@@ -4,7 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
 const path = require('path');
-const { Pool } = require('pg');
+const { Client, Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { normalizeScheduleMutation } = require('../../src/scheduling/contract');
 const { updateAppointmentSchedule } = require('../../src/scheduling/repository');
@@ -48,6 +48,59 @@ const IDS = Object.freeze({
   opportunityMutation: 'a6000000-0000-4000-8000-000000000004',
   appointmentMutation: 'a7000000-0000-4000-8000-000000000004',
 });
+
+function quoteIdentifier(value) {
+  return '"' + String(value).replace(/"/g, '""') + '"';
+}
+
+function roleConnectionString(connectionString, role) {
+  const parsed = new URL(connectionString);
+  parsed.username = role;
+  parsed.password = '';
+  return parsed.toString();
+}
+
+async function provisionSeparatedDatabaseRoles(database) {
+  const suffix = `${process.pid}_${crypto.randomBytes(5).toString('hex')}`;
+  const migrationRole = `northstar-m22-p1-migration-${suffix}`.slice(0, 63);
+  const runtimeRole = `northstar-m22-p1-runtime-${suffix}`.slice(0, 63);
+  const admin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
+  await admin.connect();
+  try {
+    await admin.query(
+      `CREATE ROLE ${quoteIdentifier(migrationRole)}
+         LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`
+    );
+    await admin.query(
+      `CREATE ROLE ${quoteIdentifier(runtimeRole)}
+         LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`
+    );
+    await admin.query(
+      `ALTER DATABASE ${quoteIdentifier(database.databaseName)}
+         OWNER TO ${quoteIdentifier(migrationRole)}`
+    );
+  } finally {
+    await admin.end();
+  }
+  return {
+    migrationRole,
+    runtimeRole,
+    migrationUrl: roleConnectionString(database.connectionString, migrationRole),
+    runtimeUrl: roleConnectionString(database.connectionString, runtimeRole),
+  };
+}
+
+async function dropSeparatedDatabaseRoles(roles) {
+  if (!roles) return;
+  const admin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
+  await admin.connect();
+  try {
+    await admin.query(`DROP ROLE ${quoteIdentifier(roles.runtimeRole)}`);
+    await admin.query(`DROP ROLE ${quoteIdentifier(roles.migrationRole)}`);
+  } finally {
+    await admin.end();
+  }
+}
 
 function migrationFiles(directory) {
   return fs.readdirSync(directory).filter(name => /^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
@@ -116,6 +169,10 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
   let upgradeDatabase;
   let freshPool;
   let upgradePool;
+  let separatedDatabase;
+  let separatedRoles;
+  let separatedMigrationPool;
+  let separatedRuntimePool;
   let prePart1Directory;
   let throughPart1Directory;
   let db;
@@ -124,8 +181,12 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
   beforeAll(async () => {
     freshDatabase = await createSuiteDatabase('m22-p1-fresh');
     upgradeDatabase = await createSuiteDatabase('m22-p1-upgrade');
+    separatedDatabase = await createSuiteDatabase('m22-p1-separated');
+    separatedRoles = await provisionSeparatedDatabaseRoles(separatedDatabase);
     freshPool = new Pool({ connectionString: freshDatabase.connectionString, max: 4 });
     upgradePool = new Pool({ connectionString: upgradeDatabase.connectionString, max: 6 });
+    separatedMigrationPool = new Pool({ connectionString: separatedRoles.migrationUrl, max: 2 });
+    separatedRuntimePool = new Pool({ connectionString: separatedRoles.runtimeUrl, max: 4 });
     prePart1Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m22-p1-pre032-'));
     throughPart1Directory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m22-p1-through032-'));
     for (const filename of migrationFiles(MIGRATIONS).filter(name => name < PART1_MIGRATION)) {
@@ -167,6 +228,11 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
 
     expect(await db.runMigrations({ pool: upgradePool, migrationsDirectory: throughPart1Directory })).toBe(true);
     expect(await db.runMigrations({ pool: freshPool, migrationsDirectory: throughPart1Directory })).toBe(true);
+    expect(await db.runMigrations({
+      pool: separatedMigrationPool,
+      runtimePool: separatedRuntimePool,
+      migrationsDirectory: throughPart1Directory,
+    })).toBe(true);
     await upgradePool.query(
       `INSERT INTO canonical_business_profiles
          (id,organization_id,version_number,version_label,raw_profile,normalized_profile,
@@ -204,12 +270,57 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       appointmentId: IDS.appointmentMutation,
       name: 'Human approved schedule mutation',
     });
+
+    await seedOrganization(separatedRuntimePool, IDS.organization, IDS.owner, 'separated');
+    await separatedRuntimePool.query(
+      `INSERT INTO canonical_business_profiles
+         (id,organization_id,version_number,version_label,raw_profile,normalized_profile,
+          normalized_profile_hash,is_active,created_by)
+       VALUES ($1,$2,1,'m22-part1-separated','{}','{}',$3,TRUE,$4)`,
+      [IDS.profile, IDS.organization, '3'.repeat(64), IDS.owner]
+    );
+    await separatedRuntimePool.query(
+      `INSERT INTO subscriptions(organization_id,plan_type,status,trial_ends_at)
+       VALUES ($1,'Trial','active',NULL)`,
+      [IDS.organization]
+    );
+    await separatedRuntimePool.query(
+      `INSERT INTO organization_onboarding
+         (organization_id,status,active_business_profile_id,completed_at)
+       VALUES ($1,'complete',$2,NOW())`,
+      [IDS.organization, IDS.profile]
+    );
+    await separatedRuntimePool.query(
+      `INSERT INTO auth_sessions
+         (id,user_id,organization_id,membership_id,status,access_expires_at,
+          refresh_expires_at,csrf_token_hash)
+       VALUES ($1,$2,$3,$2,'active',NOW() + INTERVAL '1 hour',
+               NOW() + INTERVAL '2 hours',$4)`,
+      [IDS.authSession, IDS.owner, IDS.organization, '4'.repeat(64)]
+    );
+    await seedAppointment(separatedRuntimePool, {
+      organizationId: IDS.organization,
+      operationId: IDS.operationMutation,
+      graphId: IDS.graphMutation,
+      customerId: IDS.customerMutation,
+      opportunityId: IDS.opportunityMutation,
+      appointmentId: IDS.appointmentMutation,
+      name: 'Search path invariant schedule',
+    });
+    await separatedRuntimePool.query(
+      `UPDATE public.canonical_transcripts
+          SET source='simulation', external_call_id='m22-separated-scope:call'
+        WHERE organization_id=$1 AND operation_id=$2`,
+      [IDS.organization, IDS.operationMutation]
+    );
   }, 120000);
 
   afterAll(async () => {
     try {
       if (freshPool) await freshPool.end();
       if (upgradePool) await upgradePool.end();
+      if (separatedRuntimePool) await separatedRuntimePool.end();
+      if (separatedMigrationPool) await separatedMigrationPool.end();
     } finally {
       if (prePart1Directory && path.resolve(prePart1Directory).startsWith(path.resolve(os.tmpdir()))) {
         fs.rmSync(prePart1Directory, { recursive: true, force: true });
@@ -219,6 +330,8 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
       }
       if (freshDatabase) await freshDatabase.cleanup();
       if (upgradeDatabase) await upgradeDatabase.cleanup();
+      if (separatedDatabase) await separatedDatabase.cleanup();
+      await dropSeparatedDatabaseRoles(separatedRoles);
     }
   }, 90000);
 
@@ -243,6 +356,125 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
           WHERE connamespace = 'public'::regnamespace
             AND conname LIKE 'canonical_schedule_%' AND NOT convalidated`
       )).rows).toEqual([{ count: 0 }]);
+    }
+  });
+
+  test('pins every Part 1 function and preserves runtime authority under hostile session name resolution', async () => {
+    const functions = await separatedRuntimePool.query(
+      `SELECT proname, proconfig
+         FROM pg_catalog.pg_proc
+        WHERE pronamespace = 'public'::pg_catalog.regnamespace
+          AND proname = ANY($1::text[])
+        ORDER BY proname`,
+      [[
+        'canonical_schedule_assignment_digest',
+        'canonical_schedule_create_for_appointment',
+        'canonical_schedule_guard_appointment_write',
+        'canonical_schedule_guard_assignment',
+        'canonical_schedule_guard_revision',
+        'canonical_schedule_immutable_evidence',
+        'canonical_schedule_validate_approval',
+        'canonical_schedule_validate_approval_completion',
+      ]]
+    );
+    expect(functions.rows).toHaveLength(8);
+    expect(functions.rows.every(row =>
+      JSON.stringify(row.proconfig) === JSON.stringify(['search_path=pg_catalog, public, pg_temp'])
+    )).toBe(true);
+
+    const identity = (await separatedRuntimePool.query(
+      `SELECT current_user AS role,
+              pg_catalog.current_setting('server_version') AS version,
+              pg_catalog.current_setting('TimeZone') AS timezone,
+              pg_catalog.has_schema_privilege(current_user, 'public', 'CREATE') AS public_create,
+              pg_catalog.has_table_privilege(current_user, 'public._migrations', 'SELECT') AS migration_read`
+    )).rows[0];
+    expect(identity).toMatchObject({
+      role: separatedRoles.runtimeRole,
+      version: expect.stringMatching(/^18\./),
+      timezone: 'UTC',
+      public_create: false,
+      migration_read: false,
+    });
+
+    const client = await separatedRuntimePool.connect();
+    try {
+      await client.query('SET search_path = pg_temp, public, pg_catalog');
+      for (const relation of [
+        'organizations', 'organization_memberships', 'workforce_profiles', 'workforce_crews',
+        'auth_sessions', 'subscriptions', 'organization_onboarding',
+        'canonical_operations', 'canonical_opportunities', 'canonical_schedule_assignments',
+        'canonical_appointments', 'canonical_transcripts', 'canonical_schedule_approvals',
+        'canonical_schedule_assignment_revisions', 'canonical_schedule_audit_events',
+        'canonical_schedule_idempotency',
+      ]) {
+        await client.query(`CREATE TEMP TABLE ${quoteIdentifier(relation)} (marker text)`);
+      }
+      const authority = (await client.query(
+        `SELECT revision, canonical_digest
+           FROM public.canonical_schedule_assignments
+          WHERE organization_id=$1 AND appointment_id=$2`,
+        [IDS.organization, IDS.appointmentMutation]
+      )).rows[0];
+      const input = normalizeScheduleMutation({
+        organizationId: IDS.organization,
+        actorUserId: IDS.owner,
+        actorAccessRole: 'owner',
+        authSessionId: IDS.authSession,
+        appointmentId: IDS.appointmentMutation,
+        explicitSession: 'm22-separated-scope',
+        idempotencyKey: 'm22-search-path-invariant-0001',
+        body: {
+          expectedRevision: Number(authority.revision),
+          expectedDigest: String(authority.canonical_digest).trim(),
+          action: 'calendar_edit',
+          reason: 'Approve through the role-separated runtime boundary.',
+          scheduledStart: '2026-11-03T15:00:00.000Z',
+          scheduledEnd: '2026-11-03T16:00:00.000Z',
+        },
+      });
+      const wrapper = { connect: async () => ({
+        query: client.query.bind(client),
+        release() {},
+      }) };
+      const result = await updateAppointmentSchedule(wrapper, input);
+      expect(result.status).toBe(200);
+      expect(result.body.data.scheduleAuthority).toMatchObject({ revision: 2, lastAction: 'calendar_edit' });
+      expect((await client.query('SHOW search_path')).rows[0].search_path)
+        .toBe('pg_temp, public, pg_catalog');
+
+      const wrongScope = normalizeScheduleMutation({
+        organizationId: IDS.organization,
+        actorUserId: IDS.owner,
+        actorAccessRole: 'owner',
+        authSessionId: IDS.authSession,
+        appointmentId: IDS.appointmentMutation,
+        explicitSession: 'm22-wrong-scope',
+        idempotencyKey: 'm22-search-path-wrong-scope-0002',
+        body: {
+          expectedRevision: 2,
+          expectedDigest: result.body.data.scheduleAuthority.digest,
+          action: 'calendar_edit',
+          reason: 'This mismatched simulation scope must remain rejected.',
+          scheduledStart: '2026-11-03T16:00:00.000Z',
+          scheduledEnd: '2026-11-03T17:00:00.000Z',
+        },
+      });
+      await expect(updateAppointmentSchedule(wrapper, wrongScope)).rejects.toMatchObject({
+        status: 404, code: 'NOT_FOUND',
+      });
+
+      await expect(client.query(
+        `UPDATE public.canonical_appointments
+            SET scheduled_end = scheduled_end + INTERVAL '30 minutes'
+          WHERE organization_id=$1 AND id=$2`,
+        [IDS.organization, IDS.appointmentMutation]
+      )).rejects.toMatchObject({ code: '42501', constraint: 'canonical_schedule_approval_required' });
+      await expect(client.query('SELECT * FROM public._migrations LIMIT 1'))
+        .rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await client.query('RESET search_path').catch(() => {});
+      client.release();
     }
   });
 
@@ -568,7 +800,7 @@ realPostgres('Mission 22 Part 1 canonical schedule migration authority', () => {
         const client = await upgradePool.connect();
         return {
           query(...args) {
-            if (/^\s*INSERT INTO canonical_schedule_audit_events/i.test(String(args[0]))) {
+            if (/^\s*INSERT INTO (?:public\.)?canonical_schedule_audit_events/i.test(String(args[0]))) {
               throw new Error('injected canonical schedule audit failure');
             }
             return client.query(...args);

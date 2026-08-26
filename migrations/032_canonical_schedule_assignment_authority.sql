@@ -18,6 +18,7 @@ RETURNS TEXT
 LANGUAGE SQL
 IMMUTABLE
 PARALLEL SAFE
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
   SELECT encode(sha256(convert_to(jsonb_build_object(
     'appointmentStatus', appointment_status_value,
@@ -35,9 +36,9 @@ AS $function$
   )::text, 'UTF8')), 'hex')
 $function$;
 
-CREATE TABLE canonical_schedule_assignments (
+CREATE TABLE public.canonical_schedule_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
   appointment_id UUID NOT NULL,
   operation_id UUID NOT NULL,
   graph_id UUID NOT NULL,
@@ -64,17 +65,17 @@ CREATE TABLE canonical_schedule_assignments (
   CONSTRAINT canonical_schedule_assignments_appointment_unique UNIQUE (organization_id, appointment_id),
   CONSTRAINT canonical_schedule_assignments_operation_unique UNIQUE (organization_id, operation_id),
   CONSTRAINT canonical_schedule_assignments_appointment_fk FOREIGN KEY (organization_id, appointment_id)
-    REFERENCES canonical_appointments(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_appointments(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_assignments_operation_fk FOREIGN KEY (organization_id, operation_id, graph_id)
-    REFERENCES canonical_operations(organization_id, id, graph_id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_operations(organization_id, id, graph_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_assignments_opportunity_fk FOREIGN KEY (organization_id, opportunity_id)
-    REFERENCES canonical_opportunities(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_opportunities(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_assignments_profile_fk FOREIGN KEY (organization_id, workforce_profile_id)
-    REFERENCES workforce_profiles(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.workforce_profiles(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_assignments_crew_fk FOREIGN KEY (organization_id, workforce_crew_id)
-    REFERENCES workforce_crews(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.workforce_crews(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_assignments_actor_fk FOREIGN KEY (organization_id, last_actor_user_id)
-    REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
+    REFERENCES public.organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_assignments_target_state_check CHECK (
     (target_state = 'unassigned' AND workforce_profile_id IS NULL AND workforce_crew_id IS NULL)
     OR (target_state = 'assigned' AND ((workforce_profile_id IS NOT NULL)::int + (workforce_crew_id IS NOT NULL)::int) = 1)
@@ -107,22 +108,22 @@ CREATE TABLE canonical_schedule_assignments (
 );
 
 CREATE INDEX canonical_schedule_assignments_tenant_schedule
-  ON canonical_schedule_assignments(organization_id, schedule_state, scheduled_start, id);
+  ON public.canonical_schedule_assignments(organization_id, schedule_state, scheduled_start, id);
 CREATE INDEX canonical_schedule_assignments_profile_schedule
-  ON canonical_schedule_assignments(organization_id, workforce_profile_id, scheduled_start, scheduled_end)
+  ON public.canonical_schedule_assignments(organization_id, workforce_profile_id, scheduled_start, scheduled_end)
   WHERE workforce_profile_id IS NOT NULL;
 CREATE INDEX canonical_schedule_assignments_crew_schedule
-  ON canonical_schedule_assignments(organization_id, workforce_crew_id, scheduled_start, scheduled_end)
+  ON public.canonical_schedule_assignments(organization_id, workforce_crew_id, scheduled_start, scheduled_end)
   WHERE workforce_crew_id IS NOT NULL;
 
-CREATE TABLE canonical_schedule_approvals (
+CREATE TABLE public.canonical_schedule_approvals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
   assignment_id UUID NOT NULL,
   appointment_id UUID NOT NULL,
   actor_user_id UUID NOT NULL,
   actor_access_role VARCHAR(16) NOT NULL,
-  auth_session_id UUID NOT NULL REFERENCES auth_sessions(id) ON DELETE RESTRICT,
+  auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id) ON DELETE RESTRICT,
   expected_revision BIGINT NOT NULL,
   expected_digest CHAR(64) NOT NULL,
   applied_revision BIGINT NOT NULL,
@@ -144,11 +145,11 @@ CREATE TABLE canonical_schedule_approvals (
   CONSTRAINT canonical_schedule_approvals_idempotency_unique
     UNIQUE (organization_id, actor_user_id, idempotency_key_hash),
   CONSTRAINT canonical_schedule_approvals_assignment_fk FOREIGN KEY (organization_id, assignment_id)
-    REFERENCES canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_approvals_appointment_fk FOREIGN KEY (organization_id, appointment_id)
-    REFERENCES canonical_appointments(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_appointments(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_approvals_actor_fk FOREIGN KEY (organization_id, actor_user_id)
-    REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
+    REFERENCES public.organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_approvals_role_check CHECK (actor_access_role IN ('owner', 'admin', 'member')),
   CONSTRAINT canonical_schedule_approvals_revision_check CHECK (
     expected_revision >= 1 AND applied_revision = expected_revision + 1
@@ -182,15 +183,15 @@ CREATE TABLE canonical_schedule_approvals (
   )
 );
 
-ALTER TABLE canonical_schedule_assignments
+ALTER TABLE public.canonical_schedule_assignments
   ADD CONSTRAINT canonical_schedule_assignments_last_approval_fk
   FOREIGN KEY (organization_id, last_approval_id)
-  REFERENCES canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT
+  REFERENCES public.canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT
   DEFERRABLE INITIALLY DEFERRED;
 
-CREATE TABLE canonical_schedule_assignment_revisions (
+CREATE TABLE public.canonical_schedule_assignment_revisions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
   assignment_id UUID NOT NULL,
   revision BIGINT NOT NULL,
   workforce_profile_id UUID,
@@ -215,15 +216,15 @@ CREATE TABLE canonical_schedule_assignment_revisions (
   CONSTRAINT canonical_schedule_revisions_tenant_identity UNIQUE (organization_id, id),
   CONSTRAINT canonical_schedule_revisions_number_unique UNIQUE (organization_id, assignment_id, revision),
   CONSTRAINT canonical_schedule_revisions_assignment_fk FOREIGN KEY (organization_id, assignment_id)
-    REFERENCES canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_revisions_approval_fk FOREIGN KEY (organization_id, approval_id)
-    REFERENCES canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_revisions_actor_fk FOREIGN KEY (organization_id, actor_user_id)
-    REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
+    REFERENCES public.organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_revisions_profile_fk FOREIGN KEY (organization_id, workforce_profile_id)
-    REFERENCES workforce_profiles(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.workforce_profiles(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_revisions_crew_fk FOREIGN KEY (organization_id, workforce_crew_id)
-    REFERENCES workforce_crews(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.workforce_crews(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_revisions_shape_check CHECK (
     ((target_state = 'unassigned' AND workforce_profile_id IS NULL AND workforce_crew_id IS NULL)
       OR (target_state = 'assigned' AND ((workforce_profile_id IS NOT NULL)::int + (workforce_crew_id IS NOT NULL)::int) = 1))
@@ -248,11 +249,11 @@ CREATE TABLE canonical_schedule_assignment_revisions (
 );
 
 CREATE INDEX canonical_schedule_revisions_history
-  ON canonical_schedule_assignment_revisions(organization_id, assignment_id, revision DESC);
+  ON public.canonical_schedule_assignment_revisions(organization_id, assignment_id, revision DESC);
 
-CREATE TABLE canonical_schedule_audit_events (
+CREATE TABLE public.canonical_schedule_audit_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
   assignment_id UUID NOT NULL,
   approval_id UUID NOT NULL,
   actor_user_id UUID NOT NULL,
@@ -267,11 +268,11 @@ CREATE TABLE canonical_schedule_audit_events (
   CONSTRAINT canonical_schedule_audit_tenant_identity UNIQUE (organization_id, id),
   CONSTRAINT canonical_schedule_audit_approval_unique UNIQUE (organization_id, approval_id),
   CONSTRAINT canonical_schedule_audit_assignment_fk FOREIGN KEY (organization_id, assignment_id)
-    REFERENCES canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_audit_approval_fk FOREIGN KEY (organization_id, approval_id)
-    REFERENCES canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_audit_actor_fk FOREIGN KEY (organization_id, actor_user_id)
-    REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
+    REFERENCES public.organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_audit_revision_check CHECK (after_revision = before_revision + 1),
   CONSTRAINT canonical_schedule_audit_digest_check CHECK (
     before_digest ~ '^[0-9a-f]{64}$' AND after_digest ~ '^[0-9a-f]{64}$'
@@ -280,10 +281,10 @@ CREATE TABLE canonical_schedule_audit_events (
 );
 
 CREATE INDEX canonical_schedule_audit_tenant_time
-  ON canonical_schedule_audit_events(organization_id, created_at DESC, id);
+  ON public.canonical_schedule_audit_events(organization_id, created_at DESC, id);
 
-CREATE TABLE canonical_schedule_idempotency (
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+CREATE TABLE public.canonical_schedule_idempotency (
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
   actor_user_id UUID NOT NULL,
   idempotency_key_hash CHAR(64) NOT NULL,
   request_digest CHAR(64) NOT NULL,
@@ -295,11 +296,11 @@ CREATE TABLE canonical_schedule_idempotency (
   CONSTRAINT canonical_schedule_idempotency_primary
     PRIMARY KEY (organization_id, actor_user_id, idempotency_key_hash),
   CONSTRAINT canonical_schedule_idempotency_actor_fk FOREIGN KEY (organization_id, actor_user_id)
-    REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
+    REFERENCES public.organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_idempotency_assignment_fk FOREIGN KEY (organization_id, assignment_id)
-    REFERENCES canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_schedule_assignments(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_idempotency_approval_fk FOREIGN KEY (organization_id, approval_id)
-    REFERENCES canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT,
+    REFERENCES public.canonical_schedule_approvals(organization_id, id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_idempotency_digest_check CHECK (
     idempotency_key_hash ~ '^[0-9a-f]{64}$' AND request_digest ~ '^[0-9a-f]{64}$'
   ),
@@ -310,6 +311,7 @@ CREATE TABLE canonical_schedule_idempotency (
 CREATE OR REPLACE FUNCTION public.canonical_schedule_immutable_evidence()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 BEGIN
   RAISE EXCEPTION 'Canonical schedule evidence is immutable'
@@ -318,29 +320,30 @@ END
 $function$;
 
 CREATE TRIGGER canonical_schedule_revisions_immutable
-  BEFORE UPDATE OR DELETE ON canonical_schedule_assignment_revisions
+  BEFORE UPDATE OR DELETE ON public.canonical_schedule_assignment_revisions
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_immutable_evidence();
 CREATE TRIGGER canonical_schedule_approvals_immutable
-  BEFORE UPDATE OR DELETE ON canonical_schedule_approvals
+  BEFORE UPDATE OR DELETE ON public.canonical_schedule_approvals
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_immutable_evidence();
 CREATE TRIGGER canonical_schedule_audit_immutable
-  BEFORE UPDATE OR DELETE ON canonical_schedule_audit_events
+  BEFORE UPDATE OR DELETE ON public.canonical_schedule_audit_events
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_immutable_evidence();
 CREATE TRIGGER canonical_schedule_idempotency_immutable
-  BEFORE UPDATE OR DELETE ON canonical_schedule_idempotency
+  BEFORE UPDATE OR DELETE ON public.canonical_schedule_idempotency
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_immutable_evidence();
 
 CREATE OR REPLACE FUNCTION public.canonical_schedule_validate_approval()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  assignment_record canonical_schedule_assignments%ROWTYPE;
+  assignment_record public.canonical_schedule_assignments%ROWTYPE;
   membership_record RECORD;
   expected_applied_digest TEXT;
 BEGIN
   SELECT * INTO assignment_record
-    FROM canonical_schedule_assignments
+    FROM public.canonical_schedule_assignments
    WHERE organization_id = NEW.organization_id AND id = NEW.assignment_id
    FOR UPDATE;
   IF NOT FOUND OR assignment_record.appointment_id <> NEW.appointment_id THEN
@@ -355,8 +358,8 @@ BEGIN
 
   SELECT membership.id, membership.role, profile.operational_role
     INTO membership_record
-    FROM organization_memberships membership
-    LEFT JOIN workforce_profiles profile
+    FROM public.organization_memberships membership
+    LEFT JOIN public.workforce_profiles profile
       ON profile.organization_id = membership.organization_id
      AND profile.membership_id = membership.id
    WHERE membership.organization_id = NEW.organization_id
@@ -369,7 +372,7 @@ BEGIN
       USING ERRCODE = '42501', CONSTRAINT = 'canonical_schedule_actor_unauthorized';
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM auth_sessions session
+    SELECT 1 FROM public.auth_sessions session
      WHERE session.id = NEW.auth_session_id
        AND session.organization_id = NEW.organization_id
        AND session.user_id = NEW.actor_user_id
@@ -381,7 +384,7 @@ BEGIN
       USING ERRCODE = '42501', CONSTRAINT = 'canonical_schedule_session_inactive';
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM subscriptions subscription
+    SELECT 1 FROM public.subscriptions subscription
      WHERE subscription.organization_id = NEW.organization_id
        AND (subscription.status = 'active'
          OR (subscription.status = 'trialing'
@@ -393,14 +396,14 @@ BEGIN
       USING ERRCODE = '42501', CONSTRAINT = 'canonical_schedule_subscription_read_only';
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM organization_onboarding onboarding
+    SELECT 1 FROM public.organization_onboarding onboarding
      WHERE onboarding.organization_id = NEW.organization_id AND onboarding.status = 'complete'
   ) THEN
     RAISE EXCEPTION 'Canonical schedule onboarding is incomplete'
       USING ERRCODE = '42501', CONSTRAINT = 'canonical_schedule_onboarding_incomplete';
   END IF;
 
-  expected_applied_digest := canonical_schedule_assignment_digest(
+  expected_applied_digest := public.canonical_schedule_assignment_digest(
     assignment_record.target_state,
     assignment_record.workforce_profile_id,
     assignment_record.workforce_crew_id,
@@ -442,18 +445,19 @@ END
 $function$;
 
 CREATE TRIGGER canonical_schedule_approvals_validate
-  BEFORE INSERT ON canonical_schedule_approvals
+  BEFORE INSERT ON public.canonical_schedule_approvals
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_validate_approval();
 
 CREATE OR REPLACE FUNCTION public.canonical_schedule_validate_approval_completion()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
-      FROM canonical_schedule_assignments assignment
-      JOIN canonical_appointments appointment
+      FROM public.canonical_schedule_assignments assignment
+      JOIN public.canonical_appointments appointment
         ON appointment.organization_id = assignment.organization_id
        AND appointment.id = assignment.appointment_id
      WHERE assignment.organization_id = NEW.organization_id
@@ -474,7 +478,7 @@ BEGIN
        AND appointment.scheduled_end IS NOT DISTINCT FROM NEW.approved_scheduled_end
        AND appointment.status = NEW.approved_appointment_status
   ) OR NOT EXISTS (
-    SELECT 1 FROM canonical_schedule_assignment_revisions revision
+    SELECT 1 FROM public.canonical_schedule_assignment_revisions revision
      WHERE revision.organization_id = NEW.organization_id
        AND revision.assignment_id = NEW.assignment_id
        AND revision.revision = NEW.applied_revision
@@ -485,7 +489,7 @@ BEGIN
        AND revision.action_code = NEW.action_code
        AND revision.reason = NEW.reason
   ) OR NOT EXISTS (
-    SELECT 1 FROM canonical_schedule_audit_events audit
+    SELECT 1 FROM public.canonical_schedule_audit_events audit
      WHERE audit.organization_id = NEW.organization_id
        AND audit.assignment_id = NEW.assignment_id
        AND audit.approval_id = NEW.id
@@ -497,7 +501,7 @@ BEGIN
        AND audit.action_code = NEW.action_code
        AND audit.reason = NEW.reason
   ) OR NOT EXISTS (
-    SELECT 1 FROM canonical_schedule_idempotency replay
+    SELECT 1 FROM public.canonical_schedule_idempotency replay
      WHERE replay.organization_id = NEW.organization_id
        AND replay.actor_user_id = NEW.actor_user_id
        AND rtrim(replay.idempotency_key_hash) = rtrim(NEW.idempotency_key_hash)
@@ -517,23 +521,24 @@ END
 $function$;
 
 CREATE CONSTRAINT TRIGGER canonical_schedule_approvals_complete
-  AFTER INSERT ON canonical_schedule_approvals
+  AFTER INSERT ON public.canonical_schedule_approvals
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_validate_approval_completion();
 
 CREATE OR REPLACE FUNCTION public.canonical_schedule_guard_assignment()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  approval_record canonical_schedule_approvals%ROWTYPE;
+  approval_record public.canonical_schedule_approvals%ROWTYPE;
   expected_digest TEXT;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'Canonical schedule assignments cannot be deleted'
       USING ERRCODE = '23514', CONSTRAINT = 'canonical_schedule_assignment_delete_forbidden';
   END IF;
-  expected_digest := canonical_schedule_assignment_digest(
+  expected_digest := public.canonical_schedule_assignment_digest(
     NEW.target_state, NEW.workforce_profile_id, NEW.workforce_crew_id,
     NEW.schedule_state, NEW.dispatch_state, NEW.scheduled_start, NEW.scheduled_end,
     NEW.appointment_status, NEW.needs_review, NEW.review_reasons
@@ -562,7 +567,7 @@ BEGIN
       USING ERRCODE = '23514', CONSTRAINT = 'canonical_schedule_assignment_identity_immutable';
   END IF;
   SELECT * INTO approval_record
-    FROM canonical_schedule_approvals approval
+    FROM public.canonical_schedule_approvals approval
    WHERE approval.organization_id = NEW.organization_id
      AND approval.id = NEW.last_approval_id
      AND approval.assignment_id = NEW.id
@@ -590,18 +595,19 @@ END
 $function$;
 
 CREATE TRIGGER canonical_schedule_assignments_guard
-  BEFORE INSERT OR UPDATE OR DELETE ON canonical_schedule_assignments
+  BEFORE INSERT OR UPDATE OR DELETE ON public.canonical_schedule_assignments
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_guard_assignment();
 
 CREATE OR REPLACE FUNCTION public.canonical_schedule_guard_revision()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  assignment_record canonical_schedule_assignments%ROWTYPE;
-  approval_record canonical_schedule_approvals%ROWTYPE;
+  assignment_record public.canonical_schedule_assignments%ROWTYPE;
+  approval_record public.canonical_schedule_approvals%ROWTYPE;
 BEGIN
-  SELECT * INTO assignment_record FROM canonical_schedule_assignments
+  SELECT * INTO assignment_record FROM public.canonical_schedule_assignments
    WHERE organization_id = NEW.organization_id AND id = NEW.assignment_id;
   IF NOT FOUND OR assignment_record.revision <> NEW.revision
      OR rtrim(assignment_record.canonical_digest) <> rtrim(NEW.canonical_digest)
@@ -619,7 +625,7 @@ BEGIN
       USING ERRCODE = '23514', CONSTRAINT = 'canonical_schedule_revision_divergent';
   END IF;
   IF NEW.source_kind = 'human_approved' THEN
-    SELECT * INTO approval_record FROM canonical_schedule_approvals
+    SELECT * INTO approval_record FROM public.canonical_schedule_approvals
      WHERE organization_id = NEW.organization_id AND id = NEW.approval_id
        AND assignment_id = NEW.assignment_id AND actor_user_id = NEW.actor_user_id
        AND applied_revision = NEW.revision
@@ -636,15 +642,16 @@ END
 $function$;
 
 CREATE TRIGGER canonical_schedule_revisions_validate
-  BEFORE INSERT ON canonical_schedule_assignment_revisions
+  BEFORE INSERT ON public.canonical_schedule_assignment_revisions
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_guard_revision();
 
 CREATE OR REPLACE FUNCTION public.canonical_schedule_guard_appointment_write()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  assignment_record canonical_schedule_assignments%ROWTYPE;
+  assignment_record public.canonical_schedule_assignments%ROWTYPE;
 BEGIN
   IF TG_OP = 'INSERT' THEN
     -- Appointment creation remains the accepted compatibility ingress. The
@@ -658,13 +665,13 @@ BEGIN
      AND NEW.status = OLD.status THEN
     RETURN NEW;
   END IF;
-  SELECT * INTO assignment_record FROM canonical_schedule_assignments
+  SELECT * INTO assignment_record FROM public.canonical_schedule_assignments
    WHERE organization_id = NEW.organization_id AND appointment_id = NEW.id;
   IF NOT FOUND OR assignment_record.scheduled_start IS DISTINCT FROM NEW.scheduled_start
      OR assignment_record.scheduled_end IS DISTINCT FROM NEW.scheduled_end
      OR assignment_record.appointment_status <> NEW.status
      OR NOT EXISTS (
-       SELECT 1 FROM canonical_schedule_approvals approval
+        SELECT 1 FROM public.canonical_schedule_approvals approval
         WHERE approval.organization_id = NEW.organization_id
           AND approval.id = assignment_record.last_approval_id
           AND approval.assignment_id = assignment_record.id
@@ -682,9 +689,10 @@ $function$;
 CREATE OR REPLACE FUNCTION public.canonical_schedule_create_for_appointment()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
 AS $function$
 DECLARE
-  assignment_record canonical_schedule_assignments%ROWTYPE;
+  assignment_record public.canonical_schedule_assignments%ROWTYPE;
   schedule_state_value TEXT;
   reasons JSONB;
   digest_value TEXT;
@@ -698,12 +706,12 @@ BEGIN
     THEN '["appointment_creation_schedule_unreviewed","conflict_evaluation_not_available"]'::jsonb
     ELSE '["assignment_unreviewed","conflict_evaluation_not_available"]'::jsonb
   END;
-  digest_value := canonical_schedule_assignment_digest(
+  digest_value := public.canonical_schedule_assignment_digest(
     'unassigned', NULL, NULL, schedule_state_value, 'not_dispatched',
     NEW.scheduled_start, NEW.scheduled_end,
     NEW.status, TRUE, reasons
   );
-  INSERT INTO canonical_schedule_assignments (
+  INSERT INTO public.canonical_schedule_assignments (
     organization_id, appointment_id, operation_id, graph_id, opportunity_id,
     target_state, schedule_state, dispatch_state, scheduled_start, scheduled_end,
     appointment_status,
@@ -717,7 +725,7 @@ BEGIN
     'appointment_created',
     'Canonical assignment created from accepted appointment authority; Mission 22 approval was not inferred.'
   ) RETURNING * INTO assignment_record;
-  INSERT INTO canonical_schedule_assignment_revisions (
+  INSERT INTO public.canonical_schedule_assignment_revisions (
     organization_id, assignment_id, revision, target_state, schedule_state,
     dispatch_state, scheduled_start, scheduled_end, appointment_status,
     needs_review, review_reasons,
@@ -739,7 +747,7 @@ BEGIN
 END
 $function$;
 
-INSERT INTO canonical_schedule_assignments (
+INSERT INTO public.canonical_schedule_assignments (
   organization_id, appointment_id, operation_id, graph_id, opportunity_id,
   target_state, schedule_state, dispatch_state, scheduled_start, scheduled_end,
   appointment_status, needs_review, review_reasons, revision, canonical_digest,
@@ -773,7 +781,7 @@ SELECT appointment.organization_id,
             THEN '["legacy_import_unreviewed","conflict_evaluation_not_available"]'::jsonb
             ELSE '["legacy_import_unreviewed","legacy_schedule_invalid","conflict_evaluation_not_available"]'::jsonb END,
        1,
-       canonical_schedule_assignment_digest(
+       public.canonical_schedule_assignment_digest(
          'unassigned', NULL, NULL,
          CASE WHEN appointment.scheduled_start IS NOT NULL
                     AND appointment.scheduled_end IS NOT NULL
@@ -801,10 +809,10 @@ SELECT appointment.organization_id,
        'Imported from the pre-Mission 22 appointment authority; human approval was not inferred.',
        appointment.created_at,
        appointment.updated_at
-  FROM canonical_appointments appointment
+  FROM public.canonical_appointments appointment
  ORDER BY appointment.organization_id, appointment.id;
 
-INSERT INTO canonical_schedule_assignment_revisions (
+INSERT INTO public.canonical_schedule_assignment_revisions (
   organization_id, assignment_id, revision, target_state, schedule_state,
   dispatch_state, scheduled_start, scheduled_end, appointment_status,
   needs_review, review_reasons, canonical_digest, source_kind, action_code,
@@ -823,32 +831,32 @@ SELECT assignment.organization_id, assignment.id, 1, assignment.target_state,
          'status', appointment.status
        ),
        assignment.created_at
-  FROM canonical_schedule_assignments assignment
-  JOIN canonical_appointments appointment
+  FROM public.canonical_schedule_assignments assignment
+  JOIN public.canonical_appointments appointment
     ON appointment.organization_id = assignment.organization_id
    AND appointment.id = assignment.appointment_id
  ORDER BY assignment.organization_id, assignment.id;
 
-UPDATE canonical_appointments appointment
+UPDATE public.canonical_appointments appointment
    SET scheduled_start = assignment.scheduled_start,
        scheduled_end = assignment.scheduled_end
-  FROM canonical_schedule_assignments assignment
+  FROM public.canonical_schedule_assignments assignment
  WHERE assignment.organization_id = appointment.organization_id
    AND assignment.appointment_id = appointment.id
    AND (appointment.scheduled_start IS DISTINCT FROM assignment.scheduled_start
      OR appointment.scheduled_end IS DISTINCT FROM assignment.scheduled_end);
 
-ALTER TABLE canonical_appointments
+ALTER TABLE public.canonical_appointments
   DROP CONSTRAINT canonical_appointments_schedule_check;
-ALTER TABLE canonical_appointments
+ALTER TABLE public.canonical_appointments
   ADD CONSTRAINT canonical_appointments_schedule_check CHECK (
     (scheduled_start IS NULL AND scheduled_end IS NULL)
     OR (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL AND scheduled_end > scheduled_start)
   );
 
 CREATE TRIGGER canonical_schedule_appointments_guard
-  BEFORE INSERT OR UPDATE OF scheduled_start, scheduled_end, status ON canonical_appointments
+  BEFORE INSERT OR UPDATE OF scheduled_start, scheduled_end, status ON public.canonical_appointments
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_guard_appointment_write();
 CREATE TRIGGER canonical_schedule_appointments_create
-  AFTER INSERT ON canonical_appointments
+  AFTER INSERT ON public.canonical_appointments
   FOR EACH ROW EXECUTE FUNCTION public.canonical_schedule_create_for_appointment();

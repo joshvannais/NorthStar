@@ -79,6 +79,10 @@ Add migration 032 and mounted production code for:
   `canonical_appointments`;
 - database rejection of a direct appointment schedule mutation that lacks the
   matching same-transaction approval evidence;
+- schema-qualified scheduling SQL and fixed trusted PostgreSQL function search
+  paths so session-local names cannot displace authorization or record scope;
+- semantic Calendar controls for an explicit schedule edit, pointer drag/move,
+  and pointer resize, with equivalent keyboard and touch confirmation paths;
 - explicit reconciliation of the existing mounted appointment PATCH and its
   Calendar caller.
 
@@ -180,7 +184,8 @@ These are attack hypotheses and acceptance targets, not pre-declared findings.
 ## Part 1 minimum terminal matrix
 
 - Migration 032 fresh install and every supported upgrade, canonical LF and
-  exact SHA-256, role separation, and direct-SQL bypass attempts.
+  exact SHA-256, role separation, fixed function paths, hostile session-local
+  name collisions, and direct-SQL bypass attempts.
 - One record per appointment, deterministic valid/invalid legacy backfill, new
   appointment trigger, tenant/identity/target constraints, and immutable rows.
 - Deterministic revisions/digests, stale and divergent digest rejection,
@@ -191,6 +196,11 @@ These are attack hypotheses and acceptance targets, not pre-declared findings.
   inactive membership, session revocation, and tenant/demo isolation.
 - Existing mounted route, permission, response, status, validation, Calendar
   client, full relevant Jest, PostgreSQL, migration, and startup compatibility.
+- Real visible Calendar controls in Chrome and actual Playwright WebKit across
+  desktop/light and mobile/dark, including keyboard, touch-equivalent,
+  pointer drag/resize, loading, stale, forbidden, error, success, reload,
+  exact request count/action pins, and durable PostgreSQL evidence. WebKit is
+  not physical Safari.
 - Hostile reason/action bytes remain bounded inert data.
 
 ## Release gate for every part

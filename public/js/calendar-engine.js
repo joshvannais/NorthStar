@@ -15,6 +15,35 @@ function safeCalendarColor(value) {
   return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#6395ff';
 }
 
+function calendarTimeValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+}
+
+function calendarScheduleLabel(event) {
+  if (!event || !event.rawScheduledStart || !event.rawScheduledEnd) return 'Schedule unavailable';
+  var start = new Date(event.rawScheduledStart);
+  var end = new Date(event.rawScheduledEnd);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Schedule unavailable';
+  return start.toLocaleString([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) +
+    ' to ' + end.toLocaleString([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function calendarEventButton(event, className, content, options) {
+  options = options || {};
+  var label = 'Edit schedule for ' + (event.title || 'appointment') + ', currently ' + calendarScheduleLabel(event);
+  var draggable = options.draggable ? ' draggable="true"' : '';
+  return '<button type="button" class="' + className + ' cal-schedule-event" data-calendar-event-action="edit" ' +
+    'data-calendar-event-id="' + escapeCalendarMarkup(event.id) + '" aria-label="' + escapeCalendarMarkup(label) + '"' +
+    draggable + '>' + content + '</button>';
+}
+
+function calendarResizeButton(event, className) {
+  return '<button type="button" class="' + className + ' cal-schedule-resize" data-calendar-event-action="resize" ' +
+    'data-calendar-event-id="' + escapeCalendarMarkup(event.id) + '" aria-label="Resize schedule for ' +
+    escapeCalendarMarkup(event.title || 'appointment') + '">Resize</button>';
+}
+
 // ================================================================
 // CalendarState
 // ================================================================
@@ -143,17 +172,105 @@ class CalendarRenderer {
     this.kpiBar = document.getElementById('calendarKpiBar');
     this.eventList = document.getElementById('calendarEventList');
     this.newEventArea = document.getElementById('calendarNewEventArea');
-    var selectEvent = event => {
-      var trigger = event.target.closest('[data-calendar-event-id]');
+    var openEventAction = event => {
+      var trigger = event.target.closest('[data-calendar-event-action][data-calendar-event-id]');
       if (!trigger) return;
       event.preventDefault();
       event.stopPropagation();
       var id = trigger.getAttribute('data-calendar-event-id');
       var selected = this.state.events.find(function(candidate) { return String(candidate.id) === id; });
-      if (selected) this.state.selectEvent(selected);
+      if (!selected) return;
+      var action = trigger.getAttribute('data-calendar-event-action') === 'resize'
+        ? 'calendar_resize' : 'calendar_edit';
+      if (action === 'calendar_resize' && this.suppressResizeClick === id) {
+        this.suppressResizeClick = null;
+        return;
+      }
+      window.calModal.openEditEvent(selected, { action: action, returnFocus: trigger });
     };
-    if (this.container) this.container.addEventListener('click', selectEvent);
-    if (this.eventList) this.eventList.addEventListener('click', selectEvent);
+    var dragStart = event => {
+      var trigger = event.target.closest('[draggable="true"][data-calendar-event-id]');
+      if (!trigger || !event.dataTransfer) return;
+      this.draggedEventId = trigger.getAttribute('data-calendar-event-id');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', this.draggedEventId);
+    };
+    var dragOver = event => {
+      if (!this.draggedEventId || !event.target.closest('[data-calendar-drop-date]')) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    };
+    var drop = event => {
+      var target = event.target.closest('[data-calendar-drop-date][data-calendar-drop-hour]');
+      if (!target || !this.draggedEventId) return;
+      event.preventDefault();
+      var selected = this.state.events.find(candidate => String(candidate.id) === this.draggedEventId);
+      this.draggedEventId = null;
+      if (!selected) return;
+      var originalStart = new Date(selected.rawScheduledStart);
+      var originalEnd = new Date(selected.rawScheduledEnd);
+      if (Number.isNaN(originalStart.getTime()) || Number.isNaN(originalEnd.getTime())) return;
+      var proposedStart = new Date(target.getAttribute('data-calendar-drop-date') + 'T' +
+        String(target.getAttribute('data-calendar-drop-hour')).padStart(2, '0') + ':00');
+      var proposedEnd = new Date(proposedStart.getTime() + (originalEnd.getTime() - originalStart.getTime()));
+      window.calModal.openEditEvent(selected, {
+        action: 'calendar_drag_drop',
+        returnFocus: document.querySelector('[data-calendar-event-action="edit"][data-calendar-event-id="' + CSS.escape(String(selected.id)) + '"]'),
+        proposal: {
+          date: this.state._formatDate(proposedStart),
+          time: calendarTimeValue(proposedStart),
+          endDate: this.state._formatDate(proposedEnd),
+          endTime: calendarTimeValue(proposedEnd)
+        }
+      });
+    };
+    var pointerStart = event => {
+      var trigger = event.target.closest('[data-calendar-event-action="resize"][data-calendar-event-id]');
+      if (!trigger || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      this.resizeGesture = {
+        id: trigger.getAttribute('data-calendar-event-id'),
+        startY: event.clientY,
+        trigger: trigger,
+        pointerId: event.pointerId
+      };
+      if (trigger.setPointerCapture) trigger.setPointerCapture(event.pointerId);
+    };
+    var pointerEnd = event => {
+      var gesture = this.resizeGesture;
+      this.resizeGesture = null;
+      if (!gesture || gesture.pointerId !== event.pointerId || Math.abs(event.clientY - gesture.startY) < 8) return;
+      var selected = this.state.events.find(candidate => String(candidate.id) === gesture.id);
+      if (!selected) return;
+      var start = new Date(selected.rawScheduledStart);
+      var end = new Date(selected.rawScheduledEnd);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+      var steps = Math.round((event.clientY - gesture.startY) / 24);
+      if (steps === 0) steps = event.clientY > gesture.startY ? 1 : -1;
+      var proposedEnd = new Date(Math.max(start.getTime() + 15 * 60000, end.getTime() + steps * 30 * 60000));
+      this.suppressResizeClick = gesture.id;
+      window.calModal.openEditEvent(selected, {
+        action: 'calendar_resize',
+        returnFocus: gesture.trigger,
+        proposal: {
+          date: selected.date,
+          time: selected.timeValue,
+          endDate: this.state._formatDate(proposedEnd),
+          endTime: calendarTimeValue(proposedEnd)
+        }
+      });
+    };
+    [this.container, this.eventList].filter(Boolean).forEach(function(root) {
+      root.addEventListener('click', openEventAction);
+    });
+    if (this.container) {
+      this.container.addEventListener('dragstart', dragStart);
+      this.container.addEventListener('dragover', dragOver);
+      this.container.addEventListener('drop', drop);
+      this.container.addEventListener('dragend', () => { this.draggedEventId = null; });
+      this.container.addEventListener('pointerdown', pointerStart);
+      this.container.addEventListener('pointerup', pointerEnd);
+      this.container.addEventListener('pointercancel', () => { this.resizeGesture = null; });
+    }
   }
 
   setLoading(loading) {
@@ -270,7 +387,8 @@ class CalendarRenderer {
       if (dayEvents.length > 0) {
         html += '<div class="cal-month-cell-events">';
         dayEvents.slice(0, maxDots).forEach(e => {
-          html += `<div class="cal-month-event-dot" style="background:${safeCalendarColor(e.color)}" title="${escapeCalendarMarkup(e.title || '')}"></div>`;
+          html += calendarEventButton(e, 'cal-month-event-button',
+            `<span class="cal-month-event-dot" style="background:${safeCalendarColor(e.color)}"></span>`);
         });
         if (dayEvents.length > maxDots) html += `<div class="cal-month-event-more">+${dayEvents.length - maxDots} more</div>`;
         html += '</div>';
@@ -315,7 +433,7 @@ class CalendarRenderer {
       for (var wi2 = 0; wi2 < 7; wi2++) {
         var wd2 = new Date(startOfWeek); wd2.setDate(startOfWeek.getDate() + wi2);
         var wds2 = s._formatDate(wd2);
-        html += '<div class="cal-week-cell">';
+        html += '<div class="cal-week-cell" data-calendar-drop-date="' + wds2 + '" data-calendar-drop-hour="' + hour24 + '">';
         var dayEvts = eventsByDay[wds2] || [];
         // Match events by their time's hour (e.g., "8:00 AM" → hour 8)
         dayEvts.forEach(function(e) {
@@ -325,7 +443,13 @@ class CalendarRenderer {
           if (e.time.indexOf('PM') > -1 && eHour !== 12) eHour += 12;
           if (e.time.indexOf('AM') > -1 && eHour === 12) eHour = 0;
           if (eHour === hour24) {
-            html += '<div class="cal-week-event" style="background:' + safeCalendarColor(e.color) + '" data-calendar-event-id="' + escapeCalendarMarkup(e.id) + '">' + escapeCalendarMarkup(e.title || '') + '</div>';
+            html += '<div class="cal-week-event-group" style="background:' + safeCalendarColor(e.color) + '">';
+            html += calendarEventButton(e, 'cal-week-event',
+              '<span class="cal-week-event-title">' + escapeCalendarMarkup(e.title || 'Event') + '</span>' +
+              '<span class="cal-week-event-time">' + escapeCalendarMarkup(e.time || '') + '</span>',
+              { draggable: true });
+            html += calendarResizeButton(e, 'cal-week-resize');
+            html += '</div>';
           }
         });
         html += '</div>';
@@ -366,12 +490,12 @@ class CalendarRenderer {
         if (e.time.indexOf('PM') > -1 && eHour !== 12) eHour += 12;
         if (e.time.indexOf('AM') > -1 && eHour === 12) eHour = 0;
         if (eHour === hour24) {
-          html += '<div class="cal-day-event-card" data-calendar-event-id="' + escapeCalendarMarkup(e.id) + '">';
-          html += '<div class="cal-day-event-time">' + escapeCalendarMarkup(e.time || '') + '</div>';
-          html += '<div class="cal-day-event-title">' + escapeCalendarMarkup(e.title || 'Event') + '</div>';
-          if (e.serviceType) html += '<div class="cal-day-event-desc">' + escapeCalendarMarkup(e.serviceType) + '</div>';
-          else if (e.estimatedPrice) html += '<div class="cal-day-event-desc">\$' + parseFloat(e.estimatedPrice).toLocaleString() + '</div>';
-          html += '</div>';
+          var card = '<span class="cal-day-event-time">' + escapeCalendarMarkup(e.time || '') + '</span>';
+          card += '<span class="cal-day-event-title">' + escapeCalendarMarkup(e.title || 'Event') + '</span>';
+          if (e.serviceType) card += '<span class="cal-day-event-desc">' + escapeCalendarMarkup(e.serviceType) + '</span>';
+          else if (e.estimatedPrice) card += '<span class="cal-day-event-desc">\$' + parseFloat(e.estimatedPrice).toLocaleString() + '</span>';
+          html += '<div class="cal-day-event-group">' + calendarEventButton(e, 'cal-day-event-card', card) +
+            calendarResizeButton(e, 'cal-day-resize') + '</div>';
         }
       });
       html += '</div></div>';
@@ -399,13 +523,15 @@ class CalendarRenderer {
           html += `<div class="cal-agenda-date ${isToday ? 'cal-agenda-date-today' : ''}">${dateLabel}${isToday ? ' — Today' : ''}</div>`;
           html += '<div class="cal-agenda-events">';
         }
-        html += `<div class="cal-agenda-event" data-calendar-event-id="${escapeCalendarMarkup(e.id)}">`;
-        html += `<div class="cal-agenda-event-color" style="background:${safeCalendarColor(e.color)}"></div>`;
-        html += '<div class="cal-agenda-event-info">';
-        html += `<div class="cal-agenda-event-title">${escapeCalendarMarkup(e.title || 'Event')}</div>`;
-        if (e.time) html += `<div class="cal-agenda-event-time">${escapeCalendarMarkup(e.time)}</div>`;
-        if (e.description) html += `<div class="cal-agenda-event-desc">${escapeCalendarMarkup(e.description)}</div>`;
-        html += '</div></div>';
+        var agenda = `<span class="cal-agenda-event-color" style="background:${safeCalendarColor(e.color)}"></span>`;
+        agenda += '<span class="cal-agenda-event-info">';
+        agenda += `<span class="cal-agenda-event-title">${escapeCalendarMarkup(e.title || 'Event')}</span>`;
+        if (e.time) agenda += `<span class="cal-agenda-event-time">${escapeCalendarMarkup(e.time)}</span>`;
+        agenda += `<span class="cal-agenda-event-schedule">${escapeCalendarMarkup(calendarScheduleLabel(e))}</span>`;
+        if (e.description) agenda += `<span class="cal-agenda-event-desc">${escapeCalendarMarkup(e.description)}</span>`;
+        agenda += '</span>';
+        html += '<div class="cal-agenda-event-group">' + calendarEventButton(e, 'cal-agenda-event', agenda) +
+          calendarResizeButton(e, 'cal-agenda-resize') + '</div>';
         // Close date group on next date
         const nextDate = sorted[sorted.indexOf(e) + 1];
         if (!nextDate || nextDate.date !== e.date) html += '</div>';
@@ -431,14 +557,13 @@ class CalendarRenderer {
       html += `<div class="cal-event-list-empty">No events scheduled for today</div>`;
     } else {
       todayEvents.forEach(e => {
-        html += `<div class="cal-event-list-item" data-calendar-event-id="${escapeCalendarMarkup(e.id)}">`;
-        html += `<div class="cal-event-list-dot" style="background:${safeCalendarColor(e.color)}"></div>`;
-        html += '<div class="cal-event-list-info">';
-        html += `<div class="cal-event-list-title">${escapeCalendarMarkup(e.title || 'Event')}</div>`;
-        if (e.time) html += `<div class="cal-event-list-time">${escapeCalendarMarkup(e.time)}</div>`;
-        html += '</div>';
-        if (e.estimatedPrice) html += `<div class="cal-event-list-value">$${parseFloat(e.estimatedPrice).toLocaleString()}</div>`;
-        html += '</div>';
+        var item = `<span class="cal-event-list-dot" style="background:${safeCalendarColor(e.color)}"></span>`;
+        item += '<span class="cal-event-list-info">';
+        item += `<span class="cal-event-list-title">${escapeCalendarMarkup(e.title || 'Event')}</span>`;
+        if (e.time) item += `<span class="cal-event-list-time">${escapeCalendarMarkup(e.time)}</span>`;
+        item += '</span>';
+        if (e.estimatedPrice) item += `<span class="cal-event-list-value">$${parseFloat(e.estimatedPrice).toLocaleString()}</span>`;
+        html += calendarEventButton(e, 'cal-event-list-item', item);
       });
     }
     this.eventList.innerHTML = html;
@@ -492,35 +617,62 @@ class CalendarData {
       }
 
       async updateEvent(id, data) {
+        var current = calState.events.find(function(event) { return String(event.id) === String(id); });
+        var authority = current && current.scheduleAuthority;
+        if (!authority || !Number.isSafeInteger(authority.revision) ||
+            !/^[0-9a-f]{64}$/.test(authority.digest || '')) {
+          return { ok:false, status:409, code:'M22_STALE_APPROVAL',
+            message:'Current schedule revision is unavailable. Refresh Calendar before approving this change.' };
+        }
+        if (!window.crypto || typeof window.crypto.randomUUID !== 'function') {
+          return { ok:false, status:503, code:'IDEMPOTENCY_UNAVAILABLE',
+            message:'Secure approval identity is unavailable. No schedule change was sent.' };
+        }
+        var action = ['calendar_edit','calendar_drag_drop','calendar_resize'].includes(data.action)
+          ? data.action : 'calendar_edit';
+        var startDate = new Date(data.date + 'T' + data.time);
+        var endDate = new Date(data.endDate + 'T' + data.endTime);
+        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+          return { ok:false, status:400, code:'INVALID_APPOINTMENT_SCHEDULE',
+            message:'The end of the schedule must be after its start.' };
+        }
+        var prefixes = {
+          calendar_edit: 'calendar-edit-',
+          calendar_drag_drop: 'calendar-drag-drop-',
+          calendar_resize: 'calendar-resize-'
+        };
+        var headers = Object.assign({'Content-Type':'application/json'}, this._authHeaders());
+        var context = window.CanonicalIntelligence.synchronizeAuthority();
+        if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
+        headers['Idempotency-Key'] = prefixes[action] + window.crypto.randomUUID();
         try {
-          var current = calState.events.find(function(event) { return event.id === id; });
-          var authority = current && current.scheduleAuthority;
-          if (!authority || !Number.isSafeInteger(authority.revision) ||
-              !/^[0-9a-f]{64}$/.test(authority.digest || '')) {
-            throw new Error('Current schedule revision is unavailable. Refresh Calendar before approving this change.');
-          }
-          var start = data.date && data.time ? new Date(data.date + 'T' + data.time).toISOString() : null;
-          var end = data.date && data.endTime ? new Date(data.date + 'T' + data.endTime).toISOString() : null;
-          var headers = Object.assign({'Content-Type':'application/json'}, this._authHeaders());
-          var context = window.CanonicalIntelligence.synchronizeAuthority();
-          if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
-          headers['Idempotency-Key'] = 'calendar-edit-' + window.crypto.randomUUID();
-          const r = await window.NorthStarAccountSession.fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
+          var response = await window.NorthStarAccountSession.fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
             method:'PATCH', headers:headers, body:JSON.stringify({
-              scheduledStart:start,
-              scheduledEnd:end,
+              scheduledStart:startDate.toISOString(),
+              scheduledEnd:endDate.toISOString(),
               status:'scheduled',
               expectedRevision:authority.revision,
               expectedDigest:authority.digest,
-              action:'calendar_edit'
+              action:action,
+              reason:data.reason
             })
           });
-          const d = await r.json();
-          if (!r.ok) throw new Error(d && d.error && d.error.message || 'Appointment update failed.');
-          await window.CanonicalIntelligence.loadCompatibility('calendar');
-          return d.data;
+          var body = {};
+          try { body = await response.json(); } catch (_) { body = {}; }
+          if (!response.ok) {
+            return {
+              ok:false,
+              status:response.status,
+              code:body.code || body.error && body.error.code || 'APPOINTMENT_UPDATE_FAILED',
+              message:body.error && body.error.message || body.message || 'Appointment update failed.'
+            };
+          }
+          return { ok:true, status:response.status, data:body.data };
+        } catch (error) {
+          console.warn('[CalendarData] updateEvent:', error.message);
+          return { ok:false, status:503, code:'CANONICAL_PERSISTENCE_UNAVAILABLE',
+            message:'Schedule service is unavailable. No schedule change was approved.' };
         }
-        catch(e) { console.warn('[CalendarData] updateEvent:', e.message); return null; }
       }
 
       async deleteEvent(id) {
@@ -574,29 +726,51 @@ class CalendarModal {
     this._show(html);
   }
 
-  openEditEvent(event) {
+  openEditEvent(event, options) {
+    options = options || {};
+    var action = ['calendar_edit','calendar_drag_drop','calendar_resize'].includes(options.action)
+      ? options.action : 'calendar_edit';
+    var labels = {
+      calendar_edit: { title:'Edit schedule', verb:'Approve schedule edit' },
+      calendar_drag_drop: { title:'Confirm moved schedule', verb:'Approve schedule move' },
+      calendar_resize: { title:'Confirm resized schedule', verb:'Approve schedule resize' }
+    };
+    var proposal = options.proposal || {};
+    var start = new Date(event.rawScheduledStart);
+    var end = new Date(event.rawScheduledEnd);
+    var date = proposal.date || event.date || (!Number.isNaN(start.getTime()) ? this._formatDate(start) : '');
+    var time = proposal.time || event.timeValue || (!Number.isNaN(start.getTime()) ? calendarTimeValue(start) : '09:00');
+    var endDate = proposal.endDate || event.endDate || (!Number.isNaN(end.getTime()) ? this._formatDate(end) : date);
+    var endTime = proposal.endTime || event.endTimeValue || (!Number.isNaN(end.getTime()) ? calendarTimeValue(end) : '10:00');
+    var reasons = {
+      calendar_edit: 'Human-approved Calendar schedule edit.',
+      calendar_drag_drop: 'Human-approved Calendar drag and drop.',
+      calendar_resize: 'Human-approved Calendar resize.'
+    };
+    this.editContext = { id:String(event.id), action:action, returnFocusId:String(event.id) };
+    this.pendingReturnFocus = options.returnFocus || document.activeElement;
     const html = `
       <div class="cal-modal-overlay" id="calModalOverlay" onclick="window.calModal.close()">
-        <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle" onclick="event.stopPropagation()">
-          <div class="cal-modal-header"><h2 id="calModalTitle">Edit Event</h2><button class="cal-modal-close" onclick="window.calModal.close()" aria-label="Close edit event dialog">×</button></div>
+        <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle" aria-describedby="calScheduleCurrent" onclick="event.stopPropagation()">
+          <div class="cal-modal-header"><h2 id="calModalTitle">${labels[action].title}</h2><button type="button" class="cal-modal-close" onclick="window.calModal.close()" aria-label="Cancel schedule change">×</button></div>
           <div class="cal-modal-body">
-            <div class="cal-modal-field"><label for="calEventTitle">Title</label><input type="text" id="calEventTitle" value="${escapeCalendarMarkup(event.title || '')}" required></div>
-            <div class="cal-modal-field"><label for="calEventDate">Date</label><input type="date" id="calEventDate" value="${escapeCalendarMarkup(event.date || '')}" required></div>
+            <p class="cal-current-schedule" id="calScheduleCurrent"><strong>Current schedule:</strong> ${escapeCalendarMarkup(calendarScheduleLabel(event))}</p>
+            <p class="cal-schedule-notice">This change requires your explicit approval and will be checked against revision ${escapeCalendarMarkup(event.scheduleAuthority && event.scheduleAuthority.revision)}.</p>
             <div class="cal-modal-row">
-              <div class="cal-modal-field"><label for="calEventTime">Start Time</label><input type="time" id="calEventTime" value="${escapeCalendarMarkup(event.time || '09:00')}"></div>
-              <div class="cal-modal-field"><label for="calEventEndTime">End Time</label><input type="time" id="calEventEndTime" value="${escapeCalendarMarkup(event.endTime || '10:00')}"></div>
+              <div class="cal-modal-field"><label for="calEventDate">Start date</label><input type="date" id="calEventDate" value="${escapeCalendarMarkup(date)}" required></div>
+              <div class="cal-modal-field"><label for="calEventTime">Start time</label><input type="time" id="calEventTime" value="${escapeCalendarMarkup(time)}" required></div>
             </div>
-            <div class="cal-modal-field"><label for="calEventDescription">Description</label><textarea id="calEventDescription" rows="3">${escapeCalendarMarkup(event.description || '')}</textarea></div>
-            <fieldset class="cal-modal-field"><legend>Color</legend><div class="cal-color-picker">
-              ${['#6395ff','#22c55e','#f59e0b','#ef4444','#a855f7','#14b8a6'].map(c =>
-                `<button type="button" class="cal-color-option ${c === (event.color || '#6395ff') ? 'selected' : ''}" aria-label="Select ${c} event color" style="background:${c}" data-color="${c}" onclick="document.querySelectorAll('.cal-color-option').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');"></button>`
-              ).join('')}
-            </div></fieldset>
+            <div class="cal-modal-row">
+              <div class="cal-modal-field"><label for="calEventEndDate">End date</label><input type="date" id="calEventEndDate" value="${escapeCalendarMarkup(endDate)}" required></div>
+              <div class="cal-modal-field"><label for="calEventEndTime">End time</label><input type="time" id="calEventEndTime" value="${escapeCalendarMarkup(endTime)}" required></div>
+            </div>
+            <div class="cal-modal-field"><label for="calScheduleReason">Approval reason</label><textarea id="calScheduleReason" rows="2" maxlength="1000" required>${escapeCalendarMarkup(reasons[action])}</textarea></div>
+            <label class="cal-approval-confirm"><input type="checkbox" id="calScheduleConfirmed" onchange="window.calModal.toggleApproval()"> I reviewed the proposed schedule and approve this ${action === 'calendar_drag_drop' ? 'move' : action === 'calendar_resize' ? 'resize' : 'edit'}.</label>
+            <div class="cal-schedule-status" id="calScheduleStatus" role="status" aria-live="polite" tabindex="-1">${escapeCalendarMarkup(options.message || '')}</div>
           </div>
           <div class="cal-modal-footer">
-            <button class="cal-modal-btn cal-modal-delete" onclick="window.calModal.deleteEvent('${event.id}')">Delete</button>
-            <button class="cal-modal-btn cal-modal-cancel" onclick="window.calModal.close()">Cancel</button>
-            <button class="cal-modal-btn cal-modal-save" onclick="window.calModal.saveEdit('${event.id}')">Save</button>
+            <button type="button" class="cal-modal-btn cal-modal-cancel" onclick="window.calModal.close()">Cancel</button>
+            <button type="button" class="cal-modal-btn cal-modal-save" id="calScheduleApprove" onclick="window.calModal.saveEdit()" disabled>${labels[action].verb}</button>
           </div>
         </div>
       </div>`;
@@ -604,8 +778,12 @@ class CalendarModal {
   }
 
   _show(html) {
-    this.close();
-    this.previouslyFocused = document.activeElement;
+    const existing = document.getElementById('calModalOverlay');
+    if (existing) existing.remove();
+    if (this.boundKeyDown) document.removeEventListener('keydown', this.boundKeyDown);
+    this.boundKeyDown = null;
+    if (!this.previouslyFocused) this.previouslyFocused = this.pendingReturnFocus || document.activeElement;
+    this.pendingReturnFocus = null;
     const div = document.createElement('div');
     div.innerHTML = html;
     document.body.appendChild(div.firstElementChild);
@@ -632,7 +810,8 @@ class CalendarModal {
       }
     };
     document.addEventListener('keydown', this.boundKeyDown);
-    document.getElementById('calEventTitle')?.focus();
+    const firstField = document.getElementById('calEventTitle') || document.getElementById('calEventDate');
+    if (firstField) firstField.focus();
   }
 
   close() {
@@ -640,8 +819,16 @@ class CalendarModal {
     if (o) o.remove();
     if (this.boundKeyDown) document.removeEventListener('keydown', this.boundKeyDown);
     this.boundKeyDown = null;
-    if (this.previouslyFocused && document.contains(this.previouslyFocused)) this.previouslyFocused.focus();
+    if (this.previouslyFocused && document.contains(this.previouslyFocused)) {
+      this.previouslyFocused.focus();
+    } else if (this.editContext && this.editContext.returnFocusId) {
+      var escapedId = CSS.escape(this.editContext.returnFocusId);
+      var replacement = document.querySelector('[data-calendar-event-action="edit"][data-calendar-event-id="' + escapedId + '"]') ||
+        document.querySelector('[data-calendar-event-action="resize"][data-calendar-event-id="' + escapedId + '"]');
+      if (replacement) replacement.focus();
+    }
     this.previouslyFocused = null;
+    this.editContext = null;
   }
 
   _getFormData() {
@@ -662,10 +849,76 @@ class CalendarModal {
     window.calData.createEvent(data).then(() => { window.calModal.close(); window.refreshCalendar(); });
   }
 
-  saveEdit(id) {
-    const data = this._getFormData();
-    if (!data) return;
-    window.calData.updateEvent(id, data).then(() => { window.calModal.close(); window.refreshCalendar(); });
+  toggleApproval() {
+    var checkbox = document.getElementById('calScheduleConfirmed');
+    var approve = document.getElementById('calScheduleApprove');
+    if (approve) approve.disabled = !checkbox || !checkbox.checked;
+  }
+
+  _setScheduleBusy(busy) {
+    var overlay = document.getElementById('calModalOverlay');
+    if (!overlay) return;
+    overlay.querySelectorAll('input,textarea,button').forEach(function(control) {
+      control.disabled = Boolean(busy);
+    });
+    if (!busy) this.toggleApproval();
+    var dialog = overlay.querySelector('[role="dialog"]');
+    if (dialog) dialog.setAttribute('aria-busy', String(Boolean(busy)));
+  }
+
+  _setScheduleStatus(message, alert) {
+    var status = document.getElementById('calScheduleStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.setAttribute('role', alert ? 'alert' : 'status');
+    if (alert) status.focus({ preventScroll:true });
+  }
+
+  _getScheduleData() {
+    var data = {
+      date: document.getElementById('calEventDate')?.value,
+      time: document.getElementById('calEventTime')?.value,
+      endDate: document.getElementById('calEventEndDate')?.value,
+      endTime: document.getElementById('calEventEndTime')?.value,
+      reason: document.getElementById('calScheduleReason')?.value.trim(),
+      action: this.editContext && this.editContext.action
+    };
+    if (!data.date || !data.time || !data.endDate || !data.endTime || !data.reason) return null;
+    return data;
+  }
+
+  async saveEdit() {
+    var context = this.editContext;
+    var confirmed = document.getElementById('calScheduleConfirmed');
+    var data = this._getScheduleData();
+    if (!context || !confirmed || !confirmed.checked || !data) {
+      this._setScheduleStatus('Complete every schedule field, provide a reason, and confirm your approval.', true);
+      return;
+    }
+    this._setScheduleBusy(true);
+    this._setScheduleStatus('Checking the current authority and saving your approval…', false);
+    var result = await window.calData.updateEvent(context.id, data);
+    if (result.ok) {
+      await window.refreshCalendar();
+      this._setScheduleStatus('Schedule approved and refreshed.', false);
+      window.setTimeout(function() { window.calModal.close(); }, 300);
+      return;
+    }
+    if (result.status === 409 || result.code === 'M22_STALE_APPROVAL') {
+      await window.refreshCalendar();
+      var fresh = window.calState.events.find(function(event) { return String(event.id) === context.id; });
+      if (fresh) {
+        this.openEditEvent(fresh, {
+          action: context.action,
+          message: 'The schedule changed before approval. Review the refreshed current schedule and confirm again.'
+        });
+        this._setScheduleStatus('The schedule changed before approval. Review the refreshed current schedule and confirm again.', true);
+        return;
+      }
+    }
+    this._setScheduleBusy(false);
+    var prefix = result.status === 403 ? 'You no longer have permission to approve this schedule. ' : '';
+    this._setScheduleStatus(prefix + result.message, true);
   }
 
   deleteEvent(id) {
@@ -710,6 +963,11 @@ window.syncCalendarFromAppStore = function() {
       date: start && !isNaN(start.getTime()) ? calState._formatDate(start) : null,
       time: start && !isNaN(start.getTime()) ? start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null,
       endTime: end && !isNaN(end.getTime()) ? end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null,
+      timeValue: start && !isNaN(start.getTime()) ? calendarTimeValue(start) : null,
+      endDate: end && !isNaN(end.getTime()) ? calState._formatDate(end) : null,
+      endTimeValue: end && !isNaN(end.getTime()) ? calendarTimeValue(end) : null,
+      rawScheduledStart: record.scheduledStart || null,
+      rawScheduledEnd: record.scheduledEnd || null,
       type: 'canonical',
       leadId: record.canonical && record.canonical.ids.opportunity,
       phone: record.customer && record.customer.phone,

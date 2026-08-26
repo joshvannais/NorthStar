@@ -88,7 +88,7 @@ function mapDatabaseError(error) {
 async function idempotencyResult(client, input) {
   const replay = await client.query(
     `SELECT request_digest, response_status, response_body
-       FROM canonical_schedule_idempotency
+       FROM public.canonical_schedule_idempotency
       WHERE organization_id = $1 AND actor_user_id = $2 AND idempotency_key_hash = $3`,
     [input.organizationId, input.actorUserId, input.idempotencyKeyHash]
   );
@@ -110,18 +110,18 @@ async function requireCurrentAuthority(client, input) {
             session.access_expires_at, subscription.status AS subscription_status,
             subscription.trial_started_at, subscription.trial_ends_at,
             onboarding.status AS onboarding_status
-       FROM organization_memberships membership
-       JOIN workforce_profiles profile
+       FROM public.organization_memberships membership
+       JOIN public.workforce_profiles profile
          ON profile.organization_id = membership.organization_id
         AND profile.membership_id = membership.id
-       JOIN auth_sessions session
+       JOIN public.auth_sessions session
          ON session.organization_id = membership.organization_id
         AND session.membership_id = membership.id
         AND session.user_id = membership.user_id
         AND session.id = $3
-       JOIN subscriptions subscription
+       JOIN public.subscriptions subscription
          ON subscription.organization_id = membership.organization_id
-       JOIN organization_onboarding onboarding
+       JOIN public.organization_onboarding onboarding
          ON onboarding.organization_id = membership.organization_id
       WHERE membership.organization_id = $1 AND membership.user_id = $2
       FOR SHARE OF membership, profile, session, subscription, onboarding`,
@@ -146,11 +146,11 @@ async function requireCurrentAuthority(client, input) {
 async function requireRecordScope(client, input) {
   const scoped = await client.query(
     `SELECT 1
-       FROM canonical_schedule_assignments assignment
-       JOIN canonical_appointments appointment
+       FROM public.canonical_schedule_assignments assignment
+       JOIN public.canonical_appointments appointment
          ON appointment.organization_id = assignment.organization_id
         AND appointment.id = assignment.appointment_id
-       JOIN canonical_transcripts transcript
+       JOIN public.canonical_transcripts transcript
          ON transcript.organization_id = appointment.organization_id
         AND transcript.operation_id = appointment.operation_id
       WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2
@@ -171,11 +171,11 @@ async function mutateInTransaction(client, input) {
     `SELECT assignment.*, assignment.id AS assignment_id,
             assignment.updated_at AS assignment_updated_at,
             appointment.*, transcript.source, transcript.external_call_id
-       FROM canonical_schedule_assignments assignment
-       JOIN canonical_appointments appointment
+       FROM public.canonical_schedule_assignments assignment
+       JOIN public.canonical_appointments appointment
          ON appointment.organization_id = assignment.organization_id
         AND appointment.id = assignment.appointment_id
-       JOIN canonical_transcripts transcript
+       JOIN public.canonical_transcripts transcript
          ON transcript.organization_id = appointment.organization_id
         AND transcript.operation_id = appointment.operation_id
       WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2
@@ -204,7 +204,7 @@ async function mutateInTransaction(client, input) {
   const needsReview = true;
   const reviewReasons = ['conflict_evaluation_not_available'];
   const digestResult = await client.query(
-    `SELECT canonical_schedule_assignment_digest(
+    `SELECT public.canonical_schedule_assignment_digest(
        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) AS digest`,
     [current.target_state, current.workforce_profile_id, current.workforce_crew_id,
       scheduleState, dispatchState, scheduledStart, scheduledEnd, appointmentStatus,
@@ -213,7 +213,7 @@ async function mutateInTransaction(client, input) {
   const afterRevision = Number(current.revision) + 1;
   const afterDigest = trimDigest(digestResult.rows[0].digest);
   const approval = await client.query(
-    `INSERT INTO canonical_schedule_approvals
+    `INSERT INTO public.canonical_schedule_approvals
        (organization_id, assignment_id, appointment_id, actor_user_id,
         actor_access_role, auth_session_id, expected_revision, expected_digest,
         applied_revision, applied_digest, request_digest, idempotency_key_hash,
@@ -230,7 +230,7 @@ async function mutateInTransaction(client, input) {
   );
   const approvalRow = approval.rows[0];
   const assignmentResult = await client.query(
-    `UPDATE canonical_schedule_assignments
+    `UPDATE public.canonical_schedule_assignments
         SET schedule_state = $3, dispatch_state = $4, scheduled_start = $5,
             scheduled_end = $6, appointment_status = $7, needs_review = $8,
             review_reasons = $9::jsonb, revision = $10, canonical_digest = $11,
@@ -245,7 +245,7 @@ async function mutateInTransaction(client, input) {
   );
   const assignment = assignmentResult.rows[0];
   await client.query(
-    `INSERT INTO canonical_schedule_assignment_revisions
+    `INSERT INTO public.canonical_schedule_assignment_revisions
        (organization_id, assignment_id, revision, workforce_profile_id,
         workforce_crew_id, target_state, schedule_state, dispatch_state,
         scheduled_start, scheduled_end, appointment_status, needs_review,
@@ -264,14 +264,14 @@ async function mutateInTransaction(client, input) {
       })]
   );
   const appointmentResult = await client.query(
-    `UPDATE canonical_appointments
+    `UPDATE public.canonical_appointments
         SET scheduled_start = $3, scheduled_end = $4, status = $5, updated_at = NOW()
       WHERE organization_id = $1 AND id = $2
       RETURNING *`,
     [input.organizationId, input.appointmentId, scheduledStart, scheduledEnd, appointmentStatus]
   );
   await client.query(
-    `INSERT INTO canonical_schedule_audit_events
+    `INSERT INTO public.canonical_schedule_audit_events
        (organization_id, assignment_id, approval_id, actor_user_id, action_code,
         reason, before_revision, after_revision, before_digest, after_digest, details)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
@@ -288,7 +288,7 @@ async function mutateInTransaction(client, input) {
   const authority = scheduleAuthority(assignment);
   const responseBody = { success: true, data: appointmentResponse(appointmentResult.rows[0], authority) };
   await client.query(
-    `INSERT INTO canonical_schedule_idempotency
+    `INSERT INTO public.canonical_schedule_idempotency
        (organization_id, actor_user_id, idempotency_key_hash, request_digest,
         assignment_id, approval_id, response_status, response_body)
      VALUES ($1,$2,$3,$4,$5,$6,200,$7::jsonb)`,

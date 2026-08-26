@@ -132,26 +132,26 @@ const GRAPH_SELECT = `
              'factFingerprint', f.fact_fingerprint,
              'createdAt', f.created_at
            ) ORDER BY f.ordinal)
-             FROM canonical_facts f
+             FROM public.canonical_facts f
             WHERE f.organization_id = o.organization_id
               AND f.operation_id = o.id
          ), '[]'::jsonb) AS facts
-    FROM canonical_operations o
-    JOIN canonical_transcripts t
+    FROM public.canonical_operations o
+    JOIN public.canonical_transcripts t
       ON t.organization_id = o.organization_id AND t.operation_id = o.id
-    JOIN canonical_communications cm
+    JOIN public.canonical_communications cm
       ON cm.organization_id = o.organization_id AND cm.operation_id = o.id
-    JOIN canonical_opportunities op
+    JOIN public.canonical_opportunities op
       ON op.organization_id = o.organization_id AND op.operation_id = o.id
-    JOIN canonical_customers c
+    JOIN public.canonical_customers c
       ON c.organization_id = o.organization_id AND c.id = op.customer_id
-    JOIN canonical_estimates e
+    JOIN public.canonical_estimates e
       ON e.organization_id = o.organization_id AND e.operation_id = o.id
-    JOIN canonical_appointments a
+    JOIN public.canonical_appointments a
       ON a.organization_id = o.organization_id AND a.operation_id = o.id
-    JOIN canonical_schedule_assignments sa
+    JOIN public.canonical_schedule_assignments sa
       ON sa.organization_id = a.organization_id AND sa.appointment_id = a.id
-    JOIN canonical_polaris_snapshots ps
+    JOIN public.canonical_polaris_snapshots ps
       ON ps.organization_id = o.organization_id AND ps.operation_id = o.id`;
 
 function timestamp(value, field) {
@@ -673,7 +673,7 @@ function createCanonicalRouter(options) {
     try {
       const pool = resolvePool(dependencies.poolProvider);
       const result = await pool.query(
-        `SELECT COUNT(*)::int AS completed_graphs FROM canonical_operations
+        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
           WHERE organization_id = $1 AND state = 'completed'`,
         [context.organizationId]
       );
@@ -742,11 +742,11 @@ function createCanonicalRouter(options) {
       const pool = resolvePool(dependencies.poolProvider);
       const scoped = await pool.query(
         `SELECT 1
-           FROM canonical_schedule_assignments assignment
-           JOIN canonical_appointments appointment
+           FROM public.canonical_schedule_assignments assignment
+           JOIN public.canonical_appointments appointment
              ON appointment.organization_id = assignment.organization_id
             AND appointment.id = assignment.appointment_id
-           JOIN canonical_transcripts transcript
+           JOIN public.canonical_transcripts transcript
              ON transcript.organization_id = appointment.organization_id
             AND transcript.operation_id = appointment.operation_id
           WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2
@@ -913,7 +913,7 @@ function createCompatibilityRouter(options) {
     try {
       const context = requestContext(req);
       const result = await resolvePool(dependencies.poolProvider).query(
-        `SELECT COUNT(*)::int AS completed_graphs FROM canonical_operations
+        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
           WHERE organization_id = $1 AND state = 'completed'`,
         [context.organizationId]
       );

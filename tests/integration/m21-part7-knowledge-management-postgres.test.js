@@ -67,6 +67,158 @@ function workflow(created, actorUserId, reason, overrides = {}) {
   };
 }
 
+function relationshipBearingFields(data) {
+  return {
+    provenance: data.version.provenance,
+    reviewAndSnapshot: {
+      latestReviewEventId: data.workflow.latestReviewEventId,
+      events: data.workflow.events,
+      snapshot: data.workflow.snapshot,
+    },
+    comparison: data.comparison,
+    publicationAndHistory: {
+      publication: data.publication,
+      history: data.history,
+    },
+    lifecycle: {
+      parentVersionId: data.version.parentVersionId,
+      parentVersionRestricted: data.version.parentVersionRestricted,
+      rollbackTargetVersionId: data.version.rollbackTargetVersionId,
+      rollbackTargetVersionRestricted: data.version.rollbackTargetVersionRestricted,
+    },
+    synchronization: data.synchronization,
+  };
+}
+
+async function insertOverflowFillers(client, organizationId, actorUserId, first, last) {
+  if (last < first) return;
+  await client.query(
+    `INSERT INTO canonical_knowledge_entries(id,organization_id,canonical_key,entry_type,created_by_user_id)
+     SELECT (lpad(to_hex(i),8,'0') || '-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid,
+            $1, 'overflow.filler.' || lpad(i::text,4,'0'), 'fact', $2
+       FROM generate_series($3::integer,$4::integer) AS source(i)`,
+    [organizationId, actorUserId, first, last]
+  );
+  await client.query(
+    `WITH source AS (
+       SELECT i,
+              (lpad(to_hex(i),8,'0') || '-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid AS entry_id,
+              ('10000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid AS version_id,
+              'overflow.filler.' || lpad(i::text,4,'0') AS canonical_key,
+              'Overflow filler ' || lpad(i::text,4,'0') AS label
+         FROM generate_series($3::integer,$4::integer) AS input(i)
+     ), prepared AS (
+       SELECT *, jsonb_build_object(
+         'applicability','{}'::jsonb,'canonicalKey',canonical_key,
+         'content',jsonb_build_object('facts',jsonb_build_object('value',canonical_key),'state','ready'),
+         'entryType','fact','label',label,'origin','human','reviewRequirement','standard',
+         'schemaVersion',1,'sensitivity','internal'
+       ) AS document FROM source
+     ), canonical AS (
+       SELECT *, public.canonical_knowledge_render_jsonb(document) AS canonical_document FROM prepared
+     )
+     INSERT INTO canonical_knowledge_versions(
+       id,organization_id,entry_id,version_number,schema_version,canonical_key,entry_type,
+       content_origin,label,sensitivity,review_requirement,applicability,document,
+       canonical_document,canonical_digest,parent_version_id,created_by_user_id,reason
+     )
+     SELECT version_id,$1,entry_id,1,1,canonical_key,'fact','human',label,'internal','standard',
+            '{}'::jsonb,document,canonical_document,
+            encode(sha256(convert_to(canonical_document,'UTF8')),'hex'),NULL,$2,'Create overflow filler.'
+       FROM canonical`,
+    [organizationId, actorUserId, first, last]
+  );
+  await client.query(
+    `INSERT INTO canonical_knowledge_provenance(
+       organization_id,version_id,ordinal,source_type,source_record_id,
+       source_version,source_digest,json_pointer
+     )
+     SELECT $1, ('10000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid, 1,
+            'human_input', 'overflow:filler:' || i::text, '1',
+            encode(sha256(convert_to('overflow:filler:' || i::text,'UTF8')),'hex'), ''
+       FROM generate_series($2::integer,$3::integer) AS source(i)`,
+    [organizationId, first, last]
+  );
+  await client.query(
+    `INSERT INTO canonical_knowledge_audit_events(
+       organization_id,entry_id,version_id,actor_user_id,action,reason,details
+     )
+     SELECT version.organization_id,version.entry_id,version.id,$2,'entry_draft_created',version.reason,
+            jsonb_build_object('canonicalDigest',rtrim(version.canonical_digest),'versionNumber',1)
+       FROM canonical_knowledge_versions version
+      WHERE version.organization_id=$1
+        AND version.id IN (
+          SELECT ('10000000-0000-4000-8000-' || lpad(i::text,12,'0'))::uuid
+            FROM generate_series($3::integer,$4::integer) AS source(i)
+        )`,
+    [organizationId, actorUserId, first, last]
+  );
+}
+
+async function insertOverflowVersion(client, input) {
+  await client.query(
+    `INSERT INTO canonical_knowledge_entries(id,organization_id,canonical_key,entry_type,created_by_user_id)
+     VALUES ($1,$2,$3,'fact',$4)`,
+    [input.entryId, input.organizationId, input.key, input.actorUserId]
+  );
+  await client.query(
+    `WITH prepared AS (
+       SELECT jsonb_build_object(
+         'applicability','{}'::jsonb,'canonicalKey',$4::text,
+         'content',jsonb_build_object('facts',jsonb_build_object('value',$4::text),'state','ready'),
+         'entryType','fact','label',$5::text,'origin','human','reviewRequirement',$7::text,
+         'schemaVersion',1,'sensitivity',$6::text
+       ) AS document
+     ), canonical AS (
+       SELECT document, public.canonical_knowledge_render_jsonb(document) AS canonical_document FROM prepared
+     )
+     INSERT INTO canonical_knowledge_versions(
+       id,organization_id,entry_id,version_number,schema_version,canonical_key,entry_type,
+       content_origin,label,sensitivity,review_requirement,applicability,document,
+       canonical_document,canonical_digest,parent_version_id,created_by_user_id,reason
+     )
+     SELECT $1,$2,$3,1,1,$4,'fact','human',$5,$6,$7,'{}'::jsonb,document,canonical_document,
+            encode(sha256(convert_to(canonical_document,'UTF8')),'hex'),NULL,$8,$9 FROM canonical`,
+    [input.versionId, input.organizationId, input.entryId, input.key, input.label,
+      input.sensitivity || 'internal', input.reviewRequirement || 'standard', input.actorUserId, input.reason]
+  );
+  const canonicalDigest = String((await client.query(
+    'SELECT canonical_digest FROM canonical_knowledge_versions WHERE organization_id=$1 AND id=$2',
+    [input.organizationId, input.versionId]
+  )).rows[0].canonical_digest).trim();
+  const source = typeof input.source === 'function' ? input.source(canonicalDigest) : input.source;
+  await client.query(
+    `INSERT INTO canonical_knowledge_provenance(
+       organization_id,version_id,ordinal,source_type,source_record_id,source_version,source_digest,json_pointer
+     ) VALUES ($1,$2,1,$3,$4,$5,$6,$7)`,
+    [input.organizationId, input.versionId, source.sourceType, source.sourceRecordId,
+      source.sourceVersion, source.sourceDigest, source.jsonPointer]
+  );
+  await client.query(
+    `INSERT INTO canonical_knowledge_audit_events(
+       organization_id,entry_id,version_id,actor_user_id,action,reason,details
+     ) VALUES ($1,$2,$3,$4,'entry_draft_created',$5,
+       jsonb_build_object('canonicalDigest',$6::text,'versionNumber',1))`,
+    [input.organizationId, input.entryId, input.versionId, input.actorUserId, input.reason, canonicalDigest]
+  );
+  return { id: input.entryId, version: { id: input.versionId, number: 1, canonicalDigest } };
+}
+
+async function withTestTransaction(pool, operation) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await operation(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) { /* Preserve original failure. */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
   let database;
   let pool;
@@ -448,19 +600,41 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
         }],
       }
     ));
+    const importedMissingId = '7f000000-0000-4000-8000-000000000002';
+    const importedMissingDigest = '9'.repeat(64);
+    const importedMissing = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.imported-missing-readable', {
+        provenance: [{
+          sourceType: 'imported_record', sourceRecordId: importedMissingId, sourceVersion: 'provider-v1',
+          sourceDigest: importedMissingDigest, jsonPointer: '/provider/missing',
+        }],
+      }
+    ));
+    const importedCrossTenant = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.imported-cross-tenant-readable', {
+        provenance: [{
+          sourceType: 'imported_record', sourceRecordId: otherTenant.version.id,
+          sourceVersion: String(otherTenant.version.number), sourceDigest: otherTenant.version.canonicalDigest,
+          jsonPointer: `/provider/${otherTenant.version.id}/${otherTenant.version.canonicalDigest}`,
+        }],
+      }
+    ));
 
     const restrictedMarker = [{
       ordinal: null, sourceType: null, sourceRecordId: null, sourceVersion: null,
       sourceDigest: null, jsonPointer: null, restricted: true,
     }];
-    for (const entry of [direct, transitive, crossTenant, missing, mismatched]) {
+    for (const entry of [
+      direct, transitive, crossTenant, missing, mismatched, importedMissing, importedCrossTenant,
+    ]) {
       const member = await request(app).get(`/api/v1/knowledge-management/items/${entry.id}`)
         .set('x-part7-actor', 'member');
       expect(member.status).toBe(200);
       expect(member.body.data.version.provenance).toEqual(restrictedMarker);
       const serialized = JSON.stringify(member.body);
       for (const token of [protectedTarget.version.id, protectedTarget.version.canonicalDigest,
-        otherTenant.version.id, otherTenant.version.canonicalDigest, missingId, '7'.repeat(64), '8'.repeat(64)]) {
+        otherTenant.version.id, otherTenant.version.canonicalDigest, missingId, '7'.repeat(64), '8'.repeat(64),
+        importedMissingId, importedMissingDigest]) {
         expect(serialized).not.toContain(token);
       }
     }
@@ -473,13 +647,215 @@ realPostgres('Mission 21 Part 7 mounted knowledge management', () => {
       sourceDigest: protectedTarget.version.canonicalDigest,
       jsonPointer: `/protected/${protectedTarget.version.id}`,
     })]);
-    for (const entry of [crossTenant, missing, mismatched]) {
-      const owner = await request(app).get(`/api/v1/knowledge-management/items/${entry.id}`)
-        .set('x-part7-actor', 'owner');
-      expect(owner.status).toBe(200);
-      expect(owner.body.data.version.provenance).toEqual(restrictedMarker);
+    for (const actor of ['owner', 'admin']) {
+      for (const [entry, protectedTokens] of [
+        [crossTenant, [otherTenant.version.id, otherTenant.version.canonicalDigest]],
+        [missing, [missingId, '7'.repeat(64)]],
+        [mismatched, [protectedTarget.version.id, '8'.repeat(64)]],
+        [importedMissing, [importedMissingId, importedMissingDigest]],
+        [importedCrossTenant, [otherTenant.version.id, otherTenant.version.canonicalDigest]],
+      ]) {
+        const privileged = await request(app).get(`/api/v1/knowledge-management/items/${entry.id}`)
+          .set('x-part7-actor', actor);
+        expect(privileged.status).toBe(200);
+        expect(privileged.body.data.version.provenance).toEqual(restrictedMarker);
+        const relationshipFields = relationshipBearingFields(privileged.body.data);
+        expect(relationshipFields).toEqual(expect.objectContaining({
+          reviewAndSnapshot: { latestReviewEventId: null, events: [], snapshot: null },
+          comparison: expect.objectContaining({ restricted: true }),
+          lifecycle: {
+            parentVersionId: null, parentVersionRestricted: true,
+            rollbackTargetVersionId: null, rollbackTargetVersionRestricted: true,
+          },
+          synchronization: [],
+        }));
+        expect(relationshipFields.publicationAndHistory).toEqual({
+          publication: expect.objectContaining({ selected: null, current: null, history: [] }),
+          history: null,
+        });
+        const serializedRelationships = JSON.stringify(relationshipFields);
+        protectedTokens.forEach(token => expect(serializedRelationships).not.toContain(token));
+      }
     }
   });
+
+  test('reachable relationship depth overflow redacts every relationship-bearing response field', async () => {
+    let target = await knowledge.createInitialKnowledgeDraft(pool, draft(
+      ORG_A, OWNER_A, 'relationship.overflow.terminal', {
+        provenance: [{
+          sourceType: 'imported_record', sourceRecordId: 'overflow-external-terminal',
+          sourceVersion: 'provider-v1', sourceDigest: 'd'.repeat(64), jsonPointer: '/external/terminal',
+        }],
+      }
+    ));
+    const protectedTokens = [target.version.id, target.version.canonicalDigest];
+    for (let depth = 0; depth < 34; depth += 1) {
+      const child = target;
+      target = await knowledge.createInitialKnowledgeDraft(pool, draft(
+        ORG_A, OWNER_A, `relationship.overflow.depth-${String(depth).padStart(2, '0')}`, {
+          provenance: [{
+            sourceType: 'system_generation', sourceRecordId: child.version.id,
+            sourceVersion: String(child.version.number), sourceDigest: child.version.canonicalDigest,
+            jsonPointer: `/overflow/${child.version.id}`,
+          }],
+        }
+      ));
+      protectedTokens.push(child.version.id, child.version.canonicalDigest, `/overflow/${child.version.id}`);
+    }
+    for (const role of ['owner', 'member']) {
+      const response = await request(app).get(`/api/v1/knowledge-management/items/${target.id}`)
+        .set('x-part7-actor', role);
+      expect(response.status).toBe(200);
+      const relationshipFields = relationshipBearingFields(response.body.data);
+      expect(relationshipFields.provenance).toEqual([{
+        ordinal: null, sourceType: null, sourceRecordId: null, sourceVersion: null,
+        sourceDigest: null, jsonPointer: null, restricted: true,
+      }]);
+      expect(relationshipFields.reviewAndSnapshot).toEqual({
+        latestReviewEventId: null, events: [], snapshot: null,
+      });
+      expect(relationshipFields.comparison).toEqual(expect.objectContaining({ restricted: true }));
+      expect(relationshipFields.publicationAndHistory).toEqual({
+        publication: expect.objectContaining({ selected: null, current: null, history: [] }),
+        history: null,
+      });
+      expect(relationshipFields.lifecycle).toEqual({
+        parentVersionId: null, parentVersionRestricted: true,
+        rollbackTargetVersionId: null, rollbackTargetVersionRestricted: true,
+      });
+      expect(relationshipFields.synchronization).toEqual([]);
+      const serializedRelationships = JSON.stringify(relationshipFields);
+      protectedTokens.forEach(token => expect(serializedRelationships).not.toContain(token));
+    }
+  });
+
+  test('selected reachable evidence remains exact at 4096, 4097, and larger unrelated tenant histories', async () => {
+    const organizationId = '73000000-0000-4000-8000-000000000001';
+    const ownerUserId = '73100000-0000-4000-8000-000000000001';
+    const adminUserId = '73100000-0000-4000-8000-000000000002';
+    const memberUserId = '73100000-0000-4000-8000-000000000003';
+    const targetEntryId = 'ee000000-0000-4000-8000-000000000101';
+    const targetVersionId = 'ee100000-0000-4000-8000-000000000101';
+    const selectedEntryId = 'ff000000-0000-4000-8000-000000000101';
+    const selectedVersionId = 'ff100000-0000-4000-8000-000000000101';
+    await seedActor(pool, organizationId, ownerUserId, 'owner', 'active', 'overflow-owner');
+    await seedActor(pool, organizationId, adminUserId, 'admin', 'active', 'overflow-admin');
+    await seedActor(pool, organizationId, memberUserId, 'member', 'active', 'overflow-member');
+    const client = await pool.connect();
+    let target;
+    try {
+      await client.query('BEGIN');
+      // The rows remain invariant-complete (entry, version, provenance, and exact audit evidence),
+      // but avoid queuing thousands of per-row deferred graph checks for this scale fixture.
+      await client.query("SET LOCAL session_replication_role = 'replica'");
+      await insertOverflowFillers(client, organizationId, ownerUserId, 1, 4094);
+      await client.query("SET LOCAL session_replication_role = 'origin'");
+      target = await insertOverflowVersion(client, {
+        organizationId, actorUserId: ownerUserId, entryId: targetEntryId, versionId: targetVersionId,
+        key: 'overflow.protected.target', label: 'Overflow protected target',
+        sensitivity: 'restricted', reviewRequirement: 'high_risk', reason: 'Create protected overflow target.',
+        source: { sourceType: 'human_input', sourceRecordId: 'overflow:protected:target',
+          sourceVersion: '1', sourceDigest: sha256('overflow:protected:target:1'), jsonPointer: '' },
+      });
+      await insertOverflowVersion(client, {
+        organizationId, actorUserId: ownerUserId, entryId: selectedEntryId, versionId: selectedVersionId,
+        key: 'overflow.readable.selected', label: 'Overflow readable selected',
+        reason: 'Create readable overflow selection.',
+        source: { sourceType: 'system_generation', sourceRecordId: targetVersionId, sourceVersion: '1',
+          sourceDigest: target.version.canonicalDigest, jsonPointer: `/protected/${targetVersionId}` },
+      });
+      await client.query('COMMIT');
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch (_) { /* Preserve original failure. */ }
+      throw error;
+    } finally {
+      client.release();
+    }
+    const { getKnowledgeManagementItem } = require('../../src/knowledge/managementRepository');
+    const restrictedMarker = [{
+      ordinal: null, sourceType: null, sourceRecordId: null, sourceVersion: null,
+      sourceDigest: null, jsonPointer: null, restricted: true,
+    }];
+    async function exactRead(actorUserId) {
+      return getKnowledgeManagementItem(pool, { organizationId, actorUserId, entryId: selectedEntryId });
+    }
+    async function expectProtectedAtCount(expectedCount) {
+      const count = Number((await pool.query(
+        'SELECT count(*) FROM canonical_knowledge_versions WHERE organization_id=$1', [organizationId]
+      )).rows[0].count);
+      expect(count).toBe(expectedCount);
+      const member = await exactRead(memberUserId);
+      expect(member.version.provenance).toEqual(restrictedMarker);
+      const serializedMember = JSON.stringify(member);
+      expect(serializedMember).not.toContain(targetVersionId);
+      expect(serializedMember).not.toContain(target.version.canonicalDigest);
+      expect(serializedMember).not.toContain(`/protected/${targetVersionId}`);
+      for (const actorUserId of [ownerUserId, adminUserId]) {
+        const privileged = await exactRead(actorUserId);
+        expect(privileged.version.provenance).toEqual([expect.objectContaining({
+          sourceRecordId: targetVersionId,
+          sourceVersion: '1',
+          sourceDigest: target.version.canonicalDigest,
+          jsonPointer: `/protected/${targetVersionId}`,
+        })]);
+      }
+    }
+    await expectProtectedAtCount(4096);
+    await withTestTransaction(pool, client =>
+      insertOverflowFillers(client, organizationId, ownerUserId, 4095, 4095));
+    await expectProtectedAtCount(4097);
+    await withTestTransaction(pool, client =>
+      insertOverflowFillers(client, organizationId, ownerUserId, 4096, 4199));
+    await expectProtectedAtCount(4201);
+
+    const external = await withTestTransaction(pool, client => insertOverflowVersion(client, {
+      organizationId, actorUserId: ownerUserId,
+      entryId: 'fd000000-0000-4000-8000-000000000101',
+      versionId: 'fd100000-0000-4000-8000-000000000101',
+      key: 'overflow.external.selected', label: 'Overflow external selected',
+      reason: 'Create valid external evidence.',
+      source: { sourceType: 'imported_record', sourceRecordId: 'external-provider-record-101',
+        sourceVersion: 'provider-v7', sourceDigest: '9'.repeat(64),
+        jsonPointer: '/external/provider-record-101' },
+    }));
+    const externalMember = await getKnowledgeManagementItem(pool, {
+      organizationId, actorUserId: memberUserId, entryId: external.id,
+    });
+    expect(externalMember.version.provenance).toEqual([expect.objectContaining({
+      sourceType: 'imported_record',
+      sourceRecordId: 'external-provider-record-101',
+      sourceVersion: 'provider-v7',
+      sourceDigest: '9'.repeat(64),
+      jsonPointer: '/external/provider-record-101',
+    })]);
+
+    const readableTarget = await withTestTransaction(pool, client => insertOverflowVersion(client, {
+      organizationId, actorUserId: ownerUserId,
+      entryId: 'ec000000-0000-4000-8000-000000000101',
+      versionId: 'ec100000-0000-4000-8000-000000000101',
+      key: 'overflow.readable.target', label: 'Overflow readable target',
+      reason: 'Create readable target in large tenant.',
+      source: { sourceType: 'human_input', sourceRecordId: 'overflow:readable:target',
+        sourceVersion: '1', sourceDigest: sha256('overflow:readable:target:1'), jsonPointer: '' },
+    }));
+    const readableSelected = await withTestTransaction(pool, client => insertOverflowVersion(client, {
+      organizationId, actorUserId: ownerUserId,
+      entryId: 'fe000000-0000-4000-8000-000000000101',
+      versionId: 'fe100000-0000-4000-8000-000000000101',
+      key: 'overflow.readable.graph', label: 'Overflow readable graph',
+      reason: 'Create small readable graph in large tenant.',
+      source: { sourceType: 'system_generation', sourceRecordId: readableTarget.version.id,
+        sourceVersion: '1', sourceDigest: readableTarget.version.canonicalDigest,
+        jsonPointer: `/readable/${readableTarget.version.id}` },
+    }));
+    const readableMember = await getKnowledgeManagementItem(pool, {
+      organizationId, actorUserId: memberUserId, entryId: readableSelected.id,
+    });
+    expect(readableMember.version.provenance).toEqual([expect.objectContaining({
+      sourceRecordId: readableTarget.version.id,
+      sourceDigest: readableTarget.version.canonicalDigest,
+    })]);
+  }, 120000);
 
   test('mounted stale workflow request fails closed with no review residue', async () => {
     const response = await request(app)

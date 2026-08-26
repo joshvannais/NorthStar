@@ -144,6 +144,100 @@ describe('Mission 21 Part 7 knowledge-management contract helpers', () => {
     expect(owner.restrictedProvenanceKeys).toEqual(new Set([`${readable.id}:2`]));
   });
 
+  test('relationship graph records evaluated external evidence and response-wide unresolved knowledge evidence', () => {
+    const readable = { organization_id: ORG, id: VERSION, version_number: 1,
+      canonical_digest: '1'.repeat(64), sensitivity: 'internal', review_requirement: 'standard' };
+    const validTarget = { organization_id: ORG, id: TARGET, version_number: 2,
+      canonical_digest: '2'.repeat(64), sensitivity: 'internal', review_requirement: 'standard' };
+    const external = {
+      version_id: readable.id, ordinal: 1, source_type: 'imported_record',
+      source_record_id: 'external-provider-record', source_version: '2026-08-25',
+      source_digest: '3'.repeat(64), json_pointer: '/records/external-provider-record',
+    };
+    const valid = {
+      version_id: readable.id, ordinal: 2, source_type: 'system_generation',
+      source_record_id: validTarget.id, source_version: String(validTarget.version_number),
+      source_digest: validTarget.canonical_digest, json_pointer: `/versions/${validTarget.id}`,
+    };
+    const unresolved = {
+      version_id: readable.id, ordinal: 3, source_type: 'system_generation',
+      source_record_id: '6f000000-0000-4000-8000-000000000001', source_version: '1',
+      source_digest: '4'.repeat(64), json_pointer: '/versions/missing',
+    };
+    const importedMissing = {
+      version_id: readable.id, ordinal: 4, source_type: 'imported_record',
+      source_record_id: '6f000000-0000-4000-8000-000000000002', source_version: 'provider-v1',
+      source_digest: '5'.repeat(64), json_pointer: '/provider/missing',
+    };
+    const importedCrossTenant = {
+      version_id: readable.id, ordinal: 5, source_type: 'imported_record',
+      source_record_id: '6f000000-0000-4000-8000-000000000003', source_version: 'provider-v2',
+      source_digest: '6'.repeat(64),
+      json_pointer: `/provider/6f000000-0000-4000-8000-000000000003/${'6'.repeat(64)}`,
+    };
+    const graph = buildRelationshipGraphPolicy({
+      organizationId: ORG,
+      canReadProtected: true,
+      versionRows: [readable, validTarget],
+      candidateRows: [readable, validTarget],
+      provenanceRows: [external, valid, unresolved, importedMissing, importedCrossTenant],
+    });
+    expect(graph.evaluatedProvenanceKeys).toEqual(new Set([
+      `${readable.id}:1`, `${readable.id}:2`, `${readable.id}:3`, `${readable.id}:4`, `${readable.id}:5`,
+    ]));
+    expect(graph.restrictedProvenanceKeys).toEqual(new Set([
+      `${readable.id}:3`, `${readable.id}:4`, `${readable.id}:5`,
+    ]));
+    expect(graph.restrictedIds).toEqual(new Set([
+      unresolved.source_record_id, importedMissing.source_record_id, importedCrossTenant.source_record_id,
+    ]));
+    expect(graph.restrictedDigests).toEqual(new Set([
+      unresolved.source_digest, importedMissing.source_digest, importedCrossTenant.source_digest,
+    ]));
+    expect(graph.failClosedRelationships).toBe(true);
+  });
+
+  test('relationship graph depth overflow fails closed for the selected reachable chain', () => {
+    const selected = { organization_id: ORG, id: VERSION, version_number: 1,
+      canonical_digest: 'a'.repeat(64), sensitivity: 'internal', review_requirement: 'standard' };
+    const chain = Array.from({ length: 34 }, (_, index) => ({
+      organization_id: ORG,
+      id: `7${String(index).padStart(7, '0')}-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      version_number: 1,
+      canonical_digest: index.toString(16).padStart(2, '0').repeat(32),
+      sensitivity: 'internal',
+      review_requirement: 'standard',
+    }));
+    const provenanceRows = chain.map((target, index) => ({
+      version_id: index === 0 ? selected.id : chain[index - 1].id,
+      ordinal: 1,
+      source_type: 'knowledge_version',
+      source_record_id: target.id,
+      source_version: '1',
+      source_digest: target.canonical_digest,
+      json_pointer: `/versions/${target.id}`,
+    }));
+    provenanceRows.push({
+      version_id: chain[chain.length - 1].id,
+      ordinal: 1,
+      source_type: 'human_input',
+      source_record_id: 'external-terminal',
+      source_version: '1',
+      source_digest: 'f'.repeat(64),
+      json_pointer: '/external/terminal',
+    });
+    const graph = buildRelationshipGraphPolicy({
+      organizationId: ORG,
+      canReadProtected: true,
+      versionRows: [selected, ...chain],
+      candidateRows: [selected, ...chain],
+      provenanceRows,
+    });
+    expect(graph.failClosedRelationships).toBe(true);
+    expect(graph.evaluatedProvenanceKeys).toContain(`${chain[chain.length - 1].id}:1`);
+    expect(graph.restrictedProvenanceKeys).toContain(`${selected.id}:1`);
+  });
+
   test.each([
     ['in_sync', 'current'], ['pending', 'pending'], ['stale', 'stale'], ['drift', 'drifted'],
     ['retry', 'retrying'], ['dead', 'dead'], ['suspended', 'suspended'], ['blocked', 'reconciliation_needed'],

@@ -33,6 +33,10 @@ const MAX_CURSOR_PAYLOAD_BYTES = 3072;
 const MAX_SNAPSHOT_BYTES = 2048;
 const MAX_RELATIONSHIP_NODES = 4096;
 const MAX_RELATIONSHIP_DEPTH = 32;
+const MAX_RELATIONSHIP_DB_ROWS = MAX_RELATIONSHIP_NODES * 3;
+const MAX_RELATIONSHIP_QUERIES = 96;
+const RELATIONSHIP_BATCH_SIZE = 256;
+const KNOWLEDGE_RELATIONSHIP_SOURCE_TYPES = new Set(['knowledge_version', 'system_generation']);
 const SAFE_FILTER = /^[a-z][a-z0-9_:-]{0,63}$/;
 const SAFE_CURSOR = /^[A-Za-z0-9_-]{1,4096}\.[0-9a-f]{64}$/;
 const SAFE_DIGEST = /^[0-9a-f]{64}$/;
@@ -412,7 +416,9 @@ async function membership(client, organizationId, actorUserId) {
   return Object.freeze({ id: result.rows[0].id, role: result.rows[0].role });
 }
 
-async function loadSyncRows(client, organizationId) {
+async function loadSyncRows(client, organizationId, options = {}) {
+  const entryId = options.entryId || null;
+  const limit = options.limit || 2147483647;
   return (await client.query(
     `SELECT target.id AS target_id, target.provider_key, target.consumer, target.audience,
             target.capabilities, target.target_revision, target.configuration_digest,
@@ -431,8 +437,13 @@ async function loadSyncRows(client, organizationId) {
          ON desired.organization_id = state.organization_id
         AND desired.target_id = state.target_id AND desired.id = state.desired_event_id
       WHERE target.organization_id = $1
-      ORDER BY target.provider_key, target.consumer, target.audience, target.id`,
-    [organizationId]
+        AND ($2::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(COALESCE(desired.source_pins, '[]'::jsonb)) AS pin
+           WHERE pin->>'entryId' = $2::text
+        ))
+      ORDER BY target.provider_key, target.consumer, target.audience, target.id
+      LIMIT $3`,
+    [organizationId, entryId, limit]
   )).rows.map(mapSyncRow);
 }
 
@@ -711,6 +722,7 @@ function createRelationshipPolicy(canReadProtected, options = {}) {
   const restrictedIds = new Set();
   const restrictedDigests = new Set();
   const restrictedProvenanceKeys = new Set();
+  const evaluatedProvenanceKeys = new Set(options.evaluatedProvenanceKeys || []);
   if (!canReadProtected) {
     for (const row of options.restrictedVersionRows || []) {
       restrictedVersionIds.add(row.id);
@@ -738,6 +750,8 @@ function createRelationshipPolicy(canReadProtected, options = {}) {
     }
   }
   for (const key of options.restrictedProvenanceKeys || []) restrictedProvenanceKeys.add(key);
+  for (const id of options.restrictedIds || []) restrictedIds.add(String(id).toLowerCase());
+  for (const value of options.restrictedDigests || []) restrictedDigests.add(digest(value));
   return {
     restrictedVersionIds,
     restrictedPublicationIds,
@@ -746,6 +760,8 @@ function createRelationshipPolicy(canReadProtected, options = {}) {
     restrictedIds,
     restrictedDigests,
     restrictedProvenanceKeys,
+    evaluatedProvenanceKeys,
+    failClosedRelationships: Boolean(options.failClosedRelationships),
   };
 }
 
@@ -761,7 +777,8 @@ function buildRelationshipGraphPolicy(input) {
   const versionRows = input.versionRows || [];
   const provenanceRows = input.provenanceRows || [];
   const candidateRows = input.candidateRows || [];
-  const overflow = Boolean(input.overflow);
+  const overflow = Boolean(input.overflow || versionRows.length > MAX_RELATIONSHIP_NODES ||
+    provenanceRows.length > MAX_RELATIONSHIP_NODES || candidateRows.length > MAX_RELATIONSHIP_NODES);
   const candidatesById = new Map();
   const candidatesByDigest = new Map();
   const provenanceByVersion = new Map();
@@ -780,31 +797,52 @@ function buildRelationshipGraphPolicy(input) {
     provenanceByVersion.get(row.version_id).push(row);
   }
   const restrictedProvenanceKeys = new Set();
+  const evaluatedProvenanceKeys = new Set();
+  const restrictedIds = new Set();
+  const restrictedDigests = new Set();
   const targetRestrictionMemo = new Map();
   const visitingTargets = new Set();
   let visitedRelationships = 0;
+  let unresolved = overflow;
+
+  function relationshipLooksKnowledge(row, idMatches, digestMatches) {
+    if (KNOWLEDGE_RELATIONSHIP_SOURCE_TYPES.has(row.source_type)) return true;
+    const recordId = String(row.source_record_id || '').trim().toLowerCase();
+    if (SAFE_UUID.test(recordId) || idMatches.length || digestMatches.length) return true;
+    const pointer = String(row.json_pointer || '').toLowerCase();
+    UUID_TOKEN.lastIndex = 0;
+    if (UUID_TOKEN.test(pointer)) return true;
+    DIGEST_TOKEN.lastIndex = 0;
+    return DIGEST_TOKEN.test(pointer);
+  }
 
   function resolve(row, depth) {
-    if (overflow || depth > MAX_RELATIONSHIP_DEPTH || visitedRelationships >= MAX_RELATIONSHIP_NODES) return true;
+    evaluatedProvenanceKeys.add(provenanceKey(row));
+    if (overflow || depth > MAX_RELATIONSHIP_DEPTH || visitedRelationships >= MAX_RELATIONSHIP_NODES) {
+      unresolved = true;
+      return true;
+    }
     visitedRelationships += 1;
     const recordId = String(row.source_record_id || '').trim().toLowerCase();
     const sourceDigest = digest(row.source_digest);
     const idMatches = candidatesById.get(recordId) || [];
     const digestMatches = candidatesByDigest.get(sourceDigest) || [];
-    UUID_TOKEN.lastIndex = 0;
-    DIGEST_TOKEN.lastIndex = 0;
-    const pointer = String(row.json_pointer || '');
-    const knowledgeLike = SAFE_UUID.test(recordId) || idMatches.length > 0 || digestMatches.length > 0 ||
-      UUID_TOKEN.test(pointer) || DIGEST_TOKEN.test(pointer);
+    const knowledgeLike = relationshipLooksKnowledge(row, idMatches, digestMatches);
     if (!knowledgeLike) return false;
     const exact = idMatches.filter(candidate =>
       digest(candidate.canonical_digest) === sourceDigest &&
       String(Number(candidate.version_number)) === String(row.source_version || '').trim()
     );
-    if (exact.length !== 1 || exact[0].organization_id !== input.organizationId) return true;
+    if (exact.length !== 1 || exact[0].organization_id !== input.organizationId) {
+      unresolved = true;
+      return true;
+    }
     const target = exact[0];
     if (!input.canReadProtected && protectedVersion(target)) return true;
-    if (visitingTargets.has(target.id)) return true;
+    if (visitingTargets.has(target.id)) {
+      unresolved = true;
+      return true;
+    }
     if (targetRestrictionMemo.has(target.id)) return targetRestrictionMemo.get(target.id);
     visitingTargets.add(target.id);
     let restricted = false;
@@ -823,77 +861,263 @@ function buildRelationshipGraphPolicy(input) {
     const restricted = resolve(row, 0);
     if (!restricted) continue;
     restrictedProvenanceKeys.add(provenanceKey(row));
+    const recordId = String(row.source_record_id || '').trim().toLowerCase();
+    const sourceDigest = digest(row.source_digest);
+    if (SAFE_UUID.test(recordId)) restrictedIds.add(recordId);
+    if (SAFE_DIGEST.test(sourceDigest)) restrictedDigests.add(sourceDigest);
   }
   return {
+    evaluatedProvenanceKeys,
+    failClosedRelationships: unresolved,
+    restrictedDigests,
+    restrictedIds,
     restrictedProvenanceKeys,
     restrictedVersionRows: versionRows.filter(protectedVersion),
   };
 }
 
-async function loadRelationshipPolicy(client, organizationId, canReadProtected, publicationRows, snapshotRow) {
-  const versionRows = (await client.query(
-    `SELECT organization_id, id, version_number, canonical_digest, sensitivity, review_requirement
-       FROM canonical_knowledge_versions
-      WHERE organization_id = $1
-      ORDER BY id LIMIT $2`,
-    [organizationId, MAX_RELATIONSHIP_NODES + 1]
-  )).rows;
-  const provenanceRows = (await client.query(
-    `SELECT organization_id, version_id, ordinal, source_type, source_record_id,
-            source_version, source_digest, json_pointer
-       FROM canonical_knowledge_provenance
-      WHERE organization_id = $1
-      ORDER BY version_id, ordinal LIMIT $2`,
-    [organizationId, MAX_RELATIONSHIP_NODES + 1]
-  )).rows;
-  const candidateIds = Array.from(new Set(provenanceRows
-    .map(row => String(row.source_record_id || '').trim().toLowerCase())
-    .filter(value => SAFE_UUID.test(value))));
-  const candidateDigests = Array.from(new Set(provenanceRows
-    .map(row => digest(row.source_digest)).filter(value => SAFE_DIGEST.test(value))));
-  const candidateRows = (await client.query(
-    `SELECT organization_id, id, version_number, canonical_digest, sensitivity, review_requirement
-       FROM canonical_knowledge_versions
-      WHERE organization_id = $1
-        AND (id = ANY($2::uuid[]) OR rtrim(canonical_digest) = ANY($3::text[]))
-      ORDER BY id LIMIT $4`,
-    [organizationId, candidateIds, candidateDigests, MAX_RELATIONSHIP_NODES + 1]
-  )).rows;
-  const protectedRelationshipRows = (await client.query(
-    `SELECT 'publication'::text AS kind, publication.id,
-            publication.canonical_digest AS relationship_digest
-       FROM canonical_knowledge_publications publication
-       JOIN canonical_knowledge_versions version
-         ON version.organization_id = publication.organization_id
-        AND version.entry_id = publication.entry_id AND version.id = publication.version_id
-      WHERE publication.organization_id = $1
-        AND NOT (version.sensitivity IN ('public', 'internal') AND version.review_requirement = 'standard')
-      UNION ALL
-     SELECT 'snapshot', snapshot.id, snapshot.diff_digest
-       FROM canonical_knowledge_review_snapshots snapshot
-       JOIN canonical_knowledge_versions version
-         ON version.organization_id = snapshot.organization_id
-        AND version.entry_id = snapshot.entry_id
-        AND version.id IN (snapshot.version_id, snapshot.base_version_id)
-      WHERE snapshot.organization_id = $1
-        AND NOT (version.sensitivity IN ('public', 'internal') AND version.review_requirement = 'standard')
-      ORDER BY kind, id LIMIT $2`,
-    [organizationId, MAX_RELATIONSHIP_NODES + 1]
-  )).rows;
+function collectRelationshipTokens(value, state) {
+  const pending = [value];
+  while (pending.length) {
+    const item = pending.pop();
+    state.tokenNodes += 1;
+    if (state.tokenNodes > MAX_RELATIONSHIP_NODES) {
+      state.overflow = true;
+      return;
+    }
+    if (typeof item === 'string') {
+      const normalized = item.toLowerCase();
+      UUID_TOKEN.lastIndex = 0;
+      let match;
+      while ((match = UUID_TOKEN.exec(normalized))) state.tokenIds.add(match[0]);
+      DIGEST_TOKEN.lastIndex = 0;
+      while ((match = DIGEST_TOKEN.exec(normalized))) state.tokenDigests.add(match[0]);
+    } else if (Array.isArray(item)) {
+      for (const nested of item) pending.push(nested);
+    } else if (item && typeof item === 'object') {
+      for (const nested of Object.values(item)) pending.push(nested);
+    }
+  }
+}
+
+async function relationshipQuery(state, sql, parameters, maximumRows) {
+  if (state.queries >= MAX_RELATIONSHIP_QUERIES || state.databaseRows >= MAX_RELATIONSHIP_DB_ROWS) {
+    state.overflow = true;
+    return [];
+  }
+  state.queries += 1;
+  const remaining = Math.min(maximumRows, MAX_RELATIONSHIP_DB_ROWS - state.databaseRows);
+  const rows = (await state.client.query(sql, parameters.concat([remaining + 1]))).rows;
+  if (rows.length > remaining) {
+    state.overflow = true;
+    state.databaseRows += remaining;
+    return rows.slice(0, remaining);
+  }
+  state.databaseRows += rows.length;
+  return rows;
+}
+
+function registerVersionCandidate(state, row) {
+  const id = String(row.id).toLowerCase();
+  const rowDigest = digest(row.canonical_digest);
+  const existing = state.candidatesById.get(id) || [];
+  if (!existing.some(candidate => candidate.organization_id === row.organization_id)) {
+    if (state.candidateRows.length >= MAX_RELATIONSHIP_NODES) {
+      state.overflow = true;
+      return;
+    }
+    if (!state.candidatesById.has(id)) state.candidatesById.set(id, existing);
+    existing.push(row);
+    state.candidateRows.push(row);
+  }
+  if (rowDigest) {
+    if (!state.candidatesByDigest.has(rowDigest)) state.candidatesByDigest.set(rowDigest, []);
+    if (!state.candidatesByDigest.get(rowDigest).some(candidate => candidate.id === row.id)) {
+      state.candidatesByDigest.get(rowDigest).push(row);
+    }
+  }
+}
+
+async function loadVersionCandidates(state) {
+  const ids = Array.from(state.tokenIds).filter(value => SAFE_UUID.test(value) && !state.queriedIds.has(value));
+  const digests = Array.from(state.tokenDigests)
+    .filter(value => SAFE_DIGEST.test(value) && !state.queriedDigests.has(value));
+  for (let offset = 0; offset < Math.max(ids.length, digests.length); offset += RELATIONSHIP_BATCH_SIZE) {
+    const idBatch = ids.slice(offset, offset + RELATIONSHIP_BATCH_SIZE);
+    const digestBatch = digests.slice(offset, offset + RELATIONSHIP_BATCH_SIZE);
+    idBatch.forEach(value => state.queriedIds.add(value));
+    digestBatch.forEach(value => state.queriedDigests.add(value));
+    const rows = await relationshipQuery(state,
+      `SELECT organization_id, id, version_number, canonical_digest, sensitivity, review_requirement
+         FROM canonical_knowledge_versions
+        WHERE organization_id = $1
+          AND (id = ANY($2::uuid[]) OR rtrim(canonical_digest) = ANY($3::text[]))
+        ORDER BY id LIMIT $4`,
+      [state.organizationId, idBatch, digestBatch], MAX_RELATIONSHIP_NODES);
+    rows.forEach(row => registerVersionCandidate(state, row));
+    if (state.overflow) return;
+  }
+}
+
+function exactCandidate(state, row) {
+  const recordId = String(row.source_record_id || '').trim().toLowerCase();
+  const sourceDigest = digest(row.source_digest);
+  return (state.candidatesById.get(recordId) || []).filter(candidate =>
+    digest(candidate.canonical_digest) === sourceDigest &&
+    String(Number(candidate.version_number)) === String(row.source_version || '').trim()
+  );
+}
+
+function rowLooksKnowledge(state, row) {
+  if (KNOWLEDGE_RELATIONSHIP_SOURCE_TYPES.has(row.source_type)) return true;
+  const recordId = String(row.source_record_id || '').trim().toLowerCase();
+  const sourceDigest = digest(row.source_digest);
+  if (SAFE_UUID.test(recordId) || (state.candidatesById.get(recordId) || []).length ||
+      (state.candidatesByDigest.get(sourceDigest) || []).length) return true;
+  const pointer = String(row.json_pointer || '').toLowerCase();
+  UUID_TOKEN.lastIndex = 0;
+  if (UUID_TOKEN.test(pointer)) return true;
+  DIGEST_TOKEN.lastIndex = 0;
+  return DIGEST_TOKEN.test(pointer);
+}
+
+async function loadReachableProvenance(state, selectedVersionId, selectedRows) {
+  const provenanceRows = selectedRows.slice();
+  const loadedVersions = new Set([selectedVersionId]);
+  let frontier = selectedRows.map(row => ({ row, depth: 0 }));
+  while (frontier.length && !state.overflow) {
+    const nextTargets = new Map();
+    for (let offset = 0; offset < frontier.length; offset += RELATIONSHIP_BATCH_SIZE) {
+      const batch = frontier.slice(offset, offset + RELATIONSHIP_BATCH_SIZE);
+      batch.forEach(item => collectRelationshipTokens(item.row, state));
+      await loadVersionCandidates(state);
+      if (state.overflow) break;
+      for (const item of batch) {
+        if (!rowLooksKnowledge(state, item.row)) continue;
+        const exact = exactCandidate(state, item.row);
+        if (exact.length !== 1) continue;
+        const targetId = String(exact[0].id).toLowerCase();
+        if (!loadedVersions.has(targetId)) {
+          const targetDepth = item.depth + 1;
+          const current = nextTargets.get(targetId);
+          if (current === undefined || targetDepth < current) nextTargets.set(targetId, targetDepth);
+        }
+      }
+    }
+    if (state.overflow || nextTargets.size === 0) break;
+    frontier = [];
+    const targets = Array.from(nextTargets.keys()).sort();
+    for (let offset = 0; offset < targets.length; offset += RELATIONSHIP_BATCH_SIZE) {
+      const targetBatch = targets.slice(offset, offset + RELATIONSHIP_BATCH_SIZE);
+      targetBatch.forEach(value => loadedVersions.add(value));
+      const remainingNodes = MAX_RELATIONSHIP_NODES - provenanceRows.length;
+      if (remainingNodes <= 0) {
+        state.overflow = true;
+        break;
+      }
+      const rows = await relationshipQuery(state,
+        `SELECT organization_id, version_id, ordinal, source_type, source_record_id,
+                source_version, source_digest, json_pointer
+           FROM canonical_knowledge_provenance
+          WHERE organization_id = $1 AND version_id = ANY($2::uuid[])
+          ORDER BY version_id, ordinal LIMIT $3`,
+        [state.organizationId, targetBatch], remainingNodes);
+      for (const row of rows) {
+        provenanceRows.push(row);
+        const depth = nextTargets.get(String(row.version_id).toLowerCase());
+        if (depth > MAX_RELATIONSHIP_DEPTH) state.overflow = true;
+        frontier.push({ row, depth });
+      }
+      if (state.overflow) break;
+    }
+  }
+  return provenanceRows;
+}
+
+async function loadProtectedSynchronizationPublications(state, synchronization) {
+  const pins = synchronization.flatMap(target => target.desired && Array.isArray(target.desired.sourcePins)
+    ? target.desired.sourcePins : []);
+  const publicationIds = Array.from(new Set(pins.map(pin => pin && pin.publicationId)
+    .filter(value => typeof value === 'string' && SAFE_UUID.test(value))));
+  const rows = [];
+  for (let offset = 0; offset < publicationIds.length; offset += RELATIONSHIP_BATCH_SIZE) {
+    const batch = publicationIds.slice(offset, offset + RELATIONSHIP_BATCH_SIZE);
+    rows.push(...await relationshipQuery(state,
+      `SELECT publication.id, publication.entry_id, publication.version_id,
+              publication.publication_number, publication.canonical_digest AS relationship_digest,
+              version.version_number, version.canonical_digest, version.sensitivity, version.review_requirement
+         FROM canonical_knowledge_publications publication
+         JOIN canonical_knowledge_versions version
+           ON version.organization_id = publication.organization_id
+          AND version.entry_id = publication.entry_id AND version.id = publication.version_id
+        WHERE publication.organization_id = $1 AND publication.id = ANY($2::uuid[])
+        ORDER BY publication.id LIMIT $3`,
+      [state.organizationId, batch], MAX_RELATIONSHIP_NODES));
+    if (state.overflow) break;
+  }
+  const byId = new Map(rows.map(row => [String(row.id).toLowerCase(), row]));
+  for (const pin of pins) {
+    const publication = pin && byId.get(String(pin.publicationId || '').toLowerCase());
+    if (!publication || publication.entry_id !== pin.entryId || publication.version_id !== pin.versionId ||
+        Number(publication.publication_number) !== Number(pin.publicationNumber) ||
+        Number(publication.version_number) !== Number(pin.versionNumber) ||
+        digest(publication.canonical_digest) !== digest(pin.canonicalDigest) ||
+        digest(publication.relationship_digest) !== digest(pin.canonicalDigest)) {
+      state.integrityFailure = true;
+    }
+  }
+  return rows.filter(protectedVersion).map(row => ({
+    kind: 'publication', id: row.id, relationship_digest: row.relationship_digest,
+  }));
+}
+
+async function loadRelationshipPolicy(client, input) {
+  const state = {
+    client,
+    organizationId: input.organizationId,
+    overflow: Boolean(input.overflow),
+    integrityFailure: false,
+    queries: 0,
+    databaseRows: 0,
+    tokenNodes: 0,
+    tokenIds: new Set(),
+    tokenDigests: new Set(),
+    queriedIds: new Set(),
+    queriedDigests: new Set(),
+    candidateRows: [],
+    candidatesById: new Map(),
+    candidatesByDigest: new Map(),
+  };
+  collectRelationshipTokens(input.relationshipValues, state);
+  for (const id of input.directVersionIds || []) {
+    if (id) state.tokenIds.add(String(id).toLowerCase());
+  }
+  await loadVersionCandidates(state);
+  const provenanceRows = await loadReachableProvenance(
+    state, input.selectedVersionId, input.provenanceRows || []
+  );
+  const directVersionIds = Array.from(new Set((input.directVersionIds || []).filter(Boolean)
+    .map(value => String(value).toLowerCase())));
+  for (const id of directVersionIds) {
+    if ((state.candidatesById.get(id) || []).length !== 1) state.integrityFailure = true;
+  }
+  const protectedRelationshipRows = await loadProtectedSynchronizationPublications(
+    state, input.synchronization || []
+  );
   const graph = buildRelationshipGraphPolicy({
-    organizationId,
-    canReadProtected,
-    versionRows: versionRows.slice(0, MAX_RELATIONSHIP_NODES),
-    provenanceRows: provenanceRows.slice(0, MAX_RELATIONSHIP_NODES),
-    candidateRows: candidateRows.slice(0, MAX_RELATIONSHIP_NODES),
-    overflow: versionRows.length > MAX_RELATIONSHIP_NODES || provenanceRows.length > MAX_RELATIONSHIP_NODES ||
-      candidateRows.length > MAX_RELATIONSHIP_NODES || protectedRelationshipRows.length > MAX_RELATIONSHIP_NODES,
+    organizationId: input.organizationId,
+    canReadProtected: input.canReadProtected,
+    versionRows: state.candidateRows,
+    provenanceRows,
+    candidateRows: state.candidateRows,
+    overflow: state.overflow || state.integrityFailure,
   });
-  return createRelationshipPolicy(canReadProtected, {
+  return createRelationshipPolicy(input.canReadProtected, {
     ...graph,
-    publicationRows,
-    snapshotRow,
-    protectedRelationshipRows: protectedRelationshipRows.slice(0, MAX_RELATIONSHIP_NODES),
+    failClosedRelationships: graph.failClosedRelationships || state.overflow || state.integrityFailure,
+    publicationRows: input.publicationRows,
+    snapshotRow: input.snapshotRow,
+    protectedRelationshipRows,
   });
 }
 
@@ -932,7 +1156,9 @@ function mapProvenance(row, relationshipPolicy) {
     sourceDigest: digest(row.source_digest),
     jsonPointer: row.json_pointer,
   };
-  const restricted = policy.restrictedProvenanceKeys.has(provenanceKey(row)) ||
+  const restricted = policy.failClosedRelationships ||
+    !policy.evaluatedProvenanceKeys.has(provenanceKey(row)) ||
+    policy.restrictedProvenanceKeys.has(provenanceKey(row)) ||
     policy.restrictedIds.has(row.source_record_id) ||
     policy.restrictedDigests.has(digest(row.source_digest)) ||
     [mapped.sourceRecordId, mapped.sourceDigest, mapped.jsonPointer]
@@ -949,6 +1175,17 @@ function mapProvenance(row, relationshipPolicy) {
 }
 
 function mapProvenanceRows(rows, relationshipPolicy) {
+  if (relationshipPolicy && relationshipPolicy.failClosedRelationships) {
+    return [{
+      ordinal: null,
+      sourceType: null,
+      sourceRecordId: null,
+      sourceVersion: null,
+      sourceDigest: null,
+      jsonPointer: null,
+      restricted: true,
+    }];
+  }
   const mapped = [];
   let restricted = false;
   for (const row of rows) {
@@ -1056,17 +1293,23 @@ async function getKnowledgeManagementItem(pool, input) {
       fail('knowledge_management_not_found', 'Knowledge item was not found', 404);
     }
     const row = selected.rows[0];
-    const provenanceRows = (await client.query(
+    let relationshipInputOverflow = false;
+    const loadedProvenanceRows = (await client.query(
       `SELECT * FROM canonical_knowledge_provenance
-        WHERE organization_id = $1 AND version_id = $2 ORDER BY ordinal`,
-      [organizationId, row.version_id]
+        WHERE organization_id = $1 AND version_id = $2
+        ORDER BY ordinal LIMIT $3`,
+      [organizationId, row.version_id, MAX_RELATIONSHIP_NODES + 1]
     )).rows;
-    const reviewRows = (await client.query(
+    if (loadedProvenanceRows.length > MAX_RELATIONSHIP_NODES) relationshipInputOverflow = true;
+    const provenanceRows = loadedProvenanceRows.slice(0, MAX_RELATIONSHIP_NODES);
+    const loadedReviewRows = (await client.query(
       `SELECT * FROM canonical_knowledge_review_events
         WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3
-        ORDER BY event_sequence`,
-      [organizationId, entryId, row.version_id]
+        ORDER BY event_sequence DESC LIMIT $4`,
+      [organizationId, entryId, row.version_id, MAX_RELATIONSHIP_NODES + 1]
     )).rows;
+    if (loadedReviewRows.length > MAX_RELATIONSHIP_NODES) relationshipInputOverflow = true;
+    const reviewRows = loadedReviewRows.slice(0, MAX_RELATIONSHIP_NODES).reverse();
     const snapshotRow = (await client.query(
       `SELECT * FROM canonical_knowledge_review_snapshots
         WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3`,
@@ -1077,7 +1320,7 @@ async function getKnowledgeManagementItem(pool, input) {
         WHERE organization_id = $1 AND entry_id = $2 AND version_id = $3`,
       [organizationId, entryId, row.version_id]
     )).rows[0] || null : null;
-    const allPublicationRows = (await client.query(
+    const loadedPublicationRows = (await client.query(
       `SELECT publication.*, version.sensitivity AS version_sensitivity,
               version.review_requirement AS version_review_requirement
          FROM canonical_knowledge_publications publication
@@ -1086,14 +1329,12 @@ async function getKnowledgeManagementItem(pool, input) {
           AND version.entry_id = publication.entry_id
           AND version.id = publication.version_id
         WHERE publication.organization_id = $1 AND publication.entry_id = $2
-        ORDER BY publication.publication_number`,
-      [organizationId, entryId]
+        ORDER BY publication.publication_number DESC LIMIT $3`,
+      [organizationId, entryId, MAX_RELATIONSHIP_NODES + 1]
     )).rows;
+    if (loadedPublicationRows.length > MAX_RELATIONSHIP_NODES) relationshipInputOverflow = true;
+    const allPublicationRows = loadedPublicationRows.slice(0, MAX_RELATIONSHIP_NODES).reverse();
     const actualCurrentPublicationRow = allPublicationRows[allPublicationRows.length - 1] || null;
-    const relationshipPolicy = await loadRelationshipPolicy(
-      client, organizationId, canMutate, allPublicationRows, snapshotRow
-    );
-    const { restrictedVersionIds } = relationshipPolicy;
     const restrictedCurrentPublication = !canMutate && actualCurrentPublicationRow &&
       !publicationReadable(actualCurrentPublicationRow);
     const publicationRows = canMutate ? allPublicationRows : allPublicationRows.filter(publicationReadable);
@@ -1148,9 +1389,11 @@ async function getKnowledgeManagementItem(pool, input) {
           unchangedFromPublished: false };
       }
     }
-    const historyRows = canMutate ? (await client.query(
-      `SELECT version.id, version.version_number, version.canonical_digest,
-              version.parent_version_id, version.lifecycle_action,
+    let historyRows = [];
+    if (canMutate) {
+      const loadedHistoryRows = (await client.query(
+        `SELECT version.id, version.version_number, version.canonical_digest,
+               version.parent_version_id, version.lifecycle_action,
               version.rollback_target_version_id, version.content_origin,
               version.sensitivity, version.review_requirement, version.created_by_user_id,
               version.reason, version.created_at,
@@ -1171,15 +1414,54 @@ async function getKnowledgeManagementItem(pool, input) {
                 'version_tombstoned', 'version_rollback_created')
             ORDER BY event.created_at DESC, event.id DESC LIMIT 1
          ) audit ON TRUE
-        WHERE version.organization_id = $1 AND version.entry_id = $2
-        ORDER BY version.version_number`,
-      [organizationId, entryId]
-    )).rows : [];
+          WHERE version.organization_id = $1 AND version.entry_id = $2
+          ORDER BY version.version_number DESC LIMIT $3`,
+        [organizationId, entryId, MAX_RELATIONSHIP_NODES + 1]
+      )).rows;
+      if (loadedHistoryRows.length > MAX_RELATIONSHIP_NODES) relationshipInputOverflow = true;
+      historyRows = loadedHistoryRows.slice(0, MAX_RELATIONSHIP_NODES).reverse();
+    }
     const sources = provenanceRows.map(item => item.source_type);
-    let synchronization = (await loadSyncRows(client, organizationId)).filter(target =>
-      target.desired && target.desired.sourcePins.some(pin => pin && pin.entryId === entryId)
-    );
-    if (!canMutate) synchronization = synchronization.map(redactSynchronizationPins);
+    const loadedSynchronization = await loadSyncRows(client, organizationId, {
+      entryId,
+      limit: MAX_RELATIONSHIP_NODES + 1,
+    });
+    if (loadedSynchronization.length > MAX_RELATIONSHIP_NODES) relationshipInputOverflow = true;
+    let synchronization = loadedSynchronization.slice(0, MAX_RELATIONSHIP_NODES);
+    const directVersionIds = [
+      row.parent_version_id,
+      row.rollback_target_version_id,
+      snapshotRow && snapshotRow.version_id,
+      snapshotRow && snapshotRow.base_version_id,
+      ...allPublicationRows.map(item => item.version_id),
+      ...synchronization.flatMap(target => target.desired && Array.isArray(target.desired.sourcePins)
+        ? target.desired.sourcePins.map(pin => pin && pin.versionId) : []),
+    ];
+    const relationshipPolicy = await loadRelationshipPolicy(client, {
+      organizationId,
+      canReadProtected: canMutate,
+      selectedVersionId: row.version_id,
+      provenanceRows,
+      publicationRows: allPublicationRows,
+      snapshotRow,
+      synchronization,
+      directVersionIds,
+      relationshipValues: [
+        provenanceRows,
+        reviewRows,
+        snapshotRow,
+        comparison,
+        allPublicationRows,
+        historyRows,
+        synchronization,
+        row.parent_version_id,
+        row.rollback_target_version_id,
+      ],
+      overflow: relationshipInputOverflow,
+    });
+    const { restrictedVersionIds } = relationshipPolicy;
+    const failClosedRelationships = relationshipPolicy.failClosedRelationships;
+    if (!canMutate || failClosedRelationships) synchronization = synchronization.map(redactSynchronizationPins);
     const latestReview = reviewRows[reviewRows.length - 1] || null;
     const currentDocument = storedJson(row.document);
     return {
@@ -1207,11 +1489,14 @@ async function getKnowledgeManagementItem(pool, input) {
         document: currentDocument,
         canonicalDocument: row.canonical_document,
         canonicalDigest: digest(row.canonical_digest),
-        parentVersionId: restrictedVersionIds.has(row.parent_version_id) ? null : row.parent_version_id,
-        parentVersionRestricted: restrictedVersionIds.has(row.parent_version_id),
+        parentVersionId: failClosedRelationships || restrictedVersionIds.has(row.parent_version_id)
+          ? null : row.parent_version_id,
+        parentVersionRestricted: failClosedRelationships || restrictedVersionIds.has(row.parent_version_id),
         lifecycleAction: row.lifecycle_action || (Number(row.version_number) === 1 ? 'initial' : null),
-        rollbackTargetVersionId: restrictedVersionIds.has(row.rollback_target_version_id) ? null : row.rollback_target_version_id,
-        rollbackTargetVersionRestricted: restrictedVersionIds.has(row.rollback_target_version_id),
+        rollbackTargetVersionId: failClosedRelationships || restrictedVersionIds.has(row.rollback_target_version_id)
+          ? null : row.rollback_target_version_id,
+        rollbackTargetVersionRestricted: failClosedRelationships ||
+          restrictedVersionIds.has(row.rollback_target_version_id),
         actorUserId: row.created_by_user_id,
         reason: row.reason,
         createdAt: row.created_at,
@@ -1221,9 +1506,9 @@ async function getKnowledgeManagementItem(pool, input) {
         status: selectedPublicationRow ? 'published'
           : latestReview && Object.values(APPROVAL_ACTIONS).includes(latestReview.action) ? 'approved'
             : latestReview && latestReview.action === 'review_submitted' ? 'review' : 'draft',
-        latestReviewEventId: latestReview && latestReview.id,
-        events: reviewRows.map(item => mapReviewEvent(item, relationshipPolicy)),
-        snapshot: snapshotRow ? {
+        latestReviewEventId: failClosedRelationships ? null : latestReview && latestReview.id,
+        events: failClosedRelationships ? [] : reviewRows.map(item => mapReviewEvent(item, relationshipPolicy)),
+        snapshot: !failClosedRelationships && snapshotRow ? {
           id: relationshipPolicy.restrictedSnapshotIds.has(snapshotRow.id) ? null : snapshotRow.id,
           idRestricted: relationshipPolicy.restrictedSnapshotIds.has(snapshotRow.id),
           baseVersionId: restrictedVersionIds.has(snapshotRow.base_version_id) ? null : snapshotRow.base_version_id,
@@ -1249,14 +1534,24 @@ async function getKnowledgeManagementItem(pool, input) {
           : latestReview && Object.values(APPROVAL_ACTIONS).includes(latestReview.action)
             ? 'approved' : 'not_approved',
       },
-      comparison: redactRelationshipValue(comparison, relationshipPolicy),
+      comparison: failClosedRelationships ? {
+        document: null,
+        canonicalDiff: null,
+        diffDigest: null,
+        baseVersionId: null,
+        unchangedFromPublished: false,
+        restricted: true,
+        unavailableReason: 'Relationship evidence could not be resolved within its authorization bounds.',
+      } : redactRelationshipValue(comparison, relationshipPolicy),
       publication: {
-        selected: mapPublication(selectedPublicationRow, relationshipPolicy),
-        current: restrictedCurrentPublication ? null : mapPublication(currentPublicationRow, relationshipPolicy),
-        currentRestricted: Boolean(restrictedCurrentPublication),
-        history: publicationRows.map(item => mapPublication(item, relationshipPolicy)),
+        selected: failClosedRelationships ? null : mapPublication(selectedPublicationRow, relationshipPolicy),
+        current: failClosedRelationships || restrictedCurrentPublication
+          ? null : mapPublication(currentPublicationRow, relationshipPolicy),
+        currentRestricted: failClosedRelationships ? Boolean(actualCurrentPublicationRow)
+          : Boolean(restrictedCurrentPublication),
+        history: failClosedRelationships ? [] : publicationRows.map(item => mapPublication(item, relationshipPolicy)),
       },
-      history: canMutate ? historyRows.map(item => ({
+      history: canMutate && !failClosedRelationships ? historyRows.map(item => ({
         versionId: item.id,
         versionNumber: Number(item.version_number),
         canonicalDigest: digest(item.canonical_digest),

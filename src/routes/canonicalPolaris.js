@@ -21,6 +21,8 @@ const {
   evaluateScheduleConflicts,
   replaceAvailability,
 } = require('../scheduling/conflictRepository');
+const { normalizeRecommendationEvaluation } = require('../scheduling/recommendationContract');
+const { recommendAppointmentCandidates } = require('../scheduling/recommendationRepository');
 const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const READ_MODEL_VERSION = 'm22-part1-read-v1';
@@ -833,6 +835,31 @@ function createCanonicalRouter(options) {
       try {
         const evaluation = normalizeConflictEvaluation({ body: req.body, appointmentId: req.params.id });
         const response = await evaluateScheduleConflicts(resolvePool(dependencies.poolProvider), {
+          ...evaluation,
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          actorAccessRole: req.userRole || req.tenantContext.role,
+          authSessionId: req.authSession && req.authSession.id,
+          explicitSession: context.explicitSession,
+        });
+        return res.json(response);
+      } catch (error) {
+        if (error && Number.isInteger(error.status) && error.code) {
+          return res.status(error.status).json({
+            success: false,
+            error: { code: error.code, message: error.message },
+          });
+        }
+        return sendPersistenceUnavailable(res, req);
+      }
+    });
+
+  router.post('/appointments/:id/recommendations', dependencies.onboardedAuth, requireCanonicalContext,
+    dependencies.permission('calendar', 'read'), express.json({ limit: '64kb' }), async function (req, res) {
+      const context = requestContext(req);
+      try {
+        const evaluation = normalizeRecommendationEvaluation({ body: req.body, appointmentId: req.params.id });
+        const response = await recommendAppointmentCandidates(resolvePool(dependencies.poolProvider), {
           ...evaluation,
           organizationId: context.organizationId,
           actorUserId: context.userId,

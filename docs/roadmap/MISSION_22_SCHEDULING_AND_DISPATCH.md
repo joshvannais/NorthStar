@@ -8,8 +8,10 @@ only a currently authorized individual may approve a mutation.
 This document is the root-ratified implementation contract. Part 1 was
 independently accepted, normally merged at
 `192ce709caec2fdd873ab7387182e3a66898fb4a`, automatically deployed, and
-terminally released. Part 2 is implemented on its narrow writer branch and is
-awaiting exact-head independent audit and release. Parts 3–7 remain planned and
+terminally released. Part 2 was independently accepted, normally merged at
+`98bd64733cca439fa28d022ef68457ecd3c5f7ac`, automatically deployed, and
+terminally released. Part 3 is implemented on its narrow writer branch and is
+awaiting exact-head independent audit and release. Parts 4–7 remain planned and
 must not begin before the prior part is independently accepted, normally
 merged, automatically deployed, health-clean, and passively accepted.
 
@@ -104,7 +106,7 @@ evidence. Part 1 exposes no public assign, reassign, unassign, or dispatch
 workflow and implements no conflicts, travel, recommendations, new board, or
 Today experience.
 
-### Part 2 — Availability, capacity, and conflict authority (implemented; audit pending)
+### Part 2 — Availability, capacity, and conflict authority (complete/released)
 
 Add declared availability and deterministic bounded evaluation from working
 hours, active membership/crew composition, skills, approved schedules, location
@@ -164,10 +166,9 @@ existing `/api/v1/canonical` authority:
 Part 2 adds no Calendar/Command Center/Today UI and no browser-executed code, so
 it does not claim a new Chrome/WebKit matrix. Existing Part 1 Calendar and
 compatibility behavior remain required regression gates. Physical Safari,
-hosted checks, providers, credentials/configuration, production evidence, and
-Part 2 deployment remain unavailable until their separate release stages.
+hosted checks, providers, and credentials/configuration remain unavailable.
 
-### Part 3 — Route implications and Polaris recommendations (planned)
+### Part 3 — Route implications and Polaris recommendations (implemented; audit pending)
 
 Create provider-neutral bounded route/travel implications and deterministic,
 evidence-pinned candidate recommendations. Authoritative coordinates may yield
@@ -176,6 +177,59 @@ without authorized evidence. Missing crew coordinates or route evidence is
 unavailable/needs-review. A recommendation pins its candidate set, input
 revisions/digests, constraints, conflicts, alternatives, uncertainty, and
 evaluation time and grants no mutation.
+
+Part 3 adds no schema or durable recommendation sink. Migrations 001–034 remain
+byte-for-byte protected and migration 035 is intentionally absent. One mounted
+read-only production surface is added beneath the existing canonical authority:
+
+- `POST /appointments/:id/recommendations` accepts only the exact current
+  assignment revision/digest and tenant IANA time-zone pins. Candidate IDs,
+  tenant, actor, role, permission, session, recommendation, provider, URL, or
+  route-evidence fields are rejected rather than trusted. The route requires a
+  real current cookie session, CSRF, tenant context, Calendar read permission,
+  completed onboarding, a current mutable subscription, and a current
+  owner/admin or active dispatcher. Employee/technician and broad viewer
+  enumeration remain excluded for Part 6.
+- One repeatable-read, read-only PostgreSQL snapshot reloads the exact
+  appointment-bound Part 1 authority, current Business Profile, active tenant
+  profiles and crews, crew memberships, skills, declared availability,
+  approved schedules/workload, and Part 2 conflict policy. Every response pins
+  the assignment, appointment/opportunity, Business Profile policy, candidate
+  set, per-candidate membership/skill/availability authority, conflict inputs,
+  constraints, evaluation time, and one canonical response digest.
+- Candidate selection and query shape are bounded to 20 candidates, 100 members
+  per crew, 2,000 member links, 4,096 skill rows, 4,096 availability intervals,
+  1,000 overlap schedules, 1,000 workload schedules, a 64 KiB request, and a
+  256 KiB response. Any candidate/member/evidence truncation or missing current
+  schedule makes the result `needs_review` with `rankingComplete: false`.
+- Current authoritative Business Profile location coordinates may produce only
+  a Haversine spherical geodesic straight-line distance, explicitly labelled
+  as neither driving distance nor travel time. Missing, invalid, ambiguous, or
+  changed origin/destination authority is digest-visible and remains
+  unavailable/needs-review. Driving distance and duration remain null and
+  unavailable because no separately authorized current durable provider-neutral
+  driving-route evidence authority exists.
+- Stable conflict tier, geodesic availability/distance, candidate kind, and
+  canonical ID determine ordering and ties. Hard-conflict candidates are
+  ineligible; incomplete sets never claim a complete confident ranking.
+  Hostile stored labels and explanations remain bounded JSON data. Each result
+  is explicit `persisted: false`, `grantsMutation: false`, and makes zero
+  provider calls.
+
+Writer evidence uses fresh role-separated PostgreSQL 18.4 UTC and the real
+mounted route/session/CSRF/permission/tenant modules. It covers paid/demo
+isolation, inactive membership/role/subscription/session changes, IDOR and
+smuggled authority, deterministic pins/order/ties/digests, people and crews,
+100-member and evidence truncation, Part 2 hard/warning/needs-review inheritance,
+geodesic zero/antimeridian/pole/range cases, unavailable/spoofed provider input,
+origin/destination change, DST fold/overnight/multiday compatibility, hostile
+stored bytes, constant query bounds, response bounds, and blocked transport with
+zero external requests. Parts 1–2 remain mounted compatibility gates. Part 3
+adds no UI or browser-executed code, so a new Chrome/WebKit matrix is not
+applicable; WebKit would not establish physical Safari. Hosted checks, physical
+Safari/devices, providers, credentials/configuration, production migration or
+deployment, and independent exact-head approval remain unavailable or pending
+until their separate gates.
 
 ### Part 4 — Human-approved scheduling and dispatch workflow (planned)
 

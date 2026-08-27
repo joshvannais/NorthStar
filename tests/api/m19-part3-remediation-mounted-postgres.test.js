@@ -380,7 +380,7 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .send({ status: 'scheduled' });
     expect(missingApproval.status).toBe(428);
-    expect(missingApproval.body.error.code).toBe('M22_APPROVAL_REQUIRED');
+    expect(missingApproval.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     const memberPatch = await request(app)
       .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
       .set(auth(USERS.member))
@@ -397,8 +397,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
         actorAccessRole: 'owner',
         authSessionId: USERS.owner,
       });
-    expect(memberPatch.status).toBe(403);
-    expect(memberPatch.body.error.code).toBe('M22_APPROVAL_FORBIDDEN');
+    expect(memberPatch.status).toBe(428);
+    expect(memberPatch.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     const ownerBody = {
       status: 'scheduled',
       expectedRevision: Number(assignment.revision),
@@ -412,40 +412,32 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .set('Idempotency-Key', 'm22-mounted-appointment-update-0001')
       .send(ownerBody);
-    expect(ownerPatch.status).toBe(200);
-    expect(ownerPatch.body.data.scheduleAuthority).toMatchObject({
-      revision: 2,
-      targetState: 'unassigned',
-      scheduleState: 'unscheduled',
-      dispatchState: 'not_dispatched',
-      needsReview: true,
-      reviewReasons: ['conflict_evaluation_not_available'],
-    });
+    expect(ownerPatch.status).toBe(428);
+    expect(ownerPatch.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     const replay = await request(app)
       .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
       .set(auth(USERS.owner))
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .set('Idempotency-Key', 'm22-mounted-appointment-update-0001')
       .send(ownerBody);
-    expect(replay.status).toBe(200);
-    expect(replay.headers['idempotency-replayed']).toBe('true');
-    expect(replay.body).toEqual(ownerPatch.body);
+    expect(replay.status).toBe(428);
+    expect(replay.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     const collision = await request(app)
       .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
       .set(auth(USERS.owner))
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .set('Idempotency-Key', 'm22-mounted-appointment-update-0001')
       .send({ ...ownerBody, reason: 'Divergent replay.' });
-    expect(collision.status).toBe(409);
-    expect(collision.body.error.code).toBe('M22_IDEMPOTENCY_CONFLICT');
+    expect(collision.status).toBe(428);
+    expect(collision.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     const stale = await request(app)
       .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
       .set(auth(USERS.owner))
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .set('Idempotency-Key', 'm22-mounted-stale-update-0001')
       .send(ownerBody);
-    expect(stale.status).toBe(409);
-    expect(stale.body.error.code).toBe('M22_STALE_APPROVAL');
+    expect(stale.status).toBe(428);
+    expect(stale.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     await db.getPool().query(
       `UPDATE workforce_profiles profile
           SET operational_role = 'dispatcher', updated_at = NOW()
@@ -477,8 +469,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .set('Idempotency-Key', 'm22-mounted-dispatcher-update-0001')
       .send(dispatcherBody);
-    expect(dispatcherPatch.status).toBe(200);
-    expect(dispatcherPatch.body.data.scheduleAuthority).toMatchObject({ revision: 3, scheduleState: 'scheduled' });
+    expect(dispatcherPatch.status).toBe(428);
+    expect(dispatcherPatch.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     await db.getPool().query(
       `UPDATE workforce_profiles profile
           SET operational_role = 'employee', updated_at = NOW()
@@ -495,8 +487,8 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .set('Idempotency-Key', 'm22-mounted-dispatcher-update-0001')
       .send(dispatcherBody);
-    expect(downgradedReplay.status).toBe(403);
-    expect(downgradedReplay.body.error.code).toBe('M22_APPROVAL_FORBIDDEN');
+    expect(downgradedReplay.status).toBe(428);
+    expect(downgradedReplay.body.error.code).toBe('M22_PREVIEW_REQUIRED');
     const evidence = await db.getPool().query(
       `SELECT
          (SELECT count(*)::int FROM canonical_schedule_approvals approval
@@ -512,13 +504,21 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
       WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2`,
       [ORG_A, memberSimulation.body.ids.appointment]
     );
-    expect(evidence.rows).toEqual([{ approvals: 2, audits: 2, idempotency: 2 }]);
+    expect(evidence.rows).toEqual([{ approvals: 0, audits: 0, idempotency: 0 }]);
+    const unchanged = (await db.getPool().query(
+      `SELECT revision::int AS revision,rtrim(canonical_digest) AS digest
+         FROM canonical_schedule_assignments
+        WHERE organization_id = $1 AND appointment_id = $2`,
+      [ORG_A, memberSimulation.body.ids.appointment]
+    )).rows[0];
+    expect(unchanged).toEqual({ revision: Number(assignment.revision), digest: assignment.canonical_digest.trim() });
     const crossOrganization = await request(app)
       .patch('/api/v1/canonical/appointments/' + memberSimulation.body.ids.appointment)
       .set(auth(USERS.other))
       .set('X-NorthStar-Session-ID', memberSimulation.body.sessionId)
       .send({ status: 'cancelled' });
-    expect(crossOrganization.status).toBe(404);
+    expect(crossOrganization.status).toBe(428);
+    expect(crossOrganization.body.error.code).toBe('M22_PREVIEW_REQUIRED');
   });
 
   test('one mounted Retell event commits exactly one graph and invokes zero legacy, file, or Sheets writers', async () => {

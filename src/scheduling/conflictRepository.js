@@ -551,7 +551,7 @@ async function scheduleEvidence(client, input, bufferMinutes) {
   const result = await client.query(
     `SELECT assignment.id, assignment.revision, assignment.canonical_digest,
             assignment.scheduled_start, assignment.scheduled_end,
-            (assignment.last_approval_id IS NOT NULL) AS approved,
+            (assignment.last_approval_id IS NOT NULL OR assignment.last_human_approval_id IS NOT NULL) AS approved,
             COALESCE(targets.profile_ids, ARRAY[]::uuid[]) AS profile_ids,
             COALESCE(array_length(targets.profile_ids, 1), 0) >
               ${MAXIMUM_CANDIDATE_MEMBERS} AS targets_truncated
@@ -603,7 +603,7 @@ async function workloadEvidence(client, input) {
   const result = await client.query(
     `SELECT assignment.id, assignment.revision, assignment.canonical_digest,
             assignment.scheduled_start, assignment.scheduled_end,
-            (assignment.last_approval_id IS NOT NULL) AS approved,
+            (assignment.last_approval_id IS NOT NULL OR assignment.last_human_approval_id IS NOT NULL) AS approved,
             COALESCE(targets.profile_ids, ARRAY[]::uuid[]) AS profile_ids,
             COALESCE(array_length(targets.profile_ids, 1), 0) >
               ${MAXIMUM_CANDIDATE_MEMBERS} AS targets_truncated
@@ -789,6 +789,7 @@ module.exports = {
   MAXIMUM_CANDIDATE_SKILLS,
   ConflictRepositoryError,
   availabilityResponse,
+  evaluateInTransaction,
   evaluateScheduleConflicts,
   replaceAvailability,
 };

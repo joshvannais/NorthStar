@@ -25,6 +25,7 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
       '032_canonical_schedule_assignment_authority.sql',
       '033_canonical_schedule_time_evidence.sql',
       '034_schedule_availability_conflict_authority.sql',
+      '035_schedule_human_preview_approval.sql',
     ]);
     for (const filename of fs.readdirSync(MIGRATIONS).filter(name => /^\d+.*\.sql$/.test(name) && !deferred.has(name))) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preWorkforceDirectory, filename));

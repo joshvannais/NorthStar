@@ -20,6 +20,7 @@ const voiceWebhook = require('./voice/webhook');
 const { createRetellWebhookBoundaryRouter } = require('./routes/retellWebhookBoundary');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
+const { approvalBodyBoundary } = require('./scheduling/approvalHttpBoundary');
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const { createAuthRouter } = require('./routes/auth');
@@ -63,6 +64,10 @@ app.use(createRetellWebhookBoundaryRouter());
 // an exact 64 KiB unambiguous JSON contract. Own its received bytes before the
 // broader application parser consumes the stream.
 app.use(recommendationBodyBoundary);
+// Mission 22 Part 4 human preview/approval endpoints own exact, bounded,
+// unambiguous bytes before the broader application parser. The preview is
+// evidence only and never a bearer capability.
+app.use(approvalBodyBoundary);
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {

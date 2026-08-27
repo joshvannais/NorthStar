@@ -1,0 +1,16 @@
+External audit directory relative to the Mission 22 workspace root:
+outputs/m22-part4-03ba43e-independent-final-audit
+
+b5e2610079adb11f50dad783f47c1a3947aecf98f14844d7a57f93aa8e6275d6  report.md
+9884510fc39338a275352b0e7985cf42dbc252b06647467600f3489adb20126c  findings.json
+e62b7c97c42d7cc9838cb26cc8542b0676e3974074902a3f657d74bbababcb9a  hashes.sha256
+45a801bfaa0558df5e6b00f80694ce5b2e0aec9882b63408fa46f0f52e4cb46c  mounted-parts1-4-compatibility.json
+6b91176a0d7762dc90d3a5a3815854f79e0715b6ca2eaa6a81decc827179e3f3  boundary-repeat-1.json
+532f885690e3cfebb3ab7b1d2e396866b790557182e35ad5e706813cba17b254  boundary-repeat-2.json
+631f8b64181bbaa65bd489f33c9b03cf8eb59a8776334eb1c9969c831a483fdb  boundary-repeat-3.json
+0b6985956259c9bac2bc2f518cccc5b5add2c191c5b7f696d66b6ed2ff477205  repro/startup-restart-health-result.json
+
+Prior correction writer evidence already tracked on the input head:
+65a7a1861e325d1bcf5aec199846fb24e0fe162071996f1408126fa51964fb81  outputs/m22-part4-correction-writer/report.md
+e2b06b522e8f4f72d8631ef395e4549ad6ca6205377c374e64432c3b13e16518  outputs/m22-part4-correction-writer/test-evidence.md
+bb06b08ab5e768062dd37feab7fe59588124bb66791e37efc169f7ce5e9c7cc3  outputs/m22-part4-correction-writer/hashes.sha256

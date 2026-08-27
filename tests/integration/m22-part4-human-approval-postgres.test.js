@@ -32,6 +32,7 @@ const IDS = Object.freeze({
   hardMatrixAppointment: 'e5100000-0000-4000-8000-000000000007',
   crewHardAppointment: 'e5100000-0000-4000-8000-000000000008',
   invalidTargetAppointment: 'e5100000-0000-4000-8000-000000000009',
+  boundaryAppointment: 'e5100000-0000-4000-8000-000000000010',
 });
 
 function quoteIdentifier(value) {
@@ -778,12 +779,13 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
   });
 
   test('enforces the exact fifteen-minute boundary with a database-owner controlled clock fixture', async () => {
-    const before = await pins(runtimePool);
+    await seedAppointment(runtimePool, IDS.organization, IDS.boundaryAppointment);
+    const before = await pins(runtimePool, IDS.organization, IDS.boundaryAppointment);
     const reason = 'A preview at the exact expiry boundary grants no mutation.';
-    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.boundaryAppointment}/mutation-previews`)
       .set(sessions.owner.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
-        action: 'reassign', target: { kind: 'profile', id: IDS.owner },
+        action: 'assign', target: { kind: 'profile', id: IDS.owner },
         scheduledStart: explicitOffset(before.scheduledStart), scheduledEnd: explicitOffset(before.scheduledEnd),
         appointmentStatus: before.appointmentStatus, reason,
       });
@@ -791,8 +793,12 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     await migrationPool.query('ALTER TABLE public.canonical_schedule_mutation_previews DISABLE TRIGGER canonical_schedule_previews_immutable');
     try {
       await migrationPool.query(
-        `UPDATE public.canonical_schedule_mutation_previews preview SET
-           created_at=clock_timestamp()-INTERVAL '15 minutes',expires_at=clock_timestamp(),
+        `WITH fixed AS (SELECT clock_timestamp() AS expires_at),
+              boundary AS (
+                SELECT expires_at-INTERVAL '15 minutes' AS created_at,expires_at FROM fixed
+              )
+         UPDATE public.canonical_schedule_mutation_previews preview SET
+           created_at=boundary.created_at,expires_at=boundary.expires_at,
            preview_digest=public.canonical_schedule_part4_preview_digest(
              preview.id,preview.organization_id,preview.assignment_id,preview.appointment_id,
              preview.actor_user_id,preview.auth_session_id,preview.expected_revision,rtrim(preview.expected_digest),
@@ -801,7 +807,8 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
              preview.proposed_dispatch_state,preview.proposed_appointment_status,preview.reason,
              rtrim(preview.conflict_digest),preview.warning_digests,preview.review_reason_digests,
              rtrim(preview.recommendation_digest),rtrim(preview.recommendation_authority_digest),
-             rtrim(preview.request_digest),clock_timestamp()-INTERVAL '15 minutes',clock_timestamp())
+             rtrim(preview.request_digest),boundary.created_at,boundary.expires_at)
+         FROM boundary
          WHERE organization_id=$1 AND id=$2`, [IDS.organization, created.body.data.id]
       );
     } finally {
@@ -814,7 +821,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       [IDS.organization, created.body.data.id]
     )).rows[0];
     expect(expired.lifetime).toEqual(expect.objectContaining({ minutes: 15 }));
-    const rejected = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+    const rejected = await request(app).post(`/api/v1/canonical/appointments/${IDS.boundaryAppointment}/mutation-approvals`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-expired-boundary-0001').send({
         previewId: created.body.data.id, previewDigest: expired.digest,
         acknowledgedWarningDigests: expired.warning_digests,
@@ -822,7 +829,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       });
     expect(rejected.status).toBe(409);
     expect(rejected.body.error.code).toBe('M22_PREVIEW_EXPIRED');
-    expect((await pins(runtimePool)).revision).toBe(before.revision);
+    expect((await pins(runtimePool, IDS.organization, IDS.boundaryAppointment)).revision).toBe(before.revision);
   });
 
   test('matches trusted SQL hard classes for skills, location, availability, inactive crew and invalid targets', async () => {

@@ -1,0 +1,6 @@
+[
+  {"matrix":"chrome-desktop-light","previews":14,"approvals":11,"revision":12,"externalCalls":0,"directPatches":0,"initialShown":200,"total":207,"initialTruncated":true,"calendarSearchMatches":3,"commandCenterPages":9},
+  {"matrix":"chrome-mobile-dark","previews":13,"approvals":10,"revision":11,"externalCalls":0,"directPatches":0,"initialShown":200,"total":207,"initialTruncated":true,"calendarSearchMatches":3,"commandCenterPages":9,"viewportWidth":390,"documentScrollWidth":390},
+  {"matrix":"webkit-desktop-dark","previews":14,"approvals":11,"revision":12,"externalCalls":0,"directPatches":0,"initialShown":200,"total":207,"initialTruncated":true,"calendarSearchMatches":3,"commandCenterPages":9},
+  {"matrix":"webkit-mobile-light","previews":13,"approvals":10,"revision":11,"externalCalls":0,"directPatches":0,"initialShown":200,"total":207,"initialTruncated":true,"calendarSearchMatches":3,"commandCenterPages":9,"viewportWidth":390,"documentScrollWidth":390}
+]

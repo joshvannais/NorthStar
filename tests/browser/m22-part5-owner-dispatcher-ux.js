@@ -18,6 +18,9 @@ const OWNER_ID = 'f2100000-0000-4000-8000-000000000001';
 const DISPATCHER_ID = 'f2100000-0000-4000-8000-000000000002';
 const EMPLOYEE_ID = 'f2100000-0000-4000-8000-000000000003';
 const HOSTILE = '<img src=x onerror="globalThis.m22Part5Compromised=true"> Part 5 customer';
+const TARGET_WORKER_ID = 'f2200000-0000-4000-8000-000000000102';
+const TARGET_CREW_ID = 'f3200000-0000-4000-8000-000000000102';
+const TARGET_SEARCH = 'ZZZ Browser directory';
 
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
@@ -140,6 +143,44 @@ async function main() {
     const employee = await provisionDurableSession(pool, { userId: EMPLOYEE_ID, organizationId: ORGANIZATION_ID, membershipId: EMPLOYEE_ID, role: 'member' });
     await pool.query("UPDATE workforce_profiles SET operational_role='dispatcher' WHERE organization_id=$1 AND membership_id=$2", [ORGANIZATION_ID, DISPATCHER_ID]);
     await pool.query("UPDATE workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND membership_id=$2", [ORGANIZATION_ID, EMPLOYEE_ID]);
+    const targetProfiles = Array.from({ length: 102 }, (_, index) => ({
+      id: `f2200000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      name: index >= 100 ? `${TARGET_SEARCH} duplicate ${index} ${HOSTILE}` : `Browser worker ${String(index).padStart(3, '0')}`,
+      email: `browser-directory-worker-${String(index).padStart(3, '0')}@part5.test`,
+    }));
+    const targetCrews = Array.from({ length: 102 }, (_, index) => ({
+      id: `f3200000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      key: `browser-directory-crew-${String(index).padStart(3, '0')}`,
+      name: index === 101 ? `${TARGET_SEARCH} crew ${HOSTILE}` : `Browser crew ${String(index).padStart(3, '0')}`,
+    }));
+    await pool.query(
+      `INSERT INTO users(id,organization_id,name,email,password_hash,role,status)
+       SELECT item.id::uuid,$1,item.name,item.email,'not-used','member','active'
+         FROM jsonb_to_recordset($2::jsonb) AS item(id text,name text,email text)`,
+      [ORGANIZATION_ID, JSON.stringify(targetProfiles)]
+    );
+    await pool.query(
+      `INSERT INTO organization_memberships(id,organization_id,user_id,role,status)
+       SELECT item.id::uuid,$1,item.id::uuid,'member','active'
+         FROM jsonb_to_recordset($2::jsonb) AS item(id text)`,
+      [ORGANIZATION_ID, JSON.stringify(targetProfiles)]
+    );
+    await pool.query(
+      `UPDATE workforce_profiles SET operational_role='technician'
+        WHERE organization_id=$1 AND id=ANY($2::uuid[])`, [ORGANIZATION_ID, targetProfiles.map(row => row.id)]
+    );
+    await pool.query(
+      `INSERT INTO workforce_crews(id,organization_id,crew_key,name,home_location_id,created_by_user_id,updated_by_user_id)
+       SELECT item.id::uuid,$1,item.key,item.name,'headquarters',$2,$2
+         FROM jsonb_to_recordset($3::jsonb) AS item(id text,key text,name text)`,
+      [ORGANIZATION_ID, OWNER_ID, JSON.stringify(targetCrews)]
+    );
+    await pool.query(
+      `INSERT INTO workforce_crew_members(organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+       SELECT $1,item.id::uuid,$2,'lead',$2
+         FROM jsonb_to_recordset($3::jsonb) AS item(id text)`,
+      [ORGANIZATION_ID, OWNER_ID, JSON.stringify(targetCrews)]
+    );
     const { app } = require('../../src/server');
     const simulationSession = 'sim_m22_part5_' + matrix;
     const created = await request(app).post('/api/v1/simulations/leads')
@@ -249,11 +290,34 @@ async function main() {
     await page.goto(origin + '/dashboard/calendar', { waitUntil: 'domcontentloaded' });
     await waitRevision(1);
     assert.strictEqual(await page.evaluate(() => Boolean(globalThis.m22Part5Compromised)), false);
+    const calendarDirectory = await page.evaluate(() => window.CanonicalIntelligence.getProjection('calendar').schedulingOperator);
+    assert.deepStrictEqual({
+      shown: calendarDirectory.discovery.shown,
+      total: calendarDirectory.discovery.total,
+      truncated: calendarDirectory.discovery.truncated,
+      initialHasLastWorker: calendarDirectory.targets.some(target => target.id === TARGET_WORKER_ID),
+      initialHasLastCrew: calendarDirectory.targets.some(target => target.id === TARGET_CREW_ID),
+    }, { shown: 200, total: 207, truncated: true, initialHasLastWorker: false, initialHasLastCrew: false });
+    const targetDiscoveryEvidence = {
+      initialShown: calendarDirectory.discovery.shown,
+      total: calendarDirectory.discovery.total,
+      initialTruncated: calendarDirectory.discovery.truncated,
+      calendarSearchMatches: null,
+      commandCenterPages: null,
+    };
     await screenshot('calendar-unassigned');
 
     await beginFromButton(actionButton('Assign'));
     await completeDialog(async () => {
-      await page.locator('.m22-dialog select').first().selectOption('profile:' + OWNER_ID);
+      await page.getByLabel('Search active workers and crews').fill('No current target has this name');
+      await page.getByRole('button', { name: 'Search current targets' }).click();
+      await page.getByText('No current active worker or crew matches this bounded search.').waitFor();
+      await page.getByLabel('Search active workers and crews').fill(TARGET_SEARCH);
+      await page.getByRole('button', { name: 'Search current targets' }).click();
+      await page.getByText(/Showing 3 of 3 current targets matching/).waitFor();
+      targetDiscoveryEvidence.calendarSearchMatches = await page.locator('.m22-dialog select').first().locator('option').count() - 1;
+      await page.locator('.m22-dialog select').first().selectOption('profile:' + TARGET_WORKER_ID);
+      await screenshot('calendar-target-search');
     });
     await waitRevision(2);
 
@@ -296,6 +360,9 @@ async function main() {
 
     await beginFromButton(actionButton('Reassign'));
     await completeDialog(async () => {
+      await page.getByLabel('Search active workers and crews').fill('Part 5 Dispatcher');
+      await page.getByRole('button', { name: 'Search current targets' }).click();
+      await page.getByText(/Showing 1 of 1 current targets matching/).waitFor();
       await page.locator('.m22-dialog select').first().selectOption('profile:' + DISPATCHER_ID);
       assert.ok((await page.locator('.m22-dispatch-warning').allTextContents()).join(' ').includes('revokes'));
     });
@@ -431,7 +498,27 @@ async function main() {
     const commandRecord = page.locator('#commandCenterSchedulingRecords .m22-overview-record').filter({ hasText: HOSTILE });
     assert.strictEqual(await commandRecord.count(), 1);
     await beginFromButton(commandRecord.getByRole('button', { name: 'Assign', exact: true }));
-    await completeDialog(async () => { await page.locator('.m22-dialog select').first().selectOption('profile:' + OWNER_ID); });
+    await completeDialog(async () => {
+      await page.getByRole('button', { name: 'Search current targets' }).click();
+      await page.getByText(/Showing 25 of 207 current targets/).waitFor();
+      var targetPages = 1;
+      var nextTargets = page.getByRole('button', { name: 'Next target page' });
+      while (await nextTargets.isVisible()) {
+        await nextTargets.click();
+        targetPages += 1;
+        await page.waitForFunction(expected => {
+          var status = document.querySelector('.m22-target-lookup-status');
+          return status && status.dataset.state !== 'pending' &&
+            (status.textContent.includes('current targets') || status.textContent.includes('result is complete'));
+        }, targetPages);
+        if (targetPages > 12) throw new Error('Bounded target paging did not terminate.');
+      }
+      assert.strictEqual(targetPages, 9);
+      targetDiscoveryEvidence.commandCenterPages = targetPages;
+      await page.getByText(/final bounded page; search again to revisit earlier targets/i).waitFor();
+      await page.locator('.m22-dialog select').first().selectOption('crew:' + TARGET_CREW_ID);
+      await screenshot('command-center-target-last-page');
+    });
     expectedRevision += 1;
     assert.strictEqual((await currentPins(pool, appointmentId)).revision, expectedRevision);
     await page.waitForFunction(id => {
@@ -492,6 +579,12 @@ async function main() {
       body: JSON.stringify({ success: false, error: { code: 'M22_STALE_PREVIEW_TEST', message: 'Current scheduling authority or evidence changed. Refresh and request a new preview.' } }),
     }), { times: 1 });
     await beginFromButton(reassign);
+    await page.route('**/api/v1/canonical/operator-targets*', route => route.abort('internetdisconnected'), { times: 1 });
+    await page.getByLabel('Search active workers and crews').fill('Part 5 Dispatcher');
+    await page.getByRole('button', { name: 'Search current targets' }).click();
+    await page.getByText(/network is offline or unavailable/i).waitFor();
+    await page.getByRole('button', { name: 'Search current targets' }).click();
+    await page.getByText(/Showing 1 of 1 current targets matching/).waitFor();
     await page.locator('.m22-dialog select').first().selectOption('profile:' + DISPATCHER_ID);
     const retainedReason = await page.locator('.m22-dialog textarea').inputValue();
     await page.getByRole('button', { name: 'Create non-capability preview' }).click();
@@ -502,6 +595,9 @@ async function main() {
 
     await page.route(previewPattern, route => route.abort('internetdisconnected'), { times: 1 });
     await beginFromButton(reassign);
+    await page.getByLabel('Search active workers and crews').fill('Part 5 Dispatcher');
+    await page.getByRole('button', { name: 'Search current targets' }).click();
+    await page.getByText(/Showing 1 of 1 current targets matching/).waitFor();
     await page.locator('.m22-dialog select').first().selectOption('profile:' + DISPATCHER_ID);
     await page.getByRole('button', { name: 'Create non-capability preview' }).click();
     await page.getByText(/network is offline or unavailable/i).waitFor();
@@ -686,7 +782,8 @@ async function main() {
       : ['assign', 'schedule', 'reschedule', 'dispatch', 'reassign', 'reschedule', 'unassign']);
     assert.strictEqual(errors.length, 0, 'browser page errors: ' + JSON.stringify(errors));
     console.log(JSON.stringify({ matrix, appointmentId, previews: previews.length, approvals: approvals.length,
-      revision: expectedRevision, externalCalls: 0, directPatches: 0, mobileHeading, calendarGeometry }));
+      revision: expectedRevision, externalCalls: 0, directPatches: 0, targetDiscoveryEvidence,
+      mobileHeading, calendarGeometry }));
   } finally {
     if (browser) await browser.close().catch(() => {});
     await closeServer(server).catch(() => {});

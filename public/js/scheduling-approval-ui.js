@@ -6,6 +6,8 @@
     assign: 'Assign', reassign: 'Reassign', unassign: 'Unassign',
     schedule: 'Schedule', reschedule: 'Reschedule', dispatch: 'Dispatch',
   };
+  var TARGET_DIRECTORY_ENDPOINT = '/api/v1/canonical/operator-targets';
+  var TARGET_DIRECTORY_VERSION = 'm22-part5-target-directory-v1';
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
@@ -38,9 +40,11 @@
     try { return JSON.stringify(entry).slice(0, 1000); } catch (_error) { return 'Evidence is unavailable.'; }
   }
 
-  function targetLabel(target, directory) {
+  function targetLabel(target, directory, discoveredTargets) {
     if (!target || target.kind === 'unassigned') return 'Unassigned';
-    var match = (directory && Array.isArray(directory.targets) ? directory.targets : []).find(function (entry) {
+    var entries = (directory && Array.isArray(directory.targets) ? directory.targets : [])
+      .concat(Array.isArray(discoveredTargets) ? discoveredTargets : []);
+    var match = entries.find(function (entry) {
       return entry.kind === target.kind && entry.id === target.id;
     });
     return match ? match.label : target.kind + ' ' + target.id;
@@ -161,6 +165,7 @@
   function proposedTarget() {
     if (active.action === 'unassign') return { kind: 'unassigned', id: null };
     if (!['assign', 'reassign'].includes(active.action)) return targetForAuthority(active.current);
+    if (active.targetLookupBusy) throw new Error('Wait for the current bounded target lookup to finish.');
     var selected = active.target.value.split(':');
     if (selected.length !== 2 || !selected[1]) throw new Error('Choose a current active worker or crew.');
     return { kind: selected[0], id: selected[1] };
@@ -200,7 +205,7 @@
     var terms = el('dl');
     appendTerm(terms, 'Action', ACTION_LABELS[preview.action] || preview.action);
     appendTerm(terms, 'Appointment', active.title);
-    appendTerm(terms, 'Target', targetLabel(preview.proposal.target, active.directory));
+    appendTerm(terms, 'Target', targetLabel(preview.proposal.target, active.directory, active.targetPageTargets));
     appendTerm(terms, 'Schedule', formatInstant(preview.proposal.scheduledStart, active.timeZone) + ' to ' + formatInstant(preview.proposal.scheduledEnd, active.timeZone));
     appendTerm(terms, 'Tenant time zone', active.timeZone);
     appendTerm(terms, 'Current revision', String(active.current.revision));
@@ -458,11 +463,128 @@
     var wrapper = el('div', 'm22-dialog-field');
     var label = el('label', '', active.action === 'assign' ? 'Assign to active worker or crew' : 'Reassign to a different active worker or crew');
     var select = document.createElement('select'); select.required = true;
-    var placeholder = el('option', '', 'Choose a current target'); placeholder.value = ''; select.appendChild(placeholder);
-    (directory.targets || []).filter(function (entry) { return entry.kind !== 'unassigned'; }).forEach(function (entry) {
-      var option = el('option', '', entry.label + ' — ' + entry.kind); option.value = entry.kind + ':' + entry.id; select.appendChild(option);
-    });
+    function replaceOptions(targets, emptyLabel) {
+      var previous = select.value;
+      select.replaceChildren();
+      var placeholder = el('option', '', emptyLabel || 'Choose a current target'); placeholder.value = ''; select.appendChild(placeholder);
+      (targets || []).filter(function (entry) { return entry.kind !== 'unassigned'; }).forEach(function (entry) {
+        var kind = entry.kind === 'profile' ? 'worker' : 'crew';
+        var option = el('option', '', entry.label + ' — ' + kind + ' — ' + entry.id);
+        option.value = entry.kind + ':' + entry.id;
+        select.appendChild(option);
+      });
+      if (Array.from(select.options).some(function (entry) { return entry.value === previous; })) select.value = previous;
+    }
+    replaceOptions(directory.targets || []);
     label.appendChild(select); wrapper.appendChild(label); form.appendChild(wrapper); active.target = select;
+    active.targetPageTargets = [];
+    active.targetLookupBusy = false;
+
+    var discovery = directory.discovery;
+    if (!discovery || discovery.version !== TARGET_DIRECTORY_VERSION ||
+        discovery.endpoint !== TARGET_DIRECTORY_ENDPOINT || !Number.isSafeInteger(discovery.pageSize) ||
+        discovery.pageSize < 1 || discovery.pageSize > 100) {
+      if (directory.truncated === true) {
+        select.disabled = true;
+        active.previewButton.disabled = true;
+        setStatus('The current target list is incomplete and bounded target discovery is unavailable. Refresh before acting.', 'error', true);
+      }
+      return;
+    }
+
+    var lookup = el('section', 'm22-target-lookup');
+    lookup.setAttribute('aria-label', 'Bounded active worker and crew lookup');
+    var guidance = el('p', 'm22-target-lookup-guidance');
+    guidance.textContent = discovery.truncated
+      ? 'The initial selector is incomplete: showing ' + discovery.shown + ' of ' + discovery.total +
+        ' current targets. Search or move through bounded authoritative pages.'
+      : 'All ' + discovery.total + ' current targets are shown. You can also search the authoritative directory.';
+    var searchLabel = el('label', '', 'Search active workers and crews');
+    var search = document.createElement('input'); search.type = 'search'; search.maxLength = 100;
+    search.setAttribute('autocomplete', 'off'); search.setAttribute('spellcheck', 'false');
+    searchLabel.appendChild(search);
+    var controls = el('div', 'm22-record-actions');
+    var searchButton = el('button', 'm22-action-button', 'Search current targets'); searchButton.type = 'button';
+    var nextButton = el('button', 'm22-action-button', 'Next target page'); nextButton.type = 'button'; nextButton.hidden = true;
+    var lookupStatus = el('p', 'm22-target-lookup-status', discovery.truncated
+      ? 'The initial list is incomplete; no omitted target is claimed unavailable.'
+      : 'The initial target list is complete.');
+    lookupStatus.setAttribute('role', 'status'); lookupStatus.setAttribute('aria-live', 'polite'); lookupStatus.tabIndex = -1;
+    controls.append(searchButton, nextButton); lookup.append(guidance, searchLabel, controls, lookupStatus); form.appendChild(lookup);
+
+    function setLookupStatus(message, state, focus) {
+      lookupStatus.textContent = message;
+      lookupStatus.dataset.state = state || 'ready';
+      if (focus) lookupStatus.focus({ preventScroll: true });
+    }
+    function validTargetPage(page) {
+      return page && page.version === TARGET_DIRECTORY_VERSION && page.canRead === true &&
+        typeof page.query === 'string' && Array.isArray(page.targets) && page.targets.length <= discovery.pageSize &&
+        page.page && Number.isSafeInteger(page.page.shown) && page.page.shown === page.targets.length &&
+        Number.isSafeInteger(page.page.total) && page.page.total >= page.page.shown &&
+        (page.page.nextCursor === null || typeof page.page.nextCursor === 'string') &&
+        typeof page.digest === 'string' && /^[0-9a-f]{64}$/.test(page.digest) &&
+        page.targets.every(function (entry) {
+          return entry && ['profile', 'crew'].includes(entry.kind) &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(entry.id || '') &&
+            typeof entry.label === 'string' && entry.label.length > 0;
+        });
+    }
+    function loadTargetPage(cursor) {
+      if (active.targetLookupBusy) return Promise.resolve(false);
+      var query = search.value.normalize('NFC').trim();
+      if (query.length > 100 || /[\u0000-\u001f\u007f]/.test(query)) {
+        setLookupStatus('Search must be 100 characters or fewer and contain no control bytes.', 'error', true);
+        return Promise.resolve(false);
+      }
+      var endpoint = TARGET_DIRECTORY_ENDPOINT + '?query=' + encodeURIComponent(query);
+      if (cursor) endpoint += '&cursor=' + encodeURIComponent(cursor);
+      var requestOwner = active;
+      active.targetLookupBusy = true;
+      search.disabled = true; select.disabled = true; searchButton.disabled = true; nextButton.disabled = true;
+      setLookupStatus('Loading a bounded current target page…', 'pending', false);
+      return jsonRequest(endpoint, {
+        method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
+      }).then(function (body) {
+        if (active !== requestOwner) return false;
+        if (!validTargetPage(body.data)) throw new Error('The current target directory response is invalid. Refresh before acting.');
+        var page = body.data;
+        active.targetPageTargets = page.targets.slice();
+        replaceOptions(page.targets, page.targets.length ? 'Choose a current target from this bounded page' : 'No current targets match this search');
+        nextButton.dataset.cursor = page.page.nextCursor || '';
+        nextButton.hidden = !page.page.nextCursor;
+        var queryDescription = page.query ? ' matching “' + page.query + '”' : '';
+        var boundedDescription = page.page.nextCursor
+          ? '. This page is bounded; use Next target page or search again.'
+          : '. This is the final bounded page; search again to revisit earlier targets.';
+        setLookupStatus(page.targets.length
+          ? 'Showing ' + page.page.shown + ' of ' + page.page.total + ' current targets' + queryDescription +
+            (page.page.truncated ? boundedDescription : '. This result is complete.')
+          : 'No current active worker or crew matches this bounded search.', page.targets.length ? 'ready' : 'empty', false);
+        if (page.targets.length) select.focus({ preventScroll: true }); else search.focus({ preventScroll: true });
+        return true;
+      }).catch(function (error) {
+        if (active !== requestOwner) return false;
+        nextButton.hidden = true;
+        setLookupStatus((error && error.message ? error.message : 'Target lookup failed.') +
+          ' The displayed selector may remain incomplete; retry this lookup before treating a target as unavailable.', 'error', true);
+        return false;
+      }).finally(function () {
+        if (active !== requestOwner) return;
+        active.targetLookupBusy = false;
+        search.disabled = false; select.disabled = false; searchButton.disabled = false; nextButton.disabled = false;
+      });
+    }
+    search.addEventListener('input', function () {
+      nextButton.hidden = true;
+      nextButton.dataset.cursor = '';
+      setLookupStatus('Search text changed. Run a new bounded authoritative search.', 'ready', false);
+    });
+    searchButton.addEventListener('click', function () { loadTargetPage(null); });
+    nextButton.addEventListener('click', function () {
+      var cursor = nextButton.dataset.cursor;
+      if (cursor) loadTargetPage(cursor);
+    });
   }
 
   function open(options) {

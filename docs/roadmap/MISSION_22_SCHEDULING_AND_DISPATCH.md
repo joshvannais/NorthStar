@@ -418,6 +418,23 @@ and actual Playwright WebKit. No JavaScript authority, data semantics, schema, o
 migration changed. Another different fresh exact-head audit remains mandatory
 before ready, merge, or release.
 
+The next independent exact-head audit at
+`3ea0b32737c4c05ba817758c72329cabfc3bd823` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 0 / P2 1 / P3 0`. The fourth narrow correction keeps Part 5
+audit-pending and closes only the bounded target-discovery finding. The initial
+operator directory remains resource-bounded and now reports exact shown and
+total profile/crew counts plus truthful truncation. Calendar and Command Center
+share one tenant-scoped server-side search and stable keyset-paging path, so
+every current active worker and active crew remains reachable without loading an
+unbounded directory. Cursor and search inputs are canonical and bounded before
+the target query; broad employee, inactive, and cross-tenant reads remain
+denied; safe subscription-read-only operators may inspect but cannot mutate;
+and preview/approval still rechecks current target authority. Duplicate and
+hostile labels render as inert text, while incomplete, loading, empty, error,
+last-page, and retry states remain explicit. No schema or migration changed.
+Another different fresh exact-head audit remains mandatory before ready, merge,
+or release.
+
 ### Part 6 — Crew Today experience (planned)
 
 Deliver the mobile-first self/current-crew view of assigned work, schedule and

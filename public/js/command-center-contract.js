@@ -66,10 +66,17 @@
     }
     if (expectedMode === 'paid') {
       var operator = value.schedulingOperator;
+      var discovery = operator && operator.discovery;
       var overview = value.schedulingOverview;
       var categories = ['unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
       if (!operator || operator.canRead !== true || typeof operator.canMutate !== 'boolean' || !Array.isArray(operator.targets) ||
           typeof operator.digest !== 'string' || !/^[0-9a-f]{64}$/.test(operator.digest) ||
+          !discovery || discovery.version !== 'm22-part5-target-directory-v1' ||
+          discovery.endpoint !== '/api/v1/canonical/operator-targets' ||
+          !Number.isSafeInteger(discovery.pageSize) || discovery.pageSize < 1 || discovery.pageSize > 100 ||
+          !Number.isSafeInteger(discovery.shown) || !Number.isSafeInteger(discovery.total) ||
+          discovery.shown < 0 || discovery.total < discovery.shown ||
+          typeof discovery.truncated !== 'boolean' || discovery.truncated !== operator.truncated ||
           !overview || overview.version !== 'm22-part5-overview-v1' ||
           typeof overview.timeZone !== 'string' || !overview.definitions || !overview.categories ||
           !overview.counts || !Array.isArray(overview.records) || !overview.page ||

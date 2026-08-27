@@ -8,7 +8,11 @@ const { Client, Pool } = require('pg');
 const request = require('supertest');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
 const { normalizeMutationApproval, normalizeMutationPreview } = require('../../src/scheduling/approvalContract');
-const { loadSchedulingOperatorDirectory } = require('../../src/scheduling/operatorDirectory');
+const {
+  loadSchedulingOperatorDirectory,
+  loadSchedulingOperatorTargetPage,
+  parseOperatorTargetRequest,
+} = require('../../src/scheduling/operatorDirectory');
 const { buildSchedulingOverview } = require('../../src/scheduling/overviewRepository');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
@@ -49,6 +53,7 @@ const IDS = Object.freeze({
   sqlContractAppointment: 'e5100000-0000-4000-8000-000000000021',
   digestProvenanceAppointment: 'e5100000-0000-4000-8000-000000000022',
   part5Appointment: 'e5100000-0000-4000-8000-000000000023',
+  targetDiscoveryAppointment: 'e5100000-0000-4000-8000-000000000024',
 });
 
 function quoteIdentifier(value) {
@@ -545,6 +550,190 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
     }
   }, 120000);
+
+  test('Part 5 bounded target discovery reaches 101+ active profiles and crews without weakening current authority', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.targetDiscoveryAppointment);
+    const profileRows = Array.from({ length: 102 }, (_, index) => ({
+      id: `b2100000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      name: index >= 100 ? `ZZZ ${HOSTILE} duplicate` : `Directory worker ${String(index).padStart(3, '0')}`,
+      email: `directory-worker-${String(index).padStart(3, '0')}@part5.test`,
+    }));
+    const crewRows = Array.from({ length: 102 }, (_, index) => ({
+      id: `b3100000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      key: `directory-crew-${String(index).padStart(3, '0')}`,
+      name: index === 101 ? `ZZZ ${HOSTILE} duplicate` : `Directory crew ${String(index).padStart(3, '0')}`,
+    }));
+    const profileIds = profileRows.map(row => row.id);
+    const crewIds = crewRows.map(row => row.id);
+    const ownerInput = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, onboardingComplete: true, subscriptionMutable: true,
+    };
+    await runtimePool.query(
+      `INSERT INTO public.users(id,organization_id,name,email,password_hash,role,status)
+       SELECT item.id::uuid,$1,item.name,item.email,'not-used','member','active'
+         FROM jsonb_to_recordset($2::jsonb) AS item(id text,name text,email text)`,
+      [IDS.organization, JSON.stringify(profileRows)]
+    );
+    await runtimePool.query(
+      `INSERT INTO public.organization_memberships(id,organization_id,user_id,role,status)
+       SELECT item.id::uuid,$1,item.id::uuid,'member','active'
+         FROM jsonb_to_recordset($2::jsonb) AS item(id text)`,
+      [IDS.organization, JSON.stringify(profileRows)]
+    );
+    await runtimePool.query(
+      `UPDATE public.workforce_profiles SET operational_role='technician'
+        WHERE organization_id=$1 AND id=ANY($2::uuid[])`, [IDS.organization, profileIds]
+    );
+    await runtimePool.query(
+      `INSERT INTO public.workforce_crews(
+         id,organization_id,crew_key,name,home_location_id,created_by_user_id,updated_by_user_id)
+       SELECT item.id::uuid,$1,item.key,item.name,'headquarters',$2,$2
+         FROM jsonb_to_recordset($3::jsonb) AS item(id text,key text,name text)`,
+      [IDS.organization, IDS.owner, JSON.stringify(crewRows)]
+    );
+    await runtimePool.query(
+      `INSERT INTO public.workforce_crew_members(
+         organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+       SELECT $1,item.id::uuid,$2,'lead',$2
+         FROM jsonb_to_recordset($3::jsonb) AS item(id text)`,
+      [IDS.organization, IDS.owner, JSON.stringify(crewRows)]
+    );
+    try {
+      const initial = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
+      expect(initial).toMatchObject({
+        canRead: true, canMutate: true, truncated: true,
+        discovery: {
+          version: 'm22-part5-target-directory-v1', pageSize: 25,
+          shown: 200, total: 208, truncated: true,
+          counts: { profiles: { shown: 100, total: 105 }, crews: { shown: 100, total: 103 } },
+        },
+      });
+      expect(initial.targets.some(target => target.id === profileRows[101].id)).toBe(false);
+      expect(initial.targets.some(target => target.id === crewRows[101].id)).toBe(false);
+
+      let targetRequest = parseOperatorTargetRequest({ query: 'ZZZ ' }, IDS.organization);
+      const duplicatePage = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...targetRequest });
+      expect(duplicatePage.targets.map(target => ({ kind: target.kind, id: target.id, label: target.label }))).toEqual([
+        { kind: 'profile', id: profileRows[100].id, label: profileRows[100].name },
+        { kind: 'profile', id: profileRows[101].id, label: profileRows[101].name },
+        { kind: 'crew', id: crewRows[101].id, label: crewRows[101].name },
+      ]);
+      expect(duplicatePage).toMatchObject({ canRead: true, canMutate: true, query: 'ZZZ', page: { shown: 3, total: 3, truncated: false } });
+      expect(duplicatePage.digest).toMatch(/^[0-9a-f]{64}$/);
+
+      const collected = [];
+      let rawCursor = null;
+      let pages = 0;
+      do {
+        targetRequest = parseOperatorTargetRequest({ query: '', ...(rawCursor ? { cursor: rawCursor } : {}) }, IDS.organization);
+        const page = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...targetRequest });
+        pages += 1;
+        expect(page.targets.length).toBeLessThanOrEqual(25);
+        expect(page.page).toMatchObject({ size: 25, total: 208 });
+        collected.push(...page.targets.map(target => `${target.kind}:${target.id}`));
+        rawCursor = page.page.nextCursor;
+      } while (rawCursor && pages < 20);
+      expect(pages).toBe(9);
+      expect(collected).toHaveLength(208);
+      expect(new Set(collected).size).toBe(208);
+      expect(collected).toContain(`profile:${profileRows[101].id}`);
+      expect(collected).toContain(`crew:${crewRows[101].id}`);
+
+      const ownerHttp = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: 'ZZZ ' }).set(sessions.owner.headers).expect(200);
+      expect(ownerHttp.body.data.targets.map(target => target.id)).toEqual([
+        profileRows[100].id, profileRows[101].id, crewRows[101].id,
+      ]);
+      const employeeHttp = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: 'ZZZ ' }).set(sessions.employee.headers).expect(403);
+      expect(employeeHttp.body.error.code).toBe('M22_OPERATOR_TARGET_DIRECTORY_FORBIDDEN');
+      expect(JSON.stringify(employeeHttp.body)).not.toContain(HOSTILE);
+      const crossTenant = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: profileRows[101].id }).set(sessions.other.headers).expect(200);
+      expect(crossTenant.body.data.targets).toEqual([]);
+
+      await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+      try {
+        const readOnly = await request(app).get('/api/v1/canonical/operator-targets')
+          .query({ query: 'ZZZ ' }).set(sessions.owner.headers).expect(200);
+        expect(readOnly.body.data).toMatchObject({ canRead: true, canMutate: false, reason: 'subscription_read_only' });
+      } finally {
+        await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+      }
+
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[101].id]
+      );
+      try {
+        const inactiveLookup = await request(app).get('/api/v1/canonical/operator-targets')
+          .query({ query: profileRows[101].id }).set(sessions.owner.headers).expect(200);
+        expect(inactiveLookup.body.data.targets).toEqual([]);
+        const inactivePreview = await previewAppointment(IDS.targetDiscoveryAppointment, 'assign', {
+          target: { kind: 'profile', id: profileRows[101].id },
+          reason: 'A deactivated discovered target cannot enter preview.',
+        });
+        expect(inactivePreview.response.status).toBe(409);
+        expect(inactivePreview.response.body.error.code).toBe('M22_INVALID_TRANSITION');
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, profileRows[101].id]
+        );
+      }
+
+      const currentPreview = await previewAppointment(IDS.targetDiscoveryAppointment, 'assign', {
+        target: { kind: 'profile', id: profileRows[101].id },
+        reason: 'Approval must recheck a discovered target after lookup and preview.',
+      });
+      expect(currentPreview.response.status).toBe(201);
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[101].id]
+      );
+      try {
+        const rejectedApproval = await request(app)
+          .post(`/api/v1/canonical/appointments/${IDS.targetDiscoveryAppointment}/mutation-approvals`)
+          .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part5-target-deactivate-after-preview')
+          .send({
+            previewId: currentPreview.response.body.data.id,
+            previewDigest: currentPreview.response.body.data.previewDigest,
+            acknowledgedWarningDigests: currentPreview.response.body.data.warningDigests,
+            acknowledgedReviewReasonDigests: currentPreview.response.body.data.reviewReasonDigests,
+            reason: currentPreview.reason,
+          });
+        expect(rejectedApproval.status).toBe(409);
+        expect(rejectedApproval.body.error.code).toBe('M22_EVIDENCE_STALE');
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, profileRows[101].id]
+        );
+      }
+    } finally {
+      await runtimePool.query(
+        'DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=ANY($2::uuid[])',
+        [IDS.organization, crewIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.workforce_crews WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, crewIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.workforce_profiles WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, profileIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.organization_memberships WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, profileIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.users WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, profileIds]
+      );
+    }
+  }, 180000);
 
   async function previewAndApprove(action, input = {}, session = sessions.owner, key = crypto.randomUUID()) {
     const appointmentId = input.appointmentId || IDS.mutationMatrixAppointment;

@@ -30,6 +30,10 @@
 .m22-dialog-field label, .m22-dialog legend { font-weight: 600; }
 .m22-dialog input, .m22-dialog select, .m22-dialog textarea { width: 100%; min-height: 44px; box-sizing: border-box; padding: 9px; border: 1px solid #8993a7; border-radius: 7px; color: inherit; background: inherit; font: inherit; }
 .m22-dialog textarea { min-height: 76px; resize: vertical; }
+.m22-target-lookup { display: grid; min-width: 0; gap: 8px; padding: 12px; border: 1px solid var(--border-color, #d7dce5); border-radius: 8px; }
+.m22-target-lookup p { min-width: 0; margin: 0; overflow-wrap: anywhere; word-break: break-word; }
+.m22-target-lookup-status[data-state="error"] { color: #b42318; font-weight: 600; }
+.m22-target-lookup-status[data-state="empty"] { color: var(--text-secondary, #586174); }
 .m22-dialog-summary { display: grid; gap: 8px; padding: 12px; border-radius: 8px; background: color-mix(in srgb, #6395ff 10%, transparent); }
 .m22-dialog-summary dl { display: grid; grid-template-columns: minmax(8rem, 1fr) 2fr; gap: 6px 12px; margin: 0; }
 .m22-dialog-summary dt { font-weight: 600; }

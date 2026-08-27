@@ -35,6 +35,8 @@ const { requireRecommendationBodyBoundary } = require('../scheduling/recommendat
 const {
   actorInput,
   loadSchedulingOperatorDirectory,
+  loadSchedulingOperatorTargetPage,
+  parseOperatorTargetRequest,
 } = require('../scheduling/operatorDirectory');
 const {
   buildSchedulingOverviewPage,
@@ -735,6 +737,7 @@ function createDependencies(options) {
     permission: supplied.permission || requirePermission,
     audit: supplied.audit || audit,
     operatorDirectory: supplied.operatorDirectory || loadSchedulingOperatorDirectory,
+    operatorTargetDirectory: supplied.operatorTargetDirectory || loadSchedulingOperatorTargetPage,
   };
 }
 
@@ -828,6 +831,30 @@ function createCanonicalRouter(options) {
     }
     return next();
   }
+
+  router.get('/operator-targets', dependencies.auth, requireCanonicalContext, async function (req, res) {
+    const context = requestContext(req);
+    try {
+      const targetRequest = parseOperatorTargetRequest(req.query, context.organizationId);
+      const page = await dependencies.operatorTargetDirectory(resolvePool(dependencies.poolProvider), {
+        ...actorInput(req),
+        ...targetRequest,
+      });
+      if (page.canRead !== true) {
+        return res.status(403).json({
+          success: false,
+          requestId: req && req.requestId || undefined,
+          error: {
+            code: 'M22_OPERATOR_TARGET_DIRECTORY_FORBIDDEN',
+            message: 'Current scheduling targets are limited to owners, admins, and active dispatchers.',
+          },
+        });
+      }
+      return res.json({ success: true, data: page, requestId: req && req.requestId || undefined });
+    } catch (_error) {
+      return handleEndpointError(res, _error, req);
+    }
+  });
 
   router.get('/status', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);

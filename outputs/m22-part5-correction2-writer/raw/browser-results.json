@@ -1,0 +1,41 @@
+{
+  "installedChrome151": {
+    "desktopLight": { "previews": 14, "approvals": 11, "revision": 12, "externalCalls": 0, "directPatches": 0 },
+    "mobileDark": {
+      "previews": 13,
+      "approvals": 10,
+      "revision": 11,
+      "externalCalls": 0,
+      "directPatches": 0,
+      "mobileHeading": {
+        "flexDirection": "column",
+        "headingWidth": 324,
+        "titleWidth": 324,
+        "titleHeight": 23.59375,
+        "titleLineHeight": 23.6,
+        "titleLines": 1,
+        "updatedWidth": 324
+      }
+    }
+  },
+  "actualPlaywrightWebKit26_5": {
+    "desktopDark": { "previews": 14, "approvals": 11, "revision": 12, "externalCalls": 0, "directPatches": 0 },
+    "mobileLight": {
+      "previews": 13,
+      "approvals": 10,
+      "revision": 11,
+      "externalCalls": 0,
+      "directPatches": 0,
+      "mobileHeading": {
+        "flexDirection": "column",
+        "headingWidth": 324,
+        "titleWidth": 324,
+        "titleHeight": 23.59375,
+        "titleLineHeight": 23.6,
+        "titleLines": 1,
+        "updatedWidth": 324
+      }
+    }
+  },
+  "visualApproval": "unclaimed"
+}

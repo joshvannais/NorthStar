@@ -3,6 +3,7 @@
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const { evaluateInTransaction } = require('./conflictRepository');
 const { scheduleAuthority } = require('./repository');
+const { validateGraphCursor } = require('./graphCursor');
 
 const DUE_HORIZON_MILLISECONDS = 24 * 60 * 60 * 1000;
 const AT_RISK_HORIZON_MILLISECONDS = 48 * 60 * 60 * 1000;
@@ -284,6 +285,8 @@ async function evaluateOverview(client, input) {
 }
 
 async function buildSchedulingOverviewPage(pool, input) {
+  const requestedCursor = validateGraphCursor(input && input.cursor);
+  const normalizedInput = { ...input, cursor: requestedCursor && requestedCursor.raw || null };
   if (!pool || typeof pool.connect !== 'function') throw new Error('Canonical PostgreSQL persistence is unavailable.');
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const client = await pool.connect();
@@ -296,7 +299,7 @@ async function buildSchedulingOverviewPage(pool, input) {
       await client.query("SET LOCAL statement_timeout='15000ms'");
       await client.query("SET LOCAL lock_timeout='2000ms'");
       await client.query('SET LOCAL search_path=pg_catalog,public');
-      const evaluated = await evaluateOverview(client, input);
+      const evaluated = await evaluateOverview(client, normalizedInput);
       await client.query('COMMIT');
       return evaluated;
     } catch (error) {

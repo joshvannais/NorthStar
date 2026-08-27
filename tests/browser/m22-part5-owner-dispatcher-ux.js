@@ -355,6 +355,33 @@ async function main() {
       var workspace = document.querySelector('[data-appointment-id="' + id + '"]');
       return Boolean(workspace);
     }, appointmentId).catch(() => {});
+    let mobileHeading = null;
+    if (mobile) {
+      mobileHeading = await page.evaluate(() => {
+        const heading = document.querySelector('.demo-daily-brief .demo-panel-heading');
+        const title = heading.querySelector('h2');
+        const updated = heading.querySelector('.demo-updated');
+        const headingBox = heading.getBoundingClientRect();
+        const titleBox = title.getBoundingClientRect();
+        const updatedBox = updated.getBoundingClientRect();
+        const titleStyle = getComputedStyle(title);
+        const lineHeight = Number.parseFloat(titleStyle.lineHeight);
+        return {
+          flexDirection: getComputedStyle(heading).flexDirection,
+          headingWidth: headingBox.width,
+          titleWidth: titleBox.width,
+          titleHeight: titleBox.height,
+          titleLineHeight: lineHeight,
+          titleLines: lineHeight ? Math.round(titleBox.height / lineHeight) : null,
+          updatedWidth: updatedBox.width,
+        };
+      });
+      assert.strictEqual(mobileHeading.flexDirection, 'column', JSON.stringify(mobileHeading));
+      assert.ok(mobileHeading.titleWidth >= 200, 'mobile Daily Brief title retains readable width: ' + JSON.stringify(mobileHeading));
+      assert.ok(mobileHeading.titleLines <= 2, 'mobile Daily Brief title must not collapse vertically: ' + JSON.stringify(mobileHeading));
+      assert.ok(mobileHeading.updatedWidth >= 200 && mobileHeading.updatedWidth <= mobileHeading.headingWidth + 1,
+        'updated timestamp reflows within the Daily Brief: ' + JSON.stringify(mobileHeading));
+    }
     await screenshot('command-center-overview');
 
     await page.getByRole('button', { name: /^All \d+$/ }).click();
@@ -550,6 +577,15 @@ async function main() {
       assert.strictEqual(denied.status(), 403, alias);
       assert.ok(!(await denied.text()).includes(HOSTILE), alias + ' cannot disclose stored customer bytes');
     }
+    for (const alias of ['/api/v1/canonical/status', '/api/dashboard/status']) {
+      const restricted = await employeeContext.request.get(origin + alias);
+      assert.strictEqual(restricted.status(), 200, alias);
+      const body = await restricted.json();
+      const data = body.data || body;
+      assert.strictEqual(data.broadSchedulingRead, false, alias);
+      assert.strictEqual(Object.prototype.hasOwnProperty.call(data, 'completedGraphs'), false, alias);
+      assert.ok(!JSON.stringify(body).includes(HOSTILE), alias + ' cannot disclose stored customer bytes');
+    }
     await employeeContext.close();
 
     await page.evaluate(() => { document.documentElement.style.fontSize = '400%'; });
@@ -567,7 +603,7 @@ async function main() {
       : ['assign', 'schedule', 'reschedule', 'dispatch', 'reassign', 'reschedule', 'unassign']);
     assert.strictEqual(errors.length, 0, 'browser page errors: ' + JSON.stringify(errors));
     console.log(JSON.stringify({ matrix, appointmentId, previews: previews.length, approvals: approvals.length,
-      revision: expectedRevision, externalCalls: 0, directPatches: 0 }));
+      revision: expectedRevision, externalCalls: 0, directPatches: 0, mobileHeading }));
   } finally {
     if (browser) await browser.close().catch(() => {});
     await closeServer(server).catch(() => {});

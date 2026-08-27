@@ -39,11 +39,14 @@ const {
 const {
   buildSchedulingOverviewPage,
 } = require('../scheduling/overviewRepository');
+const {
+  encodeGraphCursor,
+  validateGraphCursor,
+} = require('../scheduling/graphCursor');
 const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const READ_MODEL_VERSION = 'm22-part1-read-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const EXACT_GRAPH_CURSOR_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const SURFACES = new Set([
   'customer-detail', 'leads', 'communications', 'calendar',
   'command-center', 'polaris', 'executive', 'estimates',
@@ -99,37 +102,6 @@ function queryFilters(req) {
       Object.prototype.hasOwnProperty.call(req.query, 'customerId')
     ),
   });
-}
-
-function invalidGraphCursor() {
-  const error = new Error('Invalid canonical pagination cursor.');
-  error.code = 'INVALID_CURSOR';
-  error.statusCode = 400;
-  throw error;
-}
-
-function encodeGraphCursor(item) {
-  const createdAt = item && item._paginationCreatedAt;
-  const operationId = item && item.ids && item.ids.operation;
-  if (!EXACT_GRAPH_CURSOR_TIME.test(String(createdAt || '')) ||
-      Number.isNaN(Date.parse(createdAt)) || !UUID.test(String(operationId || ''))) invalidGraphCursor();
-  return Buffer.from(JSON.stringify({ createdAt, operationId }), 'utf8').toString('base64url');
-}
-
-function validateGraphCursor(raw) {
-  if (raw === null || raw === undefined || raw === '') return null;
-  if (typeof raw !== 'string' || raw.length > 512 || raw !== raw.trim()) invalidGraphCursor();
-  try {
-    const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
-    if (!parsed || Object.keys(parsed).sort().join(',') !== 'createdAt,operationId' ||
-        !UUID.test(String(parsed.operationId || '')) ||
-        !EXACT_GRAPH_CURSOR_TIME.test(String(parsed.createdAt || '')) ||
-        Number.isNaN(Date.parse(parsed.createdAt))) invalidGraphCursor();
-    return Object.freeze({ raw, createdAt: parsed.createdAt, operationId: parsed.operationId });
-  } catch (error) {
-    if (error && error.code === 'INVALID_CURSOR') throw error;
-    return invalidGraphCursor();
-  }
 }
 
 const GRAPH_SELECT = `
@@ -426,8 +398,9 @@ function projectRow(row) {
 
 async function listCanonicalGraphPage(pool, context, filters) {
   const limit = Math.max(1, Math.min(100, Number(filters && filters.limit) || 50));
-  const cursor = filters && filters.cursor && filters.cursor.raw
-    ? filters.cursor : validateGraphCursor(filters && filters.cursor);
+  const suppliedCursor = filters && filters.cursor && typeof filters.cursor === 'object'
+    ? filters.cursor.raw : filters && filters.cursor;
+  const cursor = validateGraphCursor(suppliedCursor);
   const values = [context.organizationId, context.explicitSession];
   let where = `
     WHERE o.organization_id = $1 AND o.state = 'completed'
@@ -815,6 +788,37 @@ async function requireBroadSchedulingRead(req, dependencies, denial) {
   return schedulingOperator;
 }
 
+async function canonicalStatus(req, dependencies) {
+  try {
+    await requireBroadSchedulingRead(req, dependencies);
+  } catch (error) {
+    if (!error || error.code !== 'M22_BROAD_SCHEDULING_READ_FORBIDDEN') throw error;
+    return {
+      status: 'operational',
+      readModelVersion: READ_MODEL_VERSION,
+      postgresAuthoritative: true,
+      redisRequired: false,
+      canonicalResponseCaching: false,
+      broadSchedulingRead: false,
+    };
+  }
+  const context = requestContext(req);
+  const result = await resolvePool(dependencies.poolProvider).query(
+    `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
+      WHERE organization_id = $1 AND state = 'completed'`,
+    [context.organizationId]
+  );
+  return {
+    status: 'operational',
+    readModelVersion: READ_MODEL_VERSION,
+    completedGraphs: result.rows[0].completed_graphs,
+    postgresAuthoritative: true,
+    redisRequired: false,
+    canonicalResponseCaching: false,
+    broadSchedulingRead: true,
+  };
+}
+
 function createCanonicalRouter(options) {
   const dependencies = createDependencies(options);
   const router = express.Router();
@@ -829,25 +833,12 @@ function createCanonicalRouter(options) {
     const context = requestContext(req);
     if (!context) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     try {
-      const pool = resolvePool(dependencies.poolProvider);
-      const result = await pool.query(
-        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
-          WHERE organization_id = $1 AND state = 'completed'`,
-        [context.organizationId]
-      );
       return res.json({
         success: true,
-        data: {
-          status: 'operational',
-          readModelVersion: READ_MODEL_VERSION,
-          completedGraphs: result.rows[0].completed_graphs,
-          postgresAuthoritative: true,
-          redisRequired: false,
-          canonicalResponseCaching: false,
-        },
+        data: await canonicalStatus(req, dependencies),
       });
     } catch (_error) {
-      return sendPersistenceUnavailable(res, req);
+      return handleEndpointError(res, _error, req);
     }
   });
 
@@ -1215,21 +1206,9 @@ function createCompatibilityRouter(options) {
   }
   ownedGet('/dashboard/status', async function (req, res) {
     try {
-      const context = requestContext(req);
-      const result = await resolvePool(dependencies.poolProvider).query(
-        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
-          WHERE organization_id = $1 AND state = 'completed'`,
-        [context.organizationId]
-      );
-      return res.json({
-        status: 'operational',
-        readModelVersion: READ_MODEL_VERSION,
-        completedGraphs: result.rows[0].completed_graphs,
-        postgresAuthoritative: true,
-        redisRequired: false,
-      });
+      return res.json(await canonicalStatus(req, dependencies));
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error, req);
     }
   });
   ownedGet('/calendar/events', handle('calendar', function (projection) { return { events: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
@@ -1367,4 +1346,5 @@ module.exports = {
   serviceAnalyticsProjection,
   surfaceProjection,
   trendProjection,
+  validateGraphCursor,
 };

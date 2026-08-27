@@ -471,6 +471,50 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       const denied = await request(app).get(route).set(sessions.employee.headers).expect(403);
       expect(JSON.stringify(denied.body)).not.toContain(HOSTILE);
     }
+    const statusAliases = ['/api/v1/canonical/status', '/api/dashboard/status'];
+    for (const route of statusAliases) {
+      const ownerStatus = await request(app).get(route).set(sessions.owner.headers).expect(200);
+      const dispatcherStatus = await request(app).get(route).set(sessions.dispatcher.headers).expect(200);
+      const employeeStatus = await request(app).get(route).set(sessions.employee.headers).expect(200);
+      const otherTenantStatus = await request(app).get(route).set(sessions.other.headers).expect(200);
+      expect(ownerStatus.body.completedGraphs ?? ownerStatus.body.data.completedGraphs).toBeGreaterThan(0);
+      expect(dispatcherStatus.body.completedGraphs ?? dispatcherStatus.body.data.completedGraphs).toBeGreaterThan(0);
+      expect(otherTenantStatus.body.completedGraphs ?? otherTenantStatus.body.data.completedGraphs).toBe(1);
+      const employeeData = employeeStatus.body.data || employeeStatus.body;
+      expect(JSON.stringify(employeeStatus.body)).not.toContain(HOSTILE);
+      expect(employeeData).toMatchObject({ status: 'operational', broadSchedulingRead: false });
+      expect(employeeData.completedGraphs).toBeUndefined();
+    }
+    await runtimePool.query(
+      "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND user_id=$2",
+      [IDS.organization, IDS.dispatcher]
+    );
+    try {
+      for (const route of statusAliases) {
+        const inactive = await request(app).get(route).set(sessions.dispatcher.headers).expect(403);
+        expect(JSON.stringify(inactive.body)).not.toContain(HOSTILE);
+      }
+    } finally {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND user_id=$2",
+        [IDS.organization, IDS.dispatcher]
+      );
+    }
+    await runtimePool.query(
+      "UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='m22_part5_status_test' WHERE id=$1",
+      [sessions.dispatcher.sessionId]
+    );
+    try {
+      for (const route of statusAliases) {
+        const revoked = await request(app).get(route).set(sessions.dispatcher.headers).expect(401);
+        expect(JSON.stringify(revoked.body)).not.toContain(HOSTILE);
+      }
+    } finally {
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+        [sessions.dispatcher.sessionId]
+      );
+    }
     const commandOwner = await request(app).get('/api/v1/command-center/workspace')
       .set(sessions.owner.headers).expect(200);
     expect(commandOwner.body.data).toEqual(expect.objectContaining({
@@ -493,6 +537,10 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       const readOnlyCommand = await request(app).get('/api/v1/command-center/workspace')
         .set(sessions.owner.headers).expect(200);
       expect(readOnlyCommand.body.data.schedulingOperator).toMatchObject({ canRead: true, canMutate: false });
+      for (const route of statusAliases) {
+        const readOnlyStatus = await request(app).get(route).set(sessions.owner.headers).expect(200);
+        expect(readOnlyStatus.body.completedGraphs ?? readOnlyStatus.body.data.completedGraphs).toBeGreaterThan(0);
+      }
     } finally {
       await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
     }
@@ -1820,6 +1868,48 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect(firstOverview.categories.unassigned).toHaveLength(101);
     const firstIds = new Set(firstOverview.records.map(value => value.appointmentId));
     expect(firstIds.size).toBe(100);
+
+    const decodedCursor = JSON.parse(Buffer.from(firstOverview.page.nextCursor, 'base64url').toString('utf8'));
+    const encodeCursor = value => Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+    const malformedCursors = [
+      '',
+      firstOverview.page.nextCursor + '!!!',
+      firstOverview.page.nextCursor + '=',
+      'A'.repeat(513),
+      Buffer.from('{', 'utf8').toString('base64url'),
+      encodeCursor([decodedCursor.createdAt, decodedCursor.operationId]),
+      encodeCursor({ ...decodedCursor, tenantId: IDS.otherOrganization }),
+      encodeCursor({ operationId: decodedCursor.operationId, createdAt: decodedCursor.createdAt }),
+      encodeCursor({ createdAt: 1, operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: decodedCursor.createdAt, operationId: decodedCursor.operationId.toUpperCase() }),
+      encodeCursor({ createdAt: '2026-02-31T00:00:00.000000Z', operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: '2025-02-29T00:00:00.000000Z', operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: '2026-02-28T00:00:00.000Z', operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: decodedCursor.createdAt, operationId: 'not-a-uuid' }),
+    ];
+    for (const cursor of malformedCursors) {
+      const invalidResponse = await request(app).get('/api/v1/command-center/workspace')
+        .query({ cursor }).set(sessions.owner.headers).expect(400);
+      expect(invalidResponse.body.error).toMatchObject({ code: 'INVALID_CURSOR' });
+    }
+    const arrayCursor = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: [firstOverview.page.nextCursor, firstOverview.page.nextCursor] })
+      .set(sessions.owner.headers).expect(400);
+    expect(arrayCursor.body.error.code).toBe('INVALID_CURSOR');
+
+    const crossTenantCursor = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: firstOverview.page.nextCursor }).set(sessions.other.headers).expect(200);
+    expect(crossTenantCursor.body.data.schedulingOverview.records.every(record =>
+      record.appointmentId === IDS.otherAppointment)).toBe(true);
+    expect(JSON.stringify(crossTenantCursor.body)).not.toContain(IDS.organization);
+    const staleCursor = encodeCursor({
+      createdAt: '2000-01-01T00:00:00.000000Z',
+      operationId: '00000000-0000-4000-8000-000000000099',
+    });
+    const stalePage = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: staleCursor }).set(sessions.owner.headers).expect(200);
+    expect(stalePage.body.data.schedulingOverview).toMatchObject({ total: 101, shown: 0 });
+    expect(stalePage.body.data.schedulingOverview.page.cursor).toBe(staleCursor);
 
     // The one operation excluded from the first keyset page is on the second page.
     // Concurrent fixture inserts deliberately do not assume creation order. Change

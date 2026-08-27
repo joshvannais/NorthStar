@@ -392,6 +392,20 @@ microseconds in private keyset cursor evidence so a JavaScript millisecond
 conversion cannot silently omit a row. A new different fresh exact-head audit
 is required before ready, merge, or release.
 
+The next independent exact-head audit at
+`00327a85bbebf3bff79a6a6a667be2ed1043f579` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 0 / P2 3 / P3 0`. The second narrow correction keeps Part 5
+audit-pending and addresses only those findings. The two canonical status aliases
+now return tenant-wide completed-graph counts only to current owners, admins, and
+active dispatchers; authenticated employees and pre-workforce onboarding sessions
+receive generic operational status without that broad count. Command Center
+cursor input is strictly canonical base64url JSON with exact PostgreSQL
+microseconds and calendar-valid UTC timestamps, and is rejected before any
+PostgreSQL connection or overview scan. At mobile widths the Daily Brief heading
+and tenant-time update stack with bounded readable widths in installed Chrome and
+actual Playwright WebKit. No schema change is required and another different fresh
+exact-head audit remains mandatory before ready, merge, or release.
+
 ### Part 6 — Crew Today experience (planned)
 
 Deliver the mobile-first self/current-crew view of assigned work, schedule and

@@ -12,6 +12,7 @@ const {
 const { buildPaidWorkspace } = require('../commandCenter/workspace');
 const { actorInput, loadSchedulingOperatorDirectory } = require('../scheduling/operatorDirectory');
 const { buildSchedulingOverviewPage } = require('../scheduling/overviewRepository');
+const { validateGraphCursor } = require('../scheduling/graphCursor');
 
 const DETAIL_KINDS = Object.freeze({
   customer: Object.freeze({ idKey: 'customer', resource: 'leads' }),
@@ -46,6 +47,9 @@ function createCommandCenterRouter(options = {}) {
 
   router.get('/workspace', requireTenantAccess, requirePermission('dashboard', 'read'), async (req, res) => {
     try {
+      const requestedCursor = validateGraphCursor(
+        Object.prototype.hasOwnProperty.call(req.query, 'cursor') ? req.query.cursor : null
+      );
       const context = paidRequestContext(req);
       const pool = poolProvider();
       if (!context || !pool || typeof pool.query !== 'function') return unavailable(req, res);
@@ -65,7 +69,7 @@ function createCommandCenterRouter(options = {}) {
         actorUserId: context.userId,
         actorAccessRole: req.userRole,
         authSessionId: req.authSession && req.authSession.id,
-        cursor: Object.prototype.hasOwnProperty.call(req.query, 'cursor') ? req.query.cursor : null,
+        cursor: requestedCursor && requestedCursor.raw || null,
         loadPage: (client, page) => listCanonicalGraphPage(client, context, {
           limit: page.limit, cursor: page.cursor, status: null, customerId: null,
         }),

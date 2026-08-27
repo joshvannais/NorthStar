@@ -64,6 +64,39 @@
     if (expected.length !== actual.length || expected.some(function (id, index) { return actual[index] !== id; })) {
       throw new Error('The Command Center navigation contract is unavailable.');
     }
+    if (expectedMode === 'paid') {
+      var operator = value.schedulingOperator;
+      var discovery = operator && operator.discovery;
+      var overview = value.schedulingOverview;
+      var categories = ['unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
+      if (!operator || operator.canRead !== true || typeof operator.canMutate !== 'boolean' || !Array.isArray(operator.targets) ||
+          typeof operator.digest !== 'string' || !/^[0-9a-f]{64}$/.test(operator.digest) ||
+          !discovery || discovery.version !== 'm22-part5-target-directory-v1' ||
+          discovery.endpoint !== '/api/v1/canonical/operator-targets' ||
+          !Number.isSafeInteger(discovery.pageSize) || discovery.pageSize < 1 || discovery.pageSize > 100 ||
+          !Number.isSafeInteger(discovery.shown) || !Number.isSafeInteger(discovery.total) ||
+          discovery.shown < 0 || discovery.total < discovery.shown ||
+          typeof discovery.truncated !== 'boolean' || discovery.truncated !== operator.truncated ||
+          !overview || overview.version !== 'm22-part5-overview-v1' ||
+          typeof overview.timeZone !== 'string' || !overview.definitions || !overview.categories ||
+          !overview.counts || !Array.isArray(overview.records) || !overview.page ||
+          !Number.isSafeInteger(overview.total) || overview.total < overview.records.length ||
+          !Number.isSafeInteger(overview.shown) || overview.shown !== overview.records.length ||
+          !Number.isSafeInteger(overview.page.size) || overview.page.size < 1 || overview.page.size > 100 ||
+          overview.page.shown !== overview.shown || overview.page.total !== overview.total ||
+          typeof overview.digest !== 'string' || !/^[0-9a-f]{64}$/.test(overview.digest) ||
+          categories.some(function (name) {
+            return typeof overview.definitions[name] !== 'string' || !Array.isArray(overview.categories[name]) ||
+              !Number.isSafeInteger(overview.counts[name]) || overview.counts[name] !== overview.categories[name].length;
+          }) || overview.records.some(function (record) {
+            return !record || typeof record.appointmentId !== 'string' || !record.authority ||
+              !Number.isSafeInteger(record.authority.revision) ||
+              typeof record.authority.digest !== 'string' || !/^[0-9a-f]{64}$/.test(record.authority.digest) ||
+              !Array.isArray(record.allowedActions) || !record.flags || !record.conflict;
+          })) {
+        throw new Error('The canonical scheduling overview contract is unavailable.');
+      }
+    }
     return value;
   }
 

@@ -4,10 +4,23 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const express = require('express');
 const { Client, Pool } = require('pg');
 const request = require('supertest');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
 const { normalizeMutationApproval, normalizeMutationPreview } = require('../../src/scheduling/approvalContract');
+const {
+  loadSchedulingOperatorDirectory,
+  loadSchedulingOperatorTargetPage,
+  parseOperatorTargetRequest,
+} = require('../../src/scheduling/operatorDirectory');
+const { buildSchedulingOverview } = require('../../src/scheduling/overviewRepository');
+const { AccountRepository } = require('../../src/accounts/repository');
+const {
+  createCanonicalRouter,
+  createCompatibilityRouter,
+} = require('../../src/routes/canonicalPolaris');
+const { createCommandCenterRouter } = require('../../src/routes/commandCenter');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
@@ -46,6 +59,8 @@ const IDS = Object.freeze({
   hardConflictAppointment: 'e5100000-0000-4000-8000-000000000020',
   sqlContractAppointment: 'e5100000-0000-4000-8000-000000000021',
   digestProvenanceAppointment: 'e5100000-0000-4000-8000-000000000022',
+  part5Appointment: 'e5100000-0000-4000-8000-000000000023',
+  targetDiscoveryAppointment: 'e5100000-0000-4000-8000-000000000024',
 });
 
 function quoteIdentifier(value) {
@@ -256,6 +271,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       other: await provisionDurableSession(runtimePool, { userId: IDS.otherOwner, organizationId: IDS.otherOrganization, membershipId: IDS.otherOwner, role: 'owner' }),
     };
     await seedAppointment(runtimePool, IDS.organization, IDS.appointment);
+    await seedAppointment(runtimePool, IDS.organization, IDS.part5Appointment);
     await seedAppointment(runtimePool, IDS.otherOrganization, IDS.otherAppointment);
   }, 180000);
 
@@ -341,6 +357,963 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       }
     }
   }, 240000);
+
+  test('Part 5 mounted operator directory and server overview preserve tenant, role, session, conflict, and paid/demo boundaries', async () => {
+    const ownerInput = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, authSessionId: sessions.owner.sessionId,
+      onboardingComplete: true, subscriptionMutable: true,
+    };
+    const ownerDirectory = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
+    expect(ownerDirectory).toMatchObject({ canRead: true, canMutate: true, reason: null, truncated: false });
+    expect(ownerDirectory.targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'profile', id: IDS.owner }),
+      expect.objectContaining({ kind: 'profile', id: IDS.dispatcher }),
+      expect.objectContaining({ kind: 'crew', id: IDS.crew, label: expect.stringContaining(HOSTILE) }),
+    ]));
+    expect(ownerDirectory.targets.some(target => target.id === IDS.otherOwner)).toBe(false);
+    const dispatcherDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
+      ...ownerInput, actorUserId: IDS.dispatcher, actorAccessRole: 'member', membershipId: IDS.dispatcher,
+      authSessionId: sessions.dispatcher.sessionId,
+    });
+    expect(dispatcherDirectory.canMutate).toBe(true);
+    const employeeDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
+      ...ownerInput, actorUserId: IDS.employee, actorAccessRole: 'member', membershipId: IDS.employee,
+      authSessionId: sessions.employee.sessionId,
+    });
+    expect(employeeDirectory).toMatchObject({ canRead: false, canMutate: false, reason: 'operator_role_required', targets: [] });
+    await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+    try {
+      const readOnlyDirectory = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
+      expect(readOnlyDirectory).toMatchObject({
+        canRead: true, canMutate: false, reason: 'subscription_read_only',
+      });
+      expect(readOnlyDirectory.targets.length).toBeGreaterThan(1);
+    } finally {
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
+
+    await previewAndApproveAppointment(IDS.part5Appointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+    }, 'm22-part5-assign-mounted-00001');
+    await previewAndApproveAppointment(IDS.part5Appointment, 'schedule', {
+      scheduledStart: '2035-06-15T09:00:00-04:00', scheduledEnd: '2035-06-15T10:00:00-04:00',
+    }, 'm22-part5-schedule-mounted-001');
+    const schedule = (await runtimePool.query(
+      `SELECT revision,rtrim(canonical_digest) AS digest,target_state,workforce_profile_id,
+              workforce_crew_id,schedule_state,dispatch_state,scheduled_start,scheduled_end,
+              appointment_status,needs_review,review_reasons
+         FROM public.canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`,
+      [IDS.organization, IDS.part5Appointment]
+    )).rows[0];
+    const item = {
+      ids: {
+        appointment: IDS.part5Appointment,
+        graph: IDS.part5Appointment.replace(/^e5/, 'e7'),
+      },
+      customer: { id: IDS.part5Appointment.replace(/^e5/, 'e8'), name: HOSTILE },
+      opportunity: { serviceType: null },
+      snapshot: { service: { label: HOSTILE } },
+      appointment: { scheduleAuthority: {
+        revision: Number(schedule.revision), digest: schedule.digest,
+        targetState: schedule.target_state, workforceProfileId: schedule.workforce_profile_id,
+        workforceCrewId: schedule.workforce_crew_id, scheduleState: schedule.schedule_state,
+        dispatchState: schedule.dispatch_state,
+        scheduledStart: new Date(schedule.scheduled_start).toISOString(),
+        scheduledEnd: new Date(schedule.scheduled_end).toISOString(),
+        appointmentStatus: schedule.appointment_status, needsReview: schedule.needs_review,
+        reviewReasons: schedule.review_reasons,
+      } },
+    };
+    const overviewInput = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      authSessionId: sessions.owner.sessionId, items: [item],
+    };
+    const overview = await buildSchedulingOverview(runtimePool, overviewInput);
+    expect(overview).toMatchObject({
+      version: 'm22-part5-overview-v1', timeZone: 'America/New_York', truncated: false,
+      records: [expect.objectContaining({
+        appointmentId: IDS.part5Appointment,
+        customer: { id: item.customer.id, name: HOSTILE },
+        allowedActions: expect.arrayContaining(['reassign', 'unassign', 'reschedule', 'dispatch']),
+        conflict: expect.objectContaining({ persisted: false, grantsMutation: false }),
+      })],
+    });
+    expect(overview.digest).toMatch(/^[0-9a-f]{64}$/);
+    const staleInput = {
+      ...item,
+      appointment: { scheduleAuthority: {
+        ...item.appointment.scheduleAuthority,
+        revision: 1,
+        digest: '0'.repeat(64),
+        targetState: 'unassigned',
+        workforceProfileId: null,
+        scheduleState: 'unscheduled',
+        scheduledStart: null,
+        scheduledEnd: null,
+      } },
+    };
+    const refreshedOverview = await buildSchedulingOverview(runtimePool, { ...overviewInput, items: [staleInput] });
+    expect(refreshedOverview.records[0].authority).toMatchObject({
+      revision: Number(schedule.revision), digest: schedule.digest, targetState: 'assigned', scheduleState: 'scheduled',
+    });
+    await expect(buildSchedulingOverview(runtimePool, {
+      ...overviewInput, actorUserId: IDS.employee, actorAccessRole: 'member',
+      authSessionId: sessions.employee.sessionId,
+    })).rejects.toMatchObject({ status: 403, code: 'M22_OVERVIEW_FORBIDDEN' });
+
+    const calendarOwner = await request(app).get('/api/v1/canonical/compat/calendar?limit=100')
+      .set(sessions.owner.headers).expect(200);
+    expect(calendarOwner.body.data).toEqual(expect.objectContaining({
+      schedulingOperator: expect.objectContaining({ canMutate: true }),
+      schedulingOverview: expect.objectContaining({ version: 'm22-part5-overview-v1' }),
+    }));
+    const calendarEmployee = await request(app).get('/api/v1/canonical/compat/calendar?limit=100')
+      .set(sessions.employee.headers).expect(403);
+    expect(calendarEmployee.body.error.code).toBe('CALENDAR_OPERATOR_REQUIRED');
+    expect(calendarEmployee.body.data).toBeUndefined();
+    const broadAliases = [
+      '/api/v1/canonical/graphs?limit=1',
+      '/api/v1/canonical/dashboard?limit=1',
+      '/api/v1/canonical/analytics?limit=1',
+      '/api/v1/canonical/surfaces/calendar?limit=1',
+      '/api/v1/canonical/compat/command-center?limit=1',
+      '/api/customers?limit=1',
+      '/api/communications?limit=1',
+      '/api/opportunities?limit=1',
+      '/api/appointments?limit=1',
+      '/api/dashboard/overview?limit=1',
+    ];
+    for (const route of broadAliases) {
+      const denied = await request(app).get(route).set(sessions.employee.headers).expect(403);
+      expect(JSON.stringify(denied.body)).not.toContain(HOSTILE);
+    }
+    const statusAliases = ['/api/v1/canonical/status', '/api/dashboard/status'];
+    for (const route of statusAliases) {
+      const ownerStatus = await request(app).get(route).set(sessions.owner.headers).expect(200);
+      const dispatcherStatus = await request(app).get(route).set(sessions.dispatcher.headers).expect(200);
+      const employeeStatus = await request(app).get(route).set(sessions.employee.headers).expect(200);
+      const otherTenantStatus = await request(app).get(route).set(sessions.other.headers).expect(200);
+      expect(ownerStatus.body.completedGraphs ?? ownerStatus.body.data.completedGraphs).toBeGreaterThan(0);
+      expect(dispatcherStatus.body.completedGraphs ?? dispatcherStatus.body.data.completedGraphs).toBeGreaterThan(0);
+      expect(otherTenantStatus.body.completedGraphs ?? otherTenantStatus.body.data.completedGraphs).toBe(1);
+      const employeeData = employeeStatus.body.data || employeeStatus.body;
+      expect(JSON.stringify(employeeStatus.body)).not.toContain(HOSTILE);
+      expect(employeeData).toMatchObject({ status: 'operational', broadSchedulingRead: false });
+      expect(employeeData.completedGraphs).toBeUndefined();
+    }
+    await runtimePool.query(
+      "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND user_id=$2",
+      [IDS.organization, IDS.dispatcher]
+    );
+    try {
+      for (const route of statusAliases) {
+        const inactive = await request(app).get(route).set(sessions.dispatcher.headers).expect(403);
+        expect(JSON.stringify(inactive.body)).not.toContain(HOSTILE);
+      }
+    } finally {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND user_id=$2",
+        [IDS.organization, IDS.dispatcher]
+      );
+    }
+    await runtimePool.query(
+      "UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='m22_part5_status_test' WHERE id=$1",
+      [sessions.dispatcher.sessionId]
+    );
+    try {
+      for (const route of statusAliases) {
+        const revoked = await request(app).get(route).set(sessions.dispatcher.headers).expect(401);
+        expect(JSON.stringify(revoked.body)).not.toContain(HOSTILE);
+      }
+    } finally {
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+        [sessions.dispatcher.sessionId]
+      );
+    }
+    const commandOwner = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.owner.headers).expect(200);
+    expect(commandOwner.body.data).toEqual(expect.objectContaining({
+      mode: 'paid', schedulingOperator: expect.objectContaining({ canMutate: true }),
+      schedulingOverview: expect.objectContaining({ version: 'm22-part5-overview-v1' }),
+    }));
+    const commandEmployee = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.employee.headers).expect(403);
+    expect(commandEmployee.body.error.code).toBe('COMMAND_CENTER_OPERATOR_REQUIRED');
+    await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+    try {
+      const readOnlyCalendar = await request(app).get('/api/v1/canonical/compat/calendar?limit=100')
+        .set(sessions.owner.headers).expect(200);
+      expect(readOnlyCalendar.body.data.schedulingOperator).toMatchObject({
+        canRead: true, canMutate: false, reason: 'subscription_read_only',
+      });
+      expect(readOnlyCalendar.body.data.schedulingOverview).toEqual(expect.objectContaining({
+        records: expect.any(Array), total: expect.any(Number), truncated: false,
+      }));
+      const readOnlyCommand = await request(app).get('/api/v1/command-center/workspace')
+        .set(sessions.owner.headers).expect(200);
+      expect(readOnlyCommand.body.data.schedulingOperator).toMatchObject({ canRead: true, canMutate: false });
+      for (const route of statusAliases) {
+        const readOnlyStatus = await request(app).get(route).set(sessions.owner.headers).expect(200);
+        expect(readOnlyStatus.body.completedGraphs ?? readOnlyStatus.body.data.completedGraphs).toBeGreaterThan(0);
+      }
+    } finally {
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
+  }, 120000);
+
+  test('Part 5 broad reads recheck current role, session, membership, workforce, and subscription authority in one snapshot', async () => {
+    const broadRoutes = [
+      '/api/v1/canonical/operator-targets?query=Part%204',
+      '/api/v1/canonical/graphs?limit=1',
+      '/api/v1/canonical/dashboard?limit=1',
+      '/api/v1/canonical/analytics?limit=1',
+      '/api/v1/canonical/surfaces/calendar?limit=1',
+      '/api/v1/canonical/compat/command-center?limit=1',
+      '/api/customers?limit=1',
+      '/api/communications?limit=1',
+      '/api/opportunities?limit=1',
+      '/api/appointments?limit=1',
+      '/api/dashboard/overview?limit=1',
+      '/api/v1/command-center/workspace',
+    ];
+    const repository = new AccountRepository(runtimePool);
+    const priorRepository = app.locals.accountRepository;
+    async function resetOwner() {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='owner',status='active',revoked_at=NULL WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.users SET role='owner',status='active' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='owner' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET status='active',access_expires_at=NOW()+INTERVAL '15 minutes',refresh_expires_at=NOW()+INTERVAL '14 days',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+        [sessions.owner.sessionId]
+      );
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
+    async function racedGet(route, mutation) {
+      let changed = false;
+      app.locals.accountRepository = {
+        sessionAuthority: async function (sessionId, userId) {
+          const authority = await repository.sessionAuthority(sessionId, userId);
+          if (!changed) {
+            changed = true;
+            await mutation();
+          }
+          return authority;
+        },
+      };
+      return request(app).get(route).set(sessions.owner.headers);
+    }
+    try {
+      for (const route of broadRoutes) {
+        await resetOwner();
+        const demoted = await racedGet(route, async function () {
+          await runtimePool.query(
+            "UPDATE public.organization_memberships SET role='member' WHERE organization_id=$1 AND id=$2",
+            [IDS.organization, IDS.owner]
+          );
+          await runtimePool.query(
+            "UPDATE public.users SET role='member' WHERE organization_id=$1 AND id=$2",
+            [IDS.organization, IDS.owner]
+          );
+          await runtimePool.query(
+            "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2",
+            [IDS.organization, IDS.owner]
+          );
+        });
+        expect(demoted.status).toBe(403);
+        expect(JSON.stringify(demoted.body)).not.toContain(HOSTILE);
+        expect(JSON.stringify(demoted.body)).not.toContain('total_count');
+      }
+      for (const route of broadRoutes) {
+        await resetOwner();
+        const revoked = await racedGet(route, async function () {
+          await runtimePool.query(
+            "UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='m22_part5_current_read_race' WHERE id=$1",
+            [sessions.owner.sessionId]
+          );
+        });
+        expect(revoked.status).toBe(401);
+        expect(revoked.body.error.code).toBe('M22_OPERATOR_SESSION_NOT_CURRENT');
+        expect(JSON.stringify(revoked.body)).not.toContain(HOSTILE);
+      }
+
+      await resetOwner();
+      const suspendedMember = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.owner]
+        );
+      });
+      expect(suspendedMember.status).toBe(403);
+
+      await resetOwner();
+      const suspendedUser = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query(
+          "UPDATE public.users SET status='suspended' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.owner]
+        );
+      });
+      expect(suspendedUser.status).toBe(403);
+
+      await resetOwner();
+      const expired = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query(
+          "UPDATE public.auth_sessions SET access_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+          [sessions.owner.sessionId]
+        );
+      });
+      expect(expired.status).toBe(401);
+      expect(expired.body.error.code).toBe('M22_OPERATOR_SESSION_NOT_CURRENT');
+
+      await resetOwner();
+      const readOnly = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+      });
+      expect(readOnly.status).toBe(200);
+      expect(readOnly.body.data).toMatchObject({ canRead: true, canMutate: false, reason: 'subscription_read_only' });
+
+      await expect(loadSchedulingOperatorDirectory(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+        membershipId: IDS.owner, authSessionId: sessions.other.sessionId,
+      })).rejects.toMatchObject({ status: 401, code: 'M22_OPERATOR_SESSION_NOT_CURRENT' });
+
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.dispatcher]
+      );
+      try {
+        const removedDispatcher = await loadSchedulingOperatorDirectory(runtimePool, {
+          organizationId: IDS.organization, actorUserId: IDS.dispatcher, actorAccessRole: 'member',
+          membershipId: IDS.dispatcher, authSessionId: sessions.dispatcher.sessionId,
+        });
+        expect(removedDispatcher).toMatchObject({ canRead: false, canMutate: false, reason: 'operator_role_required', targets: [] });
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.workforce_profiles SET operational_role='dispatcher' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.dispatcher]
+        );
+      }
+    } finally {
+      await resetOwner();
+      if (priorRepository === undefined) delete app.locals.accountRepository;
+      else app.locals.accountRepository = priorRepository;
+    }
+  }, 180000);
+
+  test('Part 5 broad aliases keep current authority and response bytes in one owned PostgreSQL snapshot', async () => {
+    const atomicSessionId = 'e5100000-0000-4000-8000-000000000001';
+    await provisionDurableSession(runtimePool, {
+      userId: IDS.owner, organizationId: IDS.organization, membershipId: IDS.owner,
+      sessionId: atomicSessionId, role: 'owner',
+    });
+    let activeTrace = null;
+    const tracePool = {
+      query: jest.fn(async function () {
+        if (activeTrace) activeTrace.poolQueries += 1;
+        throw new Error('A protected broad read escaped its owned snapshot client.');
+      }),
+      connect: async function () {
+        const trace = activeTrace;
+        if (!trace) throw new Error('A trace is required before opening the broad read snapshot.');
+        trace.connects += 1;
+        const source = await runtimePool.connect();
+        let transactionActive = false;
+        const client = {
+          __m22Trace: trace,
+          async query(sql, values) {
+            const statement = String(sql).replace(/\s+/g, ' ').trim();
+            if (/^BEGIN\b/.test(statement)) {
+              transactionActive = true;
+              trace.begins += 1;
+            } else if (statement === 'COMMIT') {
+              trace.commits += 1;
+            } else if (statement === 'ROLLBACK') {
+              trace.rollbacks += 1;
+            } else if (trace.authorityComplete && !/^SET LOCAL\b/.test(statement)) {
+              trace.dataQueries += 1;
+              if (!transactionActive) trace.dataQueriesOutsideTransaction += 1;
+              if (trace.failFirstDataQuery && !trace.dataFailureInjected) {
+                trace.dataFailureInjected = true;
+                throw new Error('injected protected broad read failure');
+              }
+            }
+            try {
+              return await source.query(sql, values);
+            } finally {
+              if (statement === 'COMMIT' || statement === 'ROLLBACK') transactionActive = false;
+            }
+          },
+          release() {
+            if (transactionActive) trace.releasedWhileActive += 1;
+            trace.releases += 1;
+            source.release();
+          },
+        };
+        return client;
+      },
+    };
+    const atomicOperatorDirectory = async function (client, input) {
+      const directory = await loadSchedulingOperatorDirectory(client, input);
+      const trace = client.__m22Trace;
+      trace.authorityBackendPid = Number((await client.query('SELECT pg_backend_pid() AS pid')).rows[0].pid);
+      trace.authorityComplete = true;
+      if (typeof trace.afterAuthority === 'function' && !trace.boundaryMutationApplied) {
+        trace.boundaryMutationApplied = true;
+        await trace.afterAuthority();
+      }
+      return directory;
+    };
+    const fakeAuth = function (req, _res, next) {
+      req.requestId = 'm22-part5-atomic-read';
+      req.tenantContext = { organizationId: IDS.organization, userId: IDS.owner, role: 'owner' };
+      req.orgId = IDS.organization;
+      req.userRole = 'owner';
+      req.user = { id: IDS.owner, organizationId: IDS.organization, role: 'owner', onboardingStatus: 'complete' };
+      req.accountAuthority = { membership_id: IDS.owner };
+      req.authSession = { id: atomicSessionId };
+      next();
+    };
+    const allowPermission = function () {
+      return function (_req, _res, next) { next(); };
+    };
+    const atomicApp = express();
+    atomicApp.use(express.json());
+    const dependencies = {
+      auth: fakeAuth,
+      onboardedAuth: fakeAuth,
+      externalAuth: fakeAuth,
+      permission: allowPermission,
+      poolProvider: function () { return tracePool; },
+      operatorDirectory: atomicOperatorDirectory,
+    };
+    atomicApp.use('/api/v1/canonical', createCanonicalRouter(dependencies));
+    atomicApp.use('/api/v1/command-center', createCommandCenterRouter(dependencies));
+    atomicApp.use('/api', createCompatibilityRouter(dependencies));
+
+    function freshTrace(overrides = {}) {
+      return {
+        connects: 0, begins: 0, commits: 0, rollbacks: 0, releases: 0,
+        poolQueries: 0, dataQueries: 0, dataQueriesOutsideTransaction: 0,
+        releasedWhileActive: 0, authorityComplete: false, boundaryMutationApplied: false,
+        dataFailureInjected: false, ...overrides,
+      };
+    }
+    function expectOwnedSnapshot(trace) {
+      expect(trace).toMatchObject({
+        connects: 1, begins: 1, commits: 1, rollbacks: 0, releases: 1,
+        poolQueries: 0, dataQueriesOutsideTransaction: 0, releasedWhileActive: 0,
+        authorityComplete: true,
+      });
+      expect(trace.dataQueries).toBeGreaterThan(0);
+      expect(trace.authorityBackendPid).toBeGreaterThan(0);
+    }
+    const notFoundId = 'f5100000-0000-4000-8000-000000000099';
+    const protectedAliases = [
+      '/api/v1/canonical/status',
+      '/api/v1/canonical/graphs?limit=1',
+      '/api/v1/canonical/dashboard?limit=1',
+      '/api/v1/canonical/analytics?limit=1',
+      ...['customer-detail', 'leads', 'communications', 'calendar', 'command-center', 'polaris', 'executive', 'estimates']
+        .map(surface => `/api/v1/canonical/surfaces/${surface}?limit=1`),
+      ...['customer-detail', 'leads', 'communications', 'calendar', 'command-center', 'polaris', 'executive', 'estimates']
+        .map(surface => `/api/v1/canonical/compat/${surface}?limit=1`),
+      `/api/v1/canonical/graphs/${notFoundId}`,
+      `/api/v1/canonical/snapshots/${notFoundId}`,
+      '/api/customers?limit=1',
+      '/api/communications?limit=1',
+      '/api/opportunities/pipeline?limit=1',
+      '/api/opportunities?limit=1',
+      '/api/financial/estimates?limit=1',
+      '/api/analytics/executive?limit=1',
+      '/api/analytics/kpis?limit=1',
+      '/api/analytics/dashboard?limit=1',
+      '/api/analytics/alerts?limit=1',
+      '/api/analytics/trends?limit=1',
+      '/api/analytics/pipeline?limit=1',
+      '/api/analytics/by-service?limit=1',
+      '/api/workflows/agenda/today?limit=1',
+      '/api/leads?limit=1',
+      '/api/calls?limit=1',
+      '/api/appointments?limit=1',
+      '/api/dashboard/overview?limit=1',
+      ...['summary', 'revenue', 'brief', 'coach', 'kpis', 'trends', 'revenue-trends']
+        .map(endpoint => `/api/dashboard/${endpoint}?limit=1`),
+      '/api/dashboard/status',
+      '/api/calendar/events?limit=1',
+      '/api/calendar/upcoming?limit=1',
+      '/api/financial/metrics?limit=1',
+      '/api/polaris/intelligence?limit=1',
+      '/api/polaris/estimates?limit=1',
+      '/api/polaris/recommendations?limit=1',
+      '/api/polaris/learning?limit=1',
+      '/api/polaris/pipeline?limit=1',
+      '/api/polaris/retell-context?limit=1',
+      '/api/polaris/business-context?limit=1',
+      '/api/polaris/unified-context?limit=1',
+      '/api/stats?limit=1',
+      '/api/leads/intelligence/dashboard?limit=1',
+      `/api/customers/${notFoundId}`,
+      `/api/communications/${notFoundId}`,
+      `/api/opportunities/${notFoundId}`,
+      `/api/financial/estimates/${notFoundId}`,
+      `/api/leads/${notFoundId}/intelligence`,
+      `/api/leads/${notFoundId}`,
+      '/api/v1/command-center/workspace',
+      `/api/v1/command-center/polaris/customer/${notFoundId}`,
+      `/api/v1/command-center/polaris/lead/${notFoundId}`,
+      `/api/v1/command-center/polaris/work/${notFoundId}`,
+    ];
+    for (const route of protectedAliases) {
+      activeTrace = freshTrace();
+      const response = await request(atomicApp).get(route);
+      expect([200, 404]).toContain(response.status);
+      expectOwnedSnapshot(activeTrace);
+    }
+
+    async function resetOwner() {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='owner',status='active',revoked_at=NULL WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.users SET role='owner',status='active' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='owner' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      const session = await runtimePool.query('SELECT id FROM public.auth_sessions WHERE id=$1', [atomicSessionId]);
+      if (session.rowCount === 0) {
+        await provisionDurableSession(runtimePool, {
+          userId: IDS.owner, organizationId: IDS.organization, membershipId: IDS.owner,
+          sessionId: atomicSessionId, role: 'owner',
+        });
+      } else {
+        await runtimePool.query(
+          "UPDATE public.auth_sessions SET status='active',access_expires_at=NOW()+INTERVAL '15 minutes',refresh_expires_at=NOW()+INTERVAL '14 days',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+          [atomicSessionId]
+        );
+      }
+      await runtimePool.query(
+        "UPDATE public.canonical_business_profiles SET is_active=TRUE,retired_at=NULL WHERE organization_id=$1",
+        [IDS.organization]
+      );
+      await runtimePool.query(
+        `UPDATE public.organization_onboarding
+            SET status='complete',active_business_profile_id=(
+              SELECT id FROM public.canonical_business_profiles
+               WHERE organization_id=$1 AND is_active=TRUE ORDER BY version_number DESC,id LIMIT 1
+            ),completed_at=NOW()
+          WHERE organization_id=$1`,
+        [IDS.organization]
+      );
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
+    async function runLinearizedRace(mutation, expectedNextStatus, expectedCode) {
+      await resetOwner();
+      activeTrace = freshTrace({ afterAuthority: mutation });
+      const raced = await request(atomicApp).get('/api/v1/canonical/graphs?limit=1');
+      expect(raced.status).toBe(200);
+      expect(raced.body.success).toBe(true);
+      expectOwnedSnapshot(activeTrace);
+      expect(activeTrace.boundaryMutationApplied).toBe(true);
+
+      activeTrace = freshTrace();
+      const current = await request(atomicApp).get('/api/v1/canonical/graphs?limit=1');
+      expect(current.status).toBe(expectedNextStatus);
+      if (expectedCode) expect(current.body.error.code).toBe(expectedCode);
+      if (expectedNextStatus !== 200) expect(JSON.stringify(current.body)).not.toContain(HOSTILE);
+      await resetOwner();
+    }
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='member' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+    }, 403, 'M22_BROAD_SCHEDULING_READ_FORBIDDEN');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='m22_part5_atomic_read' WHERE id=$1",
+        [atomicSessionId]
+      );
+    }, 401, 'M22_OPERATOR_SESSION_NOT_CURRENT');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET access_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+        [atomicSessionId]
+      );
+    }, 401, 'M22_OPERATOR_SESSION_NOT_CURRENT');
+    await runLinearizedRace(async function () {
+      await runtimePool.query('DELETE FROM public.auth_sessions WHERE id=$1', [atomicSessionId]);
+    }, 401, 'M22_OPERATOR_SESSION_NOT_CURRENT');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+    }, 403, 'M22_BROAD_SCHEDULING_READ_FORBIDDEN');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.users SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+    }, 403, 'M22_BROAD_SCHEDULING_READ_FORBIDDEN');
+
+    await resetOwner();
+    activeTrace = freshTrace({
+      afterAuthority: async function () {
+        await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+      },
+    });
+    expect((await request(atomicApp).get('/api/v1/canonical/graphs?limit=1')).status).toBe(200);
+    expectOwnedSnapshot(activeTrace);
+    const readOnly = await loadSchedulingOperatorDirectory(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, authSessionId: atomicSessionId,
+    });
+    expect(readOnly).toMatchObject({ canRead: true, canMutate: false, reason: 'subscription_read_only' });
+
+    await resetOwner();
+    activeTrace = freshTrace({
+      afterAuthority: async function () {
+        await runtimePool.query(
+          "UPDATE public.canonical_business_profiles SET is_active=FALSE,retired_at=NOW() WHERE organization_id=$1",
+          [IDS.organization]
+        );
+        await runtimePool.query(
+          "UPDATE public.organization_onboarding SET status='business_profile_required',active_business_profile_id=NULL,completed_at=NULL WHERE organization_id=$1",
+          [IDS.organization]
+        );
+      },
+    });
+    expect((await request(atomicApp).get('/api/v1/canonical/graphs?limit=1')).status).toBe(200);
+    expectOwnedSnapshot(activeTrace);
+    const onboardingReadOnly = await loadSchedulingOperatorDirectory(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, authSessionId: atomicSessionId,
+    });
+    expect(onboardingReadOnly).toMatchObject({ canRead: true, canMutate: false, reason: 'onboarding_incomplete' });
+    await resetOwner();
+
+    activeTrace = freshTrace({ failFirstDataQuery: true });
+    const failed = await request(atomicApp).get('/api/v1/canonical/graphs?limit=1');
+    expect(failed.status).toBe(503);
+    expect(activeTrace).toMatchObject({
+      connects: 1, begins: 1, commits: 0, rollbacks: 1, releases: 1,
+      dataFailureInjected: true, dataQueriesOutsideTransaction: 0, releasedWhileActive: 0,
+    });
+    expect(activeTrace.poolQueries).toBe(0);
+    await resetOwner();
+  }, 300000);
+
+  test('Part 5 bounded target discovery reaches 101+ active profiles and crews without weakening current authority', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.targetDiscoveryAppointment);
+    const profileRows = Array.from({ length: 102 }, (_, index) => ({
+      id: `b2100000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      name: index >= 100 ? `ZZZ ${HOSTILE} duplicate` : `Directory worker ${String(index).padStart(3, '0')}`,
+      email: `directory-worker-${String(index).padStart(3, '0')}@part5.test`,
+    }));
+    const crewRows = Array.from({ length: 102 }, (_, index) => ({
+      id: `b3100000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      key: `directory-crew-${String(index).padStart(3, '0')}`,
+      name: index === 101 ? `ZZZ ${HOSTILE} duplicate` : `Directory crew ${String(index).padStart(3, '0')}`,
+    }));
+    const profileIds = profileRows.map(row => row.id);
+    const crewIds = crewRows.map(row => row.id);
+    const ownerInput = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, authSessionId: sessions.owner.sessionId,
+      onboardingComplete: true, subscriptionMutable: true,
+    };
+    await runtimePool.query(
+      `INSERT INTO public.users(id,organization_id,name,email,password_hash,role,status)
+       SELECT item.id::uuid,$1,item.name,item.email,'not-used','member','active'
+         FROM jsonb_to_recordset($2::jsonb) AS item(id text,name text,email text)`,
+      [IDS.organization, JSON.stringify(profileRows)]
+    );
+    await runtimePool.query(
+      `INSERT INTO public.organization_memberships(id,organization_id,user_id,role,status)
+       SELECT item.id::uuid,$1,item.id::uuid,'member','active'
+         FROM jsonb_to_recordset($2::jsonb) AS item(id text)`,
+      [IDS.organization, JSON.stringify(profileRows)]
+    );
+    await runtimePool.query(
+      `UPDATE public.workforce_profiles SET operational_role='technician'
+        WHERE organization_id=$1 AND id=ANY($2::uuid[])`, [IDS.organization, profileIds]
+    );
+    await runtimePool.query(
+      `INSERT INTO public.workforce_crews(
+         id,organization_id,crew_key,name,home_location_id,created_by_user_id,updated_by_user_id)
+       SELECT item.id::uuid,$1,item.key,item.name,'headquarters',$2,$2
+         FROM jsonb_to_recordset($3::jsonb) AS item(id text,key text,name text)`,
+      [IDS.organization, IDS.owner, JSON.stringify(crewRows)]
+    );
+    await runtimePool.query(
+      `INSERT INTO public.workforce_crew_members(
+         organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+       SELECT $1,item.id::uuid,$2,'lead',$2
+         FROM jsonb_to_recordset($3::jsonb) AS item(id text)`,
+      [IDS.organization, IDS.owner, JSON.stringify(crewRows)]
+    );
+    try {
+      const initial = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
+      expect(initial).toMatchObject({
+        canRead: true, canMutate: true, truncated: true,
+        discovery: {
+          version: 'm22-part5-target-directory-v1', pageSize: 25,
+          shown: 200, total: 208, truncated: true,
+          counts: { profiles: { shown: 100, total: 105 }, crews: { shown: 100, total: 103 } },
+        },
+      });
+      expect(initial.targets.some(target => target.id === profileRows[101].id)).toBe(false);
+      expect(initial.targets.some(target => target.id === crewRows[101].id)).toBe(false);
+
+      let targetRequest = parseOperatorTargetRequest({ query: 'ZZZ ' }, IDS.organization);
+      const duplicatePage = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...targetRequest });
+      expect(duplicatePage.targets.map(target => ({ kind: target.kind, id: target.id, label: target.label }))).toEqual([
+        { kind: 'profile', id: profileRows[100].id, label: profileRows[100].name },
+        { kind: 'profile', id: profileRows[101].id, label: profileRows[101].name },
+        { kind: 'crew', id: crewRows[101].id, label: crewRows[101].name },
+      ]);
+      expect(duplicatePage).toMatchObject({ canRead: true, canMutate: true, query: 'ZZZ', page: { shown: 3, total: 3, truncated: false } });
+      expect(duplicatePage.digest).toMatch(/^[0-9a-f]{64}$/);
+
+      const collected = [];
+      let rawCursor = null;
+      let pages = 0;
+      do {
+        targetRequest = parseOperatorTargetRequest({ query: '', ...(rawCursor ? { cursor: rawCursor } : {}) }, IDS.organization);
+        const page = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...targetRequest });
+        pages += 1;
+        expect(page.targets.length).toBeLessThanOrEqual(25);
+        expect(page.page).toMatchObject({ size: 25, total: 208 });
+        collected.push(...page.targets.map(target => `${target.kind}:${target.id}`));
+        rawCursor = page.page.nextCursor;
+      } while (rawCursor && pages < 20);
+      expect(pages).toBe(9);
+      expect(collected).toHaveLength(208);
+      expect(new Set(collected).size).toBe(208);
+      expect(collected).toContain(`profile:${profileRows[101].id}`);
+      expect(collected).toContain(`crew:${crewRows[101].id}`);
+
+      const uppercaseRequest = parseOperatorTargetRequest({ query: profileRows[101].id.toUpperCase() }, IDS.organization);
+      expect(uppercaseRequest.query).toBe(profileRows[101].id);
+      const uppercasePage = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...uppercaseRequest });
+      expect(uppercasePage).toMatchObject({ query: profileRows[101].id, page: { shown: 1, total: 1 } });
+      expect(uppercasePage.targets[0].id).toBe(profileRows[101].id);
+
+      const renameFirstRequest = parseOperatorTargetRequest({ query: '' }, IDS.organization);
+      const renameFirstPage = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...renameFirstRequest });
+      expect(renameFirstPage.page.nextCursor).toEqual(expect.any(String));
+      await runtimePool.query(
+        `UPDATE public.users
+            SET name=CASE id WHEN $2::uuid THEN 'ZZZ renamed returned' ELSE 'AAA renamed unseen' END
+          WHERE organization_id=$1 AND id IN ($2::uuid,$3::uuid)`,
+        [IDS.organization, profileRows[0].id, profileRows[60].id]
+      );
+      try {
+        const renamedTraversal = renameFirstPage.targets.map(target => `${target.kind}:${target.id}`);
+        let renamedCursor = renameFirstPage.page.nextCursor;
+        while (renamedCursor) {
+          const requestPage = parseOperatorTargetRequest({ query: '', cursor: renamedCursor }, IDS.organization);
+          const page = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...requestPage });
+          renamedTraversal.push(...page.targets.map(target => `${target.kind}:${target.id}`));
+          renamedCursor = page.page.nextCursor;
+        }
+        expect(renamedTraversal).toHaveLength(208);
+        expect(new Set(renamedTraversal).size).toBe(208);
+        expect(renamedTraversal).toContain(`profile:${profileRows[0].id}`);
+        expect(renamedTraversal).toContain(`profile:${profileRows[60].id}`);
+      } finally {
+        await runtimePool.query(
+          `UPDATE public.users
+              SET name=CASE id WHEN $2::uuid THEN $4 ELSE $5 END
+            WHERE organization_id=$1 AND id IN ($2::uuid,$3::uuid)`,
+          [IDS.organization, profileRows[0].id, profileRows[60].id, profileRows[0].name, profileRows[60].name]
+        );
+      }
+
+      const matchingFirst = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: 'Directory worker' }, IDS.organization),
+      });
+      await runtimePool.query('UPDATE public.users SET name=$3 WHERE organization_id=$1 AND id=$2',
+        [IDS.organization, profileRows[60].id, 'No longer query matching']);
+      try {
+        const staleRequest = parseOperatorTargetRequest({
+          query: 'Directory worker', cursor: matchingFirst.page.nextCursor,
+        }, IDS.organization);
+        await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...staleRequest }))
+          .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+      } finally {
+        await runtimePool.query('UPDATE public.users SET name=$3 WHERE organization_id=$1 AND id=$2',
+          [IDS.organization, profileRows[60].id, profileRows[60].name]);
+      }
+
+      const beforeDeactivate = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: '' }, IDS.organization),
+      });
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[80].id]
+      );
+      try {
+        const staleRequest = parseOperatorTargetRequest({ cursor: beforeDeactivate.page.nextCursor }, IDS.organization);
+        await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...staleRequest }))
+          .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, profileRows[80].id]
+        );
+      }
+
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[81].id]
+      );
+      const beforeActivate = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: '' }, IDS.organization),
+      });
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[81].id]
+      );
+      const activatedRequest = parseOperatorTargetRequest({ cursor: beforeActivate.page.nextCursor }, IDS.organization);
+      await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...activatedRequest }))
+        .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+
+      const beforeCrewMembership = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: '' }, IDS.organization),
+      });
+      await runtimePool.query(
+        'DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2 AND profile_id=$3',
+        [IDS.organization, crewRows[101].id, IDS.owner]
+      );
+      try {
+        const staleRequest = parseOperatorTargetRequest({ cursor: beforeCrewMembership.page.nextCursor }, IDS.organization);
+        await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...staleRequest }))
+          .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+      } finally {
+        await runtimePool.query(
+          `INSERT INTO public.workforce_crew_members(organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+           VALUES ($1,$2,$3,'lead',$3)`,
+          [IDS.organization, crewRows[101].id, IDS.owner]
+        );
+      }
+
+      const ownerHttp = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: 'ZZZ ' }).set(sessions.owner.headers).expect(200);
+      expect(ownerHttp.body.data.targets.map(target => target.id)).toEqual([
+        profileRows[100].id, profileRows[101].id, crewRows[101].id,
+      ]);
+      const uppercaseHttp = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: profileRows[101].id.toUpperCase() }).set(sessions.owner.headers).expect(200);
+      expect(uppercaseHttp.body.data).toMatchObject({ query: profileRows[101].id, page: { shown: 1, total: 1 } });
+      const employeeHttp = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: 'ZZZ ' }).set(sessions.employee.headers).expect(403);
+      expect(employeeHttp.body.error.code).toBe('M22_OPERATOR_TARGET_DIRECTORY_FORBIDDEN');
+      expect(JSON.stringify(employeeHttp.body)).not.toContain(HOSTILE);
+      const crossTenant = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: profileRows[101].id }).set(sessions.other.headers).expect(200);
+      expect(crossTenant.body.data.targets).toEqual([]);
+
+      await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+      try {
+        const readOnly = await request(app).get('/api/v1/canonical/operator-targets')
+          .query({ query: 'ZZZ ' }).set(sessions.owner.headers).expect(200);
+        expect(readOnly.body.data).toMatchObject({ canRead: true, canMutate: false, reason: 'subscription_read_only' });
+      } finally {
+        await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+      }
+
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[101].id]
+      );
+      try {
+        const inactiveLookup = await request(app).get('/api/v1/canonical/operator-targets')
+          .query({ query: profileRows[101].id }).set(sessions.owner.headers).expect(200);
+        expect(inactiveLookup.body.data.targets).toEqual([]);
+        const inactivePreview = await previewAppointment(IDS.targetDiscoveryAppointment, 'assign', {
+          target: { kind: 'profile', id: profileRows[101].id },
+          reason: 'A deactivated discovered target cannot enter preview.',
+        });
+        expect(inactivePreview.response.status).toBe(409);
+        expect(inactivePreview.response.body.error.code).toBe('M22_INVALID_TRANSITION');
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, profileRows[101].id]
+        );
+      }
+
+      const currentPreview = await previewAppointment(IDS.targetDiscoveryAppointment, 'assign', {
+        target: { kind: 'profile', id: profileRows[101].id },
+        reason: 'Approval must recheck a discovered target after lookup and preview.',
+      });
+      expect(currentPreview.response.status).toBe(201);
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[101].id]
+      );
+      try {
+        const rejectedApproval = await request(app)
+          .post(`/api/v1/canonical/appointments/${IDS.targetDiscoveryAppointment}/mutation-approvals`)
+          .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part5-target-deactivate-after-preview')
+          .send({
+            previewId: currentPreview.response.body.data.id,
+            previewDigest: currentPreview.response.body.data.previewDigest,
+            acknowledgedWarningDigests: currentPreview.response.body.data.warningDigests,
+            acknowledgedReviewReasonDigests: currentPreview.response.body.data.reviewReasonDigests,
+            reason: currentPreview.reason,
+          });
+        expect(rejectedApproval.status).toBe(409);
+        expect(rejectedApproval.body.error.code).toBe('M22_EVIDENCE_STALE');
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, profileRows[101].id]
+        );
+      }
+    } finally {
+      await runtimePool.query(
+        'DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=ANY($2::uuid[])',
+        [IDS.organization, crewIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.workforce_crews WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, crewIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.workforce_profiles WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, profileIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.organization_memberships WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, profileIds]
+      );
+      await runtimePool.query(
+        'DELETE FROM public.users WHERE organization_id=$1 AND id=ANY($2::uuid[])',
+        [IDS.organization, profileIds]
+      );
+    }
+  }, 180000);
 
   async function previewAndApprove(action, input = {}, session = sessions.owner, key = crypto.randomUUID()) {
     const appointmentId = input.appointmentId || IDS.mutationMatrixAppointment;
@@ -1612,4 +2585,146 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect(new Date(lockEvidence.expires_at).getTime()).toBeLessThanOrEqual(Date.now());
     await assertNoAppliedEvidence(IDS.lockWaitAppointment, lockBefore);
   }, 120000);
+
+  test('Part 5 canonical overview paginates bounded rows with complete counts and stable current authority', async () => {
+    const created = [];
+    for (let offset = 0; offset < 101; offset += 5) {
+      const batch = Array.from({ length: Math.min(5, 101 - offset) }, async (_value, batchOffset) => {
+        const ordinal = offset + batchOffset;
+        const response = await request(app)
+          .post('/api/v1/simulations/leads')
+          .set(sessions.owner.headers)
+          .set('Idempotency-Key', `m22-part5-pagination-${String(ordinal).padStart(3, '0')}`)
+          .send({
+            name: `Part 5 pagination ${String(ordinal).padStart(3, '0')}`,
+            service: 'plumbing',
+            phone: `+1555${String(ordinal).padStart(7, '0')}`,
+          });
+        expect(response.status).toBe(201);
+        return response.body.ids;
+      });
+      created.push(...await Promise.all(batch));
+    }
+    expect(created[0]).toEqual(expect.objectContaining({ appointment: expect.any(String) }));
+    const sourceUpdate = await runtimePool.query(
+      `UPDATE public.canonical_transcripts SET source='manual'
+        WHERE organization_id=$1 AND EXISTS (
+          SELECT 1 FROM public.canonical_appointments appointment
+           WHERE appointment.organization_id=canonical_transcripts.organization_id
+             AND appointment.operation_id=canonical_transcripts.operation_id
+             AND appointment.id=ANY($2::uuid[])
+        )`,
+      [IDS.organization, created.map(value => value.appointment)]
+    );
+    expect(sourceUpdate.rowCount).toBe(101);
+
+    const empty = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.other.headers).expect(200);
+    expect(empty.body.data.schedulingOverview).toMatchObject({ total: 0, shown: 0, truncated: false });
+
+    const first = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.owner.headers).expect(200);
+    const firstOverview = first.body.data.schedulingOverview;
+    expect(first.body.data.graphs).toHaveLength(100);
+    expect(firstOverview).toMatchObject({
+      total: 101, shown: 100, truncated: true,
+      counts: expect.objectContaining({ unassigned: 101 }),
+      page: expect.objectContaining({
+        size: 100, shown: 100, total: 101, hasPrevious: false, hasNext: true,
+        cursor: null, nextCursor: expect.any(String),
+      }),
+    });
+    expect(firstOverview.categories.unassigned).toHaveLength(101);
+    const firstIds = new Set(firstOverview.records.map(value => value.appointmentId));
+    expect(firstIds.size).toBe(100);
+
+    const decodedCursor = JSON.parse(Buffer.from(firstOverview.page.nextCursor, 'base64url').toString('utf8'));
+    const encodeCursor = value => Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+    const malformedCursors = [
+      '',
+      firstOverview.page.nextCursor + '!!!',
+      firstOverview.page.nextCursor + '=',
+      'A'.repeat(513),
+      Buffer.from('{', 'utf8').toString('base64url'),
+      encodeCursor([decodedCursor.createdAt, decodedCursor.operationId]),
+      encodeCursor({ ...decodedCursor, tenantId: IDS.otherOrganization }),
+      encodeCursor({ operationId: decodedCursor.operationId, createdAt: decodedCursor.createdAt }),
+      encodeCursor({ createdAt: 1, operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: decodedCursor.createdAt, operationId: decodedCursor.operationId.toUpperCase() }),
+      encodeCursor({ createdAt: '2026-02-31T00:00:00.000000Z', operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: '2025-02-29T00:00:00.000000Z', operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: '2026-02-28T00:00:00.000Z', operationId: decodedCursor.operationId }),
+      encodeCursor({ createdAt: decodedCursor.createdAt, operationId: 'not-a-uuid' }),
+    ];
+    for (const cursor of malformedCursors) {
+      const invalidResponse = await request(app).get('/api/v1/command-center/workspace')
+        .query({ cursor }).set(sessions.owner.headers).expect(400);
+      expect(invalidResponse.body.error).toMatchObject({ code: 'INVALID_CURSOR' });
+    }
+    const arrayCursor = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: [firstOverview.page.nextCursor, firstOverview.page.nextCursor] })
+      .set(sessions.owner.headers).expect(400);
+    expect(arrayCursor.body.error.code).toBe('INVALID_CURSOR');
+
+    const crossTenantCursor = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: firstOverview.page.nextCursor }).set(sessions.other.headers).expect(200);
+    expect(crossTenantCursor.body.data.schedulingOverview.records.every(record =>
+      record.appointmentId === IDS.otherAppointment)).toBe(true);
+    expect(JSON.stringify(crossTenantCursor.body)).not.toContain(IDS.organization);
+    const staleCursor = encodeCursor({
+      createdAt: '2000-01-01T00:00:00.000000Z',
+      operationId: '00000000-0000-4000-8000-000000000099',
+    });
+    const stalePage = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: staleCursor }).set(sessions.owner.headers).expect(200);
+    expect(stalePage.body.data.schedulingOverview).toMatchObject({ total: 101, shown: 0 });
+    expect(stalePage.body.data.schedulingOverview.page.cursor).toBe(staleCursor);
+
+    // The one operation excluded from the first keyset page is on the second page.
+    // Concurrent fixture inserts deliberately do not assume creation order. Change
+    // that operation's current assignment between page reads; the next page must
+    // keep keyset ordering but project the current revision and complete category
+    // counts from its own repeatable-read snapshot.
+    const pageTwoAppointment = created
+      .map(value => value.appointment)
+      .find(appointmentId => !firstIds.has(appointmentId));
+    expect(pageTwoAppointment).toEqual(expect.any(String));
+    await previewAndApproveAppointment(pageTwoAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Page-two assignment proves current authoritative pagination.',
+    }, 'm22-part5-pagination-between-pages');
+    const assignedPins = await pins(runtimePool, IDS.organization, pageTwoAppointment);
+
+    const second = await request(app)
+      .get('/api/v1/command-center/workspace')
+      .query({ cursor: firstOverview.page.nextCursor })
+      .set(sessions.owner.headers).expect(200);
+    const secondOverview = second.body.data.schedulingOverview;
+    expect(second.body.data.graphs).toHaveLength(1);
+    expect(secondOverview).toMatchObject({
+      total: 101, shown: 1, truncated: true,
+      counts: expect.objectContaining({ unassigned: 100 }),
+      page: expect.objectContaining({
+        size: 100, shown: 1, total: 101, hasPrevious: true, hasNext: false,
+        cursor: firstOverview.page.nextCursor, nextCursor: null,
+      }),
+    });
+    expect(secondOverview.records).toEqual([
+      expect.objectContaining({
+        appointmentId: pageTwoAppointment,
+        authority: expect.objectContaining({
+          revision: assignedPins.revision,
+          digest: assignedPins.digest,
+          targetState: 'assigned',
+          workforceProfileId: IDS.owner,
+        }),
+      }),
+    ]);
+    expect(firstIds.has(secondOverview.records[0].appointmentId)).toBe(false);
+
+    const invalid = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: Buffer.from('{"createdAt":"not-a-date"}').toString('base64url') })
+      .set(sessions.owner.headers).expect(400);
+    expect(invalid.body.error.code).toBe('INVALID_CURSOR');
+  }, 300000);
 });

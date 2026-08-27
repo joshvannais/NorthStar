@@ -1,0 +1,43 @@
+{
+  "chrome151": {
+    "desktopLight": {
+      "previews": 14, "approvals": 11, "revision": 12,
+      "externalCalls": 0, "directPatches": 0
+    },
+    "mobileDark": {
+      "previews": 13, "approvals": 10, "revision": 11,
+      "externalCalls": 0, "directPatches": 0,
+      "normal390": {
+        "document": "390/390", "main": "390/390", "board": "364/364",
+        "records": "322/322", "titles": "294/294", "actionRows": "294/294",
+        "dispatchBounds": "161.796875..249.09375", "hostileTitleWrapped": true
+      },
+      "zoom400": {
+        "document": "390/390", "main": "390/390", "board": "364/364",
+        "records": "322/322", "titles": "294/294", "actionRows": "294/294",
+        "dispatchBounds": "161.796875..249.09375", "hostileTitleHeight": 88.3125
+      }
+    }
+  },
+  "actualPlaywrightWebKit26_5": {
+    "desktopDark": {
+      "previews": 14, "approvals": 11, "revision": 12,
+      "externalCalls": 0, "directPatches": 0
+    },
+    "mobileLight": {
+      "previews": 13, "approvals": 10, "revision": 11,
+      "externalCalls": 0, "directPatches": 0,
+      "normal390": {
+        "document": "390/390", "main": "390/390", "board": "364/364",
+        "records": "322/322", "titles": "294/294", "actionRows": "294/294",
+        "dispatchBounds": "161.796875..249.09375", "hostileTitleWrapped": true
+      },
+      "zoom400": {
+        "document": "390/390", "main": "390/390", "board": "364/364",
+        "records": "322/322", "titles": "294/294", "actionRows": "294/294",
+        "dispatchBounds": "161.796875..249.09375", "hostileTitleHeight": 88.3125
+      }
+    }
+  },
+  "visualApproval": "unclaimed"
+}

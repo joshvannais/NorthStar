@@ -195,6 +195,7 @@ class CalendarRenderer {
     this.kpiBar = document.getElementById('calendarKpiBar');
     this.eventList = document.getElementById('calendarEventList');
     this.newEventArea = document.getElementById('calendarNewEventArea');
+    this.authorityBoard = document.getElementById('calendarAuthorityBoard');
     var openEventAction = event => {
       var trigger = event.target.closest('[data-calendar-event-action][data-calendar-event-id]');
       if (!trigger) return;
@@ -318,6 +319,7 @@ class CalendarRenderer {
     this.renderCalendarView();
     this.renderEventList();
     this.renderNewEventArea();
+    this.renderAuthorityBoard();
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -601,7 +603,101 @@ class CalendarRenderer {
   // ═══════════════════════════════════════════════════════════════
   renderNewEventArea() {
     if (!this.newEventArea) return;
-    this.newEventArea.innerHTML = `<button class="cal-new-event-btn" onclick="window.openEventModal()" style="width:100%;padding:7px 14px;background:#6395ff;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;">+ New Event</button>`;
+    this.newEventArea.replaceChildren();
+    var note = document.createElement('p');
+    note.className = 'cal-event-list-empty';
+    note.textContent = 'New work originates from canonical customer and opportunity records. Calendar changes use preview and explicit human approval below.';
+    this.newEventArea.appendChild(note);
+  }
+
+  renderAuthorityBoard() {
+    if (!this.authorityBoard) return;
+    this.authorityBoard.replaceChildren();
+    var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+    var operator = projection && projection.schedulingOperator;
+    var overview = projection && projection.schedulingOverview;
+    var heading = document.createElement('div');
+    heading.className = 'm22-authority-heading';
+    var copy = document.createElement('div');
+    var title = document.createElement('h2'); title.id = 'calendarAuthorityTitle'; title.textContent = 'Scheduling authority';
+    var description = document.createElement('p');
+    description.textContent = operator && operator.canMutate
+      ? 'Every action creates a 15-minute non-capability preview and requires explicit current human approval.'
+      : operator && operator.canRead
+        ? 'Current owner or dispatcher scheduling truth remains readable; mutation controls are disabled by current account authority.'
+        : 'Detailed scheduling authority is limited to current owners, admins, and active dispatchers.';
+    copy.append(title, description); heading.appendChild(copy); this.authorityBoard.appendChild(heading);
+    if (!projection) {
+      this.authorityBoard.appendChild(Object.assign(document.createElement('p'), { className:'m22-overview-empty', textContent:'Current Calendar authority is loading or unavailable.' }));
+      return;
+    }
+    if (!operator || operator.canRead !== true || !overview) {
+      var unavailable = document.createElement('p'); unavailable.className = 'm22-overview-empty';
+      unavailable.textContent = operator && operator.reason === 'subscription_read_only'
+        ? 'This subscription is read-only. No scheduling mutation is available.'
+        : 'No owner/dispatcher mutation authority is available for this signed-in account.';
+      this.authorityBoard.appendChild(unavailable); return;
+    }
+    var page = overview.page || { shown:(overview.records || []).length, total:(overview.records || []).length };
+    var coverage = document.createElement('p');
+    coverage.className = 'm22-overview-coverage';
+    coverage.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' canonical appointments in ' + overview.timeZone +
+      (overview.truncated ? '. Additional appointments remain available through bounded pages.' : '.');
+    this.authorityBoard.appendChild(coverage);
+    var navigation = document.createElement('div'); navigation.className = 'm22-record-actions';
+    if (page.cursor) {
+      var firstPage = document.createElement('button'); firstPage.type = 'button'; firstPage.className = 'm22-action-button';
+      firstPage.textContent = 'First page';
+      firstPage.addEventListener('click', function() { window.refreshCalendar(null, { cursor:null }); });
+      navigation.appendChild(firstPage);
+    }
+    if (page.nextCursor) {
+      var nextPage = document.createElement('button'); nextPage.type = 'button'; nextPage.className = 'm22-action-button';
+      nextPage.textContent = 'Next ' + page.size + ' appointments';
+      nextPage.addEventListener('click', function() { window.refreshCalendar(null, { cursor:page.nextCursor }); });
+      navigation.appendChild(nextPage);
+    }
+    if (navigation.children.length) this.authorityBoard.appendChild(navigation);
+    var definitions = document.createElement('p');
+    definitions.textContent = 'Server categories: ' + Object.keys(overview.definitions || {}).map(function(key) {
+      return key + ' — ' + overview.definitions[key];
+    }).join(' ');
+    this.authorityBoard.appendChild(definitions);
+    var list = document.createElement('ol'); list.className = 'm22-overview-list';
+    (overview.records || []).forEach(function(record) {
+      var item = document.createElement('li'); item.className = 'm22-overview-record';
+      var recordTitle = document.createElement('h3');
+      recordTitle.textContent = (record.customer && record.customer.name || 'Customer') + ' · ' + (record.work && record.work.title || 'Appointment');
+      var states = document.createElement('ul'); states.className = 'm22-state-list';
+      [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
+        record.conflict.status].filter(Boolean).forEach(function(state) {
+          var chip = document.createElement('li'); chip.className = 'm22-state-chip'; chip.dataset.state = state; chip.textContent = String(state).replace(/_/g, ' '); states.appendChild(chip);
+        });
+      Object.keys(record.flags || {}).filter(function(key) { return record.flags[key] === true; }).forEach(function(flag) {
+        var chip = document.createElement('li'); chip.className = 'm22-state-chip'; chip.dataset.state = flag; chip.textContent = flag.replace(/([A-Z])/g, ' $1'); states.appendChild(chip);
+      });
+      var actions = document.createElement('div'); actions.className = 'm22-record-actions';
+      (operator.canMutate ? record.allowedActions || [] : []).forEach(function(action) {
+        var button = document.createElement('button'); button.type = 'button'; button.className = 'm22-action-button';
+        button.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+        button.addEventListener('click', function() {
+          window.NorthStarSchedulingApproval.open({
+            record: record, directory: operator, action: action, timeZone: overview.timeZone,
+            returnFocus: button, source: 'Calendar authority board', onApplied: window.refreshCalendar
+          });
+        });
+        actions.appendChild(button);
+      });
+      if (!operator.canMutate) {
+        var readOnly = document.createElement('p');
+        readOnly.className = 'm22-overview-read-only';
+        readOnly.textContent = 'Read-only: ' + String(operator.reason || 'mutation authority unavailable').replace(/_/g, ' ') + '.';
+        actions.appendChild(readOnly);
+      }
+      item.append(recordTitle, states, actions); list.appendChild(item);
+    });
+    if (!list.children.length) list.appendChild(Object.assign(document.createElement('li'), { className:'m22-overview-empty', textContent:'No canonical appointments are available.' }));
+    this.authorityBoard.appendChild(list);
   }
 
 }
@@ -630,9 +726,11 @@ class CalendarData {
         return Array.isArray(events) ? events : [];
       }
 
-      async fetchEvents() {
+      async fetchEvents(cursor) {
         try {
-          await window.CanonicalIntelligence.loadCompatibility('calendar');
+          var filters = { limit: 100 };
+          if (cursor) filters.cursor = cursor;
+          await window.CanonicalIntelligence.loadCompatibility('calendar', filters);
           return this.readAuthorizedEvents();
         }
         catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); throw e; }
@@ -644,73 +742,9 @@ class CalendarData {
       }
 
       async updateEvent(id, data) {
-        var current = calState.events.find(function(event) { return String(event.id) === String(id); });
-        var authority = current && current.scheduleAuthority;
-        if (!authority || !Number.isSafeInteger(authority.revision) ||
-            !/^[0-9a-f]{64}$/.test(authority.digest || '')) {
-          return { ok:false, status:409, code:'M22_STALE_APPROVAL',
-            message:'Current schedule revision is unavailable. Refresh Calendar before approving this change.' };
-        }
-        if (!window.crypto || typeof window.crypto.randomUUID !== 'function') {
-          return { ok:false, status:503, code:'IDEMPOTENCY_UNAVAILABLE',
-            message:'Secure approval identity is unavailable. No schedule change was sent.' };
-        }
-        var action = ['calendar_edit','calendar_drag_drop','calendar_resize'].includes(data.action)
-          ? data.action : 'calendar_edit';
-        var timeZoneAuthority;
-        var start;
-        var end;
-        try {
-          timeZoneAuthority = calendarTimeZoneAuthority();
-          if (data.expectedTimeZone !== timeZoneAuthority.timeZone) throw new Error('Calendar time-zone authority changed.');
-          start = calendarTimeContract().validateRfc3339InZone(data.scheduledStart, timeZoneAuthority.timeZone);
-          end = calendarTimeContract().validateRfc3339InZone(data.scheduledEnd, timeZoneAuthority.timeZone);
-        } catch (_timeError) {
-          return { ok:false, status:400, code:'INVALID_APPOINTMENT_SCHEDULE',
-            message:'The proposed wall clock and UTC offset must agree with the current tenant time zone.' };
-        }
-        if (end.epochMilliseconds <= start.epochMilliseconds) {
-          return { ok:false, status:400, code:'INVALID_APPOINTMENT_SCHEDULE',
-            message:'The end of the schedule must be after its start.' };
-        }
-        var prefixes = {
-          calendar_edit: 'calendar-edit-',
-          calendar_drag_drop: 'calendar-drag-drop-',
-          calendar_resize: 'calendar-resize-'
-        };
-        var headers = Object.assign({'Content-Type':'application/json'}, this._authHeaders());
-        var context = window.CanonicalIntelligence.synchronizeAuthority();
-        if (context.sessionId) headers['X-NorthStar-Session-ID'] = context.sessionId;
-        headers['Idempotency-Key'] = prefixes[action] + window.crypto.randomUUID();
-        try {
-          var response = await window.NorthStarAccountSession.fetch('/api/v1/canonical/appointments/' + encodeURIComponent(id), {
-            method:'PATCH', headers:headers, body:JSON.stringify({
-              scheduledStart:data.scheduledStart,
-              scheduledEnd:data.scheduledEnd,
-              expectedTimeZone:data.expectedTimeZone,
-              status:'scheduled',
-              expectedRevision:authority.revision,
-              expectedDigest:authority.digest,
-              action:action,
-              reason:data.reason
-            })
-          });
-          var body = {};
-          try { body = await response.json(); } catch (_) { body = {}; }
-          if (!response.ok) {
-            return {
-              ok:false,
-              status:response.status,
-              code:body.code || body.error && body.error.code || 'APPOINTMENT_UPDATE_FAILED',
-              message:body.error && body.error.message || body.message || 'Appointment update failed.'
-            };
-          }
-          return { ok:true, status:response.status, data:body.data };
-        } catch (error) {
-          console.warn('[CalendarData] updateEvent:', error.message);
-          return { ok:false, status:503, code:'CANONICAL_PERSISTENCE_UNAVAILABLE',
-            message:'Schedule service is unavailable. No schedule change was approved.' };
-        }
+        console.warn('[CalendarData] Direct appointment mutation is retired; use a Part 4 preview and explicit approval.');
+        return { ok:false, status:428, code:'M22_PREVIEW_REQUIRED',
+          message:'Create and approve a current non-capability preview before changing scheduling authority.' };
       }
 
       async deleteEvent(id) {
@@ -765,6 +799,30 @@ class CalendarModal {
   }
 
   openEditEvent(event, options) {
+    options = options || {};
+    var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+    var overview = projection && projection.schedulingOverview;
+    var record = overview && (overview.records || []).find(function(candidate) { return String(candidate.appointmentId) === String(event.id); });
+    if (!record || !projection.schedulingOperator || projection.schedulingOperator.canMutate !== true) {
+      throw new Error('Current operator scheduling authority is unavailable. Refresh Calendar before acting.');
+    }
+    return window.NorthStarSchedulingApproval.open({
+      record: record,
+      directory: projection.schedulingOperator,
+      action: record.authority.scheduleState === 'scheduled' ? 'reschedule' : 'schedule',
+      timeZone: overview.timeZone,
+      proposal: options.proposal || {},
+      elapsedMilliseconds: Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0
+        ? options.elapsedMilliseconds : null,
+      preserveElapsedDuration: options.action === 'calendar_drag_drop',
+      returnFocus: options.returnFocus,
+      source: options.action === 'calendar_drag_drop' ? 'Calendar drag and drop'
+        : options.action === 'calendar_resize' ? 'Calendar resize or touch gesture' : 'Calendar accessible edit control',
+      onApplied: window.refreshCalendar
+    });
+  }
+
+  _retiredEditEvent(event, options) {
     options = options || {};
     var action = ['calendar_edit','calendar_drag_drop','calendar_resize'].includes(options.action)
       ? options.action : 'calendar_edit';
@@ -1221,18 +1279,42 @@ window.syncCalendarFromAppStore = function() {
   });
 };
 
-window.refreshCalendar = async function() {
+window.calendarSchedulingCursor = null;
+window.refreshCalendar = async function(expected, navigation) {
+  var requestedCursor = navigation && Object.prototype.hasOwnProperty.call(navigation, 'cursor')
+    ? navigation.cursor : window.calendarSchedulingCursor;
   calRenderer.setLoading(true);
   calRenderer.render();
   try {
-    await calData.fetchEvents();
+    await calData.fetchEvents(requestedCursor);
     calState.events = calData.readAuthorizedEvents();
     calRenderer.setLoading(false);
+    window.calendarSchedulingCursor = requestedCursor || null;
+    var projection = window.CanonicalIntelligence.getProjection('calendar');
+    if (expected) {
+      var record = projection && projection.schedulingOverview && (projection.schedulingOverview.records || [])
+        .find(function(candidate) { return String(candidate.appointmentId) === String(expected.appointmentId); });
+      if (!record || record.authority.revision !== expected.revision || record.authority.digest !== expected.digest) {
+        throw new Error('Calendar refresh did not observe the exact applied scheduling revision.');
+      }
+      calRenderer.render();
+      return {
+        success: true,
+        appointmentId: String(record.appointmentId),
+        observedRevision: record.authority.revision,
+        observedDigest: record.authority.digest
+      };
+    }
+    calRenderer.render();
+    return { success:true };
   } catch(e) {
     calState.events = [];
     calRenderer.setRejected();
+    calRenderer.render();
+    var error = new Error('Calendar authoritative refresh failed; the visible Calendar is stale and unavailable.');
+    error.cause = e;
+    throw error;
   }
-  calRenderer.render();
 };
 
 // Handle event selection

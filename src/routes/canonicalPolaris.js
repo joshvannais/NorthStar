@@ -32,6 +32,20 @@ const {
 const { normalizeRecommendationEvaluation } = require('../scheduling/recommendationContract');
 const { recommendAppointmentCandidates } = require('../scheduling/recommendationRepository');
 const { requireRecommendationBodyBoundary } = require('../scheduling/recommendationHttpBoundary');
+const {
+  actorInput,
+  loadSchedulingOperatorDirectory,
+  loadSchedulingOperatorTargetPage,
+  parseOperatorTargetRequest,
+  withBroadSchedulingReadSnapshot,
+} = require('../scheduling/operatorDirectory');
+const {
+  buildSchedulingOverviewPage,
+} = require('../scheduling/overviewRepository');
+const {
+  encodeGraphCursor,
+  validateGraphCursor,
+} = require('../scheduling/graphCursor');
 const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const READ_MODEL_VERSION = 'm22-part1-read-v1';
@@ -84,6 +98,7 @@ function queryFilters(req) {
   const limit = Math.max(1, Math.min(100, Number.parseInt(req.query.limit, 10) || 50));
   return stableValue({
     limit,
+    cursor: validateGraphCursor(req.query.cursor),
     status: typeof req.query.status === 'string' ? req.query.status : null,
     customerId: validateCustomerIdFilter(
       req.query.customerId,
@@ -136,6 +151,8 @@ const GRAPH_SELECT = `
          ps.normalized_input_fingerprint, ps.business_profile_id, ps.business_profile_version,
          ps.business_profile_hash, ps.supporting_fact_ids, ps.snapshot,
          ps.snapshot_digest, ps.created_at AS snapshot_created_at,
+         to_char(ps.created_at AT TIME ZONE 'UTC',
+           'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS snapshot_cursor_created_at,
          COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
              'id', f.id,
@@ -371,25 +388,57 @@ function projectRow(row) {
       hash: projection.businessProfileInputHash,
     },
   });
+  // PostgreSQL stores microseconds while JavaScript Date retains milliseconds.
+  // Keep the exact trusted UTC ordering value private to server pagination so a
+  // keyset cursor cannot omit rows that share a JavaScript millisecond.
+  Object.defineProperty(projection, '_paginationCreatedAt', {
+    value: row.snapshot_cursor_created_at,
+    enumerable: false,
+    writable: false,
+  });
   return projection;
 }
 
-async function listCanonicalGraphs(pool, context, filters) {
-  const values = [context.organizationId, context.explicitSession, filters.limit];
+async function listCanonicalGraphPage(pool, context, filters) {
+  const limit = Math.max(1, Math.min(100, Number(filters && filters.limit) || 50));
+  const suppliedCursor = filters && filters.cursor && typeof filters.cursor === 'object'
+    ? filters.cursor.raw : filters && filters.cursor;
+  const cursor = validateGraphCursor(suppliedCursor);
+  const values = [context.organizationId, context.explicitSession];
   let where = `
     WHERE o.organization_id = $1 AND o.state = 'completed'
       AND (t.source NOT IN ('simulation', 'demo')
         OR ($2::text IS NOT NULL AND t.external_call_id = $2 || ':call'))`;
-  if (filters.status) {
+  if (filters && filters.status) {
     values.push(filters.status);
     where += ` AND op.status = $${values.length}`;
   }
-  if (filters.customerId) {
+  if (filters && filters.customerId) {
     values.push(filters.customerId);
     where += ` AND c.id = $${values.length}`;
   }
-  const result = await pool.query(GRAPH_SELECT + where + ` ORDER BY ps.created_at DESC, o.id ASC LIMIT $3`, values);
-  return result.rows.map(projectRow);
+  if (cursor) {
+    values.push(cursor.createdAt, cursor.operationId);
+    where += ` AND (ps.created_at < $${values.length - 1}::timestamptz
+      OR (ps.created_at = $${values.length - 1}::timestamptz AND o.id > $${values.length}::uuid))`;
+  }
+  values.push(limit + 1);
+  const result = await pool.query(GRAPH_SELECT + where +
+    ` ORDER BY ps.created_at DESC, o.id ASC LIMIT $${values.length}`, values);
+  const projected = result.rows.map(projectRow);
+  const items = projected.slice(0, limit);
+  return Object.freeze({
+    items,
+    cursor: cursor && cursor.raw || null,
+    nextCursor: projected.length > limit && items.length ? encodeGraphCursor(items[items.length - 1]) : null,
+    pageSize: limit,
+    shown: items.length,
+    hasMore: projected.length > limit,
+  });
+}
+
+async function listCanonicalGraphs(pool, context, filters) {
+  return (await listCanonicalGraphPage(pool, context, filters)).items;
 }
 
 async function getCanonicalGraph(pool, context, identifier) {
@@ -688,6 +737,8 @@ function createDependencies(options) {
     externalAuth: supplied.externalAuth || supplied.auth || requireVerifiedExternalAction,
     permission: supplied.permission || requirePermission,
     audit: supplied.audit || audit,
+    operatorDirectory: supplied.operatorDirectory || loadSchedulingOperatorDirectory,
+    operatorTargetDirectory: supplied.operatorTargetDirectory || loadSchedulingOperatorTargetPage,
   };
 }
 
@@ -719,12 +770,52 @@ function handleEndpointError(res, _error, req) {
   return sendPersistenceUnavailable(res, req);
 }
 
-async function authoritativeItems(req, dependencies, endpoint) {
+async function authoritativeItems(req, dependencies, endpoint, queryable) {
   const context = requestContext(req);
   const filters = queryFilters(req);
   void endpoint;
-  const pool = resolvePool(dependencies.poolProvider);
+  const pool = queryable || resolvePool(dependencies.poolProvider);
   return listCanonicalGraphs(pool, context, filters);
+}
+
+async function withBroadCanonicalRead(req, dependencies, operation, denial) {
+  const pool = resolvePool(dependencies.poolProvider);
+  return withBroadSchedulingReadSnapshot(pool, actorInput(req), operation, {
+    operatorDirectory: dependencies.operatorDirectory,
+    denial,
+  });
+}
+
+async function canonicalStatus(req, dependencies) {
+  try {
+    return await withBroadCanonicalRead(req, dependencies, async function (client) {
+      const context = requestContext(req);
+      const result = await client.query(
+        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
+          WHERE organization_id = $1 AND state = 'completed'`,
+        [context.organizationId]
+      );
+      return {
+        status: 'operational',
+        readModelVersion: READ_MODEL_VERSION,
+        completedGraphs: result.rows[0].completed_graphs,
+        postgresAuthoritative: true,
+        redisRequired: false,
+        canonicalResponseCaching: false,
+        broadSchedulingRead: true,
+      };
+    });
+  } catch (error) {
+    if (!error || error.code !== 'M22_BROAD_SCHEDULING_READ_FORBIDDEN') throw error;
+    return {
+      status: 'operational',
+      readModelVersion: READ_MODEL_VERSION,
+      postgresAuthoritative: true,
+      redisRequired: false,
+      canonicalResponseCaching: false,
+      broadSchedulingRead: false,
+    };
+  }
 }
 
 function createCanonicalRouter(options) {
@@ -737,36 +828,49 @@ function createCanonicalRouter(options) {
     return next();
   }
 
+  router.get('/operator-targets', dependencies.auth, requireCanonicalContext, async function (req, res) {
+    const context = requestContext(req);
+    try {
+      const targetRequest = parseOperatorTargetRequest(req.query, context.organizationId);
+      const page = await dependencies.operatorTargetDirectory(resolvePool(dependencies.poolProvider), {
+        ...actorInput(req),
+        ...targetRequest,
+      });
+      if (page.canRead !== true) {
+        return res.status(403).json({
+          success: false,
+          requestId: req && req.requestId || undefined,
+          error: {
+            code: 'M22_OPERATOR_TARGET_DIRECTORY_FORBIDDEN',
+            message: 'Current scheduling targets are limited to owners, admins, and active dispatchers.',
+          },
+        });
+      }
+      return res.json({ success: true, data: page, requestId: req && req.requestId || undefined });
+    } catch (_error) {
+      return handleEndpointError(res, _error, req);
+    }
+  });
+
   router.get('/status', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     if (!context) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     try {
-      const pool = resolvePool(dependencies.poolProvider);
-      const result = await pool.query(
-        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
-          WHERE organization_id = $1 AND state = 'completed'`,
-        [context.organizationId]
-      );
       return res.json({
         success: true,
-        data: {
-          status: 'operational',
-          readModelVersion: READ_MODEL_VERSION,
-          completedGraphs: result.rows[0].completed_graphs,
-          postgresAuthoritative: true,
-          redisRequired: false,
-          canonicalResponseCaching: false,
-        },
+        data: await canonicalStatus(req, dependencies),
       });
     } catch (_error) {
-      return sendPersistenceUnavailable(res, req);
+      return handleEndpointError(res, _error, req);
     }
   });
 
   router.get('/graphs', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     try {
-      const items = await authoritativeItems(req, dependencies, 'canonical.graphs');
+      queryFilters(req);
+      const items = await withBroadCanonicalRead(req, dependencies, client =>
+        authoritativeItems(req, dependencies, 'canonical.graphs', client));
       return res.json({ success: true, data: { items, count: items.length, readModelVersion: READ_MODEL_VERSION, digest: sha256(items.map(item => item.projectionDigest)) } });
     } catch (_error) {
       return handleEndpointError(res, _error, req);
@@ -777,7 +881,9 @@ function createCanonicalRouter(options) {
     router.get('/' + endpoint, dependencies.auth, requireCanonicalContext, async function (req, res) {
       if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
       try {
-        const items = await authoritativeItems(req, dependencies, 'canonical.' + endpoint);
+        queryFilters(req);
+        const items = await withBroadCanonicalRead(req, dependencies, client =>
+          authoritativeItems(req, dependencies, 'canonical.' + endpoint, client));
         return res.json({ success: true, data: { ...aggregate(items), digest: sha256(items.map(item => item.projectionDigest)), readModelVersion: READ_MODEL_VERSION } });
       } catch (_error) {
         return handleEndpointError(res, _error, req);
@@ -788,7 +894,9 @@ function createCanonicalRouter(options) {
   router.get('/surfaces/:surface', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Surface not found.' } });
     try {
-      const items = await authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface);
+      queryFilters(req);
+      const items = await withBroadCanonicalRead(req, dependencies, client =>
+        authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface, client));
       return res.json({ success: true, data: surfaceProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
       return handleEndpointError(res, _error, req);
@@ -798,12 +906,61 @@ function createCanonicalRouter(options) {
   router.get('/compat/:surface', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Compatibility projection not found.' } });
     try {
-      const items = await authoritativeItems(req, dependencies, 'canonical.compat.' + req.params.surface);
+      const filters = queryFilters(req);
       const context = requestContext(req);
-      const timeZoneAuthority = req.params.surface === 'calendar'
-        ? await currentCalendarTimeZoneAuthority(resolvePool(dependencies.poolProvider), context)
-        : null;
-      return res.json({ success: true, data: compatibilityProjection(req.params.surface, items, context, timeZoneAuthority) });
+      const pool = resolvePool(dependencies.poolProvider);
+      let schedulingOperator;
+      let schedulingOverview = null;
+      let items;
+      let timeZoneAuthority = null;
+      if (req.params.surface === 'calendar') {
+        const evaluated = await buildSchedulingOverviewPage(pool, {
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          actorAccessRole: req.userRole,
+          authSessionId: req.authSession && req.authSession.id,
+          cursor: filters.cursor && filters.cursor.raw || null,
+          loadPage: (client, page) => listCanonicalGraphPage(client, context, {
+            limit: page.limit, cursor: page.cursor, status: null, customerId: null,
+          }),
+          loadOperator: async client => {
+            const operator = await dependencies.operatorDirectory(client, actorInput(req));
+            if (!operator || operator.canRead !== true) {
+              const error = new Error('The broad scheduling Calendar is limited to current owners, admins, and active dispatchers.');
+              error.code = 'CALENDAR_OPERATOR_REQUIRED';
+              error.status = 403;
+              error.statusCode = 403;
+              throw error;
+            }
+            return operator;
+          },
+          loadTimeZoneAuthority: client => currentCalendarTimeZoneAuthority(client, context),
+        });
+        schedulingOperator = evaluated.schedulingOperator;
+        schedulingOverview = evaluated.overview;
+        items = evaluated.pageItems;
+        timeZoneAuthority = evaluated.timeZoneAuthority;
+      } else {
+        const evaluated = await withBroadCanonicalRead(req, dependencies, async function (client, operator) {
+          return { operator, items: await listCanonicalGraphs(client, context, filters) };
+        });
+        schedulingOperator = evaluated.operator;
+        items = evaluated.items;
+      }
+      let projection = compatibilityProjection(req.params.surface, items, context, timeZoneAuthority);
+      if (req.params.surface === 'calendar') {
+        projection = {
+          ...projection,
+          digest: sha256({
+            compatibilityDigest: projection.digest,
+            schedulingOperatorDigest: schedulingOperator.digest,
+            schedulingOverviewDigest: schedulingOverview && schedulingOverview.digest,
+          }),
+          schedulingOperator,
+          schedulingOverview,
+        };
+      }
+      return res.json({ success: true, data: projection });
     } catch (_error) {
       return handleEndpointError(res, _error, req);
     }
@@ -991,24 +1148,26 @@ function createCanonicalRouter(options) {
   router.get('/graphs/:id', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), context, req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, context, req.params.id));
       if (!item) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Canonical graph not found.' } });
       return res.json({ success: true, data: item });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error, req);
     }
   });
 
   router.get('/snapshots/:id', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), context, req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, context, req.params.id));
       if (!item || item.ids.polarisSnapshot !== req.params.id) {
         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Polaris snapshot not found.' } });
       }
       return res.json({ success: true, data: { id: item.ids.polarisSnapshot, calculationVersion: item.calculationVersion, snapshotDigest: item.snapshotDigest, snapshot: item.snapshot } });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error, req);
     }
   });
 
@@ -1043,13 +1202,15 @@ function createCompatibilityRouter(options) {
   function handle(surface, shape) {
     return async function (req, res) {
       try {
-        const items = await authoritativeItems(req, dependencies, 'compat.' + surface + '.' + req.path);
+        queryFilters(req);
         const context = requestContext(req);
-        const timeZoneAuthority = surface === 'calendar'
-          ? await currentCalendarTimeZoneAuthority(resolvePool(dependencies.poolProvider), context)
-          : null;
-        const projection = compatibilityProjection(surface, items, context, timeZoneAuthority);
-        return res.json(shape(projection, items));
+        const result = await withBroadCanonicalRead(req, dependencies, async function (client) {
+          const items = await authoritativeItems(req, dependencies, 'compat.' + surface + '.' + req.path, client);
+          const timeZoneAuthority = surface === 'calendar'
+            ? await currentCalendarTimeZoneAuthority(client, context) : null;
+          return { items, projection: compatibilityProjection(surface, items, context, timeZoneAuthority) };
+        });
+        return res.json(shape(result.projection, result.items));
       } catch (_error) {
         return handleEndpointError(res, _error, req);
       }
@@ -1080,21 +1241,9 @@ function createCompatibilityRouter(options) {
   }
   ownedGet('/dashboard/status', async function (req, res) {
     try {
-      const context = requestContext(req);
-      const result = await resolvePool(dependencies.poolProvider).query(
-        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
-          WHERE organization_id = $1 AND state = 'completed'`,
-        [context.organizationId]
-      );
-      return res.json({
-        status: 'operational',
-        readModelVersion: READ_MODEL_VERSION,
-        completedGraphs: result.rows[0].completed_graphs,
-        postgresAuthoritative: true,
-        redisRequired: false,
-      });
+      return res.json(await canonicalStatus(req, dependencies));
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error, req);
     }
   });
   ownedGet('/calendar/events', handle('calendar', function (projection) { return { events: projection.records, count: projection.records.length, canonicalDigest: projection.digest }; }));
@@ -1156,23 +1305,25 @@ function createCompatibilityRouter(options) {
 
   ownedGet('/customers/:id', async function (req, res) {
     try {
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, requestContext(req), req.params.id));
       if (!item || item.ids.customer !== req.params.id) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Customer not found.' } });
       return res.json({ ...item.customer, canonical: surfaceProjection('customer-detail', [item]).items[0] });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error, req);
     }
   });
 
   async function canonicalDetail(req, res, identifierKey, notFoundMessage, shape) {
     try {
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, requestContext(req), req.params.id));
       if (!item || item.ids[identifierKey] !== req.params.id) {
         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: notFoundMessage } });
       }
       return res.json(shape(item));
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error, req);
     }
   }
 
@@ -1199,11 +1350,12 @@ function createCompatibilityRouter(options) {
 
   ownedGet('/leads/:id', async function (req, res) {
     try {
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, requestContext(req), req.params.id));
       if (!item || item.ids.opportunity !== req.params.id) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Lead not found.' } });
       return res.json({ ...item.opportunity, customer: item.customer, canonical: surfaceProjection('leads', [item]).items[0] });
     } catch (_error) {
-      return sendPersistenceUnavailable(res);
+      return handleEndpointError(res, _error, req);
     }
   });
 
@@ -1220,6 +1372,7 @@ module.exports = {
   createCompatibilityRouter,
   currentCalendarTimeZoneAuthority,
   getCanonicalGraph,
+  listCanonicalGraphPage,
   listCanonicalGraphs,
   pipelineStageProjection,
   projectRow,
@@ -1228,4 +1381,5 @@ module.exports = {
   serviceAnalyticsProjection,
   surfaceProjection,
   trendProjection,
+  validateGraphCursor,
 };

@@ -256,7 +256,18 @@ passed a different fresh exact-head independent audit before its normal merge,
 sole automatic deployment, exact-revision verification, credential-free health,
 and authorized passive acceptance.
 
-### Part 4 — Human-approved scheduling and dispatch workflow (corrected; re-audit pending)
+### Part 4 — Human-approved scheduling and dispatch workflow (terminally released)
+
+Part 4 was independently approved at exact head
+`56d22392048bb36c6dec8e58836bcf8c91b272b7` with P0/P1/P2/P3 all zero,
+normally merged as `e20facc5937dc0581c9194ddf70b331b49de5188`, and deployed by the sole
+automatic Railway release at that exact merge revision. Railway reported
+`SUCCESS`/`RUNNING`; two credential-free health requests returned 200 with
+PostgreSQL and canonical persistence healthy. Migration 035 deployed with
+repository SHA-256
+`96fb6814a9a8a0db2ebdca2fc4626df8091bb7f3b48a3f4bef613e97fe977129`.
+The immutable release record SHA-256 is
+`628b4158092ead6b142ee9942c4bdb834feb4408ce82ad45dcbd8706c3453b78`.
 
 Mount preview and approve for assign, reassign, unassign, schedule, reschedule,
 and dispatch. A preview expires after 15 minutes and is not a capability.
@@ -323,11 +334,11 @@ checksum provenance, and the complete available compatibility corpus. Part 3
 remains non-capability and makes zero provider calls. No UI or browser-executed
 code changes in Part 4, so a new browser matrix is not applicable; visual
 approval remains a separate truth. Hosted checks, physical Safari/devices,
-providers, credentials/configuration, production migration/deployment, and the
-independent exact-head verdict remain unavailable or pending until their
-separate gates.
+providers, credentials/configuration, direct private production migration logs,
+and visual approval remain separate unavailable or unclaimed evidence; they
+were not treated as passing.
 
-### Part 5 — Owner and dispatcher experiences (planned)
+### Part 5 — Owner and dispatcher experiences (implemented; independent audit pending)
 
 Calendar/Scheduling is the detailed authoritative board. Command Center is an
 overview of unassigned, due-today, overdue, at-risk, and conflicting work; quick
@@ -335,6 +346,129 @@ actions use Part 4. Paid and demo surfaces use the same mounted contract, but
 demo persistence and sessions remain server-isolated. Cover truthful loading,
 empty, restricted, stale, conflict, error, and success states plus accessible
 keyboard/dialog behavior and desktop/mobile responsive rendering.
+
+The Part 5 implementation mounts a server-classified, tenant-scoped overview
+from canonical Parts 1–4 authority and a current operator directory for
+owner/admin and active dispatcher roles. Calendar and Command Center share one
+visible preview-and-approve component for assign, reassign, unassign, schedule,
+reschedule, and dispatch. Legacy Calendar edit, drag, resize, keyboard, and touch
+entry points now create the same 15-minute non-capability preview; the legacy
+direct PATCH uniformly returns preview-required and no visible control mutates
+before a separate current human approval. Command Center displays server-owned
+category counts and records without client-side reclassification. Employees are
+denied the broad operator overview and mutations; demo remains explicitly
+non-authoritative, read-only, and isolated from paid tenant queries.
+
+The shared dialog presents exact action, appointment, target, tenant-local
+schedule, UTC-backed authority revision, independent target/schedule/dispatch
+states, hard conflicts, warning/review acknowledgements, route/recommendation
+uncertainty, expiry, reason, and dispatch-revocation consequences. Hard conflicts
+have no override. Stale, expired, denied, offline, and server-error responses
+never show optimistic success, and the current proposal is retained safely for
+retry where applicable. All stored labels and evidence render through DOM node
+creation and `textContent`. Responsive light/dark layouts include semantic
+headings/lists, focus trap/restore, Escape/cancel, aria-live status, visible
+keyboard alternatives, touch targets, and 400% reflow.
+
+No schema change is required for Part 5; migrations 001–035 remain byte-for-byte
+protected. Fresh role-separated PostgreSQL 18.4 UTC, mounted authority tests,
+the available Jest corpus, installed Chrome, and actual Playwright WebKit are
+writer evidence only until a different fresh exact-head auditor returns a
+terminal verdict. WebKit is not physical Safari, screenshots are a separate
+ledger, and user visual approval remains unclaimed.
+
+The first independent exact-head audit at
+`0a06ec5dccd4edc8b62ed89888b439cdcad874d4` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 3 / P2 4 / P3 0`. The narrow correction keeps Part 5 in the
+audit-pending state and closes only those seven validated findings: every broad
+canonical scheduling alias now uses the same current operator gate; overview
+counts scan bounded server pages while rows remain paginated and truthfully
+labelled; tenant IANA time is used in both surfaces; each row is rebuilt from
+one current repeatable-read PostgreSQL snapshot; safe reads are separated from
+subscription mutation eligibility; drag preserves exact elapsed duration; and
+durable approval followed by refresh failure remains visibly applied-but-stale
+without any reapply path. The correction also preserves exact PostgreSQL
+microseconds in private keyset cursor evidence so a JavaScript millisecond
+conversion cannot silently omit a row. A new different fresh exact-head audit
+is required before ready, merge, or release.
+
+The next independent exact-head audit at
+`00327a85bbebf3bff79a6a6a667be2ed1043f579` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 0 / P2 3 / P3 0`. The second narrow correction keeps Part 5
+audit-pending and addresses only those findings. The two canonical status aliases
+now return tenant-wide completed-graph counts only to current owners, admins, and
+active dispatchers; authenticated employees and pre-workforce onboarding sessions
+receive generic operational status without that broad count. Command Center
+cursor input is strictly canonical base64url JSON with exact PostgreSQL
+microseconds and calendar-valid UTC timestamps, and is rejected before any
+PostgreSQL connection or overview scan. At mobile widths the Daily Brief heading
+and tenant-time update stack with bounded readable widths in installed Chrome and
+actual Playwright WebKit. No schema change is required and another different fresh
+exact-head audit remains mandatory before ready, merge, or release.
+
+The following independent exact-head audit at
+`954b243159139d5fef994f2a6329b654d7eec822` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 0 / P2 1 / P3 0`. The third narrow correction keeps Part 5
+audit-pending and closes only the responsive Calendar finding: the shared
+authority grid, records, stored titles, state chips, and action rows now have
+explicit shrink-and-wrap boundaries. Hostile unbroken durable text and every
+visible human action, including Dispatch, remain present and operable inside a
+390 CSS px Calendar at ordinary size and 400 percent reflow in installed Chrome
+and actual Playwright WebKit. No JavaScript authority, data semantics, schema, or
+migration changed. Another different fresh exact-head audit remains mandatory
+before ready, merge, or release.
+
+The next independent exact-head audit at
+`3ea0b32737c4c05ba817758c72329cabfc3bd823` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 0 / P2 1 / P3 0`. The fourth narrow correction keeps Part 5
+audit-pending and closes only the bounded target-discovery finding. The initial
+operator directory remains resource-bounded and now reports exact shown and
+total profile/crew counts plus truthful truncation. Calendar and Command Center
+share one tenant-scoped server-side search and stable keyset-paging path, so
+every current active worker and active crew remains reachable without loading an
+unbounded directory. Cursor and search inputs are canonical and bounded before
+the target query; broad employee, inactive, and cross-tenant reads remain
+denied; safe subscription-read-only operators may inspect but cannot mutate;
+and preview/approval still rechecks current target authority. Duplicate and
+hostile labels render as inert text, while incomplete, loading, empty, error,
+last-page, and retry states remain explicit. No schema or migration changed.
+Another different fresh exact-head audit remains mandatory before ready, merge,
+or release.
+
+The subsequent independent exact-head audit at
+`563b63114a19cb0ea1cda05c3bf07f9ecc8b6266` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 1 / P2 1 / P3 1`. The fifth narrow correction keeps Part 5
+audit-pending and closes only those three validated findings. Broad scheduling
+reads and target discovery now re-read the exact current authentication session,
+tenant membership, user, workforce role, onboarding, and subscription rows in
+the same repeatable-read PostgreSQL snapshot before returning any directory,
+count, or tenant-wide bytes; stale middleware authority, demotion, revocation,
+expiry, and tenant/session divergence fail closed. Target keyset traversal now
+orders only by immutable kind and UUID and binds each cursor to a bounded,
+query-specific authoritative dataset digest. Concurrent rename cannot omit or
+duplicate a target, while activation, deactivation, membership, or search-set
+changes return an explicit stale-restart response instead of a false complete
+page. UUID-shaped search input is canonicalized to lowercase before cursor
+binding, SQL, and response echo. The shared Calendar and Command Center control
+clears stale target state and requires a new bounded search; it never reuses the
+stale cursor or applies a mutation. No schema or migration changed. Another
+different fresh exact-head audit remains mandatory before ready, merge, or
+release.
+
+The following independent exact-head audit at
+`e870a46698af46bbfbf859e7bd5d57292f056db0` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 1 / P2 0 / P3 0`. The sixth narrow correction keeps Part 5
+audit-pending and closes only the remaining atomic-read gap. Every broad
+canonical, compatibility, Calendar, and Command Center response now derives
+current session, tenant membership, user, workforce role, onboarding,
+subscription, counts, and response bytes from one owned bounded repeatable-read
+PostgreSQL snapshot on the same client. A request that linearizes before a
+concurrent authority change may finish from that coherent snapshot, while the
+next request observes the committed demotion, revocation, expiry, deletion,
+suspension, or read-only transition. No route commits authority early and then
+opens a second data transaction; failures roll back and release the connection.
+No schema or migration changed. Another different fresh exact-head audit remains
+mandatory before ready, merge, or release.
 
 ### Part 6 — Crew Today experience (planned)
 

@@ -175,7 +175,7 @@ realPostgres('Mission 20 Phase 6E mounted canonical navigation authority', () =>
     }
   });
 
-  test('all four roles receive same-user preferences plus only their tenant canonical location using GETs with zero writes', async () => {
+  test('all roles receive same-user preferences while only scheduling operators receive broad canonical location data', async () => {
     const contract = require('../../public/js/navigation-launcher');
     const before = await persistenceDigest(pool);
     for (const user of USERS.slice(0, 4)) {
@@ -196,6 +196,12 @@ realPostgres('Mission 20 Phase 6E mounted canonical navigation authority', () =>
         .get('/api/v1/canonical/compat/customer-detail')
         .query({ customerId: graphA.body.ids.customer, organizationId: ORG_B, userId: USERS[4].id })
         .set({ ...session.headers, 'X-NorthStar-Session-ID': session.sessionId });
+      if (user.role === 'member' || user.role === 'viewer') {
+        expect(locations.status).toBe(403);
+        expect(locations.body.error.code).toBe('M22_BROAD_SCHEDULING_READ_FORBIDDEN');
+        expect(JSON.stringify(locations.body)).not.toMatch(/100 Cedar Lane|900 Other Tenant Way|phase6e-[ab]@example\.test/i);
+        continue;
+      }
       expect(locations.status).toBe(200);
       expect(locations.body.success).toBe(true);
       expect(locations.body.data.authority).toMatchObject({

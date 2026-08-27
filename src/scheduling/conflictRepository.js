@@ -94,26 +94,35 @@ async function requireCurrentActor(client, input) {
       new Date(authority.trial_ends_at).getTime() - new Date(authority.trial_started_at).getTime() === 14 * 86400000));
   const roleAllowed = authority && (authority.role === 'owner' || authority.role === 'admin' ||
     (authority.role === 'member' && authority.operational_role === 'dispatcher'));
+  const readOnlyOperator = input.readOnlyOperator === true;
   if (!authority || authority.membership_status !== 'active' || authority.role !== input.actorAccessRole ||
       !roleAllowed || authority.session_status !== 'active' ||
-      new Date(authority.access_expires_at).getTime() <= Date.now() || !subscriptionCurrent ||
-      authority.onboarding_status !== 'complete') {
+      new Date(authority.access_expires_at).getTime() <= Date.now() ||
+      (!readOnlyOperator && (!subscriptionCurrent || authority.onboarding_status !== 'complete'))) {
     fail(403, 'M22_EVALUATION_FORBIDDEN', 'Current scheduling authority is unavailable.');
   }
   return authority;
 }
 
 async function currentBusinessProfile(client, input) {
-  const result = await client.query(
-    `SELECT profile.id, profile.version_number, profile.normalized_profile_hash,
-            profile.raw_profile, profile.raw_profile #>> '{company,timeZone}' AS time_zone
-       FROM public.organization_onboarding onboarding
-       JOIN public.canonical_business_profiles profile
-         ON profile.organization_id = onboarding.organization_id
-        AND profile.id = onboarding.active_business_profile_id
-      WHERE onboarding.organization_id = $1 AND onboarding.status = 'complete'
-        AND profile.is_active = TRUE
-      FOR SHARE OF onboarding, profile`,
+  const readOnlyOperator = input.readOnlyOperator === true;
+  const result = await client.query(readOnlyOperator
+    ? `SELECT profile.id, profile.version_number, profile.normalized_profile_hash,
+              profile.raw_profile, profile.raw_profile #>> '{company,timeZone}' AS time_zone
+         FROM public.canonical_business_profiles profile
+        WHERE profile.organization_id = $1 AND profile.is_active = TRUE
+        ORDER BY profile.version_number DESC, profile.id
+        LIMIT 1
+        FOR SHARE OF profile`
+    : `SELECT profile.id, profile.version_number, profile.normalized_profile_hash,
+              profile.raw_profile, profile.raw_profile #>> '{company,timeZone}' AS time_zone
+         FROM public.organization_onboarding onboarding
+         JOIN public.canonical_business_profiles profile
+           ON profile.organization_id = onboarding.organization_id
+          AND profile.id = onboarding.active_business_profile_id
+        WHERE onboarding.organization_id = $1 AND onboarding.status = 'complete'
+          AND profile.is_active = TRUE
+        FOR SHARE OF onboarding, profile`,
     [input.organizationId]
   );
   const row = result.rowCount === 1 ? result.rows[0] : null;

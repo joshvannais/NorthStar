@@ -19,6 +19,7 @@ function fakeAuth(req, _res, next) {
     req.orgId = organizationId;
     req.userRole = 'owner';
     req.user = Object.freeze({ id: userId, organizationId, role: 'owner' });
+    req.authSession = Object.freeze({ id: req.get('X-Session-ID') });
   }
   next();
 }
@@ -41,6 +42,7 @@ function createApp(poolProvider, cacheClient) {
     auth: fakeAuth,
     cache: cacheClient || cache,
     audit: { record: async function () {} },
+    operatorDirectory: async function () { return { canRead: true }; },
   };
   const app = express();
   app.use(function (req, res, next) {

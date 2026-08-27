@@ -1,0 +1,54 @@
+{
+  "chrome-desktop-light": {
+    "engine": "installed Chrome 151",
+    "previews": 14,
+    "approvals": 11,
+    "finalRevision": 12,
+    "targetsShown": 200,
+    "targetsTotal": 207,
+    "targetPages": 9,
+    "staleRestartStatus": 409,
+    "providerCalls": 0,
+    "directPatchAttempts": 0,
+    "pass": true
+  },
+  "chrome-mobile-dark": {
+    "engine": "installed Chrome 151",
+    "previews": 13,
+    "approvals": 10,
+    "finalRevision": 11,
+    "targetsShown": 200,
+    "targetsTotal": 207,
+    "targetPages": 9,
+    "staleRestartStatus": 409,
+    "providerCalls": 0,
+    "directPatchAttempts": 0,
+    "pass": true
+  },
+  "webkit-desktop-dark": {
+    "engine": "actual Playwright WebKit 26.5",
+    "previews": 14,
+    "approvals": 11,
+    "finalRevision": 12,
+    "targetsShown": 200,
+    "targetsTotal": 207,
+    "targetPages": 9,
+    "staleRestartStatus": 409,
+    "providerCalls": 0,
+    "directPatchAttempts": 0,
+    "pass": true
+  },
+  "webkit-mobile-light": {
+    "engine": "actual Playwright WebKit 26.5",
+    "previews": 13,
+    "approvals": 10,
+    "finalRevision": 11,
+    "targetsShown": 200,
+    "targetsTotal": 207,
+    "targetPages": 9,
+    "staleRestartStatus": 409,
+    "providerCalls": 0,
+    "directPatchAttempts": 0,
+    "pass": true
+  }
+}

@@ -13,6 +13,7 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 const { EXTREME_FENCE_SUBTOTAL, canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
+const { loadSchedulingOperatorDirectory } = require('../../src/scheduling/operatorDirectory');
 const {
   READ_MODEL_VERSION,
   createCanonicalRouter,
@@ -27,8 +28,8 @@ const migrationDir = path.resolve(__dirname, '../../migrations');
 const migrations = fs.readdirSync(migrationDir)
   .filter(filename => /^\d{3}_[a-z0-9_]+\.sql$/.test(filename))
   .sort();
-const ORG_A = '00000000-0000-0000-0000-000000000001';
-const USER_A = '00000000-0000-0000-0000-000000000002';
+const ORG_A = '8a000000-0000-4000-8000-000000000001';
+const USER_A = '8b000000-0000-4000-8000-000000000001';
 const ORG_B = '00000000-0000-0000-0000-000000000010';
 const USER_B = '00000000-0000-0000-0000-000000000011';
 const SESSION_A = '00000000-0000-4000-8000-000000000021';
@@ -60,6 +61,18 @@ async function applyMigrations(pool) {
   }
   await pool.query(
     `INSERT INTO organizations (id, name, email)
+     VALUES ($1, 'Organization A', 'org-a-api@m19.test')
+     ON CONFLICT (id) DO NOTHING`,
+    [ORG_A]
+  );
+  await pool.query(
+    `INSERT INTO users (id, organization_id, name, email, password_hash, role, status)
+     VALUES ($1, $2, 'User A', 'user-a-api@m19.test', 'not-used', 'owner', 'active')
+     ON CONFLICT (id) DO NOTHING`,
+    [USER_A, ORG_A]
+  );
+  await pool.query(
+    `INSERT INTO organizations (id, name, email)
      VALUES ($1, 'Organization B', 'org-b-api@m19.test')
      ON CONFLICT (id) DO NOTHING`,
     [ORG_B]
@@ -77,6 +90,17 @@ async function applyMigrations(pool) {
   ]) {
     const session = await provisionDurableSession(pool, { userId, organizationId, role: 'owner', sessionId });
     authSessions.set(userId, session.sessionId);
+  }
+  for (const [userId, organizationId] of [[USER_A, ORG_A], [USER_B, ORG_B]]) {
+    const directory = await loadSchedulingOperatorDirectory(pool, {
+      organizationId,
+      actorUserId: userId,
+      actorAccessRole: 'owner',
+      membershipId: null,
+      authSessionId: authSessions.get(userId),
+      onboardingComplete: false,
+    });
+    expect(directory).toMatchObject({ canRead: true, canMutate: true });
   }
 }
 
@@ -580,6 +604,21 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
 
     const emptyOrganization = '00000000-0000-0000-0000-000000000020';
     const emptyUser = '00000000-0000-0000-0000-000000000021';
+    await pool.query(
+      `INSERT INTO organizations (id,name,email) VALUES ($1,'Empty Organization','empty-org@m19.test')`,
+      [emptyOrganization]
+    );
+    await pool.query(
+      `INSERT INTO users (id,organization_id,name,email,password_hash,role,status)
+       VALUES ($1,$2,'Empty Owner','empty-owner@m19.test','not-used','owner','active')`,
+      [emptyUser, emptyOrganization]
+    );
+    const emptySession = await provisionDurableSession(pool, {
+      organizationId: emptyOrganization,
+      userId: emptyUser,
+      role: 'owner',
+    });
+    authSessions.set(emptyUser, emptySession.sessionId);
     const empty = await Promise.all([
       request(app).get('/api/v1/analytics/trends').set(headers(emptyOrganization, emptyUser, 'empty-session')),
       request(app).get('/api/v1/analytics/by-service').set(headers(emptyOrganization, emptyUser, 'empty-session')),
@@ -646,13 +685,13 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     const first = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
     const second = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
     expect(second.body).toEqual(first.body);
-    expect(queryCount).toBe(2);
+    expect(queryCount).toBe(8);
 
     await request(countedApp).get('/api/v1/canonical/graphs?status=lead').set(headers(ORG_A, USER_A, 'session-a'));
     await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'other-session'));
     await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_B, 'session-a'));
     await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_B, USER_B, 'session-b'));
-    expect(queryCount).toBe(6);
+    expect(queryCount).toBe(21);
 
     const genericKey = cache.buildKey('test-expiry', ORG_A);
     await cache.set(genericKey, { value: 'cached' }, 0.01);
@@ -665,7 +704,7 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     const disabledA = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
     const disabledB = await request(countedApp).get('/api/v1/canonical/graphs').set(headers(ORG_A, USER_A, 'session-a'));
     expect(disabledB.body).toEqual(disabledA.body);
-    expect(queryCount - disabledBefore).toBe(2);
+    expect(queryCount - disabledBefore).toBe(8);
     cache.setEnabled(true);
     cache.clearForTests();
   });

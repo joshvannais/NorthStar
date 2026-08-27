@@ -1,17 +1,20 @@
-.m22-authority-overview { margin: 24px 0; padding: 20px; border: 1px solid var(--border-color, #d7dce5); border-radius: 12px; background: var(--surface, #fff); }
+.m22-authority-overview { min-width: 0; max-width: 100%; box-sizing: border-box; margin: 24px 0; padding: 20px; border: 1px solid var(--border-color, #d7dce5); border-radius: 12px; background: var(--surface, #fff); }
 .m22-authority-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .m22-authority-heading h2, .m22-authority-heading p { margin: 0; }
 .m22-authority-heading p { max-width: 70ch; color: var(--text-secondary, #586174); }
 .m22-category-tabs, .m22-record-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.m22-record-actions { min-width: 0; max-width: 100%; }
 .m22-category-tabs { margin: 16px 0; }
 .m22-category-button, .m22-action-button { min-height: 44px; padding: 8px 12px; border: 1px solid #8aa4df; border-radius: 8px; color: var(--text-primary, #172033); background: var(--surface, #fff); font: inherit; cursor: pointer; }
 .m22-category-button[aria-pressed="true"], .m22-action-button--primary { color: #fff; background: #285ec7; border-color: #285ec7; }
 .m22-category-button:focus-visible, .m22-action-button:focus-visible, .m22-dialog button:focus-visible, .m22-dialog input:focus-visible, .m22-dialog select:focus-visible, .m22-dialog textarea:focus-visible { outline: 3px solid #f5b942; outline-offset: 2px; }
-.m22-overview-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-.m22-overview-record { padding: 14px; border: 1px solid var(--border-color, #d7dce5); border-radius: 10px; }
+.m22-overview-list { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; max-width: 100%; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.m22-overview-record { min-width: 0; max-width: 100%; box-sizing: border-box; padding: 14px; border: 1px solid var(--border-color, #d7dce5); border-radius: 10px; overflow-wrap: anywhere; }
 .m22-overview-record h3, .m22-overview-record p { margin: 0 0 8px; }
+.m22-overview-record h3, .m22-overview-record p, .m22-state-list { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
 .m22-state-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; padding: 0; list-style: none; }
-.m22-state-chip { padding: 4px 8px; border-radius: 999px; border: 1px solid currentColor; font-size: .78rem; }
+.m22-state-chip { min-width: 0; max-width: 100%; padding: 4px 8px; border-radius: 999px; border: 1px solid currentColor; font-size: .78rem; overflow-wrap: anywhere; word-break: break-word; }
+.m22-record-actions .m22-action-button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 .m22-state-chip[data-state="conflicting"], .m22-state-chip[data-state="overdue"] { color: #b42318; }
 .m22-state-chip[data-state="needs_review"], .m22-state-chip[data-state="atRisk"] { color: #955400; }
 .m22-overview-empty { padding: 18px; color: var(--text-secondary, #586174); text-align: center; }

@@ -342,6 +342,89 @@ async function main() {
     await waitRevision(expectedRevision);
     await screenshot('calendar-actions-complete');
 
+    let calendarGeometry = null;
+    if (mobile) {
+      const measureCalendar = label => page.evaluate(currentLabel => {
+        const board = document.getElementById('calendarAuthorityBoard');
+        const main = document.getElementById('mainContent');
+        const rectangle = node => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return {
+            left: rect.left, right: rect.right, width: rect.width, height: rect.height,
+            clientWidth: node.clientWidth, scrollWidth: node.scrollWidth,
+            overflowWrap: style.overflowWrap, wordBreak: style.wordBreak,
+            display: style.display, visibility: style.visibility, pointerEvents: style.pointerEvents,
+          };
+        };
+        const visible = node => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        const records = Array.from(board.querySelectorAll('.m22-overview-record')).map(rectangle);
+        const titles = Array.from(board.querySelectorAll('.m22-overview-record h3')).map(node => ({
+          ...rectangle(node), text: node.textContent,
+          lineHeight: Number.parseFloat(getComputedStyle(node).lineHeight),
+        }));
+        const stateLists = Array.from(board.querySelectorAll('.m22-state-list')).map(rectangle);
+        const actionRows = Array.from(board.querySelectorAll('.m22-record-actions')).map(rectangle);
+        const actions = Array.from(board.querySelectorAll('.m22-action-button')).filter(visible).map(node => ({
+          ...rectangle(node), label: node.textContent.trim(), disabled: node.disabled,
+        }));
+        return {
+          label: currentLabel,
+          viewportWidth: innerWidth,
+          document: {
+            clientWidth: document.documentElement.clientWidth,
+            scrollWidth: document.documentElement.scrollWidth,
+          },
+          main: rectangle(main), board: rectangle(board), records, titles, stateLists, actionRows, actions,
+        };
+      }, label);
+      const assertCalendarReflow = geometry => {
+        const tolerance = 2;
+        assert.ok(geometry.document.scrollWidth <= geometry.document.clientWidth + tolerance, JSON.stringify(geometry));
+        assert.ok(geometry.main.scrollWidth <= geometry.main.clientWidth + tolerance, JSON.stringify(geometry));
+        assert.ok(geometry.board.right <= geometry.viewportWidth + tolerance, JSON.stringify(geometry));
+        assert.ok(geometry.board.scrollWidth <= geometry.board.clientWidth + tolerance, JSON.stringify(geometry));
+        for (const record of geometry.records) {
+          assert.ok(record.left >= geometry.board.left - tolerance && record.right <= geometry.board.right + tolerance,
+            'Calendar authority record remains inside board: ' + JSON.stringify(geometry));
+          assert.ok(record.scrollWidth <= record.clientWidth + tolerance, JSON.stringify(geometry));
+        }
+        for (const title of geometry.titles) {
+          assert.ok(title.scrollWidth <= title.clientWidth + tolerance, JSON.stringify(geometry));
+          assert.strictEqual(title.overflowWrap, 'anywhere', JSON.stringify(title));
+        }
+        for (const region of geometry.stateLists.concat(geometry.actionRows)) {
+          assert.ok(region.scrollWidth <= region.clientWidth + tolerance, JSON.stringify(geometry));
+        }
+        assert.ok(geometry.actions.some(action => action.label === 'Dispatch'), 'Dispatch remains visible: ' + JSON.stringify(geometry));
+        for (const action of geometry.actions) {
+          assert.ok(action.left >= geometry.board.left - tolerance &&
+            action.right <= Math.min(geometry.board.right, geometry.viewportWidth) + tolerance,
+          'Visible action remains in the reflow container: ' + JSON.stringify(action));
+          assert.ok(action.scrollWidth <= action.clientWidth + tolerance, JSON.stringify(action));
+          assert.strictEqual(action.disabled, false, action.label);
+          assert.notStrictEqual(action.pointerEvents, 'none', action.label);
+        }
+        const hostileTitle = geometry.titles.find(title => title.text.includes(HOSTILE));
+        assert.ok(hostileTitle, 'hostile durable title remains visible');
+        assert.ok(hostileTitle.height > hostileTitle.lineHeight,
+          'hostile durable title wraps rather than truncates: ' + JSON.stringify(hostileTitle));
+      };
+      const normal = await measureCalendar('normal-390');
+      assertCalendarReflow(normal);
+      await page.evaluate(() => { document.documentElement.style.fontSize = '400%'; });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const zoom400 = await measureCalendar('zoom-400-percent');
+      assertCalendarReflow(zoom400);
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      calendarGeometry = { normal, zoom400 };
+    }
+
     await page.goto(origin + '/dashboard', { waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: 'Owner and dispatcher overview' }).waitFor();
     await page.getByRole('button', { name: /Unassigned 1/ }).click();
@@ -603,7 +686,7 @@ async function main() {
       : ['assign', 'schedule', 'reschedule', 'dispatch', 'reassign', 'reschedule', 'unassign']);
     assert.strictEqual(errors.length, 0, 'browser page errors: ' + JSON.stringify(errors));
     console.log(JSON.stringify({ matrix, appointmentId, previews: previews.length, approvals: approvals.length,
-      revision: expectedRevision, externalCalls: 0, directPatches: 0, mobileHeading }));
+      revision: expectedRevision, externalCalls: 0, directPatches: 0, mobileHeading, calendarGeometry }));
   } finally {
     if (browser) await browser.close().catch(() => {});
     await closeServer(server).catch(() => {});

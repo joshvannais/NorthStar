@@ -10,8 +10,11 @@ independently accepted, normally merged at
 `192ce709caec2fdd873ab7387182e3a66898fb4a`, automatically deployed, and
 terminally released. Part 2 was independently accepted, normally merged at
 `98bd64733cca439fa28d022ef68457ecd3c5f7ac`, automatically deployed, and
-terminally released. Part 3 is implemented on its narrow writer branch and is
-awaiting exact-head independent audit and release. Parts 4–7 remain planned and
+terminally released. Part 3 was independently accepted, normally merged at
+`76943b124d4978af5cb7eeaecf9fdfc46307ec6e`, automatically deployed, and
+terminally released. Part 4 is corrected on its narrow writer branch after the
+first exact-head audit required two bounded changes; the corrected head awaits
+a different fresh independent audit and release. Parts 5–7 remain planned and
 must not begin before the prior part is independently accepted, normally
 merged, automatically deployed, health-clean, and passively accepted.
 
@@ -168,7 +171,7 @@ it does not claim a new Chrome/WebKit matrix. Existing Part 1 Calendar and
 compatibility behavior remain required regression gates. Physical Safari,
 hosted checks, providers, and credentials/configuration remain unavailable.
 
-### Part 3 — Route implications and Polaris recommendations (implemented; audit pending)
+### Part 3 — Route implications and Polaris recommendations (terminally released)
 
 Create provider-neutral bounded route/travel implications and deterministic,
 evidence-pinned candidate recommendations. Authoritative coordinates may yield
@@ -249,9 +252,11 @@ remain unrelated 404s with their normal anonymous audit signal; genuine origin
 and validated absolute forms retain the 64 KiB/duplicate-key boundary and zero
 durable writes. Raw backslashes, fragments, repeated slash joins, malformed
 percent encodings, and ambiguous authorities fail closed. The corrected head
-still requires a different fresh exact-head independent audit before release.
+passed a different fresh exact-head independent audit before its normal merge,
+sole automatic deployment, exact-revision verification, credential-free health,
+and authorized passive acceptance.
 
-### Part 4 — Human-approved scheduling and dispatch workflow (planned)
+### Part 4 — Human-approved scheduling and dispatch workflow (corrected; re-audit pending)
 
 Mount preview and approve for assign, reassign, unassign, schedule, reschedule,
 and dispatch. A preview expires after 15 minutes and is not a capability.
@@ -259,6 +264,68 @@ Approval pins the exact target, times, current revision, evidence/recommendation
 digest, warnings acknowledged, actor, tenant, and reason. The transaction
 reloads authority and hard constraints. Stale, replayed, duplicate,
 cross-tenant, inactive, out-of-scope, or target-divergent approvals reject.
+
+Part 4 adds migration 035 and two bounded mounted production routes:
+
+- `POST /appointments/:id/mutation-previews` accepts one of exactly `assign`,
+  `reassign`, `unassign`, `schedule`, `reschedule`, or `dispatch` with exact
+  current assignment revision/digest, tenant IANA time zone, target, schedule,
+  appointment compatibility status, and human reason. It reloads current Part 2
+  conflict authority and a bounded Part 3 recommendation result, persists their
+  exact digests and warning/review acknowledgements, expires at 15 minutes, and
+  explicitly returns `grantsMutation: false`.
+- `POST /appointments/:id/mutation-approvals` requires that exact preview,
+  digest, reason, acknowledgements, and a bounded idempotency key. One database
+  transaction locks and reloads current tenant, session, membership, role,
+  subscription, appointment, assignment, target, time evidence, conflicts, and
+  recommendation pins before applying the exact proposal. Expiry, replay,
+  divergent idempotency, stale authority, hard conflicts, or any evidence drift
+  fails closed with zero mutation. Reassign, unassign, and reschedule revoke a
+  prior dispatch; redispatch requires another preview and approval.
+
+The application runtime role cannot insert, update, or delete preview, human
+approval, human audit, human idempotency, or canonical revision evidence. It
+cannot insert/delete canonical assignments and its narrowly necessary assignment
+update privilege is guarded by a transaction-local trigger that requires the
+current immutable human approval row for that exact revision. Internal helper
+routines and evidence triggers are not executable by the runtime role; the two
+schema-qualified `SECURITY DEFINER` entry routines use a fixed trusted search
+path and authenticate the raw CSRF secret against the current durable session.
+The legacy compatibility `PATCH` is uniformly preview-required and cannot
+mutate. Migrations 001–034 remain byte-for-byte protected.
+
+The first exact-head Part 4 audit found that the runtime-executable entry
+routines could be called directly with a forged clear conflict payload despite
+a real approved schedule overlap, and that `transaction_timestamp()` let a
+transaction opened before expiry approve after the live 15-minute boundary.
+The narrow correction does not add a credential or capability system. Both
+entry routines now take the existing tenant mutation lock, and a withheld,
+fixed-search-path database helper independently derives every authoritative
+Part 2 hard class from the same locked workforce, skill, location,
+availability, crew, assignment, and approved-schedule rows. Preview hard
+evidence must exactly match that trusted result; approval recomputes it and
+rejects any current hard conflict. Actor/session/subscription authority and
+preview expiry are rechecked with `clock_timestamp()` only after the required
+locks, and the same live decision instant is recorded on all durable approval
+evidence. Mounted regressions repeat the ordinary-runtime forgery, a transaction
+held across expiry, and a lock wait crossing expiry, each with zero mutation or
+approval/audit/idempotency side effects.
+
+Writer evidence uses fresh role-separated PostgreSQL 18.4 UTC and mounted
+production modules. It covers all six actions, person/unassigned targets,
+independent schedule/dispatch states, post-dispatch revocation, exact revisions
+and digests, the controlled inclusive 15-minute expiry boundary, exact warning
+and review acknowledgement, no hard-conflict override, idempotent retry and
+collision, replay, concurrency, rollback, tenant/session/member/role/subscription
+changes, target/conflict/recommendation divergence, legacy/direct-SQL/internal
+helper/body-boundary bypasses, fresh and supported 001–034 upgrades, restart and
+checksum provenance, and the complete available compatibility corpus. Part 3
+remains non-capability and makes zero provider calls. No UI or browser-executed
+code changes in Part 4, so a new browser matrix is not applicable; visual
+approval remains a separate truth. Hosted checks, physical Safari/devices,
+providers, credentials/configuration, production migration/deployment, and the
+independent exact-head verdict remain unavailable or pending until their
+separate gates.
 
 ### Part 5 — Owner and dispatcher experiences (planned)
 

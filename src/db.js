@@ -973,6 +973,99 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I',
         runtime_role
       );
+      IF pg_catalog.to_regclass('public.canonical_schedule_mutation_previews') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE INSERT, DELETE ON TABLE public.canonical_schedule_assignments FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE INSERT, UPDATE, DELETE ON TABLE public.canonical_schedule_approvals, public.canonical_schedule_assignment_revisions, public.canonical_schedule_audit_events, public.canonical_schedule_idempotency FROM %I',
+          runtime_role
+        );
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_schedule_mutation_previews') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE INSERT, UPDATE, DELETE ON TABLE public.canonical_schedule_mutation_previews, public.canonical_schedule_human_approvals, public.canonical_schedule_human_audit_events, public.canonical_schedule_human_idempotency FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_immutable_evidence() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_reason_valid(text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_json(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_entries(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_normalize_digest_list(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_preview_request_digest(uuid,uuid,uuid,uuid,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_approval_request_digest(uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,text,text) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_schedule_contract_valid(timestamp with time zone,timestamp with time zone,jsonb,text) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_bounded_entries(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_entry_digests(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_unique_local_instant(timestamp without time zone,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_working_hours_authority(jsonb,timestamp with time zone,timestamp with time zone,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_review_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_guard_assignment() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_guard_revision() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_guard_appointment_write() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_create_for_appointment() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_target_current(uuid,text,uuid) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_preview_digest(uuid,uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,text,text,text,text,text,jsonb,jsonb,text,text,text,timestamp with time zone,timestamp with time zone) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_validate_human_approval_completion() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_schedule_create_mutation_preview(uuid,uuid,uuid,text,uuid,text,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text,jsonb,text,jsonb,jsonb,text,text,text) TO %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_schedule_apply_mutation_approval(uuid,uuid,uuid,text,uuid,text,uuid,text,jsonb,jsonb,text,text,text,text,text) TO %I',
+          runtime_role
+        );
+      END IF;
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role
@@ -1039,7 +1132,70 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
          WHERE namespace.nspname = 'public'
            AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
-           AND relation.relname <> '_migrations') AS table_dml,
+           AND relation.relname <> '_migrations'
+           AND relation.relname NOT IN (
+             'canonical_schedule_assignments',
+             'canonical_schedule_approvals',
+             'canonical_schedule_assignment_revisions',
+             'canonical_schedule_audit_events',
+             'canonical_schedule_idempotency',
+             'canonical_schedule_mutation_previews',
+             'canonical_schedule_human_approvals',
+             'canonical_schedule_human_audit_events',
+             'canonical_schedule_human_idempotency'
+           )) AS table_dml,
+       (to_regclass('public.canonical_schedule_mutation_previews') IS NULL OR COALESCE((SELECT bool_and(
+          has_table_privilege($1, relation.oid, 'SELECT')
+          AND NOT has_table_privilege($1, relation.oid, 'INSERT')
+          AND NOT has_table_privilege($1, relation.oid, 'UPDATE')
+          AND NOT has_table_privilege($1, relation.oid, 'DELETE')
+        )
+          FROM pg_catalog.pg_class relation
+          JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+         WHERE namespace.nspname = 'public'
+           AND relation.relkind IN ('r', 'p')
+           AND relation.relname IN (
+             'canonical_schedule_approvals',
+             'canonical_schedule_assignment_revisions',
+             'canonical_schedule_audit_events',
+             'canonical_schedule_idempotency',
+             'canonical_schedule_mutation_previews',
+             'canonical_schedule_human_approvals',
+             'canonical_schedule_human_audit_events',
+             'canonical_schedule_human_idempotency'
+           )), TRUE)) AS schedule_evidence_read_only,
+       (to_regclass('public.canonical_schedule_mutation_previews') IS NULL OR (
+         has_table_privilege($1, 'public.canonical_schedule_assignments', 'SELECT')
+         AND has_table_privilege($1, 'public.canonical_schedule_assignments', 'UPDATE')
+         AND NOT has_table_privilege($1, 'public.canonical_schedule_assignments', 'INSERT')
+         AND NOT has_table_privilege($1, 'public.canonical_schedule_assignments', 'DELETE')))
+         AS schedule_assignment_guarded_dml,
+       (to_regprocedure('public.canonical_schedule_create_mutation_preview(uuid,uuid,uuid,text,uuid,text,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text,jsonb,text,jsonb,jsonb,text,text,text)') IS NULL OR has_function_privilege($1,
+         'public.canonical_schedule_create_mutation_preview(uuid,uuid,uuid,text,uuid,text,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text,jsonb,text,jsonb,jsonb,text,text,text)',
+         'EXECUTE')) AS preview_entry_execute,
+       (to_regprocedure('public.canonical_schedule_apply_mutation_approval(uuid,uuid,uuid,text,uuid,text,uuid,text,jsonb,jsonb,text,text,text,text,text)') IS NULL OR has_function_privilege($1,
+         'public.canonical_schedule_apply_mutation_approval(uuid,uuid,uuid,text,uuid,text,uuid,text,jsonb,jsonb,text,text,text,text,text)',
+         'EXECUTE')) AS approval_entry_execute,
+        (to_regprocedure('public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_reason_valid(text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_reason_valid(text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_normalize_digest_list(jsonb)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_normalize_digest_list(jsonb)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_preview_request_digest(uuid,uuid,uuid,uuid,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_preview_request_digest(uuid,uuid,uuid,uuid,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_approval_request_digest(uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,text,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_approval_request_digest(uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,text,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_schedule_contract_valid(timestamp with time zone,timestamp with time zone,jsonb,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_schedule_contract_valid(timestamp with time zone,timestamp with time zone,jsonb,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_target_current(uuid,text,uuid)') IS NULL OR
+          NOT has_function_privilege($1,'public.canonical_schedule_part4_target_current(uuid,text,uuid)','EXECUTE'))
+         AND (to_regclass('public.canonical_schedule_mutation_previews') IS NULL OR
+          (NOT has_function_privilege($1,'public.canonical_schedule_guard_assignment()','EXECUTE')
+           AND NOT has_function_privilege($1,'public.canonical_schedule_create_for_appointment()','EXECUTE')))
+         AS schedule_helpers_withheld,
        (SELECT bool_and(
           NOT has_table_privilege($1, relation.oid, 'TRUNCATE')
           AND NOT has_table_privilege($1, relation.oid, 'REFERENCES')
@@ -1062,9 +1218,13 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   if (!runtimePrivileges.schema_usage || runtimePrivileges.schema_create ||
       runtimePrivileges.replication_role_set ||
       runtimePrivileges.database_create || !runtimePrivileges.table_dml ||
+      !runtimePrivileges.schedule_evidence_read_only ||
+      !runtimePrivileges.schedule_assignment_guarded_dml ||
+      !runtimePrivileges.preview_entry_execute || !runtimePrivileges.approval_entry_execute ||
+      !runtimePrivileges.schedule_helpers_withheld ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {
-    throw new Error('Runtime database role privilege verification failed');
+    throw new Error(`Runtime database role privilege verification failed: ${JSON.stringify(runtimePrivileges)}`);
   }
 }
 

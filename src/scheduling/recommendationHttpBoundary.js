@@ -283,6 +283,7 @@ module.exports = {
   isRecommendationRequest,
   isZeroDurableWriteRecommendation,
   parseUnambiguousJson,
+  rawRequestPath,
   recommendationBodyBoundary,
   requireRecommendationBodyBoundary,
 };

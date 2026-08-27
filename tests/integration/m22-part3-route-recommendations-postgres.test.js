@@ -187,30 +187,49 @@ async function seedAppointment(pool, input) {
 
 async function assignmentPins(pool, appointmentId, organizationId = IDS.organization) {
   const row = (await pool.query(
-    `SELECT id,revision,rtrim(canonical_digest) AS digest
+    `SELECT id,revision,rtrim(canonical_digest) AS digest,target_state,
+            workforce_profile_id,workforce_crew_id,appointment_status
        FROM public.canonical_schedule_assignments
       WHERE organization_id=$1 AND appointment_id=$2`,
     [organizationId, appointmentId]
   )).rows[0];
-  return { id: row.id, expectedRevision: Number(row.revision), expectedDigest: row.digest };
+  return {
+    id: row.id, expectedRevision: Number(row.revision), expectedDigest: row.digest,
+    target: row.target_state === 'unassigned' ? { kind: 'unassigned', id: null }
+      : row.workforce_profile_id ? { kind: 'profile', id: row.workforce_profile_id }
+        : { kind: 'crew', id: row.workforce_crew_id },
+    appointmentStatus: row.appointment_status,
+  };
 }
 
 async function scheduleThroughMountedRoute(app, session, appointmentId, start, end, key) {
   const pins = await assignmentPins(app.locals.m22Pool, appointmentId);
-  const response = await request(app)
-    .patch(`/api/v1/canonical/appointments/${appointmentId}`)
+  const reason = `Human approved exact Part 3 schedule. ${HOSTILE}`;
+  const preview = await request(app)
+    .post(`/api/v1/canonical/appointments/${appointmentId}/mutation-previews`)
     .set(session.headers)
-    .set('Idempotency-Key', key)
     .send({
       expectedRevision: pins.expectedRevision,
       expectedDigest: pins.expectedDigest,
       expectedTimeZone: 'America/New_York',
-      action: 'calendar_edit',
-      reason: `Human approved exact Part 3 schedule. ${HOSTILE}`,
+      action: 'schedule',
+      target: pins.target,
+      reason,
       scheduledStart: start,
       scheduledEnd: end,
-      status: 'scheduled',
+      appointmentStatus: pins.appointmentStatus,
   });
+  expect(preview.status).toBe(201);
+  const response = await request(app)
+    .post(`/api/v1/canonical/appointments/${appointmentId}/mutation-approvals`)
+    .set(session.headers).set('Idempotency-Key', key)
+    .send({
+      previewId: preview.body.data.id,
+      previewDigest: preview.body.data.previewDigest,
+      acknowledgedWarningDigests: preview.body.data.warningDigests,
+      acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests,
+      reason,
+    });
   expect(response.status).toBe(200);
   return {
     expectedRevision: response.body.data.scheduleAuthority.revision,
@@ -506,7 +525,7 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
     }
   }, 180000);
 
-  test('uses fresh PostgreSQL 18 UTC and preserves exact released migrations 001-034 with no Part 3 schema', async () => {
+  test('uses fresh PostgreSQL 18 UTC and preserves exact released migrations 001-035 with no durable Part 3 recommendation schema', async () => {
     const identity = (await runtimePool.query(
       `SELECT current_setting('server_version') AS version,current_setting('TimeZone') AS timezone,
               current_user AS runtime_role,current_setting('session_replication_role') AS replication_role`
@@ -515,7 +534,7 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
       version: expect.stringMatching(/^18\./), timezone: 'UTC', runtime_role: roles.runtimeRole, replication_role: 'origin',
     });
     const files = fs.readdirSync(MIGRATIONS).filter(name => /^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
-    expect(files.at(-1)).toBe('034_schedule_availability_conflict_authority.sql');
+    expect(files.at(-1)).toBe('035_schedule_human_preview_approval.sql');
     const ledgers = (await migrationPool.query('SELECT filename,checksum FROM public._migrations ORDER BY filename')).rows;
     expect(ledgers).toHaveLength(files.length);
     for (const row of ledgers) {

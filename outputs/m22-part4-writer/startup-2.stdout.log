@@ -1,0 +1,35 @@
+[Cache] Redis is not required; optional in-process acceleration is enabled
+
+╔══════════════════════════════════════════════╗
+║      Northstar Solutions — Platform v1.0     ║
+╠══════════════════════════════════════════════╣
+║  🌐  http://localhost:55555                ║
+║  🔐  Auth:        HttpOnly session cookies       ║
+║  🗄️  Database:    ✓ PostgreSQL                   ║
+║  📞  Retell AI:   ○ Needs API Key                ║
+║  📱  Twilio SMS:  ○ Needs API Key                ║
+╚══════════════════════════════════════════════╝
+
+📍 Pages:
+  http://localhost:55555/               → Landing page
+  http://localhost:55555/login           → Sign in
+  http://localhost:55555/signup          → Sign up (14-day free trial)
+  http://localhost:55555/dashboard       → Contractor dashboard
+  http://localhost:55555/dashboard/integrations → Integrations
+  http://localhost:55555/admin           → Admin panel
+
+📍 Auth API:
+  POST http://localhost:55555/api/auth/signup          → Queues durable verification delivery
+  POST http://localhost:55555/api/auth/login           → Sign in
+  POST http://localhost:55555/api/auth/refresh         → Refresh token
+  POST http://localhost:55555/api/auth/logout          → Revoke session
+  GET  http://localhost:55555/api/auth/me              → Current user
+
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '375992c9-789b-4be9-8356-26d84da9eab8',
+  methodClass: 'GET',
+  durationMs: 6,
+  statusCode: 200
+}

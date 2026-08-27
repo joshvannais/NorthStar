@@ -682,7 +682,7 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(response.body.data.items[0].snapshotDigest).toBe(graphA.body.snapshotDigest);
   });
 
-  test('identifier mutation is tenant/session isolated and persists a correlated audit row', async () => {
+  test('legacy identifier mutation is uniformly preview-required and leaves authority unchanged', async () => {
     const auditRecorder = {
       record: async function (entry) {
         await pool.query(
@@ -706,13 +706,15 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
       .patch('/api/v1/canonical/appointments/' + appointmentId)
       .set(headers(ORG_B, USER_B, 'session-a'))
       .send({ status: 'scheduled', scheduledStart: '2026-07-28T13:00:00.000Z', scheduledEnd: '2026-07-28T14:00:00.000Z' });
-    expect(crossTenant.status).toBe(404);
+    expect(crossTenant.status).toBe(428);
+    expect(crossTenant.body.error.code).toBe('M22_PREVIEW_REQUIRED');
 
     const wrongSession = await request(mutationApp)
       .patch('/api/v1/canonical/appointments/' + appointmentId)
       .set(headers(ORG_A, USER_A, 'wrong-session'))
       .send({ status: 'scheduled' });
-    expect(wrongSession.status).toBe(404);
+    expect(wrongSession.status).toBe(428);
+    expect(wrongSession.body.error.code).toBe('M22_PREVIEW_REQUIRED');
 
     const updated = await request(mutationApp)
       .patch('/api/v1/canonical/appointments/' + appointmentId)
@@ -727,23 +729,21 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
         expectedTimeZone: 'UTC',
         action: 'calendar_edit',
       });
-    expect(updated.status).toBe(200);
-    expect(updated.body.data.status).toBe('scheduled');
-    expect(updated.body.data.scheduleAuthority).toMatchObject({ revision: 2, scheduleState: 'scheduled' });
+    expect(updated.status).toBe(428);
+    expect(updated.body.error.code).toBe('M22_PREVIEW_REQUIRED');
+    const unchanged = (await pool.query(
+      `SELECT revision::int AS revision,rtrim(canonical_digest) AS digest
+         FROM canonical_schedule_assignments
+        WHERE organization_id = $1 AND appointment_id = $2`,
+      [ORG_A, appointmentId]
+    )).rows[0];
+    expect(unchanged).toEqual({ revision: Number(scheduleAuthority.revision), digest: scheduleAuthority.canonical_digest.trim() });
     const auditRow = await pool.query(
       `SELECT organization_id, user_id, action, entity_type, entity_id, details
          FROM audit_logs WHERE entity_type = 'canonical_appointment' AND entity_id = $1`,
       [appointmentId]
     );
-    expect(auditRow.rows).toHaveLength(1);
-    expect(auditRow.rows[0]).toMatchObject({
-      organization_id: ORG_A,
-      user_id: USER_A,
-      action: 'PATCH 200',
-      entity_type: 'canonical_appointment',
-      entity_id: appointmentId,
-    });
-    expect(auditRow.rows[0].details.requestId).toMatch(/^request-/);
+    expect(auditRow.rows).toHaveLength(0);
   });
 
   test('required PostgreSQL outage returns 503 instead of empty success', async () => {

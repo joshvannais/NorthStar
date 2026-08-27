@@ -11,8 +11,16 @@ const {
 const { requirePermission } = require('../auth/permissions');
 const { sha256, stableStringify, stableValue } = require('../services/businessProfileAdapter');
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
-const { normalizeScheduleMutation } = require('../scheduling/contract');
-const { scheduleAuthority, updateAppointmentSchedule } = require('../scheduling/repository');
+const { scheduleAuthority } = require('../scheduling/repository');
+const {
+  normalizeMutationApproval,
+  normalizeMutationPreview,
+} = require('../scheduling/approvalContract');
+const {
+  approveMutation,
+  createMutationPreview,
+} = require('../scheduling/approvalRepository');
+const { requireApprovalBodyBoundary } = require('../scheduling/approvalHttpBoundary');
 const {
   normalizeAvailabilityMutation,
   normalizeConflictEvaluation,
@@ -880,62 +888,30 @@ function createCanonicalRouter(options) {
       }
     });
 
-  router.patch('/appointments/:id', dependencies.onboardedAuth, requireCanonicalContext, dependencies.permission('calendar', 'update'), express.json(), async function (req, res) {
+  router.post('/appointments/:id/mutation-previews', requireApprovalBodyBoundary,
+    dependencies.onboardedAuth, requireCanonicalContext,
+    dependencies.permission('calendar', 'update'), async function (req, res) {
     const context = requestContext(req);
     if (!UUID.test(req.params.id)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
     try {
       const pool = resolvePool(dependencies.poolProvider);
-      const scoped = await pool.query(
-        `SELECT 1
-           FROM public.canonical_schedule_assignments assignment
-           JOIN public.canonical_appointments appointment
-             ON appointment.organization_id = assignment.organization_id
-            AND appointment.id = assignment.appointment_id
-           JOIN public.canonical_transcripts transcript
-             ON transcript.organization_id = appointment.organization_id
-            AND transcript.operation_id = appointment.operation_id
-          WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2
-            AND (transcript.source NOT IN ('simulation', 'demo')
-              OR ($3::text IS NOT NULL AND transcript.external_call_id = $3 || ':call'))`,
-        [context.organizationId, req.params.id, context.explicitSession]
-      );
-      if (scoped.rowCount !== 1) {
-        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
-      }
-      const mutation = normalizeScheduleMutation({
+      const mutation = normalizeMutationPreview({
         organizationId: context.organizationId,
         actorUserId: context.userId,
         actorAccessRole: req.userRole || req.tenantContext.role,
         authSessionId: req.authSession && req.authSession.id,
         appointmentId: req.params.id,
-        explicitSession: context.explicitSession,
-        idempotencyKey: req.get('Idempotency-Key'),
         body: req.body,
       });
-      const updated = await updateAppointmentSchedule(pool, mutation);
-      if (!updated.replayed) try {
-        await dependencies.audit.record({
-          organizationId: context.organizationId,
-          userId: context.userId,
-          actorLabel: 'authenticated',
-          actorRole: req.userRole || req.tenantContext.role,
-          action: 'PATCH 200',
-          entityType: 'canonical_appointment',
-          entityId: req.params.id,
-          beforeState: updated.audit.before,
-          afterState: updated.audit.after,
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent'),
-          correlationId: req.requestId,
-        });
-      } catch (_auditError) {
-        console.warn('[Audit] Persistence warning:', {
-          requestId: req.requestId || 'unavailable',
-          event: 'audit_persistence_failed',
-        });
-      }
-      if (updated.replayed) res.set('Idempotency-Replayed', 'true');
-      return res.status(updated.status).json(updated.body);
+      const preview = await createMutationPreview(pool, {
+        ...mutation,
+        organizationId: context.organizationId,
+        actorUserId: context.userId,
+        actorAccessRole: req.userRole || req.tenantContext.role,
+        authSessionId: req.authSession && req.authSession.id,
+        csrfToken: req.get('X-CSRF-Token'),
+      });
+      return res.status(preview.status).json(preview.body);
     } catch (error) {
       if (error && error.status) {
         return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
@@ -943,6 +919,50 @@ function createCanonicalRouter(options) {
       return sendPersistenceUnavailable(res, req);
     }
   });
+
+  router.post('/appointments/:id/mutation-approvals', requireApprovalBodyBoundary,
+    dependencies.onboardedAuth, requireCanonicalContext,
+    dependencies.permission('calendar', 'update'), async function (req, res) {
+      const context = requestContext(req);
+      if (!UUID.test(req.params.id)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment not found.' } });
+      try {
+        const mutation = normalizeMutationApproval({
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          actorAccessRole: req.userRole || req.tenantContext.role,
+          authSessionId: req.authSession && req.authSession.id,
+          appointmentId: req.params.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+          body: req.body,
+        });
+        const approved = await approveMutation(resolvePool(dependencies.poolProvider), {
+          ...mutation,
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          actorAccessRole: req.userRole || req.tenantContext.role,
+          authSessionId: req.authSession && req.authSession.id,
+          csrfToken: req.get('X-CSRF-Token'),
+        });
+        if (approved.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(approved.status).json(approved.body);
+      } catch (error) {
+        if (error && error.status) {
+          return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
+        }
+        return sendPersistenceUnavailable(res, req);
+      }
+    });
+
+  router.patch('/appointments/:id', dependencies.onboardedAuth, requireCanonicalContext,
+    dependencies.permission('calendar', 'update'), function (_req, res) {
+      return res.status(428).json({
+        success: false,
+        error: {
+          code: 'M22_PREVIEW_REQUIRED',
+          message: 'Schedule and dispatch mutations require a current 15-minute human preview and separate approval.',
+        },
+      });
+    });
 
   router.put('/integrations/:provider', dependencies.externalAuth, requireCanonicalContext, dependencies.permission('integrations', 'update'), express.json(), async function (req, res) {
     const context = requestContext(req);

@@ -12,8 +12,9 @@ terminally released. Part 2 was independently accepted, normally merged at
 `98bd64733cca439fa28d022ef68457ecd3c5f7ac`, automatically deployed, and
 terminally released. Part 3 was independently accepted, normally merged at
 `76943b124d4978af5cb7eeaecf9fdfc46307ec6e`, automatically deployed, and
-terminally released. Part 4 is implemented on its narrow writer branch and is
-awaiting exact-head independent audit and release. Parts 5–7 remain planned and
+terminally released. Part 4 is corrected on its narrow writer branch after the
+first exact-head audit required two bounded changes; the corrected head awaits
+a different fresh independent audit and release. Parts 5–7 remain planned and
 must not begin before the prior part is independently accepted, normally
 merged, automatically deployed, health-clean, and passively accepted.
 
@@ -255,7 +256,7 @@ passed a different fresh exact-head independent audit before its normal merge,
 sole automatic deployment, exact-revision verification, credential-free health,
 and authorized passive acceptance.
 
-### Part 4 — Human-approved scheduling and dispatch workflow (implemented; audit pending)
+### Part 4 — Human-approved scheduling and dispatch workflow (corrected; re-audit pending)
 
 Mount preview and approve for assign, reassign, unassign, schedule, reschedule,
 and dispatch. A preview expires after 15 minutes and is not a capability.
@@ -292,6 +293,23 @@ schema-qualified `SECURITY DEFINER` entry routines use a fixed trusted search
 path and authenticate the raw CSRF secret against the current durable session.
 The legacy compatibility `PATCH` is uniformly preview-required and cannot
 mutate. Migrations 001–034 remain byte-for-byte protected.
+
+The first exact-head Part 4 audit found that the runtime-executable entry
+routines could be called directly with a forged clear conflict payload despite
+a real approved schedule overlap, and that `transaction_timestamp()` let a
+transaction opened before expiry approve after the live 15-minute boundary.
+The narrow correction does not add a credential or capability system. Both
+entry routines now take the existing tenant mutation lock, and a withheld,
+fixed-search-path database helper independently derives every authoritative
+Part 2 hard class from the same locked workforce, skill, location,
+availability, crew, assignment, and approved-schedule rows. Preview hard
+evidence must exactly match that trusted result; approval recomputes it and
+rejects any current hard conflict. Actor/session/subscription authority and
+preview expiry are rechecked with `clock_timestamp()` only after the required
+locks, and the same live decision instant is recorded on all durable approval
+evidence. Mounted regressions repeat the ordinary-runtime forgery, a transaction
+held across expiry, and a lock wait crossing expiry, each with zero mutation or
+approval/audit/idempotency side effects.
 
 Writer evidence uses fresh role-separated PostgreSQL 18.4 UTC and mounted
 production modules. It covers all six actions, person/unassigned targets,

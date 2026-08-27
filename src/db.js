@@ -991,6 +991,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_immutable_evidence() FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_schedule_guard_assignment() FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(
@@ -1134,9 +1137,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        (to_regprocedure('public.canonical_schedule_apply_mutation_approval(uuid,uuid,uuid,text,uuid,text,uuid,text,jsonb,jsonb,text,text,text,text,text)') IS NULL OR has_function_privilege($1,
          'public.canonical_schedule_apply_mutation_approval(uuid,uuid,uuid,text,uuid,text,uuid,text,jsonb,jsonb,text,text,text,text,text)',
          'EXECUTE')) AS approval_entry_execute,
-       (to_regprocedure('public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)') IS NULL OR
-          NOT has_function_privilege($1,'public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)','EXECUTE'))
-         AND (to_regprocedure('public.canonical_schedule_part4_target_current(uuid,text,uuid)') IS NULL OR
+        (to_regprocedure('public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_target_current(uuid,text,uuid)') IS NULL OR
           NOT has_function_privilege($1,'public.canonical_schedule_part4_target_current(uuid,text,uuid)','EXECUTE'))
          AND (to_regclass('public.canonical_schedule_mutation_previews') IS NULL OR
           (NOT has_function_privilege($1,'public.canonical_schedule_guard_assignment()','EXECUTE')

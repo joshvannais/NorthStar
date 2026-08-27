@@ -25,6 +25,13 @@ const IDS = Object.freeze({
   crew: 'e3100000-0000-4000-8000-000000000001',
   appointment: 'e5100000-0000-4000-8000-000000000001',
   otherAppointment: 'e5100000-0000-4000-8000-000000000002',
+  conflictAppointment: 'e5100000-0000-4000-8000-000000000003',
+  overlapAppointment: 'e5100000-0000-4000-8000-000000000004',
+  expiryAppointment: 'e5100000-0000-4000-8000-000000000005',
+  lockWaitAppointment: 'e5100000-0000-4000-8000-000000000006',
+  hardMatrixAppointment: 'e5100000-0000-4000-8000-000000000007',
+  crewHardAppointment: 'e5100000-0000-4000-8000-000000000008',
+  invalidTargetAppointment: 'e5100000-0000-4000-8000-000000000009',
 });
 
 function quoteIdentifier(value) {
@@ -148,13 +155,13 @@ async function seedAppointment(pool, organizationId, appointmentId, source = 'ma
 
 async function pins(pool, organizationId = IDS.organization, appointmentId = IDS.appointment) {
   const row = (await pool.query(
-    `SELECT revision,rtrim(canonical_digest) AS digest,target_state,workforce_profile_id,
+    `SELECT id,revision,rtrim(canonical_digest) AS digest,target_state,workforce_profile_id,
             workforce_crew_id,schedule_state,dispatch_state,scheduled_start,scheduled_end,appointment_status
        FROM public.canonical_schedule_assignments WHERE organization_id=$1 AND appointment_id=$2`,
     [organizationId, appointmentId]
   )).rows[0];
   return {
-    revision: Number(row.revision), digest: row.digest,
+    id: row.id, revision: Number(row.revision), digest: row.digest,
     target: row.target_state === 'unassigned' ? { kind: 'unassigned', id: null }
       : row.workforce_profile_id ? { kind: 'profile', id: row.workforce_profile_id }
         : { kind: 'crew', id: row.workforce_crew_id },
@@ -352,6 +359,90 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     return { before, preview: previewResponse.body.data, approvalBody, approval: approvalResponse.body.data, key };
   }
 
+  async function previewAppointment(appointmentId, action, input = {}, session = sessions.owner) {
+    const before = await pins(runtimePool, IDS.organization, appointmentId);
+    const reason = input.reason || `${action} exact human preview for ${appointmentId}.`;
+    const target = input.target || before.target;
+    const scheduledStart = Object.prototype.hasOwnProperty.call(input, 'scheduledStart')
+      ? input.scheduledStart : explicitOffset(before.scheduledStart);
+    const scheduledEnd = Object.prototype.hasOwnProperty.call(input, 'scheduledEnd')
+      ? input.scheduledEnd : explicitOffset(before.scheduledEnd);
+    const response = await request(app)
+      .post(`/api/v1/canonical/appointments/${appointmentId}/mutation-previews`)
+      .set(session.headers).send({
+        expectedRevision: before.revision, expectedDigest: before.digest,
+        expectedTimeZone: 'America/New_York', action, target, scheduledStart, scheduledEnd,
+        appointmentStatus: before.appointmentStatus, reason,
+      });
+    return { before, reason, response };
+  }
+
+  async function approveAppointment(appointmentId, created, key, session = sessions.owner) {
+    return request(app)
+      .post(`/api/v1/canonical/appointments/${appointmentId}/mutation-approvals`)
+      .set(session.headers).set('Idempotency-Key', key).send({
+        previewId: created.response.body.data.id,
+        previewDigest: created.response.body.data.previewDigest,
+        acknowledgedWarningDigests: created.response.body.data.warningDigests,
+        acknowledgedReviewReasonDigests: created.response.body.data.reviewReasonDigests,
+        reason: created.reason,
+      });
+  }
+
+  async function previewAndApproveAppointment(appointmentId, action, input, key) {
+    const created = await previewAppointment(appointmentId, action, input);
+    expect(created.response.status).toBe(201);
+    const approved = await approveAppointment(appointmentId, created, key);
+    expect(approved.status).toBe(200);
+    return { ...created, approved };
+  }
+
+  async function movePreviewExpiry(previewId, interval) {
+    await migrationPool.query(
+      'ALTER TABLE public.canonical_schedule_mutation_previews DISABLE TRIGGER canonical_schedule_previews_immutable'
+    );
+    try {
+      return (await migrationPool.query(
+        `WITH fixed AS (SELECT clock_timestamp() AS now_value)
+         UPDATE public.canonical_schedule_mutation_previews preview SET
+           created_at=fixed.now_value-INTERVAL '15 minutes'+$3::interval,
+           expires_at=fixed.now_value+$3::interval,
+           preview_digest=public.canonical_schedule_part4_preview_digest(
+             preview.id,preview.organization_id,preview.assignment_id,preview.appointment_id,
+             preview.actor_user_id,preview.auth_session_id,preview.expected_revision,rtrim(preview.expected_digest),
+             preview.expected_time_zone,preview.action_code,preview.proposed_target_kind,preview.proposed_target_id,
+             preview.proposed_scheduled_start,preview.proposed_scheduled_end,preview.proposed_schedule_state,
+             preview.proposed_dispatch_state,preview.proposed_appointment_status,preview.reason,
+             rtrim(preview.conflict_digest),preview.warning_digests,preview.review_reason_digests,
+             rtrim(preview.recommendation_digest),rtrim(preview.recommendation_authority_digest),
+             rtrim(preview.request_digest),fixed.now_value-INTERVAL '15 minutes'+$3::interval,
+             fixed.now_value+$3::interval)
+         FROM fixed WHERE preview.organization_id=$1 AND preview.id=$2
+         RETURNING rtrim(preview.preview_digest) AS preview_digest,preview.expires_at,
+                   rtrim(preview.conflict_digest) AS conflict_digest,
+                   rtrim(preview.recommendation_authority_digest) AS recommendation_authority_digest,
+                   preview.warning_digests,preview.review_reason_digests,preview.reason`,
+        [IDS.organization, previewId, interval]
+      )).rows[0];
+    } finally {
+      await migrationPool.query(
+        'ALTER TABLE public.canonical_schedule_mutation_previews ENABLE TRIGGER canonical_schedule_previews_immutable'
+      );
+    }
+  }
+
+  async function directApproval(client, appointmentId, previewId, evidence, suffix) {
+    return client.query(
+      `SELECT public.canonical_schedule_apply_mutation_approval(
+         $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::uuid,$7::text,
+         $8::jsonb,$9::jsonb,$10::text,$11::text,$12::text,$13::text,$14::text) AS response`,
+      [IDS.organization, appointmentId, IDS.owner, sessions.owner.sessionId, sessions.owner.csrfToken,
+        previewId, evidence.preview_digest, JSON.stringify(evidence.warning_digests),
+        JSON.stringify(evidence.review_reason_digests), evidence.reason, evidence.conflict_digest,
+        evidence.recommendation_authority_digest, sha256(`idempotency:${suffix}`), sha256(`request:${suffix}`)]
+    );
+  }
+
   test('applies all six mutation types, exact revisions, and post-dispatch revocation', async () => {
     const assigned = await previewAndApprove('assign', { target: { kind: 'crew', id: IDS.crew } });
     expect(assigned.approval.scheduleAuthority).toMatchObject({ targetState: 'assigned', workforceCrewId: IDS.crew, revision: 2 });
@@ -471,6 +562,11 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     await expect(runtimePool.query(
       `SELECT public.canonical_schedule_part4_actor_authority($1,$2,'owner',$3,'forged','America/New_York')`,
       [IDS.organization, IDS.owner, sessions.owner.sessionId]
+    )).rejects.toMatchObject({ code: '42501' });
+    await expect(runtimePool.query(
+      `SELECT public.canonical_schedule_part4_hard_authority(
+         $1,$2,'unassigned',NULL,NULL,NULL)`,
+      [IDS.organization, before.id]
     )).rejects.toMatchObject({ code: '42501' });
     await expect(runtimePool.query(
       `UPDATE public.canonical_appointments SET scheduled_start=NOW(),scheduled_end=NOW()+INTERVAL '1 hour'
@@ -728,4 +824,260 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect(rejected.body.error.code).toBe('M22_PREVIEW_EXPIRED');
     expect((await pins(runtimePool)).revision).toBe(before.revision);
   });
+
+  test('matches trusted SQL hard classes for skills, location, availability, inactive crew and invalid targets', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.hardMatrixAppointment);
+    await previewAndApproveAppointment(IDS.hardMatrixAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Assign only; hard schedule evidence is evaluated separately.',
+    }, 'm22-part4-hard-matrix-assign-0001');
+    await runtimePool.query(
+      `UPDATE public.canonical_opportunities opportunity SET
+         service_type='plumbing',job_scope=jsonb_build_object('locationId','headquarters')
+        FROM public.canonical_appointments appointment
+       WHERE appointment.organization_id=opportunity.organization_id
+         AND appointment.opportunity_id=opportunity.id
+         AND appointment.organization_id=$1 AND appointment.id=$2`,
+      [IDS.organization, IDS.hardMatrixAppointment]
+    );
+    await runtimePool.query(
+      `INSERT INTO public.workforce_skills(
+         id,organization_id,skill_key,name,service_id,created_by_user_id,updated_by_user_id)
+       VALUES ('e4100000-0000-4000-8000-000000000001',$1,'plumbing-skill','Plumbing','plumbing',$2,$2)`,
+      [IDS.organization, IDS.owner]
+    );
+    const availability = await request(app)
+      .put(`/api/v1/canonical/availability/profiles/${IDS.owner}`)
+      .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-hard-matrix-availability')
+      .send({
+        expectedRevision: 0, expectedDigest: null, expectedTimeZone: 'America/New_York',
+        coverageStart: '2027-03-01T00:00:00-05:00', coverageEnd: '2027-04-01T00:00:00-04:00',
+        intervals: [{
+          kind: 'unavailable', start: '2027-03-15T15:00:00-04:00', end: '2027-03-15T16:00:00-04:00',
+        }],
+        reason: 'Hard matrix declared unavailability fixture.',
+      });
+    expect(availability.status).toBe(200);
+    await runtimePool.query(
+      `UPDATE public.workforce_profiles SET home_location_id='remote'
+        WHERE organization_id=$1 AND id=$2`, [IDS.organization, IDS.owner]
+    );
+    try {
+      const hardMatrix = await previewAppointment(IDS.hardMatrixAppointment, 'schedule', {
+        scheduledStart: '2027-03-15T15:00:00-04:00',
+        scheduledEnd: '2027-03-15T16:00:00-04:00',
+        reason: 'Trusted SQL and mounted Part 2 must agree on every hard class.',
+      });
+      expect(hardMatrix.response.status).toBe(201);
+      expect(hardMatrix.response.body.data.conflicts.hardConflicts.map(entry => entry.code)).toEqual([
+        'declared_unavailable', 'location_scope_mismatch', 'required_skill_mismatch',
+      ]);
+    } finally {
+      await runtimePool.query(
+        `UPDATE public.workforce_profiles SET home_location_id=NULL
+          WHERE organization_id=$1 AND id=$2`, [IDS.organization, IDS.owner]
+      );
+    }
+
+    await seedAppointment(runtimePool, IDS.organization, IDS.crewHardAppointment);
+    await previewAndApproveAppointment(IDS.crewHardAppointment, 'assign', {
+      target: { kind: 'crew', id: IDS.crew },
+      reason: 'Crew assignment precedes the inactive-member schedule gate.',
+    }, 'm22-part4-inactive-crew-assign-01');
+    await runtimePool.query(
+      `UPDATE public.organization_memberships SET status='suspended',updated_at=clock_timestamp()
+        WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.dispatcher]
+    );
+    try {
+      const inactiveCrew = await previewAppointment(IDS.crewHardAppointment, 'schedule', {
+        scheduledStart: '2027-03-15T18:00:00-04:00',
+        scheduledEnd: '2027-03-15T19:00:00-04:00',
+        reason: 'Inactive crew members are a trusted hard conflict.',
+      });
+      expect(inactiveCrew.response.status).toBe(201);
+      expect(inactiveCrew.response.body.data.conflicts.hardConflicts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'inactive_crew_member', profileId: IDS.dispatcher }),
+      ]));
+    } finally {
+      await runtimePool.query(
+        `UPDATE public.organization_memberships SET status='active',updated_at=clock_timestamp()
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.dispatcher]
+      );
+    }
+
+    await seedAppointment(runtimePool, IDS.organization, IDS.invalidTargetAppointment);
+    const invalidBefore = await pins(runtimePool, IDS.organization, IDS.invalidTargetAppointment);
+    await runtimePool.query(
+      `UPDATE public.organization_memberships SET status='suspended',updated_at=clock_timestamp()
+        WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.employee]
+    );
+    try {
+      const inactiveTarget = await previewAppointment(IDS.invalidTargetAppointment, 'assign', {
+        target: { kind: 'profile', id: IDS.employee },
+        reason: 'Inactive direct targets cannot enter the approval lane.',
+      });
+      expect(inactiveTarget.response.status).toBe(409);
+      expect(inactiveTarget.response.body.error.code).toBe('M22_INVALID_TRANSITION');
+    } finally {
+      await runtimePool.query(
+        `UPDATE public.organization_memberships SET status='active',updated_at=clock_timestamp()
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.employee]
+      );
+    }
+    const unavailableTarget = await previewAppointment(IDS.invalidTargetAppointment, 'assign', {
+      target: { kind: 'profile', id: 'e2100000-0000-4000-8000-000000000099' },
+      reason: 'Unavailable direct targets cannot enter the approval lane.',
+    });
+    expect(unavailableTarget.response.status).toBe(409);
+    expect(unavailableTarget.response.body.error.code).toBe('M22_INVALID_TRANSITION');
+    expect(await pins(runtimePool, IDS.organization, IDS.invalidTargetAppointment)).toEqual(invalidBefore);
+  }, 120000);
+
+  test('rejects the exact ordinary-runtime forged clear evidence against an approved overlap', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.overlapAppointment);
+    await seedAppointment(runtimePool, IDS.organization, IDS.conflictAppointment);
+    await previewAndApproveAppointment(IDS.overlapAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Owner accepts the exact overlap fixture assignment.',
+    }, 'm22-part4-overlap-fixture-assign-001');
+    await previewAndApproveAppointment(IDS.overlapAppointment, 'schedule', {
+      scheduledStart: '2027-03-15T09:00:00-04:00',
+      scheduledEnd: '2027-03-15T10:00:00-04:00',
+      reason: 'Owner accepts the exact overlap fixture schedule.',
+    }, 'm22-part4-overlap-fixture-schedule-01');
+    await previewAndApproveAppointment(IDS.conflictAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Owner accepts the conflict fixture assignment only.',
+    }, 'm22-part4-conflict-fixture-assign-01');
+
+    const authoritative = await previewAppointment(IDS.conflictAppointment, 'schedule', {
+      scheduledStart: '2027-03-15T09:00:00-04:00',
+      scheduledEnd: '2027-03-15T10:00:00-04:00',
+      reason: 'The trusted preview must expose the approved schedule overlap.',
+    });
+    expect(authoritative.response.status).toBe(201);
+    expect(authoritative.response.body.data.conflicts.hardConflicts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'approved_schedule_overlap' }),
+    ]));
+
+    const before = await pins(runtimePool, IDS.organization, IDS.conflictAppointment);
+    const forged = '0'.repeat(64);
+    const reason = 'Direct runtime forged clear evidence cannot become authority.';
+    const forgedConflict = {
+      id: forged, assignmentId: before.id, appointmentId: IDS.conflictAppointment,
+      evaluationVersion: 'forged-runtime-evidence', assignmentRevision: before.revision,
+      assignmentDigest: before.digest, status: 'clear', hardConflicts: [], warnings: [],
+      needsReview: false, reviewReasons: [], digest: forged, persisted: false, grantsMutation: false,
+    };
+    const evidenceBefore = (await migrationPool.query(
+      `SELECT (SELECT count(*) FROM public.canonical_schedule_mutation_previews
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS previews,
+              (SELECT count(*) FROM public.canonical_schedule_human_approvals
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS approvals,
+              (SELECT count(*) FROM public.canonical_schedule_human_audit_events
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS audits,
+              (SELECT count(*) FROM public.canonical_schedule_human_idempotency
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS replays`,
+      [IDS.organization, before.id]
+    )).rows[0];
+    await expect(runtimePool.query(
+      `SELECT public.canonical_schedule_create_mutation_preview(
+         $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::bigint,$7::text,
+         'America/New_York','schedule','profile',$3::uuid,
+         '2027-03-15T13:00:00.000Z'::timestamptz,'2027-03-15T14:00:00.000Z'::timestamptz,
+         '{"scheduledStart":"2027-03-15T09:00:00-04:00","scheduledEnd":"2027-03-15T10:00:00-04:00"}'::jsonb,
+         'preferred',$8::text,$9::jsonb,$10::text,'[]'::jsonb,'[]'::jsonb,$10::text,$10::text,$11::text)`,
+      [IDS.organization, IDS.conflictAppointment, IDS.owner, sessions.owner.sessionId,
+        sessions.owner.csrfToken, before.revision, before.digest, reason,
+        JSON.stringify(forgedConflict), forged, sha256('forged-overlap-preview-request')]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_schedule_part4_evidence_stale',
+    });
+    expect(await pins(runtimePool, IDS.organization, IDS.conflictAppointment)).toEqual(before);
+    expect((await migrationPool.query(
+      `SELECT (SELECT count(*) FROM public.canonical_schedule_mutation_previews
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS previews,
+              (SELECT count(*) FROM public.canonical_schedule_human_approvals
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS approvals,
+              (SELECT count(*) FROM public.canonical_schedule_human_audit_events
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS audits,
+              (SELECT count(*) FROM public.canonical_schedule_human_idempotency
+                WHERE organization_id=$1 AND assignment_id=$2)::int AS replays`,
+      [IDS.organization, before.id]
+    )).rows[0]).toEqual(evidenceBefore);
+  }, 120000);
+
+  test('uses live wall time after held-transaction and lock waits with zero mutation evidence', async () => {
+    async function assertNoAppliedEvidence(appointmentId, before) {
+      expect(await pins(runtimePool, IDS.organization, appointmentId)).toEqual(before);
+      expect((await migrationPool.query(
+        `SELECT (SELECT count(*) FROM public.canonical_schedule_human_approvals
+                  WHERE organization_id=$1 AND assignment_id=$2)::int AS approvals,
+                (SELECT count(*) FROM public.canonical_schedule_human_audit_events
+                  WHERE organization_id=$1 AND assignment_id=$2)::int AS audits,
+                (SELECT count(*) FROM public.canonical_schedule_human_idempotency
+                  WHERE organization_id=$1 AND assignment_id=$2)::int AS replays`,
+        [IDS.organization, before.id]
+      )).rows[0]).toEqual({ approvals: 0, audits: 0, replays: 0 });
+    }
+
+    await seedAppointment(runtimePool, IDS.organization, IDS.expiryAppointment);
+    const heldCreated = await previewAppointment(IDS.expiryAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Held transaction must not freeze preview lifetime.',
+    });
+    expect(heldCreated.response.status).toBe(201);
+    const heldEvidence = await movePreviewExpiry(heldCreated.response.body.data.id, '1 second');
+    const heldBefore = await pins(runtimePool, IDS.organization, IDS.expiryAppointment);
+    const held = await runtimePool.connect();
+    try {
+      await held.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
+      const started = (await held.query(
+        'SELECT transaction_timestamp() AS transaction_started,clock_timestamp() AS wall_started'
+      )).rows[0];
+      await held.query('SELECT pg_sleep(2)');
+      const afterWait = (await held.query('SELECT clock_timestamp() AS wall_after_wait')).rows[0];
+      expect(new Date(started.transaction_started).getTime()).toBeLessThan(new Date(heldEvidence.expires_at).getTime());
+      expect(new Date(afterWait.wall_after_wait).getTime()).toBeGreaterThanOrEqual(new Date(heldEvidence.expires_at).getTime());
+      await expect(directApproval(held, IDS.expiryAppointment, heldCreated.response.body.data.id,
+        heldEvidence, 'held-expiry')).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_schedule_part4_preview_expired',
+      });
+    } finally {
+      await held.query('ROLLBACK').catch(() => {});
+      held.release();
+    }
+    await assertNoAppliedEvidence(IDS.expiryAppointment, heldBefore);
+
+    await seedAppointment(runtimePool, IDS.organization, IDS.lockWaitAppointment);
+    const lockCreated = await previewAppointment(IDS.lockWaitAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Lock waits must not freeze preview lifetime.',
+    });
+    expect(lockCreated.response.status).toBe(201);
+    const lockEvidence = await movePreviewExpiry(lockCreated.response.body.data.id, '1 second');
+    const lockBefore = await pins(runtimePool, IDS.organization, IDS.lockWaitAppointment);
+    const blocker = await runtimePool.connect();
+    const waiter = await runtimePool.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT id FROM public.organizations WHERE id=$1 FOR UPDATE', [IDS.organization]);
+      await waiter.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
+      const pending = directApproval(waiter, IDS.lockWaitAppointment, lockCreated.response.body.data.id,
+        lockEvidence, 'lock-wait-expiry');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await blocker.query('COMMIT');
+      await expect(pending).rejects.toMatchObject({
+        code: '23514', constraint: 'canonical_schedule_part4_preview_expired',
+      });
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await waiter.query('ROLLBACK').catch(() => {});
+      blocker.release();
+      waiter.release();
+    }
+    expect(new Date()).toEqual(expect.any(Date));
+    expect(new Date(lockEvidence.expires_at).getTime()).toBeLessThanOrEqual(Date.now());
+    await assertNoAppliedEvidence(IDS.lockWaitAppointment, lockBefore);
+  }, 120000);
 });

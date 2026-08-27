@@ -259,6 +259,257 @@ BEGIN
 END
 $function$;
 
+-- The ordinary application role deliberately owns no canonical scheduling
+-- evidence tables, but it can invoke the two Part 4 entry routines.  Therefore
+-- caller-provided Part 2 JSON is never sufficient authority for a mutation.
+-- Recompute every presently authoritative hard-conflict class from locked
+-- PostgreSQL state.  Advisory warnings/recommendations remain useful preview
+-- context, but cannot make this trusted result less restrictive.
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_hard_authority(
+  organization_id_value UUID,assignment_id_value UUID,target_kind_value TEXT,
+  target_id_value UUID,scheduled_start_value TIMESTAMPTZ,scheduled_end_value TIMESTAMPTZ
+)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  member_ids UUID[] := ARRAY[]::UUID[];
+  target_exists BOOLEAN := FALSE;
+  target_location_id TEXT;
+  service_id_value TEXT;
+  location_id_value TEXT;
+  canonical_location_id TEXT;
+  location_match_count INTEGER := 0;
+  skill_authority_known BOOLEAN := FALSE;
+  hard_conflicts_value JSONB := '[]'::JSONB;
+BEGIN
+  IF (scheduled_start_value IS NULL) IS DISTINCT FROM (scheduled_end_value IS NULL)
+     OR (scheduled_start_value IS NOT NULL AND scheduled_end_value<=scheduled_start_value) THEN
+    RAISE EXCEPTION 'Trusted conflict proposal is invalid'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+  END IF;
+
+  -- The owning entry routine holds the organization update lock before calling
+  -- here.  These row locks bind the hard-conflict read set to that same atomic
+  -- transaction and prevent a concurrent authority change from being accepted.
+  PERFORM 1
+    FROM public.canonical_schedule_assignments assignment
+    JOIN public.canonical_opportunities opportunity
+      ON opportunity.organization_id=assignment.organization_id
+     AND opportunity.id=assignment.opportunity_id
+   WHERE assignment.organization_id=organization_id_value AND assignment.id=assignment_id_value
+   FOR SHARE OF assignment,opportunity;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trusted conflict assignment is unavailable'
+      USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_scope_unavailable';
+  END IF;
+
+  SELECT opportunity.service_type,
+         CASE WHEN jsonb_typeof(opportunity.job_scope)='object'
+                   AND jsonb_typeof(opportunity.job_scope->'locationId')='string'
+              THEN opportunity.job_scope->>'locationId' ELSE NULL END
+    INTO service_id_value,location_id_value
+    FROM public.canonical_schedule_assignments assignment
+    JOIN public.canonical_opportunities opportunity
+      ON opportunity.organization_id=assignment.organization_id
+     AND opportunity.id=assignment.opportunity_id
+   WHERE assignment.organization_id=organization_id_value AND assignment.id=assignment_id_value;
+
+  IF target_kind_value='profile' THEN
+    SELECT TRUE,profile.home_location_id,ARRAY[profile.id]::UUID[]
+      INTO target_exists,target_location_id,member_ids
+      FROM public.workforce_profiles profile
+      JOIN public.organization_memberships membership
+        ON membership.organization_id=profile.organization_id AND membership.id=profile.membership_id
+      JOIN public.users account
+        ON account.organization_id=membership.organization_id AND account.id=membership.user_id
+     WHERE profile.organization_id=organization_id_value AND profile.id=target_id_value
+     FOR SHARE OF profile,membership,account;
+  ELSIF target_kind_value='crew' THEN
+    SELECT TRUE,crew.home_location_id
+      INTO target_exists,target_location_id
+      FROM public.workforce_crews crew
+     WHERE crew.organization_id=organization_id_value AND crew.id=target_id_value
+     FOR SHARE OF crew;
+    IF target_exists THEN
+      SELECT COALESCE(array_agg(member.profile_id ORDER BY member.profile_id),ARRAY[]::UUID[])
+        INTO member_ids
+        FROM (
+          SELECT relation.profile_id
+            FROM public.workforce_crew_members relation
+            JOIN public.workforce_profiles profile
+              ON profile.organization_id=relation.organization_id AND profile.id=relation.profile_id
+            JOIN public.organization_memberships membership
+              ON membership.organization_id=profile.organization_id AND membership.id=profile.membership_id
+            JOIN public.users account
+              ON account.organization_id=membership.organization_id AND account.id=membership.user_id
+           WHERE relation.organization_id=organization_id_value AND relation.crew_id=target_id_value
+           ORDER BY relation.profile_id LIMIT 100
+           FOR SHARE OF relation,profile,membership,account
+        ) member;
+    END IF;
+  ELSIF target_kind_value='unassigned' AND target_id_value IS NULL THEN
+    target_exists := TRUE;
+  END IF;
+
+  IF scheduled_start_value IS NULL OR target_kind_value='unassigned' THEN
+    RETURN '[]'::JSONB;
+  END IF;
+
+  -- Lock the remaining authoritative workforce and availability evidence.
+  PERFORM 1
+    FROM public.workforce_profile_skills relation
+    JOIN public.workforce_skills skill
+      ON skill.organization_id=relation.organization_id AND skill.id=relation.skill_id
+   WHERE relation.organization_id=organization_id_value AND relation.profile_id=ANY(member_ids)
+   FOR SHARE OF relation,skill;
+  PERFORM 1
+    FROM public.canonical_workforce_availability_authorities authority
+   WHERE authority.organization_id=organization_id_value
+     AND authority.workforce_profile_id=ANY(member_ids)
+   FOR SHARE OF authority;
+  PERFORM 1
+    FROM public.canonical_workforce_availability_intervals interval
+    JOIN public.canonical_workforce_availability_authorities authority
+      ON authority.organization_id=interval.organization_id AND authority.id=interval.availability_id
+   WHERE interval.organization_id=organization_id_value
+     AND authority.workforce_profile_id=ANY(member_ids)
+   FOR SHARE OF interval,authority;
+  PERFORM 1
+    FROM public.canonical_schedule_assignments assignment
+   WHERE assignment.organization_id=organization_id_value AND assignment.id<>assignment_id_value
+     AND assignment.schedule_state='scheduled' AND assignment.appointment_status<>'cancelled'
+     AND assignment.scheduled_start<scheduled_end_value
+     AND assignment.scheduled_end>scheduled_start_value
+   ORDER BY assignment.id
+   FOR SHARE OF assignment;
+  PERFORM 1
+    FROM public.workforce_crew_members relation
+    JOIN public.canonical_schedule_assignments assignment
+      ON assignment.organization_id=relation.organization_id AND assignment.workforce_crew_id=relation.crew_id
+   WHERE assignment.organization_id=organization_id_value AND assignment.id<>assignment_id_value
+     AND assignment.schedule_state='scheduled' AND assignment.appointment_status<>'cancelled'
+     AND assignment.scheduled_start<scheduled_end_value
+     AND assignment.scheduled_end>scheduled_start_value
+   FOR SHARE OF relation,assignment;
+
+  SELECT count(*)::INTEGER,min(candidate.location_id)
+    INTO location_match_count,canonical_location_id
+    FROM (
+      SELECT 'headquarters'::TEXT AS location_id
+      UNION ALL
+      SELECT office->>'id'
+        FROM public.organization_onboarding onboarding
+        JOIN public.canonical_business_profiles profile
+          ON profile.organization_id=onboarding.organization_id
+         AND profile.id=onboarding.active_business_profile_id AND profile.is_active=TRUE
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(profile.raw_profile#>'{headquarters,additionalOffices}')='array'
+               THEN profile.raw_profile#>'{headquarters,additionalOffices}' ELSE '[]'::JSONB END
+        ) office
+       WHERE onboarding.organization_id=organization_id_value
+         AND jsonb_typeof(office)='object' AND jsonb_typeof(office->'id')='string'
+         AND office->>'id' ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+    ) candidate
+   WHERE location_id_value ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+     AND lower(candidate.location_id)=lower(location_id_value);
+  SELECT EXISTS (
+    SELECT 1 FROM public.workforce_skills skill
+     WHERE skill.organization_id=organization_id_value
+       AND lower(skill.service_id)=lower(service_id_value)
+  ) INTO skill_authority_known;
+
+  WITH inactive AS (
+    SELECT CASE WHEN target_kind_value='crew' THEN 'inactive_crew_member' ELSE 'inactive_target' END AS code,
+           profile.id AS profile_id
+      FROM public.workforce_profiles profile
+      JOIN public.organization_memberships membership
+        ON membership.organization_id=profile.organization_id AND membership.id=profile.membership_id
+      JOIN public.users account
+        ON account.organization_id=membership.organization_id AND account.id=membership.user_id
+     WHERE profile.organization_id=organization_id_value AND profile.id=ANY(member_ids)
+       AND (membership.status<>'active' OR account.status<>'active')
+  ), unavailable AS (
+    SELECT DISTINCT 'declared_unavailable'::TEXT AS code,authority.workforce_profile_id AS profile_id
+      FROM public.canonical_workforce_availability_authorities authority
+      JOIN public.canonical_workforce_availability_intervals interval
+        ON interval.organization_id=authority.organization_id AND interval.availability_id=authority.id
+     WHERE authority.organization_id=organization_id_value
+       AND authority.workforce_profile_id=ANY(member_ids)
+       AND authority.coverage_start<=scheduled_start_value AND authority.coverage_end>=scheduled_end_value
+       AND interval.interval_kind='unavailable'
+       AND interval.starts_at<scheduled_end_value AND interval.ends_at>scheduled_start_value
+  ), overlapping_targets AS (
+    SELECT assignment.id AS assignment_id,assignment.workforce_profile_id AS profile_id
+      FROM public.canonical_schedule_assignments assignment
+     WHERE assignment.organization_id=organization_id_value AND assignment.id<>assignment_id_value
+       AND assignment.schedule_state='scheduled' AND assignment.appointment_status<>'cancelled'
+       AND (assignment.last_approval_id IS NOT NULL OR assignment.last_human_approval_id IS NOT NULL)
+       AND assignment.scheduled_start<scheduled_end_value AND assignment.scheduled_end>scheduled_start_value
+       AND assignment.workforce_profile_id IS NOT NULL
+    UNION ALL
+    SELECT assignment.id,member.profile_id
+      FROM public.canonical_schedule_assignments assignment
+      JOIN LATERAL (
+        SELECT relation.profile_id
+          FROM public.workforce_crew_members relation
+         WHERE relation.organization_id=assignment.organization_id
+           AND relation.crew_id=assignment.workforce_crew_id
+         ORDER BY relation.profile_id LIMIT 100
+      ) member ON TRUE
+     WHERE assignment.organization_id=organization_id_value AND assignment.id<>assignment_id_value
+       AND assignment.schedule_state='scheduled' AND assignment.appointment_status<>'cancelled'
+       AND (assignment.last_approval_id IS NOT NULL OR assignment.last_human_approval_id IS NOT NULL)
+       AND assignment.scheduled_start<scheduled_end_value AND assignment.scheduled_end>scheduled_start_value
+  ), entries AS (
+    SELECT 'target_unavailable'::TEXT AS code,NULL::UUID AS assignment_id,NULL::UUID AS profile_id,
+           jsonb_build_object('code','target_unavailable') AS entry
+     WHERE NOT target_exists
+    UNION ALL
+    SELECT inactive.code,NULL,inactive.profile_id,
+           jsonb_build_object('code',inactive.code,'profileId',inactive.profile_id)
+      FROM inactive
+    UNION ALL
+    SELECT 'required_skill_mismatch',NULL,NULL,
+           jsonb_build_object('code','required_skill_mismatch','serviceId',service_id_value)
+     WHERE service_id_value ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+       AND skill_authority_known
+       AND NOT EXISTS (
+         SELECT 1 FROM public.workforce_profile_skills relation
+         JOIN public.workforce_skills skill
+           ON skill.organization_id=relation.organization_id AND skill.id=relation.skill_id
+        WHERE relation.organization_id=organization_id_value AND relation.profile_id=ANY(member_ids)
+          AND lower(skill.service_id)=lower(service_id_value)
+       )
+    UNION ALL
+    SELECT 'location_scope_mismatch',NULL,NULL,
+           jsonb_build_object('code','location_scope_mismatch','requiredLocationId',canonical_location_id)
+     WHERE location_match_count=1 AND target_location_id IS NOT NULL
+       AND lower(target_location_id)<>lower(canonical_location_id)
+    UNION ALL
+    SELECT unavailable.code,NULL,unavailable.profile_id,
+           jsonb_build_object('code',unavailable.code,'profileId',unavailable.profile_id)
+      FROM unavailable
+    UNION ALL
+    SELECT 'approved_schedule_overlap',overlap.assignment_id,overlap.profile_id,
+           jsonb_build_object('code','approved_schedule_overlap',
+             'assignmentId',overlap.assignment_id,'profileId',overlap.profile_id)
+      FROM overlapping_targets overlap
+     WHERE overlap.profile_id=ANY(member_ids)
+  ), distinct_entries AS (
+    SELECT DISTINCT code,assignment_id,profile_id,entry FROM entries
+  ), bounded AS (
+    SELECT code,assignment_id,profile_id,entry FROM distinct_entries
+     ORDER BY code COLLATE "C",assignment_id NULLS FIRST,profile_id NULLS FIRST,entry::TEXT COLLATE "C"
+     LIMIT 256
+  )
+  SELECT COALESCE(jsonb_agg(entry ORDER BY code COLLATE "C",assignment_id NULLS FIRST,
+    profile_id NULLS FIRST,entry::TEXT COLLATE "C"),'[]'::JSONB)
+    INTO hard_conflicts_value FROM bounded;
+  RETURN hard_conflicts_value;
+END
+$function$;
+
 CREATE OR REPLACE FUNCTION public.canonical_schedule_apply_mutation_approval(
   organization_id_value UUID,appointment_id_value UUID,actor_user_id_value UUID,
   actor_access_role_value TEXT,auth_session_id_value UUID,csrf_token_value TEXT,
@@ -288,6 +539,8 @@ DECLARE
   after_revision_value BIGINT;
   after_digest_value TEXT;
   response_body_value JSONB;
+  trusted_hard_conflicts_value JSONB;
+  approval_decided_at TIMESTAMPTZ;
 BEGIN
   SELECT expected_time_zone INTO preview_hint
     FROM public.canonical_schedule_mutation_previews
@@ -297,6 +550,11 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Mutation preview is unavailable'
       USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_scope_unavailable';
+  END IF;
+  PERFORM 1 FROM public.organizations WHERE id=organization_id_value FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Canonical schedule organization is unavailable'
+      USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_actor_unauthorized';
   END IF;
   time_authority := public.canonical_schedule_part4_actor_authority(
     organization_id_value,actor_user_id_value,actor_access_role_value,auth_session_id_value,
@@ -323,10 +581,6 @@ BEGIN
     RAISE EXCEPTION 'Mutation preview evidence diverges'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
   END IF;
-  IF transaction_timestamp()>=preview_record.expires_at THEN
-    RAISE EXCEPTION 'Mutation preview expired'
-      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_preview_expired';
-  END IF;
   IF EXISTS (SELECT 1 FROM public.canonical_schedule_human_approvals approval
     WHERE approval.organization_id=organization_id_value AND approval.preview_id=preview_id_value) THEN
     RAISE EXCEPTION 'Mutation preview was already applied'
@@ -347,14 +601,35 @@ BEGIN
     RAISE EXCEPTION 'Scheduling authority changed after preview'
       USING ERRCODE='40001',CONSTRAINT='canonical_schedule_part4_preview_stale';
   END IF;
+  trusted_hard_conflicts_value := public.canonical_schedule_part4_hard_authority(
+    organization_id_value,assignment_record.id,preview_record.proposed_target_kind,
+    preview_record.proposed_target_id,preview_record.proposed_scheduled_start,
+    preview_record.proposed_scheduled_end
+  );
+  -- Recheck live actor/session/subscription authority only after every mutation
+  -- and conflict row is locked.  The returned evaluatedAt is the durable
+  -- approval decision time and is never frozen at transaction start.
+  time_authority := public.canonical_schedule_part4_actor_authority(
+    organization_id_value,actor_user_id_value,actor_access_role_value,auth_session_id_value,
+    csrf_token_value,preview_record.expected_time_zone
+  );
+  approval_decided_at := (time_authority->>'evaluatedAt')::TIMESTAMPTZ;
+  IF approval_decided_at>=preview_record.expires_at THEN
+    RAISE EXCEPTION 'Mutation preview expired'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_preview_expired';
+  END IF;
   IF current_conflict_digest_value<>rtrim(preview_record.conflict_digest)
      OR current_recommendation_authority_digest_value<>rtrim(preview_record.recommendation_authority_digest) THEN
     RAISE EXCEPTION 'Conflict or recommendation authority changed after preview'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
   END IF;
-  IF jsonb_array_length(preview_record.conflict_evaluation->'hardConflicts')<>0 THEN
+  IF jsonb_array_length(trusted_hard_conflicts_value)<>0 THEN
     RAISE EXCEPTION 'Hard conflicts cannot be overridden'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_hard_conflict';
+  END IF;
+  IF preview_record.conflict_evaluation->'hardConflicts'<>trusted_hard_conflicts_value THEN
+    RAISE EXCEPTION 'Trusted conflict authority changed after preview'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
   END IF;
   IF jsonb_typeof(acknowledged_warning_digests_value)<>'array'
      OR jsonb_typeof(acknowledged_review_reason_digests_value)<>'array'
@@ -418,7 +693,7 @@ BEGIN
     submitted_time_evidence,time_authority,time_evidence_digest_value,preview_record.conflict_digest,
     preview_record.recommendation_digest,preview_record.recommendation_authority_digest,
     acknowledged_warning_digests_value,acknowledged_review_reason_digests_value,reason_value,
-    idempotency_key_hash_value,request_digest_value,txid_current(),transaction_timestamp()
+    idempotency_key_hash_value,request_digest_value,txid_current(),approval_decided_at
   ) RETURNING * INTO approval_record;
   UPDATE public.canonical_schedule_assignments SET
     workforce_profile_id=workforce_profile_id_value,workforce_crew_id=workforce_crew_id_value,
@@ -428,7 +703,7 @@ BEGIN
     appointment_status=preview_record.proposed_appointment_status,needs_review=needs_review_value,
     review_reasons=review_reasons_value,revision=after_revision_value,canonical_digest=after_digest_value,
     last_approval_id=NULL,last_human_approval_id=approval_record.id,last_actor_user_id=actor_user_id_value,
-    last_action_code=preview_record.action_code,last_reason=reason_value,updated_at=transaction_timestamp()
+    last_action_code=preview_record.action_code,last_reason=reason_value,updated_at=approval_decided_at
    WHERE organization_id=organization_id_value AND id=assignment_record.id
    RETURNING * INTO assignment_record;
   INSERT INTO public.canonical_schedule_assignment_revisions(
@@ -451,7 +726,7 @@ BEGIN
   );
   UPDATE public.canonical_appointments SET scheduled_start=preview_record.proposed_scheduled_start,
     scheduled_end=preview_record.proposed_scheduled_end,status=preview_record.proposed_appointment_status,
-    updated_at=transaction_timestamp()
+    updated_at=approval_decided_at
    WHERE organization_id=organization_id_value AND id=appointment_id_value
    RETURNING * INTO appointment_record;
   INSERT INTO public.canonical_schedule_human_audit_events(
@@ -471,7 +746,7 @@ BEGIN
       'reviewReasonDigests',acknowledged_review_reason_digests_value,
       'timeEvidenceVersion',2,'submittedSchedule',submitted_time_evidence,
       'timeZoneAuthority',time_authority,'timeEvidenceDigest',time_evidence_digest_value),
-    txid_current(),transaction_timestamp()
+    txid_current(),approval_decided_at
   );
   response_body_value := jsonb_build_object('success',TRUE,'data',jsonb_build_object(
     'id',appointment_record.id,'organization_id',appointment_record.organization_id,
@@ -506,7 +781,7 @@ BEGIN
     human_approval_id,response_status,response_body,transaction_id,created_at
   ) VALUES (
     organization_id_value,actor_user_id_value,idempotency_key_hash_value,request_digest_value,
-    assignment_record.id,approval_record.id,200,response_body_value,txid_current(),transaction_timestamp()
+    assignment_record.id,approval_record.id,200,response_body_value,txid_current(),approval_decided_at
   );
   RETURN response_body_value;
 END
@@ -732,7 +1007,7 @@ SET search_path=pg_catalog,public,pg_temp
 AS $function$
 DECLARE
   authority RECORD;
-  evaluated_at TIMESTAMPTZ := transaction_timestamp();
+  evaluated_at TIMESTAMPTZ;
 BEGIN
   PERFORM 1 FROM public.organizations WHERE id=organization_id_value FOR SHARE;
   IF NOT FOUND THEN
@@ -763,6 +1038,9 @@ BEGIN
      AND business_profile.id=onboarding.active_business_profile_id AND business_profile.is_active=TRUE
    WHERE membership.organization_id=organization_id_value AND membership.user_id=actor_user_id_value
    FOR SHARE OF membership,profile,account,session,subscription,onboarding,business_profile;
+  -- Live database wall time is sampled only after the complete authority row
+  -- set is locked; a transaction opened before expiry cannot freeze authority.
+  evaluated_at := clock_timestamp();
   IF NOT FOUND OR authority.membership_status<>'active' OR authority.account_status<>'active'
      OR authority.role<>actor_access_role_value
      OR NOT (authority.role IN ('owner','admin')
@@ -784,7 +1062,8 @@ BEGIN
     'profileId',authority.profile_id::TEXT,
     'profileVersion',authority.version_number,
     'profileHash',rtrim(authority.normalized_profile_hash),
-    'timeZone',authority.time_zone
+    'timeZone',authority.time_zone,
+    'evaluatedAt',to_char(evaluated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
   );
 END
 $function$;
@@ -875,10 +1154,16 @@ DECLARE
   proposed_schedule_state TEXT;
   proposed_dispatch_state TEXT;
   preview_id_value UUID := gen_random_uuid();
-  created_at_value TIMESTAMPTZ := transaction_timestamp();
-  expires_at_value TIMESTAMPTZ := transaction_timestamp()+INTERVAL '15 minutes';
+  created_at_value TIMESTAMPTZ;
+  expires_at_value TIMESTAMPTZ;
   preview_digest_value TEXT;
+  trusted_hard_conflicts_value JSONB;
 BEGIN
+  PERFORM 1 FROM public.organizations WHERE id=organization_id_value FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Canonical schedule organization is unavailable'
+      USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_actor_unauthorized';
+  END IF;
   time_authority := public.canonical_schedule_part4_actor_authority(
     organization_id_value,actor_user_id_value,actor_access_role_value,auth_session_id_value,
     csrf_token_value,expected_time_zone_value
@@ -988,6 +1273,10 @@ BEGIN
   proposed_dispatch_state := CASE WHEN action_code_value='dispatch' THEN 'dispatched'
     WHEN assignment_record.dispatch_state='dispatched' AND action_code_value IN ('reassign','unassign','reschedule') THEN 'revoked'
     ELSE assignment_record.dispatch_state END;
+  trusted_hard_conflicts_value := public.canonical_schedule_part4_hard_authority(
+    organization_id_value,assignment_record.id,target_kind_value,target_id_value,
+    scheduled_start_value,scheduled_end_value
+  );
   IF jsonb_typeof(conflict_evaluation_value)<>'object'
      OR conflict_evaluation_value->>'digest'<>conflict_digest_value
      OR conflict_evaluation_value->>'assignmentId'<>assignment_record.id::TEXT
@@ -999,10 +1288,15 @@ BEGIN
      OR jsonb_typeof(warning_digests_value)<>'array'
      OR jsonb_array_length(warning_digests_value)<>jsonb_array_length(conflict_evaluation_value->'warnings')
      OR jsonb_typeof(review_reason_digests_value)<>'array'
-     OR jsonb_array_length(review_reason_digests_value)<>jsonb_array_length(conflict_evaluation_value->'reviewReasons') THEN
+     OR jsonb_array_length(review_reason_digests_value)<>jsonb_array_length(conflict_evaluation_value->'reviewReasons')
+     OR conflict_evaluation_value->'hardConflicts'<>trusted_hard_conflicts_value THEN
     RAISE EXCEPTION 'Conflict preview evidence diverges'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
   END IF;
+  -- Preview lifetime starts only after all current authority/conflict rows have
+  -- been locked and validated; it is exactly fifteen database-clock minutes.
+  created_at_value := clock_timestamp();
+  expires_at_value := created_at_value+INTERVAL '15 minutes';
   preview_digest_value := public.canonical_schedule_part4_preview_digest(
     preview_id_value,organization_id_value,assignment_record.id,appointment_id_value,actor_user_id_value,
     auth_session_id_value,expected_revision_value,expected_digest_value,expected_time_zone_value,
@@ -1127,6 +1421,9 @@ ALTER FUNCTION public.canonical_schedule_create_for_appointment()
   SET search_path=pg_catalog,public,pg_temp;
 
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_immutable_evidence() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_hard_authority(
+  UUID,UUID,TEXT,UUID,TIMESTAMPTZ,TIMESTAMPTZ
+) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_guard_assignment() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_guard_revision() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_guard_appointment_write() FROM PUBLIC;

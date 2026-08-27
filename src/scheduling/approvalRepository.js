@@ -79,6 +79,14 @@ function entryDigests(entries) {
   return Object.freeze((Array.isArray(entries) ? entries : []).map(entry => sha256(stableValue(entry))).sort());
 }
 
+async function lockMutationAuthority(client, organizationId) {
+  const result = await client.query(
+    'SELECT id FROM public.organizations WHERE id=$1 FOR UPDATE',
+    [organizationId]
+  );
+  if (result.rowCount !== 1) fail(404, 'NOT_FOUND', 'Scheduling authority not found.');
+}
+
 async function assignmentPins(client, input) {
   const result = await client.query(
     `SELECT assignment.id, assignment.revision, assignment.canonical_digest,
@@ -169,6 +177,9 @@ async function currentEvaluations(client, input, assignment) {
 }
 
 async function createPreviewInTransaction(client, input) {
+  // Match the trusted database entry boundary's lock order before Part 2/3
+  // reads. This avoids lock upgrades after the evaluators acquire row shares.
+  await lockMutationAuthority(client, input.organizationId);
   const assignment = await assignmentPins(client, input);
   const evidence = await currentEvaluations(client, input, assignment);
   const warningDigests = entryDigests(evidence.conflict.data.warnings);
@@ -273,6 +284,7 @@ async function idempotencyReplay(client, input) {
 }
 
 async function applyApprovalInTransaction(client, input) {
+  await lockMutationAuthority(client, input.organizationId);
   const replay = await idempotencyReplay(client, input);
   if (replay) {
     const replayResult = await client.query(

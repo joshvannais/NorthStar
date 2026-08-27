@@ -352,7 +352,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       membershipId: IDS.owner, onboardingComplete: true, subscriptionMutable: true,
     };
     const ownerDirectory = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
-    expect(ownerDirectory).toMatchObject({ canMutate: true, reason: null, truncated: false });
+    expect(ownerDirectory).toMatchObject({ canRead: true, canMutate: true, reason: null, truncated: false });
     expect(ownerDirectory.targets).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'profile', id: IDS.owner }),
       expect.objectContaining({ kind: 'profile', id: IDS.dispatcher }),
@@ -366,10 +366,14 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     const employeeDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
       ...ownerInput, actorUserId: IDS.employee, actorAccessRole: 'member', membershipId: IDS.employee,
     });
-    expect(employeeDirectory).toMatchObject({ canMutate: false, reason: 'operator_role_required', targets: [] });
-    expect((await loadSchedulingOperatorDirectory(runtimePool, {
+    expect(employeeDirectory).toMatchObject({ canRead: false, canMutate: false, reason: 'operator_role_required', targets: [] });
+    const readOnlyDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
       ...ownerInput, subscriptionMutable: false,
-    }))).toMatchObject({ canMutate: false, reason: 'subscription_read_only', targets: [] });
+    });
+    expect(readOnlyDirectory).toMatchObject({
+      canRead: true, canMutate: false, reason: 'subscription_read_only',
+    });
+    expect(readOnlyDirectory.targets.length).toBeGreaterThan(1);
 
     await previewAndApproveAppointment(IDS.part5Appointment, 'assign', {
       target: { kind: 'profile', id: IDS.owner },
@@ -419,6 +423,23 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       })],
     });
     expect(overview.digest).toMatch(/^[0-9a-f]{64}$/);
+    const staleInput = {
+      ...item,
+      appointment: { scheduleAuthority: {
+        ...item.appointment.scheduleAuthority,
+        revision: 1,
+        digest: '0'.repeat(64),
+        targetState: 'unassigned',
+        workforceProfileId: null,
+        scheduleState: 'unscheduled',
+        scheduledStart: null,
+        scheduledEnd: null,
+      } },
+    };
+    const refreshedOverview = await buildSchedulingOverview(runtimePool, { ...overviewInput, items: [staleInput] });
+    expect(refreshedOverview.records[0].authority).toMatchObject({
+      revision: Number(schedule.revision), digest: schedule.digest, targetState: 'assigned', scheduleState: 'scheduled',
+    });
     await expect(buildSchedulingOverview(runtimePool, {
       ...overviewInput, actorUserId: IDS.employee, actorAccessRole: 'member',
       authSessionId: sessions.employee.sessionId,
@@ -434,6 +455,22 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       .set(sessions.employee.headers).expect(403);
     expect(calendarEmployee.body.error.code).toBe('CALENDAR_OPERATOR_REQUIRED');
     expect(calendarEmployee.body.data).toBeUndefined();
+    const broadAliases = [
+      '/api/v1/canonical/graphs?limit=1',
+      '/api/v1/canonical/dashboard?limit=1',
+      '/api/v1/canonical/analytics?limit=1',
+      '/api/v1/canonical/surfaces/calendar?limit=1',
+      '/api/v1/canonical/compat/command-center?limit=1',
+      '/api/customers?limit=1',
+      '/api/communications?limit=1',
+      '/api/opportunities?limit=1',
+      '/api/appointments?limit=1',
+      '/api/dashboard/overview?limit=1',
+    ];
+    for (const route of broadAliases) {
+      const denied = await request(app).get(route).set(sessions.employee.headers).expect(403);
+      expect(JSON.stringify(denied.body)).not.toContain(HOSTILE);
+    }
     const commandOwner = await request(app).get('/api/v1/command-center/workspace')
       .set(sessions.owner.headers).expect(200);
     expect(commandOwner.body.data).toEqual(expect.objectContaining({
@@ -443,6 +480,22 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     const commandEmployee = await request(app).get('/api/v1/command-center/workspace')
       .set(sessions.employee.headers).expect(403);
     expect(commandEmployee.body.error.code).toBe('COMMAND_CENTER_OPERATOR_REQUIRED');
+    await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+    try {
+      const readOnlyCalendar = await request(app).get('/api/v1/canonical/compat/calendar?limit=100')
+        .set(sessions.owner.headers).expect(200);
+      expect(readOnlyCalendar.body.data.schedulingOperator).toMatchObject({
+        canRead: true, canMutate: false, reason: 'subscription_read_only',
+      });
+      expect(readOnlyCalendar.body.data.schedulingOverview).toEqual(expect.objectContaining({
+        records: expect.any(Array), total: expect.any(Number), truncated: false,
+      }));
+      const readOnlyCommand = await request(app).get('/api/v1/command-center/workspace')
+        .set(sessions.owner.headers).expect(200);
+      expect(readOnlyCommand.body.data.schedulingOperator).toMatchObject({ canRead: true, canMutate: false });
+    } finally {
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
   }, 120000);
 
   async function previewAndApprove(action, input = {}, session = sessions.owner, key = crypto.randomUUID()) {
@@ -1715,4 +1768,104 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect(new Date(lockEvidence.expires_at).getTime()).toBeLessThanOrEqual(Date.now());
     await assertNoAppliedEvidence(IDS.lockWaitAppointment, lockBefore);
   }, 120000);
+
+  test('Part 5 canonical overview paginates bounded rows with complete counts and stable current authority', async () => {
+    const created = [];
+    for (let offset = 0; offset < 101; offset += 5) {
+      const batch = Array.from({ length: Math.min(5, 101 - offset) }, async (_value, batchOffset) => {
+        const ordinal = offset + batchOffset;
+        const response = await request(app)
+          .post('/api/v1/simulations/leads')
+          .set(sessions.owner.headers)
+          .set('Idempotency-Key', `m22-part5-pagination-${String(ordinal).padStart(3, '0')}`)
+          .send({
+            name: `Part 5 pagination ${String(ordinal).padStart(3, '0')}`,
+            service: 'plumbing',
+            phone: `+1555${String(ordinal).padStart(7, '0')}`,
+          });
+        expect(response.status).toBe(201);
+        return response.body.ids;
+      });
+      created.push(...await Promise.all(batch));
+    }
+    expect(created[0]).toEqual(expect.objectContaining({ appointment: expect.any(String) }));
+    const sourceUpdate = await runtimePool.query(
+      `UPDATE public.canonical_transcripts SET source='manual'
+        WHERE organization_id=$1 AND EXISTS (
+          SELECT 1 FROM public.canonical_appointments appointment
+           WHERE appointment.organization_id=canonical_transcripts.organization_id
+             AND appointment.operation_id=canonical_transcripts.operation_id
+             AND appointment.id=ANY($2::uuid[])
+        )`,
+      [IDS.organization, created.map(value => value.appointment)]
+    );
+    expect(sourceUpdate.rowCount).toBe(101);
+
+    const empty = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.other.headers).expect(200);
+    expect(empty.body.data.schedulingOverview).toMatchObject({ total: 0, shown: 0, truncated: false });
+
+    const first = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.owner.headers).expect(200);
+    const firstOverview = first.body.data.schedulingOverview;
+    expect(first.body.data.graphs).toHaveLength(100);
+    expect(firstOverview).toMatchObject({
+      total: 101, shown: 100, truncated: true,
+      counts: expect.objectContaining({ unassigned: 101 }),
+      page: expect.objectContaining({
+        size: 100, shown: 100, total: 101, hasPrevious: false, hasNext: true,
+        cursor: null, nextCursor: expect.any(String),
+      }),
+    });
+    expect(firstOverview.categories.unassigned).toHaveLength(101);
+    const firstIds = new Set(firstOverview.records.map(value => value.appointmentId));
+    expect(firstIds.size).toBe(100);
+
+    // The one operation excluded from the first keyset page is on the second page.
+    // Concurrent fixture inserts deliberately do not assume creation order. Change
+    // that operation's current assignment between page reads; the next page must
+    // keep keyset ordering but project the current revision and complete category
+    // counts from its own repeatable-read snapshot.
+    const pageTwoAppointment = created
+      .map(value => value.appointment)
+      .find(appointmentId => !firstIds.has(appointmentId));
+    expect(pageTwoAppointment).toEqual(expect.any(String));
+    await previewAndApproveAppointment(pageTwoAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Page-two assignment proves current authoritative pagination.',
+    }, 'm22-part5-pagination-between-pages');
+    const assignedPins = await pins(runtimePool, IDS.organization, pageTwoAppointment);
+
+    const second = await request(app)
+      .get('/api/v1/command-center/workspace')
+      .query({ cursor: firstOverview.page.nextCursor })
+      .set(sessions.owner.headers).expect(200);
+    const secondOverview = second.body.data.schedulingOverview;
+    expect(second.body.data.graphs).toHaveLength(1);
+    expect(secondOverview).toMatchObject({
+      total: 101, shown: 1, truncated: true,
+      counts: expect.objectContaining({ unassigned: 100 }),
+      page: expect.objectContaining({
+        size: 100, shown: 1, total: 101, hasPrevious: true, hasNext: false,
+        cursor: firstOverview.page.nextCursor, nextCursor: null,
+      }),
+    });
+    expect(secondOverview.records).toEqual([
+      expect.objectContaining({
+        appointmentId: pageTwoAppointment,
+        authority: expect.objectContaining({
+          revision: assignedPins.revision,
+          digest: assignedPins.digest,
+          targetState: 'assigned',
+          workforceProfileId: IDS.owner,
+        }),
+      }),
+    ]);
+    expect(firstIds.has(secondOverview.records[0].appointmentId)).toBe(false);
+
+    const invalid = await request(app).get('/api/v1/command-center/workspace')
+      .query({ cursor: Buffer.from('{"createdAt":"not-a-date"}').toString('base64url') })
+      .set(sessions.owner.headers).expect(400);
+    expect(invalid.body.error.code).toBe('INVALID_CURSOR');
+  }, 300000);
 });

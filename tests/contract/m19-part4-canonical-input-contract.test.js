@@ -41,6 +41,7 @@ function createApp(poolProvider, cacheClient) {
     auth: fakeAuth,
     cache: cacheClient || cache,
     audit: { record: async function () {} },
+    operatorDirectory: async function () { return { canRead: true }; },
   };
   const app = express();
   app.use(function (req, res, next) {

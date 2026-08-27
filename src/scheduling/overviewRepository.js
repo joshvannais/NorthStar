@@ -2,10 +2,12 @@
 
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const { evaluateInTransaction } = require('./conflictRepository');
+const { scheduleAuthority } = require('./repository');
 
 const DUE_HORIZON_MILLISECONDS = 24 * 60 * 60 * 1000;
 const AT_RISK_HORIZON_MILLISECONDS = 48 * 60 * 60 * 1000;
 const MAXIMUM_OVERVIEW_RECORDS = 100;
+const MAXIMUM_OVERVIEW_SCAN_RECORDS = 1000;
 
 function forbidden() {
   const error = new Error('Current owner or dispatcher scheduling authority is unavailable.');
@@ -26,18 +28,10 @@ async function requireOverviewActor(client, input) {
        JOIN public.auth_sessions session
          ON session.organization_id=membership.organization_id AND session.membership_id=membership.id
         AND session.user_id=membership.user_id AND session.id=$3
-       JOIN public.subscriptions subscription ON subscription.organization_id=membership.organization_id
-       JOIN public.organization_onboarding onboarding ON onboarding.organization_id=membership.organization_id
       WHERE membership.organization_id=$1 AND membership.user_id=$2
         AND membership.status='active' AND account.status='active'
         AND session.status='active' AND session.access_expires_at>clock_timestamp()
-        AND onboarding.status='complete'
-        AND (subscription.status='active' OR (
-          subscription.status='trialing' AND subscription.trial_started_at IS NOT NULL
-          AND subscription.trial_ends_at>clock_timestamp()
-          AND subscription.trial_ends_at-subscription.trial_started_at=INTERVAL '14 days'
-        ))
-      FOR SHARE OF membership,profile,account,session,subscription,onboarding`,
+      FOR SHARE OF membership,profile,account,session`,
     [input.organizationId, input.actorUserId, input.authSessionId]
   );
   const actor = result.rowCount === 1 ? result.rows[0] : null;
@@ -138,6 +132,68 @@ function categoryProjection(records) {
   return categories;
 }
 
+async function refreshItemAuthority(client, input, item) {
+  const appointmentId = item && item.ids && item.ids.appointment;
+  if (!appointmentId) throw new Error('Canonical scheduling authority is unavailable.');
+  const result = await client.query(
+    `SELECT assignment.id AS assignment_id, assignment.appointment_id,
+            assignment.operation_id, assignment.graph_id, assignment.opportunity_id,
+            assignment.target_state, assignment.workforce_profile_id,
+            assignment.workforce_crew_id, assignment.schedule_state,
+            assignment.dispatch_state, assignment.scheduled_start,
+            assignment.scheduled_end, assignment.appointment_status,
+            assignment.needs_review, assignment.review_reasons, assignment.revision,
+            assignment.canonical_digest, assignment.last_action_code,
+            assignment.last_reason, assignment.updated_at AS assignment_updated_at
+       FROM public.canonical_schedule_assignments assignment
+      WHERE assignment.organization_id=$1 AND assignment.appointment_id=$2
+      FOR SHARE OF assignment`,
+    [input.organizationId, appointmentId]
+  );
+  if (result.rowCount !== 1) throw new Error('Current canonical scheduling authority is unavailable.');
+  const current = scheduleAuthority(result.rows[0]);
+  if ((item.ids.operation && current.operationId !== item.ids.operation) ||
+      (item.ids.graph && current.graphId !== item.ids.graph) ||
+      (item.ids.opportunity && current.opportunityId !== item.ids.opportunity)) {
+    throw new Error('Canonical graph and scheduling authority disagree.');
+  }
+  return {
+    ...item,
+    appointment: { ...item.appointment, scheduleAuthority: current },
+  };
+}
+
+async function evaluateItem(client, input, item, timeZone, now) {
+  const currentItem = await refreshItemAuthority(client, input, item);
+  const authority = currentItem.appointment.scheduleAuthority;
+  let conflict = unscheduledConflict(currentItem);
+  if (authority.scheduleState === 'scheduled') {
+    const evaluated = await evaluateInTransaction(client, {
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      actorAccessRole: input.actorAccessRole,
+      authSessionId: input.authSessionId,
+      explicitSession: null,
+      readOnlyOperator: true,
+      appointmentId: currentItem.ids.appointment,
+      expectedRevision: authority.revision,
+      expectedDigest: authority.digest,
+      expectedTimeZone: timeZone,
+      proposal: {
+        target: currentTarget(authority),
+        scheduledStart: instant(authority.scheduledStart),
+        scheduledEnd: instant(authority.scheduledEnd),
+        submittedScheduledStart: instant(authority.scheduledStart),
+        submittedScheduledEnd: instant(authority.scheduledEnd),
+        timeZone,
+        appointmentStatus: authority.appointmentStatus,
+      },
+    });
+    conflict = evaluated.data;
+  }
+  return recordProjection(currentItem, conflict, now);
+}
+
 async function evaluateOverview(client, input) {
   await requireOverviewActor(client, input);
   const clock = await client.query(
@@ -151,43 +207,65 @@ async function evaluateOverview(client, input) {
   if (clock.rowCount !== 1) throw new Error('Current scheduling time authority is unavailable.');
   const now = new Date(clock.rows[0].now).toISOString();
   const timeZone = clock.rows[0].time_zone;
-  const items = input.items.slice(0, MAXIMUM_OVERVIEW_RECORDS);
-  const records = [];
-  for (const item of items) {
-    const authority = item && item.appointment && item.appointment.scheduleAuthority;
-    if (!authority) throw new Error('Canonical scheduling authority is unavailable.');
-    let conflict = unscheduledConflict(item);
-    if (authority.scheduleState === 'scheduled') {
-      const evaluated = await evaluateInTransaction(client, {
-        organizationId: input.organizationId,
-        actorUserId: input.actorUserId,
-        actorAccessRole: input.actorAccessRole,
-        authSessionId: input.authSessionId,
-        explicitSession: null,
-        appointmentId: item.ids.appointment,
-        expectedRevision: authority.revision,
-        expectedDigest: authority.digest,
-        expectedTimeZone: timeZone,
-        proposal: {
-          target: currentTarget(authority),
-          scheduledStart: instant(authority.scheduledStart),
-          scheduledEnd: instant(authority.scheduledEnd),
-          submittedScheduledStart: instant(authority.scheduledStart),
-          submittedScheduledEnd: instant(authority.scheduledEnd),
-          timeZone,
-          appointmentStatus: authority.appointmentStatus,
-        },
-      });
-      conflict = evaluated.data;
+  const allRecords = [];
+  const recordByAppointment = new Map();
+  let firstPage = null;
+  if (typeof input.loadPage === 'function') {
+    let scanCursor = null;
+    do {
+      const page = await input.loadPage(client, { cursor: scanCursor, limit: MAXIMUM_OVERVIEW_RECORDS });
+      if (!page || !Array.isArray(page.items) || page.items.length > MAXIMUM_OVERVIEW_RECORDS) {
+        throw new Error('Bounded canonical scheduling pagination is unavailable.');
+      }
+      if (scanCursor === null) firstPage = page;
+      for (const item of page.items) {
+        if (allRecords.length >= MAXIMUM_OVERVIEW_SCAN_RECORDS) {
+          const error = new Error('The scheduling overview exceeds the bounded authoritative scan limit. Narrow the tenant data before retrying.');
+          error.code = 'M22_OVERVIEW_RESOURCE_BOUND';
+          error.status = 503;
+          error.statusCode = 503;
+          throw error;
+        }
+        const record = await evaluateItem(client, input, item, timeZone, now);
+        allRecords.push(record);
+        recordByAppointment.set(record.appointmentId, record);
+      }
+      scanCursor = page.nextCursor || null;
+    } while (scanCursor);
+  } else {
+    const items = Array.isArray(input.items) ? input.items.slice(0, MAXIMUM_OVERVIEW_RECORDS) : [];
+    firstPage = { items, cursor: null, nextCursor: null, pageSize: MAXIMUM_OVERVIEW_RECORDS, shown: items.length, hasMore: false };
+    for (const item of items) {
+      const record = await evaluateItem(client, input, item, timeZone, now);
+      allRecords.push(record);
+      recordByAppointment.set(record.appointmentId, record);
     }
-    records.push(recordProjection(item, conflict, now));
   }
-  const categories = categoryProjection(records);
+  const selectedPage = input.cursor && typeof input.loadPage === 'function'
+    ? await input.loadPage(client, { cursor: input.cursor, limit: MAXIMUM_OVERVIEW_RECORDS })
+    : firstPage;
+  const records = (selectedPage && selectedPage.items || []).map(item => {
+    const record = recordByAppointment.get(item.ids.appointment);
+    if (!record) throw new Error('The requested scheduling page changed during authoritative evaluation.');
+    return record;
+  });
+  const categories = categoryProjection(allRecords);
   const overview = {
     version: 'm22-part5-overview-v1',
     evaluatedAt: now,
     timeZone,
-    truncated: input.items.length > MAXIMUM_OVERVIEW_RECORDS,
+    total: allRecords.length,
+    shown: records.length,
+    truncated: allRecords.length > records.length,
+    page: {
+      size: MAXIMUM_OVERVIEW_RECORDS,
+      cursor: selectedPage && selectedPage.cursor || null,
+      nextCursor: selectedPage && selectedPage.nextCursor || null,
+      hasPrevious: Boolean(selectedPage && selectedPage.cursor),
+      hasNext: Boolean(selectedPage && selectedPage.nextCursor),
+      shown: records.length,
+      total: allRecords.length,
+    },
     definitions: {
       unassigned: 'Current canonical assignment target is unassigned.',
       due: 'Scheduled start is within the next 24 hours in current PostgreSQL time authority.',
@@ -199,10 +277,13 @@ async function evaluateOverview(client, input) {
     counts: Object.keys(categories).reduce((value, key) => ({ ...value, [key]: categories[key].length }), {}),
     records,
   };
-  return Object.freeze({ ...overview, digest: sha256(stableValue(overview)) });
+  return Object.freeze({
+    overview: Object.freeze({ ...overview, digest: sha256(stableValue(overview)) }),
+    pageItems: Object.freeze((selectedPage && selectedPage.items || []).slice()),
+  });
 }
 
-async function buildSchedulingOverview(pool, input) {
+async function buildSchedulingOverviewPage(pool, input) {
   if (!pool || typeof pool.connect !== 'function') throw new Error('Canonical PostgreSQL persistence is unavailable.');
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const client = await pool.connect();
@@ -215,9 +296,9 @@ async function buildSchedulingOverview(pool, input) {
       await client.query("SET LOCAL statement_timeout='15000ms'");
       await client.query("SET LOCAL lock_timeout='2000ms'");
       await client.query('SET LOCAL search_path=pg_catalog,public');
-      const overview = await evaluateOverview(client, input);
+      const evaluated = await evaluateOverview(client, input);
       await client.query('COMMIT');
-      return overview;
+      return evaluated;
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch (_) {}
       if (error && ['40001', '40P01'].includes(error.code) && attempt < 2) continue;
@@ -229,11 +310,17 @@ async function buildSchedulingOverview(pool, input) {
   throw new Error('Scheduling overview changed during evaluation.');
 }
 
+async function buildSchedulingOverview(pool, input) {
+  return (await buildSchedulingOverviewPage(pool, input)).overview;
+}
+
 module.exports = {
   AT_RISK_HORIZON_MILLISECONDS,
   DUE_HORIZON_MILLISECONDS,
   MAXIMUM_OVERVIEW_RECORDS,
+  MAXIMUM_OVERVIEW_SCAN_RECORDS,
   allowedActions,
   buildSchedulingOverview,
+  buildSchedulingOverviewPage,
   classifyRecord,
 };

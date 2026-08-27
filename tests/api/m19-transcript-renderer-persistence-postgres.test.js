@@ -11,14 +11,16 @@ const { createCanonicalRouter, createCompatibilityRouter } = require('../../src/
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
+const { loadSchedulingOperatorDirectory } = require('../../src/scheduling/operatorDirectory');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = fs.readdirSync(path.join(ROOT, 'migrations'))
   .filter(function (filename) { return /^\d+.*\.sql$/.test(filename); })
   .sort();
-const ORGANIZATION_ID = '00000000-0000-0000-0000-000000000001';
-const USER_ID = '00000000-0000-0000-0000-000000000002';
+const ORGANIZATION_ID = '8c000000-0000-4000-8000-000000000001';
+const USER_ID = '8d000000-0000-4000-8000-000000000001';
 const SESSION_ID = 'm19-transcript-renderer-pg';
 const IMAGE_PAYLOAD = '<img src="/m19-transcript-attack-pg" onerror="window.__m19TranscriptXss=1">';
 const CLOSING_PAYLOAD = '</div><script>window.__m19TranscriptScript=1</script><svg onload="window.__m19TranscriptSvg=1">';
@@ -131,6 +133,16 @@ realPostgres('Mission 19 transcript raw PostgreSQL authority', () => {
     suiteDatabase = await createSuiteDatabase('transcript-renderer');
     pool = new Pool({ connectionString: suiteDatabase.connectionString, max: 4 });
     await applyMigrations(pool);
+    await pool.query(
+      `INSERT INTO organizations (id, name, email)
+       VALUES ($1,'Transcript Safety Tenant','transcript-tenant@m19.test')`,
+      [ORGANIZATION_ID]
+    );
+    await pool.query(
+      `INSERT INTO users (id, organization_id, name, email, password_hash, role, status)
+       VALUES ($1,$2,'Transcript Safety Owner','transcript-owner@m19.test','not-used','owner','active')`,
+      [USER_ID, ORGANIZATION_ID]
+    );
   }, 120000);
 
   afterAll(async () => {
@@ -157,6 +169,34 @@ realPostgres('Mission 19 transcript raw PostgreSQL authority', () => {
       expectedVersion: null,
       profile: profile,
     });
+    await provisionDurableSession(pool, {
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
+      role: 'owner',
+    });
+    const actorRows = await pool.query(
+      `SELECT profile.id AS profile_id, profile.operational_role,
+              membership.id AS membership_id, membership.status AS membership_status,
+              account.status AS user_status
+         FROM public.organization_memberships membership
+         JOIN public.users account
+           ON account.organization_id=membership.organization_id AND account.id=membership.user_id
+         LEFT JOIN public.workforce_profiles profile
+           ON profile.organization_id=membership.organization_id AND profile.membership_id=membership.id
+        WHERE membership.organization_id=$1 AND membership.user_id=$2`,
+      [ORGANIZATION_ID, USER_ID]
+    );
+    expect(actorRows.rows).toHaveLength(1);
+    expect(actorRows.rows[0]).toMatchObject({ membership_status: 'active', user_status: 'active' });
+    const directory = await loadSchedulingOperatorDirectory(pool, {
+      organizationId: ORGANIZATION_ID,
+      actorUserId: USER_ID,
+      actorAccessRole: 'owner',
+      membershipId: null,
+      onboardingComplete: false,
+      subscriptionMutable: false,
+    });
+    expect(directory).toMatchObject({ canRead: true, canMutate: false });
     const input = graphInput(profile);
     const original = JSON.parse(JSON.stringify(input));
     const result = await ingestSimulation(pool, input);

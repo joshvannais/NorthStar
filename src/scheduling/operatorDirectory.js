@@ -48,11 +48,11 @@ async function loadSchedulingOperatorDirectory(pool, input) {
   const roleCapable = active && (input.actorAccessRole === 'owner' || input.actorAccessRole === 'admin' ||
     (input.actorAccessRole === 'member' && current.operational_role === 'dispatcher'));
   const canMutate = roleCapable && input.onboardingComplete === true && input.subscriptionMutable === true;
-  if (!canMutate) {
+  if (!roleCapable) {
     const unavailable = {
+      canRead: false,
       canMutate: false,
-      reason: !active ? 'operator_inactive' : !roleCapable ? 'operator_role_required'
-        : input.onboardingComplete !== true ? 'onboarding_incomplete' : 'subscription_read_only',
+      reason: !active ? 'operator_inactive' : 'operator_role_required',
       actor: {
         profileId: current && current.profile_id || null,
         accessRole: input.actorAccessRole,
@@ -114,8 +114,10 @@ async function loadSchedulingOperatorDirectory(pool, input) {
     })),
   ];
   const directory = {
-    canMutate: true,
-    reason: null,
+    canRead: true,
+    canMutate,
+    reason: canMutate ? null
+      : input.onboardingComplete !== true ? 'onboarding_incomplete' : 'subscription_read_only',
     actor: {
       profileId: current.profile_id || null,
       accessRole: input.actorAccessRole,

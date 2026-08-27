@@ -68,11 +68,15 @@
       var operator = value.schedulingOperator;
       var overview = value.schedulingOverview;
       var categories = ['unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
-      if (!operator || operator.canMutate !== true || !Array.isArray(operator.targets) ||
+      if (!operator || operator.canRead !== true || typeof operator.canMutate !== 'boolean' || !Array.isArray(operator.targets) ||
           typeof operator.digest !== 'string' || !/^[0-9a-f]{64}$/.test(operator.digest) ||
           !overview || overview.version !== 'm22-part5-overview-v1' ||
           typeof overview.timeZone !== 'string' || !overview.definitions || !overview.categories ||
-          !overview.counts || !Array.isArray(overview.records) ||
+          !overview.counts || !Array.isArray(overview.records) || !overview.page ||
+          !Number.isSafeInteger(overview.total) || overview.total < overview.records.length ||
+          !Number.isSafeInteger(overview.shown) || overview.shown !== overview.records.length ||
+          !Number.isSafeInteger(overview.page.size) || overview.page.size < 1 || overview.page.size > 100 ||
+          overview.page.shown !== overview.shown || overview.page.total !== overview.total ||
           typeof overview.digest !== 'string' || !/^[0-9a-f]{64}$/.test(overview.digest) ||
           categories.some(function (name) {
             return typeof overview.definitions[name] !== 'string' || !Array.isArray(overview.categories[name]) ||

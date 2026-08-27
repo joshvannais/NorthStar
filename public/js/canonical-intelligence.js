@@ -256,7 +256,7 @@
   function queryString(filters) {
     if (!filters || typeof filters !== 'object') return '';
     var pairs = [];
-    ['limit', 'status', 'customerId'].forEach(function (key) {
+    ['limit', 'status', 'customerId', 'cursor'].forEach(function (key) {
       if (filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
         pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(filters[key])));
       }

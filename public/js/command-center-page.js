@@ -7,6 +7,7 @@
   var loading = false;
   var chartPeriod = 'daily';
   var schedulingCategory = 'atRisk';
+  var schedulingCursor = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -35,11 +36,64 @@
     }).format(number);
   }
 
-  function formatDate(value) {
+  function tenantTimeZone() {
+    var timeZone = workspace && workspace.schedulingOverview && workspace.schedulingOverview.timeZone;
+    if (typeof timeZone === 'string' && timeZone) return timeZone;
+    return mode === 'demo' ? 'UTC' : null;
+  }
+
+  function formatDate(value, suppliedTimeZone) {
     if (!value) return null;
     var parsed = new Date(value);
     if (!Number.isFinite(parsed.getTime())) return null;
-    return parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+    var timeZone = suppliedTimeZone || tenantTimeZone();
+    if (!timeZone) return null;
+    try {
+      return parsed.toLocaleString([], { timeZone: timeZone, dateStyle: 'medium', timeStyle: 'short' }) +
+        ' (' + timeZone + ')';
+    } catch (_error) { return null; }
+  }
+
+  function tenantCalendarDate(value) {
+    var parsed = new Date(value);
+    var timeZone = tenantTimeZone();
+    if (!Number.isFinite(parsed.getTime()) || !timeZone) return null;
+    try {
+      var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timeZone, year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
+      }).formatToParts(parsed).reduce(function (result, part) {
+        if (part.type !== 'literal') result[part.type] = part.value;
+        return result;
+      }, {});
+      return {
+        year: Number(parts.year), month: Number(parts.month), day: Number(parts.day),
+        weekday: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday),
+      };
+    } catch (_error) { return null; }
+  }
+
+  function tenantChartBucket(value, period) {
+    var parts = tenantCalendarDate(value);
+    if (!parts || parts.weekday < 0) return null;
+    var timeZone = tenantTimeZone();
+    var localCalendarDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+    if (period === 'monthly') {
+      return {
+        key: parts.year + '-' + String(parts.month).padStart(2, '0'),
+        label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', year: 'numeric' }) + ' (' + timeZone + ')',
+      };
+    }
+    if (period === 'weekly') {
+      localCalendarDate.setUTCDate(localCalendarDate.getUTCDate() - ((parts.weekday + 6) % 7));
+      return {
+        key: localCalendarDate.toISOString().slice(0, 10),
+        label: 'Week of ' + localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }) + ' (' + timeZone + ')',
+      };
+    }
+    return {
+      key: [parts.year, String(parts.month).padStart(2, '0'), String(parts.day).padStart(2, '0')].join('-'),
+      label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }) + ' (' + timeZone + ')',
+    };
   }
 
   function titleCase(value) {
@@ -288,18 +342,8 @@
       var key = 'undated';
       var label = safeString(entry.graph.lead && entry.graph.lead.serviceLabel, 'Work');
       if (date) {
-        if (chartPeriod === 'monthly') {
-          key = date.getFullYear() + '-' + date.getMonth();
-          label = date.toLocaleDateString([], { month: 'short', year: 'numeric' });
-        } else if (chartPeriod === 'weekly') {
-          date.setHours(0, 0, 0, 0);
-          date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-          key = date.toISOString().slice(0, 10);
-          label = 'Week of ' + date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        } else {
-          key = date.toISOString().slice(0, 10);
-          label = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        }
+        var bucketAuthority = tenantChartBucket(date, chartPeriod);
+        if (bucketAuthority) { key = bucketAuthority.key; label = bucketAuthority.label; }
       }
       var bucket = grouped.find(function (candidate) { return candidate.key === key; });
       if (!bucket) {
@@ -340,7 +384,7 @@
         .sort(function (left, right) { return new Date(left.authority.scheduledStart) - new Date(right.authority.scheduledStart); })
       : graphs.filter(function (graph) { return formatDate(graph.work && graph.work.scheduledStart); })
         .sort(function (left, right) { return new Date(left.work.scheduledStart) - new Date(right.work.scheduledStart); });
-    byId('commandCenterScheduleCount').textContent = scheduled.length + ' scheduled';
+    byId('commandCenterScheduleCount').textContent = scheduled.length + ' scheduled shown';
     var list = byId('commandCenterSchedule');
     list.replaceChildren();
     if (!scheduled.length) {
@@ -352,7 +396,8 @@
     scheduled.slice(0, 5).forEach(function (graph) {
       var item = element('li');
       var isCanonical = Boolean(graph && graph.authority);
-      var date = formatDate(isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart);
+      var date = formatDate(isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart,
+        canonicalRecords && workspace.schedulingOverview.timeZone);
       var copy = element('div');
       var link = element('a', 'command-center-record-link', safeString(graph.work && graph.work.title,
         safeString(graph.lead && graph.lead.serviceLabel, 'Scheduled work')));
@@ -361,7 +406,10 @@
       var assignment = isCanonical ? titleCase(graph.authority.targetState) : graph.work && graph.work.assignedTo;
       copy.append(link, element('span', '', safeString(graph.customer && graph.customer.name, 'Customer') +
         (assignment ? ' · ' + assignment : ' · Assignment unavailable')));
-      item.append(element('time', '', date), copy);
+      var time = element('time', '', date);
+      time.dateTime = isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart;
+      time.title = date;
+      item.append(time, copy);
       list.appendChild(item);
     });
   }
@@ -387,30 +435,43 @@
     }
     var overview = workspace && workspace.schedulingOverview;
     var operator = workspace && workspace.schedulingOperator;
-    if (!overview || !operator || operator.canMutate !== true) {
+    if (!overview || !operator || operator.canRead !== true) {
       definition.textContent = 'Current owner or active-dispatcher scheduling authority is unavailable. No mutation control is shown.';
       records.appendChild(element('li', 'm22-overview-empty', 'Refresh after verifying the current session, role, membership, onboarding, and subscription state.'));
       return;
     }
     var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
     if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
-    definition.textContent = schedulingCategory === 'all'
+    var page = overview.page || { shown: overview.records.length, total: overview.records.length };
+    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' canonical appointments in ' + overview.timeZone + '. ' + (schedulingCategory === 'all'
       ? 'All canonical appointments. Categories may overlap and are classified only by the server.'
-      : overview.definitions[schedulingCategory];
+      : overview.definitions[schedulingCategory]);
     categoryNames.forEach(function (name) {
-      var count = name === 'all' ? overview.records.length : overview.counts[name];
+      var count = name === 'all' ? overview.total : overview.counts[name];
       var button = element('button', 'm22-category-button', titleCase(name) + ' ' + count);
       button.type = 'button'; button.setAttribute('aria-pressed', name === schedulingCategory ? 'true' : 'false');
       button.addEventListener('click', function () { schedulingCategory = name; renderSchedulingOverview(); });
       categories.appendChild(button);
     });
+    if (page.cursor) {
+      var firstPage = element('button', 'm22-category-button', 'First page');
+      firstPage.type = 'button';
+      firstPage.addEventListener('click', function () { schedulingCursor = null; load(); });
+      categories.appendChild(firstPage);
+    }
+    if (page.nextCursor) {
+      var nextPage = element('button', 'm22-category-button', 'Next ' + page.size + ' appointments');
+      nextPage.type = 'button';
+      nextPage.addEventListener('click', function () { schedulingCursor = page.nextCursor; load(); });
+      categories.appendChild(nextPage);
+    }
     var selectedIds = schedulingCategory === 'all' ? null : new Set(overview.categories[schedulingCategory] || []);
     var selected = overview.records.filter(function (record) { return !selectedIds || selectedIds.has(record.appointmentId); });
     selected.forEach(function (record) {
       var item = element('li', 'm22-overview-record');
       item.dataset.appointmentId = record.appointmentId;
       item.appendChild(element('h3', '', safeString(record.customer && record.customer.name, 'Customer') + ' · ' + safeString(record.work && record.work.title, 'Appointment')));
-      item.appendChild(element('p', '', formatDate(record.authority.scheduledStart) || 'Unscheduled in ' + overview.timeZone));
+      item.appendChild(element('p', '', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Unscheduled in ' + overview.timeZone));
       var states = element('ul', 'm22-state-list');
       [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
         record.conflict.status].filter(Boolean).forEach(function (state) { states.appendChild(schedulingStateChip(state)); });
@@ -421,7 +482,7 @@
         item.appendChild(element('p', 'm22-hard-block', record.conflict.hardConflicts.length + ' hard conflict' + (record.conflict.hardConflicts.length === 1 ? '' : 's') + '. No override is available.'));
       }
       var actions = element('div', 'm22-record-actions');
-      (record.allowedActions || []).forEach(function (action) {
+      (operator.canMutate ? record.allowedActions || [] : []).forEach(function (action) {
         var button = element('button', 'm22-action-button', titleCase(action)); button.type = 'button';
         button.addEventListener('click', function () {
           global.NorthStarSchedulingApproval.open({
@@ -431,9 +492,12 @@
         });
         actions.appendChild(button);
       });
+      if (!operator.canMutate) actions.appendChild(element('p', 'm22-overview-read-only',
+        'Read-only: ' + titleCase(operator.reason) + '. Preview and approval controls are unavailable.'));
       item.appendChild(actions); records.appendChild(item);
     });
-    if (!selected.length) records.appendChild(element('li', 'm22-overview-empty', 'No canonical appointments are currently in this server-defined category.'));
+    if (!selected.length) records.appendChild(element('li', 'm22-overview-empty',
+      'No appointments from this bounded page are in the server-defined category; the complete category count remains shown above.'));
   }
 
   function renderLeads(graphs) {
@@ -508,7 +572,7 @@
 
   function render() {
     var graphs = latestGraphs();
-    byId('commandCenterUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
     renderPriorities(graphs);
     renderPolaris(graphs);
     renderKpis(graphs);
@@ -524,7 +588,7 @@
       : 'The current tenant workspace is ready.', 'ready');
   }
 
-  function load() {
+  function load(expected) {
     if (loading) return Promise.resolve(null);
     if (!contract || !contract.routeForPath(global.location.pathname) || !global.NorthStarAccountSession) {
       setStatus('The shared Command Center contract is unavailable.', 'error');
@@ -535,7 +599,8 @@
     byId('commandCenterContent').setAttribute('aria-busy', 'true');
     byId('commandCenterScheduling').setAttribute('aria-busy', 'true');
     setStatus('Loading the role-authorized workspace…', 'pending');
-    return global.NorthStarAccountSession.fetch('/api/v1/command-center/workspace', {
+    var endpoint = '/api/v1/command-center/workspace' + (schedulingCursor ? '?cursor=' + encodeURIComponent(schedulingCursor) : '');
+    return global.NorthStarAccountSession.fetch(endpoint, {
       method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
     }).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (payload) {
@@ -544,12 +609,28 @@
         }
         workspace = contract.validateWorkspace(payload.data, mode);
         render();
+        if (expected) {
+          var record = workspace.schedulingOverview && (workspace.schedulingOverview.records || [])
+            .find(function (candidate) { return String(candidate.appointmentId) === String(expected.appointmentId); });
+          if (!record || record.authority.revision !== expected.revision || record.authority.digest !== expected.digest) {
+            throw new Error('Command Center refresh did not observe the exact applied scheduling revision.');
+          }
+          return {
+            success: true,
+            appointmentId: String(record.appointmentId),
+            observedRevision: record.authority.revision,
+            observedDigest: record.authority.digest,
+          };
+        }
+        return { success:true };
       });
     }).catch(function (error) {
       workspace = null;
       byId('commandCenterContent').setAttribute('aria-busy', 'false');
       renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');
+      if (expected) throw new Error('Command Center authoritative refresh failed; the visible scheduling overview is stale and unavailable.');
+      return null;
     }).finally(function () {
       loading = false;
       byId('commandCenterRefresh').disabled = false;
@@ -557,7 +638,7 @@
   }
 
   configureMode();
-  byId('commandCenterRefresh').addEventListener('click', load);
+  byId('commandCenterRefresh').addEventListener('click', function () { load(); });
   document.querySelectorAll('[data-chart-period]').forEach(function (button) {
     button.addEventListener('click', function () {
       chartPeriod = button.dataset.chartPeriod;

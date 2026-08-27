@@ -377,6 +377,21 @@ writer evidence only until a different fresh exact-head auditor returns a
 terminal verdict. WebKit is not physical Safari, screenshots are a separate
 ledger, and user visual approval remains unclaimed.
 
+The first independent exact-head audit at
+`0a06ec5dccd4edc8b62ed89888b439cdcad874d4` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 3 / P2 4 / P3 0`. The narrow correction keeps Part 5 in the
+audit-pending state and closes only those seven validated findings: every broad
+canonical scheduling alias now uses the same current operator gate; overview
+counts scan bounded server pages while rows remain paginated and truthfully
+labelled; tenant IANA time is used in both surfaces; each row is rebuilt from
+one current repeatable-read PostgreSQL snapshot; safe reads are separated from
+subscription mutation eligibility; drag preserves exact elapsed duration; and
+durable approval followed by refresh failure remains visibly applied-but-stale
+without any reapply path. The correction also preserves exact PostgreSQL
+microseconds in private keyset cursor evidence so a JavaScript millisecond
+conversion cannot silently omit a row. A new different fresh exact-head audit
+is required before ready, merge, or release.
+
 ### Part 6 — Crew Today experience (planned)
 
 Deliver the mobile-first self/current-crew view of assigned work, schedule and

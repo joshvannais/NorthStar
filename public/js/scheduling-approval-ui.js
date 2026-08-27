@@ -111,8 +111,9 @@
     var contract = global.NorthStarSchedulingTime;
     if (!contract) throw new Error('Tenant scheduling time authority is unavailable.');
     var start = contract.resolveWallTime(active.startDate.value, active.startTime.value, active.timeZone);
-    var end = contract.resolveWallTime(active.endDate.value, active.endTime.value, active.timeZone);
-    if (start.status === 'gap' || end.status === 'gap') {
+    var end = active.preserveElapsedDuration ? null
+      : contract.resolveWallTime(active.endDate.value, active.endTime.value, active.timeZone);
+    if (start.status === 'gap' || end && end.status === 'gap') {
       throw new Error('That wall clock falls in a daylight-saving gap. Choose a valid local time.');
     }
     function candidate(resolution, select, label) {
@@ -137,10 +138,24 @@
       return null;
     }
     var selectedStart = candidate(start, active.startOccurrence, 'start');
-    var selectedEnd = candidate(end, active.endOccurrence, 'end');
+    var selectedEnd;
+    if (active.preserveElapsedDuration) {
+      if (!selectedStart) throw new Error('Choose the explicit daylight-saving occurrence for the moved start.');
+      var derived = contract.formatInstant(selectedStart.epochMilliseconds + active.elapsedMilliseconds, active.timeZone);
+      active.endDate.value = derived.date;
+      active.endTime.value = derived.time;
+      active.endOccurrence.hidden = true;
+      active.endOccurrence.removeAttribute('required');
+      selectedEnd = contract.validateRfc3339InZone(derived.rfc3339, active.timeZone);
+    } else {
+      selectedEnd = candidate(end, active.endOccurrence, 'end');
+    }
     if (!selectedStart || !selectedEnd) throw new Error('Choose the explicit daylight-saving occurrence for each ambiguous wall clock.');
     if (selectedEnd.epochMilliseconds <= selectedStart.epochMilliseconds) throw new Error('Schedule end must be after schedule start.');
-    return { start: selectedStart.rfc3339, end: selectedEnd.rfc3339 };
+    return {
+      start: selectedStart.rfc3339 || selectedStart.raw,
+      end: selectedEnd.rfc3339 || selectedEnd.raw,
+    };
   }
 
   function proposedTarget() {
@@ -269,6 +284,62 @@
     }).finally(function () { if (active) active.previewButton.disabled = false; });
   }
 
+  function appliedAuthority(body) {
+    var data = body && body.data;
+    var current = data && data.scheduleAuthority;
+    if (!current || !Number.isSafeInteger(current.revision) || !/^[0-9a-f]{64}$/.test(current.digest || '')) {
+      throw new Error('The approval response did not include exact durable revision evidence. Reload before any further action.');
+    }
+    return Object.freeze({
+      appointmentId: active.appointmentId,
+      revision: current.revision,
+      digest: current.digest,
+      humanApprovalId: data.humanApproval && data.humanApproval.id || null,
+      idempotencyKey: active.idempotencyKey,
+    });
+  }
+
+  function verifiedRefresh(result, applied) {
+    return Boolean(result && result.success === true && result.appointmentId === applied.appointmentId &&
+      result.observedRevision === applied.revision && result.observedDigest === applied.digest);
+  }
+
+  function showRefreshFailure(error) {
+    if (!active || !active.applied) return;
+    active.approve.disabled = true;
+    active.back.hidden = true;
+    active.retry.hidden = false;
+    active.reload.hidden = false;
+    active.cancel.hidden = true;
+    active.closeButton.hidden = true;
+    setStatus('Approval applied durably at revision ' + active.applied.revision +
+      ', but authoritative refresh failed. Do not approve again. Retry refresh or reload this page. ' +
+      (error && error.message ? error.message : ''), 'applied-refresh-failed', true);
+    active.retry.focus();
+  }
+
+  function refreshApplied() {
+    if (!active || !active.applied) return Promise.resolve(false);
+    var callback = active.onApplied;
+    active.retry.disabled = true;
+    setStatus('Approval applied durably at revision ' + active.applied.revision +
+      '. Verifying that exact authoritative revision…', 'pending', false);
+    return Promise.resolve(callback && callback(active.applied)).then(function (result) {
+      if (!active) return false;
+      if (!verifiedRefresh(result, active.applied)) {
+        throw new Error('The refreshed projection did not prove the exact applied revision and digest.');
+      }
+      setStatus('Authoritative server state refreshed at revision ' + active.applied.revision + '.', 'success', false);
+      active.retry.hidden = true;
+      active.reload.hidden = true;
+      global.setTimeout(close, 500);
+      return true;
+    }).catch(function (error) {
+      showRefreshFailure(error);
+      return false;
+    }).finally(function () { if (active) active.retry.disabled = false; });
+  }
+
   function approve() {
     if (!active || !active.preview || active.approve.disabled) return;
     if (!global.crypto || typeof global.crypto.randomUUID !== 'function') {
@@ -290,17 +361,16 @@
       method: 'POST', credentials: 'same-origin', cache: 'no-store',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': active.idempotencyKey },
       body: JSON.stringify(payload),
-    }).then(function () {
+    }).then(function (body) {
       if (!active) return;
-      var callback = active.onApplied;
-      setStatus('Approval applied durably. Refreshing authoritative server state…', 'success', false);
-      return Promise.resolve(callback && callback()).then(function () {
-        if (!active) return;
-        setStatus('Authoritative server state refreshed.', 'success', false);
-        global.setTimeout(close, 500);
-      });
+      active.applied = appliedAuthority(body);
+      active.cancel.hidden = true;
+      active.closeButton.hidden = true;
+      active.back.hidden = true;
+      return refreshApplied();
     }).catch(function (error) {
       if (!active) return;
+      if (active.applied) { showRefreshFailure(error); return; }
       setStatus(error.message, 'error', true);
       active.approve.disabled = false;
       if ([409, 410, 428].includes(error.status)) active.back.hidden = false;
@@ -331,7 +401,11 @@
 
   function trap(event) {
     if (!active) return;
-    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (active.applied) { setStatus('This approval is durable. Retry refresh or reload before leaving the stale view.', 'applied-refresh-failed', true); return; }
+      close(); return;
+    }
     if (event.key !== 'Tab') return;
     var focusable = Array.from(active.dialog.querySelectorAll('button:not([disabled]):not([hidden]), input:not([disabled]):not([hidden]), select:not([disabled]):not([hidden]), textarea:not([disabled]):not([hidden])'));
     if (!focusable.length) return;
@@ -354,6 +428,20 @@
     startTime.value = proposal.time || existingStart && existingStart.time || '09:00';
     endDate.value = proposal.endDate || existingEnd && existingEnd.date || startDate.value;
     endTime.value = proposal.endTime || existingEnd && existingEnd.time || '10:00';
+    if (active.preserveElapsedDuration) {
+      endDate.readOnly = true;
+      endTime.readOnly = true;
+      try {
+        var proposedStart = contract.resolveWallTime(startDate.value, startTime.value, timeZone);
+        if (proposedStart.status === 'unique') {
+          var derived = contract.formatInstant(
+            proposedStart.candidates[0].epochMilliseconds + active.elapsedMilliseconds, timeZone
+          );
+          endDate.value = derived.date;
+          endTime.value = derived.time;
+        }
+      } catch (_error) { /* The explicit preview validation reports invalid wall time. */ }
+    }
     function field(labelText, input) { var field = el('div', 'm22-dialog-field'); var label = el('label', '', labelText); label.appendChild(input); field.appendChild(label); return field; }
     var grid = el('div', 'm22-dialog-grid');
     grid.append(field('Start date', startDate), field('Start time', startTime), field('End date', endDate), field('End time', endTime));
@@ -424,16 +512,24 @@
     var backButton = el('button', '', 'Change proposal'); backButton.type = 'button'; backButton.hidden = true; backButton.addEventListener('click', back);
     var previewButton = el('button', '', 'Create non-capability preview'); previewButton.type = 'button'; previewButton.dataset.kind = 'approve'; previewButton.addEventListener('click', requestPreview);
     var approveButton = el('button', '', 'Approve current preview'); approveButton.type = 'button'; approveButton.dataset.kind = 'approve'; approveButton.hidden = true; approveButton.addEventListener('click', approve);
-    footerActions.append(backButton, previewButton, approveButton); footer.append(cancel, footerActions);
+    var retryButton = el('button', '', 'Retry authoritative refresh'); retryButton.type = 'button'; retryButton.hidden = true; retryButton.addEventListener('click', refreshApplied);
+    var reloadButton = el('button', '', 'Reload page'); reloadButton.type = 'button'; reloadButton.hidden = true; reloadButton.addEventListener('click', function () { global.location.reload(); });
+    footerActions.append(backButton, previewButton, approveButton, retryButton, reloadButton); footer.append(cancel, footerActions);
     var status = el('p', 'm22-dialog-status', 'Review the current state and prepare a proposal.'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); status.tabIndex = -1;
     body.appendChild(status); dialog.append(header, body, footer); layer.appendChild(dialog); document.body.appendChild(layer);
     active = {
       layer: layer, dialog: dialog, form: form, review: review, status: status,
       back: backButton, previewButton: previewButton, approve: approveButton,
+      retry: retryButton, reload: reloadButton, cancel: cancel, closeButton: closeButton,
       record: record, current: current, directory: directory, action: action,
       appointmentId: appointmentId, title: appointmentTitle, timeZone: timeZone,
       returnFocus: options.returnFocus || document.activeElement,
       onApplied: options.onApplied, keydown: trap, preview: null, idempotencyKey: null,
+      preserveElapsedDuration: options.preserveElapsedDuration === true &&
+        Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0,
+      elapsedMilliseconds: Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0
+        ? options.elapsedMilliseconds : null,
+      applied: null,
     };
     targetField(form, directory);
     scheduleFields(form, current, options.proposal || {}, timeZone);

@@ -623,19 +623,41 @@ class CalendarRenderer {
     var description = document.createElement('p');
     description.textContent = operator && operator.canMutate
       ? 'Every action creates a 15-minute non-capability preview and requires explicit current human approval.'
-      : 'Detailed mutation controls are limited to current owners, admins, and active dispatchers with a mutable subscription.';
+      : operator && operator.canRead
+        ? 'Current owner or dispatcher scheduling truth remains readable; mutation controls are disabled by current account authority.'
+        : 'Detailed scheduling authority is limited to current owners, admins, and active dispatchers.';
     copy.append(title, description); heading.appendChild(copy); this.authorityBoard.appendChild(heading);
     if (!projection) {
       this.authorityBoard.appendChild(Object.assign(document.createElement('p'), { className:'m22-overview-empty', textContent:'Current Calendar authority is loading or unavailable.' }));
       return;
     }
-    if (!operator || operator.canMutate !== true || !overview) {
+    if (!operator || operator.canRead !== true || !overview) {
       var unavailable = document.createElement('p'); unavailable.className = 'm22-overview-empty';
       unavailable.textContent = operator && operator.reason === 'subscription_read_only'
         ? 'This subscription is read-only. No scheduling mutation is available.'
         : 'No owner/dispatcher mutation authority is available for this signed-in account.';
       this.authorityBoard.appendChild(unavailable); return;
     }
+    var page = overview.page || { shown:(overview.records || []).length, total:(overview.records || []).length };
+    var coverage = document.createElement('p');
+    coverage.className = 'm22-overview-coverage';
+    coverage.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' canonical appointments in ' + overview.timeZone +
+      (overview.truncated ? '. Additional appointments remain available through bounded pages.' : '.');
+    this.authorityBoard.appendChild(coverage);
+    var navigation = document.createElement('div'); navigation.className = 'm22-record-actions';
+    if (page.cursor) {
+      var firstPage = document.createElement('button'); firstPage.type = 'button'; firstPage.className = 'm22-action-button';
+      firstPage.textContent = 'First page';
+      firstPage.addEventListener('click', function() { window.refreshCalendar(null, { cursor:null }); });
+      navigation.appendChild(firstPage);
+    }
+    if (page.nextCursor) {
+      var nextPage = document.createElement('button'); nextPage.type = 'button'; nextPage.className = 'm22-action-button';
+      nextPage.textContent = 'Next ' + page.size + ' appointments';
+      nextPage.addEventListener('click', function() { window.refreshCalendar(null, { cursor:page.nextCursor }); });
+      navigation.appendChild(nextPage);
+    }
+    if (navigation.children.length) this.authorityBoard.appendChild(navigation);
     var definitions = document.createElement('p');
     definitions.textContent = 'Server categories: ' + Object.keys(overview.definitions || {}).map(function(key) {
       return key + ' — ' + overview.definitions[key];
@@ -655,7 +677,7 @@ class CalendarRenderer {
         var chip = document.createElement('li'); chip.className = 'm22-state-chip'; chip.dataset.state = flag; chip.textContent = flag.replace(/([A-Z])/g, ' $1'); states.appendChild(chip);
       });
       var actions = document.createElement('div'); actions.className = 'm22-record-actions';
-      (record.allowedActions || []).forEach(function(action) {
+      (operator.canMutate ? record.allowedActions || [] : []).forEach(function(action) {
         var button = document.createElement('button'); button.type = 'button'; button.className = 'm22-action-button';
         button.textContent = action.charAt(0).toUpperCase() + action.slice(1);
         button.addEventListener('click', function() {
@@ -666,6 +688,12 @@ class CalendarRenderer {
         });
         actions.appendChild(button);
       });
+      if (!operator.canMutate) {
+        var readOnly = document.createElement('p');
+        readOnly.className = 'm22-overview-read-only';
+        readOnly.textContent = 'Read-only: ' + String(operator.reason || 'mutation authority unavailable').replace(/_/g, ' ') + '.';
+        actions.appendChild(readOnly);
+      }
       item.append(recordTitle, states, actions); list.appendChild(item);
     });
     if (!list.children.length) list.appendChild(Object.assign(document.createElement('li'), { className:'m22-overview-empty', textContent:'No canonical appointments are available.' }));
@@ -698,9 +726,11 @@ class CalendarData {
         return Array.isArray(events) ? events : [];
       }
 
-      async fetchEvents() {
+      async fetchEvents(cursor) {
         try {
-          await window.CanonicalIntelligence.loadCompatibility('calendar', { limit: 100 });
+          var filters = { limit: 100 };
+          if (cursor) filters.cursor = cursor;
+          await window.CanonicalIntelligence.loadCompatibility('calendar', filters);
           return this.readAuthorizedEvents();
         }
         catch(e) { console.warn('[CalendarData] fetchEvents:', e.message); throw e; }
@@ -782,6 +812,9 @@ class CalendarModal {
       action: record.authority.scheduleState === 'scheduled' ? 'reschedule' : 'schedule',
       timeZone: overview.timeZone,
       proposal: options.proposal || {},
+      elapsedMilliseconds: Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0
+        ? options.elapsedMilliseconds : null,
+      preserveElapsedDuration: options.action === 'calendar_drag_drop',
       returnFocus: options.returnFocus,
       source: options.action === 'calendar_drag_drop' ? 'Calendar drag and drop'
         : options.action === 'calendar_resize' ? 'Calendar resize or touch gesture' : 'Calendar accessible edit control',
@@ -1246,18 +1279,42 @@ window.syncCalendarFromAppStore = function() {
   });
 };
 
-window.refreshCalendar = async function() {
+window.calendarSchedulingCursor = null;
+window.refreshCalendar = async function(expected, navigation) {
+  var requestedCursor = navigation && Object.prototype.hasOwnProperty.call(navigation, 'cursor')
+    ? navigation.cursor : window.calendarSchedulingCursor;
   calRenderer.setLoading(true);
   calRenderer.render();
   try {
-    await calData.fetchEvents();
+    await calData.fetchEvents(requestedCursor);
     calState.events = calData.readAuthorizedEvents();
     calRenderer.setLoading(false);
+    window.calendarSchedulingCursor = requestedCursor || null;
+    var projection = window.CanonicalIntelligence.getProjection('calendar');
+    if (expected) {
+      var record = projection && projection.schedulingOverview && (projection.schedulingOverview.records || [])
+        .find(function(candidate) { return String(candidate.appointmentId) === String(expected.appointmentId); });
+      if (!record || record.authority.revision !== expected.revision || record.authority.digest !== expected.digest) {
+        throw new Error('Calendar refresh did not observe the exact applied scheduling revision.');
+      }
+      calRenderer.render();
+      return {
+        success: true,
+        appointmentId: String(record.appointmentId),
+        observedRevision: record.authority.revision,
+        observedDigest: record.authority.digest
+      };
+    }
+    calRenderer.render();
+    return { success:true };
   } catch(e) {
     calState.events = [];
     calRenderer.setRejected();
+    calRenderer.render();
+    var error = new Error('Calendar authoritative refresh failed; the visible Calendar is stale and unavailable.');
+    error.cause = e;
+    throw error;
   }
-  calRenderer.render();
 };
 
 // Handle event selection

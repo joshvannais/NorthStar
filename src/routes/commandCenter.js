@@ -6,12 +6,12 @@ const { requireTenantAccess } = require('../auth/middleware');
 const { hasPermission, requirePermission } = require('../auth/permissions');
 const {
   getCanonicalGraph,
-  listCanonicalGraphs,
+  listCanonicalGraphPage,
   requestContext,
 } = require('./canonicalPolaris');
 const { buildPaidWorkspace } = require('../commandCenter/workspace');
 const { actorInput, loadSchedulingOperatorDirectory } = require('../scheduling/operatorDirectory');
-const { buildSchedulingOverview } = require('../scheduling/overviewRepository');
+const { buildSchedulingOverviewPage } = require('../scheduling/overviewRepository');
 
 const DETAIL_KINDS = Object.freeze({
   customer: Object.freeze({ idKey: 'customer', resource: 'leads' }),
@@ -50,7 +50,7 @@ function createCommandCenterRouter(options = {}) {
       const pool = poolProvider();
       if (!context || !pool || typeof pool.query !== 'function') return unavailable(req, res);
       const schedulingOperator = await loadSchedulingOperatorDirectory(pool, actorInput(req));
-      if (!schedulingOperator.canMutate) {
+      if (!schedulingOperator.canRead) {
         return res.status(403).json({
           success: false,
           requestId: requestId(req),
@@ -60,22 +60,30 @@ function createCommandCenterRouter(options = {}) {
           },
         });
       }
-      const items = await listCanonicalGraphs(pool, context, { limit: 100, status: null, customerId: null });
-      const schedulingOverview = await buildSchedulingOverview(pool, {
+      const evaluated = await buildSchedulingOverviewPage(pool, {
         organizationId: context.organizationId,
         actorUserId: context.userId,
         actorAccessRole: req.userRole,
         authSessionId: req.authSession && req.authSession.id,
-        items,
+        cursor: Object.prototype.hasOwnProperty.call(req.query, 'cursor') ? req.query.cursor : null,
+        loadPage: (client, page) => listCanonicalGraphPage(client, context, {
+          limit: page.limit, cursor: page.cursor, status: null, customerId: null,
+        }),
       });
       return res.json({
         success: true,
-        data: buildPaidWorkspace({ context, items, schedulingOperator, schedulingOverview }),
+        data: buildPaidWorkspace({
+          context,
+          items: evaluated.pageItems,
+          schedulingOperator,
+          schedulingOverview: evaluated.overview,
+        }),
         requestId: requestId(req),
       });
     } catch (_error) {
-      if (_error && _error.status === 403 && _error.code) {
-        return res.status(403).json({
+      if (_error && Number.isInteger(_error.status || _error.statusCode) && _error.code) {
+        const status = _error.status || _error.statusCode;
+        return res.status(status).json({
           success: false,
           requestId: requestId(req),
           error: { code: _error.code, message: _error.message },
@@ -105,6 +113,17 @@ function createCommandCenterRouter(options = {}) {
       const context = paidRequestContext(req);
       const pool = poolProvider();
       if (!context || !pool || typeof pool.query !== 'function') return unavailable(req, res);
+      const schedulingOperator = await loadSchedulingOperatorDirectory(pool, actorInput(req));
+      if (!schedulingOperator.canRead) {
+        return res.status(403).json({
+          success: false,
+          requestId: requestId(req),
+          error: {
+            code: 'COMMAND_CENTER_OPERATOR_REQUIRED',
+            message: 'The scheduling Command Center is limited to current owners, admins, and active dispatchers.',
+          },
+        });
+      }
       const item = await getCanonicalGraph(pool, context, req.params.id);
       if (!item || item.ids[definition.idKey] !== req.params.id) {
         return res.status(404).json({

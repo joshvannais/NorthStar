@@ -241,8 +241,15 @@ enforces the inclusive 65,536-byte raw limit before the global parser while
 rejecting decoded duplicate keys and ambiguous/malformed envelopes. Mounted
 regressions cover fixed/chunked/absolute-form request targets, security headers,
 success/error/replay/concurrency all-table deltas, paid/demo/session substitution,
-and profile/crew/empty candidate shapes. The corrected head still requires a
-different fresh exact-head independent audit before release.
+and profile/crew/empty candidate shapes. A subsequent narrow correction binds
+the zero-write exemption to a strict, non-normalizing raw HTTP target candidate
+and a second private marker set only by the actual mounted recommendation route
+before authentication. Literal and percent-encoded dot-segment decoys therefore
+remain unrelated 404s with their normal anonymous audit signal; genuine origin
+and validated absolute forms retain the 64 KiB/duplicate-key boundary and zero
+durable writes. Raw backslashes, fragments, repeated slash joins, malformed
+percent encodings, and ambiguous authorities fail closed. The corrected head
+still requires a different fresh exact-head independent audit before release.
 
 ### Part 4 — Human-approved scheduling and dispatch workflow (planned)
 

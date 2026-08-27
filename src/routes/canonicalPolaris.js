@@ -855,8 +855,9 @@ function createCanonicalRouter(options) {
       }
     });
 
-  router.post('/appointments/:id/recommendations', dependencies.onboardedAuth, requireCanonicalContext,
-    dependencies.permission('calendar', 'read'), requireRecommendationBodyBoundary, async function (req, res) {
+  router.post('/appointments/:id/recommendations', requireRecommendationBodyBoundary,
+    dependencies.onboardedAuth, requireCanonicalContext,
+    dependencies.permission('calendar', 'read'), async function (req, res) {
       const context = requestContext(req);
       try {
         const evaluation = normalizeRecommendationEvaluation({ body: req.body, appointmentId: req.params.id });

@@ -259,6 +259,15 @@ async function publicTableCounts(pool) {
   return counts;
 }
 
+async function durableRequestAuditSignal(pool) {
+  const result = await pool.query(
+    `SELECT
+       (SELECT count(*)::bigint FROM public.audit_logs) +
+       (SELECT COALESCE(sum(request_count),0)::bigint FROM public.api_observability_hourly) AS total`
+  );
+  return Number(result.rows[0].total);
+}
+
 async function waitForAuditFinish() {
   await new Promise(resolve => setTimeout(resolve, 200));
 }
@@ -742,6 +751,70 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
       contentLength: Buffer.byteLength(JSON.stringify(base), 'utf8') - 1,
     });
     expect(truncatedLength.status).not.toBe(200);
+  }, 180000);
+
+  test('binds the zero-write marker to strict raw identity and actual Express route reachability', async () => {
+    const pathName = `/api/v1/canonical/appointments/${IDS.appointment}/recommendations`;
+    const body = JSON.stringify(recommendationBody(pins));
+    const protectedTargets = [
+      pathName,
+      `/API/V1/CANONICAL/APPOINTMENTS/${IDS.appointment.toUpperCase()}/RECOMMENDATIONS/?raw=query`,
+      `http://northstar.invalid${pathName}`,
+      `https://user:password@northstar.invalid:443${pathName}?proxy=true`,
+      `http://user%3Apassword@northstar.invalid${pathName}`,
+      `http://[2001:db8::1]:8080${pathName}`,
+      ...['!', '$', '&', '(', ')', '*', '+', ',', '=']
+        .map(delimiter => `http://exa${delimiter}mple.invalid${pathName}`),
+      `/api/v1/canonical/appointments/${IDS.appointment}%2Fchild/recommendations`,
+      `/api/v1/canonical/appointments/${IDS.appointment}%5Cchild/recommendations`,
+    ];
+    for (const target of protectedTargets) {
+      const before = await durableRequestAuditSignal(migrationPool);
+      const response = await rawHttpRequest(rawPort, { path: target, body });
+      expect(response.status).toBe(401);
+      expect({ target, headers: response.headers }).toEqual({
+        target,
+        headers: expect.objectContaining({
+          'content-security-policy': expect.any(String),
+          'x-content-type-options': 'nosniff',
+          'cache-control': expect.stringContaining('no-store'),
+        }),
+      });
+      await waitForAuditFinish();
+      expect(await durableRequestAuditSignal(migrationPool)).toBe(before);
+    }
+
+    const ordinarySibling = `/api/v1/canonical/not-a-real-route`;
+    const unprotectedTargets = [
+      { path: ordinarySibling, status: 404, noStore: true, auditDelta: 1 },
+      { path: `http://northstar.invalid/api/v1/canonical/ignored/../appointments/${IDS.appointment}/recommendations`, status: 404, noStore: true, auditDelta: 1 },
+      { path: `http://northstar.invalid/api/v1/canonical/ignored/%2e%2e/appointments/${IDS.appointment}/recommendations`, status: 404, noStore: true, auditDelta: 1 },
+      { path: `/api%2Fv1%2Fcanonical%2Fappointments%2F${IDS.appointment}%2Frecommendations`, status: 404, noStore: false, auditDelta: 0 },
+      { path: `${ordinarySibling}?next=${encodeURIComponent(pathName)}`, status: 404, noStore: true, auditDelta: 1 },
+      { path: `/api/v1/canonical/appointments\\${IDS.appointment}\\recommendations`, status: 404, noStore: true, auditDelta: 1 },
+      { path: `/api/v1/canonical//appointments/${IDS.appointment}/recommendations`, status: 500, noStore: true, auditDelta: 1 },
+      { path: `${pathName}#fragment`, status: 500, noStore: true, auditDelta: 1 },
+      { path: `http:///api/v1/canonical/appointments/${IDS.appointment}/recommendations`, status: 500, noStore: true, auditDelta: 1 },
+      { path: `http://one.invalid@two.invalid@three.invalid${pathName}`, status: 500, noStore: true, auditDelta: 1 },
+      { path: `http://%65xample.invalid${pathName}`, status: 404, noStore: false, auditDelta: 0 },
+      { path: `http://exa;mple.invalid${pathName}`, status: 404, noStore: false, auditDelta: 0 },
+      { path: `http://exa'mple.invalid${pathName}`, status: 404, noStore: false, auditDelta: 0 },
+      { path: `http://northstar.invalid/api/v1/canonical/appointments\\${IDS.appointment}\\recommendations`, status: 500, noStore: true, auditDelta: 1 },
+      { path: `/api/v1/canonical/appointments/%zz/recommendations`, status: 400, noStore: true, auditDelta: 1 },
+    ];
+    for (const target of unprotectedTargets) {
+      const before = await durableRequestAuditSignal(migrationPool);
+      const response = await rawHttpRequest(rawPort, { path: target.path, body });
+      expect(response.status).toBe(target.status);
+      expect(response.headers['content-security-policy']).toEqual(expect.any(String));
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      if (target.noStore) expect(response.headers['cache-control']).toContain('no-store');
+      await waitForAuditFinish();
+      const after = await durableRequestAuditSignal(migrationPool);
+      expect({ path: target.path, before, after }).toEqual({
+        path: target.path, before, after: before + target.auditDelta,
+      });
+    }
   }, 180000);
 
   test('keeps success, error, replay, and concurrency zero-write across every public table', async () => {

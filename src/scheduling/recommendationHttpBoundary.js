@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const net = require('net');
 const { MAXIMUM_BODY_BYTES } = require('./recommendationContract');
 const { securityHeaders } = require('../middleware/security');
 
@@ -8,7 +9,8 @@ const { securityHeaders } = require('../middleware/security');
 // case-insensitive and optional-trailing-slash spellings. Otherwise one of
 // those spellings could fall through the broader parser/audit boundary before
 // reaching the same handler.
-const RECOMMENDATION_PATH = /^\/api\/v1\/canonical\/appointments\/[^/]+\/recommendations\/?$/i;
+const RECOMMENDATION_PATH = /^\/api\/v1\/canonical\/appointments\/([^/]+)\/recommendations\/?$/i;
+const RAW_TARGET_CANDIDATE = Symbol('m22RecommendationRawTargetCandidate');
 const ZERO_DURABLE_WRITE = Symbol('m22RecommendationZeroDurableWrite');
 const BODY_VALIDATED = Symbol('m22RecommendationBodyValidated');
 const rawRecommendationBody = express.raw({
@@ -24,16 +26,63 @@ class DuplicateJsonKeyError extends Error {
   }
 }
 
-function requestPath(req) {
-  const target = String(req.originalUrl || req.url || '');
-  if (/^https?:\/\//i.test(target)) {
-    try { return new URL(target).pathname; } catch (_) { return ''; }
+function hasValidPercentTriplets(value) {
+  return !/%(?![0-9a-f]{2})/i.test(value);
+}
+
+function validPort(value) {
+  return /^[0-9]+$/.test(value) && Number(value) <= 65535;
+}
+
+function validAbsoluteAuthority(authority) {
+  if (!authority || /[^\x21-\x7e]/.test(authority) || /[\\/?#]/.test(authority) ||
+      !hasValidPercentTriplets(authority)) return false;
+  const at = authority.indexOf('@');
+  if (at !== authority.lastIndexOf('@')) return false;
+  const userinfo = at === -1 ? '' : authority.slice(0, at);
+  const hostPort = at === -1 ? authority : authority.slice(at + 1);
+  if (at !== -1 && !/^[A-Za-z0-9._~!$&'()*+,;=:%-]*$/.test(userinfo)) return false;
+  if (!hostPort) return false;
+
+  if (hostPort[0] === '[') {
+    const close = hostPort.indexOf(']');
+    if (close <= 1 || net.isIP(hostPort.slice(1, close)) !== 6) return false;
+    const suffix = hostPort.slice(close + 1);
+    return suffix === '' || (suffix[0] === ':' && validPort(suffix.slice(1)));
   }
-  return target.split('?')[0];
+
+  const firstColon = hostPort.indexOf(':');
+  if (firstColon !== hostPort.lastIndexOf(':')) return false;
+  const host = firstColon === -1 ? hostPort : hostPort.slice(0, firstColon);
+  const port = firstColon === -1 ? null : hostPort.slice(firstColon + 1);
+  // Stay within the conventional ASCII reg-name subset that Node's legacy URL
+  // parser (and therefore Express 4) preserves as an authority. Although RFC
+  // reg-name permits more sub-delimiters, legacy parsing can reinterpret some
+  // of them as pathname bytes and would break the soundness guarantee.
+  return Boolean(host) && /^[A-Za-z0-9._~!$&()*+,=-]+$/.test(host) &&
+    (port === null || validPort(port));
+}
+
+function rawRequestPath(req) {
+  const target = String(req.originalUrl || req.url || '');
+  const origin = target.match(/^(\/[^?#\\\s]*)(?:\?[^#\\\s]*)?$/);
+  if (origin) return hasValidPercentTriplets(target) ? origin[1] : '';
+
+  const absolute = target.match(/^(https?):\/\/([^/?#\\\s]+)(\/[^?#\\\s]*)(?:\?[^#\\\s]*)?$/i);
+  if (!absolute || !validAbsoluteAuthority(absolute[2]) || !hasValidPercentTriplets(target)) return '';
+  return absolute[3];
 }
 
 function isRecommendationRequest(req) {
-  return String(req.method || '').toUpperCase() === 'POST' && RECOMMENDATION_PATH.test(requestPath(req));
+  if (String(req.method || '').toUpperCase() !== 'POST') return false;
+  const match = RECOMMENDATION_PATH.exec(rawRequestPath(req));
+  if (!match) return false;
+  try {
+    decodeURIComponent(match[1]);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function boundaryError(statusCode, code, message) {
@@ -173,7 +222,11 @@ function recommendationBodyBoundary(req, res, next) {
   // middleware. Apply the same established headers here so every response from
   // this early exact boundary keeps the platform security/cache contract.
   return securityHeaders(req, res, function afterRecommendationSecurityHeaders() {
-    Object.defineProperty(req, ZERO_DURABLE_WRITE, {
+    // The mounted route is case-insensitive while the shared middleware's API
+    // cache predicate is intentionally case-sensitive. This exact boundary
+    // must remain no-store for every spelling that can reach the same route.
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    Object.defineProperty(req, RAW_TARGET_CANDIDATE, {
       value: true, enumerable: false, configurable: false, writable: false,
     });
     if (!contentTypeAllowed(req)) {
@@ -206,13 +259,18 @@ function recommendationBodyBoundary(req, res, next) {
 }
 
 function requireRecommendationBodyBoundary(req, _res, next) {
-  if (isRecommendationRequest(req) && req[BODY_VALIDATED] === true) return next();
+  if (req[RAW_TARGET_CANDIDATE] === true && req[BODY_VALIDATED] === true) {
+    Object.defineProperty(req, ZERO_DURABLE_WRITE, {
+      value: true, enumerable: false, configurable: false, writable: false,
+    });
+    return next();
+  }
   return next(boundaryError(500, 'M22_RECOMMENDATION_BODY_BOUNDARY_UNAVAILABLE',
     'Recommendation request validation is unavailable.'));
 }
 
 function isZeroDurableWriteRecommendation(req) {
-  return isRecommendationRequest(req) && req[ZERO_DURABLE_WRITE] === true;
+  return Boolean(req && req[ZERO_DURABLE_WRITE] === true);
 }
 
 module.exports = {

@@ -126,6 +126,16 @@ describe('Mission 22 Part 3 route/recommendation contract', () => {
       method: 'POST',
       originalUrl: `http://northstar.invalid@attacker.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations`,
     })).toBe(true);
+    expect(isRecommendationRequest({
+      method: 'POST',
+      originalUrl: `https://user:password@[2001:db8::1]:443/api/v1/canonical/appointments/${APPOINTMENT}/recommendations?proxy=true`,
+    })).toBe(true);
+    for (const host of ['exa!mple.invalid', 'exa$mple.invalid', 'exa&mple.invalid', 'exa(mple.invalid',
+      'exa)mple.invalid', 'exa*mple.invalid', 'exa+mple.invalid', 'exa,mple.invalid', 'exa=mple.invalid']) {
+      expect(isRecommendationRequest({
+        method: 'POST', originalUrl: `http://${host}/api/v1/canonical/appointments/${APPOINTMENT}/recommendations`,
+      })).toBe(true);
+    }
     for (const changed of [
       { ...exact, method: 'GET' },
       { ...exact, originalUrl: `/api/v1/canonical/appointments/${APPOINTMENT}/conflicts` },
@@ -134,6 +144,18 @@ describe('Mission 22 Part 3 route/recommendation contract', () => {
       { ...exact, originalUrl: `/api/v1/canonical/appointments//recommendations` },
       { ...exact, originalUrl: `/api%2fv1%2fcanonical%2fappointments%2f${APPOINTMENT}%2frecommendations` },
       { ...exact, originalUrl: `http://attacker.invalid/not-the-endpoint?next=/api/v1/canonical/appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http://northstar.invalid/api/v1/canonical/ignored/../appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http://northstar.invalid/api/v1/canonical/ignored/%2e%2e/appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http:///api/v1/canonical/appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http://one.invalid@two.invalid@three.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http://%65xample.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http://exa;mple.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http://exa'mple.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `http://northstar.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations#fragment` },
+      { ...exact, originalUrl: `http://northstar.invalid/api/v1/canonical/appointments\\${APPOINTMENT}\\recommendations` },
+      { ...exact, originalUrl: `/api/v1/canonical//appointments/${APPOINTMENT}/recommendations` },
+      { ...exact, originalUrl: `/api/v1/canonical/appointments/%zz/recommendations` },
+      { ...exact, originalUrl: `/api/v1/canonical/appointments/%ff/recommendations` },
     ]) expect(isRecommendationRequest(changed)).toBe(false);
   });
 

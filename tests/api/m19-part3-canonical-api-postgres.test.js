@@ -97,10 +97,10 @@ async function applyMigrations(pool) {
       actorUserId: userId,
       actorAccessRole: 'owner',
       membershipId: null,
+      authSessionId: authSessions.get(userId),
       onboardingComplete: false,
-      subscriptionMutable: false,
     });
-    expect(directory).toMatchObject({ canRead: true, canMutate: false });
+    expect(directory).toMatchObject({ canRead: true, canMutate: true });
   }
 }
 

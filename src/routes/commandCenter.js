@@ -35,6 +35,16 @@ function unavailable(req, res) {
   });
 }
 
+function typedFailure(req, res, error) {
+  const status = error && (error.status || error.statusCode);
+  if (!Number.isInteger(status) || !error.code) return null;
+  return res.status(status).json({
+    success: false,
+    requestId: requestId(req),
+    error: { code: error.code, message: error.message },
+  });
+}
+
 function paidRequestContext(req) {
   const context = requestContext(req);
   if (!context) return null;
@@ -85,14 +95,8 @@ function createCommandCenterRouter(options = {}) {
         requestId: requestId(req),
       });
     } catch (_error) {
-      if (_error && Number.isInteger(_error.status || _error.statusCode) && _error.code) {
-        const status = _error.status || _error.statusCode;
-        return res.status(status).json({
-          success: false,
-          requestId: requestId(req),
-          error: { code: _error.code, message: _error.message },
-        });
-      }
+      const typed = typedFailure(req, res, _error);
+      if (typed) return typed;
       return unavailable(req, res);
     }
   });
@@ -139,6 +143,8 @@ function createCommandCenterRouter(options = {}) {
       const workspace = buildPaidWorkspace({ context, items: [item] });
       return res.json({ success: true, data: workspace.graphs[0], integrity: workspace.integrity, requestId: requestId(req) });
     } catch (_error) {
+      const typed = typedFailure(req, res, _error);
+      if (typed) return typed;
       return unavailable(req, res);
     }
   });

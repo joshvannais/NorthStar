@@ -1,0 +1,68 @@
+{
+  "matrix": [
+    {
+      "engine": "installed Chrome 151",
+      "viewport": "desktop",
+      "theme": "light",
+      "previews": 14,
+      "approvals": 11,
+      "finalRevision": 12,
+      "initialTargetDirectory": { "shown": 200, "total": 207 },
+      "uuidSearchResults": 1,
+      "textSearchResults": 3,
+      "commandCenterPages": 9,
+      "staleTraversalStatus": 409,
+      "externalProviderCalls": 0,
+      "directPatchAttempts": 0,
+      "passed": true
+    },
+    {
+      "engine": "actual Playwright WebKit 26.5",
+      "viewport": "desktop",
+      "theme": "dark",
+      "previews": 14,
+      "approvals": 11,
+      "finalRevision": 12,
+      "initialTargetDirectory": { "shown": 200, "total": 207 },
+      "uuidSearchResults": 1,
+      "textSearchResults": 3,
+      "commandCenterPages": 9,
+      "staleTraversalStatus": 409,
+      "externalProviderCalls": 0,
+      "directPatchAttempts": 0,
+      "passed": true
+    },
+    {
+      "engine": "installed Chrome 151",
+      "viewport": "mobile",
+      "theme": "dark",
+      "previews": 13,
+      "approvals": 10,
+      "finalRevision": 11,
+      "initialTargetDirectory": { "shown": 200, "total": 207 },
+      "uuidSearchResults": 1,
+      "textSearchResults": 3,
+      "commandCenterPages": 9,
+      "staleTraversalStatus": 409,
+      "externalProviderCalls": 0,
+      "directPatchAttempts": 0,
+      "passed": true
+    },
+    {
+      "engine": "actual Playwright WebKit 26.5",
+      "viewport": "mobile",
+      "theme": "light",
+      "previews": 13,
+      "approvals": 10,
+      "finalRevision": 11,
+      "initialTargetDirectory": { "shown": 200, "total": 207 },
+      "uuidSearchResults": 1,
+      "textSearchResults": 3,
+      "commandCenterPages": 9,
+      "staleTraversalStatus": 409,
+      "externalProviderCalls": 0,
+      "directPatchAttempts": 0,
+      "passed": true
+    }
+  ]
+}

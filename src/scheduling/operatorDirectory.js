@@ -1,7 +1,7 @@
 'use strict';
 
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
-const { canMutateInternal } = require('../accounts/subscriptionPolicy');
+const { canMutateInternal, projectSubscription } = require('../accounts/subscriptionPolicy');
 
 const MAXIMUM_DIRECTORY_ENTRIES = 100;
 const TARGET_DIRECTORY_PAGE_SIZE = 25;
@@ -11,6 +11,7 @@ const MAXIMUM_TARGET_QUERY_CHARACTERS = 100;
 const MAXIMUM_TARGET_QUERY_BYTES = 400;
 const MAXIMUM_TARGET_CURSOR_BYTES = 4096;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const UUID_INPUT = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function text(value) {
   return value === null || value === undefined ? '' : String(value);
@@ -24,6 +25,7 @@ function actorInput(req) {
     actorUserId: tenant.userId,
     actorAccessRole: req && req.userRole,
     membershipId: authority.membership_id || null,
+    authSessionId: req && req.authSession && req.authSession.id || null,
     onboardingComplete: Boolean(req && req.user && req.user.onboardingStatus === 'complete'),
     subscriptionMutable: Boolean(req && canMutateInternal(req.subscriptionAuthority)),
   };
@@ -46,17 +48,17 @@ function canonicalTargetQuery(value) {
       /[\u0000-\u001f\u007f]/.test(normalized)) {
     throw invalidTargetRequest('The target search query is invalid.');
   }
-  return normalized;
+  return UUID_INPUT.test(normalized) ? normalized.toLowerCase() : normalized;
 }
 
 function canonicalCursorPayload(payload) {
   return {
-    version: 1,
+    version: 2,
     operation: 'm22_operator_target_directory',
     organizationId: payload.organizationId,
     query: payload.query,
+    datasetDigest: payload.datasetDigest,
     kindRank: payload.kindRank,
-    label: payload.label,
     id: payload.id,
   };
 }
@@ -83,14 +85,14 @@ function decodeOperatorTargetCursor(raw, authority) {
     throw invalidTargetRequest('The target directory cursor is invalid.', 'INVALID_OPERATOR_TARGET_CURSOR');
   }
   const keys = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed) : [];
-  const expectedKeys = ['version', 'operation', 'organizationId', 'query', 'kindRank', 'label', 'id'];
+  const expectedKeys = ['version', 'operation', 'organizationId', 'query', 'datasetDigest', 'kindRank', 'id'];
   const canonical = parsed && canonicalCursorPayload(parsed);
   if (!canonical || keys.length !== expectedKeys.length || expectedKeys.some((key, index) => keys[index] !== key) ||
-      JSON.stringify(canonical) !== source || parsed.version !== 1 ||
+      JSON.stringify(canonical) !== source || parsed.version !== 2 ||
       parsed.operation !== 'm22_operator_target_directory' || parsed.organizationId !== authority.organizationId ||
-      parsed.query !== authority.query || ![1, 2].includes(parsed.kindRank) ||
-      typeof parsed.label !== 'string' || parsed.label.length < 1 || parsed.label.length > 480 ||
-      Buffer.byteLength(parsed.label, 'utf8') > 1920 || parsed.id !== String(parsed.id || '').toLowerCase() ||
+      parsed.query !== authority.query || typeof parsed.datasetDigest !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(parsed.datasetDigest) || ![1, 2].includes(parsed.kindRank) ||
+      parsed.id !== String(parsed.id || '').toLowerCase() ||
       !UUID.test(String(parsed.id || ''))) {
     throw invalidTargetRequest('The target directory cursor is invalid.', 'INVALID_OPERATOR_TARGET_CURSOR');
   }
@@ -113,7 +115,7 @@ function parseOperatorTargetRequest(query, organizationId) {
 
 function validateInput(pool, input) {
   if (!pool || typeof pool.query !== 'function' || !input || !input.organizationId ||
-      !input.actorUserId || !input.actorAccessRole) {
+      !input.actorUserId || !input.actorAccessRole || !input.authSessionId) {
     const error = new Error('Scheduling operator authority is unavailable.');
     error.code = 'M22_OPERATOR_AUTHORITY_UNAVAILABLE';
     error.status = 503;
@@ -143,33 +145,71 @@ async function currentOperator(pool, input) {
   validateInput(pool, input);
   const actor = await pool.query(
     `SELECT profile.id AS profile_id, profile.operational_role,
-            membership.id AS membership_id, membership.status AS membership_status,
-            account.status AS user_status
+            membership.id AS membership_id, membership.role AS access_role,
+            membership.status AS membership_status, account.status AS user_status,
+            session.id AS session_id, session.user_id AS session_user_id,
+            session.organization_id AS session_organization_id,
+            session.membership_id AS session_membership_id,
+            session.status AS session_status, session.access_expires_at,
+            CASE WHEN active_profile.id IS NOT NULL THEN 'complete' ELSE onboarding.status END AS onboarding_status,
+            subscription.status AS subscription_status,
+            subscription.trial_started_at, subscription.trial_ends_at,
+            clock_timestamp() AS server_now
        FROM public.organization_memberships membership
        JOIN public.users account
          ON account.organization_id=membership.organization_id AND account.id=membership.user_id
        LEFT JOIN public.workforce_profiles profile
          ON profile.organization_id=membership.organization_id AND profile.membership_id=membership.id
+       LEFT JOIN public.auth_sessions session ON session.id=$4::uuid
+       JOIN public.organization_onboarding onboarding
+         ON onboarding.organization_id=membership.organization_id
+       LEFT JOIN public.canonical_business_profiles active_profile
+         ON active_profile.organization_id=membership.organization_id AND active_profile.is_active=TRUE
+       LEFT JOIN LATERAL (
+         SELECT current_subscription.status,current_subscription.trial_started_at,current_subscription.trial_ends_at
+           FROM public.subscriptions current_subscription
+          WHERE current_subscription.organization_id=membership.organization_id
+          LIMIT 1
+       ) subscription ON TRUE
       WHERE membership.organization_id=$1 AND membership.user_id=$2
         AND ($3::uuid IS NULL OR membership.id=$3::uuid)`,
-    [input.organizationId, input.actorUserId, input.membershipId]
+    [input.organizationId, input.actorUserId, input.membershipId, input.authSessionId]
   );
   return actor.rowCount === 1 ? actor.rows[0] : null;
 }
 
+function noncurrentSession() {
+  const error = new Error('The signed-in scheduling session is no longer current.');
+  error.code = 'M22_OPERATOR_SESSION_NOT_CURRENT';
+  error.status = 401;
+  error.statusCode = 401;
+  return error;
+}
+
 function operatorAuthority(input, current) {
+  if (current) {
+    const sessionCurrent = current.session_id === input.authSessionId &&
+      current.session_user_id === input.actorUserId &&
+      current.session_organization_id === input.organizationId &&
+      current.session_membership_id === current.membership_id && current.session_status === 'active' &&
+      current.access_expires_at && new Date(current.access_expires_at).getTime() > new Date(current.server_now).getTime();
+    if (!sessionCurrent) throw noncurrentSession();
+  }
   const active = Boolean(current && current.membership_status === 'active' && current.user_status === 'active');
-  const canRead = active && (input.actorAccessRole === 'owner' || input.actorAccessRole === 'admin' ||
-    (input.actorAccessRole === 'member' && current.operational_role === 'dispatcher'));
-  const canMutate = canRead && input.onboardingComplete === true && input.subscriptionMutable === true;
+  const authorityChanged = Boolean(current && current.access_role !== input.actorAccessRole);
+  const canRead = active && !authorityChanged && (current.access_role === 'owner' || current.access_role === 'admin' ||
+    (current.access_role === 'member' && current.operational_role === 'dispatcher'));
+  const currentOnboardingComplete = Boolean(current && current.onboarding_status === 'complete');
+  const currentSubscriptionMutable = Boolean(current && canMutateInternal(projectSubscription(current)));
+  const canMutate = canRead && currentOnboardingComplete && currentSubscriptionMutable;
   return Object.freeze({
     canRead,
     canMutate,
-    reason: !canRead ? (!active ? 'operator_inactive' : 'operator_role_required')
-      : canMutate ? null : input.onboardingComplete !== true ? 'onboarding_incomplete' : 'subscription_read_only',
+    reason: !canRead ? (!active ? 'operator_inactive' : authorityChanged ? 'operator_authority_changed' : 'operator_role_required')
+      : canMutate ? null : !currentOnboardingComplete ? 'onboarding_incomplete' : 'subscription_read_only',
     actor: {
       profileId: current && current.profile_id || null,
-      accessRole: input.actorAccessRole,
+      accessRole: current && current.access_role || null,
       operationalRole: current && current.operational_role || null,
     },
   });
@@ -316,29 +356,48 @@ async function loadSchedulingOperatorTargetPageFromSnapshot(pool, input) {
      ), filtered AS MATERIALIZED (
        SELECT * FROM target_candidates
         WHERE $2::text='' OR LEFT(LOWER(label),CHAR_LENGTH($2::text))=LOWER($2::text) OR id::text=$2::text
+     ), dataset AS MATERIALIZED (
+       SELECT COUNT(*)::int AS total_count,
+              COALESCE(pg_catalog.bit_xor(pg_catalog.hashtextextended(kind_rank::text || ':' || id::text,0)),0)::text AS hash_a,
+              COALESCE(pg_catalog.bit_xor(pg_catalog.hashtextextended(kind_rank::text || ':' || id::text,7046029254386353131)),0)::text AS hash_b
+         FROM filtered
      )
      SELECT page.kind_rank,page.kind,page.id,page.label,page.operational_role,page.access_role,
-            totals.total_count
-       FROM (SELECT COUNT(*)::int AS total_count FROM filtered) totals
+            dataset.total_count,dataset.hash_a,dataset.hash_b
+       FROM dataset
        LEFT JOIN LATERAL (
          SELECT filtered.*
            FROM filtered
-          WHERE $3::int IS NULL OR (kind_rank,label COLLATE "C",id) >
-                ($3::int,$4::text COLLATE "C",$5::uuid)
-          ORDER BY kind_rank,label COLLATE "C",id
+          WHERE $3::int IS NULL OR (kind_rank,id) > ($3::int,$4::uuid)
+          ORDER BY kind_rank,id
           LIMIT ${TARGET_DIRECTORY_PAGE_SIZE + 1}
        ) page ON TRUE`,
-    [input.organizationId, query, cursor && cursor.kindRank, cursor && cursor.label, cursor && cursor.id]
+    [input.organizationId, query, cursor && cursor.kindRank, cursor && cursor.id]
   );
   const total = result.rows.length ? Number(result.rows[0].total_count) : 0;
+  const datasetDigest = sha256(stableValue({
+    version: 1,
+    organizationId: input.organizationId,
+    query,
+    total,
+    hashA: result.rows.length ? result.rows[0].hash_a : '0',
+    hashB: result.rows.length ? result.rows[0].hash_b : '0',
+  }));
+  if (cursor && cursor.datasetDigest !== datasetDigest) {
+    const stale = new Error('The current target directory changed. Restart this bounded search.');
+    stale.code = 'M22_OPERATOR_TARGET_DIRECTORY_STALE';
+    stale.status = 409;
+    stale.statusCode = 409;
+    throw stale;
+  }
   const resultRows = result.rows.filter(row => row.id);
   const pageRows = resultRows.slice(0, TARGET_DIRECTORY_PAGE_SIZE);
   const hasMore = resultRows.length > TARGET_DIRECTORY_PAGE_SIZE;
   const nextCursor = hasMore && pageRows.length ? encodeOperatorTargetCursor({
     organizationId: input.organizationId,
     query,
+    datasetDigest,
     kindRank: Number(pageRows[pageRows.length - 1].kind_rank),
-    label: pageRows[pageRows.length - 1].label,
     id: pageRows[pageRows.length - 1].id,
   }) : null;
   const page = {
@@ -347,6 +406,7 @@ async function loadSchedulingOperatorTargetPageFromSnapshot(pool, input) {
     total,
     cursor: input.rawCursor || null,
     nextCursor,
+    datasetDigest,
     truncated: total !== pageRows.length,
   };
   const targetPage = {

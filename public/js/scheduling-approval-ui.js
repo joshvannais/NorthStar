@@ -522,6 +522,7 @@
         typeof page.query === 'string' && Array.isArray(page.targets) && page.targets.length <= discovery.pageSize &&
         page.page && Number.isSafeInteger(page.page.shown) && page.page.shown === page.targets.length &&
         Number.isSafeInteger(page.page.total) && page.page.total >= page.page.shown &&
+        typeof page.page.datasetDigest === 'string' && /^[0-9a-f]{64}$/.test(page.page.datasetDigest) &&
         (page.page.nextCursor === null || typeof page.page.nextCursor === 'string') &&
         typeof page.digest === 'string' && /^[0-9a-f]{64}$/.test(page.digest) &&
         page.targets.every(function (entry) {
@@ -566,6 +567,13 @@
       }).catch(function (error) {
         if (active !== requestOwner) return false;
         nextButton.hidden = true;
+        nextButton.dataset.cursor = '';
+        if (error && error.code === 'M22_OPERATOR_TARGET_DIRECTORY_STALE') {
+          active.targetPageTargets = [];
+          replaceOptions([], 'Directory changed; restart this search');
+          setLookupStatus('The current target directory changed during paging. Restart this bounded search; no target is claimed unavailable.', 'error', true);
+          return false;
+        }
         setLookupStatus((error && error.message ? error.message : 'Target lookup failed.') +
           ' The displayed selector may remain incomplete; retry this lookup before treating a target as unavailable.', 'error', true);
         return false;

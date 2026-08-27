@@ -435,6 +435,26 @@ last-page, and retry states remain explicit. No schema or migration changed.
 Another different fresh exact-head audit remains mandatory before ready, merge,
 or release.
 
+The subsequent independent exact-head audit at
+`563b63114a19cb0ea1cda05c3bf07f9ecc8b6266` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 1 / P2 1 / P3 1`. The fifth narrow correction keeps Part 5
+audit-pending and closes only those three validated findings. Broad scheduling
+reads and target discovery now re-read the exact current authentication session,
+tenant membership, user, workforce role, onboarding, and subscription rows in
+the same repeatable-read PostgreSQL snapshot before returning any directory,
+count, or tenant-wide bytes; stale middleware authority, demotion, revocation,
+expiry, and tenant/session divergence fail closed. Target keyset traversal now
+orders only by immutable kind and UUID and binds each cursor to a bounded,
+query-specific authoritative dataset digest. Concurrent rename cannot omit or
+duplicate a target, while activation, deactivation, membership, or search-set
+changes return an explicit stale-restart response instead of a false complete
+page. UUID-shaped search input is canonicalized to lowercase before cursor
+binding, SQL, and response echo. The shared Calendar and Command Center control
+clears stale target state and requires a new bounded search; it never reuses the
+stale cursor or applies a mutation. No schema or migration changed. Another
+different fresh exact-head audit remains mandatory before ready, merge, or
+release.
+
 ### Part 6 — Crew Today experience (planned)
 
 Deliver the mobile-first self/current-crew view of assigned work, schedule and

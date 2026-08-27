@@ -59,7 +59,7 @@ function fakeAuth(req, _res, next) {
   next();
 }
 
-function createApp(pool) {
+function createApp(pool, authSessionId) {
   const app = express();
   app.use(function (req, _res, next) {
     req.requestId = 'm19-transcript-request';
@@ -68,7 +68,12 @@ function createApp(pool) {
   app.use(express.json());
   const dependencies = {
     poolProvider: function () { return pool; },
-    auth: fakeAuth,
+    auth: function (req, res, next) {
+      fakeAuth(req, res, function () {
+        req.authSession = Object.freeze({ id: authSessionId });
+        next();
+      });
+    },
     cache: { get: async function () { return null; }, set: async function () {}, del: async function () {} },
     audit: { record: async function () {} },
   };
@@ -169,7 +174,7 @@ realPostgres('Mission 19 transcript raw PostgreSQL authority', () => {
       expectedVersion: null,
       profile: profile,
     });
-    await provisionDurableSession(pool, {
+    const durableSession = await provisionDurableSession(pool, {
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,
       role: 'owner',
@@ -193,10 +198,10 @@ realPostgres('Mission 19 transcript raw PostgreSQL authority', () => {
       actorUserId: USER_ID,
       actorAccessRole: 'owner',
       membershipId: null,
+      authSessionId: durableSession.sessionId,
       onboardingComplete: false,
-      subscriptionMutable: false,
     });
-    expect(directory).toMatchObject({ canRead: true, canMutate: false });
+    expect(directory).toMatchObject({ canRead: true, canMutate: true });
     const input = graphInput(profile);
     const original = JSON.parse(JSON.stringify(input));
     const result = await ingestSimulation(pool, input);
@@ -217,7 +222,7 @@ realPostgres('Mission 19 transcript raw PostgreSQL authority', () => {
     );
     expect(durable.rows).toEqual([{ transcript_text: expectedText, customer_name: CUSTOMER_NAME }]);
 
-    const response = await request(createApp(pool))
+    const response = await request(createApp(pool, durableSession.sessionId))
       .get('/api/v1/canonical/compat/communications')
       .set('X-NorthStar-Session-ID', SESSION_ID)
       .expect(200);

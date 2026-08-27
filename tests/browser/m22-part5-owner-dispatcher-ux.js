@@ -312,6 +312,10 @@ async function main() {
       await page.getByLabel('Search active workers and crews').fill('No current target has this name');
       await page.getByRole('button', { name: 'Search current targets' }).click();
       await page.getByText('No current active worker or crew matches this bounded search.').waitFor();
+      await page.getByLabel('Search active workers and crews').fill(TARGET_WORKER_ID.toUpperCase());
+      await page.getByRole('button', { name: 'Search current targets' }).click();
+      await page.getByText(new RegExp('Showing 1 of 1 current targets matching.*' + TARGET_WORKER_ID, 'i')).waitFor();
+      assert.strictEqual(await page.locator('.m22-dialog select').first().locator('option[value="profile:' + TARGET_WORKER_ID + '"]').count(), 1);
       await page.getByLabel('Search active workers and crews').fill(TARGET_SEARCH);
       await page.getByRole('button', { name: 'Search current targets' }).click();
       await page.getByText(/Showing 3 of 3 current targets matching/).waitFor();
@@ -499,6 +503,20 @@ async function main() {
     assert.strictEqual(await commandRecord.count(), 1);
     await beginFromButton(commandRecord.getByRole('button', { name: 'Assign', exact: true }));
     await completeDialog(async () => {
+      await page.getByRole('button', { name: 'Search current targets' }).click();
+      await page.getByText(/Showing 25 of 207 current targets/).waitFor();
+      await pool.query(
+        "UPDATE organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [ORGANIZATION_ID, targetProfiles[80].id]
+      );
+      await page.getByRole('button', { name: 'Next target page' }).click();
+      await page.getByText(/current target directory changed during paging/i).waitFor();
+      assert.strictEqual(await page.locator('.m22-dialog select').first().locator('option').count(), 1,
+        'stale traversal clears incomplete target choices');
+      await pool.query(
+        "UPDATE organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+        [ORGANIZATION_ID, targetProfiles[80].id]
+      );
       await page.getByRole('button', { name: 'Search current targets' }).click();
       await page.getByText(/Showing 25 of 207 current targets/).waitFor();
       var targetPages = 1;

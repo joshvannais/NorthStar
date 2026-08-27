@@ -14,6 +14,7 @@ const {
   parseOperatorTargetRequest,
 } = require('../../src/scheduling/operatorDirectory');
 const { buildSchedulingOverview } = require('../../src/scheduling/overviewRepository');
+const { AccountRepository } = require('../../src/accounts/repository');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
@@ -354,7 +355,8 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
   test('Part 5 mounted operator directory and server overview preserve tenant, role, session, conflict, and paid/demo boundaries', async () => {
     const ownerInput = {
       organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
-      membershipId: IDS.owner, onboardingComplete: true, subscriptionMutable: true,
+      membershipId: IDS.owner, authSessionId: sessions.owner.sessionId,
+      onboardingComplete: true, subscriptionMutable: true,
     };
     const ownerDirectory = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
     expect(ownerDirectory).toMatchObject({ canRead: true, canMutate: true, reason: null, truncated: false });
@@ -366,19 +368,24 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect(ownerDirectory.targets.some(target => target.id === IDS.otherOwner)).toBe(false);
     const dispatcherDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
       ...ownerInput, actorUserId: IDS.dispatcher, actorAccessRole: 'member', membershipId: IDS.dispatcher,
+      authSessionId: sessions.dispatcher.sessionId,
     });
     expect(dispatcherDirectory.canMutate).toBe(true);
     const employeeDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
       ...ownerInput, actorUserId: IDS.employee, actorAccessRole: 'member', membershipId: IDS.employee,
+      authSessionId: sessions.employee.sessionId,
     });
     expect(employeeDirectory).toMatchObject({ canRead: false, canMutate: false, reason: 'operator_role_required', targets: [] });
-    const readOnlyDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
-      ...ownerInput, subscriptionMutable: false,
-    });
-    expect(readOnlyDirectory).toMatchObject({
-      canRead: true, canMutate: false, reason: 'subscription_read_only',
-    });
-    expect(readOnlyDirectory.targets.length).toBeGreaterThan(1);
+    await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+    try {
+      const readOnlyDirectory = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
+      expect(readOnlyDirectory).toMatchObject({
+        canRead: true, canMutate: false, reason: 'subscription_read_only',
+      });
+      expect(readOnlyDirectory.targets.length).toBeGreaterThan(1);
+    } finally {
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
 
     await previewAndApproveAppointment(IDS.part5Appointment, 'assign', {
       target: { kind: 'profile', id: IDS.owner },
@@ -551,6 +558,153 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     }
   }, 120000);
 
+  test('Part 5 broad reads recheck current role, session, membership, workforce, and subscription authority in one snapshot', async () => {
+    const broadRoutes = [
+      '/api/v1/canonical/operator-targets?query=Part%204',
+      '/api/v1/canonical/graphs?limit=1',
+      '/api/v1/canonical/dashboard?limit=1',
+      '/api/v1/canonical/analytics?limit=1',
+      '/api/v1/canonical/surfaces/calendar?limit=1',
+      '/api/v1/canonical/compat/command-center?limit=1',
+      '/api/customers?limit=1',
+      '/api/communications?limit=1',
+      '/api/opportunities?limit=1',
+      '/api/appointments?limit=1',
+      '/api/dashboard/overview?limit=1',
+      '/api/v1/command-center/workspace',
+    ];
+    const repository = new AccountRepository(runtimePool);
+    const priorRepository = app.locals.accountRepository;
+    async function resetOwner() {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='owner',status='active',revoked_at=NULL WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.users SET role='owner',status='active' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='owner' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET status='active',access_expires_at=NOW()+INTERVAL '15 minutes',refresh_expires_at=NOW()+INTERVAL '14 days',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+        [sessions.owner.sessionId]
+      );
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
+    async function racedGet(route, mutation) {
+      let changed = false;
+      app.locals.accountRepository = {
+        sessionAuthority: async function (sessionId, userId) {
+          const authority = await repository.sessionAuthority(sessionId, userId);
+          if (!changed) {
+            changed = true;
+            await mutation();
+          }
+          return authority;
+        },
+      };
+      return request(app).get(route).set(sessions.owner.headers);
+    }
+    try {
+      for (const route of broadRoutes) {
+        await resetOwner();
+        const demoted = await racedGet(route, async function () {
+          await runtimePool.query(
+            "UPDATE public.organization_memberships SET role='member' WHERE organization_id=$1 AND id=$2",
+            [IDS.organization, IDS.owner]
+          );
+          await runtimePool.query(
+            "UPDATE public.users SET role='member' WHERE organization_id=$1 AND id=$2",
+            [IDS.organization, IDS.owner]
+          );
+          await runtimePool.query(
+            "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2",
+            [IDS.organization, IDS.owner]
+          );
+        });
+        expect(demoted.status).toBe(403);
+        expect(JSON.stringify(demoted.body)).not.toContain(HOSTILE);
+        expect(JSON.stringify(demoted.body)).not.toContain('total_count');
+      }
+      for (const route of broadRoutes) {
+        await resetOwner();
+        const revoked = await racedGet(route, async function () {
+          await runtimePool.query(
+            "UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='m22_part5_current_read_race' WHERE id=$1",
+            [sessions.owner.sessionId]
+          );
+        });
+        expect(revoked.status).toBe(401);
+        expect(revoked.body.error.code).toBe('M22_OPERATOR_SESSION_NOT_CURRENT');
+        expect(JSON.stringify(revoked.body)).not.toContain(HOSTILE);
+      }
+
+      await resetOwner();
+      const suspendedMember = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.owner]
+        );
+      });
+      expect(suspendedMember.status).toBe(403);
+
+      await resetOwner();
+      const suspendedUser = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query(
+          "UPDATE public.users SET status='suspended' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.owner]
+        );
+      });
+      expect(suspendedUser.status).toBe(403);
+
+      await resetOwner();
+      const expired = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query(
+          "UPDATE public.auth_sessions SET access_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+          [sessions.owner.sessionId]
+        );
+      });
+      expect(expired.status).toBe(401);
+      expect(expired.body.error.code).toBe('M22_OPERATOR_SESSION_NOT_CURRENT');
+
+      await resetOwner();
+      const readOnly = await racedGet(broadRoutes[0], async function () {
+        await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+      });
+      expect(readOnly.status).toBe(200);
+      expect(readOnly.body.data).toMatchObject({ canRead: true, canMutate: false, reason: 'subscription_read_only' });
+
+      await expect(loadSchedulingOperatorDirectory(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+        membershipId: IDS.owner, authSessionId: sessions.other.sessionId,
+      })).rejects.toMatchObject({ status: 401, code: 'M22_OPERATOR_SESSION_NOT_CURRENT' });
+
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.dispatcher]
+      );
+      try {
+        const removedDispatcher = await loadSchedulingOperatorDirectory(runtimePool, {
+          organizationId: IDS.organization, actorUserId: IDS.dispatcher, actorAccessRole: 'member',
+          membershipId: IDS.dispatcher, authSessionId: sessions.dispatcher.sessionId,
+        });
+        expect(removedDispatcher).toMatchObject({ canRead: false, canMutate: false, reason: 'operator_role_required', targets: [] });
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.workforce_profiles SET operational_role='dispatcher' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.dispatcher]
+        );
+      }
+    } finally {
+      await resetOwner();
+      if (priorRepository === undefined) delete app.locals.accountRepository;
+      else app.locals.accountRepository = priorRepository;
+    }
+  }, 180000);
+
   test('Part 5 bounded target discovery reaches 101+ active profiles and crews without weakening current authority', async () => {
     await seedAppointment(runtimePool, IDS.organization, IDS.targetDiscoveryAppointment);
     const profileRows = Array.from({ length: 102 }, (_, index) => ({
@@ -567,7 +721,8 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     const crewIds = crewRows.map(row => row.id);
     const ownerInput = {
       organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
-      membershipId: IDS.owner, onboardingComplete: true, subscriptionMutable: true,
+      membershipId: IDS.owner, authSessionId: sessions.owner.sessionId,
+      onboardingComplete: true, subscriptionMutable: true,
     };
     await runtimePool.query(
       `INSERT INTO public.users(id,organization_id,name,email,password_hash,role,status)
@@ -640,11 +795,119 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       expect(collected).toContain(`profile:${profileRows[101].id}`);
       expect(collected).toContain(`crew:${crewRows[101].id}`);
 
+      const uppercaseRequest = parseOperatorTargetRequest({ query: profileRows[101].id.toUpperCase() }, IDS.organization);
+      expect(uppercaseRequest.query).toBe(profileRows[101].id);
+      const uppercasePage = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...uppercaseRequest });
+      expect(uppercasePage).toMatchObject({ query: profileRows[101].id, page: { shown: 1, total: 1 } });
+      expect(uppercasePage.targets[0].id).toBe(profileRows[101].id);
+
+      const renameFirstRequest = parseOperatorTargetRequest({ query: '' }, IDS.organization);
+      const renameFirstPage = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...renameFirstRequest });
+      expect(renameFirstPage.page.nextCursor).toEqual(expect.any(String));
+      await runtimePool.query(
+        `UPDATE public.users
+            SET name=CASE id WHEN $2::uuid THEN 'ZZZ renamed returned' ELSE 'AAA renamed unseen' END
+          WHERE organization_id=$1 AND id IN ($2::uuid,$3::uuid)`,
+        [IDS.organization, profileRows[0].id, profileRows[60].id]
+      );
+      try {
+        const renamedTraversal = renameFirstPage.targets.map(target => `${target.kind}:${target.id}`);
+        let renamedCursor = renameFirstPage.page.nextCursor;
+        while (renamedCursor) {
+          const requestPage = parseOperatorTargetRequest({ query: '', cursor: renamedCursor }, IDS.organization);
+          const page = await loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...requestPage });
+          renamedTraversal.push(...page.targets.map(target => `${target.kind}:${target.id}`));
+          renamedCursor = page.page.nextCursor;
+        }
+        expect(renamedTraversal).toHaveLength(208);
+        expect(new Set(renamedTraversal).size).toBe(208);
+        expect(renamedTraversal).toContain(`profile:${profileRows[0].id}`);
+        expect(renamedTraversal).toContain(`profile:${profileRows[60].id}`);
+      } finally {
+        await runtimePool.query(
+          `UPDATE public.users
+              SET name=CASE id WHEN $2::uuid THEN $4 ELSE $5 END
+            WHERE organization_id=$1 AND id IN ($2::uuid,$3::uuid)`,
+          [IDS.organization, profileRows[0].id, profileRows[60].id, profileRows[0].name, profileRows[60].name]
+        );
+      }
+
+      const matchingFirst = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: 'Directory worker' }, IDS.organization),
+      });
+      await runtimePool.query('UPDATE public.users SET name=$3 WHERE organization_id=$1 AND id=$2',
+        [IDS.organization, profileRows[60].id, 'No longer query matching']);
+      try {
+        const staleRequest = parseOperatorTargetRequest({
+          query: 'Directory worker', cursor: matchingFirst.page.nextCursor,
+        }, IDS.organization);
+        await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...staleRequest }))
+          .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+      } finally {
+        await runtimePool.query('UPDATE public.users SET name=$3 WHERE organization_id=$1 AND id=$2',
+          [IDS.organization, profileRows[60].id, profileRows[60].name]);
+      }
+
+      const beforeDeactivate = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: '' }, IDS.organization),
+      });
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[80].id]
+      );
+      try {
+        const staleRequest = parseOperatorTargetRequest({ cursor: beforeDeactivate.page.nextCursor }, IDS.organization);
+        await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...staleRequest }))
+          .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+      } finally {
+        await runtimePool.query(
+          "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, profileRows[80].id]
+        );
+      }
+
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[81].id]
+      );
+      const beforeActivate = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: '' }, IDS.organization),
+      });
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, profileRows[81].id]
+      );
+      const activatedRequest = parseOperatorTargetRequest({ cursor: beforeActivate.page.nextCursor }, IDS.organization);
+      await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...activatedRequest }))
+        .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+
+      const beforeCrewMembership = await loadSchedulingOperatorTargetPage(runtimePool, {
+        ...ownerInput, ...parseOperatorTargetRequest({ query: '' }, IDS.organization),
+      });
+      await runtimePool.query(
+        'DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2 AND profile_id=$3',
+        [IDS.organization, crewRows[101].id, IDS.owner]
+      );
+      try {
+        const staleRequest = parseOperatorTargetRequest({ cursor: beforeCrewMembership.page.nextCursor }, IDS.organization);
+        await expect(loadSchedulingOperatorTargetPage(runtimePool, { ...ownerInput, ...staleRequest }))
+          .rejects.toMatchObject({ status: 409, code: 'M22_OPERATOR_TARGET_DIRECTORY_STALE' });
+      } finally {
+        await runtimePool.query(
+          `INSERT INTO public.workforce_crew_members(organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+           VALUES ($1,$2,$3,'lead',$3)`,
+          [IDS.organization, crewRows[101].id, IDS.owner]
+        );
+      }
+
       const ownerHttp = await request(app).get('/api/v1/canonical/operator-targets')
         .query({ query: 'ZZZ ' }).set(sessions.owner.headers).expect(200);
       expect(ownerHttp.body.data.targets.map(target => target.id)).toEqual([
         profileRows[100].id, profileRows[101].id, crewRows[101].id,
       ]);
+      const uppercaseHttp = await request(app).get('/api/v1/canonical/operator-targets')
+        .query({ query: profileRows[101].id.toUpperCase() }).set(sessions.owner.headers).expect(200);
+      expect(uppercaseHttp.body.data).toMatchObject({ query: profileRows[101].id, page: { shown: 1, total: 1 } });
       const employeeHttp = await request(app).get('/api/v1/canonical/operator-targets')
         .query({ query: 'ZZZ ' }).set(sessions.employee.headers).expect(403);
       expect(employeeHttp.body.error.code).toBe('M22_OPERATOR_TARGET_DIRECTORY_FORBIDDEN');

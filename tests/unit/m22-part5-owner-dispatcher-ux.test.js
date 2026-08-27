@@ -98,13 +98,15 @@ describe('Mission 22 Part 5 owner and dispatcher UX contracts', () => {
   test('operator target cursors are canonical, tenant/search bound, and malformed input fails before persistence', async () => {
     const organizationId = '11111111-1111-4111-8111-111111111111';
     const cursor = encodeOperatorTargetCursor({
-      organizationId, query: 'Worker', kindRank: 1, label: 'Worker 100',
+      organizationId, query: 'Worker', datasetDigest: 'b'.repeat(64), kindRank: 1,
       id: '22222222-2222-4222-8222-222222222222',
     });
     expect(parseOperatorTargetRequest({ query: ' Worker ', cursor }, organizationId)).toMatchObject({
       query: 'Worker', rawCursor: cursor,
-      cursor: { organizationId, query: 'Worker', kindRank: 1, label: 'Worker 100' },
+      cursor: { organizationId, query: 'Worker', datasetDigest: 'b'.repeat(64), kindRank: 1 },
     });
+    expect(parseOperatorTargetRequest({ query: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA' }, organizationId).query)
+      .toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
     const malformed = [
       '!!!', cursor + '!', cursor + '=', 'A'.repeat(4097),
       Buffer.from('{}').toString('base64url'),
@@ -147,6 +149,7 @@ describe('Mission 22 Part 5 owner and dispatcher UX contracts', () => {
     expect(approval).toContain('Search active workers and crews');
     expect(approval).toContain('Next target page');
     expect(approval).toContain('The initial selector is incomplete');
+    expect(approval).toContain('The current target directory changed during paging');
     expect(approval).toContain('textContent');
     expect(approval).not.toContain('innerHTML');
     expect(commandContract).toContain('m22-part5-target-directory-v1');

@@ -152,9 +152,8 @@ async function assignmentEvidence(client, input) {
          ON transcript.organization_id = appointment.organization_id
         AND transcript.operation_id = appointment.operation_id
       WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2
-        AND (transcript.source NOT IN ('simulation', 'demo')
-          OR ($3::text IS NOT NULL AND transcript.external_call_id = $3 || ':call'))`,
-    [input.organizationId, input.appointmentId, input.explicitSession]
+        AND transcript.source NOT IN ('simulation', 'demo')`,
+    [input.organizationId, input.appointmentId]
   );
   const row = result.rows[0];
   if (!row) fail(404, 'NOT_FOUND', 'Appointment not found.');
@@ -217,7 +216,24 @@ async function candidateSet(client, organizationId) {
 
 async function attachCrewMembers(client, organizationId, candidates) {
   const crewIds = candidates.filter(candidate => candidate.kind === 'crew').map(candidate => candidate.id);
-  if (!crewIds.length) return { truncated: false, candidates };
+  const normalizedCandidates = candidates.map(function (candidate) {
+    if (candidate.kind === 'profile') {
+      return {
+        ...candidate,
+        membersTruncated: false,
+        members: [{
+          profileId: candidate.id,
+          membershipStatus: candidate.membershipStatus,
+          membershipUpdatedAt: candidate.membershipUpdatedAt,
+          userStatus: candidate.userStatus,
+          userUpdatedAt: candidate.userUpdatedAt,
+          profileUpdatedAt: candidate.updatedAt,
+        }],
+      };
+    }
+    return { ...candidate, membersTruncated: false, members: [] };
+  });
+  if (!crewIds.length) return { truncated: false, candidates: normalizedCandidates };
   const result = await client.query(
     `SELECT * FROM (
        SELECT relation.crew_id, profile.id AS profile_id,
@@ -251,21 +267,8 @@ async function attachCrewMembers(client, organizationId, candidates) {
   }
   return {
     truncated: globallyTruncated || rows.some(row => Number(row.member_ordinal) > MAXIMUM_CREW_MEMBERS),
-    candidates: candidates.map(function (candidate) {
-      if (candidate.kind === 'profile') {
-        return {
-          ...candidate,
-          membersTruncated: false,
-          members: [{
-            profileId: candidate.id,
-            membershipStatus: candidate.membershipStatus,
-            membershipUpdatedAt: candidate.membershipUpdatedAt,
-            userStatus: candidate.userStatus,
-            userUpdatedAt: candidate.userUpdatedAt,
-            profileUpdatedAt: candidate.updatedAt,
-          }],
-        };
-      }
+    candidates: normalizedCandidates.map(function (candidate) {
+      if (candidate.kind === 'profile') return candidate;
       const candidateRows = byCrew.get(candidate.id) || [];
       return {
         ...candidate,
@@ -734,5 +737,6 @@ module.exports = {
   MAXIMUM_SCHEDULE_EVIDENCE,
   MAXIMUM_SKILL_EVIDENCE,
   RecommendationRepositoryError,
+  attachCrewMembers,
   recommendAppointmentCandidates,
 };

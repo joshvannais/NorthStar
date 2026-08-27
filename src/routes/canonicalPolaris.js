@@ -23,6 +23,7 @@ const {
 } = require('../scheduling/conflictRepository');
 const { normalizeRecommendationEvaluation } = require('../scheduling/recommendationContract');
 const { recommendAppointmentCandidates } = require('../scheduling/recommendationRepository');
+const { requireRecommendationBodyBoundary } = require('../scheduling/recommendationHttpBoundary');
 const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const READ_MODEL_VERSION = 'm22-part1-read-v1';
@@ -855,7 +856,7 @@ function createCanonicalRouter(options) {
     });
 
   router.post('/appointments/:id/recommendations', dependencies.onboardedAuth, requireCanonicalContext,
-    dependencies.permission('calendar', 'read'), express.json({ limit: '64kb' }), async function (req, res) {
+    dependencies.permission('calendar', 'read'), requireRecommendationBodyBoundary, async function (req, res) {
       const context = requestContext(req);
       try {
         const evaluation = normalizeRecommendationEvaluation({ body: req.body, appointmentId: req.params.id });
@@ -865,7 +866,6 @@ function createCanonicalRouter(options) {
           actorUserId: context.userId,
           actorAccessRole: req.userRole || req.tenantContext.role,
           authSessionId: req.authSession && req.authSession.id,
-          explicitSession: context.explicitSession,
         });
         return res.json(response);
       } catch (error) {

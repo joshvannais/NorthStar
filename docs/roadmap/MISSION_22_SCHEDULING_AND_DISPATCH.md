@@ -231,6 +231,19 @@ Safari/devices, providers, credentials/configuration, production migration or
 deployment, and independent exact-head approval remain unavailable or pending
 until their separate gates.
 
+The correction writer additionally closes the prior exact-head audit findings
+without broadening Part 3: person candidates receive the same normalized member
+shape even when a tenant has no crew; this repository categorically excludes
+demo/simulation transcripts instead of accepting request-header session scope;
+the exact non-capability POST retains bounded operational telemetry but creates
+no generic durable audit row; and an early identity-encoded UTF-8 JSON boundary
+enforces the inclusive 65,536-byte raw limit before the global parser while
+rejecting decoded duplicate keys and ambiguous/malformed envelopes. Mounted
+regressions cover fixed/chunked/absolute-form request targets, security headers,
+success/error/replay/concurrency all-table deltas, paid/demo/session substitution,
+and profile/crew/empty candidate shapes. The corrected head still requires a
+different fresh exact-head independent audit before release.
+
 ### Part 4 — Human-approved scheduling and dispatch workflow (planned)
 
 Mount preview and approve for assign, reassign, unassign, schedule, reschedule,

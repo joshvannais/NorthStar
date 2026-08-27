@@ -19,6 +19,7 @@ const voiceRoutes = require('./routes/voice');
 const voiceWebhook = require('./voice/webhook');
 const { createRetellWebhookBoundaryRouter } = require('./routes/retellWebhookBoundary');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
+const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const { createAuthRouter } = require('./routes/auth');
@@ -58,6 +59,10 @@ app.use(correlationId);
 // The two signed Retell entry points must receive bounded raw bytes before the
 // global JSON parser. The boundary router owns only those exact paths.
 app.use(createRetellWebhookBoundaryRouter());
+// Mission 22 Part 3 recommendations are a read-only, non-capability POST with
+// an exact 64 KiB unambiguous JSON contract. Own its received bytes before the
+// broader application parser consumes the stream.
+app.use(recommendationBodyBoundary);
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {

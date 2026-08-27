@@ -9,6 +9,7 @@
 const { v4: uuidv4 } = require('uuid');
 const audit = require('../audit/client');
 const safeLogger = require('../observability/safeLogger');
+const { isZeroDurableWriteRecommendation } = require('../scheduling/recommendationHttpBoundary');
 
 /**
  * Middleware: attach a correlation ID to every request.
@@ -116,6 +117,12 @@ function auditLogger(req, res, next) {
       statusCode: res.statusCode,
       durationMs: duration,
     });
+
+    // This exact Mission 22 Part 3 POST is a read-only, non-capability
+    // computation. Its pre-parser boundary supplies an internal marker so
+    // successes and rejections retain bounded telemetry but cannot allocate a
+    // durable generic audit row. Mutation and approval routes remain audited.
+    if (isZeroDurableWriteRecommendation(req)) return;
 
     // Only log data-modifying operations and errors
     const isModifying = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);

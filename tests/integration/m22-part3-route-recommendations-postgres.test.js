@@ -5,11 +5,15 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
 const { Client, Pool } = require('pg');
 const request = require('supertest');
 const { adaptBusinessProfile, sha256: stableSha256 } = require('../../src/services/businessProfileAdapter');
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-const { recommendAppointmentCandidates } = require('../../src/scheduling/recommendationRepository');
+const {
+  attachCrewMembers,
+  recommendAppointmentCandidates,
+} = require('../../src/scheduling/recommendationRepository');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
@@ -236,6 +240,68 @@ function recommendationBody(pins, overrides = {}) {
   };
 }
 
+function boundedRawBody(authority, bytes) {
+  const base = JSON.stringify(recommendationBody(authority));
+  const padding = bytes - Buffer.byteLength(base, 'utf8');
+  if (padding < 0) throw new Error('Requested raw body bound is smaller than the canonical envelope.');
+  return Buffer.from(base + ' '.repeat(padding), 'utf8');
+}
+
+async function publicTableCounts(pool) {
+  const tables = (await pool.query(
+    `SELECT tablename FROM pg_catalog.pg_tables
+      WHERE schemaname='public' ORDER BY tablename`
+  )).rows.map(row => row.tablename);
+  const counts = {};
+  for (const table of tables) {
+    counts[table] = Number((await pool.query(`SELECT count(*) AS count FROM public.${quoteIdentifier(table)}`)).rows[0].count);
+  }
+  return counts;
+}
+
+async function waitForAuditFinish() {
+  await new Promise(resolve => setTimeout(resolve, 200));
+}
+
+function expectSecurityHeaders(response) {
+  expect(response.headers['content-security-policy']).toEqual(expect.any(String));
+  expect(response.headers['x-content-type-options']).toBe('nosniff');
+  expect(response.headers['cache-control']).toContain('no-store');
+}
+
+function rawHttpRequest(port, input) {
+  return new Promise((resolve, reject) => {
+    const body = Buffer.isBuffer(input.body) ? input.body : Buffer.from(input.body || '', 'utf8');
+    const headers = { ...input.headers, Connection: 'close' };
+    if (!input.omitContentType) {
+      headers['Content-Type'] = input.contentType || 'application/json; charset=utf-8';
+    }
+    if (input.contentEncoding) headers['Content-Encoding'] = input.contentEncoding;
+    if (!input.chunked) headers['Content-Length'] = input.contentLength === undefined ? body.length : input.contentLength;
+    const outgoing = http.request({
+      host: '127.0.0.1', port, method: 'POST', path: input.path, headers,
+    }, response => {
+      const chunks = [];
+      response.on('data', chunk => chunks.push(chunk));
+      response.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let parsed = null;
+        try { parsed = JSON.parse(text); } catch (_) { /* Preserve the exact response text. */ }
+        resolve({ status: response.statusCode, headers: response.headers, body: parsed, text });
+      });
+    });
+    outgoing.on('error', reject);
+    if (input.chunked) {
+      const midpoint = Math.floor(body.length / 2);
+      outgoing.write(body.subarray(0, midpoint));
+      outgoing.write(body.subarray(midpoint));
+      outgoing.end();
+    } else {
+      outgoing.end(body);
+    }
+  });
+}
+
 function allowOnlyLoopbackTransport() {
   const originalHttp = http.request;
   const originalHttps = https.request;
@@ -280,6 +346,8 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
   let runtimePool;
   let db;
   let app;
+  let rawServer;
+  let rawPort;
   let sessions;
   let pins;
   let overnightPins;
@@ -305,6 +373,12 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
     runtimePool = db.getPool();
     ({ app } = require('../../src/server'));
     app.locals.m22Pool = runtimePool;
+    rawServer = http.createServer(app);
+    await new Promise((resolve, reject) => {
+      rawServer.once('error', reject);
+      rawServer.listen(0, '127.0.0.1', resolve);
+    });
+    rawPort = rawServer.address().port;
 
     await seedTenant(runtimePool, {
       organizationId: IDS.organization,
@@ -410,6 +484,7 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
 
   afterAll(async () => {
     try {
+      if (rawServer) await new Promise(resolve => rawServer.close(resolve));
       if (db) await db.close().catch(() => {});
       if (migrationPool) await migrationPool.end();
       if (database) await database.cleanup();
@@ -504,6 +579,218 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
     expect(after).toEqual(before);
   }, 120000);
 
+  test('normalizes profile-only, crew-only, empty, zero-member crew, and mixed candidate shapes', async () => {
+    const profileCandidate = {
+      kind: 'profile', id: IDS.owner, label: 'Owner nearest', homeLocationId: 'headquarters',
+      updatedAt: '2027-03-01T00:00:00.000Z', membershipStatus: 'active',
+      membershipUpdatedAt: '2027-03-01T00:00:00.000Z', userStatus: 'active',
+      userUpdatedAt: '2027-03-01T00:00:00.000Z',
+    };
+    const crewCandidate = {
+      kind: 'crew', id: IDS.crew, label: 'Crew north', homeLocationId: 'north',
+      updatedAt: '2027-03-01T00:00:00.000Z', membershipStatus: null,
+      membershipUpdatedAt: null, userStatus: null, userUpdatedAt: null,
+    };
+
+    expect(await attachCrewMembers(runtimePool, IDS.organization, [])).toEqual({
+      truncated: false, candidates: [],
+    });
+    const profileOnly = await attachCrewMembers(runtimePool, IDS.organization, [profileCandidate]);
+    expect(profileOnly.candidates[0]).toMatchObject({
+      kind: 'profile', id: IDS.owner, membersTruncated: false,
+      members: [{ profileId: IDS.owner, membershipStatus: 'active', userStatus: 'active' }],
+    });
+    const crewOnly = await attachCrewMembers(runtimePool, IDS.organization, [crewCandidate]);
+    expect(crewOnly.candidates[0]).toMatchObject({
+      kind: 'crew', id: IDS.crew, membersTruncated: false,
+    });
+    expect(crewOnly.candidates[0].members).toHaveLength(2);
+    const mixed = await attachCrewMembers(runtimePool, IDS.organization, [crewCandidate, profileCandidate]);
+    expect(mixed.candidates.map(candidate => [candidate.kind, candidate.members.length])).toEqual([
+      ['crew', 2], ['profile', 1],
+    ]);
+
+    const crewRecord = (await runtimePool.query(
+      'SELECT * FROM public.workforce_crews WHERE organization_id=$1 AND id=$2',
+      [IDS.organization, IDS.crew]
+    )).rows[0];
+    const memberRecords = (await runtimePool.query(
+      'SELECT * FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2 ORDER BY profile_id',
+      [IDS.organization, IDS.crew]
+    )).rows;
+    await runtimePool.query('DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2',
+      [IDS.organization, IDS.crew]);
+    try {
+      const zeroMemberCrew = await attachCrewMembers(runtimePool, IDS.organization, [crewCandidate]);
+      expect(zeroMemberCrew.candidates[0]).toMatchObject({ members: [], membersTruncated: false });
+      await runtimePool.query('DELETE FROM public.workforce_crews WHERE organization_id=$1 AND id=$2',
+        [IDS.organization, IDS.crew]);
+      const mountedProfileOnly = await request(app)
+        .post(`/api/v1/canonical/appointments/${IDS.appointment}/recommendations`)
+        .set(sessions.owner.headers).send(recommendationBody(pins));
+      expect(mountedProfileOnly.status).toBe(200);
+      expect(mountedProfileOnly.body.data.alternatives.length).toBeGreaterThan(0);
+      expect(mountedProfileOnly.body.data.alternatives.every(item => item.candidate.kind === 'profile')).toBe(true);
+      expect(mountedProfileOnly.body.data.alternatives.every(item => item.authorityPins.memberCount === 1)).toBe(true);
+    } finally {
+      await runtimePool.query(
+        `INSERT INTO public.workforce_crews
+          (id,organization_id,crew_key,name,home_location_id,created_by_user_id,updated_by_user_id,created_at,updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (organization_id,id) DO NOTHING`,
+        [crewRecord.id, crewRecord.organization_id, crewRecord.crew_key, crewRecord.name,
+          crewRecord.home_location_id, crewRecord.created_by_user_id, crewRecord.updated_by_user_id,
+          crewRecord.created_at, crewRecord.updated_at]
+      );
+      for (const member of memberRecords) {
+        await runtimePool.query(
+          `INSERT INTO public.workforce_crew_members
+            (organization_id,crew_id,profile_id,crew_role,created_by_user_id,created_at)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (organization_id,crew_id,profile_id) DO NOTHING`,
+          [member.organization_id, member.crew_id, member.profile_id, member.crew_role,
+            member.created_by_user_id, member.created_at]
+        );
+      }
+    }
+  }, 120000);
+
+  test('enforces the exact raw-wire JSON boundary before global parsing', async () => {
+    const pathName = `/api/v1/canonical/appointments/${IDS.appointment}/recommendations`;
+    for (const bytes of [65535, 65536]) {
+      const accepted = await rawHttpRequest(rawPort, {
+        path: pathName, headers: sessions.owner.headers, body: boundedRawBody(pins, bytes),
+      });
+      expect(accepted.status).toBe(200);
+    }
+    const oversized = await rawHttpRequest(rawPort, {
+      path: pathName, headers: sessions.owner.headers, body: boundedRawBody(pins, 65537),
+    });
+    expect(oversized.status).toBe(413);
+    expect(oversized.body.error.code).toBe('M22_RECOMMENDATION_BODY_TOO_LARGE');
+    expectSecurityHeaders(oversized);
+
+    const chunkedWithin = await rawHttpRequest(rawPort, {
+      path: pathName, headers: sessions.owner.headers, body: boundedRawBody(pins, 65536), chunked: true,
+    });
+    expect(chunkedWithin.status).toBe(200);
+    const chunkedOversized = await rawHttpRequest(rawPort, {
+      path: pathName, headers: sessions.owner.headers, body: boundedRawBody(pins, 65537), chunked: true,
+    });
+    expect(chunkedOversized.status).toBe(413);
+
+    const base = recommendationBody(pins);
+    const duplicateCases = [
+      `{"expectedRevision":${pins.expectedRevision},"expectedRevision":${pins.expectedRevision},"expectedDigest":"${pins.expectedDigest}","expectedTimeZone":"America/New_York"}`,
+      `{"expectedRevision":${pins.expectedRevision},"expectedDigest":"${pins.expectedDigest}","expectedDigest":"${pins.expectedDigest}","expectedTimeZone":"America/New_York"}`,
+      `{"expectedRevision":${pins.expectedRevision},"expectedDigest":"${pins.expectedDigest}","expectedTimeZone":"UTC","expectedTimeZone":"America/New_York"}`,
+      `{"expectedRevision":${pins.expectedRevision},"\\u0065xpectedRevision":${pins.expectedRevision},"expectedDigest":"${pins.expectedDigest}","expectedTimeZone":"America/New_York"}`,
+    ];
+    for (const body of duplicateCases) {
+      const duplicate = await rawHttpRequest(rawPort, {
+        path: pathName, headers: sessions.owner.headers, body,
+      });
+      expect(duplicate.status).toBe(400);
+      expect(duplicate.body.error.code).toBe('M22_RECOMMENDATION_AMBIGUOUS_JSON');
+      expectSecurityHeaders(duplicate);
+    }
+    for (const body of ['{', JSON.stringify(base) + ' trailing', '{"expectedRevision":01}', Buffer.from([0xff])]) {
+      const malformed = await rawHttpRequest(rawPort, {
+        path: pathName, headers: sessions.owner.headers, body,
+      });
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.error.code).toBe('INVALID_RECOMMENDATION_REQUEST');
+      expectSecurityHeaders(malformed);
+    }
+    for (const contentType of [undefined, 'text/plain', 'application/problem+json', 'application/json; charset=utf-16']) {
+      const media = await rawHttpRequest(rawPort, {
+        path: pathName, headers: sessions.owner.headers, body: JSON.stringify(base),
+        contentType, omitContentType: contentType === undefined,
+      });
+      expect(media.status).toBe(415);
+      expect(media.body.error.code).toBe('M22_RECOMMENDATION_MEDIA_TYPE_UNSUPPORTED');
+      expectSecurityHeaders(media);
+    }
+    for (const contentEncoding of ['gzip', 'deflate', 'br']) {
+      const encoded = await rawHttpRequest(rawPort, {
+        path: pathName, headers: sessions.owner.headers,
+        body: contentEncoding === 'gzip' ? zlib.gzipSync(JSON.stringify(base)) : JSON.stringify(base),
+        contentEncoding,
+      });
+      expect(encoded.status).toBe(415);
+      expect(encoded.body.error.code).toBe('M22_RECOMMENDATION_CONTENT_ENCODING_UNSUPPORTED');
+      expectSecurityHeaders(encoded);
+    }
+    const identity = await rawHttpRequest(rawPort, {
+      path: pathName, headers: sessions.owner.headers, body: JSON.stringify(base), contentEncoding: 'identity',
+    });
+    expect(identity.status).toBe(200);
+    const bom = await rawHttpRequest(rawPort, {
+      path: pathName, headers: sessions.owner.headers,
+      body: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(JSON.stringify(base))]),
+    });
+    expect(bom.status).toBe(200);
+
+    const alternateExpressSpelling = await rawHttpRequest(rawPort, {
+      path: `/API/V1/CANONICAL/APPOINTMENTS/${IDS.appointment.toUpperCase()}/RECOMMENDATIONS/`,
+      headers: sessions.owner.headers, body: JSON.stringify(base),
+    });
+    expect(alternateExpressSpelling.status).toBe(200);
+
+    const truncatedLength = await rawHttpRequest(rawPort, {
+      path: pathName, headers: sessions.owner.headers, body: JSON.stringify(base),
+      contentLength: Buffer.byteLength(JSON.stringify(base), 'utf8') - 1,
+    });
+    expect(truncatedLength.status).not.toBe(200);
+  }, 180000);
+
+  test('keeps success, error, replay, and concurrency zero-write across every public table', async () => {
+    const pathName = `/api/v1/canonical/appointments/${IDS.appointment}/recommendations`;
+    const before = await publicTableCounts(migrationPool);
+    const absoluteOversized = await rawHttpRequest(rawPort, {
+      path: `http://northstar.invalid${pathName}`,
+      headers: sessions.owner.headers,
+      body: boundedRawBody(pins, 65537),
+    });
+    expect(absoluteOversized.status).toBe(413);
+    expect(absoluteOversized.body.error.code).toBe('M22_RECOMMENDATION_BODY_TOO_LARGE');
+    expectSecurityHeaders(absoluteOversized);
+    const absoluteDuplicate = await rawHttpRequest(rawPort, {
+      path: `http://northstar.invalid@attacker.invalid${pathName}?host-is-not-authority=true`,
+      headers: sessions.owner.headers,
+      body: `{"expectedRevision":${pins.expectedRevision},"\\u0065xpectedRevision":${pins.expectedRevision},"expectedDigest":"${pins.expectedDigest}","expectedTimeZone":"America/New_York"}`,
+    });
+    expect(absoluteDuplicate.status).toBe(400);
+    expect(absoluteDuplicate.body.error.code).toBe('M22_RECOMMENDATION_AMBIGUOUS_JSON');
+    expectSecurityHeaders(absoluteDuplicate);
+    const attempts = [
+      request(app).post(pathName).set(sessions.owner.headers).send(recommendationBody(pins)),
+      request(app).post(pathName).set(sessions.owner.headers).send(recommendationBody(pins)),
+      request(app).post(pathName).set(sessions.owner.headers).send(recommendationBody(pins, { providerUrl: 'https://invalid.test' })),
+      request(app).post(pathName).set(sessions.owner.headers).send(recommendationBody({ ...pins, expectedDigest: '0'.repeat(64) })),
+      request(app).post(pathName).send(recommendationBody(pins)),
+      ...Array.from({ length: 8 }, () => request(app).post(pathName)
+        .set(sessions.owner.headers).send(recommendationBody(pins))),
+    ];
+    const responses = await Promise.all(attempts);
+    expect(responses.map(response => response.status)).toEqual([
+      200, 200, 400, 409, 401, 200, 200, 200, 200, 200, 200, 200, 200,
+    ]);
+    await waitForAuditFinish();
+    expect(await publicTableCounts(migrationPool)).toEqual(before);
+  }, 180000);
+
+  test('does not weaken durable auditing for the neighboring conflicts POST', async () => {
+    const before = Number((await migrationPool.query('SELECT count(*) AS count FROM public.audit_logs')).rows[0].count);
+    const response = await request(app)
+      .post(`/api/v1/canonical/appointments/${IDS.appointment}/conflicts`)
+      .set(sessions.owner.headers).send({});
+    expect(response.status).toBe(428);
+    await waitForAuditFinish();
+    const after = Number((await migrationPool.query('SELECT count(*) AS count FROM public.audit_logs')).rows[0].count);
+    expect(after).toBe(before + 1);
+  }, 120000);
+
   test('recomputes the same candidate/evidence ordering while canonically pinning each evaluation time', async () => {
     const second = await request(app)
       .post(`/api/v1/canonical/appointments/${IDS.appointment}/recommendations`)
@@ -537,6 +824,24 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
       .set(sessions.owner.headers)
       .send(recommendationBody(await assignmentPins(runtimePool, IDS.demoAppointment)));
     expect(hiddenDemo.status).toBe(404);
+    for (const headers of [
+      { 'X-NorthStar-Session-ID': 'demo-session' },
+      { 'X-Session-ID': 'demo-session' },
+      { 'x-northstar-session-id': 'demo-session', 'x-session-id': sessions.owner.sessionId },
+    ]) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const forged = await request(app)
+          .post(`/api/v1/canonical/appointments/${IDS.demoAppointment}/recommendations`)
+          .set(sessions.owner.headers).set(headers)
+          .send(recommendationBody(await assignmentPins(runtimePool, IDS.demoAppointment)));
+        expect(forged.status).toBe(404);
+        expect(forged.body).toEqual(hiddenDemo.body);
+      }
+    }
+    const paidWithForgedHeader = await request(app).post(pathName)
+      .set(sessions.owner.headers).set('X-NorthStar-Session-ID', 'demo-session')
+      .send(recommendationBody(pins));
+    expect(paidWithForgedHeader.status).toBe(200);
 
     for (const payload of [
       { tenantId: IDS.otherOrganization }, { actorUserId: IDS.owner }, { role: 'owner' },
@@ -551,8 +856,8 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
     }
     const oversized = await request(app).post(pathName).set(sessions.owner.headers)
       .send(recommendationBody(pins, { routeEvidence: 'x'.repeat(70000) }));
-    expect(oversized.status).toBe(400);
-    expect(oversized.body.error.code).toBe('INVALID_RECOMMENDATION_REQUEST');
+    expect(oversized.status).toBe(413);
+    expect(oversized.body.error.code).toBe('M22_RECOMMENDATION_BODY_TOO_LARGE');
 
     await runtimePool.query(
       `UPDATE public.workforce_profiles SET operational_role='employee'
@@ -577,6 +882,9 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
     );
     const revoked = await request(app).post(pathName).set(sessions.owner.headers).send(recommendationBody(pins));
     expect(revoked.status).toBe(401);
+    const revokedWithForgedHeader = await request(app).post(pathName).set(sessions.owner.headers)
+      .set('X-NorthStar-Session-ID', 'demo-session').send(recommendationBody(pins));
+    expect(revokedWithForgedHeader.status).toBe(401);
     await runtimePool.query(
       `UPDATE public.auth_sessions
           SET status='active',revoked_at=NULL,revoke_reason=NULL
@@ -693,7 +1001,6 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
       actorUserId: IDS.owner,
       actorAccessRole: 'owner',
       authSessionId: sessions.owner.sessionId,
-      explicitSession: null,
     });
     expect(queryCount).toBeLessThanOrEqual(18);
     expect(response.data).toMatchObject({

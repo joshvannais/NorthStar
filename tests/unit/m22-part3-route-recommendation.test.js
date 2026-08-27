@@ -10,6 +10,11 @@ const {
   routeImplication,
   summarizeConflict,
 } = require('../../src/scheduling/routeRecommendationEvaluator');
+const {
+  DuplicateJsonKeyError,
+  isRecommendationRequest,
+  parseUnambiguousJson,
+} = require('../../src/scheduling/recommendationHttpBoundary');
 
 const APPOINTMENT = 'd5000000-0000-4000-8000-000000000001';
 const DIGEST = 'a'.repeat(64);
@@ -80,6 +85,56 @@ describe('Mission 22 Part 3 route/recommendation contract', () => {
       appointmentId: 'not-an-id',
       body: { expectedRevision: 2, expectedDigest: DIGEST, expectedTimeZone: 'UTC' },
     })).toThrow(expect.objectContaining({ status: 404, code: 'NOT_FOUND' }));
+  });
+
+  test('accepts one unambiguous JSON envelope and rejects decoded duplicate keys at every object scope', () => {
+    const ordinary = JSON.stringify({
+      expectedRevision: 2, expectedDigest: DIGEST, expectedTimeZone: 'America/New_York',
+    });
+    expect(parseUnambiguousJson(ordinary)).toEqual(JSON.parse(ordinary));
+    for (const ambiguous of [
+      `{"expectedRevision":1,"expectedRevision":2,"expectedDigest":"${DIGEST}","expectedTimeZone":"UTC"}`,
+      `{"expectedRevision":1,"\\u0065xpectedRevision":2,"expectedDigest":"${DIGEST}","expectedTimeZone":"UTC"}`,
+      '{"extra":{"nested":1,"nested":2}}',
+    ]) {
+      expect(() => parseUnambiguousJson(ambiguous)).toThrow(DuplicateJsonKeyError);
+    }
+  });
+
+  test('rejects malformed, trailing, and non-JSON lexical representations', () => {
+    for (const invalid of [
+      '', '{', '{"expectedRevision":1,}', '{"expectedRevision":01}',
+      '{"expectedRevision":1} trailing', '[1,]', 'undefined', '"\\u00zz"',
+    ]) expect(() => parseUnambiguousJson(invalid)).toThrow();
+  });
+
+  test('recognizes only the exact recommendation POST path as the pre-parser boundary', () => {
+    const exact = {
+      method: 'POST',
+      originalUrl: `/api/v1/canonical/appointments/${APPOINTMENT}/recommendations?ignored=query`,
+    };
+    expect(isRecommendationRequest(exact)).toBe(true);
+    expect(isRecommendationRequest({
+      method: 'post',
+      originalUrl: `/API/V1/CANONICAL/APPOINTMENTS/${APPOINTMENT}/RECOMMENDATIONS/`,
+    })).toBe(true);
+    expect(isRecommendationRequest({
+      method: 'POST',
+      originalUrl: `http://northstar.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations?proxy=true`,
+    })).toBe(true);
+    expect(isRecommendationRequest({
+      method: 'POST',
+      originalUrl: `http://northstar.invalid@attacker.invalid/api/v1/canonical/appointments/${APPOINTMENT}/recommendations`,
+    })).toBe(true);
+    for (const changed of [
+      { ...exact, method: 'GET' },
+      { ...exact, originalUrl: `/api/v1/canonical/appointments/${APPOINTMENT}/conflicts` },
+      { ...exact, originalUrl: `/api/v1/canonical/appointments/${APPOINTMENT}/recommendations//` },
+      { ...exact, originalUrl: `/api/v1/canonical/appointments/${APPOINTMENT}/recommendations/extra` },
+      { ...exact, originalUrl: `/api/v1/canonical/appointments//recommendations` },
+      { ...exact, originalUrl: `/api%2fv1%2fcanonical%2fappointments%2f${APPOINTMENT}%2frecommendations` },
+      { ...exact, originalUrl: `http://attacker.invalid/not-the-endpoint?next=/api/v1/canonical/appointments/${APPOINTMENT}/recommendations` },
+    ]) expect(isRecommendationRequest(changed)).toBe(false);
   });
 
   test('computes bounded geodesic controls including zero, antimeridian, and poles', () => {

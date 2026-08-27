@@ -19,6 +19,7 @@ function fakeAuth(req, _res, next) {
     req.orgId = organizationId;
     req.userRole = 'owner';
     req.user = Object.freeze({ id: userId, organizationId, role: 'owner' });
+    req.authSession = Object.freeze({ id: req.get('X-Session-ID') });
   }
   next();
 }

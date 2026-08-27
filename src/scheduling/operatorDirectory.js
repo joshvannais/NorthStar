@@ -126,10 +126,18 @@ function validateInput(pool, input) {
 
 async function withReadSnapshot(pool, input, operation) {
   validateInput(pool, input);
-  if (typeof pool.connect !== 'function') return operation(pool);
+  // pg PoolClient exposes both connect() and release(). A caller that already
+  // owns the transaction must therefore be identified by release(), otherwise
+  // invoking connect() would attempt to reconnect the live client and split the
+  // authority/data boundary we are composing.
+  if (typeof pool.connect !== 'function' || typeof pool.release === 'function') return operation(pool);
   const client = await pool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    await client.query("SET LOCAL statement_timeout='15000ms'");
+    await client.query("SET LOCAL lock_timeout='2000ms'");
+    await client.query("SET LOCAL idle_in_transaction_session_timeout='15000ms'");
+    await client.query('SET LOCAL search_path=pg_catalog,public');
     const result = await operation(client);
     await client.query('COMMIT');
     return result;
@@ -308,6 +316,25 @@ async function loadSchedulingOperatorDirectory(pool, input) {
   return withReadSnapshot(pool, input, client => loadSchedulingOperatorDirectoryFromSnapshot(client, input));
 }
 
+async function withBroadSchedulingReadSnapshot(pool, input, operation, options = {}) {
+  if (typeof operation !== 'function') throw new Error('Broad scheduling read operation is required.');
+  const operatorDirectory = typeof options.operatorDirectory === 'function'
+    ? options.operatorDirectory : loadSchedulingOperatorDirectoryFromSnapshot;
+  return withReadSnapshot(pool, input, async client => {
+    const schedulingOperator = await operatorDirectory(client, input);
+    if (!schedulingOperator || schedulingOperator.canRead !== true) {
+      const denial = options.denial || {};
+      const error = new Error(denial.message ||
+        'Broad canonical customer and scheduling data is limited to current owners, admins, and active dispatchers.');
+      error.code = denial.code || 'M22_BROAD_SCHEDULING_READ_FORBIDDEN';
+      error.status = 403;
+      error.statusCode = 403;
+      throw error;
+    }
+    return operation(client, schedulingOperator);
+  });
+}
+
 async function loadSchedulingOperatorTargetPageFromSnapshot(pool, input) {
   const current = await currentOperator(pool, input);
   const authority = operatorAuthority(input, current);
@@ -442,4 +469,5 @@ module.exports = {
   loadSchedulingOperatorDirectory,
   loadSchedulingOperatorTargetPage,
   parseOperatorTargetRequest,
+  withBroadSchedulingReadSnapshot,
 };

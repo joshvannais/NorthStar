@@ -455,6 +455,21 @@ stale cursor or applies a mutation. No schema or migration changed. Another
 different fresh exact-head audit remains mandatory before ready, merge, or
 release.
 
+The following independent exact-head audit at
+`e870a46698af46bbfbf859e7bd5d57292f056db0` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 1 / P2 0 / P3 0`. The sixth narrow correction keeps Part 5
+audit-pending and closes only the remaining atomic-read gap. Every broad
+canonical, compatibility, Calendar, and Command Center response now derives
+current session, tenant membership, user, workforce role, onboarding,
+subscription, counts, and response bytes from one owned bounded repeatable-read
+PostgreSQL snapshot on the same client. A request that linearizes before a
+concurrent authority change may finish from that coherent snapshot, while the
+next request observes the committed demotion, revocation, expiry, deletion,
+suspension, or read-only transition. No route commits authority early and then
+opens a second data transaction; failures roll back and release the connection.
+No schema or migration changed. Another different fresh exact-head audit remains
+mandatory before ready, merge, or release.
+
 ### Part 6 — Crew Today experience (planned)
 
 Deliver the mobile-first self/current-crew view of assigned work, schedule and

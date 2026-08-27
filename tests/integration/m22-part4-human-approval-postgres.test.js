@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const express = require('express');
 const { Client, Pool } = require('pg');
 const request = require('supertest');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
@@ -15,6 +16,11 @@ const {
 } = require('../../src/scheduling/operatorDirectory');
 const { buildSchedulingOverview } = require('../../src/scheduling/overviewRepository');
 const { AccountRepository } = require('../../src/accounts/repository');
+const {
+  createCanonicalRouter,
+  createCompatibilityRouter,
+} = require('../../src/routes/canonicalPolaris');
+const { createCommandCenterRouter } = require('../../src/routes/commandCenter');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
@@ -704,6 +710,317 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       else app.locals.accountRepository = priorRepository;
     }
   }, 180000);
+
+  test('Part 5 broad aliases keep current authority and response bytes in one owned PostgreSQL snapshot', async () => {
+    const atomicSessionId = 'e5100000-0000-4000-8000-000000000001';
+    await provisionDurableSession(runtimePool, {
+      userId: IDS.owner, organizationId: IDS.organization, membershipId: IDS.owner,
+      sessionId: atomicSessionId, role: 'owner',
+    });
+    let activeTrace = null;
+    const tracePool = {
+      query: jest.fn(async function () {
+        if (activeTrace) activeTrace.poolQueries += 1;
+        throw new Error('A protected broad read escaped its owned snapshot client.');
+      }),
+      connect: async function () {
+        const trace = activeTrace;
+        if (!trace) throw new Error('A trace is required before opening the broad read snapshot.');
+        trace.connects += 1;
+        const source = await runtimePool.connect();
+        let transactionActive = false;
+        const client = {
+          __m22Trace: trace,
+          async query(sql, values) {
+            const statement = String(sql).replace(/\s+/g, ' ').trim();
+            if (/^BEGIN\b/.test(statement)) {
+              transactionActive = true;
+              trace.begins += 1;
+            } else if (statement === 'COMMIT') {
+              trace.commits += 1;
+            } else if (statement === 'ROLLBACK') {
+              trace.rollbacks += 1;
+            } else if (trace.authorityComplete && !/^SET LOCAL\b/.test(statement)) {
+              trace.dataQueries += 1;
+              if (!transactionActive) trace.dataQueriesOutsideTransaction += 1;
+              if (trace.failFirstDataQuery && !trace.dataFailureInjected) {
+                trace.dataFailureInjected = true;
+                throw new Error('injected protected broad read failure');
+              }
+            }
+            try {
+              return await source.query(sql, values);
+            } finally {
+              if (statement === 'COMMIT' || statement === 'ROLLBACK') transactionActive = false;
+            }
+          },
+          release() {
+            if (transactionActive) trace.releasedWhileActive += 1;
+            trace.releases += 1;
+            source.release();
+          },
+        };
+        return client;
+      },
+    };
+    const atomicOperatorDirectory = async function (client, input) {
+      const directory = await loadSchedulingOperatorDirectory(client, input);
+      const trace = client.__m22Trace;
+      trace.authorityBackendPid = Number((await client.query('SELECT pg_backend_pid() AS pid')).rows[0].pid);
+      trace.authorityComplete = true;
+      if (typeof trace.afterAuthority === 'function' && !trace.boundaryMutationApplied) {
+        trace.boundaryMutationApplied = true;
+        await trace.afterAuthority();
+      }
+      return directory;
+    };
+    const fakeAuth = function (req, _res, next) {
+      req.requestId = 'm22-part5-atomic-read';
+      req.tenantContext = { organizationId: IDS.organization, userId: IDS.owner, role: 'owner' };
+      req.orgId = IDS.organization;
+      req.userRole = 'owner';
+      req.user = { id: IDS.owner, organizationId: IDS.organization, role: 'owner', onboardingStatus: 'complete' };
+      req.accountAuthority = { membership_id: IDS.owner };
+      req.authSession = { id: atomicSessionId };
+      next();
+    };
+    const allowPermission = function () {
+      return function (_req, _res, next) { next(); };
+    };
+    const atomicApp = express();
+    atomicApp.use(express.json());
+    const dependencies = {
+      auth: fakeAuth,
+      onboardedAuth: fakeAuth,
+      externalAuth: fakeAuth,
+      permission: allowPermission,
+      poolProvider: function () { return tracePool; },
+      operatorDirectory: atomicOperatorDirectory,
+    };
+    atomicApp.use('/api/v1/canonical', createCanonicalRouter(dependencies));
+    atomicApp.use('/api/v1/command-center', createCommandCenterRouter(dependencies));
+    atomicApp.use('/api', createCompatibilityRouter(dependencies));
+
+    function freshTrace(overrides = {}) {
+      return {
+        connects: 0, begins: 0, commits: 0, rollbacks: 0, releases: 0,
+        poolQueries: 0, dataQueries: 0, dataQueriesOutsideTransaction: 0,
+        releasedWhileActive: 0, authorityComplete: false, boundaryMutationApplied: false,
+        dataFailureInjected: false, ...overrides,
+      };
+    }
+    function expectOwnedSnapshot(trace) {
+      expect(trace).toMatchObject({
+        connects: 1, begins: 1, commits: 1, rollbacks: 0, releases: 1,
+        poolQueries: 0, dataQueriesOutsideTransaction: 0, releasedWhileActive: 0,
+        authorityComplete: true,
+      });
+      expect(trace.dataQueries).toBeGreaterThan(0);
+      expect(trace.authorityBackendPid).toBeGreaterThan(0);
+    }
+    const notFoundId = 'f5100000-0000-4000-8000-000000000099';
+    const protectedAliases = [
+      '/api/v1/canonical/status',
+      '/api/v1/canonical/graphs?limit=1',
+      '/api/v1/canonical/dashboard?limit=1',
+      '/api/v1/canonical/analytics?limit=1',
+      ...['customer-detail', 'leads', 'communications', 'calendar', 'command-center', 'polaris', 'executive', 'estimates']
+        .map(surface => `/api/v1/canonical/surfaces/${surface}?limit=1`),
+      ...['customer-detail', 'leads', 'communications', 'calendar', 'command-center', 'polaris', 'executive', 'estimates']
+        .map(surface => `/api/v1/canonical/compat/${surface}?limit=1`),
+      `/api/v1/canonical/graphs/${notFoundId}`,
+      `/api/v1/canonical/snapshots/${notFoundId}`,
+      '/api/customers?limit=1',
+      '/api/communications?limit=1',
+      '/api/opportunities/pipeline?limit=1',
+      '/api/opportunities?limit=1',
+      '/api/financial/estimates?limit=1',
+      '/api/analytics/executive?limit=1',
+      '/api/analytics/kpis?limit=1',
+      '/api/analytics/dashboard?limit=1',
+      '/api/analytics/alerts?limit=1',
+      '/api/analytics/trends?limit=1',
+      '/api/analytics/pipeline?limit=1',
+      '/api/analytics/by-service?limit=1',
+      '/api/workflows/agenda/today?limit=1',
+      '/api/leads?limit=1',
+      '/api/calls?limit=1',
+      '/api/appointments?limit=1',
+      '/api/dashboard/overview?limit=1',
+      ...['summary', 'revenue', 'brief', 'coach', 'kpis', 'trends', 'revenue-trends']
+        .map(endpoint => `/api/dashboard/${endpoint}?limit=1`),
+      '/api/dashboard/status',
+      '/api/calendar/events?limit=1',
+      '/api/calendar/upcoming?limit=1',
+      '/api/financial/metrics?limit=1',
+      '/api/polaris/intelligence?limit=1',
+      '/api/polaris/estimates?limit=1',
+      '/api/polaris/recommendations?limit=1',
+      '/api/polaris/learning?limit=1',
+      '/api/polaris/pipeline?limit=1',
+      '/api/polaris/retell-context?limit=1',
+      '/api/polaris/business-context?limit=1',
+      '/api/polaris/unified-context?limit=1',
+      '/api/stats?limit=1',
+      '/api/leads/intelligence/dashboard?limit=1',
+      `/api/customers/${notFoundId}`,
+      `/api/communications/${notFoundId}`,
+      `/api/opportunities/${notFoundId}`,
+      `/api/financial/estimates/${notFoundId}`,
+      `/api/leads/${notFoundId}/intelligence`,
+      `/api/leads/${notFoundId}`,
+      '/api/v1/command-center/workspace',
+      `/api/v1/command-center/polaris/customer/${notFoundId}`,
+      `/api/v1/command-center/polaris/lead/${notFoundId}`,
+      `/api/v1/command-center/polaris/work/${notFoundId}`,
+    ];
+    for (const route of protectedAliases) {
+      activeTrace = freshTrace();
+      const response = await request(atomicApp).get(route);
+      expect([200, 404]).toContain(response.status);
+      expectOwnedSnapshot(activeTrace);
+    }
+
+    async function resetOwner() {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='owner',status='active',revoked_at=NULL WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.users SET role='owner',status='active' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='owner' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      const session = await runtimePool.query('SELECT id FROM public.auth_sessions WHERE id=$1', [atomicSessionId]);
+      if (session.rowCount === 0) {
+        await provisionDurableSession(runtimePool, {
+          userId: IDS.owner, organizationId: IDS.organization, membershipId: IDS.owner,
+          sessionId: atomicSessionId, role: 'owner',
+        });
+      } else {
+        await runtimePool.query(
+          "UPDATE public.auth_sessions SET status='active',access_expires_at=NOW()+INTERVAL '15 minutes',refresh_expires_at=NOW()+INTERVAL '14 days',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+          [atomicSessionId]
+        );
+      }
+      await runtimePool.query(
+        "UPDATE public.canonical_business_profiles SET is_active=TRUE,retired_at=NULL WHERE organization_id=$1",
+        [IDS.organization]
+      );
+      await runtimePool.query(
+        `UPDATE public.organization_onboarding
+            SET status='complete',active_business_profile_id=(
+              SELECT id FROM public.canonical_business_profiles
+               WHERE organization_id=$1 AND is_active=TRUE ORDER BY version_number DESC,id LIMIT 1
+            ),completed_at=NOW()
+          WHERE organization_id=$1`,
+        [IDS.organization]
+      );
+      await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
+    }
+    async function runLinearizedRace(mutation, expectedNextStatus, expectedCode) {
+      await resetOwner();
+      activeTrace = freshTrace({ afterAuthority: mutation });
+      const raced = await request(atomicApp).get('/api/v1/canonical/graphs?limit=1');
+      expect(raced.status).toBe(200);
+      expect(raced.body.success).toBe(true);
+      expectOwnedSnapshot(activeTrace);
+      expect(activeTrace.boundaryMutationApplied).toBe(true);
+
+      activeTrace = freshTrace();
+      const current = await request(atomicApp).get('/api/v1/canonical/graphs?limit=1');
+      expect(current.status).toBe(expectedNextStatus);
+      if (expectedCode) expect(current.body.error.code).toBe(expectedCode);
+      if (expectedNextStatus !== 200) expect(JSON.stringify(current.body)).not.toContain(HOSTILE);
+      await resetOwner();
+    }
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='member' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+      await runtimePool.query(
+        "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+    }, 403, 'M22_BROAD_SCHEDULING_READ_FORBIDDEN');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='m22_part5_atomic_read' WHERE id=$1",
+        [atomicSessionId]
+      );
+    }, 401, 'M22_OPERATOR_SESSION_NOT_CURRENT');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.auth_sessions SET access_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+        [atomicSessionId]
+      );
+    }, 401, 'M22_OPERATOR_SESSION_NOT_CURRENT');
+    await runLinearizedRace(async function () {
+      await runtimePool.query('DELETE FROM public.auth_sessions WHERE id=$1', [atomicSessionId]);
+    }, 401, 'M22_OPERATOR_SESSION_NOT_CURRENT');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+    }, 403, 'M22_BROAD_SCHEDULING_READ_FORBIDDEN');
+    await runLinearizedRace(async function () {
+      await runtimePool.query(
+        "UPDATE public.users SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.owner]
+      );
+    }, 403, 'M22_BROAD_SCHEDULING_READ_FORBIDDEN');
+
+    await resetOwner();
+    activeTrace = freshTrace({
+      afterAuthority: async function () {
+        await runtimePool.query("UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1", [IDS.organization]);
+      },
+    });
+    expect((await request(atomicApp).get('/api/v1/canonical/graphs?limit=1')).status).toBe(200);
+    expectOwnedSnapshot(activeTrace);
+    const readOnly = await loadSchedulingOperatorDirectory(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, authSessionId: atomicSessionId,
+    });
+    expect(readOnly).toMatchObject({ canRead: true, canMutate: false, reason: 'subscription_read_only' });
+
+    await resetOwner();
+    activeTrace = freshTrace({
+      afterAuthority: async function () {
+        await runtimePool.query(
+          "UPDATE public.canonical_business_profiles SET is_active=FALSE,retired_at=NOW() WHERE organization_id=$1",
+          [IDS.organization]
+        );
+        await runtimePool.query(
+          "UPDATE public.organization_onboarding SET status='business_profile_required',active_business_profile_id=NULL,completed_at=NULL WHERE organization_id=$1",
+          [IDS.organization]
+        );
+      },
+    });
+    expect((await request(atomicApp).get('/api/v1/canonical/graphs?limit=1')).status).toBe(200);
+    expectOwnedSnapshot(activeTrace);
+    const onboardingReadOnly = await loadSchedulingOperatorDirectory(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, authSessionId: atomicSessionId,
+    });
+    expect(onboardingReadOnly).toMatchObject({ canRead: true, canMutate: false, reason: 'onboarding_incomplete' });
+    await resetOwner();
+
+    activeTrace = freshTrace({ failFirstDataQuery: true });
+    const failed = await request(atomicApp).get('/api/v1/canonical/graphs?limit=1');
+    expect(failed.status).toBe(503);
+    expect(activeTrace).toMatchObject({
+      connects: 1, begins: 1, commits: 0, rollbacks: 1, releases: 1,
+      dataFailureInjected: true, dataQueriesOutsideTransaction: 0, releasedWhileActive: 0,
+    });
+    expect(activeTrace.poolQueries).toBe(0);
+    await resetOwner();
+  }, 300000);
 
   test('Part 5 bounded target discovery reaches 101+ active profiles and crews without weakening current authority', async () => {
     await seedAppointment(runtimePool, IDS.organization, IDS.targetDiscoveryAppointment);

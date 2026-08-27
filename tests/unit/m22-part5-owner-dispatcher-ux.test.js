@@ -11,6 +11,7 @@ const {
 const {
   encodeOperatorTargetCursor,
   parseOperatorTargetRequest,
+  withBroadSchedulingReadSnapshot,
 } = require('../../src/scheduling/operatorDirectory');
 const { createCanonicalRouter } = require('../../src/routes/canonicalPolaris');
 
@@ -153,5 +154,51 @@ describe('Mission 22 Part 5 owner and dispatcher UX contracts', () => {
     expect(approval).toContain('textContent');
     expect(approval).not.toContain('innerHTML');
     expect(commandContract).toContain('m22-part5-target-directory-v1');
+  });
+
+  test('broad authority and response rows share one owned bounded snapshot with rollback and release', async () => {
+    const input = {
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      actorUserId: '22222222-2222-4222-8222-222222222222',
+      actorAccessRole: 'owner',
+      authSessionId: '33333333-3333-4333-8333-333333333333',
+    };
+    const statements = [];
+    var releases = 0;
+    const client = {
+      query: jest.fn(async function (sql) {
+        statements.push(String(sql).replace(/\s+/g, ' ').trim());
+        return { rows: [{ value: 'bounded' }], rowCount: 1 };
+      }),
+      release: function () { releases += 1; },
+    };
+    const pool = { query: jest.fn(), connect: jest.fn(async function () { return client; }) };
+    const value = await withBroadSchedulingReadSnapshot(pool, input, async function (snapshot, operator) {
+      expect(snapshot).toBe(client);
+      expect(operator).toMatchObject({ canRead: true, digest: DIGEST });
+      return (await snapshot.query('SELECT value FROM public.bounded_rows')).rows[0].value;
+    }, {
+      operatorDirectory: async function (snapshot) {
+        expect(snapshot).toBe(client);
+        await snapshot.query('SELECT current operator authority');
+        return { canRead: true, digest: DIGEST };
+      },
+    });
+    expect(value).toBe('bounded');
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(pool.connect).toHaveBeenCalledTimes(1);
+    expect(releases).toBe(1);
+    expect(statements[0]).toBe('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    expect(statements.indexOf('SELECT current operator authority'))
+      .toBeLessThan(statements.indexOf('SELECT value FROM public.bounded_rows'));
+    expect(statements[statements.length - 1]).toBe('COMMIT');
+
+    statements.length = 0;
+    await expect(withBroadSchedulingReadSnapshot(pool, input, async function () {
+      throw new Error('bounded read failed');
+    }, { operatorDirectory: async function () { return { canRead: true }; } }))
+      .rejects.toThrow('bounded read failed');
+    expect(statements[statements.length - 1]).toBe('ROLLBACK');
+    expect(releases).toBe(2);
   });
 });

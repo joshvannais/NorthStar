@@ -37,6 +37,7 @@ const {
   loadSchedulingOperatorDirectory,
   loadSchedulingOperatorTargetPage,
   parseOperatorTargetRequest,
+  withBroadSchedulingReadSnapshot,
 } = require('../scheduling/operatorDirectory');
 const {
   buildSchedulingOverviewPage,
@@ -769,31 +770,41 @@ function handleEndpointError(res, _error, req) {
   return sendPersistenceUnavailable(res, req);
 }
 
-async function authoritativeItems(req, dependencies, endpoint) {
+async function authoritativeItems(req, dependencies, endpoint, queryable) {
   const context = requestContext(req);
   const filters = queryFilters(req);
   void endpoint;
-  const pool = resolvePool(dependencies.poolProvider);
+  const pool = queryable || resolvePool(dependencies.poolProvider);
   return listCanonicalGraphs(pool, context, filters);
 }
 
-async function requireBroadSchedulingRead(req, dependencies, denial) {
+async function withBroadCanonicalRead(req, dependencies, operation, denial) {
   const pool = resolvePool(dependencies.poolProvider);
-  const schedulingOperator = await dependencies.operatorDirectory(pool, actorInput(req));
-  if (schedulingOperator.canRead !== true) {
-    const error = new Error(denial && denial.message ||
-      'Broad canonical customer and scheduling data is limited to current owners, admins, and active dispatchers.');
-    error.code = denial && denial.code || 'M22_BROAD_SCHEDULING_READ_FORBIDDEN';
-    error.status = 403;
-    error.statusCode = 403;
-    throw error;
-  }
-  return schedulingOperator;
+  return withBroadSchedulingReadSnapshot(pool, actorInput(req), operation, {
+    operatorDirectory: dependencies.operatorDirectory,
+    denial,
+  });
 }
 
 async function canonicalStatus(req, dependencies) {
   try {
-    await requireBroadSchedulingRead(req, dependencies);
+    return await withBroadCanonicalRead(req, dependencies, async function (client) {
+      const context = requestContext(req);
+      const result = await client.query(
+        `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
+          WHERE organization_id = $1 AND state = 'completed'`,
+        [context.organizationId]
+      );
+      return {
+        status: 'operational',
+        readModelVersion: READ_MODEL_VERSION,
+        completedGraphs: result.rows[0].completed_graphs,
+        postgresAuthoritative: true,
+        redisRequired: false,
+        canonicalResponseCaching: false,
+        broadSchedulingRead: true,
+      };
+    });
   } catch (error) {
     if (!error || error.code !== 'M22_BROAD_SCHEDULING_READ_FORBIDDEN') throw error;
     return {
@@ -805,21 +816,6 @@ async function canonicalStatus(req, dependencies) {
       broadSchedulingRead: false,
     };
   }
-  const context = requestContext(req);
-  const result = await resolvePool(dependencies.poolProvider).query(
-    `SELECT COUNT(*)::int AS completed_graphs FROM public.canonical_operations
-      WHERE organization_id = $1 AND state = 'completed'`,
-    [context.organizationId]
-  );
-  return {
-    status: 'operational',
-    readModelVersion: READ_MODEL_VERSION,
-    completedGraphs: result.rows[0].completed_graphs,
-    postgresAuthoritative: true,
-    redisRequired: false,
-    canonicalResponseCaching: false,
-    broadSchedulingRead: true,
-  };
 }
 
 function createCanonicalRouter(options) {
@@ -873,8 +869,8 @@ function createCanonicalRouter(options) {
     if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
     try {
       queryFilters(req);
-      await requireBroadSchedulingRead(req, dependencies);
-      const items = await authoritativeItems(req, dependencies, 'canonical.graphs');
+      const items = await withBroadCanonicalRead(req, dependencies, client =>
+        authoritativeItems(req, dependencies, 'canonical.graphs', client));
       return res.json({ success: true, data: { items, count: items.length, readModelVersion: READ_MODEL_VERSION, digest: sha256(items.map(item => item.projectionDigest)) } });
     } catch (_error) {
       return handleEndpointError(res, _error, req);
@@ -886,8 +882,8 @@ function createCanonicalRouter(options) {
       if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });
       try {
         queryFilters(req);
-        await requireBroadSchedulingRead(req, dependencies);
-        const items = await authoritativeItems(req, dependencies, 'canonical.' + endpoint);
+        const items = await withBroadCanonicalRead(req, dependencies, client =>
+          authoritativeItems(req, dependencies, 'canonical.' + endpoint, client));
         return res.json({ success: true, data: { ...aggregate(items), digest: sha256(items.map(item => item.projectionDigest)), readModelVersion: READ_MODEL_VERSION } });
       } catch (_error) {
         return handleEndpointError(res, _error, req);
@@ -899,8 +895,8 @@ function createCanonicalRouter(options) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Surface not found.' } });
     try {
       queryFilters(req);
-      await requireBroadSchedulingRead(req, dependencies);
-      const items = await authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface);
+      const items = await withBroadCanonicalRead(req, dependencies, client =>
+        authoritativeItems(req, dependencies, 'canonical.surface.' + req.params.surface, client));
       return res.json({ success: true, data: surfaceProjection(req.params.surface, items, requestContext(req)) });
     } catch (_error) {
       return handleEndpointError(res, _error, req);
@@ -913,13 +909,10 @@ function createCanonicalRouter(options) {
       const filters = queryFilters(req);
       const context = requestContext(req);
       const pool = resolvePool(dependencies.poolProvider);
-      const schedulingOperator = await requireBroadSchedulingRead(req, dependencies,
-        req.params.surface === 'calendar' ? {
-          code: 'CALENDAR_OPERATOR_REQUIRED',
-          message: 'The broad scheduling Calendar is limited to current owners, admins, and active dispatchers.',
-        } : null);
+      let schedulingOperator;
       let schedulingOverview = null;
       let items;
+      let timeZoneAuthority = null;
       if (req.params.surface === 'calendar') {
         const evaluated = await buildSchedulingOverviewPage(pool, {
           organizationId: context.organizationId,
@@ -930,15 +923,30 @@ function createCanonicalRouter(options) {
           loadPage: (client, page) => listCanonicalGraphPage(client, context, {
             limit: page.limit, cursor: page.cursor, status: null, customerId: null,
           }),
+          loadOperator: async client => {
+            const operator = await dependencies.operatorDirectory(client, actorInput(req));
+            if (!operator || operator.canRead !== true) {
+              const error = new Error('The broad scheduling Calendar is limited to current owners, admins, and active dispatchers.');
+              error.code = 'CALENDAR_OPERATOR_REQUIRED';
+              error.status = 403;
+              error.statusCode = 403;
+              throw error;
+            }
+            return operator;
+          },
+          loadTimeZoneAuthority: client => currentCalendarTimeZoneAuthority(client, context),
         });
+        schedulingOperator = evaluated.schedulingOperator;
         schedulingOverview = evaluated.overview;
         items = evaluated.pageItems;
+        timeZoneAuthority = evaluated.timeZoneAuthority;
       } else {
-        items = await listCanonicalGraphs(pool, context, filters);
+        const evaluated = await withBroadCanonicalRead(req, dependencies, async function (client, operator) {
+          return { operator, items: await listCanonicalGraphs(client, context, filters) };
+        });
+        schedulingOperator = evaluated.operator;
+        items = evaluated.items;
       }
-      const timeZoneAuthority = req.params.surface === 'calendar'
-        ? await currentCalendarTimeZoneAuthority(pool, context)
-        : null;
       let projection = compatibilityProjection(req.params.surface, items, context, timeZoneAuthority);
       if (req.params.surface === 'calendar') {
         projection = {
@@ -1140,8 +1148,8 @@ function createCanonicalRouter(options) {
   router.get('/graphs/:id', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
-      await requireBroadSchedulingRead(req, dependencies);
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), context, req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, context, req.params.id));
       if (!item) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Canonical graph not found.' } });
       return res.json({ success: true, data: item });
     } catch (_error) {
@@ -1152,8 +1160,8 @@ function createCanonicalRouter(options) {
   router.get('/snapshots/:id', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
-      await requireBroadSchedulingRead(req, dependencies);
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), context, req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, context, req.params.id));
       if (!item || item.ids.polarisSnapshot !== req.params.id) {
         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Polaris snapshot not found.' } });
       }
@@ -1195,14 +1203,14 @@ function createCompatibilityRouter(options) {
     return async function (req, res) {
       try {
         queryFilters(req);
-        await requireBroadSchedulingRead(req, dependencies);
-        const items = await authoritativeItems(req, dependencies, 'compat.' + surface + '.' + req.path);
         const context = requestContext(req);
-        const timeZoneAuthority = surface === 'calendar'
-          ? await currentCalendarTimeZoneAuthority(resolvePool(dependencies.poolProvider), context)
-          : null;
-        const projection = compatibilityProjection(surface, items, context, timeZoneAuthority);
-        return res.json(shape(projection, items));
+        const result = await withBroadCanonicalRead(req, dependencies, async function (client) {
+          const items = await authoritativeItems(req, dependencies, 'compat.' + surface + '.' + req.path, client);
+          const timeZoneAuthority = surface === 'calendar'
+            ? await currentCalendarTimeZoneAuthority(client, context) : null;
+          return { items, projection: compatibilityProjection(surface, items, context, timeZoneAuthority) };
+        });
+        return res.json(shape(result.projection, result.items));
       } catch (_error) {
         return handleEndpointError(res, _error, req);
       }
@@ -1297,8 +1305,8 @@ function createCompatibilityRouter(options) {
 
   ownedGet('/customers/:id', async function (req, res) {
     try {
-      await requireBroadSchedulingRead(req, dependencies);
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, requestContext(req), req.params.id));
       if (!item || item.ids.customer !== req.params.id) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Customer not found.' } });
       return res.json({ ...item.customer, canonical: surfaceProjection('customer-detail', [item]).items[0] });
     } catch (_error) {
@@ -1308,8 +1316,8 @@ function createCompatibilityRouter(options) {
 
   async function canonicalDetail(req, res, identifierKey, notFoundMessage, shape) {
     try {
-      await requireBroadSchedulingRead(req, dependencies);
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, requestContext(req), req.params.id));
       if (!item || item.ids[identifierKey] !== req.params.id) {
         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: notFoundMessage } });
       }
@@ -1342,8 +1350,8 @@ function createCompatibilityRouter(options) {
 
   ownedGet('/leads/:id', async function (req, res) {
     try {
-      await requireBroadSchedulingRead(req, dependencies);
-      const item = await getCanonicalGraph(resolvePool(dependencies.poolProvider), requestContext(req), req.params.id);
+      const item = await withBroadCanonicalRead(req, dependencies, client =>
+        getCanonicalGraph(client, requestContext(req), req.params.id));
       if (!item || item.ids.opportunity !== req.params.id) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Lead not found.' } });
       return res.json({ ...item.opportunity, customer: item.customer, canonical: surfaceProjection('leads', [item]).items[0] });
     } catch (_error) {

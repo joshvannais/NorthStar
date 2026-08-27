@@ -10,7 +10,11 @@ const {
   requestContext,
 } = require('./canonicalPolaris');
 const { buildPaidWorkspace } = require('../commandCenter/workspace');
-const { actorInput, loadSchedulingOperatorDirectory } = require('../scheduling/operatorDirectory');
+const {
+  actorInput,
+  loadSchedulingOperatorDirectory,
+  withBroadSchedulingReadSnapshot,
+} = require('../scheduling/operatorDirectory');
 const { buildSchedulingOverviewPage } = require('../scheduling/overviewRepository');
 const { validateGraphCursor } = require('../scheduling/graphCursor');
 
@@ -45,6 +49,14 @@ function typedFailure(req, res, error) {
   });
 }
 
+function operatorRequired() {
+  const error = new Error('The scheduling Command Center is limited to current owners, admins, and active dispatchers.');
+  error.code = 'COMMAND_CENTER_OPERATOR_REQUIRED';
+  error.status = 403;
+  error.statusCode = 403;
+  return error;
+}
+
 function paidRequestContext(req) {
   const context = requestContext(req);
   if (!context) return null;
@@ -54,8 +66,12 @@ function paidRequestContext(req) {
 function createCommandCenterRouter(options = {}) {
   const router = express.Router();
   const poolProvider = typeof options.poolProvider === 'function' ? options.poolProvider : () => db.getPool();
+  const auth = typeof options.auth === 'function' ? options.auth : requireTenantAccess;
+  const permission = typeof options.permission === 'function' ? options.permission : requirePermission;
+  const operatorDirectory = typeof options.operatorDirectory === 'function'
+    ? options.operatorDirectory : loadSchedulingOperatorDirectory;
 
-  router.get('/workspace', requireTenantAccess, requirePermission('dashboard', 'read'), async (req, res) => {
+  router.get('/workspace', auth, permission('dashboard', 'read'), async (req, res) => {
     try {
       const requestedCursor = validateGraphCursor(
         Object.prototype.hasOwnProperty.call(req.query, 'cursor') ? req.query.cursor : null
@@ -63,17 +79,6 @@ function createCommandCenterRouter(options = {}) {
       const context = paidRequestContext(req);
       const pool = poolProvider();
       if (!context || !pool || typeof pool.query !== 'function') return unavailable(req, res);
-      const schedulingOperator = await loadSchedulingOperatorDirectory(pool, actorInput(req));
-      if (!schedulingOperator.canRead) {
-        return res.status(403).json({
-          success: false,
-          requestId: requestId(req),
-          error: {
-            code: 'COMMAND_CENTER_OPERATOR_REQUIRED',
-            message: 'The scheduling Command Center is limited to current owners, admins, and active dispatchers.',
-          },
-        });
-      }
       const evaluated = await buildSchedulingOverviewPage(pool, {
         organizationId: context.organizationId,
         actorUserId: context.userId,
@@ -83,13 +88,18 @@ function createCommandCenterRouter(options = {}) {
         loadPage: (client, page) => listCanonicalGraphPage(client, context, {
           limit: page.limit, cursor: page.cursor, status: null, customerId: null,
         }),
+        loadOperator: async client => {
+          const current = await operatorDirectory(client, actorInput(req));
+          if (!current || current.canRead !== true) throw operatorRequired();
+          return current;
+        },
       });
       return res.json({
         success: true,
         data: buildPaidWorkspace({
           context,
           items: evaluated.pageItems,
-          schedulingOperator,
+          schedulingOperator: evaluated.schedulingOperator,
           schedulingOverview: evaluated.overview,
         }),
         requestId: requestId(req),
@@ -101,7 +111,7 @@ function createCommandCenterRouter(options = {}) {
     }
   });
 
-  router.get('/polaris/:kind/:id', requireTenantAccess, async (req, res) => {
+  router.get('/polaris/:kind/:id', auth, async (req, res) => {
     const definition = DETAIL_KINDS[req.params.kind];
     if (!definition) {
       return res.status(404).json({
@@ -121,18 +131,14 @@ function createCommandCenterRouter(options = {}) {
       const context = paidRequestContext(req);
       const pool = poolProvider();
       if (!context || !pool || typeof pool.query !== 'function') return unavailable(req, res);
-      const schedulingOperator = await loadSchedulingOperatorDirectory(pool, actorInput(req));
-      if (!schedulingOperator.canRead) {
-        return res.status(403).json({
-          success: false,
-          requestId: requestId(req),
-          error: {
+      const item = await withBroadSchedulingReadSnapshot(pool, actorInput(req),
+        client => getCanonicalGraph(client, context, req.params.id), {
+          operatorDirectory,
+          denial: {
             code: 'COMMAND_CENTER_OPERATOR_REQUIRED',
             message: 'The scheduling Command Center is limited to current owners, admins, and active dispatchers.',
           },
         });
-      }
-      const item = await getCanonicalGraph(pool, context, req.params.id);
       if (!item || item.ids[definition.idKey] !== req.params.id) {
         return res.status(404).json({
           success: false,

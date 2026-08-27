@@ -1054,15 +1054,34 @@ realPostgres('Mission 19 Part 3 corrected real server mount', () => {
     expect(csv.text).toContain('customerId');
 
     const pool = db.getPool();
-    const originalQuery = pool.query.bind(pool);
-    pool.query = async function (statement, values) {
-      if (/canonical_/i.test(String(statement)) && !/FROM public\.auth_sessions/i.test(String(statement))) {
-        throw new Error('connection unavailable');
+    const originalConnect = pool.connect.bind(pool);
+    const wrappedClients = new Map();
+    function wrapClient(client) {
+      if (wrappedClients.has(client)) return client;
+      const originalClientQuery = client.query;
+      wrappedClients.set(client, originalClientQuery);
+      client.query = async function (statement, values) {
+        if (/FROM public\.canonical_operations/i.test(String(statement))) {
+          throw new Error('connection unavailable');
+        }
+        return originalClientQuery.call(client, statement, values);
+      };
+      return client;
+    }
+    pool.connect = function (callback) {
+      if (typeof callback === 'function') {
+        originalConnect().then(client => callback(null, client), error => callback(error));
+        return undefined;
       }
-      return originalQuery(statement, values);
+      return originalConnect().then(wrapClient);
     };
-    const unavailable = await request(app).get('/api/leads').set(auth(USERS.owner));
-    pool.query = originalQuery;
+    let unavailable;
+    try {
+      unavailable = await request(app).get('/api/leads').set(auth(USERS.owner));
+    } finally {
+      pool.connect = originalConnect;
+      for (const [client, originalClientQuery] of wrappedClients) client.query = originalClientQuery;
+    }
     expect(unavailable.status).toBe(503);
     expect(unavailable.body.error.code).toBe('CANONICAL_PERSISTENCE_UNAVAILABLE');
   });

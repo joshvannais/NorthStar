@@ -298,10 +298,15 @@ async function buildSchedulingOverviewPage(pool, input) {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
       await client.query("SET LOCAL statement_timeout='15000ms'");
       await client.query("SET LOCAL lock_timeout='2000ms'");
+      await client.query("SET LOCAL idle_in_transaction_session_timeout='15000ms'");
       await client.query('SET LOCAL search_path=pg_catalog,public');
+      const schedulingOperator = typeof normalizedInput.loadOperator === 'function'
+        ? await normalizedInput.loadOperator(client) : null;
+      const timeZoneAuthority = typeof normalizedInput.loadTimeZoneAuthority === 'function'
+        ? await normalizedInput.loadTimeZoneAuthority(client) : null;
       const evaluated = await evaluateOverview(client, normalizedInput);
       await client.query('COMMIT');
-      return evaluated;
+      return Object.freeze({ ...evaluated, schedulingOperator, timeZoneAuthority });
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch (_) {}
       if (error && ['40001', '40P01'].includes(error.code) && attempt < 2) continue;

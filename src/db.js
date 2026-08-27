@@ -994,6 +994,27 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone) FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_json(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_entries(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_bounded_entries(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_entry_digests(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_unique_local_instant(timestamp without time zone,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_working_hours_authority(jsonb,timestamp with time zone,timestamp with time zone,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_review_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_schedule_guard_assignment() FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(

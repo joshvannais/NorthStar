@@ -33,6 +33,16 @@ const IDS = Object.freeze({
   crewHardAppointment: 'e5100000-0000-4000-8000-000000000008',
   invalidTargetAppointment: 'e5100000-0000-4000-8000-000000000009',
   boundaryAppointment: 'e5100000-0000-4000-8000-000000000010',
+  staleAuthorityAppointment: 'e5100000-0000-4000-8000-000000000011',
+  reviewEvidenceAppointment: 'e5100000-0000-4000-8000-000000000012',
+  mutationMatrixAppointment: 'e5100000-0000-4000-8000-000000000013',
+  idempotencyAppointment: 'e5100000-0000-4000-8000-000000000014',
+  bypassAppointment: 'e5100000-0000-4000-8000-000000000015',
+  crewDivergenceAppointment: 'e5100000-0000-4000-8000-000000000016',
+  rollbackAppointment: 'e5100000-0000-4000-8000-000000000017',
+  concurrencyAppointment: 'e5100000-0000-4000-8000-000000000018',
+  evidenceDivergenceAppointment: 'e5100000-0000-4000-8000-000000000019',
+  hardConflictAppointment: 'e5100000-0000-4000-8000-000000000020',
 });
 
 function quoteIdentifier(value) {
@@ -178,6 +188,10 @@ function explicitOffset(value) {
     '2027-03-15T14:00:00.000Z': '2027-03-15T10:00:00-04:00',
     '2027-03-15T15:00:00.000Z': '2027-03-15T11:00:00-04:00',
     '2027-03-15T16:00:00.000Z': '2027-03-15T12:00:00-04:00',
+    '2027-04-15T13:00:00.000Z': '2027-04-15T09:00:00-04:00',
+    '2027-04-15T14:00:00.000Z': '2027-04-15T10:00:00-04:00',
+    '2027-04-15T15:00:00.000Z': '2027-04-15T11:00:00-04:00',
+    '2027-04-15T16:00:00.000Z': '2027-04-15T12:00:00-04:00',
   };
   return value === null ? null : replacements[value] || value;
 }
@@ -326,7 +340,8 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
   }, 240000);
 
   async function previewAndApprove(action, input = {}, session = sessions.owner, key = crypto.randomUUID()) {
-    const before = await pins(runtimePool);
+    const appointmentId = input.appointmentId || IDS.mutationMatrixAppointment;
+    const before = await pins(runtimePool, IDS.organization, appointmentId);
     const reason = input.reason || `${action} approved after exact human review. ${HOSTILE}`;
     const proposedTarget = input.target || before.target;
     const proposedStart = Object.prototype.hasOwnProperty.call(input, 'scheduledStart')
@@ -334,7 +349,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     const proposedEnd = Object.prototype.hasOwnProperty.call(input, 'scheduledEnd')
       ? input.scheduledEnd : explicitOffset(before.scheduledEnd);
     const previewResponse = await request(app)
-      .post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+      .post(`/api/v1/canonical/appointments/${appointmentId}/mutation-previews`)
       .set(session.headers)
       .send({
         expectedRevision: before.revision, expectedDigest: before.digest,
@@ -354,7 +369,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       reason,
     };
     const approvalResponse = await request(app)
-      .post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      .post(`/api/v1/canonical/appointments/${appointmentId}/mutation-approvals`)
       .set(session.headers).set('Idempotency-Key', key).send(approvalBody);
     expect(approvalResponse.status).toBe(200);
     return { before, preview: previewResponse.body.data, approvalBody, approval: approvalResponse.body.data, key };
@@ -445,10 +460,11 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
   }
 
   test('applies all six mutation types, exact revisions, and post-dispatch revocation', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.mutationMatrixAppointment);
     const assigned = await previewAndApprove('assign', { target: { kind: 'crew', id: IDS.crew } });
     expect(assigned.approval.scheduleAuthority).toMatchObject({ targetState: 'assigned', workforceCrewId: IDS.crew, revision: 2 });
     const scheduled = await previewAndApprove('schedule', {
-      scheduledStart: '2027-03-15T09:00:00-04:00', scheduledEnd: '2027-03-15T10:00:00-04:00',
+      scheduledStart: '2027-04-15T09:00:00-04:00', scheduledEnd: '2027-04-15T10:00:00-04:00',
     });
     expect(scheduled.approval.scheduleAuthority).toMatchObject({ scheduleState: 'scheduled', dispatchState: 'not_dispatched', revision: 3 });
     const dispatched = await previewAndApprove('dispatch');
@@ -457,7 +473,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect(reassigned.approval.scheduleAuthority).toMatchObject({ workforceProfileId: IDS.dispatcher, dispatchState: 'revoked' });
     await previewAndApprove('dispatch');
     const rescheduled = await previewAndApprove('reschedule', {
-      scheduledStart: '2027-03-15T11:00:00-04:00', scheduledEnd: '2027-03-15T12:00:00-04:00',
+      scheduledStart: '2027-04-15T11:00:00-04:00', scheduledEnd: '2027-04-15T12:00:00-04:00',
     });
     expect(rescheduled.approval.scheduleAuthority.dispatchState).toBe('revoked');
     await previewAndApprove('dispatch');
@@ -465,44 +481,49 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect(unassigned.approval.scheduleAuthority).toMatchObject({ targetState: 'unassigned', dispatchState: 'revoked', revision: 9 });
     expect(unassigned.approval.humanApproval.timeEvidenceDigest).toMatch(/^[0-9a-f]{64}$/);
     const evidence = (await migrationPool.query(
-      `SELECT (SELECT count(*) FROM public.canonical_schedule_mutation_previews)::int AS previews,
-              (SELECT count(*) FROM public.canonical_schedule_human_approvals)::int AS approvals,
-              (SELECT count(*) FROM public.canonical_schedule_human_audit_events)::int AS audits,
-              (SELECT count(*) FROM public.canonical_schedule_human_idempotency)::int AS replays`
+      `SELECT (SELECT count(*) FROM public.canonical_schedule_mutation_previews WHERE assignment_id=$1)::int AS previews,
+              (SELECT count(*) FROM public.canonical_schedule_human_approvals WHERE assignment_id=$1)::int AS approvals,
+              (SELECT count(*) FROM public.canonical_schedule_human_audit_events WHERE assignment_id=$1)::int AS audits,
+              (SELECT count(*) FROM public.canonical_schedule_human_idempotency WHERE assignment_id=$1)::int AS replays`,
+      [assigned.before.id]
     )).rows[0];
     expect(evidence).toEqual({ previews: 8, approvals: 8, audits: 8, replays: 8 });
   }, 120000);
 
   test('makes replay idempotent but rejects mismatched key reuse', async () => {
-    const assigned = await previewAndApprove('assign', { target: { kind: 'profile', id: IDS.owner } }, sessions.dispatcher,
+    await seedAppointment(runtimePool, IDS.organization, IDS.idempotencyAppointment);
+    const assigned = await previewAndApprove('assign', {
+      appointmentId: IDS.idempotencyAppointment, target: { kind: 'profile', id: IDS.owner },
+    }, sessions.dispatcher,
       'm22-part4-idempotent-retry-0001');
     const retry = await request(app)
-      .post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      .post(`/api/v1/canonical/appointments/${IDS.idempotencyAppointment}/mutation-approvals`)
       .set(sessions.dispatcher.headers).set('Idempotency-Key', assigned.key).send(assigned.approvalBody);
     expect(retry.status).toBe(200);
     expect(retry.body.data.humanApproval.id).toBe(assigned.approval.humanApproval.id);
-    expect((await pins(runtimePool)).revision).toBe(assigned.before.revision + 1);
+    expect((await pins(runtimePool, IDS.organization, IDS.idempotencyAppointment)).revision).toBe(assigned.before.revision + 1);
     const divergent = await request(app)
-      .post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      .post(`/api/v1/canonical/appointments/${IDS.idempotencyAppointment}/mutation-approvals`)
       .set(sessions.dispatcher.headers).set('Idempotency-Key', assigned.key)
       .send({ ...assigned.approvalBody, reason: 'Divergent reason cannot reuse the key.' });
     expect(divergent.status).toBe(409);
   });
 
   test('rejects stale authority, changed sessions/roles, cross-tenant and employee mutation', async () => {
-    const before = await pins(runtimePool);
+    await seedAppointment(runtimePool, IDS.organization, IDS.staleAuthorityAppointment);
+    const before = await pins(runtimePool, IDS.organization, IDS.staleAuthorityAppointment);
     const reason = 'Exact preview must not survive an authority downgrade.';
-    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.staleAuthorityAppointment}/mutation-previews`)
       .set(sessions.owner.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
-        action: 'reassign', target: { kind: 'profile', id: IDS.dispatcher },
+        action: 'assign', target: { kind: 'profile', id: IDS.dispatcher },
         scheduledStart: explicitOffset(before.scheduledStart), scheduledEnd: explicitOffset(before.scheduledEnd),
         appointmentStatus: before.appointmentStatus, reason,
       });
     expect(created.status).toBe(201);
     await runtimePool.query("UPDATE public.organization_memberships SET role='viewer' WHERE organization_id=$1 AND user_id=$2",
       [IDS.organization, IDS.owner]);
-    const rejected = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+    const rejected = await request(app).post(`/api/v1/canonical/appointments/${IDS.staleAuthorityAppointment}/mutation-approvals`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-role-change-000001').send({
         previewId: created.body.data.id, previewDigest: created.body.data.previewDigest,
         acknowledgedWarningDigests: created.body.data.warningDigests,
@@ -511,28 +532,29 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     expect([401, 403]).toContain(rejected.status);
     await runtimePool.query("UPDATE public.organization_memberships SET role='owner' WHERE organization_id=$1 AND user_id=$2",
       [IDS.organization, IDS.owner]);
-    const employee = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const employee = await request(app).post(`/api/v1/canonical/appointments/${IDS.staleAuthorityAppointment}/mutation-previews`)
       .set(sessions.employee.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
-        action: 'reassign', target: { kind: 'profile', id: IDS.dispatcher },
+        action: 'assign', target: { kind: 'profile', id: IDS.dispatcher },
         scheduledStart: explicitOffset(before.scheduledStart), scheduledEnd: explicitOffset(before.scheduledEnd),
         appointmentStatus: before.appointmentStatus, reason,
       });
     expect(employee.status).toBe(403);
-    const crossTenant = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const crossTenant = await request(app).post(`/api/v1/canonical/appointments/${IDS.staleAuthorityAppointment}/mutation-previews`)
       .set(sessions.other.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
-        action: 'reassign', target: { kind: 'profile', id: IDS.dispatcher },
+        action: 'assign', target: { kind: 'profile', id: IDS.dispatcher },
         scheduledStart: explicitOffset(before.scheduledStart), scheduledEnd: explicitOffset(before.scheduledEnd),
         appointmentStatus: before.appointmentStatus, reason,
       });
     expect(crossTenant.status).toBe(404);
-    expect((await pins(runtimePool)).revision).toBe(before.revision);
+    expect((await pins(runtimePool, IDS.organization, IDS.staleAuthorityAppointment)).revision).toBe(before.revision);
   });
 
   test('blocks legacy, direct-SQL, internal-helper, ambiguous-body and oversized bypasses', async () => {
-    const before = await pins(runtimePool);
-    const legacy = await request(app).patch(`/api/v1/canonical/appointments/${IDS.appointment}`)
+    await seedAppointment(runtimePool, IDS.organization, IDS.bypassAppointment);
+    const before = await pins(runtimePool, IDS.organization, IDS.bypassAppointment);
+    const legacy = await request(app).patch(`/api/v1/canonical/appointments/${IDS.bypassAppointment}`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-legacy-rejected-0001').send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
         action: 'calendar_edit', reason: 'Legacy direct mutation is forbidden.',
@@ -570,10 +592,15 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       [IDS.organization, before.id]
     )).rejects.toMatchObject({ code: '42501' });
     await expect(runtimePool.query(
-      `UPDATE public.canonical_appointments SET scheduled_start=NOW(),scheduled_end=NOW()+INTERVAL '1 hour'
-        WHERE organization_id=$1 AND id=$2`, [IDS.organization, IDS.appointment]
+      `SELECT public.canonical_schedule_part4_review_authority(
+         $1,$2,'unassigned',NULL,NULL,NULL,'America/New_York')`,
+      [IDS.organization, before.id]
     )).rejects.toMatchObject({ code: '42501' });
-    const pathName = `/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`;
+    await expect(runtimePool.query(
+      `UPDATE public.canonical_appointments SET scheduled_start=NOW(),scheduled_end=NOW()+INTERVAL '1 hour'
+        WHERE organization_id=$1 AND id=$2`, [IDS.organization, IDS.bypassAppointment]
+    )).rejects.toMatchObject({ code: '42501' });
+    const pathName = `/api/v1/canonical/appointments/${IDS.bypassAppointment}/mutation-previews`;
     const ambiguous = await request(app).post(pathName).set(sessions.owner.headers)
       .set('Content-Type', 'application/json').send('{"expectedRevision":1,"expectedRevision":2}');
     expect(ambiguous.status).toBe(400);
@@ -581,13 +608,18 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
     const oversized = await request(app).post(pathName).set(sessions.owner.headers)
       .set('Content-Type', 'application/json').send(' '.repeat(65537));
     expect(oversized.status).toBe(413);
-    expect((await pins(runtimePool)).revision).toBe(before.revision);
+    expect((await pins(runtimePool, IDS.organization, IDS.bypassAppointment)).revision).toBe(before.revision);
   });
 
   test('rejects crew membership divergence between preview and approval', async () => {
-    const before = await pins(runtimePool);
+    await seedAppointment(runtimePool, IDS.organization, IDS.crewDivergenceAppointment);
+    await previewAndApproveAppointment(IDS.crewDivergenceAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Establish a dedicated current target for the crew divergence case.',
+    }, 'm22-part4-crew-divergence-prerequisite');
+    const before = await pins(runtimePool, IDS.organization, IDS.crewDivergenceAppointment);
     const reason = 'Crew membership must remain exact between preview and approval.';
-    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.crewDivergenceAppointment}/mutation-previews`)
       .set(sessions.owner.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
         action: 'reassign', target: { kind: 'crew', id: IDS.crew },
@@ -601,7 +633,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       [IDS.organization, IDS.crew, IDS.dispatcher]
     );
     try {
-      const stale = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      const stale = await request(app).post(`/api/v1/canonical/appointments/${IDS.crewDivergenceAppointment}/mutation-approvals`)
         .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-crew-membership-stale-001').send({
           previewId: created.body.data.id, previewDigest: created.body.data.previewDigest,
           acknowledgedWarningDigests: created.body.data.warningDigests,
@@ -609,7 +641,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
         });
       expect(stale.status).toBe(409);
       expect(stale.body.error.code).toBe('M22_EVIDENCE_STALE');
-      expect((await pins(runtimePool)).revision).toBe(before.revision);
+      expect((await pins(runtimePool, IDS.organization, IDS.crewDivergenceAppointment)).revision).toBe(before.revision);
     } finally {
       await runtimePool.query(
         `INSERT INTO public.workforce_crew_members
@@ -621,9 +653,14 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
   });
 
   test('rolls the whole approval back when immutable audit persistence fails', async () => {
-    const before = await pins(runtimePool);
+    await seedAppointment(runtimePool, IDS.organization, IDS.rollbackAppointment);
+    await previewAndApproveAppointment(IDS.rollbackAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Establish a dedicated current target for the rollback case.',
+    }, 'm22-part4-rollback-prerequisite');
+    const before = await pins(runtimePool, IDS.organization, IDS.rollbackAppointment);
     const reason = 'Durable audit must commit atomically with the authorized mutation.';
-    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.rollbackAppointment}/mutation-previews`)
       .set(sessions.owner.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
         action: 'reassign', target: { kind: 'crew', id: IDS.crew },
@@ -640,14 +677,14 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
         FOR EACH ROW EXECUTE FUNCTION public.m22_part4_test_audit_failure()
     `);
     try {
-      const failed = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      const failed = await request(app).post(`/api/v1/canonical/appointments/${IDS.rollbackAppointment}/mutation-approvals`)
         .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-audit-rollback-0001').send({
           previewId: created.body.data.id, previewDigest: created.body.data.previewDigest,
           acknowledgedWarningDigests: created.body.data.warningDigests,
           acknowledgedReviewReasonDigests: created.body.data.reviewReasonDigests, reason,
         });
       expect(failed.status).toBe(503);
-      expect((await pins(runtimePool)).revision).toBe(before.revision);
+      expect((await pins(runtimePool, IDS.organization, IDS.rollbackAppointment)).revision).toBe(before.revision);
       expect((await migrationPool.query(
         'SELECT count(*)::int AS count FROM public.canonical_schedule_human_approvals WHERE preview_id=$1',
         [created.body.data.id]
@@ -661,7 +698,12 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
   });
 
   test('serializes concurrent approvals so one exact preview wins without duplicate evidence', async () => {
-    const before = await pins(runtimePool);
+    await seedAppointment(runtimePool, IDS.organization, IDS.concurrencyAppointment);
+    await previewAndApproveAppointment(IDS.concurrencyAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+      reason: 'Establish a dedicated current target for the concurrency case.',
+    }, 'm22-part4-concurrency-prerequisite');
+    const before = await pins(runtimePool, IDS.organization, IDS.concurrencyAppointment);
     const reason = 'Concurrent reassign preview requires exactly one current-authority winner.';
     const body = {
       expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
@@ -670,13 +712,13 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       appointmentStatus: before.appointmentStatus, reason,
     };
     const [leftPreview, rightPreview] = await Promise.all([
-      request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`).set(sessions.owner.headers).send(body),
-      request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`).set(sessions.owner.headers).send(body),
+      request(app).post(`/api/v1/canonical/appointments/${IDS.concurrencyAppointment}/mutation-previews`).set(sessions.owner.headers).send(body),
+      request(app).post(`/api/v1/canonical/appointments/${IDS.concurrencyAppointment}/mutation-previews`).set(sessions.owner.headers).send(body),
     ]);
     expect(leftPreview.status).toBe(201);
     expect(rightPreview.status).toBe(201);
     function approval(preview, key) {
-      return request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      return request(app).post(`/api/v1/canonical/appointments/${IDS.concurrencyAppointment}/mutation-approvals`)
         .set(sessions.owner.headers).set('Idempotency-Key', key).send({
           previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
           acknowledgedWarningDigests: preview.body.data.warningDigests,
@@ -688,15 +730,20 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       approval(rightPreview, 'm22-part4-concurrent-right-001'),
     ]);
     expect(results.map(result => result.status).sort()).toEqual([200, 409]);
-    const after = await pins(runtimePool);
+    const after = await pins(runtimePool, IDS.organization, IDS.concurrencyAppointment);
     expect(after.revision).toBe(before.revision + 1);
     expect(after.target).toEqual({ kind: 'profile', id: IDS.dispatcher });
   }, 120000);
 
   test('rejects conflict/recommendation divergence and subscription changes after preview', async () => {
-    const before = await pins(runtimePool);
+    await seedAppointment(runtimePool, IDS.organization, IDS.evidenceDivergenceAppointment);
+    await previewAndApproveAppointment(IDS.evidenceDivergenceAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.dispatcher },
+      reason: 'Establish a dedicated current target for the evidence divergence case.',
+    }, 'm22-part4-evidence-divergence-prerequisite');
+    const before = await pins(runtimePool, IDS.organization, IDS.evidenceDivergenceAppointment);
     const reason = 'Recommendation and current subscription evidence remain approval preconditions.';
-    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.evidenceDivergenceAppointment}/mutation-previews`)
       .set(sessions.owner.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
         action: 'reassign', target: { kind: 'profile', id: IDS.owner },
@@ -708,7 +755,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       `UPDATE public.workforce_profiles SET updated_at=updated_at+INTERVAL '1 second'
         WHERE organization_id=$1 AND id=$2`, [IDS.organization, IDS.owner]
     );
-    const staleEvidence = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+    const staleEvidence = await request(app).post(`/api/v1/canonical/appointments/${IDS.evidenceDivergenceAppointment}/mutation-approvals`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-recommendation-stale-01').send({
         previewId: created.body.data.id, previewDigest: created.body.data.previewDigest,
         acknowledgedWarningDigests: created.body.data.warningDigests,
@@ -716,7 +763,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       });
     expect(staleEvidence.status).toBe(409);
 
-    const refreshed = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const refreshed = await request(app).post(`/api/v1/canonical/appointments/${IDS.evidenceDivergenceAppointment}/mutation-previews`)
       .set(sessions.owner.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
         action: 'reassign', target: { kind: 'profile', id: IDS.owner },
@@ -725,7 +772,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       });
     expect(refreshed.status).toBe(201);
     await runtimePool.query("UPDATE public.subscriptions SET status='canceled' WHERE organization_id=$1", [IDS.organization]);
-    const readOnly = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+    const readOnly = await request(app).post(`/api/v1/canonical/appointments/${IDS.evidenceDivergenceAppointment}/mutation-approvals`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-subscription-stale-01').send({
         previewId: refreshed.body.data.id, previewDigest: refreshed.body.data.previewDigest,
         acknowledgedWarningDigests: refreshed.body.data.warningDigests,
@@ -733,10 +780,19 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       });
     expect(readOnly.status).toBe(403);
     await runtimePool.query("UPDATE public.subscriptions SET status='active' WHERE organization_id=$1", [IDS.organization]);
-    expect((await pins(runtimePool)).revision).toBe(before.revision);
+    expect((await pins(runtimePool, IDS.organization, IDS.evidenceDivergenceAppointment)).revision).toBe(before.revision);
   });
 
   test('requires exact acknowledgements and never applies a Part 2 hard conflict', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.hardConflictAppointment);
+    await previewAndApproveAppointment(IDS.hardConflictAppointment, 'assign', {
+      target: { kind: 'profile', id: IDS.dispatcher },
+      reason: 'Establish the dedicated hard-conflict target.',
+    }, 'm22-part4-hard-conflict-assign-prerequisite');
+    await previewAndApproveAppointment(IDS.hardConflictAppointment, 'schedule', {
+      scheduledStart: '2027-03-15T09:00:00-04:00', scheduledEnd: '2027-03-15T10:00:00-04:00',
+      reason: 'Establish the dedicated hard-conflict schedule.',
+    }, 'm22-part4-hard-conflict-schedule-prerequisite');
     const unavailable = await request(app)
       .put(`/api/v1/canonical/availability/profiles/${IDS.dispatcher}`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-unavailable-hard-0001').send({
@@ -746,9 +802,9 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
         reason: 'Dispatcher declared unavailable; no human override exists.',
       });
     expect(unavailable.status).toBe(200);
-    const before = await pins(runtimePool);
+    const before = await pins(runtimePool, IDS.organization, IDS.hardConflictAppointment);
     const reason = 'Hard conflict cannot be overridden by acknowledgement.';
-    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-previews`)
+    const created = await request(app).post(`/api/v1/canonical/appointments/${IDS.hardConflictAppointment}/mutation-previews`)
       .set(sessions.owner.headers).send({
         expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York',
         action: 'reschedule', target: before.target,
@@ -760,14 +816,14 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       expect.objectContaining({ code: 'declared_unavailable' }),
     ]));
     const wrongAcknowledgement = await request(app)
-      .post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      .post(`/api/v1/canonical/appointments/${IDS.hardConflictAppointment}/mutation-approvals`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-wrong-ack-00000001').send({
         previewId: created.body.data.id, previewDigest: created.body.data.previewDigest,
         acknowledgedWarningDigests: [], acknowledgedReviewReasonDigests: [], reason,
       });
     expect(wrongAcknowledgement.status).toBe(409);
     const exactAcknowledgement = await request(app)
-      .post(`/api/v1/canonical/appointments/${IDS.appointment}/mutation-approvals`)
+      .post(`/api/v1/canonical/appointments/${IDS.hardConflictAppointment}/mutation-approvals`)
       .set(sessions.owner.headers).set('Idempotency-Key', 'm22-part4-hard-no-override-00001').send({
         previewId: created.body.data.id, previewDigest: created.body.data.previewDigest,
         acknowledgedWarningDigests: created.body.data.warningDigests,
@@ -775,7 +831,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       });
     expect(exactAcknowledgement.status).toBe(409);
     expect(exactAcknowledgement.body.error.code).toBe('M22_HARD_CONFLICT');
-    expect((await pins(runtimePool)).revision).toBe(before.revision);
+    expect((await pins(runtimePool, IDS.organization, IDS.hardConflictAppointment)).revision).toBe(before.revision);
   });
 
   test('enforces the exact fifteen-minute boundary with a database-owner controlled clock fixture', async () => {
@@ -987,7 +1043,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
                 WHERE organization_id=$1 AND assignment_id=$2)::int AS replays`,
       [IDS.organization, before.id]
     )).rows[0];
-    await expect(runtimePool.query(
+    const canonicalized = (await runtimePool.query(
       `SELECT public.canonical_schedule_create_mutation_preview(
          $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::bigint,$7::text,
          'America/New_York','schedule','profile',$3::uuid,
@@ -997,11 +1053,24 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       [IDS.organization, IDS.conflictAppointment, IDS.owner, sessions.owner.sessionId,
         sessions.owner.csrfToken, before.revision, before.digest, reason,
         JSON.stringify(forgedConflict), forged, sha256('forged-overlap-preview-request')]
-    )).rejects.toMatchObject({
-      code: '23514', constraint: 'canonical_schedule_part4_evidence_stale',
+    )).rows[0].canonical_schedule_create_mutation_preview.data;
+    expect(canonicalized.conflicts.hardConflicts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'approved_schedule_overlap' }),
+    ]));
+    expect(canonicalized.conflicts.digest).not.toBe(forged);
+    const canonicalEvidence = (await runtimePool.query(
+      `SELECT rtrim(preview_digest) AS preview_digest,warning_digests,review_reason_digests,reason,
+              rtrim(conflict_digest) AS conflict_digest,
+              rtrim(recommendation_authority_digest) AS recommendation_authority_digest
+         FROM public.canonical_schedule_mutation_previews WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, canonicalized.id]
+    )).rows[0];
+    await expect(directApproval(runtimePool, IDS.conflictAppointment, canonicalized.id,
+      canonicalEvidence, 'forged-overlap-canonical-hard')).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_schedule_part4_hard_conflict',
     });
     expect(await pins(runtimePool, IDS.organization, IDS.conflictAppointment)).toEqual(before);
-    expect((await migrationPool.query(
+    const evidenceAfter = (await migrationPool.query(
       `SELECT (SELECT count(*) FROM public.canonical_schedule_mutation_previews
                 WHERE organization_id=$1 AND assignment_id=$2)::int AS previews,
               (SELECT count(*) FROM public.canonical_schedule_human_approvals
@@ -1011,7 +1080,65 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
               (SELECT count(*) FROM public.canonical_schedule_human_idempotency
                 WHERE organization_id=$1 AND assignment_id=$2)::int AS replays`,
       [IDS.organization, before.id]
-    )).rows[0]).toEqual(evidenceBefore);
+    )).rows[0];
+    expect(evidenceAfter).toEqual({ ...evidenceBefore, previews: evidenceBefore.previews + 1 });
+  }, 120000);
+
+  test('canonicalizes ordinary-runtime forged false-clear review evidence before any durable mutation', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.reviewEvidenceAppointment);
+    const before = await pins(runtimePool, IDS.organization, IDS.reviewEvidenceAppointment);
+    const forged = '0'.repeat(64);
+    const reason = 'Direct runtime false-clear review assertions cannot become immutable authority.';
+    const forgedConflict = {
+      id: forged, assignmentId: before.id, appointmentId: IDS.reviewEvidenceAppointment,
+      evaluationVersion: 'forged-runtime-evidence', assignmentRevision: before.revision,
+      assignmentDigest: before.digest, status: 'clear', hardConflicts: [], warnings: [],
+      needsReview: false, reviewReasons: [], digest: forged, persisted: false, grantsMutation: false,
+    };
+    const created = (await runtimePool.query(
+      `SELECT public.canonical_schedule_create_mutation_preview(
+         $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::bigint,$7::text,
+         'America/New_York','assign','profile',$3::uuid,NULL,NULL,
+         '{"scheduledStart":null,"scheduledEnd":null}'::jsonb,
+         'preferred',$8::text,$9::jsonb,$10::text,'[]'::jsonb,'[]'::jsonb,
+         $10::text,$10::text,$11::text) AS response`,
+      [IDS.organization, IDS.reviewEvidenceAppointment, IDS.owner, sessions.owner.sessionId,
+        sessions.owner.csrfToken, before.revision, before.digest, reason,
+        JSON.stringify(forgedConflict), forged, sha256('forged-false-clear-preview-request')]
+    )).rows[0].response.data;
+    expect(created.conflicts).toMatchObject({
+      status: 'needs_review', hardConflicts: [], warnings: [], needsReview: true,
+      reviewReasons: [{ code: 'appointment_schedule_unavailable' }],
+    });
+    expect(created.conflicts.digest).not.toBe(forged);
+    expect(created.reviewReasonDigests).toHaveLength(1);
+    const evidence = (await runtimePool.query(
+      `SELECT rtrim(preview_digest) AS preview_digest,warning_digests,review_reason_digests,reason,
+              rtrim(conflict_digest) AS conflict_digest,
+              rtrim(recommendation_authority_digest) AS recommendation_authority_digest
+         FROM public.canonical_schedule_mutation_previews WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, created.id]
+    )).rows[0];
+    const applied = await directApproval(runtimePool, IDS.reviewEvidenceAppointment, created.id,
+      evidence, 'forged-false-clear-canonicalized');
+    expect(applied.rows[0].response.data.scheduleAuthority).toMatchObject({
+      revision: before.revision + 1, needsReview: true,
+      reviewReasons: [{ code: 'appointment_schedule_unavailable' }],
+    });
+    expect((await migrationPool.query(
+      `SELECT approval.resulting_needs_review,approval.resulting_review_reasons,
+              (SELECT count(*)::int FROM public.canonical_schedule_human_audit_events audit
+                WHERE audit.organization_id=approval.organization_id AND audit.human_approval_id=approval.id) AS audits,
+              (SELECT count(*)::int FROM public.canonical_schedule_human_idempotency replay
+                WHERE replay.organization_id=approval.organization_id AND replay.human_approval_id=approval.id) AS replays
+         FROM public.canonical_schedule_human_approvals approval
+        WHERE approval.organization_id=$1 AND approval.preview_id=$2`,
+      [IDS.organization, created.id]
+    )).rows).toEqual([{
+      resulting_needs_review: true,
+      resulting_review_reasons: [{ code: 'appointment_schedule_unavailable' }],
+      audits: 1, replays: 1,
+    }]);
   }, 120000);
 
   test('uses live wall time after held-transaction and lock waits with zero mutation evidence', async () => {

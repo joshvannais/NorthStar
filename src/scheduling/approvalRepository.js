@@ -315,7 +315,11 @@ async function applyApprovalInTransaction(client, input) {
       input.authSessionId, input.csrfToken, input.previewId, input.previewDigest,
       JSON.stringify(input.acknowledgedWarningDigests),
       JSON.stringify(input.acknowledgedReviewReasonDigests), input.reason,
-      evidence.conflict.data.digest, evidence.recommendationAuthorityDigest,
+      // PostgreSQL independently recomputes the complete locked Part 2/3
+      // authority. These values identify the durable preview being rechecked;
+      // the freshly evaluated JavaScript evidence above remains display and
+      // fail-fast context, never mutation authority.
+      trimDigest(preview.conflict_digest), trimDigest(preview.recommendation_authority_digest),
       input.idempotencyKeyHash, input.requestDigest]
   );
   return { status: 200, body: result.rows[0].response, replayed: false };

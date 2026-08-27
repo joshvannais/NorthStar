@@ -259,6 +259,235 @@ BEGIN
 END
 $function$;
 
+-- Produce the same whitespace-free, recursively key-sorted JSON text used by
+-- the mounted JavaScript evaluators.  This helper is never granted to the
+-- ordinary runtime role; entry digests written to the immutable ledger are
+-- therefore database-derived rather than caller assertions.
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_stable_json(value JSONB)
+RETURNS TEXT LANGUAGE plpgsql IMMUTABLE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  result TEXT;
+BEGIN
+  IF jsonb_typeof(value)='object' THEN
+    SELECT '{'||COALESCE(string_agg(to_jsonb(key_name)::TEXT||':'||
+      public.canonical_schedule_part4_stable_json(entry_value),',' ORDER BY key_name COLLATE "C"),'')||'}'
+      INTO result FROM jsonb_each(value) item(key_name,entry_value);
+    RETURN result;
+  ELSIF jsonb_typeof(value)='array' THEN
+    SELECT '['||COALESCE(string_agg(public.canonical_schedule_part4_stable_json(entry_value),','
+      ORDER BY ordinal),'')||']'
+      INTO result FROM jsonb_array_elements(value) WITH ORDINALITY item(entry_value,ordinal);
+    RETURN result;
+  END IF;
+  RETURN value::TEXT;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_stable_entries(values_value JSONB)
+RETURNS JSONB LANGUAGE sql IMMUTABLE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+  SELECT COALESCE(jsonb_agg(entry ORDER BY entry->>'code' COLLATE "C",
+    public.canonical_schedule_part4_stable_json(entry) COLLATE "C"),'[]'::JSONB)
+    FROM (SELECT DISTINCT entry FROM jsonb_array_elements(values_value) item(entry)) unique_entries
+$function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_bounded_entries(values_value JSONB)
+RETURNS JSONB LANGUAGE sql IMMUTABLE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+  SELECT COALESCE(jsonb_agg(entry ORDER BY ordinal),'[]'::JSONB)
+    FROM jsonb_array_elements(values_value) WITH ORDINALITY item(entry,ordinal)
+   WHERE ordinal<=256
+$function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_entry_digests(values_value JSONB)
+RETURNS JSONB LANGUAGE sql IMMUTABLE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+  SELECT COALESCE(jsonb_agg(digest_value ORDER BY digest_value),'[]'::JSONB)
+    FROM (
+      SELECT encode(sha256(convert_to(public.canonical_schedule_part4_stable_json(entry),'UTF8')),
+        'hex') AS digest_value
+        FROM jsonb_array_elements(values_value) item(entry)
+    ) digests
+$function$;
+
+-- Return NULL for a local wall time that is a gap or fold.  Business Profile
+-- hours are minute-granular, so the bounded fifteen-minute offset probe covers
+-- all IANA offset changes representable by the accepted profile contract.
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_unique_local_instant(
+  local_value TIMESTAMP WITHOUT TIME ZONE,time_zone_value TEXT
+)
+RETURNS TIMESTAMPTZ LANGUAGE plpgsql STABLE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  candidate TIMESTAMPTZ;
+BEGIN
+  candidate := local_value AT TIME ZONE time_zone_value;
+  IF candidate AT TIME ZONE time_zone_value<>local_value OR EXISTS (
+    SELECT 1 FROM generate_series(-104,104) offset_step
+     WHERE offset_step<>0
+       AND (candidate+make_interval(mins=>offset_step*15)) AT TIME ZONE time_zone_value=local_value
+  ) THEN
+    RETURN NULL;
+  END IF;
+  RETURN candidate;
+EXCEPTION WHEN invalid_parameter_value THEN
+  RETURN NULL;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_working_hours_authority(
+  raw_profile_value JSONB,scheduled_start_value TIMESTAMPTZ,
+  scheduled_end_value TIMESTAMPTZ,time_zone_value TEXT
+)
+RETURNS JSONB LANGUAGE plpgsql STABLE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  first_date DATE;
+  last_date DATE;
+  current_date_value DATE;
+  weekday_name TEXT;
+  day_policy JSONB;
+  holiday_policy JSONB;
+  holiday_count INTEGER;
+  open_text TEXT;
+  close_text TEXT;
+  lunch_match TEXT[];
+  open_local TIMESTAMP WITHOUT TIME ZONE;
+  close_local TIMESTAMP WITHOUT TIME ZONE;
+  open_instant TIMESTAMPTZ;
+  close_instant TIMESTAMPTZ;
+  lunch_open_instant TIMESTAMPTZ;
+  lunch_close_instant TIMESTAMPTZ;
+  windows_value JSONB := '[]'::JSONB;
+  unknown_dates_value JSONB := '[]'::JSONB;
+  cursor_value TIMESTAMPTZ;
+  window_record RECORD;
+  guard INTEGER := 0;
+BEGIN
+  IF scheduled_start_value IS NULL OR scheduled_end_value IS NULL
+     OR scheduled_end_value<=scheduled_start_value THEN
+    RETURN jsonb_build_object('covered',FALSE,'unknownDates',jsonb_build_array());
+  END IF;
+  BEGIN
+    first_date := (scheduled_start_value AT TIME ZONE time_zone_value)::DATE;
+    last_date := ((scheduled_end_value-INTERVAL '1 microsecond') AT TIME ZONE time_zone_value)::DATE;
+  EXCEPTION WHEN invalid_parameter_value THEN
+    RETURN jsonb_build_object('covered',FALSE,'unknownDates',jsonb_build_array('invalid_time_zone'));
+  END;
+  current_date_value := first_date-1;
+  WHILE current_date_value<=last_date AND guard<35 LOOP
+    weekday_name := (ARRAY['sunday','monday','tuesday','wednesday','thursday','friday','saturday'])[
+      extract(dow FROM current_date_value)::INTEGER+1];
+    holiday_policy := NULL;
+    SELECT count(*)::INTEGER,(jsonb_agg(holiday)->0)
+      INTO holiday_count,holiday_policy
+      FROM jsonb_array_elements(CASE WHEN jsonb_typeof(raw_profile_value#>'{hours,holidays}')='array'
+        THEN raw_profile_value#>'{hours,holidays}' ELSE '[]'::JSONB END) item(holiday)
+     WHERE jsonb_typeof(holiday)='object' AND holiday->>'date'=current_date_value::TEXT;
+    IF holiday_count>1 THEN
+      unknown_dates_value := unknown_dates_value||jsonb_build_array(current_date_value::TEXT);
+      current_date_value := current_date_value+1;
+      guard := guard+1;
+      CONTINUE;
+    ELSIF holiday_count=1 THEN
+      day_policy := holiday_policy;
+      IF day_policy->'closed'='true'::JSONB THEN
+        current_date_value := current_date_value+1;
+        guard := guard+1;
+        CONTINUE;
+      ELSIF day_policy->'closed'<>'false'::JSONB THEN
+        unknown_dates_value := unknown_dates_value||jsonb_build_array(current_date_value::TEXT);
+        current_date_value := current_date_value+1;
+        guard := guard+1;
+        CONTINUE;
+      END IF;
+    ELSE
+      day_policy := raw_profile_value#>ARRAY['hours',weekday_name];
+      IF jsonb_typeof(day_policy)<>'object' THEN
+        unknown_dates_value := unknown_dates_value||jsonb_build_array(current_date_value::TEXT);
+        current_date_value := current_date_value+1;
+        guard := guard+1;
+        CONTINUE;
+      END IF;
+      IF COALESCE(day_policy->>'open','')='' AND COALESCE(day_policy->>'close','')='' THEN
+        current_date_value := current_date_value+1;
+        guard := guard+1;
+        CONTINUE;
+      END IF;
+    END IF;
+    open_text := day_policy->>'open';
+    close_text := day_policy->>'close';
+    IF open_text !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+       OR close_text !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' THEN
+      unknown_dates_value := unknown_dates_value||jsonb_build_array(current_date_value::TEXT);
+      current_date_value := current_date_value+1;
+      guard := guard+1;
+      CONTINUE;
+    END IF;
+    open_local := current_date_value+open_text::TIME;
+    close_local := (CASE WHEN close_text<=open_text THEN current_date_value+1 ELSE current_date_value END)+close_text::TIME;
+    open_instant := public.canonical_schedule_part4_unique_local_instant(open_local,time_zone_value);
+    close_instant := public.canonical_schedule_part4_unique_local_instant(close_local,time_zone_value);
+    IF open_instant IS NULL OR close_instant IS NULL OR close_instant<=open_instant THEN
+      unknown_dates_value := unknown_dates_value||jsonb_build_array(current_date_value::TEXT);
+      current_date_value := current_date_value+1;
+      guard := guard+1;
+      CONTINUE;
+    END IF;
+    lunch_match := regexp_match(COALESCE(day_policy->>'lunch',''),
+      '^(([01][0-9]|2[0-3]):[0-5][0-9])-(([01][0-9]|2[0-3]):[0-5][0-9])$');
+    IF COALESCE(day_policy->>'lunch','')='' THEN
+      windows_value := windows_value||jsonb_build_array(jsonb_build_object('start',open_instant,'end',close_instant));
+    ELSIF lunch_match IS NULL THEN
+      unknown_dates_value := unknown_dates_value||jsonb_build_array(current_date_value::TEXT);
+    ELSE
+      lunch_open_instant := public.canonical_schedule_part4_unique_local_instant(
+        current_date_value+lunch_match[1]::TIME,time_zone_value);
+      lunch_close_instant := public.canonical_schedule_part4_unique_local_instant(
+        current_date_value+lunch_match[3]::TIME,time_zone_value);
+      IF lunch_open_instant IS NULL OR lunch_close_instant IS NULL
+         OR lunch_open_instant<open_instant OR lunch_close_instant>close_instant
+         OR lunch_close_instant<=lunch_open_instant THEN
+        unknown_dates_value := unknown_dates_value||jsonb_build_array(current_date_value::TEXT);
+      ELSE
+        IF lunch_open_instant>open_instant THEN
+          windows_value := windows_value||jsonb_build_array(jsonb_build_object('start',open_instant,'end',lunch_open_instant));
+        END IF;
+        IF lunch_close_instant<close_instant THEN
+          windows_value := windows_value||jsonb_build_array(jsonb_build_object('start',lunch_close_instant,'end',close_instant));
+        END IF;
+      END IF;
+    END IF;
+    current_date_value := current_date_value+1;
+    guard := guard+1;
+  END LOOP;
+  IF current_date_value<=last_date THEN
+    unknown_dates_value := unknown_dates_value||jsonb_build_array(last_date::TEXT);
+  END IF;
+  cursor_value := scheduled_start_value;
+  FOR window_record IN
+    SELECT (window_value->>'start')::TIMESTAMPTZ AS starts_at,
+           (window_value->>'end')::TIMESTAMPTZ AS ends_at
+      FROM jsonb_array_elements(windows_value) item(window_value)
+     ORDER BY (window_value->>'start')::TIMESTAMPTZ,(window_value->>'end')::TIMESTAMPTZ
+  LOOP
+    IF window_record.ends_at<=cursor_value THEN CONTINUE; END IF;
+    IF window_record.starts_at>cursor_value THEN EXIT; END IF;
+    cursor_value := greatest(cursor_value,window_record.ends_at);
+    IF cursor_value>=scheduled_end_value THEN EXIT; END IF;
+  END LOOP;
+  RETURN jsonb_build_object('covered',cursor_value>=scheduled_end_value,
+    'unknownDates',public.canonical_schedule_part4_stable_entries(unknown_dates_value));
+END
+$function$;
+
 -- The ordinary application role deliberately owns no canonical scheduling
 -- evidence tables, but it can invoke the two Part 4 entry routines.  Therefore
 -- caller-provided Part 2 JSON is never sufficient authority for a mutation.
@@ -510,6 +739,602 @@ BEGIN
 END
 $function$;
 
+-- Derive the complete Part 2 decision from the same locked PostgreSQL evidence
+-- used by the mutation.  The result is deliberately broader than the hard
+-- gate above: warnings and missing/stale evidence are immutable human-review
+-- authority too and may not be cleared (or invented) by a runtime caller.
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_review_authority(
+  organization_id_value UUID,assignment_id_value UUID,target_kind_value TEXT,
+  target_id_value UUID,scheduled_start_value TIMESTAMPTZ,scheduled_end_value TIMESTAMPTZ,
+  time_zone_value TEXT
+)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  assignment_record public.canonical_schedule_assignments%ROWTYPE;
+  raw_profile_value JSONB;
+  profile_hash_value TEXT;
+  opportunity_updated_value TIMESTAMPTZ;
+  service_id_value TEXT;
+  location_id_value TEXT;
+  target_location_id TEXT;
+  canonical_location_id TEXT;
+  location_match_count INTEGER := 0;
+  member_ids UUID[] := ARRAY[]::UUID[];
+  member_count INTEGER := 0;
+  total_member_count INTEGER := 0;
+  skill_count INTEGER := 0;
+  interval_count INTEGER := 0;
+  schedule_count INTEGER := 0;
+  workload_count INTEGER := 0;
+  skill_authority_known BOOLEAN := FALSE;
+  hard_value JSONB;
+  warnings_value JSONB := '[]'::JSONB;
+  reviews_value JSONB := '[]'::JSONB;
+  working_value JSONB;
+  buffer_minutes INTEGER := 0;
+  max_jobs INTEGER;
+  workday_minutes NUMERIC;
+  max_crew_size INTEGER;
+  member_id_value UUID;
+  availability_record RECORD;
+  availability_cursor TIMESTAMPTZ;
+  interval_record RECORD;
+  schedule_record RECORD;
+  shared_ids UUID[];
+  local_first DATE;
+  local_last DATE;
+  local_date_value DATE;
+  day_start TIMESTAMPTZ;
+  day_end TIMESTAMPTZ;
+  approved_count INTEGER;
+  approved_minutes NUMERIC;
+  proposed_minutes NUMERIC;
+  all_hard_count INTEGER;
+  all_warning_count INTEGER;
+  all_review_count INTEGER;
+  status_value TEXT;
+  authority_snapshot JSONB;
+  authority_digest_value TEXT;
+  recommendation_digest_value TEXT;
+BEGIN
+  hard_value := public.canonical_schedule_part4_hard_authority(
+    organization_id_value,assignment_id_value,target_kind_value,target_id_value,
+    scheduled_start_value,scheduled_end_value
+  );
+  SELECT assignment.* INTO assignment_record
+    FROM public.canonical_schedule_assignments assignment
+   WHERE assignment.organization_id=organization_id_value AND assignment.id=assignment_id_value
+   FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trusted review assignment is unavailable'
+      USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_scope_unavailable';
+  END IF;
+  SELECT opportunity.service_type,
+         CASE WHEN jsonb_typeof(opportunity.job_scope)='object'
+                    AND jsonb_typeof(opportunity.job_scope->'locationId')='string'
+              THEN opportunity.job_scope->>'locationId' ELSE NULL END,
+         opportunity.updated_at,profile.raw_profile,rtrim(profile.normalized_profile_hash)
+    INTO service_id_value,location_id_value,opportunity_updated_value,raw_profile_value,profile_hash_value
+    FROM public.canonical_opportunities opportunity
+    JOIN public.organization_onboarding onboarding
+      ON onboarding.organization_id=opportunity.organization_id AND onboarding.status='complete'
+    JOIN public.canonical_business_profiles profile
+      ON profile.organization_id=onboarding.organization_id
+     AND profile.id=onboarding.active_business_profile_id AND profile.is_active=TRUE
+   WHERE opportunity.organization_id=organization_id_value AND opportunity.id=assignment_record.opportunity_id
+     AND profile.raw_profile#>>'{company,timeZone}'=time_zone_value
+   FOR SHARE OF opportunity,onboarding,profile;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trusted review authority is unavailable'
+      USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_scope_unavailable';
+  END IF;
+
+  -- An unscheduled Part 2 result is intentionally the single
+  -- appointment_schedule_unavailable review reason, but target/crew evidence
+  -- still influences Part 3 recommendations and must remain pinned between
+  -- preview and approval.
+  IF scheduled_start_value IS NULL AND target_kind_value='profile' THEN
+    SELECT profile.home_location_id,ARRAY[profile.id]::UUID[]
+      INTO target_location_id,member_ids
+      FROM public.workforce_profiles profile
+     WHERE profile.organization_id=organization_id_value AND profile.id=target_id_value
+     FOR SHARE;
+    total_member_count := COALESCE(array_length(member_ids,1),0);
+    member_count := total_member_count;
+  ELSIF scheduled_start_value IS NULL AND target_kind_value='crew' THEN
+    SELECT crew.home_location_id INTO target_location_id
+      FROM public.workforce_crews crew
+     WHERE crew.organization_id=organization_id_value AND crew.id=target_id_value
+     FOR SHARE;
+    SELECT count(*)::INTEGER,
+           COALESCE(array_agg(profile_id ORDER BY profile_id) FILTER (WHERE ordinal<=100),ARRAY[]::UUID[])
+      INTO total_member_count,member_ids
+      FROM (
+        SELECT relation.profile_id,row_number() OVER (ORDER BY relation.profile_id) AS ordinal
+          FROM public.workforce_crew_members relation
+         WHERE relation.organization_id=organization_id_value AND relation.crew_id=target_id_value
+      ) members;
+    member_count := COALESCE(array_length(member_ids,1),0);
+  END IF;
+
+  IF scheduled_start_value IS NULL THEN
+    reviews_value := jsonb_build_array(jsonb_build_object('code','appointment_schedule_unavailable'));
+  ELSIF target_kind_value='unassigned' THEN
+    reviews_value := jsonb_build_array(jsonb_build_object('code','target_unassigned'));
+  ELSE
+    IF target_kind_value='profile' THEN
+      SELECT profile.home_location_id,ARRAY[profile.id]::UUID[]
+        INTO target_location_id,member_ids
+        FROM public.workforce_profiles profile
+       WHERE profile.organization_id=organization_id_value AND profile.id=target_id_value
+       FOR SHARE;
+      total_member_count := COALESCE(array_length(member_ids,1),0);
+    ELSE
+      SELECT crew.home_location_id INTO target_location_id
+        FROM public.workforce_crews crew
+       WHERE crew.organization_id=organization_id_value AND crew.id=target_id_value
+       FOR SHARE;
+      SELECT count(*)::INTEGER,
+             COALESCE(array_agg(profile_id ORDER BY profile_id) FILTER (WHERE ordinal<=100),ARRAY[]::UUID[])
+        INTO total_member_count,member_ids
+        FROM (
+          SELECT relation.profile_id,row_number() OVER (ORDER BY relation.profile_id) AS ordinal
+            FROM public.workforce_crew_members relation
+           WHERE relation.organization_id=organization_id_value AND relation.crew_id=target_id_value
+        ) members;
+      IF total_member_count=0 THEN
+        reviews_value := reviews_value||jsonb_build_array(
+          jsonb_build_object('code','crew_membership_incomplete','crewId',target_id_value));
+      END IF;
+      IF total_member_count>100 THEN
+        reviews_value := reviews_value||jsonb_build_array(
+          jsonb_build_object('code','crew_membership_bounded','crewId',target_id_value));
+      END IF;
+    END IF;
+    member_count := COALESCE(array_length(member_ids,1),0);
+
+    SELECT count(*)::INTEGER INTO skill_count
+      FROM public.workforce_profile_skills relation
+      JOIN public.workforce_skills skill
+        ON skill.organization_id=relation.organization_id AND skill.id=relation.skill_id
+     WHERE relation.organization_id=organization_id_value AND relation.profile_id=ANY(member_ids);
+    SELECT EXISTS (SELECT 1 FROM public.workforce_skills skill
+      WHERE skill.organization_id=organization_id_value
+        AND service_id_value ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+        AND lower(skill.service_id)=lower(service_id_value)) INTO skill_authority_known;
+    IF skill_count>4096 THEN
+      reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','required_skill_authority_bounded'));
+    ELSIF service_id_value IS NULL
+       OR service_id_value !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+       OR NOT skill_authority_known THEN
+      reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','required_skill_authority_missing'));
+    END IF;
+
+    SELECT count(*)::INTEGER,min(candidate.location_id)
+      INTO location_match_count,canonical_location_id
+      FROM (
+        SELECT 'headquarters'::TEXT AS location_id
+        UNION ALL
+        SELECT office->>'id'
+          FROM jsonb_array_elements(CASE WHEN jsonb_typeof(raw_profile_value#>'{headquarters,additionalOffices}')='array'
+            THEN raw_profile_value#>'{headquarters,additionalOffices}' ELSE '[]'::JSONB END) item(office)
+         WHERE jsonb_typeof(office)='object' AND jsonb_typeof(office->'id')='string'
+           AND office->>'id' ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+      ) candidate
+     WHERE location_id_value ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+       AND lower(candidate.location_id)=lower(location_id_value);
+    IF location_match_count<>1 THEN
+      reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','location_scope_authority_missing'));
+    ELSIF target_location_id IS NULL THEN
+      reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','target_location_scope_missing'));
+    END IF;
+
+    working_value := public.canonical_schedule_part4_working_hours_authority(
+      raw_profile_value,scheduled_start_value,scheduled_end_value,time_zone_value);
+    IF (working_value->>'covered')::BOOLEAN IS NOT TRUE THEN
+      IF jsonb_array_length(working_value->'unknownDates')>0 THEN
+        reviews_value := reviews_value||jsonb_build_array(jsonb_build_object(
+          'code','working_hours_authority_incomplete','dates',working_value->'unknownDates'));
+      ELSE
+        warnings_value := warnings_value||jsonb_build_array(jsonb_build_object('code','outside_working_hours'));
+      END IF;
+    END IF;
+
+    SELECT count(*)::INTEGER INTO interval_count
+      FROM public.canonical_workforce_availability_intervals interval
+      JOIN public.canonical_workforce_availability_authorities authority
+        ON authority.organization_id=interval.organization_id AND authority.id=interval.availability_id
+     WHERE interval.organization_id=organization_id_value
+       AND authority.workforce_profile_id=ANY(member_ids);
+    IF interval_count>4096 THEN
+      reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','availability_authority_bounded'));
+    ELSE
+      FOREACH member_id_value IN ARRAY member_ids LOOP
+        SELECT authority.* INTO availability_record
+          FROM public.canonical_workforce_availability_authorities authority
+         WHERE authority.organization_id=organization_id_value
+           AND authority.workforce_profile_id=member_id_value FOR SHARE;
+        IF NOT FOUND THEN
+          reviews_value := reviews_value||jsonb_build_array(jsonb_build_object(
+            'code','availability_authority_missing','profileId',member_id_value));
+          CONTINUE;
+        END IF;
+        IF availability_record.coverage_start>scheduled_start_value
+           OR availability_record.coverage_end<scheduled_end_value THEN
+          reviews_value := reviews_value||jsonb_build_array(jsonb_build_object(
+            'code','availability_authority_stale','profileId',member_id_value));
+          CONTINUE;
+        END IF;
+        IF EXISTS (
+          SELECT 1 FROM public.canonical_workforce_availability_intervals interval
+           WHERE interval.organization_id=organization_id_value
+             AND interval.availability_id=availability_record.id
+             AND interval.interval_kind='unavailable'
+             AND interval.starts_at<scheduled_end_value AND interval.ends_at>scheduled_start_value
+        ) THEN
+          CONTINUE;
+        END IF;
+        availability_cursor := scheduled_start_value;
+        FOR interval_record IN
+          SELECT interval.starts_at,interval.ends_at
+            FROM public.canonical_workforce_availability_intervals interval
+           WHERE interval.organization_id=organization_id_value
+             AND interval.availability_id=availability_record.id AND interval.interval_kind='available'
+           ORDER BY interval.starts_at,interval.ends_at
+        LOOP
+          IF interval_record.ends_at<=availability_cursor THEN CONTINUE; END IF;
+          IF interval_record.starts_at>availability_cursor THEN EXIT; END IF;
+          availability_cursor := greatest(availability_cursor,interval_record.ends_at);
+          IF availability_cursor>=scheduled_end_value THEN EXIT; END IF;
+        END LOOP;
+        IF availability_cursor<scheduled_end_value THEN
+          reviews_value := reviews_value||jsonb_build_array(jsonb_build_object(
+            'code','declared_availability_incomplete','profileId',member_id_value));
+        END IF;
+      END LOOP;
+    END IF;
+
+    buffer_minutes := greatest(
+      CASE WHEN jsonb_typeof(raw_profile_value#>'{scheduling,appointmentBuffer}')='number'
+             AND (raw_profile_value#>>'{scheduling,appointmentBuffer}')::NUMERIC BETWEEN 0 AND 1440
+        THEN (raw_profile_value#>>'{scheduling,appointmentBuffer}')::INTEGER ELSE 0 END,
+      CASE WHEN jsonb_typeof(raw_profile_value#>'{scheduling,travelBuffer}')='number'
+             AND (raw_profile_value#>>'{scheduling,travelBuffer}')::NUMERIC BETWEEN 0 AND 1440
+        THEN (raw_profile_value#>>'{scheduling,travelBuffer}')::INTEGER ELSE 0 END
+    );
+    FOR schedule_record IN
+      SELECT assignment.id,assignment.scheduled_start,assignment.scheduled_end,
+             (assignment.last_approval_id IS NOT NULL OR assignment.last_human_approval_id IS NOT NULL) AS approved,
+             COALESCE(targets.profile_ids,ARRAY[]::UUID[]) AS profile_ids,targets.total_count,
+             row_number() OVER (ORDER BY assignment.scheduled_start,assignment.id) AS ordinal
+        FROM public.canonical_schedule_assignments assignment
+        LEFT JOIN LATERAL (
+          SELECT count(*)::INTEGER AS total_count,
+                 COALESCE(array_agg(profile_id ORDER BY profile_id) FILTER (WHERE ordinal<=100),ARRAY[]::UUID[]) AS profile_ids
+            FROM (
+              SELECT profile_id,row_number() OVER (ORDER BY profile_id) AS ordinal
+                FROM (
+                  SELECT assignment.workforce_profile_id AS profile_id WHERE assignment.workforce_profile_id IS NOT NULL
+                  UNION
+                  SELECT relation.profile_id FROM public.workforce_crew_members relation
+                   WHERE relation.organization_id=assignment.organization_id
+                     AND relation.crew_id=assignment.workforce_crew_id
+                ) profiles
+            ) bounded_profiles
+        ) targets ON TRUE
+       WHERE assignment.organization_id=organization_id_value AND assignment.id<>assignment_id_value
+         AND assignment.schedule_state='scheduled' AND assignment.appointment_status<>'cancelled'
+         AND assignment.scheduled_start<scheduled_end_value+make_interval(mins=>buffer_minutes)
+         AND assignment.scheduled_end>scheduled_start_value-make_interval(mins=>buffer_minutes)
+       ORDER BY assignment.scheduled_start,assignment.id LIMIT 1001
+    LOOP
+      schedule_count := schedule_count+1;
+      IF schedule_record.ordinal>1000 THEN CONTINUE; END IF;
+      IF schedule_record.total_count>100 THEN schedule_count := 1001; END IF;
+      SELECT COALESCE(array_agg(profile_id ORDER BY profile_id),ARRAY[]::UUID[]) INTO shared_ids
+        FROM unnest(schedule_record.profile_ids) profile_id WHERE profile_id=ANY(member_ids);
+      IF COALESCE(array_length(shared_ids,1),0)=0 THEN CONTINUE; END IF;
+      IF schedule_record.scheduled_start<scheduled_end_value
+         AND schedule_record.scheduled_end>scheduled_start_value THEN
+        IF NOT schedule_record.approved THEN
+          FOREACH member_id_value IN ARRAY shared_ids LOOP
+            reviews_value := reviews_value||jsonb_build_array(jsonb_build_object(
+              'code','overlap_authority_unapproved','assignmentId',schedule_record.id,
+              'profileId',member_id_value));
+          END LOOP;
+        END IF;
+      ELSIF schedule_record.approved AND buffer_minutes>0 THEN
+        warnings_value := warnings_value||jsonb_build_array(jsonb_build_object(
+          'code','schedule_buffer_threshold','assignmentId',schedule_record.id,
+          'bufferMinutes',buffer_minutes,'profileIds',to_jsonb(shared_ids)));
+      END IF;
+    END LOOP;
+    IF schedule_count>1000 THEN
+      reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','schedule_evidence_bounded'));
+    END IF;
+
+    BEGIN
+      local_first := (scheduled_start_value AT TIME ZONE time_zone_value)::DATE;
+      local_last := ((scheduled_end_value-INTERVAL '1 millisecond') AT TIME ZONE time_zone_value)::DATE;
+    EXCEPTION WHEN invalid_parameter_value THEN
+      local_first := NULL; local_last := NULL;
+    END;
+    IF local_first IS NULL OR local_last-local_first>=32 THEN
+      reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','workload_authority_incomplete'));
+    ELSE
+      IF jsonb_typeof(raw_profile_value#>'{scheduling,maxJobsPerDay}')='number'
+         AND (raw_profile_value#>>'{scheduling,maxJobsPerDay}')::NUMERIC BETWEEN 1 AND 1000 THEN
+        max_jobs := (raw_profile_value#>>'{scheduling,maxJobsPerDay}')::INTEGER;
+      END IF;
+      IF jsonb_typeof(raw_profile_value#>'{scheduling,workDayLength}')='number'
+         AND (raw_profile_value#>>'{scheduling,workDayLength}')::NUMERIC BETWEEN 0.25 AND 24 THEN
+        workday_minutes := (raw_profile_value#>>'{scheduling,workDayLength}')::NUMERIC*60;
+      END IF;
+      FOREACH member_id_value IN ARRAY member_ids LOOP
+        local_date_value := local_first;
+        WHILE local_date_value<=local_last LOOP
+          day_start := public.canonical_schedule_part4_unique_local_instant(local_date_value::TIMESTAMP,time_zone_value);
+          day_end := public.canonical_schedule_part4_unique_local_instant((local_date_value+1)::TIMESTAMP,time_zone_value);
+          IF day_start IS NULL OR day_end IS NULL OR day_end<=day_start THEN
+            reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','workload_authority_incomplete'));
+            EXIT;
+          END IF;
+          approved_count := 0; approved_minutes := 0;
+          FOR schedule_record IN
+            SELECT assignment.id,assignment.scheduled_start,assignment.scheduled_end,
+                   (assignment.last_approval_id IS NOT NULL OR assignment.last_human_approval_id IS NOT NULL) AS approved,
+                   row_number() OVER (ORDER BY assignment.scheduled_start,assignment.id) AS ordinal
+              FROM public.canonical_schedule_assignments assignment
+             WHERE assignment.organization_id=organization_id_value AND assignment.id<>assignment_id_value
+               AND assignment.schedule_state='scheduled' AND assignment.appointment_status<>'cancelled'
+               AND assignment.scheduled_start<scheduled_end_value+INTERVAL '48 hours'
+               AND assignment.scheduled_end>scheduled_start_value-INTERVAL '48 hours'
+               AND assignment.scheduled_start<day_end AND assignment.scheduled_end>day_start
+               AND (assignment.workforce_profile_id=member_id_value OR EXISTS (
+                 SELECT 1 FROM public.workforce_crew_members relation
+                  WHERE relation.organization_id=assignment.organization_id
+                    AND relation.crew_id=assignment.workforce_crew_id AND relation.profile_id=member_id_value))
+             ORDER BY assignment.scheduled_start,assignment.id LIMIT 1001
+          LOOP
+            workload_count := greatest(workload_count,schedule_record.ordinal);
+            IF schedule_record.ordinal>1000 THEN CONTINUE; END IF;
+            IF schedule_record.approved THEN
+              approved_count := approved_count+1;
+              approved_minutes := approved_minutes+extract(epoch FROM
+                least(schedule_record.scheduled_end,day_end)-greatest(schedule_record.scheduled_start,day_start))/60;
+            ELSE
+              reviews_value := reviews_value||jsonb_build_array(jsonb_build_object(
+                'code','workload_authority_unapproved','assignmentId',schedule_record.id,
+                'localDate',local_date_value::TEXT,'profileId',member_id_value));
+            END IF;
+          END LOOP;
+          IF max_jobs IS NOT NULL AND approved_count+1>max_jobs THEN
+            warnings_value := warnings_value||jsonb_build_array(jsonb_build_object(
+              'code','max_jobs_per_day_threshold','localDate',local_date_value::TEXT,
+              'profileId',member_id_value,'proposedJobs',approved_count+1,'threshold',max_jobs));
+          END IF;
+          proposed_minutes := extract(epoch FROM
+            least(scheduled_end_value,day_end)-greatest(scheduled_start_value,day_start))/60;
+          IF workday_minutes IS NOT NULL AND proposed_minutes+approved_minutes>workday_minutes THEN
+            warnings_value := warnings_value||jsonb_build_array(jsonb_build_object(
+              'code','workday_length_threshold','localDate',local_date_value::TEXT,
+              'profileId',member_id_value,'proposedMinutes',round(proposed_minutes+approved_minutes),
+              'thresholdMinutes',round(workday_minutes)));
+          END IF;
+          local_date_value := local_date_value+1;
+        END LOOP;
+      END LOOP;
+      IF workload_count>1000 THEN
+        reviews_value := reviews_value||jsonb_build_array(jsonb_build_object('code','workload_evidence_bounded'));
+      END IF;
+    END IF;
+    IF target_kind_value='crew'
+       AND jsonb_typeof(raw_profile_value#>'{crew,maxCrewSize}')='number'
+       AND (raw_profile_value#>>'{crew,maxCrewSize}')::NUMERIC BETWEEN 1 AND 1000 THEN
+      max_crew_size := (raw_profile_value#>>'{crew,maxCrewSize}')::INTEGER;
+      IF member_count>max_crew_size THEN
+        warnings_value := warnings_value||jsonb_build_array(jsonb_build_object(
+          'code','crew_size_threshold','proposedSize',member_count,'threshold',max_crew_size));
+      END IF;
+    END IF;
+  END IF;
+
+  hard_value := public.canonical_schedule_part4_stable_entries(hard_value);
+  warnings_value := public.canonical_schedule_part4_stable_entries(warnings_value);
+  reviews_value := public.canonical_schedule_part4_stable_entries(reviews_value);
+  all_hard_count := jsonb_array_length(hard_value);
+  all_warning_count := jsonb_array_length(warnings_value);
+  all_review_count := jsonb_array_length(reviews_value);
+  IF all_hard_count>256 OR all_warning_count>256 OR all_review_count>256 THEN
+    reviews_value := public.canonical_schedule_part4_stable_entries(reviews_value||jsonb_build_array(
+      jsonb_build_object('code','conflict_evidence_bounded','hardConflictCount',all_hard_count,
+        'reviewReasonCount',all_review_count,'warningCount',all_warning_count)));
+  END IF;
+  hard_value := public.canonical_schedule_part4_bounded_entries(hard_value);
+  warnings_value := public.canonical_schedule_part4_bounded_entries(warnings_value);
+  reviews_value := public.canonical_schedule_part4_bounded_entries(reviews_value);
+  status_value := CASE WHEN jsonb_array_length(hard_value)>0 THEN 'hard_conflict'
+    WHEN jsonb_array_length(reviews_value)>0 THEN 'needs_review'
+    WHEN jsonb_array_length(warnings_value)>0 THEN 'warning' ELSE 'clear' END;
+
+  authority_snapshot := jsonb_build_object(
+    'assignmentDigest',rtrim(assignment_record.canonical_digest),'assignmentRevision',assignment_record.revision,
+    'businessProfileDigest',profile_hash_value,
+    'businessProfileRawDigest',encode(sha256(convert_to(
+      public.canonical_schedule_part4_stable_json(raw_profile_value),'UTF8')),'hex'),
+    'opportunityUpdatedAt',opportunity_updated_value,
+    'targetKind',target_kind_value,'targetId',target_id_value,'memberIds',to_jsonb(member_ids),
+    'scheduledStart',scheduled_start_value,'scheduledEnd',scheduled_end_value,'timeZone',time_zone_value,
+    'skillCount',skill_count,'availabilityIntervalCount',interval_count,
+    'scheduleEvidenceCount',schedule_count,'workloadEvidenceCount',workload_count,
+    'memberAuthority',(
+      SELECT COALESCE(jsonb_agg(jsonb_build_array(
+        profile.id,profile.home_location_id,profile.updated_at,membership.id,membership.role,
+        membership.status,membership.updated_at,account.status,account.updated_at)
+        ORDER BY profile.id),'[]'::JSONB)
+        FROM public.workforce_profiles profile
+        JOIN public.organization_memberships membership
+          ON membership.organization_id=profile.organization_id AND membership.id=profile.membership_id
+        JOIN public.users account
+          ON account.organization_id=membership.organization_id AND account.id=membership.user_id
+       WHERE profile.organization_id=organization_id_value AND profile.id=ANY(member_ids)
+    ),
+    'skillAuthority',(
+      SELECT COALESCE(jsonb_agg(jsonb_build_array(relation.profile_id,skill.id,skill.service_id,
+        skill.updated_at) ORDER BY relation.profile_id,skill.service_id,skill.id),'[]'::JSONB)
+        FROM public.workforce_profile_skills relation
+        JOIN public.workforce_skills skill
+          ON skill.organization_id=relation.organization_id AND skill.id=relation.skill_id
+       WHERE relation.organization_id=organization_id_value AND relation.profile_id=ANY(member_ids)
+    ),
+    'availabilityAuthority',(
+      SELECT COALESCE(jsonb_agg(jsonb_build_array(authority.workforce_profile_id,authority.id,
+        authority.revision,rtrim(authority.canonical_digest),authority.coverage_start,
+        authority.coverage_end,authority.updated_at) ORDER BY authority.workforce_profile_id),'[]'::JSONB)
+        FROM public.canonical_workforce_availability_authorities authority
+       WHERE authority.organization_id=organization_id_value
+         AND authority.workforce_profile_id=ANY(member_ids)
+    ),
+    'availabilityIntervalAuthority',(
+      SELECT COALESCE(jsonb_agg(jsonb_build_array(interval.workforce_profile_id,
+        interval.availability_id,interval.ordinal,interval.interval_kind,
+        interval.starts_at,interval.ends_at)
+        ORDER BY interval.workforce_profile_id,interval.ordinal),'[]'::JSONB)
+        FROM (
+          SELECT authority.workforce_profile_id,source.availability_id,source.ordinal,
+                 source.interval_kind,source.starts_at,source.ends_at
+            FROM public.canonical_workforce_availability_intervals source
+            JOIN public.canonical_workforce_availability_authorities authority
+              ON authority.organization_id=source.organization_id AND authority.id=source.availability_id
+           WHERE source.organization_id=organization_id_value
+             AND authority.workforce_profile_id=ANY(member_ids)
+           ORDER BY authority.workforce_profile_id,source.ordinal
+           LIMIT 4097
+        ) interval
+    ),
+    -- Part 3 recommendations never authorize a mutation, but their bounded
+    -- database authority still has to go stale atomically.  Pin the same
+    -- tenant candidate sources that feed the provider-neutral evaluator so a
+    -- direct runtime call cannot preserve a recommendation digest after
+    -- candidate, crew, skill, availability, or workload evidence changes.
+    'recommendationCandidateAuthority',jsonb_build_object(
+      'profiles',(
+        SELECT COALESCE(jsonb_agg(jsonb_build_array(candidate.id,candidate.display_name,
+          candidate.home_location_id,candidate.updated_at,candidate.membership_id,
+          candidate.membership_role,candidate.membership_status,candidate.membership_updated_at,
+          candidate.user_id,candidate.user_status,candidate.user_updated_at)
+          ORDER BY candidate.id),'[]'::JSONB)
+          FROM (
+            SELECT profile.id,account.name AS display_name,profile.home_location_id,profile.updated_at,
+                   membership.id AS membership_id,membership.role AS membership_role,
+                   membership.status AS membership_status,membership.updated_at AS membership_updated_at,
+                   account.id AS user_id,account.status AS user_status,account.updated_at AS user_updated_at
+              FROM public.workforce_profiles profile
+              JOIN public.organization_memberships membership
+                ON membership.organization_id=profile.organization_id AND membership.id=profile.membership_id
+              JOIN public.users account
+                ON account.organization_id=membership.organization_id AND account.id=membership.user_id
+             WHERE profile.organization_id=organization_id_value
+             ORDER BY profile.id
+             LIMIT 21
+          ) candidate
+      ),
+      'crews',(
+        SELECT COALESCE(jsonb_agg(jsonb_build_array(candidate.id,candidate.name,
+          candidate.home_location_id,candidate.updated_at)
+          ORDER BY candidate.id),'[]'::JSONB)
+          FROM (
+            SELECT crew.id,crew.name,crew.home_location_id,crew.updated_at
+              FROM public.workforce_crews crew
+             WHERE crew.organization_id=organization_id_value
+             ORDER BY crew.id
+             LIMIT 21
+          ) candidate
+      ),
+      'crewMembers',(
+        SELECT COALESCE(jsonb_agg(jsonb_build_array(candidate.crew_id,candidate.profile_id,
+          candidate.crew_role,candidate.created_at) ORDER BY candidate.crew_id,candidate.profile_id),'[]'::JSONB)
+          FROM (
+            SELECT relation.crew_id,relation.profile_id,relation.crew_role,relation.created_at
+              FROM public.workforce_crew_members relation
+             WHERE relation.organization_id=organization_id_value
+             ORDER BY relation.crew_id,relation.profile_id
+             LIMIT 2001
+          ) candidate
+      ),
+      'skills',(
+        SELECT COALESCE(jsonb_agg(jsonb_build_array(candidate.profile_id,candidate.skill_id,
+          candidate.service_id,candidate.updated_at) ORDER BY candidate.profile_id,candidate.service_id,
+          candidate.skill_id),'[]'::JSONB)
+          FROM (
+            SELECT relation.profile_id,skill.id AS skill_id,skill.service_id,skill.updated_at
+              FROM public.workforce_profile_skills relation
+              JOIN public.workforce_skills skill
+                ON skill.organization_id=relation.organization_id AND skill.id=relation.skill_id
+             WHERE relation.organization_id=organization_id_value
+             ORDER BY relation.profile_id,skill.service_id,skill.id
+             LIMIT 4097
+          ) candidate
+      ),
+      'availability',(
+        SELECT COALESCE(jsonb_agg(jsonb_build_array(candidate.workforce_profile_id,candidate.id,
+          candidate.revision,rtrim(candidate.canonical_digest),candidate.coverage_start,
+          candidate.coverage_end,candidate.updated_at) ORDER BY candidate.workforce_profile_id),'[]'::JSONB)
+          FROM (
+            SELECT authority.workforce_profile_id,authority.id,authority.revision,
+                   authority.canonical_digest,authority.coverage_start,authority.coverage_end,
+                   authority.updated_at
+              FROM public.canonical_workforce_availability_authorities authority
+             WHERE authority.organization_id=organization_id_value
+             ORDER BY authority.workforce_profile_id
+             LIMIT 21
+          ) candidate
+      )
+    ),
+    'scheduleAuthority',(
+      SELECT COALESCE(jsonb_agg(jsonb_build_array(candidate.id,candidate.appointment_id,
+        candidate.revision,rtrim(candidate.canonical_digest),candidate.target_state,
+        candidate.workforce_profile_id,candidate.workforce_crew_id,candidate.schedule_state,
+        candidate.dispatch_state,candidate.scheduled_start,candidate.scheduled_end,
+        candidate.appointment_status,candidate.updated_at)
+        ORDER BY candidate.scheduled_start,candidate.id),'[]'::JSONB)
+        FROM (
+          SELECT schedule.id,schedule.appointment_id,schedule.revision,schedule.canonical_digest,
+                 schedule.target_state,schedule.workforce_profile_id,schedule.workforce_crew_id,
+                 schedule.schedule_state,schedule.dispatch_state,schedule.scheduled_start,
+                 schedule.scheduled_end,schedule.appointment_status,schedule.updated_at
+            FROM public.canonical_schedule_assignments schedule
+           WHERE schedule.organization_id=organization_id_value
+             AND schedule.id<>assignment_record.id
+             AND schedule.schedule_state='scheduled'
+             AND schedule.scheduled_start<scheduled_end_value+INTERVAL '48 hours'
+             AND schedule.scheduled_end>scheduled_start_value-INTERVAL '48 hours'
+           ORDER BY schedule.scheduled_start,schedule.id
+           LIMIT 1001
+        ) candidate
+    ),
+    'hardConflicts',hard_value,'warnings',warnings_value,'reviewReasons',reviews_value
+  );
+  authority_digest_value := encode(sha256(convert_to(
+    public.canonical_schedule_part4_stable_json(authority_snapshot),'UTF8')),'hex');
+  recommendation_digest_value := encode(sha256(convert_to(
+    public.canonical_schedule_part4_stable_json(jsonb_build_object(
+      'authorityDigest',authority_digest_value,'mutationGrant',FALSE,'providerCallsAllowed',0,
+      'routeEvidence','unavailable_without_separately_authorized_current_durable_evidence')),
+    'UTF8')),'hex');
+  RETURN jsonb_build_object(
+    'status',status_value,'hardConflicts',hard_value,'warnings',warnings_value,
+    'needsReview',jsonb_array_length(reviews_value)>0,'reviewReasons',reviews_value,
+    'warningDigests',public.canonical_schedule_part4_entry_digests(warnings_value),
+    'reviewReasonDigests',public.canonical_schedule_part4_entry_digests(reviews_value),
+    'conflictDigest',authority_digest_value,'recommendationDigest',recommendation_digest_value,
+    'recommendationAuthorityDigest',authority_digest_value
+  );
+END
+$function$;
+
 CREATE OR REPLACE FUNCTION public.canonical_schedule_apply_mutation_approval(
   organization_id_value UUID,appointment_id_value UUID,actor_user_id_value UUID,
   actor_access_role_value TEXT,auth_session_id_value UUID,csrf_token_value TEXT,
@@ -540,6 +1365,7 @@ DECLARE
   after_digest_value TEXT;
   response_body_value JSONB;
   trusted_hard_conflicts_value JSONB;
+  trusted_review_authority_value JSONB;
   approval_decided_at TIMESTAMPTZ;
 BEGIN
   SELECT expected_time_zone INTO preview_hint
@@ -601,11 +1427,12 @@ BEGIN
     RAISE EXCEPTION 'Scheduling authority changed after preview'
       USING ERRCODE='40001',CONSTRAINT='canonical_schedule_part4_preview_stale';
   END IF;
-  trusted_hard_conflicts_value := public.canonical_schedule_part4_hard_authority(
+  trusted_review_authority_value := public.canonical_schedule_part4_review_authority(
     organization_id_value,assignment_record.id,preview_record.proposed_target_kind,
     preview_record.proposed_target_id,preview_record.proposed_scheduled_start,
-    preview_record.proposed_scheduled_end
+    preview_record.proposed_scheduled_end,preview_record.expected_time_zone
   );
+  trusted_hard_conflicts_value := trusted_review_authority_value->'hardConflicts';
   -- Recheck live actor/session/subscription authority only after every mutation
   -- and conflict row is locked.  The returned evaluatedAt is the durable
   -- approval decision time and is never frozen at transaction start.
@@ -629,6 +1456,20 @@ BEGIN
   END IF;
   IF preview_record.conflict_evaluation->'hardConflicts'<>trusted_hard_conflicts_value THEN
     RAISE EXCEPTION 'Trusted conflict authority changed after preview'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
+  END IF;
+  IF preview_record.conflict_evaluation->'warnings'<>trusted_review_authority_value->'warnings'
+     OR preview_record.conflict_evaluation->'reviewReasons'<>trusted_review_authority_value->'reviewReasons'
+     OR preview_record.conflict_evaluation->>'status'<>trusted_review_authority_value->>'status'
+     OR COALESCE((preview_record.conflict_evaluation->>'needsReview')::BOOLEAN,FALSE)
+          IS DISTINCT FROM (trusted_review_authority_value->>'needsReview')::BOOLEAN
+     OR rtrim(preview_record.conflict_digest)<>trusted_review_authority_value->>'conflictDigest'
+     OR preview_record.warning_digests<>trusted_review_authority_value->'warningDigests'
+     OR preview_record.review_reason_digests<>trusted_review_authority_value->'reviewReasonDigests'
+     OR rtrim(preview_record.recommendation_digest)<>trusted_review_authority_value->>'recommendationDigest'
+     OR rtrim(preview_record.recommendation_authority_digest)<>
+          trusted_review_authority_value->>'recommendationAuthorityDigest' THEN
+    RAISE EXCEPTION 'Trusted review or recommendation authority changed after preview'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
   END IF;
   IF jsonb_typeof(acknowledged_warning_digests_value)<>'array'
@@ -1158,6 +1999,8 @@ DECLARE
   expires_at_value TIMESTAMPTZ;
   preview_digest_value TEXT;
   trusted_hard_conflicts_value JSONB;
+  trusted_review_authority_value JSONB;
+  trusted_conflict_evaluation_value JSONB;
 BEGIN
   PERFORM 1 FROM public.organizations WHERE id=organization_id_value FOR UPDATE;
   IF NOT FOUND THEN
@@ -1273,23 +2116,16 @@ BEGIN
   proposed_dispatch_state := CASE WHEN action_code_value='dispatch' THEN 'dispatched'
     WHEN assignment_record.dispatch_state='dispatched' AND action_code_value IN ('reassign','unassign','reschedule') THEN 'revoked'
     ELSE assignment_record.dispatch_state END;
-  trusted_hard_conflicts_value := public.canonical_schedule_part4_hard_authority(
+  trusted_review_authority_value := public.canonical_schedule_part4_review_authority(
     organization_id_value,assignment_record.id,target_kind_value,target_id_value,
-    scheduled_start_value,scheduled_end_value
+    scheduled_start_value,scheduled_end_value,expected_time_zone_value
   );
+  trusted_hard_conflicts_value := trusted_review_authority_value->'hardConflicts';
   IF jsonb_typeof(conflict_evaluation_value)<>'object'
-     OR conflict_evaluation_value->>'digest'<>conflict_digest_value
      OR conflict_evaluation_value->>'assignmentId'<>assignment_record.id::TEXT
      OR conflict_evaluation_value->>'assignmentRevision'<>assignment_record.revision::TEXT
      OR conflict_evaluation_value->>'assignmentDigest'<>rtrim(assignment_record.canonical_digest)
-     OR jsonb_typeof(conflict_evaluation_value->'hardConflicts')<>'array'
-     OR jsonb_typeof(conflict_evaluation_value->'warnings')<>'array'
-     OR jsonb_typeof(conflict_evaluation_value->'reviewReasons')<>'array'
-     OR jsonb_typeof(warning_digests_value)<>'array'
-     OR jsonb_array_length(warning_digests_value)<>jsonb_array_length(conflict_evaluation_value->'warnings')
-     OR jsonb_typeof(review_reason_digests_value)<>'array'
-     OR jsonb_array_length(review_reason_digests_value)<>jsonb_array_length(conflict_evaluation_value->'reviewReasons')
-     OR conflict_evaluation_value->'hardConflicts'<>trusted_hard_conflicts_value THEN
+     OR conflict_evaluation_value->>'appointmentId'<>appointment_id_value::TEXT THEN
     RAISE EXCEPTION 'Conflict preview evidence diverges'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
   END IF;
@@ -1297,6 +2133,31 @@ BEGIN
   -- been locked and validated; it is exactly fifteen database-clock minutes.
   created_at_value := clock_timestamp();
   expires_at_value := created_at_value+INTERVAL '15 minutes';
+  conflict_digest_value := trusted_review_authority_value->>'conflictDigest';
+  warning_digests_value := trusted_review_authority_value->'warningDigests';
+  review_reason_digests_value := trusted_review_authority_value->'reviewReasonDigests';
+  recommendation_digest_value := trusted_review_authority_value->>'recommendationDigest';
+  recommendation_authority_digest_value := trusted_review_authority_value->>'recommendationAuthorityDigest';
+  trusted_conflict_evaluation_value := jsonb_build_object(
+    'id',conflict_digest_value,'assignmentId',assignment_record.id,
+    'appointmentId',appointment_id_value,'evaluationVersion','m22-conflict-v1',
+    'assignmentRevision',assignment_record.revision,
+    'assignmentDigest',rtrim(assignment_record.canonical_digest),
+    'proposal',jsonb_build_object(
+      'target',jsonb_build_object('kind',target_kind_value,'id',target_id_value),
+      'scheduledStart',scheduled_start_value,'scheduledEnd',scheduled_end_value,
+      'submittedScheduledStart',submitted_schedule_value->'scheduledStart',
+      'submittedScheduledEnd',submitted_schedule_value->'scheduledEnd',
+      'timeZone',expected_time_zone_value,'appointmentStatus',appointment_status_value),
+    'status',trusted_review_authority_value->>'status',
+    'hardConflicts',trusted_hard_conflicts_value,
+    'warnings',trusted_review_authority_value->'warnings',
+    'needsReview',(trusted_review_authority_value->>'needsReview')::BOOLEAN,
+    'reviewReasons',trusted_review_authority_value->'reviewReasons',
+    'digest',conflict_digest_value,'evaluatedAt',created_at_value,
+    'persisted',FALSE,'grantsMutation',FALSE
+  );
+  conflict_evaluation_value := trusted_conflict_evaluation_value;
   preview_digest_value := public.canonical_schedule_part4_preview_digest(
     preview_id_value,organization_id_value,assignment_record.id,appointment_id_value,actor_user_id_value,
     auth_session_id_value,expected_revision_value,expected_digest_value,expected_time_zone_value,
@@ -1423,6 +2284,19 @@ ALTER FUNCTION public.canonical_schedule_create_for_appointment()
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_immutable_evidence() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_hard_authority(
   UUID,UUID,TEXT,UUID,TIMESTAMPTZ,TIMESTAMPTZ
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_json(JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_entries(JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_bounded_entries(JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_entry_digests(JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_unique_local_instant(
+  TIMESTAMP WITHOUT TIME ZONE,TEXT
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_working_hours_authority(
+  JSONB,TIMESTAMPTZ,TIMESTAMPTZ,TEXT
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_review_authority(
+  UUID,UUID,TEXT,UUID,TIMESTAMPTZ,TIMESTAMPTZ,TEXT
 ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_guard_assignment() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_guard_revision() FROM PUBLIC;

@@ -4,6 +4,40 @@
 -- tenant, actor, session, CSRF, subscription, scope, target, schedule,
 -- conflict, recommendation, warning, revision, digest, and time authority.
 
+-- Match JavaScript String.prototype.trim and boundedReason without relying on
+-- database locale or regex character classes. PostgreSQL text cannot contain
+-- U+0000; every other prohibited C0/DEL byte is rejected while interior tab,
+-- LF, and CR remain legitimate exactly as in the public contract.
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_reason_valid(value TEXT)
+RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  first_code INTEGER;
+  last_code INTEGER;
+BEGIN
+  IF value IS NULL OR char_length(value) NOT BETWEEN 1 AND 1000
+     OR octet_length(value)>4000 THEN
+    RETURN FALSE;
+  END IF;
+  first_code := ascii(left(value,1));
+  last_code := ascii(right(value,1));
+  IF first_code IN (9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,
+      8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279)
+     OR last_code IN (9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,
+      8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279)
+     OR EXISTS (
+       SELECT 1 FROM generate_series(0,octet_length(value)-1) byte_position
+        WHERE get_byte(convert_to(value,'UTF8'),byte_position) BETWEEN 1 AND 8
+           OR get_byte(convert_to(value,'UTF8'),byte_position) IN (11,12,127)
+           OR get_byte(convert_to(value,'UTF8'),byte_position) BETWEEN 14 AND 31
+     ) THEN
+    RETURN FALSE;
+  END IF;
+  RETURN TRUE;
+END
+$function$;
+
 CREATE TABLE public.canonical_schedule_mutation_previews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
@@ -55,13 +89,17 @@ CREATE TABLE public.canonical_schedule_mutation_previews (
   CONSTRAINT canonical_schedule_previews_schedule_check CHECK (
     (proposed_schedule_state='unscheduled' AND proposed_scheduled_start IS NULL AND proposed_scheduled_end IS NULL)
     OR (proposed_schedule_state='scheduled' AND proposed_scheduled_start IS NOT NULL
-      AND proposed_scheduled_end IS NOT NULL AND proposed_scheduled_end > proposed_scheduled_start)
+      AND proposed_scheduled_end IS NOT NULL AND proposed_scheduled_end > proposed_scheduled_start
+      AND proposed_scheduled_end-proposed_scheduled_start<=INTERVAL '31 days')
   ),
   CONSTRAINT canonical_schedule_previews_dispatch_check CHECK (
     proposed_dispatch_state IN ('not_dispatched','dispatched','revoked')
   ),
   CONSTRAINT canonical_schedule_previews_reason_check CHECK (
-    length(btrim(reason)) BETWEEN 1 AND 1000 AND octet_length(reason) <= 4000
+    public.canonical_schedule_part4_reason_valid(reason)
+  ),
+  CONSTRAINT canonical_schedule_previews_status_check CHECK (
+    proposed_appointment_status IN ('preferred','scheduled','cancelled','completed')
   ),
   CONSTRAINT canonical_schedule_previews_json_check CHECK (
     jsonb_typeof(submitted_schedule)='object'
@@ -142,7 +180,8 @@ CREATE TABLE public.canonical_schedule_human_approvals (
   CONSTRAINT canonical_schedule_human_approvals_schedule_check CHECK (
     (resulting_schedule_state='unscheduled' AND approved_scheduled_start IS NULL AND approved_scheduled_end IS NULL)
     OR (resulting_schedule_state='scheduled' AND approved_scheduled_start IS NOT NULL
-      AND approved_scheduled_end IS NOT NULL AND approved_scheduled_end > approved_scheduled_start)
+      AND approved_scheduled_end IS NOT NULL AND approved_scheduled_end > approved_scheduled_start
+      AND approved_scheduled_end-approved_scheduled_start<=INTERVAL '31 days')
   ),
   CONSTRAINT canonical_schedule_human_approvals_review_check CHECK (
     jsonb_typeof(resulting_review_reasons)='array'
@@ -162,7 +201,10 @@ CREATE TABLE public.canonical_schedule_human_approvals (
     AND idempotency_key_hash ~ '^[0-9a-f]{64}$' AND request_digest ~ '^[0-9a-f]{64}$'
   ),
   CONSTRAINT canonical_schedule_human_approvals_reason_check CHECK (
-    length(btrim(reason)) BETWEEN 1 AND 1000 AND octet_length(reason) <= 4000
+    public.canonical_schedule_part4_reason_valid(reason)
+  ),
+  CONSTRAINT canonical_schedule_human_approvals_status_check CHECK (
+    approved_appointment_status IN ('preferred','scheduled','cancelled','completed')
   )
 );
 
@@ -173,6 +215,15 @@ ALTER TABLE public.canonical_schedule_assignments
   FOREIGN KEY (organization_id,last_human_approval_id)
   REFERENCES public.canonical_schedule_human_approvals(organization_id,id) ON DELETE RESTRICT
   DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE public.canonical_schedule_assignments
+  ADD CONSTRAINT canonical_schedule_assignments_part4_contract_check CHECK (
+    last_human_approval_id IS NULL OR (
+      public.canonical_schedule_part4_reason_valid(last_reason)
+      AND (schedule_state='unscheduled'
+        OR scheduled_end-scheduled_start<=INTERVAL '31 days')
+      AND appointment_status IN ('preferred','scheduled','cancelled','completed')
+    )
+  );
 
 ALTER TABLE public.canonical_schedule_assignment_revisions
   ADD COLUMN human_approval_id UUID;
@@ -190,6 +241,15 @@ ALTER TABLE public.canonical_schedule_assignment_revisions
       AND human_approval_id IS NULL AND actor_user_id IS NOT NULL AND request_digest IS NOT NULL)
     OR (source_kind='human_preview_approved' AND revision>1 AND approval_id IS NULL
       AND human_approval_id IS NOT NULL AND actor_user_id IS NOT NULL AND request_digest IS NOT NULL)
+  );
+ALTER TABLE public.canonical_schedule_assignment_revisions
+  ADD CONSTRAINT canonical_schedule_revisions_part4_contract_check CHECK (
+    source_kind<>'human_preview_approved' OR (
+      public.canonical_schedule_part4_reason_valid(reason)
+      AND (schedule_state='unscheduled'
+        OR scheduled_end-scheduled_start<=INTERVAL '31 days')
+      AND appointment_status IN ('preferred','scheduled','cancelled','completed')
+    )
   );
 
 CREATE TABLE public.canonical_schedule_human_audit_events (
@@ -216,6 +276,9 @@ CREATE TABLE public.canonical_schedule_human_audit_events (
   CONSTRAINT canonical_schedule_human_audit_actor_fk FOREIGN KEY (organization_id,actor_user_id)
     REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_schedule_human_audit_revision_check CHECK (after_revision=before_revision+1),
+  CONSTRAINT canonical_schedule_human_audit_reason_check CHECK (
+    public.canonical_schedule_part4_reason_valid(reason)
+  ),
   CONSTRAINT canonical_schedule_human_audit_digest_check CHECK (
     before_digest ~ '^[0-9a-f]{64}$' AND after_digest ~ '^[0-9a-f]{64}$'
   ),
@@ -293,6 +356,140 @@ AS $function$
     public.canonical_schedule_part4_stable_json(entry) COLLATE "C"),'[]'::JSONB)
     FROM (SELECT DISTINCT entry FROM jsonb_array_elements(values_value) item(entry)) unique_entries
 $function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_normalize_digest_list(values_value JSONB)
+RETURNS JSONB LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  result JSONB;
+  entry_count INTEGER;
+  distinct_count INTEGER;
+BEGIN
+  IF jsonb_typeof(values_value)<>'array' OR jsonb_array_length(values_value)>256
+     OR EXISTS (
+       SELECT 1 FROM jsonb_array_elements(values_value) item(entry)
+        WHERE jsonb_typeof(entry)<>'string'
+           OR (entry#>>'{}') !~ '^[0-9a-f]{64}$'
+     ) THEN
+    RAISE EXCEPTION 'Approval acknowledgement digests are invalid'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_acknowledgement_invalid';
+  END IF;
+  SELECT count(*)::INTEGER,count(DISTINCT entry#>>'{}')::INTEGER,
+         COALESCE(jsonb_agg(entry#>>'{}' ORDER BY entry#>>'{}' COLLATE "C"),'[]'::JSONB)
+    INTO entry_count,distinct_count,result
+    FROM jsonb_array_elements(values_value) item(entry);
+  IF distinct_count<>entry_count THEN
+    RAISE EXCEPTION 'Approval acknowledgement digests contain duplicates'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_acknowledgement_invalid';
+  END IF;
+  RETURN result;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_preview_request_digest(
+  organization_id_value UUID,appointment_id_value UUID,actor_user_id_value UUID,
+  auth_session_id_value UUID,expected_revision_value BIGINT,expected_digest_value TEXT,
+  expected_time_zone_value TEXT,action_code_value TEXT,target_kind_value TEXT,target_id_value UUID,
+  scheduled_start_value TIMESTAMPTZ,scheduled_end_value TIMESTAMPTZ,
+  submitted_schedule_value JSONB,appointment_status_value TEXT,reason_value TEXT
+)
+RETURNS TEXT LANGUAGE sql IMMUTABLE PARALLEL SAFE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+  SELECT encode(sha256(convert_to(public.canonical_schedule_part4_stable_json(
+    jsonb_build_object(
+      'action',action_code_value,'actorUserId',actor_user_id_value,
+      'appointmentId',appointment_id_value,'appointmentStatus',appointment_status_value,
+      'authSessionId',auth_session_id_value,'expectedDigest',expected_digest_value,
+      'expectedRevision',expected_revision_value,'expectedTimeZone',expected_time_zone_value,
+      'organizationId',organization_id_value,
+      'proposal',jsonb_build_object(
+        'appointmentStatus',appointment_status_value,
+        'scheduledEnd',CASE WHEN scheduled_end_value IS NULL THEN NULL ELSE
+          to_char(scheduled_end_value AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END,
+        'scheduledStart',CASE WHEN scheduled_start_value IS NULL THEN NULL ELSE
+          to_char(scheduled_start_value AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END,
+        'submittedScheduledEnd',submitted_schedule_value->'scheduledEnd',
+        'submittedScheduledStart',submitted_schedule_value->'scheduledStart',
+        'target',jsonb_build_object('id',target_id_value,'kind',target_kind_value),
+        'timeZone',expected_time_zone_value
+      ),
+      'rawScheduledEnd',submitted_schedule_value->'scheduledEnd',
+      'rawScheduledStart',submitted_schedule_value->'scheduledStart',
+      'reason',reason_value,
+      'scheduledEnd',CASE WHEN scheduled_end_value IS NULL THEN NULL ELSE
+        to_char(scheduled_end_value AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END,
+      'scheduledStart',CASE WHEN scheduled_start_value IS NULL THEN NULL ELSE
+        to_char(scheduled_start_value AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END,
+      'target',jsonb_build_object('id',target_id_value,'kind',target_kind_value)
+    )
+  ),'UTF8')),'hex')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_approval_request_digest(
+  organization_id_value UUID,appointment_id_value UUID,actor_user_id_value UUID,
+  auth_session_id_value UUID,preview_id_value UUID,preview_digest_value TEXT,
+  acknowledged_warning_digests_value JSONB,acknowledged_review_reason_digests_value JSONB,
+  reason_value TEXT,idempotency_key_hash_value TEXT
+)
+RETURNS TEXT LANGUAGE sql IMMUTABLE PARALLEL SAFE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+  SELECT encode(sha256(convert_to(public.canonical_schedule_part4_stable_json(
+    jsonb_build_object(
+      'acknowledgedReviewReasonDigests',acknowledged_review_reason_digests_value,
+      'acknowledgedWarningDigests',acknowledged_warning_digests_value,
+      'actorUserId',actor_user_id_value,'appointmentId',appointment_id_value,
+      'authSessionId',auth_session_id_value,'idempotencyKeyHash',idempotency_key_hash_value,
+      'organizationId',organization_id_value,'previewDigest',preview_digest_value,
+      'previewId',preview_id_value,'reason',reason_value
+    )
+  ),'UTF8')),'hex')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_schedule_contract_valid(
+  scheduled_start_value TIMESTAMPTZ,scheduled_end_value TIMESTAMPTZ,
+  submitted_schedule_value JSONB,time_zone_value TEXT
+)
+RETURNS BOOLEAN LANGUAGE plpgsql STABLE
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+BEGIN
+  IF jsonb_typeof(submitted_schedule_value)<>'object'
+     OR NOT (submitted_schedule_value ?& ARRAY['scheduledStart','scheduledEnd'])
+     OR (SELECT count(*) FROM jsonb_object_keys(submitted_schedule_value))<>2 THEN
+    RETURN FALSE;
+  END IF;
+  IF scheduled_start_value IS NULL OR scheduled_end_value IS NULL THEN
+    RETURN scheduled_start_value IS NULL AND scheduled_end_value IS NULL
+      AND submitted_schedule_value->'scheduledStart'='null'::JSONB
+      AND submitted_schedule_value->'scheduledEnd'='null'::JSONB;
+  END IF;
+  IF scheduled_end_value<=scheduled_start_value
+     OR scheduled_end_value-scheduled_start_value>INTERVAL '31 days'
+     OR jsonb_typeof(submitted_schedule_value->'scheduledStart')<>'string'
+     OR jsonb_typeof(submitted_schedule_value->'scheduledEnd')<>'string' THEN
+    RETURN FALSE;
+  END IF;
+  RETURN public.canonical_schedule_validate_rfc3339_in_zone(
+      submitted_schedule_value->>'scheduledStart',scheduled_start_value,time_zone_value
+    ) IS TRUE
+    AND public.canonical_schedule_validate_rfc3339_in_zone(
+      submitted_schedule_value->>'scheduledEnd',scheduled_end_value,time_zone_value
+    ) IS TRUE;
+END
+$function$;
+
+ALTER TABLE public.canonical_schedule_mutation_previews
+  ADD CONSTRAINT canonical_schedule_previews_request_digest_authority_check CHECK (
+    rtrim(request_digest)=public.canonical_schedule_part4_preview_request_digest(
+      organization_id,appointment_id,actor_user_id,auth_session_id,expected_revision,
+      rtrim(expected_digest),expected_time_zone,action_code,proposed_target_kind,
+      proposed_target_id,proposed_scheduled_start,proposed_scheduled_end,submitted_schedule,
+      proposed_appointment_status,reason
+    )
+  );
 
 CREATE OR REPLACE FUNCTION public.canonical_schedule_part4_bounded_entries(values_value JSONB)
 RETURNS JSONB LANGUAGE sql IMMUTABLE
@@ -1367,6 +1564,9 @@ DECLARE
   trusted_hard_conflicts_value JSONB;
   trusted_review_authority_value JSONB;
   approval_decided_at TIMESTAMPTZ;
+  normalized_warning_digests_value JSONB;
+  normalized_review_reason_digests_value JSONB;
+  trusted_request_digest_value TEXT;
 BEGIN
   SELECT expected_time_zone INTO preview_hint
     FROM public.canonical_schedule_mutation_previews
@@ -1386,6 +1586,28 @@ BEGIN
     organization_id_value,actor_user_id_value,actor_access_role_value,auth_session_id_value,
     csrf_token_value,preview_hint.expected_time_zone
   );
+  IF NOT public.canonical_schedule_part4_reason_valid(reason_value)
+     OR preview_digest_value !~ '^[0-9a-f]{64}$'
+     OR idempotency_key_hash_value !~ '^[0-9a-f]{64}$' THEN
+    RAISE EXCEPTION 'Mutation approval violates the canonical public contract'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+  END IF;
+  normalized_warning_digests_value :=
+    public.canonical_schedule_part4_normalize_digest_list(acknowledged_warning_digests_value);
+  normalized_review_reason_digests_value :=
+    public.canonical_schedule_part4_normalize_digest_list(acknowledged_review_reason_digests_value);
+  trusted_request_digest_value := public.canonical_schedule_part4_approval_request_digest(
+    organization_id_value,appointment_id_value,actor_user_id_value,auth_session_id_value,
+    preview_id_value,preview_digest_value,normalized_warning_digests_value,
+    normalized_review_reason_digests_value,reason_value,idempotency_key_hash_value
+  );
+  IF request_digest_value<>trusted_request_digest_value THEN
+    RAISE EXCEPTION 'Mutation approval request digest diverges from canonical inputs'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_request_digest_divergent';
+  END IF;
+  request_digest_value := trusted_request_digest_value;
+  acknowledged_warning_digests_value := normalized_warning_digests_value;
+  acknowledged_review_reason_digests_value := normalized_review_reason_digests_value;
   SELECT * INTO replay_record FROM public.canonical_schedule_human_idempotency replay
    WHERE replay.organization_id=organization_id_value AND replay.actor_user_id=actor_user_id_value
      AND rtrim(replay.idempotency_key_hash)=idempotency_key_hash_value;
@@ -1405,6 +1627,24 @@ BEGIN
      OR preview_record.actor_access_role<>actor_access_role_value
      OR preview_record.reason<>reason_value THEN
     RAISE EXCEPTION 'Mutation preview evidence diverges'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
+  END IF;
+  IF preview_record.action_code NOT IN ('assign','reassign','unassign','schedule','reschedule','dispatch')
+     OR preview_record.proposed_appointment_status NOT IN ('preferred','scheduled','cancelled','completed')
+     OR NOT public.canonical_schedule_part4_reason_valid(preview_record.reason)
+     OR NOT public.canonical_schedule_part4_schedule_contract_valid(
+       preview_record.proposed_scheduled_start,preview_record.proposed_scheduled_end,
+       preview_record.submitted_schedule,preview_record.expected_time_zone
+     )
+     OR rtrim(preview_record.request_digest)<>public.canonical_schedule_part4_preview_request_digest(
+       preview_record.organization_id,preview_record.appointment_id,preview_record.actor_user_id,
+       preview_record.auth_session_id,preview_record.expected_revision,rtrim(preview_record.expected_digest),
+       preview_record.expected_time_zone,preview_record.action_code,preview_record.proposed_target_kind,
+       preview_record.proposed_target_id,preview_record.proposed_scheduled_start,
+       preview_record.proposed_scheduled_end,preview_record.submitted_schedule,
+       preview_record.proposed_appointment_status,preview_record.reason
+     ) THEN
+    RAISE EXCEPTION 'Stored mutation preview violates the canonical public contract'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
   END IF;
   IF EXISTS (SELECT 1 FROM public.canonical_schedule_human_approvals approval
@@ -1998,6 +2238,7 @@ DECLARE
   created_at_value TIMESTAMPTZ;
   expires_at_value TIMESTAMPTZ;
   preview_digest_value TEXT;
+  trusted_request_digest_value TEXT;
   trusted_hard_conflicts_value JSONB;
   trusted_review_authority_value JSONB;
   trusted_conflict_evaluation_value JSONB;
@@ -2033,33 +2274,31 @@ BEGIN
     RAISE EXCEPTION 'Appointment compatibility status changed'
       USING ERRCODE='40001',CONSTRAINT='canonical_schedule_part4_preview_stale';
   END IF;
-  IF jsonb_typeof(submitted_schedule_value)<>'object'
-     OR NOT (submitted_schedule_value ?& ARRAY['scheduledStart','scheduledEnd'])
-     OR (SELECT count(*) FROM jsonb_object_keys(submitted_schedule_value))<>2 THEN
-    RAISE EXCEPTION 'Submitted schedule evidence is invalid'
+  IF action_code_value NOT IN ('assign','reassign','unassign','schedule','reschedule','dispatch')
+     OR appointment_status_value NOT IN ('preferred','scheduled','cancelled','completed')
+     OR NOT public.canonical_schedule_part4_reason_valid(reason_value)
+     OR NOT public.canonical_schedule_part4_schedule_contract_valid(
+       scheduled_start_value,scheduled_end_value,submitted_schedule_value,expected_time_zone_value
+     ) THEN
+    RAISE EXCEPTION 'Mutation preview violates the canonical public contract'
       USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
   END IF;
-  IF scheduled_start_value IS NULL OR scheduled_end_value IS NULL THEN
-    IF scheduled_start_value IS NOT NULL OR scheduled_end_value IS NOT NULL
-       OR submitted_schedule_value->'scheduledStart'<>'null'::jsonb
-       OR submitted_schedule_value->'scheduledEnd'<>'null'::jsonb THEN
-      RAISE EXCEPTION 'Unscheduled preview evidence diverges'
-        USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
-    END IF;
+  IF scheduled_start_value IS NULL THEN
     proposed_schedule_state := 'unscheduled';
   ELSE
-    IF scheduled_end_value<=scheduled_start_value
-       OR public.canonical_schedule_validate_rfc3339_in_zone(
-         submitted_schedule_value->>'scheduledStart',scheduled_start_value,expected_time_zone_value
-       ) IS NOT TRUE
-       OR public.canonical_schedule_validate_rfc3339_in_zone(
-         submitted_schedule_value->>'scheduledEnd',scheduled_end_value,expected_time_zone_value
-       ) IS NOT TRUE THEN
-      RAISE EXCEPTION 'Scheduled preview evidence diverges'
-        USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
-    END IF;
     proposed_schedule_state := 'scheduled';
   END IF;
+  trusted_request_digest_value := public.canonical_schedule_part4_preview_request_digest(
+    organization_id_value,appointment_id_value,actor_user_id_value,auth_session_id_value,
+    expected_revision_value,expected_digest_value,expected_time_zone_value,action_code_value,
+    target_kind_value,target_id_value,scheduled_start_value,scheduled_end_value,
+    submitted_schedule_value,appointment_status_value,reason_value
+  );
+  IF request_digest_value<>trusted_request_digest_value THEN
+    RAISE EXCEPTION 'Mutation preview request digest diverges from canonical inputs'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_request_digest_divergent';
+  END IF;
+  request_digest_value := trusted_request_digest_value;
   current_target_kind := CASE WHEN assignment_record.target_state='unassigned' THEN 'unassigned'
     WHEN assignment_record.workforce_profile_id IS NOT NULL THEN 'profile' ELSE 'crew' END;
   current_target_id := COALESCE(assignment_record.workforce_profile_id,assignment_record.workforce_crew_id);
@@ -2213,6 +2452,11 @@ BEGIN
        AND rtrim(preview.expected_digest)=rtrim(NEW.expected_digest)
        AND preview.expected_revision=NEW.expected_revision AND preview.action_code=NEW.action_code
        AND preview.reason=NEW.reason
+       AND rtrim(NEW.request_digest)=public.canonical_schedule_part4_approval_request_digest(
+         NEW.organization_id,NEW.appointment_id,NEW.actor_user_id,NEW.auth_session_id,
+         NEW.preview_id,rtrim(preview.preview_digest),NEW.acknowledged_warning_digests,
+         NEW.acknowledged_review_reason_digests,NEW.reason,rtrim(NEW.idempotency_key_hash)
+       )
   ) OR NOT EXISTS (
     SELECT 1 FROM public.canonical_schedule_assignments assignment
     JOIN public.canonical_appointments appointment
@@ -2282,11 +2526,23 @@ ALTER FUNCTION public.canonical_schedule_create_for_appointment()
   SET search_path=pg_catalog,public,pg_temp;
 
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_immutable_evidence() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_reason_valid(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_hard_authority(
   UUID,UUID,TEXT,UUID,TIMESTAMPTZ,TIMESTAMPTZ
 ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_json(JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_entries(JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_normalize_digest_list(JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_preview_request_digest(
+  UUID,UUID,UUID,UUID,BIGINT,TEXT,TEXT,TEXT,TEXT,UUID,
+  TIMESTAMPTZ,TIMESTAMPTZ,JSONB,TEXT,TEXT
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_approval_request_digest(
+  UUID,UUID,UUID,UUID,UUID,TEXT,JSONB,JSONB,TEXT,TEXT
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_schedule_part4_schedule_contract_valid(
+  TIMESTAMPTZ,TIMESTAMPTZ,JSONB,TEXT
+) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_bounded_entries(JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_entry_digests(JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_schedule_part4_unique_local_instant(

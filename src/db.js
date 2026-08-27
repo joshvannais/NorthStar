@@ -991,6 +991,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_immutable_evidence() FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_reason_valid(text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone) FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(
@@ -998,6 +1001,21 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         );
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_stable_entries(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_normalize_digest_list(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_preview_request_digest(uuid,uuid,uuid,uuid,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_approval_request_digest(uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,text,text) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_schedule_contract_valid(timestamp with time zone,timestamp with time zone,jsonb,text) FROM %I',
+          runtime_role
         );
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_schedule_part4_bounded_entries(jsonb) FROM %I', runtime_role
@@ -1160,8 +1178,18 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          'EXECUTE')) AS approval_entry_execute,
         (to_regprocedure('public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)') IS NULL OR
            NOT has_function_privilege($1,'public.canonical_schedule_part4_actor_authority(uuid,uuid,text,uuid,text,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_reason_valid(text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_reason_valid(text)','EXECUTE'))
           AND (to_regprocedure('public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone)') IS NULL OR
            NOT has_function_privilege($1,'public.canonical_schedule_part4_hard_authority(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_normalize_digest_list(jsonb)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_normalize_digest_list(jsonb)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_preview_request_digest(uuid,uuid,uuid,uuid,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_preview_request_digest(uuid,uuid,uuid,uuid,bigint,text,text,text,text,uuid,timestamp with time zone,timestamp with time zone,jsonb,text,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_approval_request_digest(uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,text,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_approval_request_digest(uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,text,text)','EXECUTE'))
+          AND (to_regprocedure('public.canonical_schedule_part4_schedule_contract_valid(timestamp with time zone,timestamp with time zone,jsonb,text)') IS NULL OR
+           NOT has_function_privilege($1,'public.canonical_schedule_part4_schedule_contract_valid(timestamp with time zone,timestamp with time zone,jsonb,text)','EXECUTE'))
           AND (to_regprocedure('public.canonical_schedule_part4_target_current(uuid,text,uuid)') IS NULL OR
           NOT has_function_privilege($1,'public.canonical_schedule_part4_target_current(uuid,text,uuid)','EXECUTE'))
          AND (to_regclass('public.canonical_schedule_mutation_previews') IS NULL OR

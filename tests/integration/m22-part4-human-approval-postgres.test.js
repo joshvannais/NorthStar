@@ -7,6 +7,7 @@ const path = require('path');
 const { Client, Pool } = require('pg');
 const request = require('supertest');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
+const { normalizeMutationApproval, normalizeMutationPreview } = require('../../src/scheduling/approvalContract');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
@@ -43,6 +44,8 @@ const IDS = Object.freeze({
   concurrencyAppointment: 'e5100000-0000-4000-8000-000000000018',
   evidenceDivergenceAppointment: 'e5100000-0000-4000-8000-000000000019',
   hardConflictAppointment: 'e5100000-0000-4000-8000-000000000020',
+  sqlContractAppointment: 'e5100000-0000-4000-8000-000000000021',
+  digestProvenanceAppointment: 'e5100000-0000-4000-8000-000000000022',
 });
 
 function quoteIdentifier(value) {
@@ -448,6 +451,21 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
   }
 
   async function directApproval(client, appointmentId, previewId, evidence, suffix) {
+    const idempotencyKey = `m22-${suffix}-direct-idempotency`;
+    const normalized = normalizeMutationApproval({
+      organizationId: IDS.organization,
+      actorUserId: IDS.owner,
+      authSessionId: sessions.owner.sessionId,
+      appointmentId,
+      idempotencyKey,
+      body: {
+        previewId,
+        previewDigest: evidence.preview_digest,
+        acknowledgedWarningDigests: evidence.warning_digests,
+        acknowledgedReviewReasonDigests: evidence.review_reason_digests,
+        reason: evidence.reason,
+      },
+    });
     return client.query(
       `SELECT public.canonical_schedule_apply_mutation_approval(
          $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::uuid,$7::text,
@@ -455,7 +473,53 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       [IDS.organization, appointmentId, IDS.owner, sessions.owner.sessionId, sessions.owner.csrfToken,
         previewId, evidence.preview_digest, JSON.stringify(evidence.warning_digests),
         JSON.stringify(evidence.review_reason_digests), evidence.reason, evidence.conflict_digest,
-        evidence.recommendation_authority_digest, sha256(`idempotency:${suffix}`), sha256(`request:${suffix}`)]
+        evidence.recommendation_authority_digest, normalized.idempotencyKeyHash, normalized.requestDigest]
+    );
+  }
+
+  function previewContractInput(appointmentId, before, overrides = {}) {
+    return {
+      organizationId: IDS.organization,
+      actorUserId: IDS.owner,
+      authSessionId: sessions.owner.sessionId,
+      appointmentId,
+      body: {
+        expectedRevision: before.revision,
+        expectedDigest: before.digest,
+        expectedTimeZone: 'America/New_York',
+        action: 'assign',
+        target: { kind: 'profile', id: IDS.owner },
+        scheduledStart: before.scheduledStart,
+        scheduledEnd: before.scheduledEnd,
+        appointmentStatus: before.appointmentStatus,
+        reason: 'Direct runtime canonical contract evidence.',
+        ...overrides,
+      },
+    };
+  }
+
+  async function directPreview(client, input, requestDigest) {
+    const before = await pins(client, IDS.organization, input.appointmentId);
+    const body = input.body;
+    const conflict = {
+      id: '0'.repeat(64), assignmentId: before.id, appointmentId: input.appointmentId,
+      evaluationVersion: 'caller-evidence-is-non-authoritative', assignmentRevision: before.revision,
+      assignmentDigest: before.digest, status: 'clear', hardConflicts: [], warnings: [],
+      needsReview: false, reviewReasons: [], digest: '0'.repeat(64), persisted: false,
+      grantsMutation: false,
+    };
+    return client.query(
+      `SELECT public.canonical_schedule_create_mutation_preview(
+         $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::bigint,$7::text,
+         $8::text,$9::text,$10::text,$11::uuid,$12::timestamptz,$13::timestamptz,
+         $14::jsonb,$15::text,$16::text,$17::jsonb,$18::text,'[]'::jsonb,'[]'::jsonb,
+         $18::text,$18::text,$19::text) AS response`,
+      [IDS.organization, input.appointmentId, IDS.owner, sessions.owner.sessionId,
+        sessions.owner.csrfToken, body.expectedRevision, body.expectedDigest,
+        body.expectedTimeZone, body.action, body.target.kind, body.target.id,
+        body.scheduledStart, body.scheduledEnd,
+        JSON.stringify({ scheduledStart: body.scheduledStart, scheduledEnd: body.scheduledEnd }),
+        body.appointmentStatus, body.reason, JSON.stringify(conflict), '0'.repeat(64), requestDigest]
     );
   }
 
@@ -596,6 +660,24 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
          $1,$2,'unassigned',NULL,NULL,NULL,'America/New_York')`,
       [IDS.organization, before.id]
     )).rejects.toMatchObject({ code: '42501' });
+    const withheldContractHelpers = (await runtimePool.query(
+      `SELECT procedure.proname,
+              pg_catalog.has_function_privilege(current_user,procedure.oid,'EXECUTE') AS executable
+         FROM pg_catalog.pg_proc procedure
+         JOIN pg_catalog.pg_namespace namespace ON namespace.oid=procedure.pronamespace
+        WHERE namespace.nspname='public'
+          AND procedure.proname=ANY($1::text[])
+        ORDER BY procedure.proname`,
+      [[
+        'canonical_schedule_part4_reason_valid',
+        'canonical_schedule_part4_normalize_digest_list',
+        'canonical_schedule_part4_preview_request_digest',
+        'canonical_schedule_part4_approval_request_digest',
+        'canonical_schedule_part4_schedule_contract_valid',
+      ]]
+    )).rows;
+    expect(withheldContractHelpers).toHaveLength(5);
+    expect(withheldContractHelpers.every(row => row.executable === false)).toBe(true);
     await expect(runtimePool.query(
       `UPDATE public.canonical_appointments SET scheduled_start=NOW(),scheduled_end=NOW()+INTERVAL '1 hour'
         WHERE organization_id=$1 AND id=$2`, [IDS.organization, IDS.bypassAppointment]
@@ -1032,6 +1114,18 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       assignmentDigest: before.digest, status: 'clear', hardConflicts: [], warnings: [],
       needsReview: false, reviewReasons: [], digest: forged, persisted: false, grantsMutation: false,
     };
+    const canonicalRequestDigest = normalizeMutationPreview({
+      organizationId: IDS.organization, actorUserId: IDS.owner,
+      authSessionId: sessions.owner.sessionId, appointmentId: IDS.conflictAppointment,
+      body: {
+        expectedRevision: before.revision, expectedDigest: before.digest,
+        expectedTimeZone: 'America/New_York', action: 'schedule',
+        target: { kind: 'profile', id: IDS.owner },
+        scheduledStart: '2027-03-15T09:00:00-04:00',
+        scheduledEnd: '2027-03-15T10:00:00-04:00',
+        appointmentStatus: 'preferred', reason,
+      },
+    }).requestDigest;
     const evidenceBefore = (await migrationPool.query(
       `SELECT (SELECT count(*) FROM public.canonical_schedule_mutation_previews
                 WHERE organization_id=$1 AND assignment_id=$2)::int AS previews,
@@ -1052,7 +1146,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
          'preferred',$8::text,$9::jsonb,$10::text,'[]'::jsonb,'[]'::jsonb,$10::text,$10::text,$11::text)`,
       [IDS.organization, IDS.conflictAppointment, IDS.owner, sessions.owner.sessionId,
         sessions.owner.csrfToken, before.revision, before.digest, reason,
-        JSON.stringify(forgedConflict), forged, sha256('forged-overlap-preview-request')]
+        JSON.stringify(forgedConflict), forged, canonicalRequestDigest]
     )).rows[0].canonical_schedule_create_mutation_preview.data;
     expect(canonicalized.conflicts.hardConflicts).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'approved_schedule_overlap' }),
@@ -1095,6 +1189,16 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       assignmentDigest: before.digest, status: 'clear', hardConflicts: [], warnings: [],
       needsReview: false, reviewReasons: [], digest: forged, persisted: false, grantsMutation: false,
     };
+    const canonicalRequestDigest = normalizeMutationPreview({
+      organizationId: IDS.organization, actorUserId: IDS.owner,
+      authSessionId: sessions.owner.sessionId, appointmentId: IDS.reviewEvidenceAppointment,
+      body: {
+        expectedRevision: before.revision, expectedDigest: before.digest,
+        expectedTimeZone: 'America/New_York', action: 'assign',
+        target: { kind: 'profile', id: IDS.owner }, scheduledStart: null, scheduledEnd: null,
+        appointmentStatus: 'preferred', reason,
+      },
+    }).requestDigest;
     const created = (await runtimePool.query(
       `SELECT public.canonical_schedule_create_mutation_preview(
          $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::bigint,$7::text,
@@ -1104,7 +1208,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
          $10::text,$10::text,$11::text) AS response`,
       [IDS.organization, IDS.reviewEvidenceAppointment, IDS.owner, sessions.owner.sessionId,
         sessions.owner.csrfToken, before.revision, before.digest, reason,
-        JSON.stringify(forgedConflict), forged, sha256('forged-false-clear-preview-request')]
+        JSON.stringify(forgedConflict), forged, canonicalRequestDigest]
     )).rows[0].response.data;
     expect(created.conflicts).toMatchObject({
       status: 'needs_review', hardConflicts: [], warnings: [], needsReview: true,
@@ -1140,6 +1244,300 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       audits: 1, replays: 1,
     }]);
   }, 120000);
+
+  test('enforces SQL/public input parity and database-owned request-digest provenance', async () => {
+    await seedAppointment(runtimePool, IDS.organization, IDS.sqlContractAppointment);
+    await seedAppointment(runtimePool, IDS.organization, IDS.digestProvenanceAppointment);
+    const contractBefore = await pins(runtimePool, IDS.organization, IDS.sqlContractAppointment);
+    const contractPath = `/api/v1/canonical/appointments/${IDS.sqlContractAppointment}/mutation-previews`;
+    const longHttp = await request(app).post(contractPath).set(sessions.owner.headers).send({
+      expectedRevision: contractBefore.revision, expectedDigest: contractBefore.digest,
+      expectedTimeZone: 'America/New_York', action: 'schedule', target: contractBefore.target,
+      scheduledStart: '2027-04-01T09:00:00-04:00',
+      scheduledEnd: '2027-05-03T09:00:00-04:00', appointmentStatus: 'preferred',
+      reason: 'The public and SQL duration boundaries must agree.',
+    });
+    expect(longHttp.status).toBe(400);
+    expect(longHttp.body.error.code).toBe('INVALID_APPROVAL_SCHEDULE');
+    const controlHttp = await request(app).post(contractPath).set(sessions.owner.headers).send({
+      expectedRevision: contractBefore.revision, expectedDigest: contractBefore.digest,
+      expectedTimeZone: 'America/New_York', action: 'assign',
+      target: { kind: 'profile', id: IDS.owner }, scheduledStart: null, scheduledEnd: null,
+      appointmentStatus: 'preferred', reason: `public${String.fromCharCode(1)}control`,
+    });
+    expect(controlHttp.status).toBe(400);
+    expect(controlHttp.body.error.code).toBe('INVALID_APPROVAL_REASON');
+
+    const evidenceCounts = async appointmentId => (await migrationPool.query(
+      `SELECT assignment.revision::int,
+              (SELECT count(*)::int FROM public.canonical_schedule_mutation_previews preview
+                WHERE preview.organization_id=assignment.organization_id
+                  AND preview.assignment_id=assignment.id) AS previews,
+              (SELECT count(*)::int FROM public.canonical_schedule_human_approvals approval
+                WHERE approval.organization_id=assignment.organization_id
+                  AND approval.assignment_id=assignment.id) AS approvals,
+              (SELECT count(*)::int FROM public.canonical_schedule_human_audit_events audit
+                WHERE audit.organization_id=assignment.organization_id
+                  AND audit.assignment_id=assignment.id) AS audits,
+              (SELECT count(*)::int FROM public.canonical_schedule_human_idempotency replay
+                WHERE replay.organization_id=assignment.organization_id
+                  AND replay.assignment_id=assignment.id) AS replays
+         FROM public.canonical_schedule_assignments assignment
+        WHERE assignment.organization_id=$1 AND assignment.appointment_id=$2`,
+      [IDS.organization, appointmentId]
+    )).rows[0];
+    const invalidBefore = await evidenceCounts(IDS.sqlContractAppointment);
+    const invalidBodies = [
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, {
+        action: 'schedule', target: contractBefore.target,
+        scheduledStart: '2027-04-01T09:00:00-04:00', scheduledEnd: '2027-05-03T09:00:00-04:00',
+        reason: 'Direct SQL must reject thirty-two days.',
+      }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, {
+        action: 'schedule', target: contractBefore.target,
+        scheduledStart: '2027-04-01T09:00:00-04:00', scheduledEnd: '2027-05-02T09:00:00.001-04:00',
+        reason: 'Direct SQL must reject thirty-one days plus one millisecond.',
+      }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, { action: 'invalid_action' }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, { appointmentStatus: 'pending' }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, {
+        scheduledStart: '2027-04-01T09:00:00-04:00', scheduledEnd: null,
+      }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, { reason: `\u00a0leading whitespace` }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, { reason: `trailing whitespace\ufeff` }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, { reason: 'x'.repeat(1001) }),
+      ...[1,2,8,11,12,14,31,127].map(code => previewContractInput(
+        IDS.sqlContractAppointment, contractBefore,
+        { reason: `direct${String.fromCharCode(code)}control` }
+      )),
+    ];
+    for (const invalid of invalidBodies) {
+      let rejection;
+      try {
+        await directPreview(runtimePool, invalid, 'c'.repeat(64));
+      } catch (error) {
+        rejection = error;
+      }
+      expect(rejection).toBeDefined();
+      expect(['23514', '40001']).toContain(rejection.code);
+      expect([
+        'canonical_schedule_part4_transition_invalid',
+        'canonical_schedule_part4_preview_stale',
+      ]).toContain(rejection.constraint);
+    }
+    expect(await evidenceCounts(IDS.sqlContractAppointment)).toEqual(invalidBefore);
+
+    const validBodies = [
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, {
+        action: 'schedule', target: contractBefore.target,
+        scheduledStart: '2027-04-01T09:00:00-04:00', scheduledEnd: '2027-05-02T09:00:00-04:00',
+        reason: 'Exact 31-day boundary with printable hostile Unicode <script>🔥 café Ω.',
+      }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, {
+        reason: 'Interior\ttab\nline\rcarriage return remains legitimate.',
+      }),
+      previewContractInput(IDS.sqlContractAppointment, contractBefore, { reason: '😀'.repeat(1000) }),
+    ];
+    const validPreviews = [];
+    for (const valid of validBodies) {
+      const normalized = normalizeMutationPreview(valid);
+      validPreviews.push((await directPreview(runtimePool, valid, normalized.requestDigest)).rows[0].response.data);
+    }
+    expect(validPreviews).toHaveLength(3);
+
+    await migrationPool.query(
+      'ALTER TABLE public.canonical_schedule_mutation_previews DISABLE TRIGGER canonical_schedule_previews_immutable'
+    );
+    try {
+      await expect(migrationPool.query(
+        `UPDATE public.canonical_schedule_mutation_previews preview SET
+           reason=$3,
+           request_digest=public.canonical_schedule_part4_preview_request_digest(
+             preview.organization_id,preview.appointment_id,preview.actor_user_id,preview.auth_session_id,
+             preview.expected_revision,rtrim(preview.expected_digest),preview.expected_time_zone,
+             preview.action_code,preview.proposed_target_kind,preview.proposed_target_id,
+             preview.proposed_scheduled_start,preview.proposed_scheduled_end,preview.submitted_schedule,
+             preview.proposed_appointment_status,$3)
+         WHERE preview.organization_id=$1 AND preview.id=$2`,
+        [IDS.organization, validPreviews[0].id, `durable${String.fromCharCode(1)}control`]
+      )).rejects.toMatchObject({ code: '23514' });
+      await expect(migrationPool.query(
+        `UPDATE public.canonical_schedule_mutation_previews preview SET
+           proposed_scheduled_end='2027-05-03T13:00:00Z',
+           submitted_schedule='{"scheduledStart":"2027-04-01T09:00:00-04:00","scheduledEnd":"2027-05-03T09:00:00-04:00"}'::jsonb,
+           request_digest=public.canonical_schedule_part4_preview_request_digest(
+             preview.organization_id,preview.appointment_id,preview.actor_user_id,preview.auth_session_id,
+             preview.expected_revision,rtrim(preview.expected_digest),preview.expected_time_zone,
+             preview.action_code,preview.proposed_target_kind,preview.proposed_target_id,
+             preview.proposed_scheduled_start,'2027-05-03T13:00:00Z',
+             '{"scheduledStart":"2027-04-01T09:00:00-04:00","scheduledEnd":"2027-05-03T09:00:00-04:00"}'::jsonb,
+             preview.proposed_appointment_status,preview.reason)
+         WHERE preview.organization_id=$1 AND preview.id=$2`,
+        [IDS.organization, validPreviews[0].id]
+      )).rejects.toMatchObject({ code: '23514' });
+    } finally {
+      await migrationPool.query(
+        'ALTER TABLE public.canonical_schedule_mutation_previews ENABLE TRIGGER canonical_schedule_previews_immutable'
+      );
+    }
+
+    const digestCases = [
+      { action: 'assign', target: { kind: 'profile', id: IDS.owner.toUpperCase() }, scheduledStart: null, scheduledEnd: null },
+      { action: 'reassign', target: { kind: 'crew', id: IDS.crew }, scheduledStart: '2027-04-15T09:00:00-04:00', scheduledEnd: '2027-04-15T10:00:00-04:00' },
+      { action: 'unassign', target: { kind: 'unassigned', id: null }, scheduledStart: null, scheduledEnd: null },
+      { action: 'schedule', target: { kind: 'unassigned', id: null }, scheduledStart: '2027-04-15T09:00:00.125-04:00', scheduledEnd: '2027-04-15T10:00:00.250-04:00' },
+      { action: 'reschedule', target: { kind: 'profile', id: IDS.dispatcher }, scheduledStart: '2027-04-15T11:00:00-04:00', scheduledEnd: '2027-04-15T12:00:00-04:00' },
+      { action: 'dispatch', target: { kind: 'crew', id: IDS.crew }, scheduledStart: '2027-04-15T11:00:00-04:00', scheduledEnd: '2027-04-15T12:00:00-04:00' },
+    ];
+    for (const [index, candidate] of digestCases.entries()) {
+      const raw = previewContractInput(IDS.digestProvenanceAppointment.toUpperCase(), {
+        revision: 7, digest: 'a'.repeat(64), scheduledStart: null, scheduledEnd: null,
+        appointmentStatus: 'preferred', target: { kind: 'unassigned', id: null },
+      }, {
+        ...candidate, reason: `Digest parity ${index} printable Unicode Ω🔥.`,
+      });
+      const normalized = normalizeMutationPreview(raw);
+      const sqlDigest = (await migrationPool.query(
+        `SELECT public.canonical_schedule_part4_preview_request_digest(
+           $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::bigint,$6::text,$7::text,$8::text,
+           $9::text,$10::uuid,$11::timestamptz,$12::timestamptz,$13::jsonb,$14::text,$15::text) AS digest`,
+        [IDS.organization, normalized.appointmentId, IDS.owner, sessions.owner.sessionId,
+          normalized.expectedRevision, normalized.expectedDigest, normalized.expectedTimeZone,
+          normalized.action, normalized.target.kind, normalized.target.id, normalized.scheduledStart,
+          normalized.scheduledEnd, JSON.stringify({
+            scheduledStart: normalized.rawScheduledStart, scheduledEnd: normalized.rawScheduledEnd,
+          }), normalized.appointmentStatus, normalized.reason]
+      )).rows[0].digest;
+      expect(sqlDigest).toBe(normalized.requestDigest);
+    }
+
+    const parityWarnings = ['b'.repeat(64), 'a'.repeat(64)];
+    const parityReviews = ['d'.repeat(64), 'c'.repeat(64)];
+    const parityApproval = normalizeMutationApproval({
+      organizationId: IDS.organization.toUpperCase(), actorUserId: IDS.owner,
+      authSessionId: sessions.owner.sessionId, appointmentId: IDS.digestProvenanceAppointment.toUpperCase(),
+      idempotencyKey: 'm22-sql-js-parity-000001',
+      body: {
+        previewId: 'e6100000-0000-4000-8000-000000000001'.toUpperCase(),
+        previewDigest: 'e'.repeat(64), acknowledgedWarningDigests: parityWarnings,
+        acknowledgedReviewReasonDigests: parityReviews,
+        reason: 'Approval digest canonical order Ω🔥.',
+      },
+    });
+    const parityRows = (await migrationPool.query(
+      `SELECT public.canonical_schedule_part4_normalize_digest_list($1::jsonb) AS warnings,
+              public.canonical_schedule_part4_normalize_digest_list($2::jsonb) AS reviews`,
+      [JSON.stringify(parityWarnings), JSON.stringify(parityReviews)]
+    )).rows[0];
+    const sqlApprovalDigest = (await migrationPool.query(
+      `SELECT public.canonical_schedule_part4_approval_request_digest(
+         $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::text,$7::jsonb,$8::jsonb,
+         $9::text,$10::text) AS digest`,
+      [IDS.organization, parityApproval.appointmentId, IDS.owner, sessions.owner.sessionId,
+        parityApproval.previewId, parityApproval.previewDigest, JSON.stringify(parityRows.warnings),
+        JSON.stringify(parityRows.reviews), parityApproval.reason, parityApproval.idempotencyKeyHash]
+    )).rows[0].digest;
+    expect(sqlApprovalDigest).toBe(parityApproval.requestDigest);
+
+    const digestBefore = await pins(runtimePool, IDS.organization, IDS.digestProvenanceAppointment);
+    const digestInput = previewContractInput(IDS.digestProvenanceAppointment, digestBefore, {
+      reason: 'Database-owned exact request digest provenance Ω.',
+    });
+    const normalizedDigestPreview = normalizeMutationPreview(digestInput);
+    const digestEvidenceBefore = await evidenceCounts(IDS.digestProvenanceAppointment);
+    await expect(directPreview(runtimePool, digestInput, 'c'.repeat(64))).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_schedule_part4_request_digest_divergent',
+    });
+    expect(await evidenceCounts(IDS.digestProvenanceAppointment)).toEqual(digestEvidenceBefore);
+    const digestPreview = (await directPreview(
+      runtimePool, digestInput, normalizedDigestPreview.requestDigest
+    )).rows[0].response.data;
+    const digestEvidence = (await runtimePool.query(
+      `SELECT rtrim(preview_digest) AS preview_digest,warning_digests,review_reason_digests,reason,
+              rtrim(conflict_digest) AS conflict_digest,
+              rtrim(recommendation_authority_digest) AS recommendation_authority_digest,
+              rtrim(request_digest) AS request_digest
+         FROM public.canonical_schedule_mutation_previews WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, digestPreview.id]
+    )).rows[0];
+    expect(digestEvidence.request_digest).toBe(normalizedDigestPreview.requestDigest);
+    const digestKey = 'm22-database-digest-provenance-0001';
+    const normalizedDigestApproval = normalizeMutationApproval({
+      organizationId: IDS.organization, actorUserId: IDS.owner,
+      authSessionId: sessions.owner.sessionId, appointmentId: IDS.digestProvenanceAppointment,
+      idempotencyKey: digestKey,
+      body: {
+        previewId: digestPreview.id, previewDigest: digestEvidence.preview_digest,
+        acknowledgedWarningDigests: digestEvidence.warning_digests,
+        acknowledgedReviewReasonDigests: digestEvidence.review_reason_digests,
+        reason: digestEvidence.reason,
+      },
+    });
+    const applyDigest = requestDigest => runtimePool.query(
+      `SELECT public.canonical_schedule_apply_mutation_approval(
+         $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::uuid,$7::text,
+         $8::jsonb,$9::jsonb,$10::text,$11::text,$12::text,$13::text,$14::text) AS response`,
+      [IDS.organization, IDS.digestProvenanceAppointment, IDS.owner, sessions.owner.sessionId,
+        sessions.owner.csrfToken, digestPreview.id, digestEvidence.preview_digest,
+        JSON.stringify(digestEvidence.warning_digests), JSON.stringify(digestEvidence.review_reason_digests),
+        digestEvidence.reason, digestEvidence.conflict_digest,
+        digestEvidence.recommendation_authority_digest, normalizedDigestApproval.idempotencyKeyHash,
+        requestDigest]
+    );
+    await expect(applyDigest('d'.repeat(64))).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_schedule_part4_request_digest_divergent',
+    });
+    expect(await evidenceCounts(IDS.digestProvenanceAppointment)).toEqual({
+      ...digestEvidenceBefore, previews: digestEvidenceBefore.previews + 1,
+    });
+    const applied = await applyDigest(normalizedDigestApproval.requestDigest);
+    expect(applied.rows[0].response.data.humanApproval.requestDigest).toBe(normalizedDigestApproval.requestDigest);
+    const ledger = (await migrationPool.query(
+      `SELECT rtrim(approval.request_digest) AS approval_digest,
+              rtrim(revision.request_digest) AS revision_digest,
+              rtrim(replay.request_digest) AS replay_digest
+         FROM public.canonical_schedule_human_approvals approval
+         JOIN public.canonical_schedule_assignment_revisions revision
+           ON revision.organization_id=approval.organization_id AND revision.human_approval_id=approval.id
+         JOIN public.canonical_schedule_human_idempotency replay
+           ON replay.organization_id=approval.organization_id AND replay.human_approval_id=approval.id
+        WHERE approval.organization_id=$1 AND approval.preview_id=$2`,
+      [IDS.organization, digestPreview.id]
+    )).rows[0];
+    expect(ledger).toEqual({
+      approval_digest: normalizedDigestApproval.requestDigest,
+      revision_digest: normalizedDigestApproval.requestDigest,
+      replay_digest: normalizedDigestApproval.requestDigest,
+    });
+    const replayed = await applyDigest(normalizedDigestApproval.requestDigest);
+    expect(replayed.rows[0].response).toEqual(applied.rows[0].response);
+    const divergentReason = 'Different valid request using the same idempotency key.';
+    const divergentApproval = normalizeMutationApproval({
+      organizationId: IDS.organization, actorUserId: IDS.owner,
+      authSessionId: sessions.owner.sessionId, appointmentId: IDS.digestProvenanceAppointment,
+      idempotencyKey: digestKey,
+      body: {
+        previewId: digestPreview.id, previewDigest: digestEvidence.preview_digest,
+        acknowledgedWarningDigests: digestEvidence.warning_digests,
+        acknowledgedReviewReasonDigests: digestEvidence.review_reason_digests,
+        reason: divergentReason,
+      },
+    });
+    await expect(runtimePool.query(
+      `SELECT public.canonical_schedule_apply_mutation_approval(
+         $1::uuid,$2::uuid,$3::uuid,'owner',$4::uuid,$5::text,$6::uuid,$7::text,
+         $8::jsonb,$9::jsonb,$10::text,$11::text,$12::text,$13::text,$14::text)`,
+      [IDS.organization, IDS.digestProvenanceAppointment, IDS.owner, sessions.owner.sessionId,
+        sessions.owner.csrfToken, digestPreview.id, digestEvidence.preview_digest,
+        JSON.stringify(digestEvidence.warning_digests), JSON.stringify(digestEvidence.review_reason_digests),
+        divergentReason, digestEvidence.conflict_digest,digestEvidence.recommendation_authority_digest,
+        divergentApproval.idempotencyKeyHash, divergentApproval.requestDigest]
+    )).rejects.toMatchObject({
+      code: '23514', constraint: 'canonical_schedule_part4_idempotency_divergent',
+    });
+    expect((await pins(runtimePool, IDS.organization, IDS.digestProvenanceAppointment)).revision)
+      .toBe(digestBefore.revision + 1);
+  }, 180000);
 
   test('uses live wall time after held-transaction and lock waits with zero mutation evidence', async () => {
     async function assertNoAppliedEvidence(appointmentId, before) {

@@ -138,6 +138,9 @@ function normalizeMutationPreview(input) {
     fail(400, 'INVALID_APPOINTMENT_STATUS', 'Appointment compatibility status is invalid.');
   }
   const reason = boundedReason(body.reason);
+  const actorUserId = uuid(input && input.actorUserId, 'INVALID_APPROVAL_ACTOR', 'Approval actor');
+  const authSessionId = uuid(input && input.authSessionId, 'INVALID_APPROVAL_SESSION', 'Approval session');
+  const organizationId = uuid(input && input.organizationId, 'INVALID_APPROVAL_ORGANIZATION', 'Organization');
   const proposal = stableValue({
     target: proposedTarget,
     scheduledStart: start === null ? null : start.instant,
@@ -163,9 +166,9 @@ function normalizeMutationPreview(input) {
     proposal: Object.freeze(proposal),
   };
   normalized.requestDigest = sha256(stableValue({
-    actorUserId: String(input.actorUserId),
-    authSessionId: String(input.authSessionId),
-    organizationId: String(input.organizationId),
+    actorUserId,
+    authSessionId,
+    organizationId,
     ...normalized,
   }));
   return Object.freeze(normalized);
@@ -183,6 +186,9 @@ function normalizeMutationApproval(input) {
       'Exact preview, acknowledgement, reason, idempotency, and current session evidence is required.');
   }
   const key = idempotencyKey(input && input.idempotencyKey);
+  const actorUserId = uuid(input && input.actorUserId, 'INVALID_APPROVAL_ACTOR', 'Approval actor');
+  const authSessionId = uuid(input && input.authSessionId, 'INVALID_APPROVAL_SESSION', 'Approval session');
+  const organizationId = uuid(input && input.organizationId, 'INVALID_APPROVAL_ORGANIZATION', 'Organization');
   const normalized = {
     appointmentId: uuid(input && input.appointmentId, 'INVALID_APPROVAL_APPOINTMENT', 'Appointment'),
     previewId: uuid(body.previewId, 'INVALID_MUTATION_APPROVAL', 'Mutation preview'),
@@ -193,9 +199,9 @@ function normalizeMutationApproval(input) {
     idempotencyKeyHash: sha256(key),
   };
   normalized.requestDigest = sha256(stableValue({
-    actorUserId: String(input.actorUserId),
-    authSessionId: String(input.authSessionId),
-    organizationId: String(input.organizationId),
+    actorUserId,
+    authSessionId,
+    organizationId,
     ...normalized,
   }));
   return Object.freeze(normalized);

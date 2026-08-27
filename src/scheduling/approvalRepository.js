@@ -62,6 +62,8 @@ function mapDatabaseError(error) {
       canonical_schedule_part4_acknowledgement_divergent: ['M22_ACKNOWLEDGEMENT_DIVERGENT', 'The exact warning acknowledgement changed.'],
       canonical_schedule_part4_transition_invalid: ['M22_INVALID_TRANSITION', 'The requested assignment, schedule, or dispatch transition is invalid.'],
       canonical_schedule_part4_evidence_stale: ['M22_EVIDENCE_STALE', 'Conflict or recommendation evidence changed; request a new preview.'],
+      canonical_schedule_part4_request_digest_divergent: ['M22_REQUEST_DIGEST_DIVERGENT', 'Human approval request provenance diverged from its canonical inputs.'],
+      canonical_schedule_part4_acknowledgement_invalid: ['M22_ACKNOWLEDGEMENT_DIVERGENT', 'The exact warning acknowledgement is invalid.'],
     };
     const mapped = codes[constraint] || ['M22_APPROVAL_INVALID', 'Human approval evidence is invalid.'];
     return new ApprovalRepositoryError(409, mapped[0], mapped[1], error);

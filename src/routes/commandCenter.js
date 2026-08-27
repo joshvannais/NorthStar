@@ -10,6 +10,8 @@ const {
   requestContext,
 } = require('./canonicalPolaris');
 const { buildPaidWorkspace } = require('../commandCenter/workspace');
+const { actorInput, loadSchedulingOperatorDirectory } = require('../scheduling/operatorDirectory');
+const { buildSchedulingOverview } = require('../scheduling/overviewRepository');
 
 const DETAIL_KINDS = Object.freeze({
   customer: Object.freeze({ idKey: 'customer', resource: 'leads' }),
@@ -47,9 +49,38 @@ function createCommandCenterRouter(options = {}) {
       const context = paidRequestContext(req);
       const pool = poolProvider();
       if (!context || !pool || typeof pool.query !== 'function') return unavailable(req, res);
+      const schedulingOperator = await loadSchedulingOperatorDirectory(pool, actorInput(req));
+      if (!schedulingOperator.canMutate) {
+        return res.status(403).json({
+          success: false,
+          requestId: requestId(req),
+          error: {
+            code: 'COMMAND_CENTER_OPERATOR_REQUIRED',
+            message: 'The scheduling Command Center is limited to current owners, admins, and active dispatchers.',
+          },
+        });
+      }
       const items = await listCanonicalGraphs(pool, context, { limit: 100, status: null, customerId: null });
-      return res.json({ success: true, data: buildPaidWorkspace({ context, items }), requestId: requestId(req) });
+      const schedulingOverview = await buildSchedulingOverview(pool, {
+        organizationId: context.organizationId,
+        actorUserId: context.userId,
+        actorAccessRole: req.userRole,
+        authSessionId: req.authSession && req.authSession.id,
+        items,
+      });
+      return res.json({
+        success: true,
+        data: buildPaidWorkspace({ context, items, schedulingOperator, schedulingOverview }),
+        requestId: requestId(req),
+      });
     } catch (_error) {
+      if (_error && _error.status === 403 && _error.code) {
+        return res.status(403).json({
+          success: false,
+          requestId: requestId(req),
+          error: { code: _error.code, message: _error.message },
+        });
+      }
       return unavailable(req, res);
     }
   });

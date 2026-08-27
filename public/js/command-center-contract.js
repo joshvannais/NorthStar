@@ -64,6 +64,28 @@
     if (expected.length !== actual.length || expected.some(function (id, index) { return actual[index] !== id; })) {
       throw new Error('The Command Center navigation contract is unavailable.');
     }
+    if (expectedMode === 'paid') {
+      var operator = value.schedulingOperator;
+      var overview = value.schedulingOverview;
+      var categories = ['unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
+      if (!operator || operator.canMutate !== true || !Array.isArray(operator.targets) ||
+          typeof operator.digest !== 'string' || !/^[0-9a-f]{64}$/.test(operator.digest) ||
+          !overview || overview.version !== 'm22-part5-overview-v1' ||
+          typeof overview.timeZone !== 'string' || !overview.definitions || !overview.categories ||
+          !overview.counts || !Array.isArray(overview.records) ||
+          typeof overview.digest !== 'string' || !/^[0-9a-f]{64}$/.test(overview.digest) ||
+          categories.some(function (name) {
+            return typeof overview.definitions[name] !== 'string' || !Array.isArray(overview.categories[name]) ||
+              !Number.isSafeInteger(overview.counts[name]) || overview.counts[name] !== overview.categories[name].length;
+          }) || overview.records.some(function (record) {
+            return !record || typeof record.appointmentId !== 'string' || !record.authority ||
+              !Number.isSafeInteger(record.authority.revision) ||
+              typeof record.authority.digest !== 'string' || !/^[0-9a-f]{64}$/.test(record.authority.digest) ||
+              !Array.isArray(record.allowedActions) || !record.flags || !record.conflict;
+          })) {
+        throw new Error('The canonical scheduling overview contract is unavailable.');
+      }
+    }
     return value;
   }
 

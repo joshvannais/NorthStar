@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/css/demo-dashboard.css">
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
+  <link rel="stylesheet" href="/css/scheduling-approval.css">
   <link rel="icon" href="/assets/logo.png">
   <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
@@ -89,6 +90,14 @@
           </section>
 
           <section class="demo-kpi-grid" id="commandCenterKpis" aria-label="Business snapshot"></section>
+
+          <section class="m22-authority-overview" id="commandCenterScheduling" aria-labelledby="commandCenterSchedulingTitle" aria-busy="true">
+            <div class="m22-authority-heading">
+              <div><p class="demo-panel-kicker">Canonical scheduling</p><h2 id="commandCenterSchedulingTitle">Owner and dispatcher overview</h2><p id="commandCenterSchedulingDefinition">Loading server-authoritative categories and independent assignment, schedule, dispatch, review, and conflict states.</p></div>
+            </div>
+            <div class="m22-category-tabs" id="commandCenterSchedulingCategories" aria-label="Scheduling overview category"></div>
+            <ol class="m22-overview-list" id="commandCenterSchedulingRecords"><li class="m22-overview-empty">Loading scheduling authority…</li></ol>
+          </section>
 
           <section class="demo-dashboard-analytics-grid" aria-label="Pipeline and schedule">
             <article class="demo-panel demo-revenue-panel">
@@ -177,6 +186,8 @@
   </div>
 
   <script src="/js/polaris-card.js"></script>
+  <script src="/js/scheduling-time-contract.js"></script>
+  <script src="/js/scheduling-approval-ui.js"></script>
   <script src="/js/command-center-page.js"></script>
   <script src="/js/nav-component.js"></script>
   <script>NavComponent.init('command-center');</script>

@@ -8,6 +8,8 @@ const { Client, Pool } = require('pg');
 const request = require('supertest');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
 const { normalizeMutationApproval, normalizeMutationPreview } = require('../../src/scheduling/approvalContract');
+const { loadSchedulingOperatorDirectory } = require('../../src/scheduling/operatorDirectory');
+const { buildSchedulingOverview } = require('../../src/scheduling/overviewRepository');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
@@ -46,6 +48,7 @@ const IDS = Object.freeze({
   hardConflictAppointment: 'e5100000-0000-4000-8000-000000000020',
   sqlContractAppointment: 'e5100000-0000-4000-8000-000000000021',
   digestProvenanceAppointment: 'e5100000-0000-4000-8000-000000000022',
+  part5Appointment: 'e5100000-0000-4000-8000-000000000023',
 });
 
 function quoteIdentifier(value) {
@@ -256,6 +259,7 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       other: await provisionDurableSession(runtimePool, { userId: IDS.otherOwner, organizationId: IDS.otherOrganization, membershipId: IDS.otherOwner, role: 'owner' }),
     };
     await seedAppointment(runtimePool, IDS.organization, IDS.appointment);
+    await seedAppointment(runtimePool, IDS.organization, IDS.part5Appointment);
     await seedAppointment(runtimePool, IDS.otherOrganization, IDS.otherAppointment);
   }, 180000);
 
@@ -341,6 +345,105 @@ realPostgres('Mission 22 Part 4 mounted human preview and approval authority', (
       }
     }
   }, 240000);
+
+  test('Part 5 mounted operator directory and server overview preserve tenant, role, session, conflict, and paid/demo boundaries', async () => {
+    const ownerInput = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      membershipId: IDS.owner, onboardingComplete: true, subscriptionMutable: true,
+    };
+    const ownerDirectory = await loadSchedulingOperatorDirectory(runtimePool, ownerInput);
+    expect(ownerDirectory).toMatchObject({ canMutate: true, reason: null, truncated: false });
+    expect(ownerDirectory.targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'profile', id: IDS.owner }),
+      expect.objectContaining({ kind: 'profile', id: IDS.dispatcher }),
+      expect.objectContaining({ kind: 'crew', id: IDS.crew, label: expect.stringContaining(HOSTILE) }),
+    ]));
+    expect(ownerDirectory.targets.some(target => target.id === IDS.otherOwner)).toBe(false);
+    const dispatcherDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
+      ...ownerInput, actorUserId: IDS.dispatcher, actorAccessRole: 'member', membershipId: IDS.dispatcher,
+    });
+    expect(dispatcherDirectory.canMutate).toBe(true);
+    const employeeDirectory = await loadSchedulingOperatorDirectory(runtimePool, {
+      ...ownerInput, actorUserId: IDS.employee, actorAccessRole: 'member', membershipId: IDS.employee,
+    });
+    expect(employeeDirectory).toMatchObject({ canMutate: false, reason: 'operator_role_required', targets: [] });
+    expect((await loadSchedulingOperatorDirectory(runtimePool, {
+      ...ownerInput, subscriptionMutable: false,
+    }))).toMatchObject({ canMutate: false, reason: 'subscription_read_only', targets: [] });
+
+    await previewAndApproveAppointment(IDS.part5Appointment, 'assign', {
+      target: { kind: 'profile', id: IDS.owner },
+    }, 'm22-part5-assign-mounted-00001');
+    await previewAndApproveAppointment(IDS.part5Appointment, 'schedule', {
+      scheduledStart: '2035-06-15T09:00:00-04:00', scheduledEnd: '2035-06-15T10:00:00-04:00',
+    }, 'm22-part5-schedule-mounted-001');
+    const schedule = (await runtimePool.query(
+      `SELECT revision,rtrim(canonical_digest) AS digest,target_state,workforce_profile_id,
+              workforce_crew_id,schedule_state,dispatch_state,scheduled_start,scheduled_end,
+              appointment_status,needs_review,review_reasons
+         FROM public.canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`,
+      [IDS.organization, IDS.part5Appointment]
+    )).rows[0];
+    const item = {
+      ids: {
+        appointment: IDS.part5Appointment,
+        graph: IDS.part5Appointment.replace(/^e5/, 'e7'),
+      },
+      customer: { id: IDS.part5Appointment.replace(/^e5/, 'e8'), name: HOSTILE },
+      opportunity: { serviceType: null },
+      snapshot: { service: { label: HOSTILE } },
+      appointment: { scheduleAuthority: {
+        revision: Number(schedule.revision), digest: schedule.digest,
+        targetState: schedule.target_state, workforceProfileId: schedule.workforce_profile_id,
+        workforceCrewId: schedule.workforce_crew_id, scheduleState: schedule.schedule_state,
+        dispatchState: schedule.dispatch_state,
+        scheduledStart: new Date(schedule.scheduled_start).toISOString(),
+        scheduledEnd: new Date(schedule.scheduled_end).toISOString(),
+        appointmentStatus: schedule.appointment_status, needsReview: schedule.needs_review,
+        reviewReasons: schedule.review_reasons,
+      } },
+    };
+    const overviewInput = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      authSessionId: sessions.owner.sessionId, items: [item],
+    };
+    const overview = await buildSchedulingOverview(runtimePool, overviewInput);
+    expect(overview).toMatchObject({
+      version: 'm22-part5-overview-v1', timeZone: 'America/New_York', truncated: false,
+      records: [expect.objectContaining({
+        appointmentId: IDS.part5Appointment,
+        customer: { id: item.customer.id, name: HOSTILE },
+        allowedActions: expect.arrayContaining(['reassign', 'unassign', 'reschedule', 'dispatch']),
+        conflict: expect.objectContaining({ persisted: false, grantsMutation: false }),
+      })],
+    });
+    expect(overview.digest).toMatch(/^[0-9a-f]{64}$/);
+    await expect(buildSchedulingOverview(runtimePool, {
+      ...overviewInput, actorUserId: IDS.employee, actorAccessRole: 'member',
+      authSessionId: sessions.employee.sessionId,
+    })).rejects.toMatchObject({ status: 403, code: 'M22_OVERVIEW_FORBIDDEN' });
+
+    const calendarOwner = await request(app).get('/api/v1/canonical/compat/calendar?limit=100')
+      .set(sessions.owner.headers).expect(200);
+    expect(calendarOwner.body.data).toEqual(expect.objectContaining({
+      schedulingOperator: expect.objectContaining({ canMutate: true }),
+      schedulingOverview: expect.objectContaining({ version: 'm22-part5-overview-v1' }),
+    }));
+    const calendarEmployee = await request(app).get('/api/v1/canonical/compat/calendar?limit=100')
+      .set(sessions.employee.headers).expect(403);
+    expect(calendarEmployee.body.error.code).toBe('CALENDAR_OPERATOR_REQUIRED');
+    expect(calendarEmployee.body.data).toBeUndefined();
+    const commandOwner = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.owner.headers).expect(200);
+    expect(commandOwner.body.data).toEqual(expect.objectContaining({
+      mode: 'paid', schedulingOperator: expect.objectContaining({ canMutate: true }),
+      schedulingOverview: expect.objectContaining({ version: 'm22-part5-overview-v1' }),
+    }));
+    const commandEmployee = await request(app).get('/api/v1/command-center/workspace')
+      .set(sessions.employee.headers).expect(403);
+    expect(commandEmployee.body.error.code).toBe('COMMAND_CENTER_OPERATOR_REQUIRED');
+  }, 120000);
 
   async function previewAndApprove(action, input = {}, session = sessions.owner, key = crypto.randomUUID()) {
     const appointmentId = input.appointmentId || IDS.mutationMatrixAppointment;

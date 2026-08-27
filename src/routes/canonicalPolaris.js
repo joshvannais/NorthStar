@@ -32,6 +32,11 @@ const {
 const { normalizeRecommendationEvaluation } = require('../scheduling/recommendationContract');
 const { recommendAppointmentCandidates } = require('../scheduling/recommendationRepository');
 const { requireRecommendationBodyBoundary } = require('../scheduling/recommendationHttpBoundary');
+const {
+  actorInput,
+  loadSchedulingOperatorDirectory,
+} = require('../scheduling/operatorDirectory');
+const { buildSchedulingOverview } = require('../scheduling/overviewRepository');
 const schedulingTime = require('../../public/js/scheduling-time-contract');
 
 const READ_MODEL_VERSION = 'm22-part1-read-v1';
@@ -798,12 +803,46 @@ function createCanonicalRouter(options) {
   router.get('/compat/:surface', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!SURFACES.has(req.params.surface)) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Compatibility projection not found.' } });
     try {
-      const items = await authoritativeItems(req, dependencies, 'canonical.compat.' + req.params.surface);
       const context = requestContext(req);
+      const pool = resolvePool(dependencies.poolProvider);
+      const items = await listCanonicalGraphs(pool, context, queryFilters(req));
       const timeZoneAuthority = req.params.surface === 'calendar'
-        ? await currentCalendarTimeZoneAuthority(resolvePool(dependencies.poolProvider), context)
+        ? await currentCalendarTimeZoneAuthority(pool, context)
         : null;
-      return res.json({ success: true, data: compatibilityProjection(req.params.surface, items, context, timeZoneAuthority) });
+      let projection = compatibilityProjection(req.params.surface, items, context, timeZoneAuthority);
+      if (req.params.surface === 'calendar') {
+        const schedulingOperator = await loadSchedulingOperatorDirectory(pool, actorInput(req));
+        if (!schedulingOperator.canMutate && schedulingOperator.reason === 'operator_role_required') {
+          return res.status(403).json({
+            success: false,
+            requestId: req.requestId || undefined,
+            error: {
+              code: 'CALENDAR_OPERATOR_REQUIRED',
+              message: 'The broad scheduling Calendar is limited to current owners, admins, and active dispatchers.',
+            },
+          });
+        }
+        const schedulingOverview = schedulingOperator.canMutate
+          ? await buildSchedulingOverview(pool, {
+            organizationId: context.organizationId,
+            actorUserId: context.userId,
+            actorAccessRole: req.userRole,
+            authSessionId: req.authSession && req.authSession.id,
+            items,
+          })
+          : null;
+        projection = {
+          ...projection,
+          digest: sha256({
+            compatibilityDigest: projection.digest,
+            schedulingOperatorDigest: schedulingOperator.digest,
+            schedulingOverviewDigest: schedulingOverview && schedulingOverview.digest,
+          }),
+          schedulingOperator,
+          schedulingOverview,
+        };
+      }
+      return res.json({ success: true, data: projection });
     } catch (_error) {
       return handleEndpointError(res, _error, req);
     }

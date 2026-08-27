@@ -771,7 +771,7 @@ function buildPaidWorkspace(input) {
         ['simulation', 'demo'].includes(item.source.type.toLowerCase()))) {
     throw new Error('The paid Command Center requires real tenant projections.');
   }
-  return workspaceBase(
+  const workspace = workspaceBase(
     'paid',
     { id: input.context.organizationId, name: 'Your NorthStar workspace', fictional: false, isolated: true },
     input.items.map(paidGraph),
@@ -781,6 +781,16 @@ function buildPaidWorkspace(input) {
       note: 'Configuration remains on its role-authorized paid destination and is not copied into this projection.',
     }
   );
+  if (input.schedulingOperator && input.schedulingOverview) {
+    workspace.schedulingOperator = stableValue(input.schedulingOperator);
+    workspace.schedulingOverview = stableValue(input.schedulingOverview);
+    workspace.integrity.digest = sha256({
+      workspaceDigest: workspace.integrity.digest,
+      schedulingOperatorDigest: workspace.schedulingOperator.digest,
+      schedulingOverviewDigest: workspace.schedulingOverview.digest,
+    });
+  }
+  return workspace;
 }
 
 module.exports = {

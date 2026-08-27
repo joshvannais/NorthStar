@@ -6,6 +6,7 @@
   var workspace = null;
   var loading = false;
   var chartPeriod = 'daily';
+  var schedulingCategory = 'atRisk';
 
   function byId(id) { return document.getElementById(id); }
 
@@ -332,8 +333,13 @@
   }
 
   function renderSchedule(graphs) {
-    var scheduled = graphs.filter(function (graph) { return formatDate(graph.work && graph.work.scheduledStart); })
-      .sort(function (left, right) { return new Date(left.work.scheduledStart) - new Date(right.work.scheduledStart); });
+    var canonicalRecords = mode === 'paid' && workspace && workspace.schedulingOverview && Array.isArray(workspace.schedulingOverview.records)
+      ? workspace.schedulingOverview.records : null;
+    var scheduled = canonicalRecords
+      ? canonicalRecords.filter(function (record) { return record.authority && record.authority.scheduleState === 'scheduled'; })
+        .sort(function (left, right) { return new Date(left.authority.scheduledStart) - new Date(right.authority.scheduledStart); })
+      : graphs.filter(function (graph) { return formatDate(graph.work && graph.work.scheduledStart); })
+        .sort(function (left, right) { return new Date(left.work.scheduledStart) - new Date(right.work.scheduledStart); });
     byId('commandCenterScheduleCount').textContent = scheduled.length + ' scheduled';
     var list = byId('commandCenterSchedule');
     list.replaceChildren();
@@ -345,16 +351,89 @@
     }
     scheduled.slice(0, 5).forEach(function (graph) {
       var item = element('li');
-      var date = formatDate(graph.work.scheduledStart);
+      var isCanonical = Boolean(graph && graph.authority);
+      var date = formatDate(isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart);
       var copy = element('div');
       var link = element('a', 'command-center-record-link', safeString(graph.work && graph.work.title,
         safeString(graph.lead && graph.lead.serviceLabel, 'Scheduled work')));
-      link.href = detailHref(graph);
+      var linkedGraph = isCanonical ? graphs.find(function (candidate) { return candidate.ids && candidate.ids.appointment === graph.appointmentId; }) : graph;
+      link.href = linkedGraph ? detailHref(linkedGraph) : destination('calendar');
+      var assignment = isCanonical ? titleCase(graph.authority.targetState) : graph.work && graph.work.assignedTo;
       copy.append(link, element('span', '', safeString(graph.customer && graph.customer.name, 'Customer') +
-        (graph.work && graph.work.assignedTo ? ' · ' + graph.work.assignedTo : ' · Assignment not recorded')));
+        (assignment ? ' · ' + assignment : ' · Assignment unavailable')));
       item.append(element('time', '', date), copy);
       list.appendChild(item);
     });
+  }
+
+  function schedulingStateChip(state) {
+    var chip = element('li', 'm22-state-chip', titleCase(state));
+    chip.dataset.state = state;
+    return chip;
+  }
+
+  function renderSchedulingOverview() {
+    var section = byId('commandCenterScheduling');
+    var categories = byId('commandCenterSchedulingCategories');
+    var records = byId('commandCenterSchedulingRecords');
+    var definition = byId('commandCenterSchedulingDefinition');
+    section.setAttribute('aria-busy', 'false');
+    categories.replaceChildren();
+    records.replaceChildren();
+    if (mode === 'demo') {
+      definition.textContent = 'This isolated demo presentation is non-authoritative and read-only. It never reads or mutates paid tenant scheduling data.';
+      records.appendChild(element('li', 'm22-overview-empty', 'Canonical owner and dispatcher scheduling actions are available only inside an authorized paid tenant workspace.'));
+      return;
+    }
+    var overview = workspace && workspace.schedulingOverview;
+    var operator = workspace && workspace.schedulingOperator;
+    if (!overview || !operator || operator.canMutate !== true) {
+      definition.textContent = 'Current owner or active-dispatcher scheduling authority is unavailable. No mutation control is shown.';
+      records.appendChild(element('li', 'm22-overview-empty', 'Refresh after verifying the current session, role, membership, onboarding, and subscription state.'));
+      return;
+    }
+    var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
+    if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
+    definition.textContent = schedulingCategory === 'all'
+      ? 'All canonical appointments. Categories may overlap and are classified only by the server.'
+      : overview.definitions[schedulingCategory];
+    categoryNames.forEach(function (name) {
+      var count = name === 'all' ? overview.records.length : overview.counts[name];
+      var button = element('button', 'm22-category-button', titleCase(name) + ' ' + count);
+      button.type = 'button'; button.setAttribute('aria-pressed', name === schedulingCategory ? 'true' : 'false');
+      button.addEventListener('click', function () { schedulingCategory = name; renderSchedulingOverview(); });
+      categories.appendChild(button);
+    });
+    var selectedIds = schedulingCategory === 'all' ? null : new Set(overview.categories[schedulingCategory] || []);
+    var selected = overview.records.filter(function (record) { return !selectedIds || selectedIds.has(record.appointmentId); });
+    selected.forEach(function (record) {
+      var item = element('li', 'm22-overview-record');
+      item.dataset.appointmentId = record.appointmentId;
+      item.appendChild(element('h3', '', safeString(record.customer && record.customer.name, 'Customer') + ' · ' + safeString(record.work && record.work.title, 'Appointment')));
+      item.appendChild(element('p', '', formatDate(record.authority.scheduledStart) || 'Unscheduled in ' + overview.timeZone));
+      var states = element('ul', 'm22-state-list');
+      [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
+        record.conflict.status].filter(Boolean).forEach(function (state) { states.appendChild(schedulingStateChip(state)); });
+      Object.keys(record.flags || {}).filter(function (key) { return record.flags[key] === true; })
+        .forEach(function (flag) { states.appendChild(schedulingStateChip(flag)); });
+      item.appendChild(states);
+      if (record.conflict && record.conflict.hardConflicts && record.conflict.hardConflicts.length) {
+        item.appendChild(element('p', 'm22-hard-block', record.conflict.hardConflicts.length + ' hard conflict' + (record.conflict.hardConflicts.length === 1 ? '' : 's') + '. No override is available.'));
+      }
+      var actions = element('div', 'm22-record-actions');
+      (record.allowedActions || []).forEach(function (action) {
+        var button = element('button', 'm22-action-button', titleCase(action)); button.type = 'button';
+        button.addEventListener('click', function () {
+          global.NorthStarSchedulingApproval.open({
+            record: record, directory: operator, action: action, timeZone: overview.timeZone,
+            returnFocus: button, source: 'Command Center canonical overview', onApplied: load,
+          });
+        });
+        actions.appendChild(button);
+      });
+      item.appendChild(actions); records.appendChild(item);
+    });
+    if (!selected.length) records.appendChild(element('li', 'm22-overview-empty', 'No canonical appointments are currently in this server-defined category.'));
   }
 
   function renderLeads(graphs) {
@@ -435,6 +514,7 @@
     renderKpis(graphs);
     renderChart(graphs);
     renderSchedule(graphs);
+    renderSchedulingOverview();
     renderLeads(graphs);
     renderCoachAndStatus(graphs);
     renderCta();
@@ -453,6 +533,7 @@
     loading = true;
     byId('commandCenterRefresh').disabled = true;
     byId('commandCenterContent').setAttribute('aria-busy', 'true');
+    byId('commandCenterScheduling').setAttribute('aria-busy', 'true');
     setStatus('Loading the role-authorized workspace…', 'pending');
     return global.NorthStarAccountSession.fetch('/api/v1/command-center/workspace', {
       method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
@@ -467,6 +548,7 @@
     }).catch(function (error) {
       workspace = null;
       byId('commandCenterContent').setAttribute('aria-busy', 'false');
+      renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');
     }).finally(function () {
       loading = false;

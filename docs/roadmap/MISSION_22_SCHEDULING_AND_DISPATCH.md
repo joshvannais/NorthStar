@@ -256,7 +256,18 @@ passed a different fresh exact-head independent audit before its normal merge,
 sole automatic deployment, exact-revision verification, credential-free health,
 and authorized passive acceptance.
 
-### Part 4 — Human-approved scheduling and dispatch workflow (corrected; re-audit pending)
+### Part 4 — Human-approved scheduling and dispatch workflow (terminally released)
+
+Part 4 was independently approved at exact head
+`56d22392048bb36c6dec8e58836bcf8c91b272b7` with P0/P1/P2/P3 all zero,
+normally merged as `e20facc5937dc0581c9194ddf70b331b49de5188`, and deployed by the sole
+automatic Railway release at that exact merge revision. Railway reported
+`SUCCESS`/`RUNNING`; two credential-free health requests returned 200 with
+PostgreSQL and canonical persistence healthy. Migration 035 deployed with
+repository SHA-256
+`96fb6814a9a8a0db2ebdca2fc4626df8091bb7f3b48a3f4bef613e97fe977129`.
+The immutable release record SHA-256 is
+`628b4158092ead6b142ee9942c4bdb834feb4408ce82ad45dcbd8706c3453b78`.
 
 Mount preview and approve for assign, reassign, unassign, schedule, reschedule,
 and dispatch. A preview expires after 15 minutes and is not a capability.
@@ -323,11 +334,11 @@ checksum provenance, and the complete available compatibility corpus. Part 3
 remains non-capability and makes zero provider calls. No UI or browser-executed
 code changes in Part 4, so a new browser matrix is not applicable; visual
 approval remains a separate truth. Hosted checks, physical Safari/devices,
-providers, credentials/configuration, production migration/deployment, and the
-independent exact-head verdict remain unavailable or pending until their
-separate gates.
+providers, credentials/configuration, direct private production migration logs,
+and visual approval remain separate unavailable or unclaimed evidence; they
+were not treated as passing.
 
-### Part 5 — Owner and dispatcher experiences (planned)
+### Part 5 — Owner and dispatcher experiences (implemented; independent audit pending)
 
 Calendar/Scheduling is the detailed authoritative board. Command Center is an
 overview of unassigned, due-today, overdue, at-risk, and conflicting work; quick
@@ -335,6 +346,36 @@ actions use Part 4. Paid and demo surfaces use the same mounted contract, but
 demo persistence and sessions remain server-isolated. Cover truthful loading,
 empty, restricted, stale, conflict, error, and success states plus accessible
 keyboard/dialog behavior and desktop/mobile responsive rendering.
+
+The Part 5 implementation mounts a server-classified, tenant-scoped overview
+from canonical Parts 1–4 authority and a current operator directory for
+owner/admin and active dispatcher roles. Calendar and Command Center share one
+visible preview-and-approve component for assign, reassign, unassign, schedule,
+reschedule, and dispatch. Legacy Calendar edit, drag, resize, keyboard, and touch
+entry points now create the same 15-minute non-capability preview; the legacy
+direct PATCH uniformly returns preview-required and no visible control mutates
+before a separate current human approval. Command Center displays server-owned
+category counts and records without client-side reclassification. Employees are
+denied the broad operator overview and mutations; demo remains explicitly
+non-authoritative, read-only, and isolated from paid tenant queries.
+
+The shared dialog presents exact action, appointment, target, tenant-local
+schedule, UTC-backed authority revision, independent target/schedule/dispatch
+states, hard conflicts, warning/review acknowledgements, route/recommendation
+uncertainty, expiry, reason, and dispatch-revocation consequences. Hard conflicts
+have no override. Stale, expired, denied, offline, and server-error responses
+never show optimistic success, and the current proposal is retained safely for
+retry where applicable. All stored labels and evidence render through DOM node
+creation and `textContent`. Responsive light/dark layouts include semantic
+headings/lists, focus trap/restore, Escape/cancel, aria-live status, visible
+keyboard alternatives, touch targets, and 400% reflow.
+
+No schema change is required for Part 5; migrations 001–035 remain byte-for-byte
+protected. Fresh role-separated PostgreSQL 18.4 UTC, mounted authority tests,
+the available Jest corpus, installed Chrome, and actual Playwright WebKit are
+writer evidence only until a different fresh exact-head auditor returns a
+terminal verdict. WebKit is not physical Safari, screenshots are a separate
+ledger, and user visual approval remains unclaimed.
 
 ### Part 6 — Crew Today experience (planned)
 

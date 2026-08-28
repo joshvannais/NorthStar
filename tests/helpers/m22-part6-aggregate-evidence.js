@@ -31,6 +31,8 @@ function main() {
   const matrices = manifestFiles.map(name => JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')));
   assert.deepStrictEqual(matrices.map(value => value.matrix).sort(), [...expectedMatrices].sort());
   for (const matrix of matrices) {
+    assert.ok(!JSON.stringify(matrix).includes('m22Part6Compromised'),
+      `${matrix.matrix} employee handoff manifest contains the hostile security probe`);
     assert.strictEqual(matrix.testedRevision, testedRevision);
     assert.strictEqual(matrix.testedTree, testedTree);
     assert.match(matrix.browserVersion, /^\d+\./);
@@ -50,7 +52,14 @@ function main() {
       assert.strictEqual(entry.fixtureTenantTimeZone, matrix.fixtureTenantTimeZone);
       assert.strictEqual(entry.fixtureReferenceInstant, matrix.fixtureReferenceInstant);
       assert.ok(typeof entry.stateProvenance === 'string' && entry.stateProvenance.length > 20);
+      if (entry.state === 'ready' && entry.sourceRoute === '/dashboard/today') {
+        assert.strictEqual(entry.presentationFixture,
+          'realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL');
+        assert.ok(entry.expectedVisible.some(value => value.startsWith('fixture ')),
+          `${entry.filename} lacks exact realistic visible fixture values`);
+      }
       if (['loading', 'error', 'offline', 'stale', 'restricted', 'empty'].includes(entry.state) && entry.sourceRoute === '/dashboard/today') {
+        assert.strictEqual(entry.presentationFixture, 'no private work values rendered in this non-ready or empty state');
         assert.ok(entry.expectedWithheld.some(value => value.includes('all private work records')),
           `${entry.filename} must state that private work is absent`);
         assert.ok(!entry.expectedVisible.includes('minimum job and customer essentials'),

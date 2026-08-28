@@ -162,6 +162,20 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
     expect(css).toContain('overflow-wrap: anywhere');
   });
 
+  test('keeps hostile source-to-sink proof separate from realistic employee handoff screenshots', () => {
+    const browser = source('tests/browser/m22-part6-mobile-today.js');
+    const hostileAggregate = source('tests/helpers/m22-part6-aggregate-hostile-evidence.js');
+
+    expect(browser).toContain('M22_PART6_SECURITY_EVIDENCE_DIR');
+    expect(browser).toContain('hostile security proof must be separate from employee handoff package');
+    expect(browser).toContain('installRealisticPresentation');
+    expect(browser).toContain('employee handoff UI fixture must be realistic');
+    expect(browser).toContain('hostile-source-to-sink-inert.png');
+    expect(hostileAggregate).toContain('not the realistic employee handoff package');
+    expect(hostileAggregate).toContain('executableImageElementsInTodayRecords');
+    expect(hostileAggregate).toContain('globalCompromiseFlag');
+  });
+
   test('fails closed above the record bound and always rolls back and releases', async () => {
     const { loadToday, MAXIMUM_TODAY_RECORDS } = require('../../src/scheduling/todayRepository');
     const calls = [];

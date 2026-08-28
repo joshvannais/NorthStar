@@ -20,6 +20,45 @@ const EMPLOYEE_ID = 'b2600000-0000-4000-8000-000000000002';
 const TEAMMATE_ID = 'b2600000-0000-4000-8000-000000000003';
 const CREW_ID = 'c2600000-0000-4000-8000-000000000001';
 const HOSTILE = '<img src=x onerror="globalThis.m22Part6Compromised=true">';
+const HOSTILE_MARKER = 'm22Part6Compromised=true';
+const REALISTIC = Object.freeze({
+  tenant: 'Cedar Ridge Home Services',
+  employee: 'Alex Rivera',
+  teammate: 'Morgan Chen',
+  crew: 'East Service Crew',
+  work: Object.freeze([
+    Object.freeze({ customer: 'Jamie Carter', street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110',
+      serviceType: 'Drain cleaning', jobTitle: 'Kitchen sink drain backup', instructions: 'Park in the driveway and use the side entrance.' }),
+    Object.freeze({ customer: 'Jamie Carter', street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110',
+      serviceType: 'Water heater service', jobTitle: 'Water heater safety check', instructions: 'Call on arrival; the utility room is through the rear door.' }),
+    Object.freeze({ customer: 'Jamie Carter', street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110',
+      serviceType: 'Sewer and drain', jobTitle: 'Main line inspection', instructions: 'The cleanout is beside the left garage bay.' }),
+    Object.freeze({ customer: 'Jamie Carter', street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110',
+      serviceType: 'Fixture repair', jobTitle: 'Upstairs faucet repair', instructions: 'Use shoe covers; the customer will meet you at the front door.' }),
+    Object.freeze({ customer: 'Jamie Carter', street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110',
+      serviceType: 'Leak detection', jobTitle: 'Laundry room leak diagnosis', instructions: 'Access the laundry room from the mudroom entrance.' }),
+  ]),
+});
+const REALISTIC_READY_VISIBLE = Object.freeze({
+  'employee-primary': Object.freeze([
+    'fixture employee: Alex Rivera', 'fixture direct job: Kitchen sink drain backup for Jamie Carter',
+    'fixture crew job: Water heater safety check for Jamie Carter',
+    'fixture rescheduled job: Main line inspection for Jamie Carter',
+  ]),
+  'dispatched-route-and-instructions': Object.freeze([
+    'fixture dispatched job: Kitchen sink drain backup', 'fixture customer: Jamie Carter',
+    'fixture location: 125 Maple Avenue, Riverton, MA 02110',
+    'fixture instructions: Park in the driveway and use the side entrance.',
+  ]),
+  'current-active-crew': Object.freeze([
+    'fixture crew: East Service Crew', 'fixture crew member: Morgan Chen',
+    'fixture crew job: Water heater safety check for Jamie Carter',
+  ]),
+  'crew-membership-removed': Object.freeze([
+    'fixture employee: Alex Rivera', 'fixture direct job: Kitchen sink drain backup for Jamie Carter',
+    'fixture direct rescheduled job: Main line inspection for Jamie Carter', 'current crew work absent after durable membership removal',
+  ]),
+});
 let fixtureTimeZone = 'America/New_York';
 const WITHHELD = Object.freeze([
   'SECRET_FINANCIAL_MARGIN', 'SECRET_INVOICE', 'SECRET_PAYROLL', 'SECRET_HISTORY',
@@ -92,10 +131,11 @@ async function approve(app, pool, owner, appointmentId, action, proposal) {
 }
 async function createWork(app, pool, owner, ordinal) {
   const sessionId = `sim_m22_part6_browser_${ordinal}_${crypto.randomBytes(4).toString('hex')}`;
+  const phone = `+1555010600${ordinal}`;
   const created = await request(app).post('/api/v1/simulations/leads')
     .set(owner.headers).set('X-NorthStar-Session-ID', sessionId)
     .set('Idempotency-Key', `m22-part6-browser-${ordinal}-${crypto.randomUUID()}`)
-    .send({ name: `Browser customer ${ordinal}`, service: 'plumbing', phone: '+15550106222', sessionId });
+    .send({ name: `Browser customer ${ordinal}`, service: 'plumbing', phone, sessionId });
   assert.strictEqual(created.status, 201, JSON.stringify(created.body));
   const ids = created.body.ids;
   assert.strictEqual((await pool.query(
@@ -104,12 +144,12 @@ async function createWork(app, pool, owner, ordinal) {
   )).rowCount, 1);
   await pool.query(
     `UPDATE public.canonical_customers
-        SET name=$3,email='private-history@example.test',phone='+15550106222',
+        SET name=$3,email='private-history@example.test',phone=$5,
             address=$4::jsonb
       WHERE organization_id=$1 AND id=$2`,
     [ORGANIZATION_ID, ids.customer, `Customer ${ordinal} ${HOSTILE}`, JSON.stringify({
       street: `12 Test Way ${HOSTILE}`, city: 'Boston', state: 'MA', postalCode: '02110', internalGateCode: 'SECRET-GATE',
-    })]
+    }), phone]
   );
   await pool.query(
     `UPDATE public.canonical_opportunities
@@ -124,7 +164,42 @@ async function createWork(app, pool, owner, ordinal) {
     `UPDATE public.canonical_transcripts SET transcript_text=$3
       WHERE organization_id=$1 AND id=$2`, [ORGANIZATION_ID, ids.transcript, `PRIVATE TRANSCRIPT ${HOSTILE}`]
   );
-  return ids.appointment;
+  return { ordinal, appointmentId: ids.appointment, customerId: ids.customer, opportunityId: ids.opportunity };
+}
+async function installRealisticPresentation(pool, workItems) {
+  assert.strictEqual(workItems.length, REALISTIC.work.length);
+  assert.strictEqual((await pool.query(
+    `UPDATE public.users SET name=CASE id WHEN $2 THEN $4 WHEN $3 THEN $5 ELSE name END
+      WHERE organization_id=$1 AND id IN ($2,$3)`,
+    [ORGANIZATION_ID, EMPLOYEE_ID, TEAMMATE_ID, REALISTIC.employee, REALISTIC.teammate]
+  )).rowCount, 2);
+  assert.strictEqual((await pool.query(
+    'UPDATE public.workforce_crews SET name=$3 WHERE organization_id=$1 AND id=$2',
+    [ORGANIZATION_ID, CREW_ID, REALISTIC.crew]
+  )).rowCount, 1);
+  for (let index = 0; index < workItems.length; index += 1) {
+    const item = workItems[index];
+    const realistic = REALISTIC.work[index];
+    assert.strictEqual((await pool.query(
+      `UPDATE public.canonical_customers
+          SET name=$3,address=$4::jsonb
+        WHERE organization_id=$1 AND id=$2`,
+      [ORGANIZATION_ID, item.customerId, realistic.customer, JSON.stringify({
+        street: realistic.street, city: realistic.city, state: realistic.state,
+        postalCode: realistic.postalCode, internalGateCode: 'SECRET-GATE',
+      })]
+    )).rowCount, 1);
+    assert.strictEqual((await pool.query(
+      `UPDATE public.canonical_opportunities
+          SET service_type=$3,job_scope=$4::jsonb
+        WHERE organization_id=$1 AND id=$2`,
+      [ORGANIZATION_ID, item.opportunityId, realistic.serviceType, JSON.stringify({
+        jobTitle: realistic.jobTitle, instructions: realistic.instructions,
+        internalMargin: 'SECRET_FINANCIAL_MARGIN', invoiceId: 'SECRET_INVOICE',
+        payroll: 'SECRET_PAYROLL', broadCustomerHistory: 'SECRET_HISTORY',
+      })]
+    )).rowCount, 1);
+  }
 }
 function cookies(session, origin) {
   const values = [
@@ -180,12 +255,17 @@ async function main() {
   const matrix = `${selected}-${mobile ? 'mobile' : 'desktop'}-${dark ? 'dark' : 'light'}`;
   const viewport = mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 };
   const evidenceRoot = process.env.M22_PART6_EVIDENCE_DIR ? path.resolve(process.env.M22_PART6_EVIDENCE_DIR) : null;
+  const securityEvidenceRoot = process.env.M22_PART6_SECURITY_EVIDENCE_DIR
+    ? path.resolve(process.env.M22_PART6_SECURITY_EVIDENCE_DIR) : null;
   const testedRevision = process.env.M22_PART6_TESTED_REVISION || null;
   const testedTree = process.env.M22_PART6_TESTED_TREE || null;
   if (evidenceRoot) {
     assert.match(testedRevision || '', /^[0-9a-f]{40}$/);
     assert.match(testedTree || '', /^[0-9a-f]{40}$/);
+    assert.ok(securityEvidenceRoot, 'M22_PART6_SECURITY_EVIDENCE_DIR is required with the employee handoff package');
+    assert.notStrictEqual(securityEvidenceRoot, evidenceRoot, 'hostile security proof must be separate from employee handoff package');
     fs.mkdirSync(evidenceRoot, { recursive: true });
+    fs.mkdirSync(securityEvidenceRoot, { recursive: true });
   }
   const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m22-p6-browser-'));
   const environment = ['DATABASE_URL', 'MIGRATION_DATABASE_URL', 'NODE_ENV', 'AUTH_ACCESS_SECRET', 'NORTHSTAR_DATA_DIR',
@@ -196,7 +276,8 @@ async function main() {
   const original = Object.fromEntries(environment.map(key => [key, process.env[key]]));
   const suiteDatabase = await createSuiteDatabase(`m22-p6-browser-${matrix}`);
   let roles, db, server, browser, context, ownerContext, logoutContext;
-  const external = [], browserErrors = [], network = [], responseBodies = [], responseInventory = [], responseCaptureTasks = [], screenshots = [];
+  const external = [], browserErrors = [], network = [], responseBodies = [], responseInventory = [], responseCaptureTasks = [];
+  const screenshots = [], securityScreenshots = [];
   let sameOriginResponseEvents = 0;
   try {
     roles = await createRoles(suiteDatabase, matrix);
@@ -209,7 +290,7 @@ async function main() {
     db = require('../../src/db');
     assert.strictEqual(await db.initDatabase(), true);
     const pool = db.getPool();
-    await pool.query(`INSERT INTO organizations(id,name,email) VALUES ($1,'Part 6 Browser Tenant','part6-browser@example.test')`, [ORGANIZATION_ID]);
+    await pool.query('INSERT INTO organizations(id,name,email) VALUES ($1,$2,\'part6-browser@example.test\')', [ORGANIZATION_ID, REALISTIC.tenant]);
     await pool.query(
       `INSERT INTO users(id,organization_id,name,email,password_hash,role,status)
        VALUES ($1,$4,'Owner Operator','part6-owner@example.test','not-used','owner','active'),
@@ -218,7 +299,7 @@ async function main() {
       [OWNER_ID, EMPLOYEE_ID, TEAMMATE_ID, ORGANIZATION_ID, `Alex Employee ${HOSTILE}`, `Morgan Teammate ${HOSTILE}`]
     );
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-    const business = canonicalFenceProfile({ companyName: 'Part 6 Browser Tenant' });
+    const business = canonicalFenceProfile({ companyName: REALISTIC.tenant });
     const fixturePlan = chooseFixturePlan(new Date());
     fixtureTimeZone = fixturePlan.timeZone;
     business.company.timeZone = fixturePlan.timeZone;
@@ -249,8 +330,11 @@ async function main() {
        VALUES ($1,$2,$3,'lead',$4),($1,$2,$4,'member',$4)`, [ORGANIZATION_ID, CREW_ID, EMPLOYEE_ID, TEAMMATE_ID]
     );
     const { app } = require('../../src/server');
-    const appointmentIds = [];
-    for (let ordinal = 0; ordinal < 5; ordinal += 1) appointmentIds.push(await createWork(app, pool, owner, ordinal + 1));
+    const workItems = [];
+    for (let ordinal = 0; ordinal < REALISTIC.work.length; ordinal += 1) {
+      workItems.push(await createWork(app, pool, owner, ordinal + 1));
+    }
+    const appointmentIds = workItems.map(item => item.appointmentId);
     const at = offset => instantAt(fixturePlan, offset);
     await approve(app, pool, owner, appointmentIds[0], 'assign', { target: { kind: 'profile', id: EMPLOYEE_ID } });
     await approve(app, pool, owner, appointmentIds[0], 'schedule', { scheduledStart: at(0), scheduledEnd: at(20) });
@@ -314,19 +398,24 @@ async function main() {
       const filename = path.join(evidenceRoot, `${matrix}-${label}.png`);
       await page.screenshot({ path: filename, fullPage: true });
       const nonReady = NON_READY_PRESENTATION[state];
+      const realisticVisible = nonReady ? [] : [...(REALISTIC_READY_VISIBLE[label] || [])];
+      if (!nonReady) assert.ok(realisticVisible.length > 0, `ready screenshot lacks exact realistic fixture ledger: ${label}`);
       const expectedVisible = nonReady ? [...nonReady.visible] : [
         'minimum job and customer essentials', 'current assignment, schedule and dispatch truth',
-        'provider-neutral route uncertainty', 'read-only state',
+        'provider-neutral route uncertainty', 'read-only state', ...realisticVisible,
       ];
       const expectedWithheld = [...CUSTOMER_WITHHELD, ...(nonReady ? nonReady.withheld : [])];
       const durableSession = 'mounted real PostgreSQL cookie session; nonsecret test identity';
       screenshots.push({ filename: path.basename(filename), browser: selected,
         engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         version, viewport, theme: dark ? 'dark' : 'light', realRoleIdentity: identity, assignmentMode, state,
-        testedRevision, testedTree, fixtureTenant: 'isolated disposable Part 6 Browser Tenant', fixtureTenantTimeZone: fixturePlan.timeZone,
+        testedRevision, testedTree, fixtureTenant: `isolated disposable ${REALISTIC.tenant} test tenant`, fixtureTenantTimeZone: fixturePlan.timeZone,
         fixtureReferenceInstant: fixturePlan.referenceInstant,
         sessionProvenance: stateProvenance ? `${durableSession}; ${stateProvenance}` : durableSession,
         stateProvenance: stateProvenance || 'real mounted PostgreSQL authority and transport; no synthetic state injection',
+        presentationFixture: nonReady
+          ? 'no private work values rendered in this non-ready or empty state'
+          : 'realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL',
         sourceRoute: '/dashboard/today', expectedVisible, expectedWithheld, withheldCategories: expectedWithheld,
         timestamp: new Date().toISOString() });
     }
@@ -350,6 +439,7 @@ async function main() {
     const serialized = JSON.stringify(primaryBody);
     WITHHELD.forEach(value => assert.ok(!serialized.includes(value), `withheld API category leaked: ${value}`));
     const pageText = await page.locator('#todayMain').innerText();
+    const pageRawText = await page.locator('#todayMain').textContent();
     ['Margin', 'Payroll', 'Billing', 'Subscriptions', 'Settings', 'Customer history', 'Start job', 'Arrive', 'En route', 'Complete job', 'Clock in', 'Upload photo']
       .forEach(value => assert.ok(!pageText.includes(value), `withheld DOM category leaked: ${value}`));
     assert.strictEqual(await page.locator('[data-nav-id]:not([data-nav-id="today"])').count(), 0);
@@ -360,6 +450,46 @@ async function main() {
     assert.strictEqual(await page.getByText('Assigned to you', { exact: true }).count(), 2);
     assert.strictEqual(await page.getByText('Current crew', { exact: true }).count() >= 1, true);
     assert.deepStrictEqual(Object.keys(primaryBody.data.identity).sort(), ['displayName', 'operationalRole']);
+    assert.ok(serialized.includes(HOSTILE_MARKER), 'hostile API bytes must reach the allowlisted projection for the adversarial proof');
+    assert.ok(pageRawText.includes(HOSTILE), 'hostile stored bytes must render as inert literal text for the adversarial proof');
+    if (securityEvidenceRoot) {
+      const filename = path.join(securityEvidenceRoot, `${matrix}-hostile-source-to-sink-inert.png`);
+      await page.screenshot({ path: filename, fullPage: true });
+      securityScreenshots.push({
+        filename: path.basename(filename), browser: selected,
+        engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
+        version, viewport, theme: dark ? 'dark' : 'light', testedRevision, testedTree,
+        purpose: 'separate adversarial security proof; explicitly not the employee visual handoff package',
+        authority: 'isolated disposable PostgreSQL cookie session with real tenant/member/workforce/crew scope',
+        storedProbe: HOSTILE, apiProjectionContainsLiteralProbe: true, domContainsLiteralProbeText: true,
+        executableImageElementsInTodayRecords: 0, globalCompromiseFlag: false,
+        sinkConclusion: 'hostile stored bytes remained inert text; no HTML element or script execution occurred',
+        sourceRoute: '/dashboard/today', timestamp: new Date().toISOString(),
+      });
+    }
+
+    await installRealisticPresentation(pool, workItems);
+    const realisticResponseWait = page.waitForResponse(value => value.url().includes('/api/v1/today') && value.status() === 200);
+    await page.locator('#todayRefresh').click();
+    const realisticResponse = await realisticResponseWait;
+    const realisticBody = await realisticResponse.json();
+    await page.waitForFunction(({ hostile, employee }) => {
+      const text = document.getElementById('todayMain')?.textContent || '';
+      return document.body.dataset.todayState === 'ready' && !text.includes(hostile) && text.includes(employee);
+    }, { hostile: HOSTILE, employee: REALISTIC.employee });
+    const realisticSerialized = JSON.stringify(realisticBody);
+    const realisticRawText = await page.locator('#todayMain').textContent();
+    assert.strictEqual(realisticSerialized.includes(HOSTILE_MARKER), false, 'employee handoff API fixture must be realistic');
+    assert.strictEqual(realisticRawText.includes(HOSTILE_MARKER), false, 'employee handoff UI fixture must be realistic');
+    for (const expected of [
+      REALISTIC.employee, REALISTIC.crew, REALISTIC.work[0].customer, REALISTIC.work[0].jobTitle,
+      REALISTIC.work[1].customer, REALISTIC.work[1].jobTitle, REALISTIC.work[2].customer, REALISTIC.work[2].jobTitle,
+    ]) assert.ok(realisticSerialized.includes(expected),
+      `realistic employee handoff API value missing: ${expected}; body=${realisticSerialized}`);
+    assert.strictEqual(await page.locator('#todayRecords img').count(), 0);
+    assert.strictEqual(await page.evaluate(() => Boolean(globalThis.m22Part6Compromised)), false);
+    assert.deepStrictEqual(Object.keys(realisticBody.data.identity).sort(), ['displayName', 'operationalRole']);
+    assert.strictEqual(realisticBody.data.identity.displayName, REALISTIC.employee);
     assert.strictEqual(network.some(entry => entry.pathname === '/api/auth/me'), false);
     const allowedEmployeePaths = new Set([
       '/dashboard/today', '/api/v1/today', '/js/theme.js', '/js/today-shell.js', '/js/today-page.js',
@@ -643,10 +773,11 @@ async function main() {
         engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         version, viewport, theme: dark ? 'dark' : 'light', realRoleIdentity: 'active owner with no personal assignment',
         assignmentMode: 'none', state: 'empty', testedRevision, testedTree,
-        fixtureTenant: 'isolated disposable Part 6 Browser Tenant', fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureTenant: `isolated disposable ${REALISTIC.tenant} test tenant`, fixtureTenantTimeZone: fixturePlan.timeZone,
         fixtureReferenceInstant: fixturePlan.referenceInstant,
         sessionProvenance: 'mounted real PostgreSQL owner cookie session; nonsecret test identity',
         stateProvenance: 'real mounted PostgreSQL authority and transport; no synthetic state injection',
+        presentationFixture: 'no private work values rendered in this non-ready or empty state',
         expectedVisible: ['personal empty Today', 'read-only state'],
         expectedWithheld: ['all private work records; none returned', 'employee records', 'financials', 'Mission 23 controls'],
         withheldCategories: ['all private work records; none returned', 'employee records', 'financials', 'Mission 23 controls'],
@@ -663,7 +794,7 @@ async function main() {
         engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         version, viewport, theme: dark ? 'dark' : 'light', realRoleIdentity: 'active owner reference only',
         assignmentMode: 'broad-reference-not-Today', state: 'ready', testedRevision, testedTree,
-        fixtureTenant: 'isolated disposable Part 6 Browser Tenant', fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureTenant: `isolated disposable ${REALISTIC.tenant} test tenant`, fixtureTenantTimeZone: fixturePlan.timeZone,
         fixtureReferenceInstant: fixturePlan.referenceInstant,
         sessionProvenance: 'mounted real PostgreSQL owner cookie session; nonsecret test identity',
         stateProvenance: 'real mounted PostgreSQL owner reference; not an employee Today authority claim',
@@ -691,7 +822,7 @@ async function main() {
         matrix, engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         browserVersion: version, viewport, theme: dark ? 'dark' : 'light', testedRevision, testedTree,
         realAuthority: 'disposable PostgreSQL cookie session',
-        fixtureTenant: 'Part 6 Browser Tenant (isolated disposable test database)', fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureTenant: `${REALISTIC.tenant} (isolated disposable test database)`, fixtureTenantTimeZone: fixturePlan.timeZone,
         fixtureReferenceInstant: fixturePlan.referenceInstant, expectedVisible: [
           'job title and type', 'tenant-timezone schedule', 'direct or current-crew assignment', 'dispatch truth',
           'provider-neutral unavailable route uncertainty', 'operational instructions', 'minimum customer and current crew context',
@@ -700,6 +831,19 @@ async function main() {
         screenshots,
       };
       fs.writeFileSync(path.join(evidenceRoot, `${matrix}-manifest.json`), JSON.stringify(manifest, null, 2) + '\n');
+    }
+    if (securityEvidenceRoot) {
+      for (const entry of securityScreenshots) entry.sha256 = sha256File(path.join(securityEvidenceRoot, entry.filename));
+      fs.writeFileSync(path.join(securityEvidenceRoot, `${matrix}-manifest.json`), JSON.stringify({
+        matrix,
+        packagePurpose: 'separate hostile stored-byte and DOM-sink security evidence; not employee handoff visuals',
+        testedRevision,
+        testedTree,
+        fixtureTenant: `${REALISTIC.tenant} (isolated disposable test database)`,
+        fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureReferenceInstant: fixturePlan.referenceInstant,
+        screenshots: securityScreenshots,
+      }, null, 2) + '\n');
     }
     console.log(JSON.stringify({ matrix, version, viewport, fixtureTenantTimeZone: fixturePlan.timeZone,
       fixtureReferenceInstant: fixturePlan.referenceInstant, screenshots: screenshots.length, todayResponses: responseBodies.length,

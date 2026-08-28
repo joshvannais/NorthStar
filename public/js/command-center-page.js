@@ -414,7 +414,14 @@
     });
   }
 
-  function schedulingStateChip(state) {
+  function schedulingStateItem(labelText, state) {
+    var item = element('div', 'm22-state-item');
+    item.dataset.state = state;
+    item.append(element('dt', '', labelText), element('dd', '', titleCase(state)));
+    return item;
+  }
+
+  function schedulingAttentionChip(state) {
     var chip = element('li', 'm22-state-chip', titleCase(state));
     chip.dataset.state = state;
     return chip;
@@ -448,7 +455,8 @@
       : overview.definitions[schedulingCategory]);
     categoryNames.forEach(function (name) {
       var count = name === 'all' ? overview.total : overview.counts[name];
-      var button = element('button', 'm22-category-button', titleCase(name) + ' ' + count);
+      var button = element('button', 'm22-category-button');
+      button.append(element('span', 'm22-category-label', titleCase(name)), element('span', 'm22-category-count', count));
       button.type = 'button'; button.setAttribute('aria-pressed', name === schedulingCategory ? 'true' : 'false');
       button.addEventListener('click', function () { schedulingCategory = name; renderSchedulingOverview(); });
       categories.appendChild(button);
@@ -470,14 +478,28 @@
     selected.forEach(function (record) {
       var item = element('li', 'm22-overview-record');
       item.dataset.appointmentId = record.appointmentId;
-      item.appendChild(element('h3', '', safeString(record.customer && record.customer.name, 'Customer') + ' · ' + safeString(record.work && record.work.title, 'Appointment')));
-      item.appendChild(element('p', '', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Unscheduled in ' + overview.timeZone));
-      var states = element('ul', 'm22-state-list');
-      [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
-        record.conflict.status].filter(Boolean).forEach(function (state) { states.appendChild(schedulingStateChip(state)); });
-      Object.keys(record.flags || {}).filter(function (key) { return record.flags[key] === true; })
-        .forEach(function (flag) { states.appendChild(schedulingStateChip(flag)); });
-      item.appendChild(states);
+      var summary = element('div', 'm22-record-summary');
+      summary.append(element('h3', '', safeString(record.customer && record.customer.name, 'Customer') + ' · ' + safeString(record.work && record.work.title, 'Appointment')),
+        element('p', 'm22-record-time', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Unscheduled in ' + overview.timeZone));
+      var states = element('dl', 'm22-state-summary');
+      states.append(
+        schedulingStateItem('Assignment', record.authority.targetState),
+        schedulingStateItem('Schedule', record.authority.scheduleState),
+        schedulingStateItem('Dispatch', record.authority.dispatchState)
+      );
+      var attention = [];
+      if (record.authority.needsReview === true || record.conflict && record.conflict.needsReview === true) attention.push('needs_review');
+      if (record.flags && record.flags.due === true) attention.push('due');
+      if (record.flags && record.flags.overdue === true) attention.push('overdue');
+      if (record.flags && record.flags.atRisk === true) attention.push('at_risk');
+      if (record.flags && record.flags.conflicting === true) attention.push('conflicting');
+      var uniqueAttention = Array.from(new Set(attention));
+      var attentionList = element('ul', 'm22-state-list');
+      uniqueAttention.forEach(function (state) { attentionList.appendChild(schedulingAttentionChip(state)); });
+      var status = element('div', 'm22-record-status');
+      status.appendChild(states);
+      if (uniqueAttention.length) status.appendChild(attentionList);
+      item.append(summary, status);
       if (record.conflict && record.conflict.hardConflicts && record.conflict.hardConflicts.length) {
         item.appendChild(element('p', 'm22-hard-block', record.conflict.hardConflicts.length + ' hard conflict' + (record.conflict.hardConflicts.length === 1 ? '' : 's') + '. No override is available.'));
       }
@@ -512,12 +534,34 @@
       rows.appendChild(row);
       return;
     }
-    graphs.slice(0, 8).forEach(function (graph) {
+    var visible = graphs.slice(0, 8);
+    var groups = [];
+    var groupByCustomer = new Map();
+    visible.forEach(function(graph) {
+      var key = safeString(graph.ids && graph.ids.customer, safeString(graph.customer && graph.customer.name, 'Customer'));
+      var group = groupByCustomer.get(key);
+      if (!group) {
+        group = { key: key, records: [] };
+        groupByCustomer.set(key, group);
+        groups.push(group);
+      }
+      group.records.push(graph);
+    });
+    groups.forEach(function(group) {
+      group.records.forEach(function (graph, index) {
       var row = document.createElement('tr');
-      var customerCell = document.createElement('td');
-      var link = element('a', 'command-center-record-link', safeString(graph.customer && graph.customer.name, 'Customer record'));
-      link.href = detailHref(graph);
-      customerCell.append(link, element('span', '', formatDate(graph.timestamps && graph.timestamps.createdAt) || 'Recorded time unavailable'));
+      if (index === 0) {
+        var customerCell = document.createElement('td');
+        customerCell.className = 'command-center-customer-group';
+        customerCell.rowSpan = group.records.length;
+        var link = element('a', 'command-center-record-link', safeString(graph.customer && graph.customer.name, 'Customer Record'));
+        link.href = detailHref(graph);
+        customerCell.appendChild(link);
+        customerCell.appendChild(element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records')));
+        var recordedAt = formatDate(graph.timestamps && graph.timestamps.createdAt);
+        if (recordedAt) customerCell.appendChild(element('span', 'command-center-customer-recorded-at', recordedAt));
+        row.appendChild(customerCell);
+      }
       var serviceCell = element('td', '', safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType)));
       var recorded = formatMoney(graph.estimate && graph.estimate.customerPrice);
       var valueCell = element('td', '', recorded || 'Unavailable — no recorded estimate');
@@ -525,8 +569,9 @@
       statusCell.appendChild(element('span', 'demo-status', titleCase(graph.lead && graph.lead.status)));
       var action = actionEntries(graph)[0];
       var actionCell = element('td', '', action ? action.label : 'Review complete Polaris detail');
-      row.append(customerCell, serviceCell, valueCell, statusCell, actionCell);
+      row.append(serviceCell, valueCell, statusCell, actionCell);
       rows.appendChild(row);
+      });
     });
   }
 

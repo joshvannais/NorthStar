@@ -30,7 +30,9 @@
     }
   }
   function label(value) {
-    return cleanText(value, 'unavailable').replace(/_/g, ' ');
+    return cleanText(value, 'Unavailable').replace(/[_-]+/g, ' ').replace(/\b\w/g, function(letter) {
+      return letter.toUpperCase();
+    });
   }
   function validate(data) {
     if (!data || data.version !== 'm22-part6-today-v1' || data.readOnly !== true ||
@@ -54,8 +56,7 @@
     document.body.setAttribute('data-today-state', name);
     if (name !== 'ready') {
       byId('todayRecords').replaceChildren();
-      byId('todayWorkCount').textContent = '0 appointments';
-      byId('todayCount').textContent = name === 'loading' ? 'Checking today…' : 'No work shown';
+      byId('todayCount').textContent = name === 'loading' ? 'Checking Today…' : 'No Work Shown';
     }
     byId('todayLoading').hidden = name !== 'loading';
     byId('todayWork').hidden = name !== 'ready';
@@ -153,10 +154,9 @@
   }
   function render(data) {
     var timeZone = data.day.timeZone;
-    byId('todayAuthority').textContent = cleanText(data.identity && data.identity.displayName, 'Current worker') + ' · personal work only';
+    byId('todayAuthority').textContent = cleanText(data.identity && data.identity.displayName, 'Current Worker') + ' · Personal Work Only';
     byId('todayDate').textContent = formatInstant(data.day.start, timeZone, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + ' · ' + timeZone;
-    byId('todayCount').textContent = data.records.length + (data.records.length === 1 ? ' appointment' : ' appointments');
-    byId('todayWorkCount').textContent = byId('todayCount').textContent;
+    byId('todayCount').textContent = data.records.length + (data.records.length === 1 ? ' Appointment' : ' Appointments');
     var records = byId('todayRecords');
     records.replaceChildren();
     data.records.forEach(function(record) { records.appendChild(renderRecord(record, timeZone)); });

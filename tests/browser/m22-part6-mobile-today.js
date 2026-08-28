@@ -436,6 +436,31 @@ async function main() {
     assert.deepStrictEqual(primaryBody.data.records.map(record => record.dispatch.state), ['dispatched', 'not_dispatched', 'revoked']);
     assert.ok(primaryBody.data.records.some(record => record.assignment.currentCrew));
     assert.ok(primaryBody.data.records.every(record => record.route.providerNeutral && record.route.providerCalls === 0));
+    const todayPresentation = await page.evaluate(() => ({
+      authority: document.getElementById('todayAuthority').textContent,
+      duplicateCount: document.querySelectorAll('#todayWorkCount').length,
+      labels: Array.from(document.querySelectorAll('.today-state-badge')).map(node => node.textContent.trim()),
+      todayHeaderPosition: getComputedStyle(document.querySelector('.today-header')).position,
+      mobileHeader: (() => {
+        const node = document.querySelector('.mobile-header');
+        if (!node) return null;
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return { display: style.display, position: style.position, top: rect.top, right: rect.right };
+      })(),
+      documentWidth: { client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
+    }));
+    assert.ok(todayPresentation.authority.endsWith('· Personal Work Only'), JSON.stringify(todayPresentation));
+    assert.strictEqual(todayPresentation.duplicateCount, 0, JSON.stringify(todayPresentation));
+    todayPresentation.labels.forEach(value => assert.match(value, /^[A-Z]/, `uncapitalized Today label: ${value}`));
+    assert.strictEqual(todayPresentation.todayHeaderPosition, 'static', JSON.stringify(todayPresentation));
+    assert.ok(todayPresentation.documentWidth.scroll <= todayPresentation.documentWidth.client + 2, JSON.stringify(todayPresentation));
+    if (mobile) {
+      assert.ok(todayPresentation.mobileHeader && todayPresentation.mobileHeader.display !== 'none', JSON.stringify(todayPresentation));
+      assert.strictEqual(todayPresentation.mobileHeader.position, 'static', JSON.stringify(todayPresentation));
+      assert.ok(Math.abs(todayPresentation.mobileHeader.top) <= 2, JSON.stringify(todayPresentation));
+      assert.ok(todayPresentation.mobileHeader.right <= viewport.width + 2, JSON.stringify(todayPresentation));
+    }
     const serialized = JSON.stringify(primaryBody);
     WITHHELD.forEach(value => assert.ok(!serialized.includes(value), `withheld API category leaked: ${value}`));
     const pageText = await page.locator('#todayMain').innerText();
@@ -446,7 +471,7 @@ async function main() {
     assert.strictEqual(await page.locator('#northstarQuickStartButton, #northstarQuickStartDialog').count(), 0);
     assert.strictEqual(await page.locator('#todayRecords img').count(), 0);
     assert.strictEqual(await page.evaluate(() => Boolean(globalThis.m22Part6Compromised)), false);
-    assert.strictEqual(await page.getByText('Read-only', { exact: true }).count(), 1);
+    assert.strictEqual(await page.getByText('Read-only View', { exact: true }).count(), 1);
     assert.strictEqual(await page.getByText('Assigned to you', { exact: true }).count(), 2);
     assert.strictEqual(await page.getByText('Current crew', { exact: true }).count() >= 1, true);
     assert.deepStrictEqual(Object.keys(primaryBody.data.identity).sort(), ['displayName', 'operationalRole']);
@@ -515,6 +540,21 @@ async function main() {
     const firstDisclosure = page.locator('.today-disclosure summary').first();
     if (mobile) await firstDisclosure.tap(); else { await firstDisclosure.focus(); await page.keyboard.press('Enter'); }
     assert.strictEqual(await firstDisclosure.evaluate(node => node.parentElement.open), true);
+    const disclosurePresentation = await firstDisclosure.evaluate(node => {
+      const details = node.parentElement;
+      const content = details.querySelector('.today-disclosure-content');
+      const accent = details.closest('.today-work-card').querySelector('.today-card-accent');
+      const summaryRect = node.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
+      return {
+        accentDisplay: getComputedStyle(accent).display,
+        contentBorderTop: getComputedStyle(content).borderTopColor,
+        themeBorder: getComputedStyle(document.documentElement).getPropertyValue('--theme-border').trim(),
+        verticalGap: contentRect.top - summaryRect.bottom,
+      };
+    });
+    assert.strictEqual(disclosurePresentation.accentDisplay, 'none', JSON.stringify(disclosurePresentation));
+    assert.ok(disclosurePresentation.verticalGap >= -1, JSON.stringify(disclosurePresentation));
     await capture('employee-primary', 'ready', 'active employee', 'direct-and-current-crew');
     const routeDisclosure = page.locator('.today-work-card').first().locator('.today-disclosure summary').nth(1);
     if (mobile) await routeDisclosure.tap(); else { await routeDisclosure.focus(); await page.keyboard.press('Enter'); }
@@ -698,6 +738,14 @@ async function main() {
     await page.route('**/api/v1/today', route => route.abort('internetdisconnected'), { times: 1 });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitState('error');
+    if (mobile) {
+      const reloadSpacing = await page.evaluate(() => {
+        const copy = document.getElementById('todayStateCopy').getBoundingClientRect();
+        const action = document.getElementById('todayStateAction').getBoundingClientRect();
+        return { gap: action.top - copy.bottom, copy: copy.toJSON(), action: action.toJSON() };
+      });
+      assert.ok(reloadSpacing.gap >= 12, `reload spacing ${JSON.stringify(reloadSpacing)}`);
+    }
     await capture('network-error', 'error', 'active employee', 'no-returned-records',
       'synthetic transport only: Playwright route.abort("internetdisconnected") for one /api/v1/today request; no durable authority claim');
     await page.getByRole('button', { name: 'Reload', exact: true }).click();
@@ -787,6 +835,29 @@ async function main() {
     await ownerPage.goto(origin + '/dashboard', { waitUntil: 'domcontentloaded' });
     assert.strictEqual((await commandResponse).status(), 200);
     await ownerPage.getByRole('heading', { name: 'One operating view for the day ahead.' }).waitFor();
+    await ownerPage.waitForFunction(() => document.getElementById('commandCenterScheduling').getAttribute('aria-busy') === 'false');
+    const commandPresentation = await ownerPage.evaluate(() => ({
+      schedulingTitle: document.getElementById('commandCenterSchedulingTitle').textContent,
+      records: Array.from(document.querySelectorAll('#commandCenterSchedulingRecords .m22-overview-record')).map(record => ({
+        primaryStates: Array.from(record.querySelectorAll('.m22-state-item')).map(node => node.textContent.trim()),
+        attention: Array.from(record.querySelectorAll('.m22-state-chip')).map(node => node.textContent.trim()),
+        columns: getComputedStyle(record).gridTemplateColumns,
+        clientWidth: record.clientWidth,
+        scrollWidth: record.scrollWidth,
+      })),
+      leadRows: document.querySelectorAll('#commandCenterLeadRows tr').length,
+      customerGroups: Array.from(document.querySelectorAll('#commandCenterLeadRows .command-center-customer-group')).map(cell => ({ rowSpan: cell.rowSpan, text: cell.textContent.trim() })),
+      containsRepeatedUnavailableTime: document.getElementById('commandCenterLeadRows').textContent.includes('Recorded time unavailable'),
+    }));
+    assert.strictEqual(commandPresentation.schedulingTitle, 'Owner and Dispatcher Overview');
+    commandPresentation.records.forEach(record => {
+      assert.strictEqual(record.primaryStates.length, 3, JSON.stringify(record));
+      assert.strictEqual(new Set(record.attention).size, record.attention.length, JSON.stringify(record));
+      assert.ok(record.attention.length <= 5, JSON.stringify(record));
+      assert.ok(record.scrollWidth <= record.clientWidth + 2, JSON.stringify(record));
+    });
+    assert.strictEqual(commandPresentation.containsRepeatedUnavailableTime, false, JSON.stringify(commandPresentation));
+    commandPresentation.customerGroups.forEach(group => assert.ok(group.rowSpan >= 1 && group.text.includes('work record'), JSON.stringify(group)));
     if (evidenceRoot) {
       const filename = path.join(evidenceRoot, `${matrix}-command-center-reference.png`);
       await ownerPage.screenshot({ path: filename, fullPage: true });

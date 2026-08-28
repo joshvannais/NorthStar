@@ -373,6 +373,13 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     try { await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(401); }
     finally { await runtimePool.query("UPDATE public.auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1", [sessions.employee.sessionId]); }
 
+    const accessExpiry = (await runtimePool.query(
+      'SELECT access_expires_at FROM public.auth_sessions WHERE id=$1', [sessions.employee.sessionId]
+    )).rows[0].access_expires_at;
+    await runtimePool.query("UPDATE public.auth_sessions SET access_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1", [sessions.employee.sessionId]);
+    try { await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(401); }
+    finally { await runtimePool.query('UPDATE public.auth_sessions SET access_expires_at=$2 WHERE id=$1', [sessions.employee.sessionId, accessExpiry]); }
+
     await runtimePool.query("UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND id=$2", [IDS.organization, IDS.employee]);
     try { await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(403); }
     finally { await runtimePool.query("UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND id=$2", [IDS.organization, IDS.employee]); }

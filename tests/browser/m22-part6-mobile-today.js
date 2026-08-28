@@ -197,6 +197,7 @@ async function main() {
   const suiteDatabase = await createSuiteDatabase(`m22-p6-browser-${matrix}`);
   let roles, db, server, browser, context, ownerContext, logoutContext;
   const external = [], browserErrors = [], network = [], responseBodies = [], responseInventory = [], responseCaptureTasks = [], screenshots = [];
+  let sameOriginResponseEvents = 0;
   try {
     roles = await createRoles(suiteDatabase, matrix);
     process.env.DATABASE_URL = roles.runtimeUrl;
@@ -286,6 +287,7 @@ async function main() {
       const target = new URL(value.url());
       const captureResponse = (async () => {
         if (target.origin !== origin) return;
+        sameOriginResponseEvents += 1;
         const headers = value.headers();
         const contentType = String(headers['content-type'] || '').toLowerCase();
         let body = null;
@@ -459,12 +461,17 @@ async function main() {
       logoutControl.click(),
     ]);
     assert.strictEqual(logoutResult.status(), 200);
+    const logoutBody = await logoutResult.json();
+    assert.deepStrictEqual(Object.keys(logoutBody).sort(), ['requestId', 'success']);
+    assert.strictEqual(logoutBody.success, true);
     await logoutPage.waitForURL(value => new URL(value).pathname === '/login');
     assert.strictEqual(logoutExternal.length, 0);
     assert.strictEqual(logoutNetwork.some(entry => entry.pathname === '/api/auth/me'), false);
     assert.strictEqual(logoutNetwork.some(entry => entry.method === 'POST' && entry.pathname === '/api/auth/logout'), true);
     assert.strictEqual((await pool.query('SELECT status FROM auth_sessions WHERE id=$1', [logoutEmployee.sessionId])).rows[0].status, 'revoked');
     assert.strictEqual(await logoutPage.locator('.today-work-card').count(), 0);
+    const logoutPageContent = await logoutPage.content();
+    WITHHELD.forEach(value => assert.ok(!logoutPageContent.includes(value), `cached logout page bytes: ${value}`));
     await logoutContext.close();
     logoutContext = null;
 
@@ -587,6 +594,7 @@ async function main() {
     }
 
     await Promise.all(responseCaptureTasks);
+    assert.strictEqual(responseInventory.length, sameOriginResponseEvents, 'every same-origin employee response event must be inventoried');
     network.forEach(entry => assert.ok(allowedEmployeePaths.has(entry.pathname), `unapproved employee network destination: ${JSON.stringify(entry)}`));
     responseInventory.forEach(entry => {
       if (!entry.body) return;

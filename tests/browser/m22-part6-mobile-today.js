@@ -482,6 +482,8 @@ async function main() {
           assert.ok(logoutForwardedResponse, 'real logout response must be captured before browser navigation');
           assert.strictEqual(logoutForwardedResponse.status, value.status());
           body = logoutForwardedResponse.body;
+        } else if (target.pathname === '/api/telemetry' && value.status() === 202) {
+          body = '';
         } else if (/(?:json|javascript|text\/|css|html)/.test(contentType)) {
           try { body = (await value.body()).toString('utf8'); } catch (_error) { body = null; }
         }

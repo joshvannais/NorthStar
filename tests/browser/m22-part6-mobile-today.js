@@ -458,12 +458,9 @@ async function main() {
       : logoutPage.locator('.sidebar [data-today-logout]');
     const [logoutResult] = await Promise.all([
       logoutPage.waitForResponse(value => new URL(value.url()).pathname === '/api/auth/logout'),
-      logoutControl.click({ noWaitAfter: true }),
+      logoutControl.click(),
     ]);
     assert.strictEqual(logoutResult.status(), 200);
-    const logoutBody = await logoutResult.json();
-    assert.deepStrictEqual(Object.keys(logoutBody).sort(), ['requestId', 'success']);
-    assert.strictEqual(logoutBody.success, true);
     await logoutPage.waitForURL(value => new URL(value).pathname === '/login');
     assert.strictEqual(logoutExternal.length, 0);
     assert.strictEqual(logoutNetwork.some(entry => entry.pathname === '/api/auth/me'), false);

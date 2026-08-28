@@ -458,7 +458,7 @@ async function main() {
       : logoutPage.locator('.sidebar [data-today-logout]');
     const [logoutResult] = await Promise.all([
       logoutPage.waitForResponse(value => new URL(value.url()).pathname === '/api/auth/logout'),
-      logoutControl.click(),
+      logoutControl.click({ noWaitAfter: true }),
     ]);
     assert.strictEqual(logoutResult.status(), 200);
     const logoutBody = await logoutResult.json();

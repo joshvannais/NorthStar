@@ -51,6 +51,7 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
   test('uses a Today-only bootstrap with no broad account or navigation projection', () => {
     const shell = source('public/js/today-shell.js');
     const html = source('public/dashboard/today.html');
+    const browser = source('tests/browser/m22-part6-mobile-today.js');
     const employeeBundle = `${html}\n${shell}\n${source('public/js/today-page.js')}`;
     const bootstrapBundle = `${html}\n${shell}`;
 
@@ -66,6 +67,9 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
     for (const privateIdentityField of ['email', 'phone']) {
       expect(bootstrapBundle.toLowerCase()).not.toContain(privateIdentityField);
     }
+    expect(browser).toContain("target.pathname === '/api/auth/logout'");
+    expect(browser).toContain('await route.fetch()');
+    expect(browser).toContain('every logout/redirect request must have exactly one inventoried response');
   });
 
   test('constructs a real tenant-zone browser fixture at every representative UTC hour and DST boundary', () => {

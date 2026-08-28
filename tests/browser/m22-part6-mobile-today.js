@@ -438,16 +438,62 @@ async function main() {
     await logoutContext.addCookies(cookies(logoutEmployee, origin));
     await logoutContext.addInitScript(installSessionMetadata, `employee-logout-${matrix}`);
     const logoutExternal = [];
+    const logoutNetwork = [];
+    const logoutResponseInventory = [];
+    const logoutResponseCaptureTasks = [];
+    const logoutRequestFailures = [];
+    let logoutForwardedResponse = null;
+    let logoutSameOriginResponseEvents = 0;
     await logoutContext.route('**/*', async route => {
       const target = new URL(route.request().url());
       if (target.origin !== origin) { logoutExternal.push(target.href); await route.abort(); return; }
+      if (target.pathname === '/api/auth/logout') {
+        const forwarded = await route.fetch();
+        const body = await forwarded.body();
+        logoutForwardedResponse = {
+          method: route.request().method(), pathname: target.pathname, status: forwarded.status(),
+          contentType: String(forwarded.headers()['content-type'] || '').toLowerCase(), body: body.toString('utf8'),
+        };
+        await route.fulfill({ response: forwarded, body });
+        return;
+      }
       await route.continue();
     });
     const logoutPage = await logoutContext.newPage();
-    const logoutNetwork = [];
     logoutPage.on('request', requestValue => {
       const target = new URL(requestValue.url());
       if (target.origin === origin) logoutNetwork.push({ method: requestValue.method(), pathname: target.pathname });
+    });
+    logoutPage.on('requestfailed', requestValue => {
+      const target = new URL(requestValue.url());
+      if (target.origin === origin) logoutRequestFailures.push({
+        method: requestValue.method(), pathname: target.pathname, failure: requestValue.failure(),
+      });
+    });
+    logoutPage.on('response', value => {
+      const target = new URL(value.url());
+      if (target.origin !== origin) return;
+      logoutSameOriginResponseEvents += 1;
+      const captureResponse = (async () => {
+        const headers = value.headers();
+        const contentType = String(headers['content-type'] || '').toLowerCase();
+        let body = null;
+        if (target.pathname === '/api/auth/logout') {
+          assert.ok(logoutForwardedResponse, 'real logout response must be captured before browser navigation');
+          assert.strictEqual(logoutForwardedResponse.status, value.status());
+          body = logoutForwardedResponse.body;
+        } else if (/(?:json|javascript|text\/|css|html)/.test(contentType)) {
+          try { body = (await value.body()).toString('utf8'); } catch (_error) { body = null; }
+        }
+        logoutResponseInventory.push({
+          method: value.request().method(), pathname: target.pathname, status: value.status(),
+          contentType, contentLength: headers['content-length'] || null, body,
+        });
+      })();
+      logoutResponseCaptureTasks.push(Promise.race([
+        captureResponse,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`logout response body capture timed out: ${target.pathname}`)), 10000)),
+      ]));
     });
     await logoutPage.goto(origin + '/dashboard/today', { waitUntil: 'domcontentloaded' });
     await logoutPage.waitForFunction(() => document.body.dataset.todayState === 'ready');
@@ -462,9 +508,38 @@ async function main() {
     ]);
     assert.strictEqual(logoutResult.status(), 200);
     await logoutPage.waitForURL(value => new URL(value).pathname === '/login');
+    await logoutPage.waitForLoadState('networkidle');
+    await Promise.all(logoutResponseCaptureTasks);
     assert.strictEqual(logoutExternal.length, 0);
+    assert.deepStrictEqual(logoutRequestFailures, []);
     assert.strictEqual(logoutNetwork.some(entry => entry.pathname === '/api/auth/me'), false);
     assert.strictEqual(logoutNetwork.some(entry => entry.method === 'POST' && entry.pathname === '/api/auth/logout'), true);
+    const allowedLogoutPaths = new Set([
+      ...allowedEmployeePaths, '/api/auth/logout', '/login', '/js/auth-session.js', '/js/password-fields.js',
+      '/js/product-telemetry.js', '/api/telemetry',
+    ]);
+    logoutNetwork.forEach(entry => assert.ok(allowedLogoutPaths.has(entry.pathname),
+      `unapproved employee logout/redirect destination: ${JSON.stringify(entry)}`));
+    assert.strictEqual(logoutResponseInventory.length, logoutSameOriginResponseEvents,
+      'every logout/redirect response event must be inventoried');
+    const counted = entries => entries.reduce((result, entry) => {
+      const key = `${entry.method} ${entry.pathname}`;
+      result[key] = (result[key] || 0) + 1;
+      return result;
+    }, {});
+    assert.deepStrictEqual(counted(logoutResponseInventory), counted(logoutNetwork),
+      'every logout/redirect request must have exactly one inventoried response');
+    logoutResponseInventory.forEach(entry => {
+      if (!entry.body) return;
+      WITHHELD.forEach(value => assert.ok(!entry.body.includes(value),
+        `withheld logout/redirect response bytes in ${entry.pathname}: ${value}`));
+    });
+    assert.ok(logoutForwardedResponse, 'logout must traverse the real mounted route');
+    assert.strictEqual(logoutForwardedResponse.method, 'POST');
+    assert.strictEqual(logoutForwardedResponse.status, 200);
+    const logoutBody = JSON.parse(logoutForwardedResponse.body);
+    assert.deepStrictEqual(Object.keys(logoutBody).sort(), ['requestId', 'success']);
+    assert.strictEqual(logoutBody.success, true);
     assert.strictEqual((await pool.query('SELECT status FROM auth_sessions WHERE id=$1', [logoutEmployee.sessionId])).rows[0].status, 'revoked');
     assert.strictEqual(await logoutPage.locator('.today-work-card').count(), 0);
     const logoutPageContent = await logoutPage.content();

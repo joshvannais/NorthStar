@@ -1,0 +1,496 @@
+{
+  "version": "m22-part7-browser-trace-v1",
+  "matrix": "chrome-desktop-light",
+  "browser": {
+    "requested": "chrome",
+    "version": "151.0.7922.175",
+    "physicalSafari": false
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "theme": "light",
+  "reducedMotion": "reduce",
+  "testedRevision": "703335495a8d431633c9c3011481dfa0cfb3ea8f",
+  "testedTree": "743b3b54c2a448295b5fb7bb7fe8ecb3ee71d139",
+  "appointmentId": "39ba758b-ee64-53ad-8880-3563a3b98542",
+  "assignmentRevision": 7,
+  "assignmentDigest": "d8e097678e92a65b0d1fefa5a9b2b0fb255c7416c1e09b1a5f4214966772f385",
+  "target": {
+    "kind": "crew",
+    "id": "c7700000-0000-4000-8000-000000000001"
+  },
+  "dispatchState": "revoked",
+  "surfaces": [
+    "calendar",
+    "command-center-reference",
+    "employee-today"
+  ],
+  "commandCenterPrimaryThemeReference": true,
+  "employeeCrewRevocation": "prior appointment absent after durable membership deletion",
+  "externalRequests": [],
+  "providerCalls": 0,
+  "providerCredentials": "all omitted",
+  "network": [
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/dashboard/calendar"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/scheduling-time-contract.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/scheduling-approval.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/canonical-intelligence.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/demo-runtime.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/demo-runtime.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/theme.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/style.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/auth-session.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/trial-status.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/site-professionalism.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/polaris-api.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/simulator.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/api.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/event-bus.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/business-models.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/app-store.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/polaris-engine.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/notification-service.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/scheduling-approval-ui.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/calendar-engine.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/command-center-contract.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/nav-component.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/product-telemetry.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/account/subscription"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/workspace-guidance.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/workspace-guidance.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/v1/canonical/compat/leads"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/v1/canonical/compat/calendar"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/assets/logo.png"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/v1/canonical/compat/calendar"
+    },
+    {
+      "identity": "owner",
+      "method": "POST",
+      "path": "/api/telemetry"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/assets/favicon.svg"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/dashboard"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/theme.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/command-center-contract.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/demo-runtime.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/auth-session.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/style.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/homepage-refresh.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/demo-dashboard.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/demo-runtime.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/polaris-card.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/scheduling-approval.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/site-professionalism.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/assets/logo.png"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/polaris-card.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/scheduling-time-contract.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/scheduling-approval-ui.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/command-center-page.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/nav-component.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/v1/command-center/workspace"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/product-telemetry.js"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/css/workspace-guidance.css"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/js/workspace-guidance.js"
+    },
+    {
+      "identity": "owner",
+      "method": "POST",
+      "path": "/api/telemetry"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/assets/logo.png"
+    },
+    {
+      "identity": "owner",
+      "method": "GET",
+      "path": "/api/v1/command-center/workspace"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/dashboard/today"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/js/theme.js"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/style.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/homepage-refresh.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/demo-dashboard.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/today.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/site-professionalism.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/assets/logo.png"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/js/today-shell.js"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/js/today-page.js"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/api/v1/today"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/assets/logo.png"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/api/v1/today"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/dashboard/today"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/js/theme.js"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/style.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/homepage-refresh.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/demo-dashboard.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/today.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/css/site-professionalism.css"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/assets/logo.png"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/js/today-shell.js"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/js/today-page.js"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/api/v1/today"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/api/v1/today"
+    },
+    {
+      "identity": "employee",
+      "method": "GET",
+      "path": "/assets/logo.png"
+    }
+  ],
+  "pageErrors": [],
+  "screenshots": [
+    {
+      "filename": "chrome-desktop-light-calendar-exact-revision-7.png",
+      "sha256": "1de602f59f3fb030e5b39490fc4e8bb868c843492ff78c6bbf320bf795ae0479",
+      "surface": "calendar",
+      "state": "exact-revision-7"
+    },
+    {
+      "filename": "chrome-desktop-light-command-center-reference-exact-revision-7.png",
+      "sha256": "b209f6fe23a9041a16a755d11224bcd8aae5c3a9003e74c30f3def57dc564138",
+      "surface": "command-center-reference",
+      "state": "exact-revision-7"
+    },
+    {
+      "filename": "chrome-desktop-light-employee-today-crew-reschedule-dispatch-revoked.png",
+      "sha256": "a71e0bf940c5a5687dc2b482dcffa42b478520c477c7779be1f98938553390af",
+      "surface": "employee-today",
+      "state": "crew-reschedule-dispatch-revoked"
+    },
+    {
+      "filename": "chrome-desktop-light-employee-today-crew-membership-revoked.png",
+      "sha256": "d131ac6da75dc64ba7329bcc8c3adc271f24ca5e5cd7cd561f561d8f4a83c797",
+      "surface": "employee-today",
+      "state": "crew-membership-revoked"
+    }
+  ],
+  "webkitIsPhysicalSafari": false,
+  "userVisualApproval": "separate and unclaimed"
+}

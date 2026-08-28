@@ -19,6 +19,15 @@
     Object.freeze({ id: 'settings', label: 'Settings', resource: 'settings', paidPath: '/dashboard/settings', demoPath: '/demo/settings' }),
     Object.freeze({ id: 'integrations', label: 'Integrations', resource: 'integrations', paidPath: '/dashboard/integrations', demoPath: '/demo/integrations' }),
   ]);
+  var TODAY_ROUTE = Object.freeze({ id: 'today', label: 'Today', resource: 'dashboard', paidPath: '/dashboard/today', demoPath: null });
+  // Today is signed-in workforce authority only. Keeping it outside ROUTES
+  // preserves the accepted account-free demo contract and prevents a demo
+  // route from being mistaken for employee scope.
+  var PAID_ROUTES = Object.freeze([ROUTES[0], TODAY_ROUTE].concat(ROUTES.slice(1)));
+
+  function routesForMode(mode) {
+    return mode === 'demo' ? ROUTES : PAID_ROUTES;
+  }
 
   function normalizePath(value) {
     var path = String(value || '/').split('?')[0].split('#')[0];
@@ -36,15 +45,15 @@
   function routeForPath(value) {
     var path = normalizePath(value);
     if (path === '/demo-dashboard') return ROUTES[0];
-    for (var index = 0; index < ROUTES.length; index += 1) {
-      if (ROUTES[index].paidPath === path || ROUTES[index].demoPath === path) return ROUTES[index];
+    for (var index = 0; index < PAID_ROUTES.length; index += 1) {
+      if (PAID_ROUTES[index].paidPath === path || PAID_ROUTES[index].demoPath === path) return PAID_ROUTES[index];
     }
     return null;
   }
 
   function destinationPath(id, mode) {
-    for (var index = 0; index < ROUTES.length; index += 1) {
-      if (ROUTES[index].id === id) return mode === 'demo' ? ROUTES[index].demoPath : ROUTES[index].paidPath;
+    for (var index = 0; index < PAID_ROUTES.length; index += 1) {
+      if (PAID_ROUTES[index].id === id) return mode === 'demo' ? PAID_ROUTES[index].demoPath : PAID_ROUTES[index].paidPath;
     }
     return null;
   }
@@ -59,7 +68,7 @@
         typeof value.integrity.digest !== 'string' || !/^[0-9a-f]{64}$/.test(value.integrity.digest)) {
       throw new Error('The Command Center workspace contract is unavailable.');
     }
-    var expected = ROUTES.map(function (route) { return route.id; });
+    var expected = routesForMode(expectedMode).map(function (route) { return route.id; });
     var actual = value.navigation.map(function (route) { return route && route.id; });
     if (expected.length !== actual.length || expected.some(function (id, index) { return actual[index] !== id; })) {
       throw new Error('The Command Center navigation contract is unavailable.');
@@ -104,10 +113,13 @@
     CONTRACT_VERSION: CONTRACT_VERSION,
     WORKSPACE_CONTRACT: WORKSPACE_CONTRACT,
     ROUTES: ROUTES,
+    PAID_ROUTES: PAID_ROUTES,
+    TODAY_ROUTE: TODAY_ROUTE,
     destinationPath: destinationPath,
     modeForPath: modeForPath,
     normalizePath: normalizePath,
     routeForPath: routeForPath,
+    routesForMode: routesForMode,
     validateWorkspace: validateWorkspace,
   });
 });

@@ -26,6 +26,11 @@ const ROUTES = Object.freeze([
   Object.freeze({ id: 'settings', path: '/demo/settings', paidPath: '/dashboard/settings', marker: 'Settings', surface: '.settings-section' }),
   Object.freeze({ id: 'integrations', path: '/demo/integrations', paidPath: '/dashboard/integrations', marker: 'Integrations', surface: '#integrationAuthority' }),
 ]);
+const PAID_NAV_ROUTES = Object.freeze([
+  ROUTES[0],
+  Object.freeze({ id: 'today', path: null, paidPath: '/dashboard/today', marker: 'Today', surface: '#todayMain' }),
+  ...ROUTES.slice(1),
+]);
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
   Object.freeze({ label: 'tablet', width: 1024, height: 768 }),
@@ -769,11 +774,11 @@ async function inspectPaidCurrent(page, route, viewport, expectedLeadHref) {
 
   assert.strictEqual(snapshot.pathname, route.paidPath, route.paidPath + ' exact paid route');
   assert.strictEqual(snapshot.toolbar, false, route.paidPath + ' has no demo controls');
-  assert.strictEqual(snapshot.sidebarLinks.length, ROUTES.length, route.paidPath + ' full paid desktop navigation');
-  assert.strictEqual(snapshot.mobileLinks.length, ROUTES.length, route.paidPath + ' full paid mobile navigation');
-  assert.deepStrictEqual(snapshot.sidebarLinks.map(item => item.href), ROUTES.map(item => item.paidPath),
+  assert.strictEqual(snapshot.sidebarLinks.length, PAID_NAV_ROUTES.length, route.paidPath + ' full paid desktop navigation');
+  assert.strictEqual(snapshot.mobileLinks.length, PAID_NAV_ROUTES.length, route.paidPath + ' full paid mobile navigation');
+  assert.deepStrictEqual(snapshot.sidebarLinks.map(item => item.href), PAID_NAV_ROUTES.map(item => item.paidPath),
     route.paidPath + ' exact paid desktop destinations');
-  assert.deepStrictEqual(snapshot.mobileLinks.map(item => item.href), ROUTES.map(item => item.paidPath),
+  assert.deepStrictEqual(snapshot.mobileLinks.map(item => item.href), PAID_NAV_ROUTES.map(item => item.paidPath),
     route.paidPath + ' exact paid mobile destinations');
   assert.deepStrictEqual(snapshot.activeSidebar, [route.id], route.paidPath + ' paid desktop active destination');
   assert.deepStrictEqual(snapshot.activeMobile, [route.id], route.paidPath + ' paid mobile active destination');

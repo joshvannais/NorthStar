@@ -12,11 +12,14 @@ terminally released. Part 2 was independently accepted, normally merged at
 `98bd64733cca439fa28d022ef68457ecd3c5f7ac`, automatically deployed, and
 terminally released. Part 3 was independently accepted, normally merged at
 `76943b124d4978af5cb7eeaecf9fdfc46307ec6e`, automatically deployed, and
-terminally released. Part 4 is corrected on its narrow writer branch after the
-first exact-head audit required two bounded changes; the corrected head awaits
-a different fresh independent audit and release. Parts 5–7 remain planned and
-must not begin before the prior part is independently accepted, normally
-merged, automatically deployed, health-clean, and passively accepted.
+terminally released. Part 4 was independently accepted, normally merged at
+`e20facc5937dc0581c9194ddf70b331b49de5188`, automatically deployed, and
+terminally released. Part 5 was independently accepted, normally merged at
+`8d5f18ed02b2edd201664a75c5cd726edcce1bd9`, automatically deployed, and
+terminally released. Part 6 is implemented on its narrow sole-writer branch and
+remains audit-pending. Part 7 must not begin before Part 6 is independently
+accepted, normally merged, automatically deployed, health-clean, and passively
+accepted.
 
 ## Non-negotiable boundaries
 
@@ -470,13 +473,66 @@ opens a second data transaction; failures roll back and release the connection.
 No schema or migration changed. Another different fresh exact-head audit remains
 mandatory before ready, merge, or release.
 
-### Part 6 — Crew Today experience (planned)
+### Part 6 — Crew Today experience (implemented; independent audit pending)
 
-Deliver the mobile-first self/current-crew view of assigned work, schedule and
-dispatch facts, route implications, instructions, and minimum permitted
-customer/job/crew context. Exclude margins, internal costs, payroll, billing,
-subscriptions, settings, broad customer data, other workers' schedules, and all
-Mission 23 execution controls.
+The mounted `/dashboard/today.html` and `GET /api/v1/today` surface deliver a
+mobile-first, employee-safe view of only work assigned directly to the current
+active workforce profile or assigned to a crew in which that profile has a
+current active membership. Owner, admin, and dispatcher sessions remain bound
+to that same personal/current-crew scope. The endpoint accepts no client scope
+parameters and derives the current cookie session, tenant membership, active
+user, workforce profile and operational role, tenant IANA time zone, active
+crew memberships, local-day bounds, and returned work bytes from one owned,
+bounded, read-only repeatable-read PostgreSQL snapshot on the same client.
+Authority or serialization divergence fails closed; rollback and release remain
+mandatory on every path.
+
+The projection reuses the current appointment-bound assignment authority and
+exposes only the appointment/job title and type, truthful current schedule and
+dispatch states, assignment kind and the current worker or crew label, minimum
+service address/customer contact, bounded current operational instructions,
+current crew name and current teammate labels, and provider-neutral route
+implications. Part 3 currently records route evidence as unavailable without a
+separately authorized durable source, so Today truthfully renders
+`needs_review`/unavailable with uncertainty and performs zero provider calls.
+It never promotes recommendation evidence into route truth. Unassigned,
+other-worker, inactive or removed-crew, cross-tenant, and unrelated work are
+absent. Revocation replaces prior rendered records with a restricted or empty
+state instead of leaving stale bytes in the DOM.
+
+No margin, internal cost, payroll, estimate, invoice, payment, subscription,
+settings, configuration, broad customer history, other-worker directory or
+schedule, owner-only Polaris cost intelligence, raw audit/recommendation bytes,
+hidden secret, or Mission 23 execution control appears in the PostgreSQL
+projection, JSON response, network trace, or DOM. Hostile durable strings remain
+raw authoritative bytes in PostgreSQL/API and reach the browser only through
+DOM creation and `textContent`. The page is read-only: its only operational
+controls reload the bounded read or disclose already returned instructions,
+route uncertainty, and current-crew context.
+
+The Today presentation reuses the accepted Command Center tokens, typography,
+page-title treatment, gutters, card rhythm, badges, state panels, header/footer,
+and light/dark behavior while retaining an employee-specific mobile hierarchy.
+It is tested at narrow mobile and desktop widths for touch, keyboard/focus,
+loading, empty, error, offline, restricted, stale, 200%/400% zoom, and reflow.
+No customer-facing footer contains version, debug, or roadmap copy; no demo
+simulation affordance is copied to the paid employee surface. Shared-component
+changes are limited to the paid navigation contract and page classification
+needed to mount Today; the demo route contract remains unchanged.
+
+No migration is required. Migrations 001–035 remain byte-for-byte unchanged.
+The committed `outputs/m22-part6-writer/employee-only-screenshots` package uses
+only disposable PostgreSQL test tenants, distinct test identities, mounted
+cookie sessions, current member/workforce/crew authorities, installed Chrome,
+and actual Playwright WebKit. Its machine/human manifest records exact tested
+revision/tree, browser engine/version, viewport, theme, identity role,
+direct-versus-crew mode, UI state, nonsecret fixture provenance, expected
+visible fields, withheld categories, source route, timestamp, screenshot
+hashes, and paired Command Center references. WebKit is not physical Safari;
+user visual approval remains separate and unclaimed. After the Part 6 release,
+the Mission 22 lead must copy this immutable in-repository package to the
+already verified canonical OneDrive evidence/screenshots destination and
+surface key views in the master chat; this writer does not write OneDrive.
 
 ### Part 7 — Mission-wide acceptance and release (planned)
 

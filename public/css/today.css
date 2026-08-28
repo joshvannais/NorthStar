@@ -1,0 +1,165 @@
+.today-page { overflow-x: clip; }
+.today-page .command-center-blueprint-shell { min-width: 0; padding: 0; }
+.today-header { position: sticky; }
+.today-refresh {
+  min-height: 44px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface);
+  cursor: pointer;
+  font: inherit;
+}
+.today-refresh:disabled { cursor: wait; opacity: 0.68; }
+.today-main { width: min(calc(100% - 32px), 1040px); padding-top: clamp(26px, 5vw, 52px); }
+.today-page-title { align-items: flex-end; margin-bottom: 22px; }
+.today-page-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.today-page-title .demo-panel-kicker { margin-bottom: 6px; }
+.today-page-title h1 {
+  margin: 0;
+  color: var(--theme-text);
+  font-size: clamp(34px, 6vw, 58px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.today-page-title p:not(.demo-panel-kicker) { max-width: 62ch; margin: 10px 0 0; color: var(--theme-muted); line-height: 1.55; }
+.today-readonly-badge,
+.today-state-badge,
+.today-assignment-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 11px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  color: var(--theme-muted);
+  background: var(--theme-surface-soft);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.today-scope-note,
+.today-state-panel,
+.today-work-card {
+  border: 1px solid var(--theme-border);
+  border-radius: 18px;
+  background: var(--theme-surface);
+  box-shadow: var(--shadow-sm);
+}
+.today-scope-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-left: 4px solid var(--northstar-brand-gold);
+}
+.today-scope-note h2 { margin: 0 0 4px; color: var(--theme-text); font-size: 15px; }
+.today-scope-note p { margin: 0; color: var(--theme-muted); font-size: 13px; line-height: 1.5; }
+.today-scope-note > span { flex: 0 0 auto; color: var(--brand-700); font-size: 12px; font-weight: 800; }
+.today-live-state { min-height: 22px; margin: 0 0 14px; color: var(--theme-muted); font-size: 13px; }
+.today-loading { display: grid; gap: 12px; padding: 24px; border: 1px solid var(--theme-border); border-radius: 18px; background: var(--theme-surface); }
+.today-skeleton {
+  width: 100%;
+  height: 18px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--theme-surface-soft) 20%, color-mix(in srgb, var(--theme-surface-soft) 65%, var(--northstar-brand-gold)) 48%, var(--theme-surface-soft) 76%);
+  background-size: 220% 100%;
+  animation: today-shimmer 1.4s linear infinite;
+}
+.today-skeleton-title { width: 46%; height: 28px; }
+.today-skeleton-short { width: 70%; }
+@keyframes today-shimmer { to { background-position: -220% 0; } }
+.today-state-panel {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: clamp(20px, 5vw, 34px);
+}
+.today-state-icon { color: var(--northstar-brand-gold); font-size: 28px; }
+.today-state-panel h2 { margin: 0 0 6px; color: var(--theme-text); font-size: 20px; }
+.today-state-panel p { margin: 0; color: var(--theme-muted); line-height: 1.55; }
+.today-state-action { min-height: 44px; }
+.today-work-list { margin-top: 6px; }
+.today-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.today-section-heading h2 { margin: 0; color: var(--theme-text); font-size: clamp(20px, 4vw, 26px); }
+.today-work-list ol { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.today-work-card { min-width: 0; overflow: hidden; }
+.today-card-accent { height: 4px; background: linear-gradient(90deg, var(--northstar-brand-gold), var(--brand-500)); }
+.today-card-body { display: grid; gap: 18px; padding: clamp(18px, 4vw, 26px); }
+.today-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.today-card-heading h3 { margin: 0; color: var(--theme-text); font-size: clamp(19px, 4vw, 24px); line-height: 1.2; overflow-wrap: anywhere; }
+.today-card-service { margin: 6px 0 0; color: var(--theme-muted); font-size: 13px; overflow-wrap: anywhere; }
+.today-badges { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+.today-state-badge[data-state="dispatched"] { color: #065f46; border-color: #a7f3d0; background: #ecfdf5; }
+.today-state-badge[data-state="revoked"],
+.today-state-badge[data-state="needs_review"] { color: #92400e; border-color: #fde68a; background: #fffbeb; }
+.today-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.today-detail {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface-soft);
+}
+.today-detail-label { margin: 0 0 5px; color: var(--brand-700); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.today-detail-value { margin: 0; color: var(--theme-text); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.today-detail-sub { margin: 4px 0 0; color: var(--theme-muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.today-disclosure {
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface-soft);
+  overflow: hidden;
+}
+.today-disclosure summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 12px 14px;
+  color: var(--theme-text);
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+.today-disclosure summary::-webkit-details-marker { display: none; }
+.today-disclosure summary::after { content: '+'; color: var(--brand-700); font-size: 20px; }
+.today-disclosure[open] summary::after { content: '−'; }
+.today-disclosure-content { display: grid; gap: 8px; padding: 0 14px 14px; color: var(--theme-muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.today-disclosure-content p { margin: 0; }
+.today-team-list { margin: 4px 0 0; padding-left: 20px; }
+.today-team-list li + li { margin-top: 3px; }
+.today-page button:focus-visible,
+.today-page a:focus-visible,
+.today-page summary:focus-visible { outline: 3px solid var(--brand-500); outline-offset: 3px; }
+[data-theme="dark"] .today-state-badge[data-state="dispatched"] { color: #a7f3d0; border-color: rgba(52,211,153,.35); background: rgba(6,95,70,.34); }
+[data-theme="dark"] .today-state-badge[data-state="revoked"],
+[data-theme="dark"] .today-state-badge[data-state="needs_review"] { color: #fde68a; border-color: rgba(251,191,36,.35); background: rgba(120,53,15,.35); }
+@media (max-width: 768px) {
+  .today-main { width: min(calc(100% - 24px), 1040px); padding-top: 28px; }
+  .today-header { position: static; }
+  .today-header .demo-dashboard-brand { display: none; }
+  .today-header .demo-dashboard-header-inner { min-height: 54px; justify-content: flex-end; }
+  .today-card-heading { display: grid; }
+  .today-badges { justify-content: flex-start; }
+  .today-detail-grid { grid-template-columns: 1fr; }
+  .today-state-panel { grid-template-columns: auto minmax(0,1fr); }
+  .today-state-action { grid-column: 1 / -1; width: 100%; }
+}
+@media (max-width: 390px) {
+  .today-main { width: min(calc(100% - 20px), 1040px); }
+  .today-page-title { align-items: flex-start; }
+  .today-page-actions { width: 100%; justify-content: flex-start; }
+  .today-scope-note,
+  .today-section-heading { align-items: flex-start; flex-direction: column; }
+  .today-scope-note > span { align-self: flex-start; }
+  .today-card-body { padding: 16px; }
+  .today-readonly-badge { align-self: flex-start; }
+  .demo-dashboard-footer { padding-bottom: 98px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .today-page *, .today-page *::before, .today-page *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+@media (forced-colors: active) {
+  .today-card-accent { background: CanvasText; }
+  .today-scope-note { border-left-color: CanvasText; }
+}

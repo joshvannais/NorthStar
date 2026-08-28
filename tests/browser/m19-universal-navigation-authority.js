@@ -15,6 +15,7 @@ const { app } = require('../../src/server');
 const BASE_RED = process.env.M19_NAV_BASE_RED === '1';
 const EXPECTED_NAVIGATION = Object.freeze([
   Object.freeze({ id: 'command-center', href: '/dashboard', label: 'Command Center' }),
+  Object.freeze({ id: 'today', href: '/dashboard/today', label: 'Today' }),
   Object.freeze({ id: 'polaris', href: '/dashboard/polaris', label: 'POLARIS' }),
   Object.freeze({ id: 'leads', href: '/dashboard/leads', label: 'Leads' }),
   Object.freeze({ id: 'communications', href: '/dashboard/communications', label: 'Communications' }),

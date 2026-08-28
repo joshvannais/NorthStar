@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Your current direct and crew-assigned NorthStar work for today.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101217" media="(prefers-color-scheme: dark)">
+  <title>Today — NorthStar</title>
+  <script src="/js/theme.js"></script>
+  <script src="/js/command-center-contract.js"></script>
+  <script src="/js/auth-session.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/homepage-refresh.css">
+  <link rel="stylesheet" href="/css/demo-dashboard.css">
+  <link rel="stylesheet" href="/css/today.css">
+  <link rel="icon" href="/assets/logo.png">
+  <link rel="stylesheet" href="/css/site-professionalism.css">
+</head>
+<body class="demo-dashboard-page command-center-blueprint-page today-page" data-today-state="loading">
+  <a class="skip-link" href="#todayMain">Skip to Today</a>
+
+  <div class="app-layout">
+    <main class="main-content command-center-blueprint-shell" id="todayMain" tabindex="-1" aria-labelledby="todayTitle">
+      <header class="demo-dashboard-header command-center-blueprint-header today-header">
+        <div class="demo-dashboard-header-inner">
+          <a class="demo-dashboard-brand northstar-lockup" href="/dashboard/today" aria-label="NorthStar Today">
+            <img src="/assets/logo.png" alt="">
+            <span>NorthStar</span>
+          </a>
+          <div class="demo-dashboard-header-actions">
+            <span class="demo-data-pill" id="todayAuthority">Personal work only</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="demo-dashboard-main command-center-blueprint-main today-main">
+        <div class="page-header today-page-title">
+          <div>
+            <p class="demo-panel-kicker">Your work</p>
+            <h1 id="todayTitle">Today</h1>
+            <p id="todayDate">Your current direct and crew-assigned appointments.</p>
+          </div>
+          <div class="today-page-actions">
+            <span class="today-readonly-badge" aria-label="Read-only view">Read-only</span>
+            <button class="btn btn-secondary today-refresh" id="todayRefresh" type="button">Reload Today</button>
+          </div>
+        </div>
+
+        <section class="today-scope-note" aria-labelledby="todayScopeTitle">
+          <div>
+            <h2 id="todayScopeTitle">Only work currently assigned to you</h2>
+            <p>Direct assignments and your current crews appear here. This view does not change job or field status.</p>
+          </div>
+          <span id="todayCount">Checking today…</span>
+        </section>
+
+        <p class="today-live-state" id="todayStatus" role="status" aria-live="polite" aria-atomic="true">Loading your current work…</p>
+
+        <section class="today-loading" id="todayLoading" aria-label="Loading Today">
+          <div class="today-skeleton today-skeleton-title"></div>
+          <div class="today-skeleton"></div>
+          <div class="today-skeleton today-skeleton-short"></div>
+        </section>
+
+        <section class="today-state-panel" id="todayStatePanel" aria-labelledby="todayStateTitle" hidden>
+          <div class="today-state-icon" aria-hidden="true">✦</div>
+          <div>
+            <h2 id="todayStateTitle">Today is unavailable</h2>
+            <p id="todayStateCopy">Reload to try again.</p>
+          </div>
+          <button class="btn btn-secondary today-state-action" id="todayStateAction" type="button">Reload</button>
+        </section>
+
+        <section class="today-work-list" id="todayWork" aria-labelledby="todayWorkTitle" hidden>
+          <div class="today-section-heading">
+            <div>
+              <p class="demo-panel-kicker">Schedule</p>
+              <h2 id="todayWorkTitle">Current work for today</h2>
+            </div>
+            <span class="demo-count-pill" id="todayWorkCount">0 appointments</span>
+          </div>
+          <ol id="todayRecords"></ol>
+        </section>
+      </div>
+
+      <footer class="footer northstar-site-footer demo-dashboard-footer" data-northstar-site-footer>
+        <nav class="footer-links" aria-label="NorthStar information">
+          <a href="/">Home</a><a href="/#how-it-works">How It Works</a><a href="/#pricing">Pricing</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refund">Refunds</a><a href="/legal">Legal</a>
+        </nav>
+        <p>© 2026 NorthStar Solutions LLC. All rights reserved.</p>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/js/today-page.js"></script>
+  <script src="/js/nav-component.js"></script>
+  <script>NavComponent.init('today');</script>
+</body>
+</html>

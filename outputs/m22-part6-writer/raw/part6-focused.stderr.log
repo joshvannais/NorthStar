@@ -1,0 +1,5 @@
+Test Suites: 2 passed, 2 total
+Tests:       12 passed, 12 total
+Snapshots:   0 total
+Time:        5.018 s
+Ran all test suites matching tests/integration/m22-part6-mobile-today-postgres.test.js|tests/unit/m22-part6-mobile-today.test.js.

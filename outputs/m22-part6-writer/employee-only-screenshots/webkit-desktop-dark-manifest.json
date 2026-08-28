@@ -1,0 +1,451 @@
+{
+  "matrix": "webkit-desktop-dark",
+  "engineLabel": "Playwright WebKit (not physical Safari)",
+  "browserVersion": "26.5",
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "theme": "dark",
+  "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+  "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+  "realAuthority": "disposable PostgreSQL cookie session",
+  "fixtureTenant": "Part 6 Browser Tenant (isolated disposable test database)",
+  "expectedVisible": [
+    "job title and type",
+    "tenant-timezone schedule",
+    "direct or current-crew assignment",
+    "dispatch truth",
+    "provider-neutral unavailable route uncertainty",
+    "operational instructions",
+    "minimum customer and current crew context"
+  ],
+  "withheldCategories": [
+    "financials and prices",
+    "billing and subscription settings",
+    "broad customer history",
+    "other workers schedules",
+    "owner-only Polaris cost intelligence",
+    "Mission 23 execution controls",
+    "provider credentials and live calls"
+  ],
+  "screenshots": [
+    {
+      "filename": "webkit-desktop-dark-employee-primary.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "direct-and-current-crew",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:49.869Z",
+      "sha256": "8c3f2666b920067c15f870e5f7a69ceb3baf7fe8ca79a317c9aea3dfdd43ba2e"
+    },
+    {
+      "filename": "webkit-desktop-dark-dispatched-route-and-instructions.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "direct-dispatched",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:49.983Z",
+      "sha256": "9abc200c6a7e9e373cd8a404b86f7c4a7903a9e4db6e9f21298ce86286ceb013"
+    },
+    {
+      "filename": "webkit-desktop-dark-current-active-crew.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee and current crew",
+      "assignmentMode": "crew-scheduled-not-dispatched",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:50.088Z",
+      "sha256": "00ed36d38ea9d27c0ea17170eaf0a6741ffd6c853235015388b708b2f81ad2f2"
+    },
+    {
+      "filename": "webkit-desktop-dark-loading.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "pending-authoritative-read",
+      "state": "loading",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:50.440Z",
+      "sha256": "f7f867b98e3e9a0bcf567af31a2e67f9211f338aeade2eea4beebbac21ec6797"
+    },
+    {
+      "filename": "webkit-desktop-dark-network-error.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "error",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:50.640Z",
+      "sha256": "4f11b2dd5ea80b50f9984d875acee6e668109894781d6d49553693e51d135764"
+    },
+    {
+      "filename": "webkit-desktop-dark-offline.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "offline",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:50.988Z",
+      "sha256": "f326cc2c83ec5d9e07dfc0d4aec2468f3c9e67fe1bd6fc3a75c091a54d84525f"
+    },
+    {
+      "filename": "webkit-desktop-dark-stale-reload.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "stale",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:51.164Z",
+      "sha256": "a7096629952ac707a708540b37dbd3ae7ca7739fd4a655539ff5329dc0274519"
+    },
+    {
+      "filename": "webkit-desktop-dark-crew-membership-removed.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee removed from crew",
+      "assignmentMode": "direct-only",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:51.564Z",
+      "sha256": "fefb739db175561054974ea8a715575f97dac52d69dfa777809a5600ecc54bfc"
+    },
+    {
+      "filename": "webkit-desktop-dark-session-revoked.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "revoked employee session",
+      "assignmentMode": "none",
+      "state": "restricted",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:51.785Z",
+      "sha256": "99ddde8a0660b4decd2a6814101dc242aa835566ccac78630e8a4e602eab8162"
+    },
+    {
+      "filename": "webkit-desktop-dark-employee-no-work-unassigned.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "unassigned-and-not-current-crew",
+      "state": "empty",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:30:52.732Z",
+      "sha256": "9bf82f616e2d17c4696cfe4e946de56257b37e30bb35303ff018cbb3992e76f4"
+    },
+    {
+      "filename": "webkit-desktop-dark-no-work-empty.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active owner with no personal assignment",
+      "assignmentMode": "none",
+      "state": "empty",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
+      "expectedVisible": [
+        "personal empty Today",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "employee records",
+        "financials",
+        "Mission 23 controls"
+      ],
+      "sourceRoute": "/dashboard/today",
+      "timestamp": "2026-08-28T01:30:53.293Z",
+      "sha256": "adda210441f152517d2ebb6c702e378f476bf8fcc799f42f103bacd43677c63d"
+    },
+    {
+      "filename": "webkit-desktop-dark-command-center-reference.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active owner reference only",
+      "assignmentMode": "broad-reference-not-Today",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
+      "expectedVisible": [
+        "Command Center design reference"
+      ],
+      "withheldCategories": [
+        "not an employee Today authority claim"
+      ],
+      "sourceRoute": "/dashboard",
+      "timestamp": "2026-08-28T01:30:53.676Z",
+      "sha256": "aa0d781d84036554af7392775baaddc5a49add67441191ffb607a40476e72d59"
+    }
+  ]
+}

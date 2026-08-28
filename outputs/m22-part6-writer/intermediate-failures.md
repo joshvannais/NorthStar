@@ -47,6 +47,13 @@
     new mounted `public/js/today-page.js`. Only that exact new customer script
     was added to the authorized tracked-script list; no missing, retired, or
     unrelated script was allowed.
+12. The first explicit Parts 1–6 compatibility command after the terminal full
+    run selected only two real files because several requested filenames were
+    stale and omitted the required disposable PostgreSQL run identity. That
+    harness invocation produced `2/2` failed suites and `31/31` failed tests
+    before application execution. The terminal command used the 13 exact
+    repository paths plus a distinct run identity and passed `13/13` suites and
+    `169/169` tests. No product assertion was weakened.
 
 These are preserved as intermediate evidence and are not reclassified as
 passes. Terminal results are recorded separately.

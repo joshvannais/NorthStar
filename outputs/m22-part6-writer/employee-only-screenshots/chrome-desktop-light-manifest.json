@@ -1,0 +1,451 @@
+{
+  "matrix": "chrome-desktop-light",
+  "engineLabel": "Installed Google Chrome",
+  "browserVersion": "151.0.7922.173",
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "theme": "light",
+  "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+  "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+  "realAuthority": "disposable PostgreSQL cookie session",
+  "fixtureTenant": "Part 6 Browser Tenant (isolated disposable test database)",
+  "expectedVisible": [
+    "job title and type",
+    "tenant-timezone schedule",
+    "direct or current-crew assignment",
+    "dispatch truth",
+    "provider-neutral unavailable route uncertainty",
+    "operational instructions",
+    "minimum customer and current crew context"
+  ],
+  "withheldCategories": [
+    "financials and prices",
+    "billing and subscription settings",
+    "broad customer history",
+    "other workers schedules",
+    "owner-only Polaris cost intelligence",
+    "Mission 23 execution controls",
+    "provider credentials and live calls"
+  ],
+  "screenshots": [
+    {
+      "filename": "chrome-desktop-light-employee-primary.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "direct-and-current-crew",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:53.074Z",
+      "sha256": "aec22ee3f7cd618838ab83adafbd3b68b6f6526469b3e9343949c40b0e6acd4c"
+    },
+    {
+      "filename": "chrome-desktop-light-dispatched-route-and-instructions.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "direct-dispatched",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:53.689Z",
+      "sha256": "74898935b64f8da7dd765f2d2459b4a3dfddfa4c043ea4f564b053c71ec8026d"
+    },
+    {
+      "filename": "chrome-desktop-light-current-active-crew.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee and current crew",
+      "assignmentMode": "crew-scheduled-not-dispatched",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:53.828Z",
+      "sha256": "18e21f0de0e696581d9c9249e5abf7e989e2abc7f7de69dad7e9668535d8efed"
+    },
+    {
+      "filename": "chrome-desktop-light-loading.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "pending-authoritative-read",
+      "state": "loading",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:54.262Z",
+      "sha256": "f608588a2f596eaa039d9303961d344e117efdede995ab276bb2402751c3beb0"
+    },
+    {
+      "filename": "chrome-desktop-light-network-error.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "error",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:54.513Z",
+      "sha256": "b45c33f3ea8c0520838b0749c7270fd70b05670d4f82dd530dd1f0af056bafea"
+    },
+    {
+      "filename": "chrome-desktop-light-offline.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "offline",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:54.706Z",
+      "sha256": "2db205d2ce6082b76db236b7b2afb7613330e5bdc6a368349fdcfa530cf17a8f"
+    },
+    {
+      "filename": "chrome-desktop-light-stale-reload.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "stale",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:54.898Z",
+      "sha256": "24bfbc81f2eff755bd47892540988a4825d75bef950fb2e8f82833687eb021d1"
+    },
+    {
+      "filename": "chrome-desktop-light-crew-membership-removed.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee removed from crew",
+      "assignmentMode": "direct-only",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:55.212Z",
+      "sha256": "48bcb14ec8465d7f6c7a93ce0f074adfb6a9416c4051c3bf9edc71996cb3940a"
+    },
+    {
+      "filename": "chrome-desktop-light-session-revoked.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "revoked employee session",
+      "assignmentMode": "none",
+      "state": "restricted",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:55.341Z",
+      "sha256": "b889a19ee30457e8802f99f25fd35abdbfc853123a9baff28d445c613c73aaa5"
+    },
+    {
+      "filename": "chrome-desktop-light-employee-no-work-unassigned.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "unassigned-and-not-current-crew",
+      "state": "empty",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T01:29:56.304Z",
+      "sha256": "deacfffd40eaeb0b062daf903c0f4ef57c855ecc36601915b7ad0506508f671e"
+    },
+    {
+      "filename": "chrome-desktop-light-no-work-empty.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active owner with no personal assignment",
+      "assignmentMode": "none",
+      "state": "empty",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
+      "expectedVisible": [
+        "personal empty Today",
+        "read-only state"
+      ],
+      "withheldCategories": [
+        "employee records",
+        "financials",
+        "Mission 23 controls"
+      ],
+      "sourceRoute": "/dashboard/today",
+      "timestamp": "2026-08-28T01:29:56.699Z",
+      "sha256": "b33cc3f29be6ef4d11f2457259949cbd36c48a3dc31b96d3f49b63f6827682d5"
+    },
+    {
+      "filename": "chrome-desktop-light-command-center-reference.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.173",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "light",
+      "realRoleIdentity": "active owner reference only",
+      "assignmentMode": "broad-reference-not-Today",
+      "state": "ready",
+      "testedRevision": "dcd860524c9242a6c774e349e63091f92646b246",
+      "testedTree": "9163cc43eddd557eecb0afe8510a73a8c6553bff",
+      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
+      "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
+      "expectedVisible": [
+        "Command Center design reference"
+      ],
+      "withheldCategories": [
+        "not an employee Today authority claim"
+      ],
+      "sourceRoute": "/dashboard",
+      "timestamp": "2026-08-28T01:29:57.258Z",
+      "sha256": "a3ae0ab586632a1e1bd78fffcea46b73308dff81e54003828d68a23495b3c51d"
+    }
+  ]
+}

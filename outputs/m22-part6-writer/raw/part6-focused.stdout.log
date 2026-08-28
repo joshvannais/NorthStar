@@ -1,0 +1,453 @@
+  console.log
+    [DB] Migration applied: 001_initial_schema.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 002_seed_data.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 003_voice_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 004_canonical_persistence_v2.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 005_canonical_organization_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 006_canonical_voice_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 007_canonical_tax_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 008_canonical_demo_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 009_canonical_voice_provider_identity.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 010_account_session_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 011_oauth_authorization_states.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 012_account_verification_trial.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 015_workforce_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 016_tenant_asset_catalogue.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 017_retell_webhook_replay_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 018_canonical_map_preferences.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 019_account_email_outbox.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 020_canonical_workforce_access_roles.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 021_bounded_api_observability.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 022_demo_command_center_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 023_homepage_demo_admission.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 024_homepage_verified_purge_receipt.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 025_provider_agnostic_knowledge_registry.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 026_canonical_knowledge_review_publication.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 027_canonical_knowledge_audit_graph_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 028_canonical_knowledge_immutable_lifecycle.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 029_canonical_knowledge_transactional_sync.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 030_canonical_knowledge_sync_revocation.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 031_canonical_knowledge_sync_recovery_lifecycle.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 032_canonical_schedule_assignment_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 033_canonical_schedule_time_evidence.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 034_schedule_availability_conflict_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 035_schedule_human_preview_approval.sql
+
+      at log (src/db.js:1312:42)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'a7d3e8c4-a62d-42ae-b08c-b55a66a6b40f',
+      methodClass: 'POST',
+      durationMs: 176,
+      statusCode: 201
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '9e3d5ab2-c829-4d25-9343-3631a20892ed',
+      methodClass: 'POST',
+      durationMs: 239,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '7516385c-5ed6-483e-bded-d09b33c597dc',
+      methodClass: 'POST',
+      durationMs: 147,
+      statusCode: 201
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'd9e44305-492b-4179-9a17-fd18399c1f4a',
+      methodClass: 'POST',
+      durationMs: 179,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'bf1d8f4b-cb41-407e-9da2-798ea17f3b85',
+      methodClass: 'POST',
+      durationMs: 145,
+      statusCode: 201
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'e83442f7-d81e-473e-a8bc-0b0f171d87ce',
+      methodClass: 'POST',
+      durationMs: 175,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '3c3dd0ac-d25a-41cf-9f17-8c6788c1c35e',
+      methodClass: 'POST',
+      durationMs: 142,
+      statusCode: 201
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '59319113-b909-4ec9-b289-bd989b025c61',
+      methodClass: 'POST',
+      durationMs: 176,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'b9e18ead-3e1e-4bd3-9bf0-f35855405a18',
+      methodClass: 'POST',
+      durationMs: 140,
+      statusCode: 201
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'da22e6e7-617f-433e-9f91-e3fd0fb0b247',
+      methodClass: 'POST',
+      durationMs: 180,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '5fea7410-25c1-4d69-84eb-9f68b7b05858',
+      methodClass: 'POST',
+      durationMs: 144,
+      statusCode: 201
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'bc84c703-a9e5-4544-bccd-620d55c375df',
+      methodClass: 'POST',
+      durationMs: 171,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'e2b67576-c9e7-4bc6-a116-a478fb8f1d90',
+      methodClass: 'POST',
+      durationMs: 138,
+      statusCode: 201
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '99a97b6a-e414-4db5-8e62-5bcd66ff3f23',
+      methodClass: 'POST',
+      durationMs: 165,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '8e5e4922-ba51-4e0d-8465-b69207983a37',
+      methodClass: 'GET',
+      durationMs: 16,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'cbaa05cc-3313-479d-8065-81eef3a8691e',
+      methodClass: 'GET',
+      durationMs: 2,
+      statusCode: 400
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'd7ae4b7c-b551-4053-b6b8-f4b9450d1c13',
+      methodClass: 'POST',
+      durationMs: 1,
+      statusCode: 404
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '68c825bb-da62-4c33-8bce-019536ccf8e9',
+      methodClass: 'GET',
+      durationMs: 15,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '369f4751-f021-4513-b271-8aa35ccfa8b9',
+      methodClass: 'GET',
+      durationMs: 16,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'da3be2c7-8219-4bad-aa3b-b54788e581c4',
+      methodClass: 'GET',
+      durationMs: 15,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '9e6a2a1b-9a09-497c-9d11-4765bb1e8a36',
+      methodClass: 'GET',
+      durationMs: 2,
+      statusCode: 401
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '2c5b93c4-3e1e-45e8-b3f9-c7aa22d01745',
+      methodClass: 'GET',
+      durationMs: 2,
+      statusCode: 403
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '3bfe29b1-82d2-435e-886d-681e343e6aee',
+      methodClass: 'GET',
+      durationMs: 2,
+      statusCode: 403
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: '822d4897-ad8f-41a8-9326-564cfc556b16',
+      methodClass: 'GET',
+      durationMs: 16,
+      statusCode: 200
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+

@@ -1,0 +1,3 @@
+response.json: Protocol error (Network.getResponseBody): No resource with given identifier found
+Response body is not available for a response that was navigated away from. Read response.body() before triggering any navigation.
+    at main (C:\Users\joshv\Documents\Codex\2026-08-26\northstar-mission-22\work\m22-part6-writer\tests\browser\m22-part6-mobile-today.js:464:43)

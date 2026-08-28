@@ -10,6 +10,7 @@ const NAV_PATH = path.join(ROOT, 'public', 'js', 'nav-component.js');
 
 const EXPECTED_NAVIGATION = Object.freeze([
   Object.freeze({ id: 'command-center', href: '/dashboard', resource: 'dashboard' }),
+  Object.freeze({ id: 'today', href: '/dashboard/today', resource: 'dashboard' }),
   Object.freeze({ id: 'polaris', href: '/dashboard/polaris', resource: 'ai' }),
   Object.freeze({ id: 'leads', href: '/dashboard/leads', resource: 'leads' }),
   Object.freeze({ id: 'communications', href: '/dashboard/communications', resource: 'calls' }),

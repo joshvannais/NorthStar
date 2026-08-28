@@ -35,6 +35,7 @@ const { AssetCatalogueService } = require('./assets/service');
 const { createAssetCatalogueRouter } = require('./routes/assets');
 const { createIntegrationStatusRouter } = require('./routes/integrationStatus');
 const { createCommandCenterRouter } = require('./routes/commandCenter');
+const { createTodayRouter } = require('./routes/today');
 const { createKnowledgeManagementRouter } = require('./routes/knowledgeManagement');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
 const { HomepageDemoAdmissionHousekeepingWorker } = require('./services/homepageDemoAdmission');
@@ -96,6 +97,7 @@ const pages = {
   '/accept-invitation': 'public/accept-invitation.html',
   '/account/pending': 'public/account/pending.html',
   '/dashboard': 'public/demo-dashboard.html',
+  '/dashboard/today': 'public/dashboard/today.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',
@@ -215,6 +217,7 @@ app.all('/api/admin/users', legacyAdminDisabled);
 // ── /api/v1/* routes — registered BEFORE /api to avoid interception by apiRoutes' global requireAuth
 const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1/command-center', createCommandCenterRouter());
+app.use('/api/v1/today', createTodayRouter());
 app.use('/api/v1', simulationsRoutes);
 app.use('/api/v1/canonical', createCanonicalRouter());
 // Canonical compatibility routes precede legacy dashboard/public routers so

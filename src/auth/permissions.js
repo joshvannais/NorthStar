@@ -71,7 +71,7 @@ const PERMISSIONS = {
 
 // The server permission matrix is the visibility authority. The browser keeps
 // labels and icons only; it never derives destination visibility from a role.
-const NAVIGATION_DESTINATIONS = Object.freeze(commandCenterContract.ROUTES.map(destination => Object.freeze({
+const NAVIGATION_DESTINATIONS = Object.freeze(commandCenterContract.PAID_ROUTES.map(destination => Object.freeze({
   id: destination.id,
   href: destination.paidPath,
   resource: destination.resource,

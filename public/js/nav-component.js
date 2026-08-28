@@ -5,7 +5,7 @@
  * Usage: <script src="/js/nav-component.js"></script>
  *        NavComponent.init('page-name');
  * 
- * Where 'page-name' is one of: command-center, polaris, leads, communications,
+ * Where 'page-name' is one of: command-center, today, polaris, leads, communications,
  *   calendar, team, business-profile, settings, integrations
  */
 (function() {
@@ -16,6 +16,7 @@
 
   var NAV_ITEMS = [
     { id: 'command-center',   href: '/dashboard',                  label: 'Command Center',   svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' },
+    { id: 'today',            href: '/dashboard/today',            label: 'Today',            svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-5"/></svg>' },
     { id: 'polaris',          href: '/dashboard/polaris',          label: 'POLARIS',           svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' },
     { id: 'leads',            href: '/dashboard/leads',            label: 'Leads',             svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
     { id: 'communications',   href: '/dashboard/communications',   label: 'Communications',    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>' },
@@ -29,10 +30,11 @@
   // Labels/icons remain presentation-only. The paid paths and ordering come
   // from the same UMD contract consumed by server permissions and demo routes.
   var routeContract = window.NorthStarCommandCenterContract;
-  if (!routeContract || !Array.isArray(routeContract.ROUTES) || routeContract.ROUTES.length !== NAV_ITEMS.length) {
+  var paidRoutes = routeContract && routeContract.PAID_ROUTES;
+  if (!routeContract || !Array.isArray(paidRoutes) || paidRoutes.length !== NAV_ITEMS.length) {
     NAV_ITEMS = [];
   } else {
-    NAV_ITEMS = routeContract.ROUTES.map(function(route, index) {
+    NAV_ITEMS = paidRoutes.map(function(route, index) {
       var presentation = NAV_ITEMS[index];
       if (!presentation || presentation.id !== route.id || route.paidPath !== presentation.href) return null;
       return {
@@ -42,7 +44,7 @@
         svg: presentation.svg,
       };
     }).filter(Boolean);
-    if (NAV_ITEMS.length !== routeContract.ROUTES.length) NAV_ITEMS = [];
+    if (NAV_ITEMS.length !== paidRoutes.length) NAV_ITEMS = [];
   }
 
   function makeNavLinks(isMobile, items) {
@@ -129,18 +131,25 @@
           break;
         }
       }
-      var contractRoute = routeContract && routeContract.ROUTES && routeContract.ROUTES.find(function(route) {
+      var contractRoute = routeContract && routeContract.PAID_ROUTES && routeContract.PAID_ROUTES.find(function(route) {
         return route.id === projected.id;
       });
       var expectedHref = contractRoute && mode === 'demo' ? contractRoute.demoPath : canonical && canonical.href;
       if (!canonical || !contractRoute || expectedHref !== projected.href) return null;
       allowed[projected.id] = true;
     }
-    return NAV_ITEMS.filter(function(item) { return allowed[item.id] === true; }).map(function(item) {
+    var projectedItems = NAV_ITEMS.filter(function(item) { return allowed[item.id] === true; }).map(function(item) {
       if (mode !== 'demo') return item;
-      var contractRoute = routeContract.ROUTES.find(function(route) { return route.id === item.id; });
+      var contractRoute = routeContract.PAID_ROUTES.find(function(route) { return route.id === item.id; });
       return { id: item.id, href: contractRoute.demoPath, label: item.label, svg: item.svg };
     });
+    // Today is an employee-minimized surface even when the signed-in person also
+    // has broad owner or dispatcher authority elsewhere. Its navigation must not
+    // enumerate those broader surfaces or imply that Today grants access to them.
+    if (ACTIVE_PAGE === 'today') {
+      projectedItems = projectedItems.filter(function(item) { return item.id === 'today'; });
+    }
+    return projectedItems;
   }
 
   function removeGeneratedMobileNav() {
@@ -302,25 +311,31 @@
         }
 
         root.setAttribute('data-northstar-navigation', 'ready');
-        if (!document.querySelector('link[data-northstar-workspace-guidance]')) {
-          var guidanceStyles = document.createElement('link');
-          guidanceStyles.rel = 'stylesheet';
-          guidanceStyles.href = '/css/workspace-guidance.css';
-          guidanceStyles.dataset.northstarWorkspaceGuidance = 'true';
-          document.head.appendChild(guidanceStyles);
-        }
-        var startGuidance = function () {
-          if (window.NorthStarWorkspaceGuidance) {
-            window.NorthStarWorkspaceGuidance.init({ mode: mode, activePage: ACTIVE_PAGE });
+        // The existing paid Quick Start enumerates Command Center, Business
+        // Profile, Settings, and Integrations. That setup authority is useful on
+        // broad operator pages but is intentionally not applicable to the
+        // minimized employee Today surface.
+        if (ACTIVE_PAGE !== 'today') {
+          if (!document.querySelector('link[data-northstar-workspace-guidance]')) {
+            var guidanceStyles = document.createElement('link');
+            guidanceStyles.rel = 'stylesheet';
+            guidanceStyles.href = '/css/workspace-guidance.css';
+            guidanceStyles.dataset.northstarWorkspaceGuidance = 'true';
+            document.head.appendChild(guidanceStyles);
           }
-        };
-        if (window.NorthStarWorkspaceGuidance) startGuidance();
-        else if (!document.querySelector('script[data-northstar-workspace-guidance]')) {
-          var guidanceScript = document.createElement('script');
-          guidanceScript.src = '/js/workspace-guidance.js';
-          guidanceScript.dataset.northstarWorkspaceGuidance = 'true';
-          guidanceScript.addEventListener('load', startGuidance, { once: true });
-          document.head.appendChild(guidanceScript);
+          var startGuidance = function () {
+            if (window.NorthStarWorkspaceGuidance) {
+              window.NorthStarWorkspaceGuidance.init({ mode: mode, activePage: ACTIVE_PAGE });
+            }
+          };
+          if (window.NorthStarWorkspaceGuidance) startGuidance();
+          else if (!document.querySelector('script[data-northstar-workspace-guidance]')) {
+            var guidanceScript = document.createElement('script');
+            guidanceScript.src = '/js/workspace-guidance.js';
+            guidanceScript.dataset.northstarWorkspaceGuidance = 'true';
+            guidanceScript.addEventListener('load', startGuidance, { once: true });
+            document.head.appendChild(guidanceScript);
+          }
         }
         window.dispatchEvent(new CustomEvent('northstar:navigation-ready', {
           detail: Object.freeze({ activePage: ACTIVE_PAGE })

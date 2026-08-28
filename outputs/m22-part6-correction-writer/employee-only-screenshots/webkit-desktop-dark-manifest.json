@@ -1,0 +1,619 @@
+{
+  "matrix": "webkit-desktop-dark",
+  "engineLabel": "Playwright WebKit (not physical Safari)",
+  "browserVersion": "26.5",
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "theme": "dark",
+  "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+  "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+  "realAuthority": "disposable PostgreSQL cookie session",
+  "fixtureTenant": "Cedar Ridge Home Services (isolated disposable test database)",
+  "fixtureTenantTimeZone": "Pacific/Honolulu",
+  "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+  "expectedVisible": [
+    "job title and type",
+    "tenant-timezone schedule",
+    "direct or current-crew assignment",
+    "dispatch truth",
+    "provider-neutral unavailable route uncertainty",
+    "operational instructions",
+    "minimum customer and current crew context"
+  ],
+  "withheldCategories": [
+    "financials and prices",
+    "billing and subscription settings",
+    "broad customer history",
+    "other workers schedules",
+    "owner-only Polaris cost intelligence",
+    "Mission 23 execution controls",
+    "provider credentials and live calls"
+  ],
+  "screenshots": [
+    {
+      "filename": "webkit-desktop-dark-employee-primary.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "direct-and-current-crew",
+      "state": "ready",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state",
+        "fixture employee: Alex Rivera",
+        "fixture direct job: Kitchen sink drain backup for Jamie Carter",
+        "fixture crew job: Water heater safety check for Jamie Carter",
+        "fixture rescheduled job: Main line inspection for Jamie Carter"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T10:51:11.092Z",
+      "sha256": "22d70a9d8f098695f7a6573b2d4a5cdc9171da27e3993bb5d7256980e542f804"
+    },
+    {
+      "filename": "webkit-desktop-dark-dispatched-route-and-instructions.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "direct-dispatched",
+      "state": "ready",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state",
+        "fixture dispatched job: Kitchen sink drain backup",
+        "fixture customer: Jamie Carter",
+        "fixture location: 125 Maple Avenue, Riverton, MA 02110",
+        "fixture instructions: Park in the driveway and use the side entrance."
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T10:51:11.199Z",
+      "sha256": "a0116fc2f28043a752aefde4cf36c66fd8e8ef4b765c72b4fdd979037053352e"
+    },
+    {
+      "filename": "webkit-desktop-dark-current-active-crew.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee and current crew",
+      "assignmentMode": "crew-scheduled-not-dispatched",
+      "state": "ready",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state",
+        "fixture crew: East Service Crew",
+        "fixture crew member: Morgan Chen",
+        "fixture crew job: Water heater safety check for Jamie Carter"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T10:51:11.306Z",
+      "sha256": "b2d232f466f6e83cb0d7ba2acf24b52eb920ed60db493e2a2fc6aa2835a22521"
+    },
+    {
+      "filename": "webkit-desktop-dark-loading.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "pending-authoritative-read",
+      "state": "loading",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic transport timing only: Playwright delays one real /api/v1/today request before continuing it; no durable authority claim",
+      "stateProvenance": "synthetic transport timing only: Playwright delays one real /api/v1/today request before continuing it; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "loading state",
+        "read-only shell"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "timestamp": "2026-08-28T10:51:12.416Z",
+      "sha256": "3401f639a942bc1bb166280fc2a92652c968a7a317dc72530476b7aa9c3b8664"
+    },
+    {
+      "filename": "webkit-desktop-dark-network-error.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "error",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic transport only: Playwright route.abort(\"internetdisconnected\") for one /api/v1/today request; no durable authority claim",
+      "stateProvenance": "synthetic transport only: Playwright route.abort(\"internetdisconnected\") for one /api/v1/today request; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "network error state",
+        "real reload control",
+        "read-only shell"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "timestamp": "2026-08-28T10:51:12.589Z",
+      "sha256": "8164ed414c5ce9b1ac9e9f803c93f12da7f8241f39379ffd6cd1e7b7f0790993"
+    },
+    {
+      "filename": "webkit-desktop-dark-offline.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "offline",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic transport only: Playwright context.setOffline(true) for this browser context; no durable authority claim",
+      "stateProvenance": "synthetic transport only: Playwright context.setOffline(true) for this browser context; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "offline state",
+        "reconnect guidance",
+        "read-only shell"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "timestamp": "2026-08-28T10:51:12.961Z",
+      "sha256": "829ce11ac829748aa111b40ec616d77bcaf5892560bec37e0cb7e3d501fab1f4"
+    },
+    {
+      "filename": "webkit-desktop-dark-stale-reload.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "no-returned-records",
+      "state": "stale",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic response only: Playwright route.fulfill injects one typed HTTP 409 stale response; no durable authority claim",
+      "stateProvenance": "synthetic response only: Playwright route.fulfill injects one typed HTTP 409 stale response; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "stale authority state",
+        "real reload control",
+        "read-only shell"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "timestamp": "2026-08-28T10:51:13.216Z",
+      "sha256": "cbda407e3664796c03aa4b90970a418948c90658da9b554c3a4ca0b834613b33"
+    },
+    {
+      "filename": "webkit-desktop-dark-crew-membership-removed.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee removed from crew",
+      "assignmentMode": "direct-only",
+      "state": "ready",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "minimum job and customer essentials",
+        "current assignment, schedule and dispatch truth",
+        "provider-neutral route uncertainty",
+        "read-only state",
+        "fixture employee: Alex Rivera",
+        "fixture direct job: Kitchen sink drain backup for Jamie Carter",
+        "fixture direct rescheduled job: Main line inspection for Jamie Carter",
+        "current crew work absent after durable membership removal"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials"
+      ],
+      "timestamp": "2026-08-28T10:51:13.773Z",
+      "sha256": "05eb2946c1444289cf46e09e1b2a4ad126e94353feabad3eedfaf3b34b068e51"
+    },
+    {
+      "filename": "webkit-desktop-dark-session-revoked.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "revoked employee session",
+      "assignmentMode": "none",
+      "state": "restricted",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; real durable PostgreSQL auth session revocation; no synthetic transport or response",
+      "stateProvenance": "real durable PostgreSQL auth session revocation; no synthetic transport or response",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "access-changed state",
+        "sign-in or administrator guidance",
+        "read-only shell"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; prior cards cleared"
+      ],
+      "timestamp": "2026-08-28T10:51:14.062Z",
+      "sha256": "b5ca98a5ac1ec7854aa7ced86dbac1796a6186b20a0f86a46748a76a83a32c5f"
+    },
+    {
+      "filename": "webkit-desktop-dark-employee-no-work-unassigned.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active employee",
+      "assignmentMode": "unassigned-and-not-current-crew",
+      "state": "empty",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
+      "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
+      "sourceRoute": "/dashboard/today",
+      "expectedVisible": [
+        "personal no-work state",
+        "read-only shell"
+      ],
+      "expectedWithheld": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; none returned"
+      ],
+      "withheldCategories": [
+        "financials",
+        "billing and subscription settings",
+        "broad customer history",
+        "other workers schedules",
+        "Polaris cost intelligence",
+        "Mission 23 controls",
+        "provider credentials",
+        "all private work records; none returned"
+      ],
+      "timestamp": "2026-08-28T10:51:15.767Z",
+      "sha256": "00e9bda6e6a8dd7bc5caa45daec74f06d1e5ca1fcc29b0faa4bf2ffe7570ed3f"
+    },
+    {
+      "filename": "webkit-desktop-dark-no-work-empty.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active owner with no personal assignment",
+      "assignmentMode": "none",
+      "state": "empty",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
+      "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
+      "expectedVisible": [
+        "personal empty Today",
+        "read-only state"
+      ],
+      "expectedWithheld": [
+        "all private work records; none returned",
+        "employee records",
+        "financials",
+        "Mission 23 controls"
+      ],
+      "withheldCategories": [
+        "all private work records; none returned",
+        "employee records",
+        "financials",
+        "Mission 23 controls"
+      ],
+      "sourceRoute": "/dashboard/today",
+      "timestamp": "2026-08-28T10:51:16.174Z",
+      "sha256": "6cd48d8c6754dd1eb8fce96094db9a347467ec903723ebf532ed64bb7011bd18"
+    },
+    {
+      "filename": "webkit-desktop-dark-command-center-reference.png",
+      "browser": "webkit",
+      "engineLabel": "Playwright WebKit (not physical Safari)",
+      "version": "26.5",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme": "dark",
+      "realRoleIdentity": "active owner reference only",
+      "assignmentMode": "broad-reference-not-Today",
+      "state": "ready",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:05.851Z",
+      "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
+      "stateProvenance": "real mounted PostgreSQL owner reference; not an employee Today authority claim",
+      "expectedVisible": [
+        "Command Center design reference"
+      ],
+      "expectedWithheld": [
+        "not an employee Today authority claim"
+      ],
+      "withheldCategories": [
+        "not an employee Today authority claim"
+      ],
+      "sourceRoute": "/dashboard",
+      "timestamp": "2026-08-28T10:51:16.574Z",
+      "sha256": "a6936fcc28b6ca3c549085ead6f1773f5cf653365d4ea89595d1ba371722ce91"
+    }
+  ]
+}

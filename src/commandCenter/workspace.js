@@ -51,7 +51,7 @@ function tenantIdFromTokenHash(tokenHash) {
 }
 
 function routeProjection(mode) {
-  return contract.ROUTES.map(route => ({
+  return contract.routesForMode(mode).map(route => ({
     id: route.id,
     label: route.label,
     href: mode === 'demo' ? route.demoPath : route.paidPath,

@@ -1,0 +1,5 @@
+Test Suites: 13 passed, 13 total
+Tests:       169 passed, 169 total
+Snapshots:   0 total
+Time:        50.788 s
+Ran all test suites matching tests/integration/m22-part1-schedule-assignment-postgres.test.js|tests/integration/m22-part2-availability-conflicts-postgres.test.js|tests/integration/m22-part3-route-recommendations-postgres.test.js|tests/integration/m22-part4-human-approval-postgres.test.js|tests/integration/m22-part6-mobile-today-postgres.test.js|tests/unit/m22-part1-scheduling-time-contract.test.js|tests/unit/m22-part1-scheduling-contract.test.js|tests/unit/m22-part2-conflict-authority.test.js|tests/unit/m22-part3-route-recommendation.test.js|tests/unit/m22-part4-human-approval.test.js|tests/unit/m22-part5-owner-dispatcher-ux.test.js|tests/unit/m22-part5-graph-cursor-boundary.test.js|tests/unit/m22-part6-mobile-today.test.js.

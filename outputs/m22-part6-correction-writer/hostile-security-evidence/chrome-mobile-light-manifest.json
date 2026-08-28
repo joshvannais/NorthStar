@@ -1,0 +1,35 @@
+{
+  "matrix": "chrome-mobile-light",
+  "packagePurpose": "separate hostile stored-byte and DOM-sink security evidence; not employee handoff visuals",
+  "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+  "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+  "fixtureTenant": "Cedar Ridge Home Services (isolated disposable test database)",
+  "fixtureTenantTimeZone": "Pacific/Honolulu",
+  "fixtureReferenceInstant": "2026-08-28T10:49:59.986Z",
+  "screenshots": [
+    {
+      "filename": "chrome-mobile-light-hostile-source-to-sink-inert.png",
+      "browser": "chrome",
+      "engineLabel": "Installed Google Chrome",
+      "version": "151.0.7922.175",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme": "light",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "purpose": "separate adversarial security proof; explicitly not the employee visual handoff package",
+      "authority": "isolated disposable PostgreSQL cookie session with real tenant/member/workforce/crew scope",
+      "storedProbe": "<img src=x onerror=\"globalThis.m22Part6Compromised=true\">",
+      "apiProjectionContainsLiteralProbe": true,
+      "domContainsLiteralProbeText": true,
+      "executableImageElementsInTodayRecords": 0,
+      "globalCompromiseFlag": false,
+      "sinkConclusion": "hostile stored bytes remained inert text; no HTML element or script execution occurred",
+      "sourceRoute": "/dashboard/today",
+      "timestamp": "2026-08-28T10:50:05.477Z",
+      "sha256": "bf178455ffcc28a20b0c2fb9f2a3a9c482ef989cd8e0017b341c31016f30bad8"
+    }
+  ]
+}

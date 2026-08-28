@@ -1,0 +1,443 @@
+[DB] Migration applied: 001_initial_schema.sql
+[DB] Migration applied: 002_seed_data.sql
+[DB] Migration applied: 003_voice_sessions.sql
+[DB] Migration applied: 004_canonical_persistence_v2.sql
+[DB] Migration applied: 005_canonical_organization_authority.sql
+[DB] Migration applied: 006_canonical_voice_sessions.sql
+[DB] Migration applied: 007_canonical_tax_authority.sql
+[DB] Migration applied: 008_canonical_demo_authority.sql
+[DB] Migration applied: 009_canonical_voice_provider_identity.sql
+[DB] Migration applied: 010_account_session_authority.sql
+[DB] Migration applied: 011_oauth_authorization_states.sql
+[DB] Migration applied: 012_account_verification_trial.sql
+[DB] Migration applied: 015_workforce_authority.sql
+[DB] Migration applied: 016_tenant_asset_catalogue.sql
+[DB] Migration applied: 017_retell_webhook_replay_authority.sql
+[DB] Migration applied: 018_canonical_map_preferences.sql
+[DB] Migration applied: 019_account_email_outbox.sql
+[DB] Migration applied: 020_canonical_workforce_access_roles.sql
+[DB] Migration applied: 021_bounded_api_observability.sql
+[DB] Migration applied: 022_demo_command_center_sessions.sql
+[DB] Migration applied: 023_homepage_demo_admission.sql
+[DB] Migration applied: 024_homepage_verified_purge_receipt.sql
+[DB] Migration applied: 025_provider_agnostic_knowledge_registry.sql
+[DB] Migration applied: 026_canonical_knowledge_review_publication.sql
+[DB] Migration applied: 027_canonical_knowledge_audit_graph_authority.sql
+[DB] Migration applied: 028_canonical_knowledge_immutable_lifecycle.sql
+[DB] Migration applied: 029_canonical_knowledge_transactional_sync.sql
+[DB] Migration applied: 030_canonical_knowledge_sync_revocation.sql
+[DB] Migration applied: 031_canonical_knowledge_sync_recovery_lifecycle.sql
+[DB] Migration applied: 032_canonical_schedule_assignment_authority.sql
+[DB] Migration applied: 033_canonical_schedule_time_evidence.sql
+[DB] Migration applied: 034_schedule_availability_conflict_authority.sql
+[DB] Migration applied: 035_schedule_human_preview_approval.sql
+[Simulations] Canonical graph committed: {"operationId":"9194b8de-c79a-4e2c-a1e1-1d08134b7caa","service":"plumbing","replayed":false}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'e678d8bd-22ed-408f-8b06-6d56e15497a5',
+  methodClass: 'POST',
+  durationMs: 40,
+  statusCode: 201
+}
+[Simulations] Canonical graph committed: {"operationId":"fd4ef3b1-e37e-4be1-9673-d2839bb5ffa1","service":"plumbing","replayed":false}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '0bb6a26f-7743-47cc-ae04-4f7d03c49d97',
+  methodClass: 'POST',
+  durationMs: 25,
+  statusCode: 201
+}
+[Simulations] Canonical graph committed: {"operationId":"c92af928-363e-4613-a84f-bbacf11f4ec7","service":"plumbing","replayed":false}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '51b8e5eb-9367-4791-8191-98bcff06da61',
+  methodClass: 'POST',
+  durationMs: 14,
+  statusCode: 201
+}
+[Simulations] Canonical graph committed: {"operationId":"ebed0818-a7fc-48b3-9c84-592624ba7b8c","service":"plumbing","replayed":false}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'c3278ab9-6c1c-47d5-b766-964f80c348e8',
+  methodClass: 'POST',
+  durationMs: 14,
+  statusCode: 201
+}
+[Simulations] Canonical graph committed: {"operationId":"0ee4bb15-092e-48b6-a5cf-8f6466fd3e6d","service":"plumbing","replayed":false}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '83966d09-7b1d-4dbe-99ce-72256342756c',
+  methodClass: 'POST',
+  durationMs: 12,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'bb7bf98d-dbb6-41d1-8964-e1e5d6b46583',
+  methodClass: 'POST',
+  durationMs: 60,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '79da49d8-6d12-44d2-a35e-2b15de3ea077',
+  methodClass: 'POST',
+  durationMs: 87,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '10b26641-2545-4268-b592-0debd7d987a3',
+  methodClass: 'POST',
+  durationMs: 117,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'f410ce57-2695-4aa8-837b-7b8ee4ce0fda',
+  methodClass: 'POST',
+  durationMs: 149,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'b78755fc-ca6b-422e-a017-d544ba960e68',
+  methodClass: 'POST',
+  durationMs: 147,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '87e125ac-81b3-4215-b3d7-712a247db4a8',
+  methodClass: 'POST',
+  durationMs: 171,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'a5a22463-5b15-4561-b4db-fbc21b55df2c',
+  methodClass: 'POST',
+  durationMs: 41,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '8069b16f-b093-4c3f-a0c0-05c9acdc33c6',
+  methodClass: 'POST',
+  durationMs: 71,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '477c98b5-abfb-4ff0-baa4-d12550e00b98',
+  methodClass: 'POST',
+  durationMs: 107,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '1647cdea-fea4-4234-8a01-465e4c6fc649',
+  methodClass: 'POST',
+  durationMs: 138,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'c1cac5f8-aa75-4e60-b58f-3cac02979f26',
+  methodClass: 'POST',
+  durationMs: 39,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '612309d3-97b3-4307-8a29-7d3afa97318f',
+  methodClass: 'POST',
+  durationMs: 66,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '6ce81fae-45dc-469c-9fdb-22df699c0119',
+  methodClass: 'POST',
+  durationMs: 105,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'c0140fa6-f0f6-47ed-aa8a-eddb41f4c712',
+  methodClass: 'POST',
+  durationMs: 137,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '1e80a803-7a88-4929-a42e-176d1d3e326a',
+  methodClass: 'POST',
+  durationMs: 278,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '87f094a2-ca61-4348-8aa2-ff683a1325e8',
+  methodClass: 'POST',
+  durationMs: 265,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'de50a05b-4ff7-405d-ac87-8662d8a83485',
+  methodClass: 'POST',
+  durationMs: 148,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'f845c2c4-1025-4ecf-8d7f-2c97aa278299',
+  methodClass: 'POST',
+  durationMs: 297,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '1fd07340-b103-4980-ba94-fbb9f97fb76e',
+  methodClass: 'POST',
+  durationMs: 41,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '332b65b3-3cbb-4bc7-9054-530056b70ebb',
+  methodClass: 'POST',
+  durationMs: 65,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'd7b6508b-08bf-4ab1-bee6-fb89cc943ac6',
+  methodClass: 'POST',
+  durationMs: 103,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'f12b235b-fbdd-4778-970c-55f15c05dc33',
+  methodClass: 'POST',
+  durationMs: 223,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'a2248ca3-0a39-45a4-8332-6644c416e863',
+  methodClass: 'GET',
+  durationMs: 39,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'e1a601af-9ac1-4cab-b638-0ef17ca48978',
+  methodClass: 'GET',
+  durationMs: 19,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'a9c26230-6393-4311-8166-0df720978825',
+  methodClass: 'GET',
+  durationMs: 21,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '3be2a2a2-de8d-4c1e-a33b-2d117dbcf01c',
+  methodClass: 'POST',
+  durationMs: 4,
+  statusCode: 200
+}
+{
+  component: 'product_telemetry',
+  event: 'aggregate_updated',
+  eventClass: 'page_view',
+  surface: 'public',
+  routeClass: 'login',
+  action: 'none',
+  elapsedBucket: 'under_15s',
+  count: 1
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'c8d59296-3f69-4a59-b10f-4f3775b20521',
+  methodClass: 'POST',
+  durationMs: 3,
+  statusCode: 202
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '8a263833-b4e5-48db-b744-22aea8da4f38',
+  methodClass: 'GET',
+  durationMs: 17,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '3be6a44f-6d6d-4259-b489-2edaa7fc8943',
+  methodClass: 'GET',
+  durationMs: 43,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'a9864947-02b4-4760-a2c4-09354213839c',
+  methodClass: 'GET',
+  durationMs: 21,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '279cfac7-64ce-4941-8069-7abd41982985',
+  methodClass: 'GET',
+  durationMs: 36,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '3f34aea3-68f8-4de0-a95a-edbe362d437a',
+  methodClass: 'GET',
+  durationMs: 31,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '7d2ad4bf-1ab4-4be3-a9f6-177dd699c94f',
+  methodClass: 'GET',
+  durationMs: 4,
+  statusCode: 401
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'd9f0c9be-1920-42ac-8193-c1e6490b04d9',
+  methodClass: 'GET',
+  durationMs: 32,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '81f8f602-222d-449c-a7dd-542419b89097',
+  methodClass: 'POST',
+  durationMs: 292,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '95479096-c1e4-46d0-9765-9d55b0b5b49b',
+  methodClass: 'POST',
+  durationMs: 325,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'e18f3d46-5afe-4d62-aeda-8221a71c3d2e',
+  methodClass: 'POST',
+  durationMs: 280,
+  statusCode: 201
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'ece85835-facf-43d7-a1bb-1de115df1c05',
+  methodClass: 'POST',
+  durationMs: 325,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '40d04373-1aa8-4491-8252-29e420c75abf',
+  methodClass: 'GET',
+  durationMs: 36,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '9e631b18-1d5a-4a86-acb7-f8fe61947fb7',
+  methodClass: 'GET',
+  durationMs: 17,
+  statusCode: 200
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '7eece366-f9a4-4a11-8718-5769dd582372',
+  methodClass: 'GET',
+  durationMs: 28,
+  statusCode: 200
+}
+{
+  component: 'product_telemetry',
+  event: 'aggregate_updated',
+  eventClass: 'page_view',
+  surface: 'paid',
+  routeClass: 'paid_command_center',
+  action: 'none',
+  elapsedBucket: 'under_15s',
+  count: 1
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: '9ba499d6-4b84-4956-8f07-f07ec42a6af6',
+  methodClass: 'POST',
+  durationMs: 2,
+  statusCode: 202
+}
+{
+  component: 'http',
+  event: 'request_completed',
+  requestId: 'e8b2c2a5-5c87-4029-8ef1-423d67ebf260',
+  methodClass: 'GET',
+  durationMs: 98,
+  statusCode: 200
+}
+{"matrix":"webkit-desktop-dark","version":"26.5","viewport":{"width":1280,"height":900},"fixtureTenantTimeZone":"Pacific/Honolulu","fixtureReferenceInstant":"2026-08-28T10:51:05.851Z","screenshots":12,"todayResponses":9,"employeeNetworkDestinations":["/api/v1/today","/assets/logo.png","/css/demo-dashboard.css","/css/homepage-refresh.css","/css/site-professionalism.css","/css/style.css","/css/today.css","/dashboard/today","/js/theme.js","/js/today-page.js","/js/today-shell.js"],"employeeResponseInventory":51,"externalCalls":0,"workerMutationNetwork":0,"browserErrors":[]}

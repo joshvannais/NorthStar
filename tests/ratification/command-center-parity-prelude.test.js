@@ -87,10 +87,12 @@ function renderedText(node) {
 }
 
 describe('Demo/Paid Command Center Parity Prelude contracts', () => {
-  test('one shared route manifest binds all nine paid destinations to account-free counterparts', async () => {
+  test('nine shared routes retain demo parity while paid navigation adds signed-in Today only', async () => {
     expect(contract.ROUTES).toHaveLength(9);
-    expect(contract.ROUTES.map(route => route.id)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.id));
-    expect(contract.ROUTES.map(route => route.paidPath)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.href));
+    expect(contract.PAID_ROUTES).toHaveLength(10);
+    expect(contract.PAID_ROUTES.map(route => route.id)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.id));
+    expect(contract.PAID_ROUTES.map(route => route.paidPath)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.href));
+    expect(contract.TODAY_ROUTE.demoPath).toBeNull();
     expect(new Set(contract.ROUTES.map(route => route.demoPath)).size).toBe(9);
     expect(contract.routeForPath('/demo-dashboard').id).toBe('command-center');
 

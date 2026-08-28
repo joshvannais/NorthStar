@@ -17,6 +17,7 @@ const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/accept-invitation', file: 'public/accept-invitation.html', surface: 'auth' },
   { route: '/account/pending', file: 'public/account/pending.html', surface: 'account' },
   { route: '/dashboard', file: 'public/dashboard/command-center.html', surface: 'dashboard' },
+  { route: '/dashboard/today', file: 'public/dashboard/today.html', surface: 'dashboard' },
   { route: '/dashboard/executive-brief', file: 'public/dashboard/executive-brief.html', surface: 'dashboard' },
   { route: '/dashboard/leads', file: 'public/dashboard/leads.html', surface: 'dashboard' },
   { route: '/dashboard/communications', file: 'public/dashboard/communications.html', surface: 'dashboard' },

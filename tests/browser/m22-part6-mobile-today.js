@@ -451,9 +451,14 @@ async function main() {
     await logoutPage.waitForFunction(() => document.body.dataset.todayState === 'ready');
     assert.strictEqual(await logoutPage.locator('.today-work-card').count(), 3);
     if (mobile) await logoutPage.locator('#todayMenuToggle').click();
-    const logoutResponse = logoutPage.waitForResponse(value => new URL(value.url()).pathname === '/api/auth/logout');
-    await logoutPage.locator('[data-today-logout]:visible').first().click();
-    assert.strictEqual((await logoutResponse).status(), 200);
+    const logoutControl = mobile
+      ? logoutPage.locator('#todayMobileMenu [data-today-logout]')
+      : logoutPage.locator('.sidebar [data-today-logout]');
+    const [logoutResult] = await Promise.all([
+      logoutPage.waitForResponse(value => new URL(value.url()).pathname === '/api/auth/logout'),
+      logoutControl.click(),
+    ]);
+    assert.strictEqual(logoutResult.status(), 200);
     await logoutPage.waitForURL(value => new URL(value).pathname === '/login');
     assert.strictEqual(logoutExternal.length, 0);
     assert.strictEqual(logoutNetwork.some(entry => entry.pathname === '/api/auth/me'), false);

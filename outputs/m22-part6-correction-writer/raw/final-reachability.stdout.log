@@ -1,0 +1,17 @@
+  console.info
+    {
+      component: 'http',
+      event: 'request_completed',
+      requestId: 'd36d4edf-09f4-48b0-a1e1-747fdf9b2a7b',
+      methodClass: 'GET',
+      durationMs: 4,
+      statusCode: 401
+    }
+
+      at write (src/observability/safeLogger.js:178:17)
+
+Test Suites: 1 passed, 1 total
+Tests:       5 passed, 5 total
+Snapshots:   0 total
+Time:        2.977 s, estimated 4 s
+Ran all test suites matching tests/ratification/m19-part4-final-reachability.test.js.

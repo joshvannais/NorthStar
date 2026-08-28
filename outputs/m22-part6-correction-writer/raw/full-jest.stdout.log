@@ -1,0 +1,344 @@
+  console.log
+    [DB] Migration applied: 001_initial_schema.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 002_seed_data.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 003_voice_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 004_canonical_persistence_v2.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 005_canonical_organization_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 006_canonical_voice_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 007_canonical_tax_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 008_canonical_demo_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 009_canonical_voice_provider_identity.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 010_account_session_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 011_oauth_authorization_states.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 012_account_verification_trial.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 015_workforce_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 016_tenant_asset_catalogue.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 017_retell_webhook_replay_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 018_canonical_map_preferences.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 019_account_email_outbox.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 020_canonical_workforce_access_roles.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 021_bounded_api_observability.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 022_demo_command_center_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 023_homepage_demo_admission.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 024_homepage_verified_purge_receipt.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 025_provider_agnostic_knowledge_registry.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 026_canonical_knowledge_review_publication.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 027_canonical_knowledge_audit_graph_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 028_canonical_knowledge_immutable_lifecycle.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 029_canonical_knowledge_transactional_sync.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 030_canonical_knowledge_sync_revocation.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 031_canonical_knowledge_sync_recovery_lifecycle.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 032_canonical_schedule_assignment_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 033_canonical_schedule_time_evidence.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 034_schedule_availability_conflict_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 035_schedule_human_preview_approval.sql
+
+      at log (src/db.js:1312:42)
+
+  console.info
+    [login-timing-regression] {"missing":[378.16,379.25,373.22,370.59,373.99,368.36],"existing":[377.9,373.46,370.86,377.98,377.23,372.9],"missingMedianMs":373.61,"existingMedianMs":375.35,"medianRatio":1.005,"relativeGap":0.005,"missingCompareCalls":[2,2,2,2,2,2],"existingCompareCalls":[2,2,2,2,2,2]}
+
+      at Object.info (tests/api/m20-phase7-login-timing-postgres.test.js:246:13)
+
+  console.info
+    [login-timing-supported-matrix] {"groupLabel":"costs-4-6","measuredOrders":[["cost-5","cost-4","cost-6"],["cost-5","cost-6","cost-4"],["cost-6","cost-5","cost-4"],["cost-6","cost-4","cost-5"],["cost-4","cost-6","cost-5"],["cost-4","cost-5","cost-6"],["cost-5","cost-4","cost-6"],["cost-5","cost-6","cost-4"],["cost-6","cost-5","cost-4"],["cost-6","cost-4","cost-5"],["cost-4","cost-6","cost-5"],["cost-4","cost-5","cost-6"],["cost-5","cost-4","cost-6"],["cost-5","cost-6","cost-4"],["cost-6","cost-5","cost-4"]],"costs":[{"cost":4,"baselineMedianMs":373.87,"medianMs":375.75,"marginalRatio":1.005,"marginalRelativeGap":0.005,"medianLogRatio":0.003697,"ratio":1.004,"relativeGap":0.004,"rawBaselineMs":[394.05,382.72,373.84,371.51,373.74,373.54,375.62,374.84,380.86,423.37,424.22,373.87,371.4,372.64,371.05],"rawSampleMs":[390.29,384.94,380.18,374.36,375.13,383.14,372.18,377.35,373.62,375.75,421.81,372.61,373.46,370.07,379.12],"pairRatios":[1.01,1.006,1.017,1.008,1.004,1.026,1.009,1.007,1.019,1.127,1.006,1.003,1.006,1.007,1.022],"signedPairRatios":[0.99,1.006,1.017,1.008,1.004,1.026,0.991,1.007,0.981,0.888,0.994,0.997,1.006,0.993,1.022],"logRatios":[-0.009588,0.005787,0.016836,0.00766,0.003697,0.025393,-0.009186,0.006661,-0.019174,-0.119318,-0.005698,-0.003377,0.005517,-0.006924,0.021495],"baselineFirstCount":8,"compareCalls":[10,10,10,10,10,10,10,10,10,10,10,10,10,10,10]},{"cost":5,"baselineMedianMs":375.76,"medianMs":377.87,"marginalRatio":1.006,"marginalRelativeGap":0.006,"medianLogRatio":0.001941,"ratio":1.002,"relativeGap":0.002,"rawBaselineMs":[398.62,401.79,375.76,382.93,374.64,374.35,376.39,373.18,376.97,421.85,377.11,367.82,375.16,374.78,372.61],"rawSampleMs":[382.75,392.56,381.88,372.96,372.43,377.87,372.37,380.85,374.7,431.8,386.12,380.36,373.89,375.51,375.98],"pairRatios":[1.041,1.024,1.016,1.027,1.006,1.009,1.011,1.021,1.006,1.024,1.024,1.034,1.003,1.002,1.009],"signedPairRatios":[0.96,0.977,1.016,0.974,0.994,1.009,0.989,1.021,0.994,1.024,1.024,1.034,0.997,1.002,1.009],"logRatios":[-0.040613,-0.023233,0.016152,-0.026362,-0.005905,0.009361,-0.010742,0.020352,-0.006039,0.023308,0.023619,0.033536,-0.003382,0.001941,0.008995],"baselineFirstCount":7,"compareCalls":[9,9,9,9,9,9,9,9,9,9,9,9,9,9,9]},{"cost":6,"baselineMedianMs":374.82,"medianMs":377.38,"marginalRatio":1.007,"marginalRelativeGap":0.007,"medianLogRatio":0.007178,"ratio":1.007,"relativeGap":0.007,"rawBaselineMs":[384.11,429.15,381.05,373.97,374.59,375.73,375.29,372.43,370.11,381.46,420.1,373.78,374.82,373.93,374.48],"rawSampleMs":[398.47,399.89,381.99,371,377.38,382.77,377.99,377.34,373.86,376.59,379.48,377.04,376.87,378.81,373.95],"pairRatios":[1.037,1.073,1.002,1.008,1.007,1.019,1.007,1.013,1.01,1.013,1.107,1.009,1.005,1.013,1.001],"signedPairRatios":[1.037,0.932,1.002,0.992,1.007,1.019,1.007,1.013,1.01,0.987,0.903,1.009,1.005,1.013,0.999],"logRatios":[0.036697,-0.070613,0.002458,-0.007983,0.007437,0.018575,0.007178,0.013098,0.010086,-0.012854,-0.10169,0.008665,0.005472,0.012954,-0.001416],"baselineFirstCount":8,"compareCalls":[8,8,8,8,8,8,8,8,8,8,8,8,8,8,8]}]}
+
+      at info (tests/api/m20-phase7-login-timing-postgres.test.js:419:15)
+
+  console.info
+    [login-timing-supported-matrix] {"groupLabel":"costs-7-9","measuredOrders":[["cost-8","cost-9","cost-7"],["cost-8","cost-7","cost-9"],["cost-7","cost-8","cost-9"],["cost-7","cost-9","cost-8"],["cost-9","cost-7","cost-8"],["cost-9","cost-8","cost-7"],["cost-8","cost-9","cost-7"],["cost-8","cost-7","cost-9"],["cost-7","cost-8","cost-9"],["cost-7","cost-9","cost-8"],["cost-9","cost-7","cost-8"],["cost-9","cost-8","cost-7"],["cost-8","cost-9","cost-7"],["cost-8","cost-7","cost-9"],["cost-7","cost-8","cost-9"]],"costs":[{"cost":7,"baselineMedianMs":372.34,"medianMs":374.73,"marginalRatio":1.006,"marginalRelativeGap":0.006,"medianLogRatio":0.007345,"ratio":1.007,"relativeGap":0.007,"rawBaselineMs":[367.62,374.02,369.46,369.5,376.38,381.38,376.73,379.4,372.34,370.83,375,370.69,371.18,375.91,371.86],"rawSampleMs":[374.76,379.47,373.63,369.49,384.31,369.03,373.26,381.09,377.23,368.91,371.2,379.13,373.92,374.73,378.08],"pairRatios":[1.019,1.015,1.011,1,1.021,1.033,1.009,1.004,1.013,1.005,1.01,1.023,1.007,1.003,1.017],"signedPairRatios":[1.019,1.015,1.011,1,1.021,0.968,0.991,1.004,1.013,0.995,0.99,1.023,1.007,0.997,1.017],"logRatios":[0.019259,0.014469,0.011224,-0.000006,0.020845,-0.032929,-0.009252,0.004456,0.013048,-0.005191,-0.010202,0.022505,0.007345,-0.003154,0.016594],"baselineFirstCount":8,"compareCalls":[7,7,7,7,7,7,7,7,7,7,7,7,7,7,7]},{"cost":8,"baselineMedianMs":373.57,"medianMs":373.67,"marginalRatio":1,"marginalRelativeGap":0,"medianLogRatio":-0.003713,"ratio":1.004,"relativeGap":0.004,"rawBaselineMs":[372.45,375.15,368.59,378.17,376.56,376.06,373.28,368.7,373.57,379.02,382.46,369.9,371.05,373.02,377.32],"rawSampleMs":[371.3,369.28,376.5,371.05,373.67,372.12,370.99,378.15,370.5,383.7,378.12,372.15,379.3,375.31,375.92],"pairRatios":[1.003,1.016,1.021,1.019,1.008,1.011,1.006,1.026,1.008,1.012,1.011,1.006,1.022,1.006,1.004],"signedPairRatios":[0.997,0.984,1.021,0.981,0.992,0.99,0.994,1.026,0.992,1.012,0.989,1.006,1.022,1.006,0.996],"logRatios":[-0.003078,-0.015783,0.021214,-0.019008,-0.007703,-0.010529,-0.006149,0.025301,-0.008274,0.012276,-0.011414,0.006068,0.021995,0.006106,-0.003713],"baselineFirstCount":7,"compareCalls":[6,6,6,6,6,6,6,6,6,6,6,6,6,6,6]},{"cost":9,"baselineMedianMs":376.1,"medianMs":374.58,"marginalRatio":1.004,"marginalRelativeGap":0.004,"medianLogRatio":0.004259,"ratio":1.004,"relativeGap":0.004,"rawBaselineMs":[371.43,375.75,376.1,381.48,379.33,369.64,373.49,377.91,377.31,369.59,377.81,375.25,371.11,381.39,425.64],"rawSampleMs":[374.5,381.14,374.06,382.71,374.58,371.83,385.64,384.38,370.79,372.47,370.83,377.38,372.7,375,375.1],"pairRatios":[1.008,1.014,1.005,1.003,1.013,1.006,1.033,1.017,1.018,1.008,1.019,1.006,1.004,1.017,1.135],"signedPairRatios":[1.008,1.014,0.995,1.003,0.987,1.006,1.033,1.017,0.983,1.008,0.982,1.006,1.004,0.983,0.881],"logRatios":[0.008241,0.014243,-0.005418,0.003214,-0.012595,0.005925,0.03202,0.016954,-0.017433,0.007751,-0.018662,0.005656,0.004259,-0.016883,-0.126406],"baselineFirstCount":8,"compareCalls":[5,5,5,5,5,5,5,5,5,5,5,5,5,5,5]}]}
+
+      at info (tests/api/m20-phase7-login-timing-postgres.test.js:419:15)
+
+  console.info
+    [login-timing-supported-matrix] {"groupLabel":"costs-10-12","measuredOrders":[["cost-11","cost-10","cost-12"],["cost-11","cost-12","cost-10"],["cost-12","cost-11","cost-10"],["cost-12","cost-10","cost-11"],["cost-10","cost-12","cost-11"],["cost-10","cost-11","cost-12"],["cost-11","cost-10","cost-12"],["cost-11","cost-12","cost-10"],["cost-12","cost-11","cost-10"],["cost-12","cost-10","cost-11"],["cost-10","cost-12","cost-11"],["cost-10","cost-11","cost-12"],["cost-11","cost-10","cost-12"],["cost-11","cost-12","cost-10"],["cost-12","cost-11","cost-10"]],"costs":[{"cost":10,"baselineMedianMs":375.82,"medianMs":376.22,"marginalRatio":1.001,"marginalRelativeGap":0.001,"medianLogRatio":0.002761,"ratio":1.003,"relativeGap":0.003,"rawBaselineMs":[376.51,368.13,375.34,372.89,380.77,374.87,370.34,372.53,384.21,375.7,380.57,376.67,375.82,376.95,377.6],"rawSampleMs":[380.83,369.53,382.85,378.35,376.22,377.73,371.36,375.57,380.57,384.15,379,374.82,375.4,372.37,372.66],"pairRatios":[1.011,1.004,1.02,1.015,1.012,1.008,1.003,1.008,1.01,1.022,1.004,1.005,1.001,1.012,1.013],"signedPairRatios":[1.011,1.004,1.02,1.015,0.988,1.008,1.003,1.008,0.991,1.022,0.996,0.995,0.999,0.988,0.987],"logRatios":[0.011415,0.003805,0.019804,0.014541,-0.012031,0.007598,0.002761,0.008132,-0.00953,0.022243,-0.004123,-0.004925,-0.001127,-0.012215,-0.013146],"baselineFirstCount":8,"compareCalls":[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4]},{"cost":11,"baselineMedianMs":375.11,"medianMs":377.18,"marginalRatio":1.006,"marginalRelativeGap":0.005,"medianLogRatio":0.007286,"ratio":1.007,"relativeGap":0.007,"rawBaselineMs":[370.86,409.28,374.97,379.03,378.53,368.5,368.46,377.77,372.01,382.63,371.26,375.11,389.42,377.71,372.71],"rawSampleMs":[377.42,377.99,371.29,377.18,376.19,368.7,375.62,380.05,374.73,385.71,374.82,378.03,373.43,380.7,378.85],"pairRatios":[1.018,1.083,1.01,1.005,1.006,1.001,1.019,1.006,1.007,1.008,1.01,1.008,1.043,1.008,1.016],"signedPairRatios":[1.018,0.924,0.99,0.995,0.994,1.001,1.019,1.006,1.007,1.008,1.01,1.008,0.959,1.008,1.016],"logRatios":[0.01753,-0.07953,-0.009861,-0.004885,-0.006205,0.00055,0.019223,0.00603,0.007286,0.00802,0.009543,0.007753,-0.041916,0.007872,0.016337],"baselineFirstCount":7,"compareCalls":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},{"cost":12,"baselineMedianMs":376.44,"medianMs":375.72,"marginalRatio":1.002,"marginalRelativeGap":0.002,"medianLogRatio":-0.000513,"ratio":1.001,"relativeGap":0.001,"rawBaselineMs":[394.3,381.23,371.28,382.24,371.09,378.91,378.81,372.49,378.75,372.84,369.48,370.27,376.44,379.02,376.35],"rawSampleMs":[397.97,378.05,376.96,371.4,375.72,372.51,374.74,375.76,371.65,372.14,372.25,370.08,385.57,378.62,379.52],"pairRatios":[1.009,1.008,1.015,1.029,1.012,1.017,1.011,1.009,1.019,1.002,1.007,1.001,1.024,1.001,1.008],"signedPairRatios":[1.009,0.992,1.015,0.972,1.012,0.983,0.989,1.009,0.981,0.998,1.007,0.999,1.024,0.999,1.008],"logRatios":[0.009276,-0.008382,0.015202,-0.028781,0.012401,-0.017048,-0.010786,0.008729,-0.018932,-0.001885,0.007464,-0.000513,0.023961,-0.001035,0.008408],"baselineFirstCount":8,"compareCalls":[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]}]}
+
+      at info (tests/api/m20-phase7-login-timing-postgres.test.js:419:15)
+
+  console.info
+    [login-timing-unsupported-matrix] {"measuredOrders":[["unsupported13","unsupported31","malformed"],["unsupported13","malformed","unsupported31"],["malformed","unsupported13","unsupported31"],["malformed","unsupported31","unsupported13"],["unsupported31","malformed","unsupported13"],["unsupported31","unsupported13","malformed"],["unsupported13","unsupported31","malformed"],["unsupported13","malformed","unsupported31"],["malformed","unsupported13","unsupported31"],["malformed","unsupported31","unsupported13"],["unsupported31","malformed","unsupported13"],["unsupported31","unsupported13","malformed"],["unsupported13","unsupported31","malformed"],["unsupported13","malformed","unsupported31"],["malformed","unsupported13","unsupported31"]],"classes":[{"name":"unsupported31","baselineMedianMs":374.57,"baselineFirstCount":8,"logRatios":[-0.006989,-0.009468,-0.100924,0.012897,0.000015,0.019867,-0.022547,0.005549,0.003858,0.002082,-0.030851,0.013537,0.002709,0.009351,0.013514],"marginalRatio":1.002,"marginalRelativeGap":0.002,"medianLogRatio":0.002709,"medianMs":373.8,"ratio":1.003,"relativeGap":0.003,"pairRatios":[1.007,1.01,1.106,1.013,1,1.02,1.023,1.006,1.004,1.002,1.031,1.014,1.003,1.009,1.014],"rawBaselineMs":[374.57,374.55,413.03,373.71,378.66,370.26,379.05,374.87,369.73,373.02,382.13,369.22,374.58,376.59,368.01],"rawSampleMs":[371.96,371.02,373.38,378.56,378.66,377.69,370.6,376.95,371.16,373.8,370.52,374.25,375.59,380.13,373.02],"signedPairRatios":[0.993,0.991,0.904,1.013,1,1.02,0.978,1.006,1.004,1.002,0.97,1.014,1.003,1.009,1.014]},{"name":"malformed","baselineMedianMs":374.9,"baselineFirstCount":7,"logRatios":[-0.092294,0.010481,-0.007236,-0.018105,-0.011982,-0.005872,-0.002781,-0.031513,0.005483,0.007515,0.007018,-0.020334,-0.008281,0.027746,0.025306],"marginalRatio":1.007,"marginalRelativeGap":0.007,"medianLogRatio":-0.005872,"medianMs":372.19,"ratio":1.006,"relativeGap":0.006,"pairRatios":[1.097,1.011,1.007,1.018,1.012,1.006,1.003,1.032,1.005,1.008,1.007,1.021,1.008,1.028,1.026],"rawBaselineMs":[407.85,375.04,372.88,379.68,374.9,371.66,377.11,383.44,372.63,368.28,369.58,377.84,378.5,370.03,368.98],"rawSampleMs":[371.89,378.99,370.19,372.87,370.44,369.48,376.06,371.54,374.68,371.06,372.19,370.23,375.38,380.44,378.44],"signedPairRatios":[0.912,1.011,0.993,0.982,0.988,0.994,0.997,0.969,1.005,1.008,1.007,0.98,0.992,1.028,1.026]},{"name":"unsupported13","baselineMedianMs":372.97,"baselineFirstCount":8,"logRatios":[0.029593,0.083989,-0.011596,0.010617,-0.004333,-0.004951,0.014411,-0.00694,0.021406,-0.012132,-0.025731,0.023699,0.041029,0.003776,0.007543],"marginalRatio":1.006,"marginalRelativeGap":0.006,"medianLogRatio":0.007543,"medianMs":375.28,"ratio":1.008,"relativeGap":0.008,"pairRatios":[1.03,1.088,1.012,1.011,1.004,1.005,1.015,1.007,1.022,1.012,1.026,1.024,1.042,1.004,1.008],"rawBaselineMs":[372.87,372.25,374.31,371.22,374.75,376.1,372.97,374.08,368.05,374.8,382.76,370.02,369.23,374.5,372.46],"rawSampleMs":[384.07,404.86,370,375.18,373.13,374.24,378.38,371.5,376.02,370.28,373.03,378.89,384.7,375.91,375.28],"signedPairRatios":[1.03,1.088,0.988,1.011,0.996,0.995,1.015,0.993,1.022,0.988,0.975,1.024,1.042,1.004,1.008]}]}
+
+      at Object.info (tests/api/m20-phase7-login-timing-postgres.test.js:725:15)
+
+  console.log
+    [DB] Migration applied: 001_initial_schema.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 002_seed_data.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 003_voice_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 004_canonical_persistence_v2.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 005_canonical_organization_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 006_canonical_voice_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 007_canonical_tax_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 008_canonical_demo_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 009_canonical_voice_provider_identity.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 010_account_session_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 011_oauth_authorization_states.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 012_account_verification_trial.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 015_workforce_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 016_tenant_asset_catalogue.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 017_retell_webhook_replay_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 018_canonical_map_preferences.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 019_account_email_outbox.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 020_canonical_workforce_access_roles.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 021_bounded_api_observability.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 022_demo_command_center_sessions.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 023_homepage_demo_admission.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 024_homepage_verified_purge_receipt.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 025_provider_agnostic_knowledge_registry.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 026_canonical_knowledge_review_publication.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 027_canonical_knowledge_audit_graph_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 028_canonical_knowledge_immutable_lifecycle.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 029_canonical_knowledge_transactional_sync.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 030_canonical_knowledge_sync_revocation.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 031_canonical_knowledge_sync_recovery_lifecycle.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 032_canonical_schedule_assignment_authority.sql
+
+      at log (src/db.js:1312:42)
+
+  console.log
+    [DB] Migration applied: 033_canonical_schedule_time_evidence.sql
+
+      at log (src/d

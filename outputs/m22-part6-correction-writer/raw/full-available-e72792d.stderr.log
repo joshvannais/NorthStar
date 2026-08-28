@@ -1,0 +1,1453 @@
+FAIL tests/api/m20-phase7-login-timing-postgres.test.js
+  ● Mission 20 Phase 7 mounted login timing safety › missing and existing wrong credentials have equal verification work and indistinguishable distributions
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › supported bcrypt costs 4 through 6 have adjacent current-cost controls
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › supported bcrypt costs 7 through 9 have adjacent current-cost controls
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › supported bcrypt costs 10 through 12 have adjacent current-cost controls
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › every supported bcrypt prefix and cost authenticates and noncanonical material upgrades
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › malformed and unsupported cost hashes fail closed through bounded dummy work
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › inactive supported legacy authorities and progressive throttle semantics remain intact
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › a bcrypt failure during lower-cost padding fails closed before failure mutation
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › a correct login still succeeds, creates one session, and clears only its own throttle keys
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › the source limiter caps expensive missing-account work before an eleventh bcrypt verification
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › a bcrypt failure on the missing-account path fails closed without a session or credential response
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+FAIL tests/api/m20-phase7-refresh-reset-race-postgres.test.js
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › both legal orders serialize refresh and reset without a recovery deadlock
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › ordinary ungated reset/refresh races never abort recovery
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › refresh insertion failure rolls back and the exact original credential remains retryable
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › a nonlocking route read cannot authorize after exact token/session identity changes
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › CSRF, replay-family, and inactive-membership controls remain fail closed
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+FAIL tests/api/m20-phase7-forgot-password-timing-postgres.test.js
+  ● Mission 20 Phase 7 mounted forgot-password timing safety › eligible and every non-authoritative outcome have adjacent indistinguishable distributions
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      128 |               current_setting('data_checksums') AS checksums,
+      129 |               current_setting('max_connections')::int AS max_connections`
+    > 130 |     )).rows[0]).toEqual({
+          |                 ^
+      131 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      132 |     });
+      133 |
+
+      at Object.toEqual (tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)
+
+  ● Mission 20 Phase 7 mounted forgot-password timing safety › source throttling bounds recovery delay and creates no dummy authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      128 |               current_setting('data_checksums') AS checksums,
+      129 |               current_setting('max_connections')::int AS max_connections`
+    > 130 |     )).rows[0]).toEqual({
+          |                 ^
+      131 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      132 |     });
+      133 |
+
+      at Object.toEqual (tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)
+
+  ● Mission 20 Phase 7 mounted forgot-password timing safety › bounded equalization preserves repository errors and never runs after a denied limit
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      128 |               current_setting('data_checksums') AS checksums,
+      129 |               current_setting('max_connections')::int AS max_connections`
+    > 130 |     )).rows[0]).toEqual({
+          |                 ^
+      131 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      132 |     });
+      133 |
+
+      at Object.toEqual (tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)
+
+FAIL tests/api/m20-phase7-login-reset-race-postgres.test.js
+  ● Mission 20 Phase 7 password-reset/login transaction authority › reset-first rejects stale deterministic canonical, raw, and current-material logins
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+  ● Mission 20 Phase 7 password-reset/login transaction authority › ordinary ungated reset-first rejects canonical, raw, and current-material logins
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+  ● Mission 20 Phase 7 password-reset/login transaction authority › login-first serializes canonical and supported upgrades before reset revokes the committed session
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+  ● Mission 20 Phase 7 password-reset/login transaction authority › session transaction failure rolls back supported upgrade and both credential inserts
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+FAIL tests/integration/m19-part3-canonical-graph-postgres.test.js (34.731 s)
+  ● Mission 19 Part 3 transactional canonical graph on disposable PostgreSQL › 32 concurrent requests across two Node processes create exactly one graph
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      198 |   });
+      199 |
+    > 200 |   test('32 concurrent requests across two Node processes create exactly one graph', async () => {
+          |   ^
+      201 |     const key = 'm19-graph-multiprocess-32';
+      202 |     const input = graphInput(key);
+      203 |     const [workerA, workerB] = await Promise.all([runWorker(input, 16), runWorker(input, 16)]);
+
+      at test (tests/integration/m19-part3-canonical-graph-postgres.test.js:200:3)
+      at Object.realPostgres (tests/integration/m19-part3-canonical-graph-postgres.test.js:151:1)
+
+FAIL tests/api/m20-phase7-oauth-reset-race-postgres.test.js
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › both legal issue/reset orders serialize without a deadlock or stale authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › both legal consume/reset orders serialize without a deadlock or stale authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › ordinary ungated issue/consume/reset races preserve recovery authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › legitimate OAuth single-use and reset controls remain intact
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+FAIL tests/api/m20-phase7-lane3-role-authority-postgres.test.js
+  ● Mission 20 Phase 7 Lane 3 mounted canonical role authority › upgrade preserves operational identity and active durable sessions while canonicalizing access
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "port": 55746,
+        "timezone": "UTC",
+      }
+
+      189 |     )).rows[0];
+      190 |     expect(Math.floor(identity.version_num / 10000)).toBe(18);
+    > 191 |     expect(identity).toMatchObject({
+          |                      ^
+      192 |       timezone: 'UTC', checksums: 'on', max_connections: 100,
+      193 |       port: Number(process.env.M19_EXPECTED_PG_PORT),
+      194 |     });
+
+      at Object.toMatchObject (tests/api/m20-phase7-lane3-role-authority-postgres.test.js:191:22)
+
+Summary of all failing tests
+FAIL tests/api/m20-phase7-login-timing-postgres.test.js
+  ● Mission 20 Phase 7 mounted login timing safety › missing and existing wrong credentials have equal verification work and indistinguishable distributions
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › supported bcrypt costs 4 through 6 have adjacent current-cost controls
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › supported bcrypt costs 7 through 9 have adjacent current-cost controls
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › supported bcrypt costs 10 through 12 have adjacent current-cost controls
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › every supported bcrypt prefix and cost authenticates and noncanonical material upgrades
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › malformed and unsupported cost hashes fail closed through bounded dummy work
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › inactive supported legacy authorities and progressive throttle semantics remain intact
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › a bcrypt failure during lower-cost padding fails closed before failure mutation
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › a correct login still succeeds, creates one session, and clears only its own throttle keys
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › the source limiter caps expensive missing-account work before an eleventh bcrypt verification
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+  ● Mission 20 Phase 7 mounted login timing safety › a bcrypt failure on the missing-account path fails closed without a session or credential response
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      137 |               current_setting('data_checksums') AS checksums,
+      138 |               current_setting('max_connections')::int AS max_connections`
+    > 139 |     )).rows[0]).toEqual({
+          |                 ^
+      140 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      141 |     });
+      142 |
+
+      at Object.toEqual (tests/api/m20-phase7-login-timing-postgres.test.js:139:17)
+
+FAIL tests/api/m20-phase7-refresh-reset-race-postgres.test.js
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › both legal orders serialize refresh and reset without a recovery deadlock
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › ordinary ungated reset/refresh races never abort recovery
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › refresh insertion failure rolls back and the exact original credential remains retryable
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › a nonlocking route read cannot authorize after exact token/session identity changes
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+  ● Mission 20 Phase 7 password-reset/refresh transaction authority › CSRF, replay-family, and inactive-membership controls remain fail closed
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      216 |               current_setting('data_checksums') AS checksums,
+      217 |               current_setting('max_connections')::int AS max_connections`
+    > 218 |     )).rows[0]).toEqual({
+          |                 ^
+      219 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      220 |     });
+      221 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)
+
+FAIL tests/api/m20-phase7-forgot-password-timing-postgres.test.js
+  ● Mission 20 Phase 7 mounted forgot-password timing safety › eligible and every non-authoritative outcome have adjacent indistinguishable distributions
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      128 |               current_setting('data_checksums') AS checksums,
+      129 |               current_setting('max_connections')::int AS max_connections`
+    > 130 |     )).rows[0]).toEqual({
+          |                 ^
+      131 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      132 |     });
+      133 |
+
+      at Object.toEqual (tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)
+
+  ● Mission 20 Phase 7 mounted forgot-password timing safety › source throttling bounds recovery delay and creates no dummy authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      128 |               current_setting('data_checksums') AS checksums,
+      129 |               current_setting('max_connections')::int AS max_connections`
+    > 130 |     )).rows[0]).toEqual({
+          |                 ^
+      131 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      132 |     });
+      133 |
+
+      at Object.toEqual (tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)
+
+  ● Mission 20 Phase 7 mounted forgot-password timing safety › bounded equalization preserves repository errors and never runs after a denied limit
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      128 |               current_setting('data_checksums') AS checksums,
+      129 |               current_setting('max_connections')::int AS max_connections`
+    > 130 |     )).rows[0]).toEqual({
+          |                 ^
+      131 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      132 |     });
+      133 |
+
+      at Object.toEqual (tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)
+
+FAIL tests/api/m20-phase7-login-reset-race-postgres.test.js
+  ● Mission 20 Phase 7 password-reset/login transaction authority › reset-first rejects stale deterministic canonical, raw, and current-material logins
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+  ● Mission 20 Phase 7 password-reset/login transaction authority › ordinary ungated reset-first rejects canonical, raw, and current-material logins
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+  ● Mission 20 Phase 7 password-reset/login transaction authority › login-first serializes canonical and supported upgrades before reset revokes the committed session
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+  ● Mission 20 Phase 7 password-reset/login transaction authority › session transaction failure rolls back supported upgrade and both credential inserts
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      405 |               current_setting('data_checksums') AS checksums,
+      406 |               current_setting('max_connections')::int AS max_connections`
+    > 407 |     )).rows[0]).toEqual({
+          |                 ^
+      408 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      409 |     });
+      410 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)
+
+FAIL tests/integration/m19-part3-canonical-graph-postgres.test.js (34.731 s)
+  ● Mission 19 Part 3 transactional canonical graph on disposable PostgreSQL › 32 concurrent requests across two Node processes create exactly one graph
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      198 |   });
+      199 |
+    > 200 |   test('32 concurrent requests across two Node processes create exactly one graph', async () => {
+          |   ^
+      201 |     const key = 'm19-graph-multiprocess-32';
+      202 |     const input = graphInput(key);
+      203 |     const [workerA, workerB] = await Promise.all([runWorker(input, 16), runWorker(input, 16)]);
+
+      at test (tests/integration/m19-part3-canonical-graph-postgres.test.js:200:3)
+      at Object.realPostgres (tests/integration/m19-part3-canonical-graph-postgres.test.js:151:1)
+
+FAIL tests/api/m20-phase7-oauth-reset-race-postgres.test.js
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › both legal issue/reset orders serialize without a deadlock or stale authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › both legal consume/reset orders serialize without a deadlock or stale authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › ordinary ungated issue/consume/reset races preserve recovery authority
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+  ● Mission 20 Phase 7 OAuth-state/password-reset transaction authority › legitimate OAuth single-use and reset controls remain intact
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "timezone": "UTC",
+        "version": "18.4",
+      }
+
+      295 |               current_setting('data_checksums') AS checksums,
+      296 |               current_setting('max_connections')::int AS max_connections`
+    > 297 |     )).rows[0]).toEqual({
+          |                 ^
+      298 |       version: '18.4', timezone: 'UTC', checksums: 'on', max_connections: 100,
+      299 |     });
+      300 |     const { AccountRepository } = require('../../src/accounts/repository');
+
+      at Object.toEqual (tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)
+
+FAIL tests/api/m20-phase7-lane3-role-authority-postgres.test.js
+  ● Mission 20 Phase 7 Lane 3 mounted canonical role authority › upgrade preserves operational identity and active durable sessions while canonicalizing access
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "checksums": "on",
+    -   "max_connections": 100,
+    +   "max_connections": 200,
+        "port": 55746,
+        "timezone": "UTC",
+      }
+
+      189 |     )).rows[0];
+      190 |     expect(Math.floor(identity.version_num / 10000)).toBe(18);
+    > 191 |     expect(identity).toMatchObject({
+          |                      ^
+      192 |       timezone: 'UTC', checksums: 'on', max_connections: 100,
+      193 |       port: Number(process.env.M19_EXPECTED_PG_PORT),
+      194 |     });
+
+      at Object.toMatchObject (tests/api/m20-phase7-lane3-role-authority-postgres.test.js:191:22)
+
+
+Test Suites: 7 failed, 146 passed, 153 total
+Tests:       29 failed, 2104 passed, 2133 total
+Snapshots:   0 total
+Time:        479.374 s, estimated 585 s
+Ran all test suites.

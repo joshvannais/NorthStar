@@ -1,0 +1,11 @@
+node:internal/process/promises:394
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+page.waitForResponse: Timeout 30000ms exceeded while waiting for event "response"
+    at main (C:\Users\joshv\Documents\Codex\2026-08-26\northstar-mission-22\work\m22-part6-writer\tests\browser\m22-part6-mobile-today.js:454:39) {
+  log: [],
+  name: 'TimeoutError'
+}
+
+Node.js v24.19.0

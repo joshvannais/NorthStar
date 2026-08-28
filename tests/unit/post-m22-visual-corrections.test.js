@@ -19,6 +19,7 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(css).toMatch(/\.today-page\s+\.app-layout\s*\{\s*padding-top:\s*0\s*!important;/);
     expect(css).toMatch(/\.today-card-accent\s*\{\s*display:\s*none;/);
     expect(css).toMatch(/\.today-disclosure\[open\][\s\S]*border-top:\s*0/);
+    expect(css).toMatch(/summary:focus-visible\s*\{[\s\S]*outline:\s*0;[\s\S]*box-shadow:\s*inset/);
   });
 
   test('capitalizes projected Today labels and keeps one appointment count authority', () => {

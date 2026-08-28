@@ -555,12 +555,23 @@ async function main() {
     assert.strictEqual(disclosurePresentation.accentDisplay, 'none', JSON.stringify(disclosurePresentation));
     assert.strictEqual(disclosurePresentation.contentBorderTopWidth, '0px', JSON.stringify(disclosurePresentation));
     assert.ok(disclosurePresentation.verticalGap >= -1, JSON.stringify(disclosurePresentation));
+    if (!mobile) {
+      const focusPresentation = await firstDisclosure.evaluate(node => ({
+        outlineWidth: getComputedStyle(node).outlineWidth,
+        boxShadow: getComputedStyle(node).boxShadow,
+      }));
+      assert.strictEqual(focusPresentation.outlineWidth, '0px', JSON.stringify(focusPresentation));
+      assert.notStrictEqual(focusPresentation.boxShadow, 'none', JSON.stringify(focusPresentation));
+      await firstDisclosure.evaluate(node => node.blur());
+    }
     await capture('employee-primary', 'ready', 'active employee', 'direct-and-current-crew');
     const routeDisclosure = page.locator('.today-work-card').first().locator('.today-disclosure summary').nth(1);
     if (mobile) await routeDisclosure.tap(); else { await routeDisclosure.focus(); await page.keyboard.press('Enter'); }
+    if (!mobile) await routeDisclosure.evaluate(node => node.blur());
     await capture('dispatched-route-and-instructions', 'ready', 'active employee', 'direct-dispatched');
     const crewDisclosure = page.locator('.today-work-card').nth(1).locator('.today-disclosure summary').last();
     if (mobile) await crewDisclosure.tap(); else { await crewDisclosure.focus(); await page.keyboard.press('Enter'); }
+    if (!mobile) await crewDisclosure.evaluate(node => node.blur());
     await capture('current-active-crew', 'ready', 'active employee and current crew', 'crew-scheduled-not-dispatched');
 
     for (const scale of ['200%', '400%']) {

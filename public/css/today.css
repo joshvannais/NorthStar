@@ -153,8 +153,12 @@
 .today-team-list { margin: 4px 0 0; padding-left: 20px; }
 .today-team-list li + li { margin-top: 3px; }
 .today-page button:focus-visible,
-.today-page a:focus-visible,
-.today-page summary:focus-visible { outline: 3px solid var(--brand-500); outline-offset: 3px; }
+.today-page a:focus-visible { outline: 3px solid var(--brand-500); outline-offset: 3px; }
+.today-page summary:focus-visible {
+  outline: 0;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 3px var(--brand-500);
+}
 [data-theme="dark"] .today-state-badge[data-state="dispatched"] { color: #a7f3d0; border-color: rgba(52,211,153,.35); background: rgba(6,95,70,.34); }
 [data-theme="dark"] .today-state-badge[data-state="revoked"],
 [data-theme="dark"] .today-state-badge[data-state="needs_review"] { color: #fde68a; border-color: rgba(251,191,36,.35); background: rgba(120,53,15,.35); }

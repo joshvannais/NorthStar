@@ -97,7 +97,7 @@
   }
 
   function titleCase(value) {
-    return safeString(value, 'unavailable').replace(/[_-]+/g, ' ').replace(/\b\w/g, function (letter) {
+    return safeString(value, 'unavailable').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b\w/g, function (letter) {
       return letter.toUpperCase();
     });
   }
@@ -524,7 +524,9 @@
 
   function renderLeads(graphs) {
     var rows = byId('commandCenterLeadRows');
+    var mobileCards = byId('commandCenterLeadCards');
     rows.replaceChildren();
+    mobileCards.replaceChildren();
     byId('commandCenterLeadCount').textContent = graphs.length + (graphs.length === 1 ? ' active lead' : ' active leads');
     if (!graphs.length) {
       var row = document.createElement('tr');
@@ -532,6 +534,7 @@
       cell.colSpan = 5;
       row.appendChild(cell);
       rows.appendChild(row);
+      mobileCards.appendChild(element('p', 'command-center-mobile-empty', 'No role-authorized lead records are available.'));
       return;
     }
     var visible = graphs.slice(0, 8);
@@ -572,6 +575,36 @@
       row.append(serviceCell, valueCell, statusCell, actionCell);
       rows.appendChild(row);
       });
+
+      var firstGraph = group.records[0];
+      var customerCard = element('article', 'command-center-mobile-customer');
+      var customerHeader = element('header', 'command-center-mobile-customer-header');
+      var customerLink = element('a', 'command-center-record-link', safeString(firstGraph.customer && firstGraph.customer.name, 'Customer Record'));
+      customerLink.href = detailHref(firstGraph);
+      customerHeader.append(
+        customerLink,
+        element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records'))
+      );
+      var groupRecordedAt = formatDate(firstGraph.timestamps && firstGraph.timestamps.createdAt);
+      if (groupRecordedAt) customerHeader.appendChild(element('span', 'command-center-customer-recorded-at', groupRecordedAt));
+      var workList = element('ol', 'command-center-mobile-work-list');
+      group.records.forEach(function (graph) {
+        var workItem = element('li', 'command-center-mobile-work');
+        var mobileService = safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
+        var mobileRecorded = formatMoney(graph.estimate && graph.estimate.customerPrice) || 'Unavailable — no recorded estimate';
+        var mobileStatus = titleCase(graph.lead && graph.lead.status);
+        var mobileAction = actionEntries(graph)[0];
+        var details = element('dl', 'command-center-mobile-work-details');
+        details.append(
+          element('dt', '', 'Recorded Value'), element('dd', '', mobileRecorded),
+          element('dt', '', 'Status'), element('dd', '', mobileStatus),
+          element('dt', '', 'Next Action'), element('dd', '', mobileAction ? mobileAction.label : 'Review complete Polaris detail')
+        );
+        workItem.append(element('h3', '', mobileService), details);
+        workList.appendChild(workItem);
+      });
+      customerCard.append(customerHeader, workList);
+      mobileCards.appendChild(customerCard);
     });
   }
 

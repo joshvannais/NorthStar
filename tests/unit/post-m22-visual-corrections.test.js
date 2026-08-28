@@ -55,4 +55,27 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(page).toContain('command-center-customer-record-count');
     expect(page).not.toContain('Recorded time unavailable');
   });
+
+  test('reflows the mobile lead table into complete grouped customer cards', () => {
+    const html = source('public/demo-dashboard.html');
+    const css = source('public/css/demo-dashboard.css');
+    const page = source('public/js/command-center-page.js');
+
+    expect(html).toContain('id="commandCenterLeadCards"');
+    expect(css).not.toMatch(/\.demo-table-wrap table\s*\{[^}]*760px/);
+    expect(css).toMatch(/\.demo-leads-panel \.demo-table-wrap\s*\{\s*display:\s*none/);
+    expect(css).toMatch(/\.command-center-mobile-leads\s*\{\s*display:\s*grid/);
+    expect(page).toContain("element('article', 'command-center-mobile-customer')");
+    for (const label of ['Recorded Value', 'Status', 'Next Action']) expect(page).toContain(`'${label}'`);
+  });
+
+  test('splits camel-case owner labels and supplies accessible dark operational colors', () => {
+    const page = source('public/js/command-center-page.js');
+    const today = source('public/css/today.css');
+    const scheduling = source('public/css/scheduling-approval.css');
+
+    expect(page).toContain("replace(/([a-z0-9])([A-Z])/g, '$1 $2')");
+    expect(today).toMatch(/\[data-theme="dark"\] \.today-scope-note > span,[\s\S]*\.today-detail-label,[\s\S]*\.today-disclosure summary::after\s*\{\s*color:\s*var\(--brand-200\)/);
+    expect(scheduling).toMatch(/\[data-theme="dark"\][\s\S]*\.m22-state-chip\[data-state="at_risk"\][\s\S]*color:\s*#fde68a/);
+  });
 });

@@ -162,6 +162,9 @@
 [data-theme="dark"] .today-state-badge[data-state="dispatched"] { color: #a7f3d0; border-color: rgba(52,211,153,.35); background: rgba(6,95,70,.34); }
 [data-theme="dark"] .today-state-badge[data-state="revoked"],
 [data-theme="dark"] .today-state-badge[data-state="needs_review"] { color: #fde68a; border-color: rgba(251,191,36,.35); background: rgba(120,53,15,.35); }
+[data-theme="dark"] .today-scope-note > span,
+[data-theme="dark"] .today-detail-label,
+[data-theme="dark"] .today-disclosure summary::after { color: var(--brand-200); }
 @media (max-width: 768px) {
   .today-page > .mobile-header {
     position: static !important;

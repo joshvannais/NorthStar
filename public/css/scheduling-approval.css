@@ -86,3 +86,7 @@
 [data-theme="dark"] .m22-authority-overview .m22-action-button { color: var(--text-primary); background: var(--surface); }
 [data-theme] .m22-authority-overview .m22-category-button[aria-pressed="true"],
 [data-theme] .m22-authority-overview .m22-action-button--primary { color: #fff; background: #285ec7; border-color: #285ec7; }
+[data-theme="dark"] .m22-authority-overview .m22-state-chip[data-state="conflicting"],
+[data-theme="dark"] .m22-authority-overview .m22-state-chip[data-state="overdue"] { color: #fca5a5; }
+[data-theme="dark"] .m22-authority-overview .m22-state-chip[data-state="needs_review"],
+[data-theme="dark"] .m22-authority-overview .m22-state-chip[data-state="at_risk"] { color: #fde68a; }

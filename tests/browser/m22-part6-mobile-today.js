@@ -436,11 +436,41 @@ async function main() {
     assert.deepStrictEqual(primaryBody.data.records.map(record => record.dispatch.state), ['dispatched', 'not_dispatched', 'revoked']);
     assert.ok(primaryBody.data.records.some(record => record.assignment.currentCrew));
     assert.ok(primaryBody.data.records.every(record => record.route.providerNeutral && record.route.providerCalls === 0));
-    const todayPresentation = await page.evaluate(() => ({
+    const todayPresentation = await page.evaluate(() => {
+      const parseColor = value => {
+        const parts = String(value).match(/[\d.]+/g) || [];
+        return { r: Number(parts[0] || 0), g: Number(parts[1] || 0), b: Number(parts[2] || 0), a: parts[3] === undefined ? 1 : Number(parts[3]) };
+      };
+      const composite = (foreground, background) => ({
+        r: foreground.r * foreground.a + background.r * (1 - foreground.a),
+        g: foreground.g * foreground.a + background.g * (1 - foreground.a),
+        b: foreground.b * foreground.a + background.b * (1 - foreground.a),
+        a: 1,
+      });
+      const effectiveBackground = node => {
+        const layers = [];
+        for (let current = node; current; current = current.parentElement) layers.push(parseColor(getComputedStyle(current).backgroundColor));
+        return layers.reverse().reduce((background, layer) => composite(layer, background), { r: 255, g: 255, b: 255, a: 1 });
+      };
+      const luminance = color => {
+        const channel = value => { const normalized = value / 255; return normalized <= .03928 ? normalized / 12.92 : Math.pow((normalized + .055) / 1.055, 2.4); };
+        return .2126 * channel(color.r) + .7152 * channel(color.g) + .0722 * channel(color.b);
+      };
+      const contrast = (node, pseudo) => {
+        const foreground = parseColor(getComputedStyle(node, pseudo || null).color);
+        const background = effectiveBackground(node);
+        const values = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+        return (values[0] + .05) / (values[1] + .05);
+      };
+      const scopeCount = document.querySelector('.today-scope-note > span');
+      const detailLabel = document.querySelector('.today-detail-label');
+      const disclosure = document.querySelector('.today-disclosure summary');
+      return {
       authority: document.getElementById('todayAuthority').textContent,
       duplicateCount: document.querySelectorAll('#todayWorkCount').length,
       labels: Array.from(document.querySelectorAll('.today-state-badge')).map(node => node.textContent.trim()),
       todayHeaderPosition: getComputedStyle(document.querySelector('.today-header')).position,
+      operationalContrast: [scopeCount && contrast(scopeCount), detailLabel && contrast(detailLabel), disclosure && contrast(disclosure, '::after')].filter(Number.isFinite),
       mobileHeader: (() => {
         const node = document.querySelector('.mobile-header');
         if (!node) return null;
@@ -449,12 +479,13 @@ async function main() {
         return { display: style.display, position: style.position, top: rect.top, right: rect.right };
       })(),
       documentWidth: { client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
-    }));
+    }; });
     assert.ok(todayPresentation.authority.endsWith('· Personal Work Only'), JSON.stringify(todayPresentation));
     assert.strictEqual(todayPresentation.duplicateCount, 0, JSON.stringify(todayPresentation));
     todayPresentation.labels.forEach(value => assert.match(value, /^[A-Z]/, `uncapitalized Today label: ${value}`));
     assert.strictEqual(todayPresentation.todayHeaderPosition, 'static', JSON.stringify(todayPresentation));
     assert.ok(todayPresentation.documentWidth.scroll <= todayPresentation.documentWidth.client + 2, JSON.stringify(todayPresentation));
+    if (dark) todayPresentation.operationalContrast.forEach(value => assert.ok(value >= 4.5, `dark Today contrast ${JSON.stringify(todayPresentation)}`));
     if (mobile) {
       assert.ok(todayPresentation.mobileHeader && todayPresentation.mobileHeader.display !== 'none', JSON.stringify(todayPresentation));
       assert.strictEqual(todayPresentation.mobileHeader.position, 'static', JSON.stringify(todayPresentation));
@@ -854,8 +885,37 @@ async function main() {
     assert.strictEqual((await commandResponse).status(), 200);
     await ownerPage.getByRole('heading', { name: 'One operating view for the day ahead.' }).waitFor();
     await ownerPage.waitForFunction(() => document.getElementById('commandCenterScheduling').getAttribute('aria-busy') === 'false');
-    const commandPresentation = await ownerPage.evaluate(() => ({
+    const commandPresentation = await ownerPage.evaluate(() => {
+      const parseColor = value => {
+        const parts = String(value).match(/[\d.]+/g) || [];
+        return { r: Number(parts[0] || 0), g: Number(parts[1] || 0), b: Number(parts[2] || 0), a: parts[3] === undefined ? 1 : Number(parts[3]) };
+      };
+      const composite = (foreground, background) => ({
+        r: foreground.r * foreground.a + background.r * (1 - foreground.a),
+        g: foreground.g * foreground.a + background.g * (1 - foreground.a),
+        b: foreground.b * foreground.a + background.b * (1 - foreground.a),
+        a: 1,
+      });
+      const effectiveBackground = node => {
+        const layers = [];
+        for (let current = node; current; current = current.parentElement) layers.push(parseColor(getComputedStyle(current).backgroundColor));
+        return layers.reverse().reduce((background, layer) => composite(layer, background), { r: 255, g: 255, b: 255, a: 1 });
+      };
+      const luminance = color => {
+        const channel = value => { const normalized = value / 255; return normalized <= .03928 ? normalized / 12.92 : Math.pow((normalized + .055) / 1.055, 2.4); };
+        return .2126 * channel(color.r) + .7152 * channel(color.g) + .0722 * channel(color.b);
+      };
+      const contrast = node => {
+        const values = [luminance(parseColor(getComputedStyle(node).color)), luminance(effectiveBackground(node))].sort((left, right) => right - left);
+        return (values[0] + .05) / (values[1] + .05);
+      };
+      const leadsPanel = document.querySelector('.demo-leads-panel');
+      const tableWrap = leadsPanel.querySelector('.demo-table-wrap');
+      const mobileCards = document.getElementById('commandCenterLeadCards');
+      return {
       schedulingTitle: document.getElementById('commandCenterSchedulingTitle').textContent,
+      selectedCategory: document.querySelector('.m22-category-button[aria-pressed="true"] .m22-category-label').textContent.trim(),
+      riskContrast: Array.from(document.querySelectorAll('.m22-state-chip')).map(node => ({ text: node.textContent.trim(), ratio: contrast(node) })),
       records: Array.from(document.querySelectorAll('#commandCenterSchedulingRecords .m22-overview-record')).map(record => ({
         primaryStates: Array.from(record.querySelectorAll('.m22-state-item')).map(node => node.textContent.trim()),
         attention: Array.from(record.querySelectorAll('.m22-state-chip')).map(node => node.textContent.trim()),
@@ -866,8 +926,20 @@ async function main() {
       leadRows: document.querySelectorAll('#commandCenterLeadRows tr').length,
       customerGroups: Array.from(document.querySelectorAll('#commandCenterLeadRows .command-center-customer-group')).map(cell => ({ rowSpan: cell.rowSpan, text: cell.textContent.trim() })),
       containsRepeatedUnavailableTime: document.getElementById('commandCenterLeadRows').textContent.includes('Recorded time unavailable'),
-    }));
+      leadLayout: {
+        panel: { client: leadsPanel.clientWidth, scroll: leadsPanel.scrollWidth },
+        tableDisplay: getComputedStyle(tableWrap).display,
+        cardsDisplay: getComputedStyle(mobileCards).display,
+        cards: Array.from(mobileCards.querySelectorAll('.command-center-mobile-customer')).map(card => ({
+          client: card.clientWidth,
+          scroll: card.scrollWidth,
+          records: card.querySelectorAll('.command-center-mobile-work').length,
+          labels: Array.from(card.querySelectorAll('dt')).map(node => node.textContent.trim()),
+        })),
+      },
+    }; });
     assert.strictEqual(commandPresentation.schedulingTitle, 'Owner and Dispatcher Overview');
+    assert.strictEqual(commandPresentation.selectedCategory, 'At Risk', JSON.stringify(commandPresentation));
     commandPresentation.records.forEach(record => {
       assert.strictEqual(record.primaryStates.length, 3, JSON.stringify(record));
       assert.strictEqual(new Set(record.attention).size, record.attention.length, JSON.stringify(record));
@@ -876,6 +948,21 @@ async function main() {
     });
     assert.strictEqual(commandPresentation.containsRepeatedUnavailableTime, false, JSON.stringify(commandPresentation));
     commandPresentation.customerGroups.forEach(group => assert.ok(group.rowSpan >= 1 && group.text.includes('work record'), JSON.stringify(group)));
+    assert.ok(commandPresentation.leadLayout.panel.scroll <= commandPresentation.leadLayout.panel.client + 2, JSON.stringify(commandPresentation));
+    if (mobile) {
+      assert.strictEqual(commandPresentation.leadLayout.tableDisplay, 'none', JSON.stringify(commandPresentation));
+      assert.notStrictEqual(commandPresentation.leadLayout.cardsDisplay, 'none', JSON.stringify(commandPresentation));
+      assert.strictEqual(commandPresentation.leadLayout.cards.length, commandPresentation.customerGroups.length, JSON.stringify(commandPresentation));
+      commandPresentation.leadLayout.cards.forEach(card => {
+        assert.ok(card.scroll <= card.client + 2, JSON.stringify(card));
+        assert.ok(card.records >= 1, JSON.stringify(card));
+        for (const label of ['Recorded Value', 'Status', 'Next Action']) assert.ok(card.labels.includes(label), JSON.stringify(card));
+      });
+    } else {
+      assert.notStrictEqual(commandPresentation.leadLayout.tableDisplay, 'none', JSON.stringify(commandPresentation));
+      assert.strictEqual(commandPresentation.leadLayout.cardsDisplay, 'none', JSON.stringify(commandPresentation));
+    }
+    if (dark) commandPresentation.riskContrast.forEach(entry => assert.ok(entry.ratio >= 4.5, `dark scheduling contrast ${JSON.stringify(entry)}`));
     if (evidenceRoot) {
       const filename = path.join(evidenceRoot, `${matrix}-command-center-reference.png`);
       await ownerPage.screenshot({ path: filename, fullPage: true });
@@ -890,6 +977,39 @@ async function main() {
         expectedVisible: ['Command Center design reference'],
         expectedWithheld: ['not an employee Today authority claim'], withheldCategories: ['not an employee Today authority claim'],
         sourceRoute: '/dashboard', timestamp: new Date().toISOString() });
+    }
+    if (mobile) {
+      await ownerPage.evaluate(() => { document.documentElement.style.fontSize = '400%'; });
+      await ownerPage.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const commandReflow = await ownerPage.evaluate(() => ({
+        document: { client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
+        panel: (() => { const node = document.querySelector('.demo-leads-panel'); return { client: node.clientWidth, scroll: node.scrollWidth, rect: node.getBoundingClientRect().toJSON() }; })(),
+        tableDisplay: getComputedStyle(document.querySelector('.demo-leads-panel .demo-table-wrap')).display,
+        cards: Array.from(document.querySelectorAll('#commandCenterLeadCards .command-center-mobile-customer')).map(node => ({ client: node.clientWidth, scroll: node.scrollWidth, rect: node.getBoundingClientRect().toJSON() })),
+      }));
+      assert.ok(commandReflow.document.scroll <= commandReflow.document.client + 2, `400% Command Center document reflow ${JSON.stringify(commandReflow)}`);
+      assert.ok(commandReflow.panel.scroll <= commandReflow.panel.client + 2, `400% Command Center panel reflow ${JSON.stringify(commandReflow)}`);
+      assert.strictEqual(commandReflow.tableDisplay, 'none', JSON.stringify(commandReflow));
+      commandReflow.cards.forEach(card => {
+        assert.ok(card.scroll <= card.client + 2, JSON.stringify(card));
+        assert.ok(card.rect.left >= -2 && card.rect.right <= commandReflow.document.client + 2, JSON.stringify(card));
+      });
+      if (evidenceRoot) {
+        const filename = path.join(evidenceRoot, `${matrix}-command-center-400-percent-reflow.png`);
+        await ownerPage.screenshot({ path: filename, fullPage: true });
+        screenshots.push({ filename: path.basename(filename), browser: selected,
+          engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
+          version, viewport, theme: dark ? 'dark' : 'light', realRoleIdentity: 'active owner reference only',
+          assignmentMode: 'broad-reference-not-Today', state: 'ready-400-percent-reflow', testedRevision, testedTree,
+          fixtureTenant: `isolated disposable ${REALISTIC.tenant} test tenant`, fixtureTenantTimeZone: fixturePlan.timeZone,
+          fixtureReferenceInstant: fixturePlan.referenceInstant,
+          sessionProvenance: 'mounted real PostgreSQL owner cookie session; nonsecret test identity',
+          stateProvenance: 'real mounted PostgreSQL owner reference at 400 percent root text reflow; not an employee Today authority claim',
+          expectedVisible: ['complete grouped mobile lead cards', 'customer', 'service', 'recorded value', 'status', 'next action'],
+          expectedWithheld: ['not an employee Today authority claim'], withheldCategories: ['not an employee Today authority claim'],
+          sourceRoute: '/dashboard', timestamp: new Date().toISOString() });
+      }
+      await ownerPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
     }
 
     await Promise.all(responseCaptureTasks);

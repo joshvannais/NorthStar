@@ -17,13 +17,22 @@ migrations 001–035 are byte-preserved.
 
 Writer evidence at the exact implementation source:
 
-- focused Part 6: 2/2 suites, 12/12 tests;
-- explicit Parts 1–6 compatibility: 13/13 suites, 169/169 tests;
-- locally available Jest: 153/153 suites, 2,130/2,130 tests;
+- focused Part 6: 2/2 suites, 15/15 tests;
+- explicit Parts 1–6 compatibility: 13/13 suites, 172/172 tests;
+- locally available Jest: 153/153 suites, 2,133/2,133 tests;
 - PostgreSQL 18.4 UTC fresh/restart, migration 035 exactly once, two health 200s;
 - installed Chrome 151 and actual Playwright WebKit 26.5: 8 matrices and 96
   committed employee-only/Command Center-reference screenshots, zero provider
   calls, zero worker-mutation traffic, zero browser errors.
+
+The correction closes the independent audit's four validated findings: Today
+uses a dedicated minimum shell and never requests `/api/auth/me`; the committed
+evidence ledger is generated and verified from immutable Git blobs; every
+screenshot row is state-truthful with explicit synthetic provenance; and the
+browser fixture selects a real IANA tenant zone that remains deterministic at
+every wall-clock hour while retaining New York DST coverage. The browser proof
+also inventories exact logout JSON and every observed public-login redirect
+request/response before confirming durable session revocation.
 
 The screenshot package is under
 `outputs/m22-part6-writer/employee-only-screenshots/` with exact hashes and a

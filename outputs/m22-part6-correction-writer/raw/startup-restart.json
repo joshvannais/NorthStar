@@ -1,0 +1,67 @@
+{
+  "postgres": {
+    "version": "18.4",
+    "timezone": "UTC",
+    "migration_count": 33,
+    "migration035_count": 1,
+    "migration035_checksum": "96fb6814a9a8a0db2ebdca2fc4626df8091bb7f3b48a3f4bef613e97fe977129",
+    "preview_table": "canonical_schedule_mutation_previews",
+    "approval_table": "canonical_schedule_human_approvals"
+  },
+  "runtime": {
+    "role": "ns_m22p5_runtime_29796_862a5190",
+    "can_create_database": false,
+    "can_create_public": false
+  },
+  "firstHealth": {
+    "status": 200,
+    "body": {
+      "status": "ok",
+      "service": "northstar-solutions-api",
+      "persistence": "postgresql",
+      "components": {
+        "database": "healthy",
+        "canonicalPersistence": "healthy"
+      },
+      "data": {
+        "status": "ok",
+        "service": "northstar-solutions-api",
+        "persistence": "postgresql",
+        "components": {
+          "database": "healthy",
+          "canonicalPersistence": "healthy"
+        }
+      }
+    }
+  },
+  "secondHealth": {
+    "status": 200,
+    "body": {
+      "status": "ok",
+      "service": "northstar-solutions-api",
+      "persistence": "postgresql",
+      "components": {
+        "database": "healthy",
+        "canonicalPersistence": "healthy"
+      },
+      "data": {
+        "status": "ok",
+        "service": "northstar-solutions-api",
+        "persistence": "postgresql",
+        "components": {
+          "database": "healthy",
+          "canonicalPersistence": "healthy"
+        }
+      }
+    }
+  },
+  "firstAppliedMigrations": 33,
+  "secondAppliedMigrations": 0,
+  "firstStartupApplied035": true,
+  "secondStartupApplied035": false,
+  "firstStderrBytes": 0,
+  "secondStderrBytes": 0,
+  "sourceChecksum": "96fb6814a9a8a0db2ebdca2fc4626df8091bb7f3b48a3f4bef613e97fe977129",
+  "providerConfiguration": "all provider credentials omitted",
+  "pass": true
+}

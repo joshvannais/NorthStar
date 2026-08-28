@@ -12,7 +12,7 @@
   revocation, loading, network error, offline, stale/reload, and paired Command
   Center reference views.
 
-Every screenshot entry records the browser/engine and version, viewport, theme,
+Every corrected screenshot entry records the browser/engine and version,
 durable test role/identity, assignment mode, UI state, exact implementation
 revision/tree, nonsecret disposable tenant/session provenance, expected visible
 fields, withheld categories, source route, timestamp, and SHA-256. Fixtures use
@@ -36,6 +36,13 @@ prove the Today payload/DOM contains no financials, prices/margins/internal
 costs/payroll, invoices/payments, billing/subscription settings, broad customer
 history, other-worker schedules, owner-only Polaris cost intelligence, provider
 credentials, or Mission 23 controls. Hostile durable bytes render only as text.
+
+The corrected matrices also inventory every signed-in employee request and
+inspectable response, then exercise the real visible logout control. The real
+mounted logout JSON is inspected before genuine login navigation, every
+observed logout/public-login request has exactly one inventoried response, the
+durable session is revoked, and no prior work card remains. Signed-in Today
+never requests `/api/auth/me`, shared telemetry, or a broad operator bundle.
 
 WebKit is not physical Safari. Physical-device and user visual approval remain
 separate and unclaimed. After terminal Part 6 release, the Mission 22 lead must

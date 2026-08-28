@@ -2,9 +2,9 @@
 
 ## Result
 
-The narrow Part 6 implementation is writer-complete at source commit
-`dcd860524c9242a6c774e349e63091f92646b246` and tree
-`9163cc43eddd557eecb0afe8510a73a8c6553bff`. It adds a genuine signed-in,
+The narrow Part 6 correction implementation is writer-complete at source commit
+`e72792da9edbee3b051fd34f14cd810324870e8b` and tree
+`2a6d9a61557dadd2bb3f5593fc6c202ec30995f4`. It retains the genuine signed-in,
 mobile-first, read-only Today surface whose server projection is restricted to
 the current active workforce identity's direct assignments and current active
 crews inside the same read-only repeatable-read authorization/data snapshot.
@@ -17,19 +17,25 @@ approval divergence, and has no worker mutation or Mission 23 capability.
 
 ## Security and compatibility boundary
 
-The complete diff was manually traced from cookie session and tenant authority
+The complete diff and all four validated audit findings were manually traced
+from cookie session and tenant authority
 through schema-qualified bounded PostgreSQL, allowlisted JSON, structural
 browser validation, DOM-safe text sinks, shared navigation, and network calls.
 The implementation adds no durable authority or migration, makes no live
 provider call, and does not broaden Today for owners/admins/dispatchers. Broad
 Calendar/Command Center routes retain their existing contracts; the Today page
-itself exposes only Today navigation and no broad Quick Start.
+mounts its own minimum shell, exposes only Today navigation and logout, and
+loads neither `/api/auth/me`, broad operator navigation, telemetry, nor Quick
+Start while signed in.
 
 Terminal writer evidence is green as detailed in `test-evidence.md`: focused
-12/12, Parts 1–6 compatibility 169/169, available full Jest 2,130/2,130,
+15/15, Parts 1–6 compatibility 172/172, available full Jest 2,133/2,133,
 PostgreSQL startup/restart and two health 200s, and eight real-browser matrices
 with 96 frozen screenshots, zero external/provider calls, zero worker mutation
-traffic, and zero browser errors. Unavailable evidence is reported, not passed.
+traffic, and zero browser errors. The screenshot manifests are state-truthful,
+all synthetic transport provenance is explicit, and the evidence ledger is
+regenerated from immutable Git blobs. Unavailable evidence is reported, not
+passed.
 
 ## Handoff gate
 

@@ -1,10 +1,11 @@
 # Mission 22 Part 6 startup, reference, and migration record
 
 - Authorized base: `8d5f18ed02b2edd201664a75c5cd726edcce1bd9`.
-- Tested implementation: `dcd860524c9242a6c774e349e63091f92646b246`.
-- Tested tree: `9163cc43eddd557eecb0afe8510a73a8c6553bff`.
+- Tested correction implementation: `e72792da9edbee3b051fd34f14cd810324870e8b`.
+- Tested tree: `2a6d9a61557dadd2bb3f5593fc6c202ec30995f4`.
 - PostgreSQL: disposable loopback 18.4, UTC, isolated data directory and port
-  `55436`; no production data/account/configuration.
+  `55746`, data checksums on, `max_connections=100`; no production
+  data/account/configuration.
 - Fresh start: 33 migrations; restart: zero migrations.
 - Migration 035 ledger count: one; exact source/ledger checksum
   `96fb6814a9a8a0db2ebdca2fc4626df8091bb7f3b48a3f4bef613e97fe977129`.

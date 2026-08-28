@@ -72,9 +72,11 @@ imports no provider SDK/configuration/credential or live map link.
 - A non-ready state clears prior record DOM before showing loading, empty,
   error, offline, stale, or restricted state. Revoked sessions and removed crew
   membership cannot leave prior work visible or enumerable.
-- The page issues only same-origin `GET /api/v1/today` plus existing telemetry;
-  the mounted browser matrix asserts zero worker mutation requests and aborts/
-  records every non-loopback request.
+- The signed-in page issues only same-origin Today document/static `GET`s and
+  `GET /api/v1/today`; it loads neither shared telemetry nor `/api/auth/me`.
+  The mounted browser matrix asserts zero worker mutation requests, records
+  every non-loopback attempt, inventories every same-origin response, and
+  separately proves real CSRF-protected logout plus public-login navigation.
 - Visible controls are real read-only controls: reload plus native disclosure
   of already returned instructions, route uncertainty, and current-crew
   context. No control implies arrive/en-route/start/progress/complete/cancel,
@@ -83,16 +85,18 @@ imports no provider SDK/configuration/credential or live map link.
 
 ## Navigation, demo, and visual boundary
 
-The shared paid navigation contract adds Today while the accepted nine-route
-account-free demo contract remains unchanged. On Today, the shared navigation
-is reduced to Today itself even for a broadly authorized owner/dispatcher, so
-the employee surface does not enumerate broad directories, settings, or other
-workers. Demo tokens/simulated controls are absent.
+The accepted nine-route account-free demo contract remains unchanged. Today
+uses a dedicated minimum shell that contains only Today and genuine logout even
+for a broadly authorized owner/dispatcher, so the employee surface neither
+downloads nor enumerates broad directories, account fields, subscription or
+onboarding state, settings, or other workers. Demo tokens/simulated controls
+are absent.
 
 Today reuses Command Center theme and layout assets, page hierarchy, gutters,
 cards, borders/radii/shadows, badges, footer, focus, light/dark, and mobile-nav
 conventions. Part 6 adds only its page CSS and the exact shared route/navigation
-classification required to mount the page; it makes no site-wide redesign.
+classification required to mount the page plus its minimum shell; it makes no
+site-wide redesign.
 
 ## Manual security-diff conclusion
 

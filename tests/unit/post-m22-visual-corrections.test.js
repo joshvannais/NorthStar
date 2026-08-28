@@ -18,7 +18,7 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(css).toMatch(/\.today-page\s*>\s*\.mobile-header\s*\{[\s\S]*position:\s*static\s*!important;/);
     expect(css).toMatch(/\.today-page\s+\.app-layout\s*\{\s*padding-top:\s*0\s*!important;/);
     expect(css).toMatch(/\.today-card-accent\s*\{\s*display:\s*none;/);
-    expect(css).toMatch(/\.today-disclosure\[open\][\s\S]*border-top:\s*1px\s+solid\s+var\(--theme-border\)/);
+    expect(css).toMatch(/\.today-disclosure\[open\][\s\S]*border-top:\s*0/);
   });
 
   test('capitalizes projected Today labels and keeps one appointment count authority', () => {
@@ -28,6 +28,8 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(page).toContain("letter.toUpperCase()");
     expect(page).toContain("' · Personal Work Only'");
     expect(page).not.toContain("byId('todayWorkCount')");
+    expect(page).toContain("byId('todayRefresh').hidden = !panel.hidden && action !== false");
+    expect(page).toContain("byId('todayStatus').classList.toggle('sr-only', !panel.hidden)");
   });
 
   test('uses structured scheduling state rows and deduplicated attention indicators', () => {

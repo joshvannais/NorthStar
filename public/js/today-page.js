@@ -67,6 +67,8 @@
       byId('todayStateCopy').textContent = copy;
       byId('todayStateAction').hidden = action === false;
     }
+    byId('todayRefresh').hidden = !panel.hidden && action !== false;
+    byId('todayStatus').classList.toggle('sr-only', !panel.hidden);
     byId('todayStatus').textContent = copy;
   }
   function badge(text, state) {

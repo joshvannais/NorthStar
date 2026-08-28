@@ -147,7 +147,7 @@
 .today-disclosure-content { display: grid; gap: 8px; padding: 0 14px 14px; color: var(--theme-muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
 .today-disclosure[open] .today-disclosure-content {
   padding-top: 12px;
-  border-top: 1px solid var(--theme-border);
+  border-top: 0;
 }
 .today-disclosure-content p { margin: 0; }
 .today-team-list { margin: 4px 0 0; padding-left: 20px; }

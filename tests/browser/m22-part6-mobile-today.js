@@ -548,12 +548,12 @@ async function main() {
       const contentRect = content.getBoundingClientRect();
       return {
         accentDisplay: getComputedStyle(accent).display,
-        contentBorderTop: getComputedStyle(content).borderTopColor,
-        themeBorder: getComputedStyle(document.documentElement).getPropertyValue('--theme-border').trim(),
+        contentBorderTopWidth: getComputedStyle(content).borderTopWidth,
         verticalGap: contentRect.top - summaryRect.bottom,
       };
     });
     assert.strictEqual(disclosurePresentation.accentDisplay, 'none', JSON.stringify(disclosurePresentation));
+    assert.strictEqual(disclosurePresentation.contentBorderTopWidth, '0px', JSON.stringify(disclosurePresentation));
     assert.ok(disclosurePresentation.verticalGap >= -1, JSON.stringify(disclosurePresentation));
     await capture('employee-primary', 'ready', 'active employee', 'direct-and-current-crew');
     const routeDisclosure = page.locator('.today-work-card').first().locator('.today-disclosure summary').nth(1);
@@ -738,6 +738,12 @@ async function main() {
     await page.route('**/api/v1/today', route => route.abort('internetdisconnected'), { times: 1 });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitState('error');
+    const errorActions = await page.evaluate(() => ({
+      headerReloadHidden: document.getElementById('todayRefresh').hidden,
+      panelReloadHidden: document.getElementById('todayStateAction').hidden,
+      liveStatusVisuallyHidden: document.getElementById('todayStatus').classList.contains('sr-only'),
+    }));
+    assert.deepStrictEqual(errorActions, { headerReloadHidden: true, panelReloadHidden: false, liveStatusVisuallyHidden: true });
     if (mobile) {
       const reloadSpacing = await page.evaluate(() => {
         const copy = document.getElementById('todayStateCopy').getBoundingClientRect();
@@ -750,6 +756,7 @@ async function main() {
       'synthetic transport only: Playwright route.abort("internetdisconnected") for one /api/v1/today request; no durable authority claim');
     await page.getByRole('button', { name: 'Reload', exact: true }).click();
     await waitState('ready');
+    assert.strictEqual(await page.locator('#todayRefresh').evaluate(node => node.hidden), false);
 
     await context.setOffline(true);
     await page.locator('#todayRefresh').click();

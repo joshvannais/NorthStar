@@ -504,13 +504,18 @@ async function main() {
     const logoutControl = mobile
       ? logoutPage.locator('#todayMobileMenu [data-today-logout]')
       : logoutPage.locator('.sidebar [data-today-logout]');
+    const publicTelemetryAfterLogout = logoutPage.waitForResponse(value => {
+      const target = new URL(value.url());
+      return target.origin === origin && target.pathname === '/api/telemetry' && value.status() === 202;
+    });
     const [logoutResult] = await Promise.all([
       logoutPage.waitForResponse(value => new URL(value.url()).pathname === '/api/auth/logout'),
       logoutControl.click(),
     ]);
     assert.strictEqual(logoutResult.status(), 200);
     await logoutPage.waitForURL(value => new URL(value).pathname === '/login');
-    await logoutPage.waitForLoadState('networkidle');
+    await logoutPage.waitForLoadState('load');
+    await publicTelemetryAfterLogout;
     await Promise.all(logoutResponseCaptureTasks);
     assert.strictEqual(logoutExternal.length, 0);
     assert.deepStrictEqual(logoutRequestFailures, []);

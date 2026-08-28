@@ -1,0 +1,1601 @@
+{
+  "version": "m22-part7-record-trace-v1",
+  "providerCalls": 0,
+  "productionData": false,
+  "steps": [
+    {
+      "ordinal": 0,
+      "name": "01-new-appointment-created-with-compatible-schedule-ingress",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 1,
+        "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c",
+        "target": {
+          "kind": "unassigned",
+          "id": null
+        },
+        "targetState": "unassigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "not_dispatched",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          "appointment_creation_schedule_unreviewed",
+          "conflict_evaluation_not_available"
+        ],
+        "lastAction": "appointment_created",
+        "lastActorUserId": null,
+        "lastApprovalId": null,
+        "lastHumanApprovalId": null
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 2,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 0,
+        "canonical_schedule_human_approvals": 0,
+        "canonical_schedule_human_audit_events": 0,
+        "canonical_schedule_human_idempotency": 0
+      },
+      "allTableDelta": {},
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          }
+        ],
+        "evidence": {
+          "approvals": 0,
+          "audits": 0,
+          "idempotency": 0,
+          "previews": 0
+        }
+      },
+      "appointmentId": "d7000000-0000-4000-8000-000000000001",
+      "operationId": "e7000000-0000-4000-8000-000000000001",
+      "graphId": "f7000000-0000-4000-8000-000000000001",
+      "opportunityId": "c7000000-0000-4000-8000-000000000001"
+    },
+    {
+      "ordinal": 1,
+      "name": "02-part2-conflict-evaluation-non-capability",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 1,
+        "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c",
+        "target": {
+          "kind": "unassigned",
+          "id": null
+        },
+        "targetState": "unassigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "not_dispatched",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          "appointment_creation_schedule_unreviewed",
+          "conflict_evaluation_not_available"
+        ],
+        "lastAction": "appointment_created",
+        "lastActorUserId": null,
+        "lastApprovalId": null,
+        "lastHumanApprovalId": null
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 2,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 0,
+        "canonical_schedule_human_approvals": 0,
+        "canonical_schedule_human_audit_events": 0,
+        "canonical_schedule_human_idempotency": 0
+      },
+      "allTableDelta": {
+        "audit_logs": 1
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          }
+        ],
+        "evidence": {
+          "approvals": 0,
+          "audits": 0,
+          "idempotency": 0,
+          "previews": 0
+        }
+      },
+      "conflict": {
+        "digest": "482dd0f0fe85cd4cd02f6b9f48575e1ecf31d57a114e56bd0847e0a7a7113c7a",
+        "persisted": false,
+        "grantsMutation": false
+      }
+    },
+    {
+      "ordinal": 2,
+      "name": "03-part3-evidence-pinned-recommendation-non-capability",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 1,
+        "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c",
+        "target": {
+          "kind": "unassigned",
+          "id": null
+        },
+        "targetState": "unassigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "not_dispatched",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          "appointment_creation_schedule_unreviewed",
+          "conflict_evaluation_not_available"
+        ],
+        "lastAction": "appointment_created",
+        "lastActorUserId": null,
+        "lastApprovalId": null,
+        "lastHumanApprovalId": null
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 2,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 0,
+        "canonical_schedule_human_approvals": 0,
+        "canonical_schedule_human_audit_events": 0,
+        "canonical_schedule_human_idempotency": 0
+      },
+      "allTableDelta": {},
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          }
+        ],
+        "evidence": {
+          "approvals": 0,
+          "audits": 0,
+          "idempotency": 0,
+          "previews": 0
+        }
+      },
+      "recommendation": {
+        "digest": "3e35eb852799fe4aae6a2ed9753e3cfa556c2474b60b27696724eb2e6fca7833",
+        "persisted": false,
+        "grantsMutation": false,
+        "candidateCount": 4,
+        "providerCalls": 0
+      }
+    },
+    {
+      "ordinal": 3,
+      "name": "04-current-owner-human-assign-approval",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 2,
+        "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375",
+        "target": {
+          "kind": "profile",
+          "id": "b7000000-0000-4000-8000-000000000002"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "not_dispatched",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "assign",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 3,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1
+      },
+      "allTableDelta": {
+        "audit_logs": 2,
+        "canonical_schedule_assignment_revisions": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1,
+        "canonical_schedule_mutation_previews": 1
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          }
+        ],
+        "evidence": {
+          "approvals": 1,
+          "audits": 1,
+          "idempotency": 1,
+          "previews": 1
+        }
+      },
+      "previewId": "ba6a469a-a881-4d0e-9cab-9a1e9bff6031",
+      "previewDigest": "6dacd7e5a2ccf3b05a50c217e4e08474b930a04b64670670445b02ce3a4f9281",
+      "approvalResponse": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375",
+        "graphId": "f7000000-0000-4000-8000-000000000001",
+        "revision": 2,
+        "updatedAt": "2026-08-28T12:23:18.038941+00:00",
+        "lastAction": "assign",
+        "lastReason": "Mission 22 Part 7 exact human assign approval. <img src=x onerror=\"globalThis.m22Part7Compromised=true\">",
+        "needsReview": true,
+        "operationId": "e7000000-0000-4000-8000-000000000001",
+        "targetState": "assigned",
+        "scheduledEnd": "2026-08-28T13:30:00+00:00",
+        "appointmentId": "d7000000-0000-4000-8000-000000000001",
+        "dispatchState": "not_dispatched",
+        "opportunityId": "c7000000-0000-4000-8000-000000000001",
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "scheduleState": "scheduled",
+        "scheduledStart": "2026-08-28T13:10:00+00:00",
+        "workforceCrewId": null,
+        "appointmentStatus": "scheduled",
+        "workforceProfileId": "b7000000-0000-4000-8000-000000000002",
+        "lastHumanApprovalId": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9"
+      }
+    },
+    {
+      "ordinal": 4,
+      "name": "05-calendar-command-center-today-exact-record-parity",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 2,
+        "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375",
+        "target": {
+          "kind": "profile",
+          "id": "b7000000-0000-4000-8000-000000000002"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "not_dispatched",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "assign",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 3,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1
+      },
+      "allTableDelta": {
+        "audit_logs": 2
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          }
+        ],
+        "evidence": {
+          "approvals": 1,
+          "audits": 1,
+          "idempotency": 1,
+          "previews": 1
+        }
+      },
+      "surfaces": {
+        "calendarDigest": "dc075f586963dbc96707527349f78a521cdbdf3c24987d3be3c9d5bc35a85222",
+        "commandCenterDigest": "dd47455fe0968c06667f592aaf7dd60493c876486639055702b2743da6498f41",
+        "todayDigest": "42cf213d2f7fe8ddd1c6cf167778cdec8c2445cfcc5be3d36f447ca8dde847a5",
+        "todayCount": 1
+      }
+    },
+    {
+      "ordinal": 5,
+      "name": "06-current-owner-human-dispatch-approval",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 3,
+        "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec",
+        "target": {
+          "kind": "profile",
+          "id": "b7000000-0000-4000-8000-000000000002"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "dispatched",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "dispatch",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "1a4c6a62-f527-44f7-8abb-bcf6de471533"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 4,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 2,
+        "canonical_schedule_human_approvals": 2,
+        "canonical_schedule_human_audit_events": 2,
+        "canonical_schedule_human_idempotency": 2
+      },
+      "allTableDelta": {
+        "audit_logs": 2,
+        "canonical_schedule_assignment_revisions": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1,
+        "canonical_schedule_mutation_previews": 1
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          },
+          {
+            "revision": 3,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "1a4c6a62-f527-44f7-8abb-bcf6de471533",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec"
+          }
+        ],
+        "evidence": {
+          "approvals": 2,
+          "audits": 2,
+          "idempotency": 2,
+          "previews": 2
+        }
+      }
+    },
+    {
+      "ordinal": 6,
+      "name": "07-reassign-to-current-crew-atomically-revokes-dispatch",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 4,
+        "digest": "8603670b691bb6b3534e687343fe003b2f871708884574235fce0fe9444b7049",
+        "target": {
+          "kind": "crew",
+          "id": "c7000000-0000-4000-8000-000000000001"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "revoked",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000003"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "reassign",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "87dc9d57-98bd-4978-91c1-aefec53befbe"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 5,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 3,
+        "canonical_schedule_human_approvals": 3,
+        "canonical_schedule_human_audit_events": 3,
+        "canonical_schedule_human_idempotency": 3
+      },
+      "allTableDelta": {
+        "audit_logs": 2,
+        "canonical_schedule_assignment_revisions": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1,
+        "canonical_schedule_mutation_previews": 1
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          },
+          {
+            "revision": 3,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "1a4c6a62-f527-44f7-8abb-bcf6de471533",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec"
+          },
+          {
+            "revision": 4,
+            "source_kind": "human_preview_approved",
+            "action_code": "reassign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "87dc9d57-98bd-4978-91c1-aefec53befbe",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "8603670b691bb6b3534e687343fe003b2f871708884574235fce0fe9444b7049"
+          }
+        ],
+        "evidence": {
+          "approvals": 3,
+          "audits": 3,
+          "idempotency": 3,
+          "previews": 3
+        }
+      }
+    },
+    {
+      "ordinal": 7,
+      "name": "08-new-human-dispatch-approval-after-reassignment",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 5,
+        "digest": "3f58c3cfdfb7db1e80d03d07a5ac158a8cf7c122a5703a529224e1dcb2e5dd17",
+        "target": {
+          "kind": "crew",
+          "id": "c7000000-0000-4000-8000-000000000001"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "dispatched",
+        "scheduledStart": "2026-08-28T13:10:00.000Z",
+        "scheduledEnd": "2026-08-28T13:30:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000003"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "dispatch",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "83ecd985-6c0b-4f4e-b17f-42992fb79fde"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 6,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 4,
+        "canonical_schedule_human_approvals": 4,
+        "canonical_schedule_human_audit_events": 4,
+        "canonical_schedule_human_idempotency": 4
+      },
+      "allTableDelta": {
+        "audit_logs": 2,
+        "canonical_schedule_assignment_revisions": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1,
+        "canonical_schedule_mutation_previews": 1
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          },
+          {
+            "revision": 3,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "1a4c6a62-f527-44f7-8abb-bcf6de471533",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec"
+          },
+          {
+            "revision": 4,
+            "source_kind": "human_preview_approved",
+            "action_code": "reassign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "87dc9d57-98bd-4978-91c1-aefec53befbe",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "8603670b691bb6b3534e687343fe003b2f871708884574235fce0fe9444b7049"
+          },
+          {
+            "revision": 5,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "83ecd985-6c0b-4f4e-b17f-42992fb79fde",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "3f58c3cfdfb7db1e80d03d07a5ac158a8cf7c122a5703a529224e1dcb2e5dd17"
+          }
+        ],
+        "evidence": {
+          "approvals": 4,
+          "audits": 4,
+          "idempotency": 4,
+          "previews": 4
+        }
+      }
+    },
+    {
+      "ordinal": 8,
+      "name": "09-reschedule-atomically-revokes-dispatch",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 6,
+        "digest": "a6f05a5a2469c99f4f4b24da3e0413321e71364cdf55367014a99ed2b60f55b4",
+        "target": {
+          "kind": "crew",
+          "id": "c7000000-0000-4000-8000-000000000001"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "revoked",
+        "scheduledStart": "2026-08-28T13:45:00.000Z",
+        "scheduledEnd": "2026-08-28T14:05:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000003"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "reschedule",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "8a5dad15-d68e-4523-b95e-06b7f819e73f"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 7,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 5,
+        "canonical_schedule_human_approvals": 5,
+        "canonical_schedule_human_audit_events": 5,
+        "canonical_schedule_human_idempotency": 5
+      },
+      "allTableDelta": {
+        "audit_logs": 2,
+        "canonical_schedule_assignment_revisions": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1,
+        "canonical_schedule_mutation_previews": 1
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          },
+          {
+            "revision": 3,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "1a4c6a62-f527-44f7-8abb-bcf6de471533",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec"
+          },
+          {
+            "revision": 4,
+            "source_kind": "human_preview_approved",
+            "action_code": "reassign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "87dc9d57-98bd-4978-91c1-aefec53befbe",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "8603670b691bb6b3534e687343fe003b2f871708884574235fce0fe9444b7049"
+          },
+          {
+            "revision": 5,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "83ecd985-6c0b-4f4e-b17f-42992fb79fde",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "3f58c3cfdfb7db1e80d03d07a5ac158a8cf7c122a5703a529224e1dcb2e5dd17"
+          },
+          {
+            "revision": 6,
+            "source_kind": "human_preview_approved",
+            "action_code": "reschedule",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "8a5dad15-d68e-4523-b95e-06b7f819e73f",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:45:00.000Z",
+            "scheduled_end": "2026-08-28T14:05:00.000Z",
+            "digest": "a6f05a5a2469c99f4f4b24da3e0413321e71364cdf55367014a99ed2b60f55b4"
+          }
+        ],
+        "evidence": {
+          "approvals": 5,
+          "audits": 5,
+          "idempotency": 5,
+          "previews": 5
+        }
+      }
+    },
+    {
+      "ordinal": 9,
+      "name": "10-concurrent-current-authority-approval-has-one-winner",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 7,
+        "digest": "a18899eb98cb9a4f4c52da7fa18a8bb26ba16dca7e109554fe7c34e5de0b1644",
+        "target": {
+          "kind": "crew",
+          "id": "c7000000-0000-4000-8000-000000000001"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "dispatched",
+        "scheduledStart": "2026-08-28T13:45:00.000Z",
+        "scheduledEnd": "2026-08-28T14:05:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000003"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "dispatch",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "c9cad10e-da16-49d7-966c-c1288245fb0f"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 8,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 7,
+        "canonical_schedule_human_approvals": 6,
+        "canonical_schedule_human_audit_events": 6,
+        "canonical_schedule_human_idempotency": 6
+      },
+      "allTableDelta": {
+        "audit_logs": 4,
+        "canonical_schedule_assignment_revisions": 1,
+        "canonical_schedule_human_approvals": 1,
+        "canonical_schedule_human_audit_events": 1,
+        "canonical_schedule_human_idempotency": 1,
+        "canonical_schedule_mutation_previews": 2
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          },
+          {
+            "revision": 3,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "1a4c6a62-f527-44f7-8abb-bcf6de471533",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec"
+          },
+          {
+            "revision": 4,
+            "source_kind": "human_preview_approved",
+            "action_code": "reassign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "87dc9d57-98bd-4978-91c1-aefec53befbe",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "8603670b691bb6b3534e687343fe003b2f871708884574235fce0fe9444b7049"
+          },
+          {
+            "revision": 5,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "83ecd985-6c0b-4f4e-b17f-42992fb79fde",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "3f58c3cfdfb7db1e80d03d07a5ac158a8cf7c122a5703a529224e1dcb2e5dd17"
+          },
+          {
+            "revision": 6,
+            "source_kind": "human_preview_approved",
+            "action_code": "reschedule",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "8a5dad15-d68e-4523-b95e-06b7f819e73f",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:45:00.000Z",
+            "scheduled_end": "2026-08-28T14:05:00.000Z",
+            "digest": "a6f05a5a2469c99f4f4b24da3e0413321e71364cdf55367014a99ed2b60f55b4"
+          },
+          {
+            "revision": 7,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c9cad10e-da16-49d7-966c-c1288245fb0f",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:45:00.000Z",
+            "scheduled_end": "2026-08-28T14:05:00.000Z",
+            "digest": "a18899eb98cb9a4f4c52da7fa18a8bb26ba16dca7e109554fe7c34e5de0b1644"
+          }
+        ],
+        "evidence": {
+          "approvals": 6,
+          "audits": 6,
+          "idempotency": 6,
+          "previews": 7
+        }
+      },
+      "statuses": [
+        200,
+        409
+      ]
+    },
+    {
+      "ordinal": 10,
+      "name": "11-current-crew-membership-revocation-removes-employee-read",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 7,
+        "digest": "a18899eb98cb9a4f4c52da7fa18a8bb26ba16dca7e109554fe7c34e5de0b1644",
+        "target": {
+          "kind": "crew",
+          "id": "c7000000-0000-4000-8000-000000000001"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "dispatched",
+        "scheduledStart": "2026-08-28T13:45:00.000Z",
+        "scheduledEnd": "2026-08-28T14:05:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000003"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "dispatch",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "c9cad10e-da16-49d7-966c-c1288245fb0f"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 8,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 7,
+        "canonical_schedule_human_approvals": 6,
+        "canonical_schedule_human_audit_events": 6,
+        "canonical_schedule_human_idempotency": 6
+      },
+      "allTableDelta": {
+        "audit_logs": 1,
+        "workforce_crew_members": -1
+      },
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          },
+          {
+            "revision": 3,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "1a4c6a62-f527-44f7-8abb-bcf6de471533",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec"
+          },
+          {
+            "revision": 4,
+            "source_kind": "human_preview_approved",
+            "action_code": "reassign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "87dc9d57-98bd-4978-91c1-aefec53befbe",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "8603670b691bb6b3534e687343fe003b2f871708884574235fce0fe9444b7049"
+          },
+          {
+            "revision": 5,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "83ecd985-6c0b-4f4e-b17f-42992fb79fde",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "3f58c3cfdfb7db1e80d03d07a5ac158a8cf7c122a5703a529224e1dcb2e5dd17"
+          },
+          {
+            "revision": 6,
+            "source_kind": "human_preview_approved",
+            "action_code": "reschedule",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "8a5dad15-d68e-4523-b95e-06b7f819e73f",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:45:00.000Z",
+            "scheduled_end": "2026-08-28T14:05:00.000Z",
+            "digest": "a6f05a5a2469c99f4f4b24da3e0413321e71364cdf55367014a99ed2b60f55b4"
+          },
+          {
+            "revision": 7,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c9cad10e-da16-49d7-966c-c1288245fb0f",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:45:00.000Z",
+            "scheduled_end": "2026-08-28T14:05:00.000Z",
+            "digest": "a18899eb98cb9a4f4c52da7fa18a8bb26ba16dca7e109554fe7c34e5de0b1644"
+          }
+        ],
+        "evidence": {
+          "approvals": 6,
+          "audits": 6,
+          "idempotency": 6,
+          "previews": 7
+        }
+      },
+      "beforeTodayCount": 1,
+      "afterTodayCount": 0,
+      "priorRecordAbsent": true
+    },
+    {
+      "ordinal": 11,
+      "name": "12-terminal-paid-demo-isolated-record-trace",
+      "assignment": {
+        "id": "2337ee08-6dab-44bb-b0c2-b87915665548",
+        "revision": 7,
+        "digest": "a18899eb98cb9a4f4c52da7fa18a8bb26ba16dca7e109554fe7c34e5de0b1644",
+        "target": {
+          "kind": "crew",
+          "id": "c7000000-0000-4000-8000-000000000001"
+        },
+        "targetState": "assigned",
+        "scheduleState": "scheduled",
+        "dispatchState": "dispatched",
+        "scheduledStart": "2026-08-28T13:45:00.000Z",
+        "scheduledEnd": "2026-08-28T14:05:00.000Z",
+        "appointmentStatus": "scheduled",
+        "needsReview": true,
+        "reviewReasons": [
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000002"
+          },
+          {
+            "code": "availability_authority_missing",
+            "profileId": "b7000000-0000-4000-8000-000000000003"
+          },
+          {
+            "code": "location_scope_authority_missing"
+          },
+          {
+            "code": "required_skill_authority_missing"
+          }
+        ],
+        "lastAction": "dispatch",
+        "lastActorUserId": "b7000000-0000-4000-8000-000000000001",
+        "lastApprovalId": null,
+        "lastHumanApprovalId": "c9cad10e-da16-49d7-966c-c1288245fb0f"
+      },
+      "coreCounts": {
+        "canonical_schedule_assignments": 2,
+        "canonical_schedule_assignment_revisions": 8,
+        "canonical_schedule_approvals": 0,
+        "canonical_schedule_audit_events": 0,
+        "canonical_schedule_idempotency": 0,
+        "canonical_schedule_mutation_previews": 7,
+        "canonical_schedule_human_approvals": 6,
+        "canonical_schedule_human_audit_events": 6,
+        "canonical_schedule_human_idempotency": 6
+      },
+      "allTableDelta": {},
+      "history": {
+        "revisions": [
+          {
+            "revision": 1,
+            "source_kind": "appointment_created",
+            "action_code": "appointment_created",
+            "actor_user_id": null,
+            "human_approval_id": null,
+            "target_state": "unassigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "7d19409275ef7c4a1e6a16fefe01b8acb9e28c446ed85dfd7cb150cb4ec5ac9c"
+          },
+          {
+            "revision": 2,
+            "source_kind": "human_preview_approved",
+            "action_code": "assign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c5c97cf0-3fc5-4de4-8489-1620c5b081f9",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "not_dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "e16b1b1de274747b98a26d900184a80dbad59a37e761eeb02a05c0d93dabe375"
+          },
+          {
+            "revision": 3,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "1a4c6a62-f527-44f7-8abb-bcf6de471533",
+            "target_state": "assigned",
+            "workforce_profile_id": "b7000000-0000-4000-8000-000000000002",
+            "workforce_crew_id": null,
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "993260dab2bb6454ce10389780017ef9597022119f75820a69c5ac616af146ec"
+          },
+          {
+            "revision": 4,
+            "source_kind": "human_preview_approved",
+            "action_code": "reassign",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "87dc9d57-98bd-4978-91c1-aefec53befbe",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "8603670b691bb6b3534e687343fe003b2f871708884574235fce0fe9444b7049"
+          },
+          {
+            "revision": 5,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "83ecd985-6c0b-4f4e-b17f-42992fb79fde",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:10:00.000Z",
+            "scheduled_end": "2026-08-28T13:30:00.000Z",
+            "digest": "3f58c3cfdfb7db1e80d03d07a5ac158a8cf7c122a5703a529224e1dcb2e5dd17"
+          },
+          {
+            "revision": 6,
+            "source_kind": "human_preview_approved",
+            "action_code": "reschedule",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "8a5dad15-d68e-4523-b95e-06b7f819e73f",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "revoked",
+            "scheduled_start": "2026-08-28T13:45:00.000Z",
+            "scheduled_end": "2026-08-28T14:05:00.000Z",
+            "digest": "a6f05a5a2469c99f4f4b24da3e0413321e71364cdf55367014a99ed2b60f55b4"
+          },
+          {
+            "revision": 7,
+            "source_kind": "human_preview_approved",
+            "action_code": "dispatch",
+            "actor_user_id": "b7000000-0000-4000-8000-000000000001",
+            "human_approval_id": "c9cad10e-da16-49d7-966c-c1288245fb0f",
+            "target_state": "assigned",
+            "workforce_profile_id": null,
+            "workforce_crew_id": "c7000000-0000-4000-8000-000000000001",
+            "schedule_state": "scheduled",
+            "dispatch_state": "dispatched",
+            "scheduled_start": "2026-08-28T13:45:00.000Z",
+            "scheduled_end": "2026-08-28T14:05:00.000Z",
+            "digest": "a18899eb98cb9a4f4c52da7fa18a8bb26ba16dca7e109554fe7c34e5de0b1644"
+          }
+        ],
+        "evidence": {
+          "approvals": 6,
+          "audits": 6,
+          "idempotency": 6,
+          "previews": 7
+        }
+      },
+      "demoStatus": 200,
+      "employeePriorRecordAbsent": true,
+      "zeroExternalProviderCalls": true
+    }
+  ],
+  "unavailable": {
+    "hostedChecks": "unavailable",
+    "physicalSafari": "unavailable",
+    "liveProviders": "unavailable",
+    "providerCredentials": "unavailable",
+    "privateProductionLogs": "unavailable"
+  },
+  "migrations": {
+    "count": 33,
+    "latest": "035_schedule_human_preview_approval.sql",
+    "latestChecksum": "96fb6814a9a8a0db2ebdca2fc4626df8091bb7f3b48a3f4bef613e97fe977129",
+    "restartApplied": 0,
+    "timezone": "UTC",
+    "runtimeRole": "northstar_m22_p7_r_5668_4b861527",
+    "runtimeDatabaseCreate": false,
+    "runtimeSchemaCreate": false,
+    "routineCount": 31,
+    "exactBlobLedger": true,
+    "lookupPlan": {
+      "Plan": {
+        "Node Type": "Index Scan",
+        "Parallel Aware": false,
+        "Async Capable": false,
+        "Scan Direction": "Forward",
+        "Index Name": "canonical_schedule_assignments_tenant_schedule",
+        "Relation Name": "canonical_schedule_assignments",
+        "Alias": "canonical_schedule_assignments",
+        "Startup Cost": 0.14,
+        "Total Cost": 8.16,
+        "Plan Rows": 1,
+        "Plan Width": 939,
+        "Disabled": false,
+        "Index Cond": "(organization_id = 'a7000000-0000-4000-8000-000000000001'::uuid)",
+        "Filter": "(appointment_id = 'd7000000-0000-4000-8000-000000000001'::uuid)"
+      }
+    }
+  },
+  "supportedUpgrade": {
+    "boundary": "001-031 to 001-035",
+    "legacyBackfill": {
+      "id": "8505bbb2-df0d-454d-99c0-9597c592f6dd",
+      "revision": 1,
+      "digest": "7dcac33ec53bae9febd43052933045a9e51e76b55f38d89cfdcc9d928be61ddb",
+      "target": {
+        "kind": "unassigned",
+        "id": null
+      },
+      "targetState": "unassigned",
+      "scheduleState": "scheduled",
+      "dispatchState": "not_dispatched",
+      "scheduledStart": "2026-08-28T13:10:00.000Z",
+      "scheduledEnd": "2026-08-28T13:30:00.000Z",
+      "appointmentStatus": "scheduled",
+      "needsReview": true,
+      "reviewReasons": [
+        "legacy_import_unreviewed",
+        "conflict_evaluation_not_available"
+      ],
+      "lastAction": "legacy_import",
+      "lastActorUserId": null,
+      "lastApprovalId": null,
+      "lastHumanApprovalId": null
+    },
+    "history": {
+      "revisions": [
+        {
+          "revision": 1,
+          "source_kind": "legacy_import",
+          "action_code": "legacy_import",
+          "actor_user_id": null,
+          "human_approval_id": null,
+          "target_state": "unassigned",
+          "workforce_profile_id": null,
+          "workforce_crew_id": null,
+          "schedule_state": "scheduled",
+          "dispatch_state": "not_dispatched",
+          "scheduled_start": "2026-08-28T13:10:00.000Z",
+          "scheduled_end": "2026-08-28T13:30:00.000Z",
+          "digest": "7dcac33ec53bae9febd43052933045a9e51e76b55f38d89cfdcc9d928be61ddb"
+        }
+      ],
+      "evidence": {
+        "approvals": 0,
+        "audits": 0,
+        "idempotency": 0,
+        "previews": 0
+      }
+    },
+    "migrationCount": 33,
+    "exactChecksums": true
+  }
+}

@@ -335,6 +335,20 @@ async function main() {
     await waitRevision(3);
 
     await page.getByRole('button', { name: 'Week', exact: true }).click();
+    const targetOutsideVisibleWeek = await page.evaluate(targetDate => {
+      const target = new Date(targetDate + 'T12:00:00');
+      const start = new Date(window.calState.currentDate);
+      start.setHours(12, 0, 0, 0);
+      start.setDate(start.getDate() - start.getDay());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      return target < start ? -1 : target >= end ? 1 : 0;
+    }, date);
+    if (targetOutsideVisibleWeek < 0) {
+      await page.getByRole('button', { name: 'Previous Week' }).click();
+    } else if (targetOutsideVisibleWeek > 0) {
+      await page.getByRole('button', { name: 'Next Week' }).click();
+    }
     const visibleEvent = page.locator('#calendarGrid [draggable="true"][data-calendar-event-id="' + appointmentId + '"]');
     await visibleEvent.waitFor({ state: 'visible' });
     let expectedRevision = 3;

@@ -16,10 +16,11 @@ terminally released. Part 4 was independently accepted, normally merged at
 `e20facc5937dc0581c9194ddf70b331b49de5188`, automatically deployed, and
 terminally released. Part 5 was independently accepted, normally merged at
 `8d5f18ed02b2edd201664a75c5cd726edcce1bd9`, automatically deployed, and
-terminally released. Part 6 is implemented on its narrow sole-writer branch and
-remains audit-pending. Part 7 must not begin before Part 6 is independently
-accepted, normally merged, automatically deployed, health-clean, and passively
-accepted.
+terminally released. Part 6 was independently accepted at
+`6fa5c4ff11a530331824165c13f553a5b700c47e`, normally merged at
+`09c7cb9c08e09c7e4242d7df1be87a3ead1e6729`, automatically deployed,
+health-clean, passively accepted, and terminally released. Part 7 is implemented
+on its narrow sole-writer branch and remains exact-head audit-pending.
 
 ## Non-negotiable boundaries
 
@@ -473,7 +474,7 @@ opens a second data transaction; failures roll back and release the connection.
 No schema or migration changed. Another different fresh exact-head audit remains
 mandatory before ready, merge, or release.
 
-### Part 6 — Crew Today experience (implemented; independent audit pending)
+### Part 6 — Crew Today experience (terminally released)
 
 The mounted `/dashboard/today.html` and `GET /api/v1/today` surface deliver a
 mobile-first, employee-safe view of only work assigned directly to the current
@@ -529,10 +530,15 @@ revision/tree, browser engine/version, viewport, theme, identity role,
 direct-versus-crew mode, UI state, nonsecret fixture provenance, expected
 visible fields, withheld categories, source route, timestamp, screenshot
 hashes, and paired Command Center references. WebKit is not physical Safari;
-user visual approval remains separate and unclaimed. After the Part 6 release,
-the Mission 22 lead must copy this immutable in-repository package to the
-already verified canonical OneDrive evidence/screenshots destination and
-surface key views in the master chat; this writer does not write OneDrive.
+user visual approval remains separate and unclaimed. The package was local-only
+until the lead copied and read back its exact immutable bytes at
+`C:\Users\joshv\OneDrive\NorthStar Mission 22 Employee Visual Evidence\Part6-09c7cb9-20260828`.
+That verified copy contains 107 of 107 source files, 96 PNG screenshots, and
+zero SHA-256 mismatches. Its manifest SHA-256 is
+`8bc708fa4ccf7f8f8f150a3b9497b016d9221b9b1c3214d7da27c84879425bb7`; its
+screenshot-ledger SHA-256 is
+`c0a8e2f4390bcb20a72775e8956ff88cbb52609040b5bd15ca1b2c940f7a8ee7`.
+No other path is claimed as OneDrive evidence.
 
 The independent exact-head audit at
 `7bccaeb41f1595237309888e5858e3afc7efc07d` returned `CHANGES_REQUIRED`
@@ -570,7 +576,15 @@ not a customer-facing visual handoff. No production authority, UI, migration,
 or Part 7 behavior changed. A different fresh exact-new-head audit remains
 mandatory before ready, merge, release, OneDrive copy, or Part 7.
 
-### Part 7 — Mission-wide acceptance and release (planned)
+The final different exact-head audit accepted
+`6fa5c4ff11a530331824165c13f553a5b700c47e` with no P0–P3 findings. It was
+normally merged at `09c7cb9c08e09c7e4242d7df1be87a3ead1e6729`; the sole
+automatic deployment, exact revision, migrations, credential-free health, and
+authorized passive acceptance were clean. The later exact OneDrive readback
+above cleared the employee visual-package copy gate. Automated screenshot
+acceptance does not grant user visual approval, which remains separate.
+
+### Part 7 — Mission-wide acceptance and release (implemented; independent audit pending)
 
 Trace one exact assignment through creation/backfill, evaluation,
 recommendation, human approval, Calendar, Command Center, Today, reassignment,
@@ -580,6 +594,42 @@ concurrency, restart/failure, tenant/session/role isolation, hostile stored
 content, demo separation, compatibility, exact-head independent audit, normal
 merge, sole automatic deployment, exact deployed migration/SHA, health, passive
 acceptance, and separate visual/device/provider/legal verdicts.
+
+The Part 7 writer adds one mounted production-module trace rather than a copied
+validator or mock. The trace begins with an appointment-created `needs_review`
+authority, proves that Part 2 evaluation and Part 3 evidence-pinned candidate
+recommendation are non-capabilities, and applies six real cookie-session/CSRF
+human approvals. Its exact seven revisions cover direct assignment, schedule,
+dispatch, crew reassignment with atomic dispatch revocation, redispatch, and
+reschedule with a second atomic revocation. Two concurrent dispatch approvals
+have one winner; an exact replay returns the same authority while a divergent
+idempotency body, stale pins, cross-tenant ID, employee mutation, and smuggled
+authority fields fail closed.
+
+At every step the evidence captures bounded deltas across current assignment,
+immutable revision history, human preview, human approval, human audit,
+idempotency, compatibility, evaluation, recommendation, Calendar, Command
+Center, and employee Today projections. The ordinary runtime role cannot write
+the assignment, human history, or preview tables through direct SQL. Removing
+the current crew membership removes the appointment from Today without changing
+the owner surfaces or immutable history. Hostile stored customer, address,
+instruction, explanation, crew, and approval-reason bytes remain inert through
+the mounted HTTP and Chrome/WebKit DOM sinks. Provider credentials are absent,
+external transport is blocked, route/travel truth remains unavailable, and
+recommendations never mutate.
+
+Fresh and supported-upgrade PostgreSQL 18.x UTC runs verify Git-blob migration
+provenance, all protected migrations 001–035, role separation, fixed trusted
+routine paths, exact-once migration startup and zero-on-restart, legacy import
+truth, query plans, and the bounded cross-surface repository paths. The browser
+trace pairs Calendar, Command Center (the primary theme reference), and Today at
+the same exact revision/digest before proving crew-access revocation. Installed
+Chrome and actual Playwright WebKit are covered across desktop/mobile and
+light/dark with reduced motion, keyboard or touch, reflow, zero horizontal
+overhang, no external request, and employee-network minimization. WebKit is not
+physical Safari and user visual approval remains separate. A different fresh
+read-only auditor must still reproduce the trace at the frozen exact head before
+ready, merge, release, or Mission 22 completion.
 
 ## Threat and mounted-test ledger
 

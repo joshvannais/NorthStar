@@ -1,5 +1,26 @@
 # Mission 22 Part 6 terminal writer test evidence
 
+## M22-P6-FINAL-001 visual-evidence correction
+
+The employee handoff package was regenerated at implementation commit
+`b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34` / tree
+`89de0e967290bc36e7572c4ee0abe508b13ed023` using realistic, non-hostile
+technician, crew, customer, job, address, and instruction fixtures mounted
+through the same real disposable PostgreSQL cookie-session authority.
+
+- Focused Part 6: 2/2 suites, 16/16 tests.
+- Installed Chrome 151 and actual Playwright WebKit 26.5: 8/8 responsive/theme
+  matrices and 96 authoritative employee screenshots.
+- Employee manifest: 32 realistic ready Today rows, 56 non-ready/empty rows,
+  32 synthetic rows with exact transport provenance, and zero hostile markers.
+- Separate adversarial package: 8/8 hostile stored-byte screenshots proving
+  literal text rendering, zero injected images, and no browser compromise.
+
+The compatibility, full-Jest, and startup/restart gates below are historical
+results from the earlier production correction and are not relabeled as fresh
+results for this evidence-only change. The independent audit's unrelated
+2,132/2,133 full-corpus red remains preserved.
+
 ## Exact implementation gates
 
 - Focused mounted Part 6 PostgreSQL plus contract tests: 2/2 suites and 15/15

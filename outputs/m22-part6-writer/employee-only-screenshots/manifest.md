@@ -1,7 +1,7 @@
 # Mission 22 Part 6 employee-only screenshot manifest
 
-- Exact tested revision: `e72792da9edbee3b051fd34f14cd810324870e8b`
-- Exact tested tree: `2a6d9a61557dadd2bb3f5593fc6c202ec30995f4`
+- Exact tested revision: `b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34`
+- Exact tested tree: `89de0e967290bc36e7572c4ee0abe508b13ed023`
 - Browser matrices: 8; screenshots: 96.
 - UI states: empty, error, loading, offline, ready, restricted, stale.
 - Authority: isolated disposable PostgreSQL tenants; distinct mounted cookie-session identities; current durable user/member/workforce/crew authority.

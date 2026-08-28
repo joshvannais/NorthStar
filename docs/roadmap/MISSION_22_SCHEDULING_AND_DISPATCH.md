@@ -554,6 +554,22 @@ new authentication authority, site-wide navigation redesign, or Part 7 scope
 is included. The corrected head still requires a different fresh exact-head
 independent audit before ready, merge, or release.
 
+The next independent audit at
+`3ddd332a1c6cb50c86897783347d495700859e2b` closed all four historical
+findings and returned `CHANGES_REQUIRED` only for `M22-P6-FINAL-001` (`P2`):
+the employee handoff screenshots were XSS-safe but visibly used the hostile
+source-to-sink probe instead of realistic employee presentation values. The
+narrow evidence-fixture correction at
+`b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34` preserves that hostile proof in
+`outputs/m22-part6-correction-writer/hostile-security-evidence` and regenerates
+the authoritative 96-image employee package from realistic non-hostile
+technician, crew, customer, job, address, and instruction values through the
+same mounted disposable PostgreSQL/session authority. The two packages have
+separate manifests and hash ledgers; adversarial security imagery is explicitly
+not a customer-facing visual handoff. No production authority, UI, migration,
+or Part 7 behavior changed. A different fresh exact-new-head audit remains
+mandatory before ready, merge, release, OneDrive copy, or Part 7.
+
 ### Part 7 — Mission-wide acceptance and release (planned)
 
 Trace one exact assignment through creation/backfill, evaluation,

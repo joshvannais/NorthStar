@@ -11,6 +11,22 @@
 - Branch: `mission22/part6-mobile-crew-today`
 - Pull request: draft PR #149, `Mission 22 Part 6: mobile crew Today`
 
+Second audit and evidence-only correction:
+
+- Independently audited head:
+  `3ddd332a1c6cb50c86897783347d495700859e2b`
+- Independent report SHA-256:
+  `8a969e0c02fd50fb92c2c0d4284622544cfca9d1c68052fd84647b8bc6a1193c`
+- Sole validated finding: `M22-P6-FINAL-001` (`P2`), realistic employee visual
+  handoff absent because hostile probes were visibly present.
+- Tested narrow evidence-fixture correction commit:
+  `b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34`
+- Tested narrow evidence-fixture correction tree:
+  `89de0e967290bc36e7572c4ee0abe508b13ed023`
+- Exact second-correction implementation scope: four test/helper paths, 258
+  insertions and 14 deletions; zero production source, UI, migration, or
+  authority paths.
+
 The correction from the audited head through the tested implementation changes
 14 paths with 780 insertions and 53 deletions. It adds the Today-only shell,
 real-IANA browser fixture helper, immutable Git-blob ledger verifier, focused

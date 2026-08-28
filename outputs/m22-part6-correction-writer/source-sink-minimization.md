@@ -1,5 +1,20 @@
 # Mission 22 Part 6 correction source-to-sink and minimization record
 
+## M22-P6-FINAL-001 — realistic employee handoff versus hostile proof
+
+The employee-only visual package now uses realistic presentation fixtures after
+the same mounted disposable PostgreSQL authority has first exercised the
+hostile stored-byte path. The harness proves the literal hostile bytes traverse
+the real `/api/v1/today` response and safe `textContent` DOM sinks with zero
+injected image elements, captures one explicitly non-customer-facing security
+screenshot per matrix, then updates only disposable fixture presentation bytes
+and reloads the real endpoint before capturing the authoritative package.
+
+Aggregate validation rejects a hostile marker in any employee-package manifest,
+requires exact realistic ready-state values, and independently validates the
+eight hostile security manifests. No production endpoint, authorization rule,
+renderer, visual component, or migration changed for this evidence correction.
+
 ## M22-P6-AUD-001 — employee bootstrap boundary
 
 The vulnerable path was:

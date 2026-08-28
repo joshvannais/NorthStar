@@ -73,6 +73,30 @@
     nonprivileged attributes were reverified before deletion. The exact database
     and two roles were removed; the cluster then reported zero non-template
     databases and zero non-system roles before the superseding full run.
+14. The independent final audit at exact head
+    `3ddd332a1c6cb50c86897783347d495700859e2b` froze `CHANGES_REQUIRED` with
+    `P0 0 / P1 0 / P2 1 / P3 0`: all 32 ready employee-package screenshots
+    visibly embedded the literal hostile XSS fixture, making the otherwise
+    XSS-safe package unrealistic for customer-facing handoff. Report SHA-256:
+    `8a969e0c02fd50fb92c2c0d4284622544cfca9d1c68052fd84647b8bc6a1193c`.
+15. The first evidence-correction browser diagnostic was invoked without the
+    required `M19_TEST_RUN_ID` and stopped before application execution.
+16. The next diagnostic compared a JavaScript-decoded marker with its JSON-
+    escaped transport representation. The proof now checks the raw response
+    marker separately from exact DOM `textContent`.
+17. An early realistic-fixture assertion read collapsed layout text before the
+    ready card was expanded. It now asserts exact mounted API values and the
+    state-appropriate DOM content.
+18. The simulation-authority fixture intentionally canonicalizes all work onto
+    one customer record. Two diagnostics therefore observed the last temporary
+    customer value where separate per-job customers had been expected. The
+    realistic fixture now uses one truthful Jamie Carter / 125 Maple Avenue
+    customer projection consistently across all canonical work.
+
+Items 15–18 were bounded interactive diagnostics and did not produce durable
+raw files; their exact failure classes are preserved here rather than omitted
+or relabeled. The superseding focused run and all eight matrices are frozen in
+`raw/realistic-b51f467-*`.
 
 None of these failures is relabeled as passing. Terminal results are recorded
 separately, and a different fresh exact-head auditor remains mandatory.

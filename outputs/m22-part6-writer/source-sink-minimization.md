@@ -69,6 +69,10 @@ imports no provider SDK/configuration/credential or live map link.
   `createElement`, `appendChild`, `replaceChildren`, and `textContent`. Scoped
   review found no `innerHTML`, `outerHTML`, `insertAdjacentHTML`,
   `document.write`, `eval`, or `new Function` sink.
+- The authoritative employee screenshot package uses realistic presentation
+  fixtures. Hostile stored-byte/DOM-sink proof is kept in a separate,
+  non-customer-facing security package that proves the exact raw marker renders
+  as literal text with zero injected image elements and no compromise flag.
 - A non-ready state clears prior record DOM before showing loading, empty,
   error, offline, stale, or restricted state. Revoked sessions and removed crew
   membership cannot leave prior work visible or enumerable.

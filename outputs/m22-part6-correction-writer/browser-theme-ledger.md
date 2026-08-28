@@ -1,5 +1,26 @@
 # Mission 22 Part 6 correction browser and theme ledger
 
+## M22-P6-FINAL-001 realistic handoff package
+
+Eight superseding matrices passed at implementation commit
+`b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34` / tree
+`89de0e967290bc36e7572c4ee0abe508b13ed023`: installed Chrome
+`151.0.7922.175` and actual Playwright WebKit `26.5`, each desktop/mobile and
+light/dark. Every matrix captured 12 authoritative images and nine Today
+responses, for 96 employee-package screenshots. Chrome recorded 55 inspectable
+employee response entries per matrix and WebKit recorded 51. All eight selected
+the real `Pacific/Honolulu` tenant zone for the current wall-clock run.
+
+The 32 ready screenshots now show realistic NorthStar technician/crew/customer/
+job/instruction data; no employee-package manifest or image contains the
+hostile fixture marker. Hostile stored-byte/DOM-sink proof is retained only in
+`hostile-security-evidence/`, with eight images and manifests that explicitly
+label it non-customer-facing security evidence. Zero provider/external calls,
+worker mutations, or browser errors were observed. The corrected 107-file
+employee package is byte-identical at both committed authoritative paths.
+
+## Historical first-correction browser proof
+
 Eight fresh matrices passed against implementation commit
 `e72792da9edbee3b051fd34f14cd810324870e8b` and tree
 `2a6d9a61557dadd2bb3f5593fc6c202ec30995f4`:

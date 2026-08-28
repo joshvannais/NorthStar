@@ -7,12 +7,12 @@
     "height": 844
   },
   "theme": "light",
-  "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-  "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
+  "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+  "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
   "realAuthority": "disposable PostgreSQL cookie session",
-  "fixtureTenant": "Part 6 Browser Tenant (isolated disposable test database)",
-  "fixtureTenantTimeZone": "America/Anchorage",
-  "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+  "fixtureTenant": "Cedar Ridge Home Services (isolated disposable test database)",
+  "fixtureTenantTimeZone": "Pacific/Honolulu",
+  "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
   "expectedVisible": [
     "job title and type",
     "tenant-timezone schedule",
@@ -45,19 +45,24 @@
       "realRoleIdentity": "active employee",
       "assignmentMode": "direct-and-current-crew",
       "state": "ready",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
       "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "minimum job and customer essentials",
         "current assignment, schedule and dispatch truth",
         "provider-neutral route uncertainty",
-        "read-only state"
+        "read-only state",
+        "fixture employee: Alex Rivera",
+        "fixture direct job: Kitchen sink drain backup for Jamie Carter",
+        "fixture crew job: Water heater safety check for Jamie Carter",
+        "fixture rescheduled job: Main line inspection for Jamie Carter"
       ],
       "expectedWithheld": [
         "financials",
@@ -77,8 +82,8 @@
         "Mission 23 controls",
         "provider credentials"
       ],
-      "timestamp": "2026-08-28T09:10:20.485Z",
-      "sha256": "535a46b1f269b22065835ee7e17fea449a342bc714ded1e88fc165eb58b58a21"
+      "timestamp": "2026-08-28T10:51:32.818Z",
+      "sha256": "187b565de2604100469b9176d0483cf24c5ff98ce8b2919877f42fd8977a0371"
     },
     {
       "filename": "webkit-mobile-light-dispatched-route-and-instructions.png",
@@ -93,19 +98,24 @@
       "realRoleIdentity": "active employee",
       "assignmentMode": "direct-dispatched",
       "state": "ready",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
       "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "minimum job and customer essentials",
         "current assignment, schedule and dispatch truth",
         "provider-neutral route uncertainty",
-        "read-only state"
+        "read-only state",
+        "fixture dispatched job: Kitchen sink drain backup",
+        "fixture customer: Jamie Carter",
+        "fixture location: 125 Maple Avenue, Riverton, MA 02110",
+        "fixture instructions: Park in the driveway and use the side entrance."
       ],
       "expectedWithheld": [
         "financials",
@@ -125,8 +135,8 @@
         "Mission 23 controls",
         "provider credentials"
       ],
-      "timestamp": "2026-08-28T09:10:20.847Z",
-      "sha256": "8c55b24ed084b3b31a986294319d966c9a16db5e01539b2bef482a81642d154e"
+      "timestamp": "2026-08-28T10:51:33.158Z",
+      "sha256": "035af4eb3b598714713a6e1b1f4c51a7ed02a8955691ee94b17bd0f3a0b69904"
     },
     {
       "filename": "webkit-mobile-light-current-active-crew.png",
@@ -141,19 +151,23 @@
       "realRoleIdentity": "active employee and current crew",
       "assignmentMode": "crew-scheduled-not-dispatched",
       "state": "ready",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
       "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "minimum job and customer essentials",
         "current assignment, schedule and dispatch truth",
         "provider-neutral route uncertainty",
-        "read-only state"
+        "read-only state",
+        "fixture crew: East Service Crew",
+        "fixture crew member: Morgan Chen",
+        "fixture crew job: Water heater safety check for Jamie Carter"
       ],
       "expectedWithheld": [
         "financials",
@@ -173,8 +187,8 @@
         "Mission 23 controls",
         "provider credentials"
       ],
-      "timestamp": "2026-08-28T09:10:21.268Z",
-      "sha256": "96a99ef5e295035bcf584b92d563d5cc9c32f78c2c48cd9a0b14e2f42297a138"
+      "timestamp": "2026-08-28T10:51:33.486Z",
+      "sha256": "c698b2bb82b729db892f519aba92ad4af1751d8d99a1509931bc6ee19fd501d4"
     },
     {
       "filename": "webkit-mobile-light-loading.png",
@@ -189,13 +203,14 @@
       "realRoleIdentity": "active employee",
       "assignmentMode": "pending-authoritative-read",
       "state": "loading",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic transport timing only: Playwright delays one real /api/v1/today request before continuing it; no durable authority claim",
       "stateProvenance": "synthetic transport timing only: Playwright delays one real /api/v1/today request before continuing it; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "loading state",
@@ -221,8 +236,8 @@
         "provider credentials",
         "all private work records; prior cards cleared"
       ],
-      "timestamp": "2026-08-28T09:10:23.028Z",
-      "sha256": "849118501789790bab8dd0ab304b5f8a5d6665ba123a6d055cc58b73447e8e24"
+      "timestamp": "2026-08-28T10:51:35.350Z",
+      "sha256": "20a33b8fc5d0b4bf748e5c0a60c17b76cd609604a3321a15984aac5caf53352e"
     },
     {
       "filename": "webkit-mobile-light-network-error.png",
@@ -237,13 +252,14 @@
       "realRoleIdentity": "active employee",
       "assignmentMode": "no-returned-records",
       "state": "error",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic transport only: Playwright route.abort(\"internetdisconnected\") for one /api/v1/today request; no durable authority claim",
       "stateProvenance": "synthetic transport only: Playwright route.abort(\"internetdisconnected\") for one /api/v1/today request; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "network error state",
@@ -270,7 +286,7 @@
         "provider credentials",
         "all private work records; prior cards cleared"
       ],
-      "timestamp": "2026-08-28T09:10:23.428Z",
+      "timestamp": "2026-08-28T10:51:35.701Z",
       "sha256": "548a4f956fab81e323347bf0a091e1aed3bbc271e6eac6eb6a56550a0110b107"
     },
     {
@@ -286,13 +302,14 @@
       "realRoleIdentity": "active employee",
       "assignmentMode": "no-returned-records",
       "state": "offline",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic transport only: Playwright context.setOffline(true) for this browser context; no durable authority claim",
       "stateProvenance": "synthetic transport only: Playwright context.setOffline(true) for this browser context; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "offline state",
@@ -319,8 +336,8 @@
         "provider credentials",
         "all private work records; prior cards cleared"
       ],
-      "timestamp": "2026-08-28T09:10:23.885Z",
-      "sha256": "3683f2da27fd32cd8ee2e5a840a50511086e6615b989a47bac2460b9a8954816"
+      "timestamp": "2026-08-28T10:51:36.231Z",
+      "sha256": "e03050fe1a6c3405bd9a25619353833b476a87eedfebdb46de3b4b7563b53720"
     },
     {
       "filename": "webkit-mobile-light-stale-reload.png",
@@ -335,13 +352,14 @@
       "realRoleIdentity": "active employee",
       "assignmentMode": "no-returned-records",
       "state": "stale",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; synthetic response only: Playwright route.fulfill injects one typed HTTP 409 stale response; no durable authority claim",
       "stateProvenance": "synthetic response only: Playwright route.fulfill injects one typed HTTP 409 stale response; no durable authority claim",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "stale authority state",
@@ -368,8 +386,8 @@
         "provider credentials",
         "all private work records; prior cards cleared"
       ],
-      "timestamp": "2026-08-28T09:10:24.216Z",
-      "sha256": "4a98daddf93021d0f60578505ddb338f92d5e71a41916c7ec5b83fe0d375162b"
+      "timestamp": "2026-08-28T10:51:36.632Z",
+      "sha256": "fc0fbc9e26b13d6a286a8674447bd325dacac1196a10795d4b96984fd5c52cc0"
     },
     {
       "filename": "webkit-mobile-light-crew-membership-removed.png",
@@ -384,19 +402,24 @@
       "realRoleIdentity": "active employee removed from crew",
       "assignmentMode": "direct-only",
       "state": "ready",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
       "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "realistic non-hostile employee handoff values loaded from mounted disposable PostgreSQL",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "minimum job and customer essentials",
         "current assignment, schedule and dispatch truth",
         "provider-neutral route uncertainty",
-        "read-only state"
+        "read-only state",
+        "fixture employee: Alex Rivera",
+        "fixture direct job: Kitchen sink drain backup for Jamie Carter",
+        "fixture direct rescheduled job: Main line inspection for Jamie Carter",
+        "current crew work absent after durable membership removal"
       ],
       "expectedWithheld": [
         "financials",
@@ -416,8 +439,8 @@
         "Mission 23 controls",
         "provider credentials"
       ],
-      "timestamp": "2026-08-28T09:10:24.984Z",
-      "sha256": "816fae203114baefe6704c78901971032fbfeabe65d9fa20777c82b990e366ac"
+      "timestamp": "2026-08-28T10:51:37.220Z",
+      "sha256": "81fd7ff105a40ddf89142a870456a7b95ec048f6c358ea0f75e7033d8c14f4b7"
     },
     {
       "filename": "webkit-mobile-light-session-revoked.png",
@@ -432,13 +455,14 @@
       "realRoleIdentity": "revoked employee session",
       "assignmentMode": "none",
       "state": "restricted",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity; real durable PostgreSQL auth session revocation; no synthetic transport or response",
       "stateProvenance": "real durable PostgreSQL auth session revocation; no synthetic transport or response",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "access-changed state",
@@ -465,8 +489,8 @@
         "provider credentials",
         "all private work records; prior cards cleared"
       ],
-      "timestamp": "2026-08-28T09:10:25.304Z",
-      "sha256": "dbbe57dd00fd8ff4fe6cad7cc1978281a52a206e85f14fdf9030b5fd7c5670c4"
+      "timestamp": "2026-08-28T10:51:37.589Z",
+      "sha256": "4f5c526df564688e091f3ecd0696819586ea5857d63f8d43323cd9010bef9738"
     },
     {
       "filename": "webkit-mobile-light-employee-no-work-unassigned.png",
@@ -481,13 +505,14 @@
       "realRoleIdentity": "active employee",
       "assignmentMode": "unassigned-and-not-current-crew",
       "state": "empty",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL cookie session; nonsecret test identity",
       "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
       "sourceRoute": "/dashboard/today",
       "expectedVisible": [
         "personal no-work state",
@@ -513,8 +538,8 @@
         "provider credentials",
         "all private work records; none returned"
       ],
-      "timestamp": "2026-08-28T09:10:27.196Z",
-      "sha256": "d4cc42991ffdb17c1450af516711b3547557268cf2471c153b660433a75cf454"
+      "timestamp": "2026-08-28T10:51:39.389Z",
+      "sha256": "d67649d90e2803d1e17e14ef8ad19f042cd109b5e332d68ad81f21587671dff1"
     },
     {
       "filename": "webkit-mobile-light-no-work-empty.png",
@@ -529,13 +554,14 @@
       "realRoleIdentity": "active owner with no personal assignment",
       "assignmentMode": "none",
       "state": "empty",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
       "stateProvenance": "real mounted PostgreSQL authority and transport; no synthetic state injection",
+      "presentationFixture": "no private work values rendered in this non-ready or empty state",
       "expectedVisible": [
         "personal empty Today",
         "read-only state"
@@ -553,8 +579,8 @@
         "Mission 23 controls"
       ],
       "sourceRoute": "/dashboard/today",
-      "timestamp": "2026-08-28T09:10:27.715Z",
-      "sha256": "3e3a9982ba2a8c30daec21efddba237c69fc5b3c52eecaa5c4d091b8231c123f"
+      "timestamp": "2026-08-28T10:51:39.898Z",
+      "sha256": "cdfd13e801745ceabeed76ded72284251831ec10768f57e4f8d26efe62d9d7c7"
     },
     {
       "filename": "webkit-mobile-light-command-center-reference.png",
@@ -569,11 +595,11 @@
       "realRoleIdentity": "active owner reference only",
       "assignmentMode": "broad-reference-not-Today",
       "state": "ready",
-      "testedRevision": "e72792da9edbee3b051fd34f14cd810324870e8b",
-      "testedTree": "2a6d9a61557dadd2bb3f5593fc6c202ec30995f4",
-      "fixtureTenant": "isolated disposable Part 6 Browser Tenant",
-      "fixtureTenantTimeZone": "America/Anchorage",
-      "fixtureReferenceInstant": "2026-08-28T09:10:15.171Z",
+      "testedRevision": "b51f467f1dbf222a11b9ac6f0238a8a3ff5f2d34",
+      "testedTree": "89de0e967290bc36e7572c4ee0abe508b13ed023",
+      "fixtureTenant": "isolated disposable Cedar Ridge Home Services test tenant",
+      "fixtureTenantTimeZone": "Pacific/Honolulu",
+      "fixtureReferenceInstant": "2026-08-28T10:51:26.949Z",
       "sessionProvenance": "mounted real PostgreSQL owner cookie session; nonsecret test identity",
       "stateProvenance": "real mounted PostgreSQL owner reference; not an employee Today authority claim",
       "expectedVisible": [
@@ -586,8 +612,8 @@
         "not an employee Today authority claim"
       ],
       "sourceRoute": "/dashboard",
-      "timestamp": "2026-08-28T09:10:28.420Z",
-      "sha256": "8ecad9b516dd5fe8e4cf0f524b882de024296622364ea750a35d3254300f04e2"
+      "timestamp": "2026-08-28T10:51:40.539Z",
+      "sha256": "497b1e66fa9109470f79fe7b31e853d45fbe572e8a1401a6465264cb97eb45bd"
     }
   ]
 }

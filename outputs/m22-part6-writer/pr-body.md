@@ -15,15 +15,28 @@ settings/broad-history projection, other-worker schedule access, Mission 23
 field execution capability, new durable authority, or migration 036. Protected
 migrations 001–035 are byte-preserved.
 
-Writer evidence at the exact implementation source:
+Historical writer evidence for the production correction at `e72792d`:
 
 - focused Part 6: 2/2 suites, 15/15 tests;
 - explicit Parts 1–6 compatibility: 13/13 suites, 172/172 tests;
 - locally available Jest: 153/153 suites, 2,133/2,133 tests;
 - PostgreSQL 18.4 UTC fresh/restart, migration 035 exactly once, two health 200s;
 - installed Chrome 151 and actual Playwright WebKit 26.5: 8 matrices and 96
-  committed employee-only/Command Center-reference screenshots, zero provider
-  calls, zero worker-mutation traffic, zero browser errors.
+  committed employee-only/Command Center-reference screenshots.
+
+The evidence-only correction at `b51f467` / tree `89de0e9` then reran focused
+Part 6 at 16/16 and all eight Chrome/WebKit matrices. It froze 96 authoritative
+screenshots with realistic technician/crew/customer/job/instruction fixtures,
+32 realistic ready rows, 56 non-ready/empty rows, 32 exact-provenance synthetic
+rows, zero hostile markers, zero provider/external calls, zero worker-mutation
+traffic, and zero browser errors. Eight separate, explicitly
+non-customer-facing security screenshots retain hostile stored-byte/text-sink
+proof with zero injected image elements and no compromise flag. Production
+authority, UI, and migrations are unchanged by this evidence-only correction.
+
+The compatibility/full/startup results above remain historical; they are not
+relabeled as fresh results for `b51f467`. The independent final audit's
+unrelated 2,132/2,133 full-corpus red remains preserved.
 
 The correction closes the independent audit's four validated findings: Today
 uses a dedicated minimum shell and never requests `/api/auth/me`; the committed
@@ -39,6 +52,11 @@ The screenshot package is under
 machine/human manifest. After terminal release, the Mission 22 lead must copy
 it to the already verified canonical OneDrive evidence/screenshots path and
 surface key views; user visual approval remains separate and unclaimed.
+
+The prior final audit at `3ddd332` returned `CHANGES_REQUIRED` solely because
+all 32 ready screenshots visibly contained hostile fixture probes. This draft
+now awaits a new different fresh exact-head independent audit of the realistic
+package and the separately preserved adversarial proof.
 
 Unavailable/unclaimed: the 24 account-migration-010 cases requiring four absent
 disposable URLs, optional security scanner configuration, hosted checks if

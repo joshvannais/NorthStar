@@ -20,6 +20,14 @@ isolated disposable PostgreSQL databases plus real cookie-session and durable
 user/member/workforce/crew authority; no production account/data, client-only
 role fabrication, weakened auth, or test endpoint is used.
 
+The authoritative package uses realistic presentation values for technician,
+crew, customer, job, service address, and instructions. Hostile stored-byte and
+DOM-sink proof is deliberately separated under the correction evidence root's
+`hostile-security-evidence/` directory and is explicitly non-customer-facing;
+it is not part of the employee OneDrive/master-chat handoff package. The eight
+separate adversarial screenshots still prove literal text rendering, zero
+injected image elements, and no browser compromise.
+
 ## Visual and minimization result
 
 The Today surface reuses the Command Center hierarchy, widths/gutters, section
@@ -35,7 +43,8 @@ DOM and captured response/network assertions, not screenshot absence alone,
 prove the Today payload/DOM contains no financials, prices/margins/internal
 costs/payroll, invoices/payments, billing/subscription settings, broad customer
 history, other-worker schedules, owner-only Polaris cost intelligence, provider
-credentials, or Mission 23 controls. Hostile durable bytes render only as text.
+credentials, or Mission 23 controls. Separate adversarial evidence proves
+hostile durable bytes render only as text.
 
 The corrected matrices also inventory every signed-in employee request and
 inspectable response, then exercise the real visible logout control. The real

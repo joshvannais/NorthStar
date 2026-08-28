@@ -22,6 +22,19 @@
     return typeof value === 'string' && value.trim() ? value.trim() : (fallback || '');
   }
 
+  function markupLike(value) {
+    if (typeof value !== 'string') return false;
+    return /<\s*\/?\s*[a-z][^>]*>/i.test(value) ||
+      /&lt;\s*\/?\s*[a-z][\s\S]*?&gt;/i.test(value) ||
+      /(?:^|[\s"'])on[a-z]+\s*=\s*/i.test(value) ||
+      /(?:javascript\s*:|data\s*:\s*text\/html)/i.test(value);
+  }
+
+  function presentationString(value, fallback) {
+    var text = safeString(value, fallback);
+    return markupLike(text) ? (fallback || '') : text;
+  }
+
   function finiteNumber(value) {
     if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
     var number = Number(value);
@@ -97,7 +110,7 @@
   }
 
   function titleCase(value) {
-    return safeString(value, 'unavailable').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b\w/g, function (letter) {
+    return presentationString(value, 'unavailable').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b\w/g, function (letter) {
       return letter.toUpperCase();
     });
   }
@@ -139,8 +152,9 @@
 
   function setStatus(message, state) {
     var status = byId('commandCenterStatus');
-    status.textContent = message;
+    status.textContent = message || '';
     status.dataset.state = state || 'ready';
+    status.hidden = !message;
   }
 
   function configureMode() {
@@ -203,9 +217,9 @@
       var item = element('li');
       var body = element('div');
       body.append(
-        element('strong', '', safeString(graph.customer && graph.customer.name, 'Customer record') + ' · ' +
-          safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType))),
-        element('p', '', action ? action.label : safeString(graph.lead && graph.lead.summary,
+        element('strong', '', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable') + ' · ' +
+          presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType))),
+        element('p', '', action ? presentationString(action.label, 'Recommendation unavailable') : presentationString(graph.lead && graph.lead.summary,
           'Review the current role-authorized record before taking action.'))
       );
       var badge = element('span', 'demo-priority-badge' + (risk.emergency === true ? ' demo-priority-high' : ''),
@@ -217,7 +231,7 @@
 
   function humanEvidence(graph) {
     var facts = graph && graph.polaris && Array.isArray(graph.polaris.facts) ? graph.polaris.facts : [];
-    return facts.map(function (fact) { return safeString(fact && fact.evidenceText); }).filter(Boolean).slice(0, 6);
+    return facts.map(function (fact) { return presentationString(fact && fact.evidenceText, ''); }).filter(Boolean).slice(0, 6);
   }
 
   function missingInputs(graph) {
@@ -225,14 +239,14 @@
     var result = [];
     if (Array.isArray(value.missingInformation)) {
       value.missingInformation.forEach(function (entry) {
-        var text = safeString(entry && typeof entry === 'object' ? (entry.reason || entry.label) : entry);
+        var text = presentationString(entry && typeof entry === 'object' ? (entry.reason || entry.label) : entry, '');
         if (text) result.push(text);
       });
     }
     if (Array.isArray(value.notCalculated)) {
       value.notCalculated.forEach(function (entry) {
         var field = titleCase(entry && entry.field);
-        var reason = safeString(entry && entry.reason);
+        var reason = presentationString(entry && entry.reason, '');
         if (reason) result.push(field + ': ' + reason);
       });
     }
@@ -263,14 +277,14 @@
     var value = snapshot(graph);
     var confidence = finiteNumber(value.confidence && value.confidence.score);
     var risk = value.risk || {};
-    var customer = safeString(graph.customer && graph.customer.name, 'Current customer');
-    var service = safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
+    var customer = presentationString(graph.customer && graph.customer.name, 'Customer name unavailable');
+    var service = presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
     var recommendations = actionEntries(graph).map(function (entry) {
-      return { label: entry.label, priority: safeString(entry.priority), href: detailHref(graph) };
+      return { label: presentationString(entry.label, 'Recommendation unavailable'), priority: safeString(entry.priority), href: detailHref(graph) };
     });
     var risks = [];
-    if (risk.emergency === true) risks.push(safeString(risk.evidence, 'An emergency signal requires immediate review.'));
-    else if (safeString(risk.signal)) risks.push('Current risk signal: ' + safeString(risk.signal) + '.');
+    if (risk.emergency === true) risks.push(presentationString(risk.evidence, 'An emergency signal requires immediate review.'));
+    else if (presentationString(risk.signal, '')) risks.push('Current risk signal: ' + presentationString(risk.signal, 'Risk detail unavailable') + '.');
     var opportunities = [];
     if (graph.work && graph.work.scheduledStart) opportunities.push('A scheduled work window is already present for coordinated follow-through.');
     if (finiteNumber(graph.estimate && graph.estimate.customerPrice) !== null) opportunities.push('A recorded customer-facing estimate is available for review.');
@@ -279,7 +293,7 @@
       surface: 'command-center',
       detailed: true,
       title: customer + ' · ' + service,
-      summary: safeString(graph.lead && graph.lead.summary, 'The latest role-authorized record is ready for operational review.'),
+      summary: presentationString(graph.lead && graph.lead.summary, 'The latest role-authorized record is ready for operational review.'),
       confidence: confidence,
       confidenceExplanation: confidence === null
         ? 'No supported confidence score is present in the current Polaris snapshot.'
@@ -399,12 +413,12 @@
       var date = formatDate(isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart,
         canonicalRecords && workspace.schedulingOverview.timeZone);
       var copy = element('div');
-      var link = element('a', 'command-center-record-link', safeString(graph.work && graph.work.title,
-        safeString(graph.lead && graph.lead.serviceLabel, 'Scheduled work')));
+      var link = element('a', 'command-center-record-link', presentationString(graph.work && graph.work.title,
+        presentationString(graph.lead && graph.lead.serviceLabel, 'Job title unavailable')));
       var linkedGraph = isCanonical ? graphs.find(function (candidate) { return candidate.ids && candidate.ids.appointment === graph.appointmentId; }) : graph;
       link.href = linkedGraph ? detailHref(linkedGraph) : destination('calendar');
       var assignment = isCanonical ? titleCase(graph.authority.targetState) : graph.work && graph.work.assignedTo;
-      copy.append(link, element('span', '', safeString(graph.customer && graph.customer.name, 'Customer') +
+      copy.append(link, element('span', '', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable') +
         (assignment ? ' · ' + assignment : ' · Assignment unavailable')));
       var time = element('time', '', date);
       time.dateTime = isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart;
@@ -450,8 +464,8 @@
     var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
     if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
     var page = overview.page || { shown: overview.records.length, total: overview.records.length };
-    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' canonical appointments in ' + overview.timeZone + '. ' + (schedulingCategory === 'all'
-      ? 'All canonical appointments. Categories may overlap and are classified only by the server.'
+    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '. ' + (schedulingCategory === 'all'
+      ? 'All appointments. Categories may overlap and are classified only by the server.'
       : overview.definitions[schedulingCategory]);
     categoryNames.forEach(function (name) {
       var count = name === 'all' ? overview.total : overview.counts[name];
@@ -479,7 +493,7 @@
       var item = element('li', 'm22-overview-record');
       item.dataset.appointmentId = record.appointmentId;
       var summary = element('div', 'm22-record-summary');
-      summary.append(element('h3', '', safeString(record.customer && record.customer.name, 'Customer') + ' · ' + safeString(record.work && record.work.title, 'Appointment')),
+      summary.append(element('h3', '', presentationString(record.customer && record.customer.name, 'Customer name unavailable') + ' · ' + presentationString(record.work && record.work.title, 'Job title unavailable')),
         element('p', 'm22-record-time', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Unscheduled in ' + overview.timeZone));
       var states = element('dl', 'm22-state-summary');
       states.append(
@@ -557,7 +571,7 @@
         var customerCell = document.createElement('td');
         customerCell.className = 'command-center-customer-group';
         customerCell.rowSpan = group.records.length;
-        var link = element('a', 'command-center-record-link', safeString(graph.customer && graph.customer.name, 'Customer Record'));
+        var link = element('a', 'command-center-record-link', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable'));
         link.href = detailHref(graph);
         customerCell.appendChild(link);
         customerCell.appendChild(element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records')));
@@ -565,13 +579,13 @@
         if (recordedAt) customerCell.appendChild(element('span', 'command-center-customer-recorded-at', recordedAt));
         row.appendChild(customerCell);
       }
-      var serviceCell = element('td', '', safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType)));
+      var serviceCell = element('td', '', presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType)));
       var recorded = formatMoney(graph.estimate && graph.estimate.customerPrice);
       var valueCell = element('td', '', recorded || 'Unavailable — no recorded estimate');
       var statusCell = document.createElement('td');
       statusCell.appendChild(element('span', 'demo-status', titleCase(graph.lead && graph.lead.status)));
       var action = actionEntries(graph)[0];
-      var actionCell = element('td', '', action ? action.label : 'Review complete Polaris detail');
+      var actionCell = element('td', '', action ? presentationString(action.label, 'Recommendation unavailable') : 'Review complete Polaris detail');
       row.append(serviceCell, valueCell, statusCell, actionCell);
       rows.appendChild(row);
       });
@@ -579,7 +593,7 @@
       var firstGraph = group.records[0];
       var customerCard = element('article', 'command-center-mobile-customer');
       var customerHeader = element('header', 'command-center-mobile-customer-header');
-      var customerLink = element('a', 'command-center-record-link', safeString(firstGraph.customer && firstGraph.customer.name, 'Customer Record'));
+      var customerLink = element('a', 'command-center-record-link', presentationString(firstGraph.customer && firstGraph.customer.name, 'Customer name unavailable'));
       customerLink.href = detailHref(firstGraph);
       customerHeader.append(
         customerLink,
@@ -590,7 +604,7 @@
       var workList = element('ol', 'command-center-mobile-work-list');
       group.records.forEach(function (graph) {
         var workItem = element('li', 'command-center-mobile-work');
-        var mobileService = safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
+        var mobileService = presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
         var mobileRecorded = formatMoney(graph.estimate && graph.estimate.customerPrice) || 'Unavailable — no recorded estimate';
         var mobileStatus = titleCase(graph.lead && graph.lead.status);
         var mobileAction = actionEntries(graph)[0];
@@ -598,7 +612,7 @@
         details.append(
           element('dt', '', 'Recorded Value'), element('dd', '', mobileRecorded),
           element('dt', '', 'Status'), element('dd', '', mobileStatus),
-          element('dt', '', 'Next Action'), element('dd', '', mobileAction ? mobileAction.label : 'Review complete Polaris detail')
+          element('dt', '', 'Next Action'), element('dd', '', mobileAction ? presentationString(mobileAction.label, 'Recommendation unavailable') : 'Review complete Polaris detail')
         );
         workItem.append(element('h3', '', mobileService), details);
         workList.appendChild(workItem);
@@ -612,7 +626,7 @@
     var first = graphs[0];
     var action = first && actionEntries(first)[0];
     byId('commandCenterCoach').textContent = action
-      ? action.label + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
+      ? presentationString(action.label, 'Recommendation unavailable') + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
       : 'No prioritized recommendation is available until a role-authorized customer, lead, or work record supplies enough evidence.';
     byId('commandCenterWorkspaceStatus').textContent = mode === 'demo'
       ? 'Isolated demo workspace is current'
@@ -663,7 +677,7 @@
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
     setStatus(mode === 'demo'
       ? 'The isolated workspace is ready. Simulate Lead updates this view and every demo destination.'
-      : 'The current tenant workspace is ready.', 'ready');
+      : '', 'ready');
   }
 
   function load(expected) {

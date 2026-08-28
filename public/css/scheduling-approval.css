@@ -1,5 +1,6 @@
 .m22-authority-overview { --surface: var(--theme-surface, #fff); --border-color: var(--theme-border, #d7dce5); --text-primary: var(--theme-text, #172033); --text-secondary: var(--theme-muted, #586174); min-width: 0; max-width: 100%; box-sizing: border-box; margin: 24px 0; padding: clamp(18px, 2vw, 24px); border: 1px solid var(--border-color); border-radius: 16px; color: var(--text-primary); background: var(--surface); }
 .m22-authority-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.m22-authority-heading > div { display: grid; gap: 6px; }
 .m22-authority-heading h2, .m22-authority-heading p { margin: 0; }
 .m22-authority-heading p { max-width: 70ch; color: var(--text-secondary, #586174); }
 .m22-category-tabs, .m22-record-actions { display: flex; flex-wrap: wrap; gap: 10px; }

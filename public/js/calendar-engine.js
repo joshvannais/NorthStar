@@ -641,7 +641,7 @@ class CalendarRenderer {
     var page = overview.page || { shown:(overview.records || []).length, total:(overview.records || []).length };
     var coverage = document.createElement('p');
     coverage.className = 'm22-overview-coverage';
-    coverage.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' canonical appointments in ' + overview.timeZone +
+    coverage.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone +
       (overview.truncated ? '. Additional appointments remain available through bounded pages.' : '.');
     this.authorityBoard.appendChild(coverage);
     var navigation = document.createElement('div'); navigation.className = 'm22-record-actions';
@@ -696,7 +696,7 @@ class CalendarRenderer {
       }
       item.append(recordTitle, states, actions); list.appendChild(item);
     });
-    if (!list.children.length) list.appendChild(Object.assign(document.createElement('li'), { className:'m22-overview-empty', textContent:'No canonical appointments are available.' }));
+    if (!list.children.length) list.appendChild(Object.assign(document.createElement('li'), { className:'m22-overview-empty', textContent:'No appointments are available.' }));
     this.authorityBoard.appendChild(list);
   }
 

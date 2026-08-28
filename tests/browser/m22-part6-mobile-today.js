@@ -420,6 +420,19 @@ async function main() {
         timestamp: new Date().toISOString() });
     }
     async function waitState(state) { await page.waitForFunction(expected => document.body.dataset.todayState === expected, state, { timeout: 20000 }); }
+    async function assertStateActionSpacing(label) {
+      const spacing = await page.evaluate(() => {
+        const panel = document.getElementById('todayStatePanel').getBoundingClientRect();
+        const copy = document.getElementById('todayStateCopy').getBoundingClientRect();
+        const action = document.getElementById('todayStateAction').getBoundingClientRect();
+        return {
+          gap: action.top - copy.bottom,
+          inside: action.left >= panel.left - 1 && action.right <= panel.right + 1 && action.bottom <= panel.bottom + 1,
+        };
+      });
+      assert.ok(spacing.gap >= 16, `${label} reload spacing ${JSON.stringify(spacing)}`);
+      assert.strictEqual(spacing.inside, true, `${label} reload boundary ${JSON.stringify(spacing)}`);
+    }
 
     const todayResponse = page.waitForResponse(value => value.url().includes('/api/v1/today') && value.status() === 200);
     await page.goto(origin + '/dashboard/today', { waitUntil: 'domcontentloaded' });
@@ -465,11 +478,31 @@ async function main() {
       const scopeCount = document.querySelector('.today-scope-note > span');
       const detailLabel = document.querySelector('.today-detail-label');
       const disclosure = document.querySelector('.today-disclosure summary');
+      const authority = document.getElementById('todayAuthority');
+      const todayHeader = document.querySelector('.today-header');
+      const sidebar = document.querySelector('.sidebar');
+      const signOut = document.querySelector('.sidebar [data-today-logout]');
+      const themeToggle = document.querySelector('[data-northstar-theme-toggle]');
+      const authorityRange = document.createRange();
+      authorityRange.selectNodeContents(authority);
       return {
-      authority: document.getElementById('todayAuthority').textContent,
+      authority: authority.textContent,
+      authorityOneLine: authorityRange.getClientRects().length <= 1 && getComputedStyle(authority).whiteSpace === 'nowrap',
+      authorityAccessibleName: authority.getAttribute('aria-label'),
       duplicateCount: document.querySelectorAll('#todayWorkCount').length,
       labels: Array.from(document.querySelectorAll('.today-state-badge')).map(node => node.textContent.trim()),
-      todayHeaderPosition: getComputedStyle(document.querySelector('.today-header')).position,
+      todayHeaderPosition: getComputedStyle(todayHeader).position,
+      todayHeaderDisplay: getComputedStyle(todayHeader).display,
+      todayHeaderTop: todayHeader.getBoundingClientRect().top,
+      visibleHeaderBrands: Array.from(document.querySelectorAll('.today-header .demo-dashboard-brand')).filter(node => getComputedStyle(node).display !== 'none').length,
+      sidebar: sidebar ? { position: getComputedStyle(sidebar).position, top: sidebar.getBoundingClientRect().top } : null,
+      shellControls: {
+        signOutTag: signOut && signOut.tagName,
+        signOutClass: signOut && signOut.className,
+        themeClass: themeToggle && themeToggle.className,
+        themeIcons: themeToggle && themeToggle.querySelectorAll('.northstar-theme-sun, .northstar-theme-moon').length,
+        currentTheme: themeToggle && themeToggle.getAttribute('data-current-theme'),
+      },
       operationalContrast: [scopeCount && contrast(scopeCount), detailLabel && contrast(detailLabel), disclosure && contrast(disclosure, '::after')].filter(Number.isFinite),
       mobileHeader: (() => {
         const node = document.querySelector('.mobile-header');
@@ -481,9 +514,16 @@ async function main() {
       documentWidth: { client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
     }; });
     assert.ok(todayPresentation.authority.endsWith('· Personal Work Only'), JSON.stringify(todayPresentation));
+    assert.strictEqual(todayPresentation.authorityOneLine, true, JSON.stringify(todayPresentation));
+    assert.strictEqual(todayPresentation.authorityAccessibleName, todayPresentation.authority, JSON.stringify(todayPresentation));
     assert.strictEqual(todayPresentation.duplicateCount, 0, JSON.stringify(todayPresentation));
     todayPresentation.labels.forEach(value => assert.match(value, /^[A-Z]/, `uncapitalized Today label: ${value}`));
     assert.strictEqual(todayPresentation.todayHeaderPosition, 'static', JSON.stringify(todayPresentation));
+    assert.strictEqual(todayPresentation.visibleHeaderBrands, 0, JSON.stringify(todayPresentation));
+    assert.deepStrictEqual(todayPresentation.shellControls, {
+      signOutTag: 'BUTTON', signOutClass: 'today-sign-out',
+      themeClass: 'theme-toggle northstar-theme-switch', themeIcons: 2, currentTheme: dark ? 'dark' : 'light',
+    });
     assert.ok(todayPresentation.documentWidth.scroll <= todayPresentation.documentWidth.client + 2, JSON.stringify(todayPresentation));
     if (dark) todayPresentation.operationalContrast.forEach(value => assert.ok(value >= 4.5, `dark Today contrast ${JSON.stringify(todayPresentation)}`));
     if (mobile) {
@@ -491,6 +531,11 @@ async function main() {
       assert.strictEqual(todayPresentation.mobileHeader.position, 'static', JSON.stringify(todayPresentation));
       assert.ok(Math.abs(todayPresentation.mobileHeader.top) <= 2, JSON.stringify(todayPresentation));
       assert.ok(todayPresentation.mobileHeader.right <= viewport.width + 2, JSON.stringify(todayPresentation));
+      assert.strictEqual(todayPresentation.todayHeaderDisplay, 'none', JSON.stringify(todayPresentation));
+    } else {
+      assert.ok(Math.abs(todayPresentation.todayHeaderTop) <= 2, JSON.stringify(todayPresentation));
+      assert.ok(todayPresentation.sidebar && todayPresentation.sidebar.position === 'static', JSON.stringify(todayPresentation));
+      assert.ok(Math.abs(todayPresentation.sidebar.top) <= 2, JSON.stringify(todayPresentation));
     }
     const serialized = JSON.stringify(primaryBody);
     WITHHELD.forEach(value => assert.ok(!serialized.includes(value), `withheld API category leaked: ${value}`));
@@ -506,8 +551,10 @@ async function main() {
     assert.strictEqual(await page.getByText('Assigned to you', { exact: true }).count(), 2);
     assert.strictEqual(await page.getByText('Current crew', { exact: true }).count() >= 1, true);
     assert.deepStrictEqual(Object.keys(primaryBody.data.identity).sort(), ['displayName', 'operationalRole']);
-    assert.ok(serialized.includes(HOSTILE_MARKER), 'hostile API bytes must reach the allowlisted projection for the adversarial proof');
-    assert.ok(pageRawText.includes(HOSTILE), 'hostile stored bytes must render as inert literal text for the adversarial proof');
+    assert.ok(serialized.includes(HOSTILE_MARKER), 'hostile API bytes must remain unchanged in the allowlisted projection for the adversarial proof');
+    assert.ok(!pageRawText.includes(HOSTILE), 'hostile stored bytes must not be exposed in the user-facing display projection');
+    ['Job title unavailable', 'Employee name unavailable', 'Customer name unavailable', 'Service location unavailable']
+      .forEach(value => assert.ok(pageRawText.includes(value), `missing neutral hostile display placeholder: ${value}`));
     if (securityEvidenceRoot) {
       const filename = path.join(securityEvidenceRoot, `${matrix}-hostile-source-to-sink-inert.png`);
       await page.screenshot({ path: filename, fullPage: true });
@@ -517,9 +564,10 @@ async function main() {
         version, viewport, theme: dark ? 'dark' : 'light', testedRevision, testedTree,
         purpose: 'separate adversarial security proof; explicitly not the employee visual handoff package',
         authority: 'isolated disposable PostgreSQL cookie session with real tenant/member/workforce/crew scope',
-        storedProbe: HOSTILE, apiProjectionContainsLiteralProbe: true, domContainsLiteralProbeText: true,
+        storedProbe: HOSTILE, apiProjectionContainsLiteralProbe: true, domContainsLiteralProbeText: false,
         executableImageElementsInTodayRecords: 0, globalCompromiseFlag: false,
-        sinkConclusion: 'hostile stored bytes remained inert text; no HTML element or script execution occurred',
+        displayProjection: ['Job title unavailable', 'Employee name unavailable', 'Customer name unavailable', 'Service location unavailable'],
+        sinkConclusion: 'hostile stored bytes remained unchanged in PostgreSQL/API evidence and were replaced only in the user-facing display projection; no HTML element or script execution occurred',
         sourceRoute: '/dashboard/today', timestamp: new Date().toISOString(),
       });
     }
@@ -786,14 +834,7 @@ async function main() {
       liveStatusVisuallyHidden: document.getElementById('todayStatus').classList.contains('sr-only'),
     }));
     assert.deepStrictEqual(errorActions, { headerReloadHidden: true, panelReloadHidden: false, liveStatusVisuallyHidden: true });
-    if (mobile) {
-      const reloadSpacing = await page.evaluate(() => {
-        const copy = document.getElementById('todayStateCopy').getBoundingClientRect();
-        const action = document.getElementById('todayStateAction').getBoundingClientRect();
-        return { gap: action.top - copy.bottom, copy: copy.toJSON(), action: action.toJSON() };
-      });
-      assert.ok(reloadSpacing.gap >= 12, `reload spacing ${JSON.stringify(reloadSpacing)}`);
-    }
+    await assertStateActionSpacing('network error');
     await capture('network-error', 'error', 'active employee', 'no-returned-records',
       'synthetic transport only: Playwright route.abort("internetdisconnected") for one /api/v1/today request; no durable authority claim');
     await page.getByRole('button', { name: 'Reload', exact: true }).click();
@@ -803,6 +844,7 @@ async function main() {
     await context.setOffline(true);
     await page.locator('#todayRefresh').click();
     await waitState('offline');
+    await assertStateActionSpacing('offline');
     await capture('offline', 'offline', 'active employee', 'no-returned-records',
       'synthetic transport only: Playwright context.setOffline(true) for this browser context; no durable authority claim');
     await context.setOffline(false);
@@ -816,6 +858,7 @@ async function main() {
     }), { times: 1 });
     await page.locator('#todayRefresh').click();
     await waitState('stale');
+    await assertStateActionSpacing('stale');
     await capture('stale-reload', 'stale', 'active employee', 'no-returned-records',
       'synthetic response only: Playwright route.fulfill injects one typed HTTP 409 stale response; no durable authority claim');
     await page.getByRole('button', { name: 'Reload', exact: true }).click();
@@ -836,6 +879,7 @@ async function main() {
     await page.locator('#todayRefresh').click();
     await waitState('restricted');
     assert.strictEqual(await page.locator('.today-work-card').count(), 0);
+    await assertStateActionSpacing('session revoked');
     await capture('session-revoked', 'restricted', 'revoked employee session', 'none',
       'real durable PostgreSQL auth session revocation; no synthetic transport or response');
     await pool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1", [employee.sessionId]);
@@ -863,6 +907,7 @@ async function main() {
     const ownerPage = await ownerContext.newPage();
     await ownerPage.goto(origin + '/dashboard/today', { waitUntil: 'domcontentloaded' });
     await ownerPage.waitForFunction(() => document.body.dataset.todayState === 'empty');
+    assert.strictEqual(await ownerPage.locator('#todayAuthority').textContent(), 'Owner Operator · Personal Work Only');
     if (evidenceRoot) {
       const filename = path.join(evidenceRoot, `${matrix}-no-work-empty.png`);
       await ownerPage.screenshot({ path: filename, fullPage: true });
@@ -913,7 +958,15 @@ async function main() {
       const tableWrap = leadsPanel.querySelector('.demo-table-wrap');
       const mobileCards = document.getElementById('commandCenterLeadCards');
       return {
+      headerBrandDisplay: getComputedStyle(document.querySelector('.command-center-blueprint-header .demo-dashboard-brand')).display,
       schedulingTitle: document.getElementById('commandCenterSchedulingTitle').textContent,
+      schedulingKicker: document.querySelector('#commandCenterScheduling .demo-panel-kicker').textContent.trim(),
+      schedulingDefinition: document.getElementById('commandCenterSchedulingDefinition').textContent,
+      schedulingHeadingGap: parseFloat(getComputedStyle(document.querySelector('.m22-authority-heading > div')).rowGap),
+      paidReadyStatus: {
+        hidden: document.getElementById('commandCenterStatus').hidden,
+        text: document.getElementById('commandCenterStatus').textContent,
+      },
       selectedCategory: document.querySelector('.m22-category-button[aria-pressed="true"] .m22-category-label').textContent.trim(),
       riskContrast: Array.from(document.querySelectorAll('.m22-state-chip')).map(node => ({ text: node.textContent.trim(), ratio: contrast(node) })),
       records: Array.from(document.querySelectorAll('#commandCenterSchedulingRecords .m22-overview-record')).map(record => ({
@@ -939,6 +992,12 @@ async function main() {
       },
     }; });
     assert.strictEqual(commandPresentation.schedulingTitle, 'Owner and Dispatcher Overview');
+    if (mobile) assert.notStrictEqual(commandPresentation.headerBrandDisplay, 'none', JSON.stringify(commandPresentation));
+    else assert.strictEqual(commandPresentation.headerBrandDisplay, 'none', JSON.stringify(commandPresentation));
+    assert.strictEqual(commandPresentation.schedulingKicker, 'Scheduling Overview');
+    assert.ok(!/canonical scheduling|canonical appointments/i.test(commandPresentation.schedulingDefinition), JSON.stringify(commandPresentation));
+    assert.ok(commandPresentation.schedulingHeadingGap >= 6, JSON.stringify(commandPresentation));
+    assert.deepStrictEqual(commandPresentation.paidReadyStatus, { hidden: true, text: '' });
     assert.strictEqual(commandPresentation.selectedCategory, 'At Risk', JSON.stringify(commandPresentation));
     commandPresentation.records.forEach(record => {
       assert.strictEqual(record.primaryStates.length, 3, JSON.stringify(record));

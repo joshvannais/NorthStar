@@ -901,6 +901,17 @@ html body .mobile-header .mobile-logo {
   height: 46px !important;
 }
 
+@media (min-width: 769px) {
+  html body.command-center-blueprint-page .command-center-blueprint-header .demo-dashboard-brand {
+    display: none !important;
+  }
+
+  html body.command-center-blueprint-page .command-center-blueprint-header .demo-dashboard-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 html body .theme-toggle {
   position: relative !important;
   display: inline-grid !important;
@@ -916,6 +927,66 @@ html body .theme-toggle [data-theme-icon] svg {
   height: 20px !important;
   margin: auto !important;
   transform: none !important;
+}
+
+html body .northstar-theme-switch {
+  width: 70px !important;
+  min-width: 70px !important;
+  height: 34px !important;
+  border-radius: 999px !important;
+  overflow: hidden;
+  background: var(--theme-surface-soft) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-border) 88%, transparent) !important;
+}
+
+html body .northstar-theme-switch::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 4px;
+  left: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--theme-surface);
+  box-shadow: 0 2px 7px rgba(15, 23, 42, .18);
+  transform: translateX(0);
+  transition: transform .2s ease;
+}
+
+html body .northstar-theme-switch[data-current-theme="dark"]::before {
+  transform: translateX(36px);
+}
+
+html body .northstar-theme-switch [data-theme-icon] {
+  position: relative !important;
+  z-index: 1;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+html body .northstar-theme-switch [data-theme-icon] > span {
+  display: grid;
+  place-items: center;
+  color: var(--theme-muted);
+  opacity: .58;
+}
+
+html body .northstar-theme-switch [data-theme-icon] svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+html body .northstar-theme-switch[data-current-theme="light"] .northstar-theme-sun,
+html body .northstar-theme-switch[data-current-theme="dark"] .northstar-theme-moon {
+  color: var(--theme-text);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body .northstar-theme-switch::before { transition: none; }
 }
 
 html body.homepage-refresh {

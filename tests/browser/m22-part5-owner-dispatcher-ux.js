@@ -731,7 +731,7 @@ async function main() {
       assert.strictEqual(pageOneBody.data.schedulingOverview.shown, 100);
       try {
       await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-        .includes('Showing 100 of 103 canonical appointments in America/New_York.'), null, { timeout: 10000 });
+        .includes('Showing 100 of 103 appointments in America/New_York.'), null, { timeout: 10000 });
       } catch (error) {
         const state = await page.evaluate(() => ({
         definition: document.getElementById('commandCenterSchedulingDefinition').textContent,
@@ -743,11 +743,11 @@ async function main() {
       const nextPage = page.getByRole('button', { name: 'Next 100 appointments', exact: true });
       await nextPage.click();
       await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-      .includes('Showing 3 of 103 canonical appointments in America/New_York.'));
+      .includes('Showing 3 of 103 appointments in America/New_York.'));
       assert.strictEqual(await page.getByRole('button', { name: 'First page', exact: true }).count(), 1);
       await page.getByRole('button', { name: 'First page', exact: true }).click();
       await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-      .includes('Showing 100 of 103 canonical appointments in America/New_York.'));
+      .includes('Showing 100 of 103 appointments in America/New_York.'));
     }
 
     await pool.query("UPDATE subscriptions SET status='past_due' WHERE organization_id=$1", [ORGANIZATION_ID]);

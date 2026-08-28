@@ -37,7 +37,9 @@ function main() {
     assert.strictEqual(entry.filename, `${matrix.matrix}-hostile-source-to-sink-inert.png`);
     assert.strictEqual(entry.storedProbe, HOSTILE);
     assert.strictEqual(entry.apiProjectionContainsLiteralProbe, true);
-    assert.strictEqual(entry.domContainsLiteralProbeText, true);
+    assert.strictEqual(entry.domContainsLiteralProbeText, false);
+    assert.deepStrictEqual(entry.displayProjection,
+      ['Job title unavailable', 'Employee name unavailable', 'Customer name unavailable', 'Service location unavailable']);
     assert.strictEqual(entry.executableImageElementsInTodayRecords, 0);
     assert.strictEqual(entry.globalCompromiseFlag, false);
     assert.strictEqual(entry.sha256, sha256File(path.join(directory, entry.filename)));
@@ -66,7 +68,7 @@ function main() {
     `- Exact tested tree: \`${testedTree}\``,
     `- Browser matrices: ${matrices.length}; deliberately hostile security screenshots: ${screenshots.length}.`,
     '- This is adversarial security evidence, not the realistic employee handoff package and not a customer-facing visual reference.',
-    '- The literal stored probe traversed disposable PostgreSQL and the allowlisted API, rendered as inert text, created zero image elements, and did not set the compromise flag.',
+    '- The literal stored probe traversed disposable PostgreSQL and the allowlisted API unchanged, while the user-facing display used neutral placeholders, created zero image elements, and did not set the compromise flag.',
     '- Authority used real mounted cookie sessions and durable tenant/member/workforce/crew scope in isolated disposable databases.',
     '- Browser truth: installed Chrome plus actual Playwright WebKit. WebKit is not physical Safari.',
     '',

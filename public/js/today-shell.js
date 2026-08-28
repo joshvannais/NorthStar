@@ -52,13 +52,34 @@
     return link;
   }
 
-  function signOutLink() {
-    var link = node('a');
-    link.href = LOGIN_PATH;
-    link.dataset.todayLogout = '';
-    link.appendChild(node('span', 'today-logout-icon', '↪'));
-    link.appendChild(node('span', '', 'Sign Out'));
-    return link;
+  function logoutIcon() {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('aria-hidden', 'true');
+    var paths = [
+      ['path', { d: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }],
+      ['path', { d: 'm16 17 5-5-5-5' }],
+      ['path', { d: 'M21 12H9' }],
+    ];
+    paths.forEach(function(specification) {
+      var child = document.createElementNS('http://www.w3.org/2000/svg', specification[0]);
+      Object.keys(specification[1]).forEach(function(key) { child.setAttribute(key, specification[1][key]); });
+      svg.appendChild(child);
+    });
+    return svg;
+  }
+
+  function signOutButton() {
+    var button = node('button', 'today-sign-out');
+    button.type = 'button';
+    button.dataset.todayLogout = '';
+    button.setAttribute('aria-label', 'Sign Out');
+    button.appendChild(logoutIcon());
+    button.appendChild(node('span', '', 'Sign Out'));
+    return button;
   }
 
   function brand() {
@@ -78,7 +99,7 @@
     navigation.setAttribute('aria-label', 'Today navigation');
     navigation.appendChild(todayLink());
     var footer = node('div', 'sidebar-footer');
-    footer.appendChild(signOutLink());
+    footer.appendChild(signOutButton());
     var theme = node('span', 'northstar-theme-slot');
     theme.dataset.northstarThemeSlot = '';
     theme.dataset.northstarThemeLocation = 'desktop';
@@ -128,7 +149,7 @@
     navigation.setAttribute('aria-label', 'Today navigation');
     navigation.appendChild(todayLink());
     var footer = node('div', 'mobile-menu-footer');
-    footer.appendChild(signOutLink());
+    footer.appendChild(signOutButton());
     menu.append(menuHeader, navigation, footer);
     fragment.append(header, overlay, menu);
     return fragment;
@@ -197,6 +218,12 @@
 
   function logout() {
     if (logoutInFlight) return logoutInFlight;
+    var controls = Array.prototype.slice.call(document.querySelectorAll('[data-today-logout]'));
+    controls.forEach(function(control) {
+      control.disabled = true;
+      control.setAttribute('aria-disabled', 'true');
+      control.classList.add('is-loading');
+    });
     var headers = { Accept: 'application/json' };
     var csrf = cookie('northstar_csrf');
     if (csrf) headers['X-CSRF-Token'] = csrf;
@@ -211,7 +238,14 @@
     }).catch(function(error) {
       showLogoutFailure();
       throw error;
-    }).finally(function() { logoutInFlight = null; });
+    }).finally(function() {
+      controls.forEach(function(control) {
+        control.disabled = false;
+        control.removeAttribute('aria-disabled');
+        control.classList.remove('is-loading');
+      });
+      logoutInFlight = null;
+    });
     return logoutInFlight;
   }
 

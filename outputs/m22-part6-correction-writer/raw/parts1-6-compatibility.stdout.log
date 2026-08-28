@@ -167,7 +167,6 @@
     [DB] Migration applied: 001_initial_schema.sql
 
       at Object.log [as runMigrations] (src/db.js:1312:42)
-
   console.log
     [DB] Migration applied: 002_seed_data.sql
 
@@ -10202,4 +10201,3 @@
     [DB] Migration applied: 035_schedule_human_preview_approval.sql
 
       at Object.log [as runMigrations] (src/db.js:1312:42)
-

@@ -174,7 +174,6 @@
     }
 
       at write (src/observability/safeLogger.js:178:17)
-
   console.info
     {
       component: 'http',
@@ -32516,4 +32515,3 @@
     }
 
       at write (src/observability/safeLogger.js:178:17)
-

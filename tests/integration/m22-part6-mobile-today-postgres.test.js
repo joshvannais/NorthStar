@@ -309,6 +309,35 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     expect(serialized).not.toContain(IDS.otherTenant);
   });
 
+  test('serves an employee-minimal Today bootstrap and static bundle through a real mounted cookie session', async () => {
+    const shell = await request(app).get('/dashboard/today').set(sessions.employee.headers).expect(200);
+    const scriptPaths = [...shell.text.matchAll(/<script[^>]+src="([^"]+)"/g)].map(match => match[1]);
+    expect(scriptPaths).toContain('/js/today-shell.js');
+    expect(scriptPaths).not.toContain('/js/auth-session.js');
+    expect(scriptPaths).not.toContain('/js/nav-component.js');
+    expect(scriptPaths).not.toContain('/js/command-center-contract.js');
+
+    const bodies = [shell.text];
+    const bootstrapBodies = [shell.text];
+    for (const scriptPath of scriptPaths) {
+      const response = await request(app).get(scriptPath).set(sessions.employee.headers).expect(200);
+      bodies.push(response.text);
+      if (scriptPath === '/js/today-shell.js') bootstrapBodies.push(response.text);
+    }
+    const employeeBytes = bodies.join('\n').toLowerCase();
+    for (const forbidden of [
+      '/api/auth/me', '/dashboard/polaris', '/dashboard/leads', '/dashboard/communications',
+      '/dashboard/calendar', '/dashboard/team', '/dashboard/business-profile', '/dashboard/settings',
+      '/dashboard/integrations', 'subscription', 'onboarding', 'organization',
+    ]) expect(employeeBytes).not.toContain(forbidden.toLowerCase());
+    const bootstrapBytes = bootstrapBodies.join('\n').toLowerCase();
+    for (const privateIdentityField of ['email', 'phone']) expect(bootstrapBytes).not.toContain(privateIdentityField);
+
+    const today = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+    expect(today.body.data.identity).toEqual(expect.objectContaining({ displayName: expect.any(String) }));
+    expect(Object.keys(today.body.data.identity).sort()).toEqual(['displayName', 'operationalRole']);
+  });
+
   test('rejects forged scope, exposes no mutation method, and keeps owner access personal', async () => {
     await request(app).get(`/api/v1/today?tenantId=${IDS.otherOrganization}&workerId=${IDS.teammate}&day=2027-01-01`)
       .set(sessions.employee.headers).expect(400).expect(response => {

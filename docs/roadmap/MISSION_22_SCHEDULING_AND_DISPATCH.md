@@ -534,6 +534,26 @@ the Mission 22 lead must copy this immutable in-repository package to the
 already verified canonical OneDrive evidence/screenshots destination and
 surface key views in the master chat; this writer does not write OneDrive.
 
+The independent exact-head audit at
+`7bccaeb41f1595237309888e5858e3afc7efc07d` returned `CHANGES_REQUIRED`
+with `P0 0 / P1 1 / P2 3 / P3 0`. The authorized correction remains limited
+to those four findings. Today now mounts a dedicated minimized shell and no
+longer downloads or calls the shared operator account/navigation bootstrap;
+real employee-cookie browser coverage inventories every same-origin network
+destination and inspectable response body, exercises real logout and revoked
+session behavior, and proves that the accepted operator pages keep their
+existing bootstrap. Evidence ledgers are regenerated only from immutable Git
+blob bytes, exclude their own ledger file explicitly, and are verified for
+complete path coverage from a fresh full-history checkout. Non-ready screenshot
+rows describe only the state actually rendered, state that prior private work
+is absent or cleared, and identify each Playwright transport interception as
+synthetic rather than durable authority. Browser fixtures select and record a
+real tenant IANA timezone whose current civil day can contain the bounded test
+horizon; dedicated America/New_York DST coverage remains mounted. No migration,
+new authentication authority, site-wide navigation redesign, or Part 7 scope
+is included. The corrected head still requires a different fresh exact-head
+independent audit before ready, merge, or release.
+
 ### Part 7 — Mission-wide acceptance and release (planned)
 
 Trace one exact assignment through creation/backfill, evaluation,

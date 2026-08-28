@@ -288,7 +288,12 @@
     }
     updateToggle(currentTheme());
     scheduleDocking();
-    if (!telemetryRequested) {
+    // Employee Today is a deliberately minimized bundle. The shared product
+    // telemetry client contains broad operator route classifications that are
+    // not needed to render or authorize this surface, so Today does not fetch
+    // that otherwise unchanged shared script.
+    var employeeMinimized = document.body && document.body.classList.contains('today-page');
+    if (!telemetryRequested && !employeeMinimized) {
       telemetryRequested = true;
       var telemetry = document.createElement('script');
       telemetry.src = '/js/product-telemetry.js';

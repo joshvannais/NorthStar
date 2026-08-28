@@ -12,6 +12,7 @@ const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const schedulingTime = require('../../public/js/scheduling-time-contract');
+const { chooseFixturePlan, instantAt } = require('../helpers/m22-part6-browser-fixture-time');
 
 const ORGANIZATION_ID = 'a2600000-0000-4000-8000-000000000001';
 const OWNER_ID = 'b2600000-0000-4000-8000-000000000001';
@@ -19,10 +20,23 @@ const EMPLOYEE_ID = 'b2600000-0000-4000-8000-000000000002';
 const TEAMMATE_ID = 'b2600000-0000-4000-8000-000000000003';
 const CREW_ID = 'c2600000-0000-4000-8000-000000000001';
 const HOSTILE = '<img src=x onerror="globalThis.m22Part6Compromised=true">';
+let fixtureTimeZone = 'America/New_York';
 const WITHHELD = Object.freeze([
   'SECRET_FINANCIAL_MARGIN', 'SECRET_INVOICE', 'SECRET_PAYROLL', 'SECRET_HISTORY',
   'SECRET-GATE', 'private-history@example.test', 'PRIVATE TRANSCRIPT',
 ]);
+const CUSTOMER_WITHHELD = Object.freeze([
+  'financials', 'billing and subscription settings', 'broad customer history',
+  'other workers schedules', 'Polaris cost intelligence', 'Mission 23 controls', 'provider credentials',
+]);
+const NON_READY_PRESENTATION = Object.freeze({
+  loading: Object.freeze({ visible: ['loading state', 'read-only shell'], withheld: ['all private work records; prior cards cleared'] }),
+  error: Object.freeze({ visible: ['network error state', 'real reload control', 'read-only shell'], withheld: ['all private work records; prior cards cleared'] }),
+  offline: Object.freeze({ visible: ['offline state', 'reconnect guidance', 'read-only shell'], withheld: ['all private work records; prior cards cleared'] }),
+  stale: Object.freeze({ visible: ['stale authority state', 'real reload control', 'read-only shell'], withheld: ['all private work records; prior cards cleared'] }),
+  restricted: Object.freeze({ visible: ['access-changed state', 'sign-in or administrator guidance', 'read-only shell'], withheld: ['all private work records; prior cards cleared'] }),
+  empty: Object.freeze({ visible: ['personal no-work state', 'read-only shell'], withheld: ['all private work records; none returned'] }),
+});
 
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
@@ -50,8 +64,8 @@ async function pins(pool, appointmentId) {
     revision: Number(row.revision), digest: row.digest,
     target: row.target_state === 'unassigned' ? { kind: 'unassigned', id: null }
       : row.workforce_profile_id ? { kind: 'profile', id: row.workforce_profile_id } : { kind: 'crew', id: row.workforce_crew_id },
-    scheduledStart: row.scheduled_start ? schedulingTime.formatInstant(row.scheduled_start, 'America/New_York').rfc3339 : null,
-    scheduledEnd: row.scheduled_end ? schedulingTime.formatInstant(row.scheduled_end, 'America/New_York').rfc3339 : null,
+    scheduledStart: row.scheduled_start ? schedulingTime.formatInstant(row.scheduled_start, fixtureTimeZone).rfc3339 : null,
+    scheduledEnd: row.scheduled_end ? schedulingTime.formatInstant(row.scheduled_end, fixtureTimeZone).rfc3339 : null,
     appointmentStatus: row.appointment_status,
   };
 }
@@ -59,7 +73,7 @@ async function approve(app, pool, owner, appointmentId, action, proposal) {
   const before = await pins(pool, appointmentId);
   const reason = 'Part 6 disposable browser fixture exact human approval.';
   const previewBody = {
-    expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: 'America/New_York', action,
+    expectedRevision: before.revision, expectedDigest: before.digest, expectedTimeZone: fixtureTimeZone, action,
     target: proposal.target || before.target,
     scheduledStart: Object.prototype.hasOwnProperty.call(proposal, 'scheduledStart') ? proposal.scheduledStart : before.scheduledStart,
     scheduledEnd: Object.prototype.hasOwnProperty.call(proposal, 'scheduledEnd') ? proposal.scheduledEnd : before.scheduledEnd,
@@ -113,10 +127,14 @@ async function createWork(app, pool, owner, ordinal) {
   return ids.appointment;
 }
 function cookies(session, origin) {
-  return [
+  const values = [
     { name: 'northstar_access', value: session.accessToken, url: origin, httpOnly: true, sameSite: 'Lax' },
     { name: 'northstar_csrf', value: session.csrfToken, url: origin, httpOnly: false, sameSite: 'Lax' },
   ];
+  if (session.refreshToken) values.push({
+    name: 'northstar_refresh', value: session.refreshToken, url: origin, httpOnly: true, sameSite: 'Lax',
+  });
+  return values;
 }
 function sha256File(filename) {
   return crypto.createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
@@ -177,8 +195,8 @@ async function main() {
     'GOOGLE_SHEETS_CLIENT_EMAIL', 'GOOGLE_SHEETS_PRIVATE_KEY', 'GOOGLE_SHEETS_SPREADSHEET_ID'];
   const original = Object.fromEntries(environment.map(key => [key, process.env[key]]));
   const suiteDatabase = await createSuiteDatabase(`m22-p6-browser-${matrix}`);
-  let roles, db, server, browser, context, ownerContext;
-  const external = [], browserErrors = [], network = [], responseBodies = [], screenshots = [];
+  let roles, db, server, browser, context, ownerContext, logoutContext;
+  const external = [], browserErrors = [], network = [], responseBodies = [], responseInventory = [], responseCaptureTasks = [], screenshots = [];
   try {
     roles = await createRoles(suiteDatabase, matrix);
     process.env.DATABASE_URL = roles.runtimeUrl;
@@ -200,7 +218,9 @@ async function main() {
     );
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
     const business = canonicalFenceProfile({ companyName: 'Part 6 Browser Tenant' });
-    business.company.timeZone = 'America/New_York';
+    const fixturePlan = chooseFixturePlan(new Date());
+    fixtureTimeZone = fixturePlan.timeZone;
+    business.company.timeZone = fixturePlan.timeZone;
     business.scheduling = { maxJobsPerDay: 100, workDayLength: 24, appointmentBuffer: 0, travelBuffer: 0 };
     business.hours = {};
     for (const weekday of ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']) {
@@ -209,6 +229,14 @@ async function main() {
     await putBusinessProfile(pool, { organizationId: ORGANIZATION_ID, userId: OWNER_ID, expectedVersion: null, profile: business });
     const owner = await provisionDurableSession(pool, { userId: OWNER_ID, organizationId: ORGANIZATION_ID, membershipId: OWNER_ID, role: 'owner' });
     const employee = await provisionDurableSession(pool, { userId: EMPLOYEE_ID, organizationId: ORGANIZATION_ID, membershipId: EMPLOYEE_ID, role: 'member' });
+    const logoutEmployee = await provisionDurableSession(pool, { userId: EMPLOYEE_ID, organizationId: ORGANIZATION_ID, membershipId: EMPLOYEE_ID, role: 'member' });
+    logoutEmployee.refreshToken = crypto.randomBytes(32).toString('base64url');
+    await pool.query(
+      `INSERT INTO public.auth_refresh_tokens(id,session_id,family_id,token_hash,expires_at)
+       VALUES ($1,$2,$3,$4,NOW()+INTERVAL '14 days')`,
+      [crypto.randomUUID(), logoutEmployee.sessionId, crypto.randomUUID(),
+        require('../../src/auth/credentials').hashToken(logoutEmployee.refreshToken)]
+    );
     await provisionDurableSession(pool, { userId: TEAMMATE_ID, organizationId: ORGANIZATION_ID, membershipId: TEAMMATE_ID, role: 'member' });
     await pool.query("UPDATE workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id IN ($2,$3)", [ORGANIZATION_ID, EMPLOYEE_ID, TEAMMATE_ID]);
     await pool.query(
@@ -222,16 +250,7 @@ async function main() {
     const { app } = require('../../src/server');
     const appointmentIds = [];
     for (let ordinal = 0; ordinal < 5; ordinal += 1) appointmentIds.push(await createWork(app, pool, owner, ordinal + 1));
-    const futureLocal = schedulingTime.formatInstant(new Date(Date.now() + 15 * 60 * 1000), 'America/New_York');
-    const day = futureLocal.date;
-    const futureParts = futureLocal.time.split(':').map(Number);
-    const baseMinute = Math.ceil((futureParts[0] * 60 + futureParts[1]) / 5) * 5;
-    assert.ok(baseMinute + 110 < 24 * 60, 'Part 6 browser matrix requires two hours remaining in the current tenant day');
-    const wall = offset => {
-      const minute = baseMinute + offset;
-      return `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-    };
-    const at = offset => schedulingTime.resolveWallTime(day, wall(offset), 'America/New_York').candidates[0].rfc3339;
+    const at = offset => instantAt(fixturePlan, offset);
     await approve(app, pool, owner, appointmentIds[0], 'assign', { target: { kind: 'profile', id: EMPLOYEE_ID } });
     await approve(app, pool, owner, appointmentIds[0], 'schedule', { scheduledStart: at(0), scheduledEnd: at(20) });
     await approve(app, pool, owner, appointmentIds[0], 'dispatch', {});
@@ -259,26 +278,54 @@ async function main() {
     });
     const page = await context.newPage();
     page.on('pageerror', error => browserErrors.push(error.message));
-    page.on('request', value => { if (new URL(value.url()).origin === origin && value.url().includes('/api/')) network.push({ method: value.method(), url: value.url() }); });
-    page.on('response', async value => {
-      if (value.url().includes('/api/v1/today') && value.status() === 200) {
-        try { responseBodies.push(await value.json()); } catch (_error) {}
-      }
+    page.on('request', value => {
+      const target = new URL(value.url());
+      if (target.origin === origin) network.push({ method: value.method(), url: value.url(), pathname: target.pathname });
+    });
+    page.on('response', value => {
+      const target = new URL(value.url());
+      const captureResponse = (async () => {
+        if (target.origin !== origin) return;
+        const headers = value.headers();
+        const contentType = String(headers['content-type'] || '').toLowerCase();
+        let body = null;
+        if (target.pathname === '/api/telemetry' && value.status() === 202) {
+          body = '';
+        } else if (/(?:json|javascript|text\/|css|html)/.test(contentType)) {
+          try { body = (await value.body()).toString('utf8'); } catch (_error) { body = null; }
+        }
+        responseInventory.push({ method: value.request().method(), pathname: target.pathname, status: value.status(),
+          contentType, contentLength: headers['content-length'] || null, body });
+        if (target.pathname === '/api/v1/today' && value.status() === 200 && body) {
+          try { responseBodies.push(JSON.parse(body)); } catch (_error) {}
+        }
+      })();
+      const task = Promise.race([
+        captureResponse,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`response body capture timed out: ${target.pathname}`)), 10000)),
+      ]);
+      responseCaptureTasks.push(task);
     });
 
-    async function capture(label, state, identity, assignmentMode) {
+    async function capture(label, state, identity, assignmentMode, stateProvenance) {
       if (!evidenceRoot) return;
       const filename = path.join(evidenceRoot, `${matrix}-${label}.png`);
       await page.screenshot({ path: filename, fullPage: true });
+      const nonReady = NON_READY_PRESENTATION[state];
+      const expectedVisible = nonReady ? [...nonReady.visible] : [
+        'minimum job and customer essentials', 'current assignment, schedule and dispatch truth',
+        'provider-neutral route uncertainty', 'read-only state',
+      ];
+      const expectedWithheld = [...CUSTOMER_WITHHELD, ...(nonReady ? nonReady.withheld : [])];
+      const durableSession = 'mounted real PostgreSQL cookie session; nonsecret test identity';
       screenshots.push({ filename: path.basename(filename), browser: selected,
         engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         version, viewport, theme: dark ? 'dark' : 'light', realRoleIdentity: identity, assignmentMode, state,
-        testedRevision, testedTree, fixtureTenant: 'isolated disposable Part 6 Browser Tenant',
-        sessionProvenance: 'mounted real PostgreSQL cookie session; nonsecret test identity', sourceRoute: '/dashboard/today',
-        expectedVisible: ['minimum job and customer essentials', 'current assignment, schedule and dispatch truth',
-          'provider-neutral route uncertainty', 'read-only state'],
-        withheldCategories: ['financials', 'billing and subscription settings', 'broad customer history',
-          'other workers schedules', 'Polaris cost intelligence', 'Mission 23 controls', 'provider credentials'],
+        testedRevision, testedTree, fixtureTenant: 'isolated disposable Part 6 Browser Tenant', fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureReferenceInstant: fixturePlan.referenceInstant,
+        sessionProvenance: stateProvenance ? `${durableSession}; ${stateProvenance}` : durableSession,
+        stateProvenance: stateProvenance || 'real mounted PostgreSQL authority and transport; no synthetic state injection',
+        sourceRoute: '/dashboard/today', expectedVisible, expectedWithheld, withheldCategories: expectedWithheld,
         timestamp: new Date().toISOString() });
     }
     async function waitState(state) { await page.waitForFunction(expected => document.body.dataset.todayState === expected, state, { timeout: 20000 }); }
@@ -288,6 +335,7 @@ async function main() {
     const primaryResponse = await todayResponse;
     const primaryBody = await primaryResponse.json();
     await page.waitForTimeout(250);
+    await Promise.all(responseCaptureTasks);
     if (await page.getAttribute('body', 'data-today-state') !== 'ready') {
       throw new Error(JSON.stringify({ state: await page.getAttribute('body', 'data-today-state'), browserErrors, primaryBody }));
     }
@@ -309,6 +357,29 @@ async function main() {
     assert.strictEqual(await page.getByText('Read-only', { exact: true }).count(), 1);
     assert.strictEqual(await page.getByText('Assigned to you', { exact: true }).count(), 2);
     assert.strictEqual(await page.getByText('Current crew', { exact: true }).count() >= 1, true);
+    assert.deepStrictEqual(Object.keys(primaryBody.data.identity).sort(), ['displayName', 'operationalRole']);
+    assert.strictEqual(network.some(entry => entry.pathname === '/api/auth/me'), false);
+    const allowedEmployeePaths = new Set([
+      '/dashboard/today', '/api/v1/today', '/js/theme.js', '/js/today-shell.js', '/js/today-page.js',
+      '/css/style.css', '/css/homepage-refresh.css', '/css/demo-dashboard.css', '/css/today.css',
+      '/css/site-professionalism.css', '/assets/logo.png',
+    ]);
+    network.forEach(entry => assert.ok(allowedEmployeePaths.has(entry.pathname), `unapproved employee network destination: ${JSON.stringify(entry)}`));
+    const broadEmployeePaths = [
+      '/api/auth/me', '/dashboard/polaris', '/dashboard/leads', '/dashboard/communications', '/dashboard/calendar',
+      '/dashboard/team', '/dashboard/business-profile', '/dashboard/settings', '/dashboard/integrations',
+    ];
+    responseInventory.forEach(entry => {
+      if (!entry.body) return;
+      WITHHELD.forEach(value => assert.ok(!entry.body.includes(value), `withheld response bytes in ${entry.pathname}: ${value}`));
+      broadEmployeePaths.forEach(value => assert.ok(!entry.body.includes(value), `broad response bytes in ${entry.pathname}: ${value}`));
+      if (entry.pathname === '/dashboard/today' || entry.pathname === '/js/today-shell.js') {
+        const lower = entry.body.toLowerCase();
+        ['subscription', 'onboarding', 'organization', 'email', 'phone'].forEach(value => {
+          assert.ok(!lower.includes(value), `private bootstrap field in ${entry.pathname}: ${value}`);
+        });
+      }
+    });
     const firstDisclosure = page.locator('.today-disclosure summary').first();
     if (mobile) await firstDisclosure.tap(); else { await firstDisclosure.focus(); await page.keyboard.press('Enter'); }
     assert.strictEqual(await firstDisclosure.evaluate(node => node.parentElement.open), true);
@@ -360,12 +431,45 @@ async function main() {
     await page.locator('#todayRefresh').evaluate(node => node.focus());
     assert.strictEqual(await page.evaluate(() => document.activeElement === document.getElementById('todayRefresh')), true);
 
+    logoutContext = await browser.newContext({ viewport, colorScheme: dark ? 'dark' : 'light', timezoneId: 'America/Los_Angeles',
+      hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
+    await logoutContext.addCookies(cookies(logoutEmployee, origin));
+    await logoutContext.addInitScript(installSessionMetadata, `employee-logout-${matrix}`);
+    const logoutExternal = [];
+    await logoutContext.route('**/*', async route => {
+      const target = new URL(route.request().url());
+      if (target.origin !== origin) { logoutExternal.push(target.href); await route.abort(); return; }
+      await route.continue();
+    });
+    const logoutPage = await logoutContext.newPage();
+    const logoutNetwork = [];
+    logoutPage.on('request', requestValue => {
+      const target = new URL(requestValue.url());
+      if (target.origin === origin) logoutNetwork.push({ method: requestValue.method(), pathname: target.pathname });
+    });
+    await logoutPage.goto(origin + '/dashboard/today', { waitUntil: 'domcontentloaded' });
+    await logoutPage.waitForFunction(() => document.body.dataset.todayState === 'ready');
+    assert.strictEqual(await logoutPage.locator('.today-work-card').count(), 3);
+    if (mobile) await logoutPage.locator('#todayMenuToggle').click();
+    const logoutResponse = logoutPage.waitForResponse(value => new URL(value.url()).pathname === '/api/auth/logout');
+    await logoutPage.locator('[data-today-logout]:visible').first().click();
+    assert.strictEqual((await logoutResponse).status(), 200);
+    await logoutPage.waitForURL(value => new URL(value).pathname === '/login');
+    assert.strictEqual(logoutExternal.length, 0);
+    assert.strictEqual(logoutNetwork.some(entry => entry.pathname === '/api/auth/me'), false);
+    assert.strictEqual(logoutNetwork.some(entry => entry.method === 'POST' && entry.pathname === '/api/auth/logout'), true);
+    assert.strictEqual((await pool.query('SELECT status FROM auth_sessions WHERE id=$1', [logoutEmployee.sessionId])).rows[0].status, 'revoked');
+    assert.strictEqual(await logoutPage.locator('.today-work-card').count(), 0);
+    await logoutContext.close();
+    logoutContext = null;
+
     let releaseLoading;
     const loadingGate = new Promise(resolve => { releaseLoading = resolve; });
     await page.route('**/api/v1/today', async route => { await loadingGate; await route.continue(); }, { times: 1 });
     const loadingNavigation = page.reload({ waitUntil: 'domcontentloaded' });
     await waitState('loading');
-    await capture('loading', 'loading', 'active employee', 'pending-authoritative-read');
+    await capture('loading', 'loading', 'active employee', 'pending-authoritative-read',
+      'synthetic transport timing only: Playwright delays one real /api/v1/today request before continuing it; no durable authority claim');
     releaseLoading();
     await loadingNavigation;
     await waitState('ready');
@@ -373,14 +477,16 @@ async function main() {
     await page.route('**/api/v1/today', route => route.abort('internetdisconnected'), { times: 1 });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitState('error');
-    await capture('network-error', 'error', 'active employee', 'no-returned-records');
+    await capture('network-error', 'error', 'active employee', 'no-returned-records',
+      'synthetic transport only: Playwright route.abort("internetdisconnected") for one /api/v1/today request; no durable authority claim');
     await page.getByRole('button', { name: 'Reload', exact: true }).click();
     await waitState('ready');
 
     await context.setOffline(true);
     await page.locator('#todayRefresh').click();
     await waitState('offline');
-    await capture('offline', 'offline', 'active employee', 'no-returned-records');
+    await capture('offline', 'offline', 'active employee', 'no-returned-records',
+      'synthetic transport only: Playwright context.setOffline(true) for this browser context; no durable authority claim');
     await context.setOffline(false);
     // The real page listens for the online event and reloads automatically.
     await waitState('ready');
@@ -392,7 +498,8 @@ async function main() {
     }), { times: 1 });
     await page.locator('#todayRefresh').click();
     await waitState('stale');
-    await capture('stale-reload', 'stale', 'active employee', 'no-returned-records');
+    await capture('stale-reload', 'stale', 'active employee', 'no-returned-records',
+      'synthetic response only: Playwright route.fulfill injects one typed HTTP 409 stale response; no durable authority claim');
     await page.getByRole('button', { name: 'Reload', exact: true }).click();
     await waitState('ready');
 
@@ -411,7 +518,8 @@ async function main() {
     await page.locator('#todayRefresh').click();
     await waitState('restricted');
     assert.strictEqual(await page.locator('.today-work-card').count(), 0);
-    await capture('session-revoked', 'restricted', 'revoked employee session', 'none');
+    await capture('session-revoked', 'restricted', 'revoked employee session', 'none',
+      'real durable PostgreSQL auth session revocation; no synthetic transport or response');
     await pool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1", [employee.sessionId]);
     await page.getByRole('button', { name: 'Reload', exact: true }).click();
     await waitState('ready');
@@ -425,7 +533,7 @@ async function main() {
     assert.strictEqual(await page.locator('.today-work-card').count(), 0);
     await capture('employee-no-work-unassigned', 'empty', 'active employee', 'unassigned-and-not-current-crew');
 
-    ownerContext = await browser.newContext({ viewport, colorScheme: dark ? 'dark' : 'light', timezoneId: 'America/New_York',
+    ownerContext = await browser.newContext({ viewport, colorScheme: dark ? 'dark' : 'light', timezoneId: fixturePlan.timeZone,
       hasTouch: mobile, isMobile: mobile, deviceScaleFactor: mobile ? 2 : 1, serviceWorkers: 'block' });
     await ownerContext.addCookies(cookies(owner, origin));
     await ownerContext.addInitScript(installSessionMetadata, `owner-${matrix}`);
@@ -444,10 +552,13 @@ async function main() {
         engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         version, viewport, theme: dark ? 'dark' : 'light', realRoleIdentity: 'active owner with no personal assignment',
         assignmentMode: 'none', state: 'empty', testedRevision, testedTree,
-        fixtureTenant: 'isolated disposable Part 6 Browser Tenant',
+        fixtureTenant: 'isolated disposable Part 6 Browser Tenant', fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureReferenceInstant: fixturePlan.referenceInstant,
         sessionProvenance: 'mounted real PostgreSQL owner cookie session; nonsecret test identity',
+        stateProvenance: 'real mounted PostgreSQL authority and transport; no synthetic state injection',
         expectedVisible: ['personal empty Today', 'read-only state'],
-        withheldCategories: ['employee records', 'financials', 'Mission 23 controls'],
+        expectedWithheld: ['all private work records; none returned', 'employee records', 'financials', 'Mission 23 controls'],
+        withheldCategories: ['all private work records; none returned', 'employee records', 'financials', 'Mission 23 controls'],
         sourceRoute: '/dashboard/today', timestamp: new Date().toISOString() });
     }
     const commandResponse = ownerPage.waitForResponse(value => value.url().includes('/api/v1/command-center/workspace'));
@@ -461,12 +572,22 @@ async function main() {
         engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         version, viewport, theme: dark ? 'dark' : 'light', realRoleIdentity: 'active owner reference only',
         assignmentMode: 'broad-reference-not-Today', state: 'ready', testedRevision, testedTree,
-        fixtureTenant: 'isolated disposable Part 6 Browser Tenant',
+        fixtureTenant: 'isolated disposable Part 6 Browser Tenant', fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureReferenceInstant: fixturePlan.referenceInstant,
         sessionProvenance: 'mounted real PostgreSQL owner cookie session; nonsecret test identity',
-        expectedVisible: ['Command Center design reference'], withheldCategories: ['not an employee Today authority claim'],
+        stateProvenance: 'real mounted PostgreSQL owner reference; not an employee Today authority claim',
+        expectedVisible: ['Command Center design reference'],
+        expectedWithheld: ['not an employee Today authority claim'], withheldCategories: ['not an employee Today authority claim'],
         sourceRoute: '/dashboard', timestamp: new Date().toISOString() });
     }
 
+    await Promise.all(responseCaptureTasks);
+    network.forEach(entry => assert.ok(allowedEmployeePaths.has(entry.pathname), `unapproved employee network destination: ${JSON.stringify(entry)}`));
+    responseInventory.forEach(entry => {
+      if (!entry.body) return;
+      WITHHELD.forEach(value => assert.ok(!entry.body.includes(value), `withheld response bytes in ${entry.pathname}: ${value}`));
+      broadEmployeePaths.forEach(value => assert.ok(!entry.body.includes(value), `broad response bytes in ${entry.pathname}: ${value}`));
+    });
     assert.strictEqual(external.length, 0, `provider/external calls: ${JSON.stringify(external)}`);
     const workerMutationNetwork = network.filter(entry => entry.method !== 'GET' && new URL(entry.url).pathname !== '/api/telemetry');
     assert.strictEqual(workerMutationNetwork.length, 0, `browser worker mutation network: ${JSON.stringify(network)}`);
@@ -478,7 +599,8 @@ async function main() {
         matrix, engineLabel: selected === 'webkit' ? 'Playwright WebKit (not physical Safari)' : 'Installed Google Chrome',
         browserVersion: version, viewport, theme: dark ? 'dark' : 'light', testedRevision, testedTree,
         realAuthority: 'disposable PostgreSQL cookie session',
-        fixtureTenant: 'Part 6 Browser Tenant (isolated disposable test database)', expectedVisible: [
+        fixtureTenant: 'Part 6 Browser Tenant (isolated disposable test database)', fixtureTenantTimeZone: fixturePlan.timeZone,
+        fixtureReferenceInstant: fixturePlan.referenceInstant, expectedVisible: [
           'job title and type', 'tenant-timezone schedule', 'direct or current-crew assignment', 'dispatch truth',
           'provider-neutral unavailable route uncertainty', 'operational instructions', 'minimum customer and current crew context',
         ], withheldCategories: ['financials and prices', 'billing and subscription settings', 'broad customer history',
@@ -487,9 +609,12 @@ async function main() {
       };
       fs.writeFileSync(path.join(evidenceRoot, `${matrix}-manifest.json`), JSON.stringify(manifest, null, 2) + '\n');
     }
-    console.log(JSON.stringify({ matrix, version, viewport, screenshots: screenshots.length, todayResponses: responseBodies.length,
+    console.log(JSON.stringify({ matrix, version, viewport, fixtureTenantTimeZone: fixturePlan.timeZone,
+      fixtureReferenceInstant: fixturePlan.referenceInstant, screenshots: screenshots.length, todayResponses: responseBodies.length,
+      employeeNetworkDestinations: [...new Set(network.map(entry => entry.pathname))].sort(), employeeResponseInventory: responseInventory.length,
       externalCalls: external.length, workerMutationNetwork: workerMutationNetwork.length, browserErrors }));
   } finally {
+    if (logoutContext) await logoutContext.close().catch(() => {});
     if (ownerContext) await ownerContext.close().catch(() => {});
     if (context) await context.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});

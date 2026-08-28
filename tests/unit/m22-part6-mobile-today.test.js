@@ -40,9 +40,49 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
     expect(server).toContain("app.use('/api/v1/today'");
     expect(route).toContain("router.get('/', auth");
     expect(route).not.toMatch(/router\.(post|put|patch|delete)\(/);
-    expect(html).toContain('NavComponent.init(\'today\')');
+    expect(html).toContain('/js/today-shell.js');
+    expect(html).not.toContain('/js/auth-session.js');
+    expect(html).not.toContain('/js/nav-component.js');
+    expect(html).not.toContain('/js/command-center-contract.js');
     expect(html).toContain('/js/today-page.js');
     expect(html).toContain('aria-labelledby="todayTitle"');
+  });
+
+  test('uses a Today-only bootstrap with no broad account or navigation projection', () => {
+    const shell = source('public/js/today-shell.js');
+    const html = source('public/dashboard/today.html');
+    const employeeBundle = `${html}\n${shell}\n${source('public/js/today-page.js')}`;
+    const bootstrapBundle = `${html}\n${shell}`;
+
+    expect(shell).toContain("'/dashboard/today'");
+    expect(shell).toContain("'/api/auth/logout'");
+    expect(shell).not.toContain('/api/auth/me');
+    expect(source('public/js/theme.js')).toContain("document.body.classList.contains('today-page')");
+    for (const forbidden of [
+      '/dashboard/polaris', '/dashboard/leads', '/dashboard/communications', '/dashboard/calendar',
+      '/dashboard/team', '/dashboard/business-profile', '/dashboard/settings', '/dashboard/integrations',
+      'subscription', 'onboarding', 'organization',
+    ]) expect(employeeBundle.toLowerCase()).not.toContain(forbidden.toLowerCase());
+    for (const privateIdentityField of ['email', 'phone']) {
+      expect(bootstrapBundle.toLowerCase()).not.toContain(privateIdentityField);
+    }
+  });
+
+  test('constructs a real tenant-zone browser fixture at every representative UTC hour and DST boundary', () => {
+    const { chooseFixturePlan } = require('../helpers/m22-part6-browser-fixture-time');
+    const samples = [];
+    for (let hour = 0; hour < 24; hour += 1) samples.push(new Date(Date.UTC(2026, 7, 27, hour, 58)));
+    samples.push(
+      new Date('2026-03-08T06:55:00.000Z'), new Date('2026-03-08T07:05:00.000Z'),
+      new Date('2026-11-01T05:55:00.000Z'), new Date('2026-11-01T06:05:00.000Z')
+    );
+    for (const instant of samples) {
+      const plan = chooseFixturePlan(instant);
+      expect(plan.timeZone).toMatch(/^[A-Za-z]+(?:\/[A-Za-z_+-]+)+$/);
+      expect(plan.instants).toHaveLength(10);
+      expect(new Set(plan.instants).size).toBe(10);
+      expect(plan.instants.every(value => /(?:Z|[+-]\d{2}:\d{2})$/.test(value))).toBe(true);
+    }
   });
 
   test('keeps authorization and returned bytes in one bounded repeatable-read snapshot', () => {
@@ -95,7 +135,7 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
     }
     expect(page).toContain('textContent');
     expect(page).not.toContain('innerHTML');
-    expect(source('public/js/nav-component.js')).toContain("ACTIVE_PAGE !== 'today'");
+    expect(source('public/js/today-shell.js')).not.toContain('/api/auth/me');
     expect(repository).toContain('providerNeutral: true');
     expect(repository).toContain('providerCalls: 0');
     expect(repository).toContain('mutationCapabilities: []');

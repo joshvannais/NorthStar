@@ -49,6 +49,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/scheduling-approval-ui.js',
   'public/js/scheduling-time-contract.js',
   'public/js/today-page.js',
+  'public/js/today-shell.js',
   'public/js/transcript-renderer.js',
   'public/js/vendor/retell-web-client.mjs',
   'public/js/workspace-form-state.js',

@@ -3,7 +3,7 @@
 .today-page *::before,
 .today-page *::after { box-sizing: border-box; }
 .today-page .command-center-blueprint-shell { min-width: 0; padding: 0; }
-.today-header { position: static; }
+.today-header { position: sticky; top: 0; z-index: 300; }
 .today-header .demo-dashboard-brand { display: none; }
 .today-header .demo-dashboard-header-inner { justify-content: flex-end; }
 .today-header #todayAuthority {
@@ -63,11 +63,22 @@
   border-radius: 999px;
   color: var(--theme-muted);
   background: var(--theme-surface-soft);
-  font-size: 12px;
-  font-weight: 800;
+  font-family: var(--font-body, inherit);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.2;
 }
-.today-readonly-badge { min-height: 34px; padding-inline: 10px; border: 0; background: transparent; }
+.today-readonly-badge {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  justify-content: center;
+}
 .today-scope-note,
 .today-state-panel,
 .today-work-card {
@@ -220,11 +231,14 @@
 @media (max-width: 768px) {
   .today-header { display: none; }
   .today-page > .mobile-header {
-    position: static !important;
-    inset: auto !important;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    z-index: 400 !important;
     width: 100%;
   }
-  .today-page .app-layout { padding-top: 0 !important; }
+  .today-page .app-layout { padding-top: calc(73px + env(safe-area-inset-top)) !important; }
   .today-main { width: min(calc(100% - 24px), 1040px); padding-top: 28px; }
   .today-card-heading { display: grid; }
   .today-badges { justify-content: flex-start; }
@@ -240,7 +254,7 @@
   .today-section-heading { align-items: flex-start; flex-direction: column; }
   .today-scope-note > span { align-self: flex-start; }
   .today-card-body { padding: 16px; }
-  .today-readonly-badge { align-self: flex-start; }
+  .today-readonly-badge { align-self: center; }
   .demo-dashboard-footer { padding-bottom: 98px; }
 }
 @media (prefers-reduced-motion: reduce) {

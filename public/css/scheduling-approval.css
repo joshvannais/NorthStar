@@ -23,7 +23,7 @@
 .m22-state-item dt { color: var(--text-secondary, #586174); font-size: .7rem; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
 .m22-state-item dd { min-width: 0; margin: 0; color: var(--text-primary, #172033); font-weight: 700; overflow-wrap: anywhere; }
 .m22-state-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.m22-state-chip { min-width: 0; max-width: 100%; padding: 5px 9px; border-radius: 999px; border: 1px solid currentColor; font-size: .75rem; font-weight: 700; overflow-wrap: anywhere; word-break: break-word; }
+.m22-state-chip { min-width: 0; max-width: 100%; padding: 6px 10px; border-radius: 999px; border: 1px solid currentColor; font-family: var(--font-body, inherit); font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: 0; overflow-wrap: anywhere; word-break: break-word; }
 .m22-overview-record > .m22-hard-block,
 .m22-overview-record > .m22-record-actions,
 .m22-overview-record > .m22-overview-read-only { grid-column: 1 / -1; }

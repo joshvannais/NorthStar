@@ -23,9 +23,9 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(html).not.toContain('id="todayWorkCount"');
     expect(html).toContain('Personal Work Only');
     expect(html).toContain('Read-only View');
-    expect(css).toMatch(/\.today-header\s*\{\s*position:\s*static;/);
-    expect(css).toMatch(/\.today-page\s*>\s*\.mobile-header\s*\{[\s\S]*position:\s*static\s*!important;/);
-    expect(css).toMatch(/\.today-page\s+\.app-layout\s*\{\s*padding-top:\s*0\s*!important;/);
+    expect(css).toMatch(/\.today-header\s*\{\s*position:\s*sticky;\s*top:\s*0;\s*z-index:\s*300;/);
+    expect(css).toMatch(/\.today-page\s*>\s*\.mobile-header\s*\{[\s\S]*position:\s*fixed\s*!important;[\s\S]*top:\s*0\s*!important;/);
+    expect(css).toMatch(/\.today-page\s+\.app-layout\s*\{\s*padding-top:\s*calc\(73px \+ env\(safe-area-inset-top\)\)\s*!important;/);
     expect(css).toMatch(/\.today-card-accent\s*\{\s*display:\s*none;/);
     expect(css).toMatch(/\.today-header \.demo-dashboard-brand\s*\{\s*display:\s*none;/);
     expect(css).toMatch(/\.today-header #todayAuthority[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*ellipsis;/);
@@ -86,8 +86,8 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
 
     expect(html).toMatch(/display-projection\.js[\s\S]*scheduling-approval-ui\.js[\s\S]*calendar-engine\.js/);
     expect(html).toContain('<body class="calendar-page">');
-    expect(html).toMatch(/body\.calendar-page > \.mobile-header\s*\{[\s\S]*position:\s*static\s*!important;/);
-    expect(html).toMatch(/body\.calendar-page > \.dashboard-layout\s*\{[\s\S]*padding-top:\s*0\s*!important;/);
+    expect(html).toMatch(/body\.calendar-page > \.mobile-header\s*\{[\s\S]*position:\s*fixed\s*!important;[\s\S]*top:\s*0\s*!important;/);
+    expect(html).toMatch(/body\.calendar-page > \.dashboard-layout\s*\{[\s\S]*padding-top:\s*calc\(73px \+ env\(safe-area-inset-top\)\)\s*!important;/);
     expect(dashboard).toMatch(/display-projection\.js[\s\S]*scheduling-approval-ui\.js/);
     expect(projection).toContain('NorthStarDisplayProjection');
     expect(projection).toContain('function markupLike(value)');
@@ -96,8 +96,8 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
       'Customer name unavailable', 'Job title unavailable', 'Employee name unavailable',
       'Crew name unavailable', 'Service location unavailable',
     ]) expect(calendar + approval).toContain(placeholder);
-    expect(calendar).toContain("calendarDisplayProjection().text(record.customer && record.customer.name, 'Customer name unavailable')");
-    expect(calendar).toContain("calendarDisplayProjection().text(record.work && record.work.title, 'Job title unavailable')");
+    expect(calendar).toContain("calendarRecordLabel(record.customer && record.customer.name, 'Customer name unavailable', 'name')");
+    expect(calendar).toContain("calendarRecordLabel(record.work && record.work.title, 'Job title unavailable', 'role')");
     expect(calendar).toContain("calendarDisplayProjection().text(record.customer && record.customer.phone, 'Phone unavailable')");
     expect(calendar).toContain("calendarDisplayProjection().location(record.customer && record.customer.address, 'Service location unavailable')");
     expect(calendar).toContain("calendarDisplayProjection().text(presentation && presentation.serviceText, 'Service type unavailable')");
@@ -205,9 +205,21 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(theme).toContain("button.setAttribute('data-current-theme', theme)");
     expect(shell).toContain("node('button', 'today-sign-out')");
     expect(shell).toContain("control.setAttribute('aria-disabled', 'true')");
-    expect(shared).toMatch(/\.northstar-theme-switch\s*\{[\s\S]*width:\s*70px\s*!important;[\s\S]*border-radius:\s*999px/);
+    expect(shared).toMatch(/\.northstar-theme-switch\s*\{[\s\S]*width:\s*76px\s*!important;[\s\S]*height:\s*38px\s*!important;[\s\S]*border-radius:\s*999px/);
+    expect(shared).toMatch(/\.northstar-theme-switch::before\s*\{[\s\S]*width:\s*30px;[\s\S]*height:\s*30px;/);
+    expect(shared).toMatch(/data-current-theme="dark"\]::before\s*\{\s*transform:\s*translateX\(38px\)/);
     expect(today).toContain('.today-sign-out');
     expect(today).toContain('.today-sign-out:disabled');
+  });
+
+  test('Quick Start is a one-time centered Command Center guide, not a floating page overlay', () => {
+    const guidance = source('public/js/workspace-guidance.js');
+    const guidanceCss = source('public/css/workspace-guidance.css');
+    expect(guidance).toContain("activePage !== 'command-center' || hasSeenGuide(mode)");
+    expect(guidance).toContain("localStorage.setItem(SEEN_KEY + ':' + mode, 'true')");
+    expect(guidance).not.toContain('northstarQuickStartButton');
+    expect(guidanceCss).not.toContain('.northstar-quick-start-button');
+    expect(guidanceCss).toMatch(/\.northstar-quick-start-dialog\s*\{[\s\S]*inset:\s*50% auto auto 50%;[\s\S]*transform:\s*translate\(-50%, -50%\)/);
   });
 
   test('uses customer-facing scheduling language and removes the paid ready sentence without a gap', () => {
@@ -223,7 +235,27 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     }
     expect(page).not.toContain('The current tenant workspace is ready.');
     expect(page).toContain('status.hidden = !message');
+    expect(page).toContain("definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '.';");
+    expect(page).not.toContain('overview.definitions[schedulingCategory]');
     expect(scheduling).toMatch(/\.m22-authority-heading > div\s*\{\s*display:\s*grid;\s*gap:\s*6px;/);
+    expect(calendar).not.toContain('New work originates from');
+    expect(calendar).not.toContain('Server categories:');
+    expect(calendar).toContain('Review appointments and approve schedule changes.');
+    expect(calendar).toContain("calendarTitleCaseLabel(state)");
+  });
+
+  test('matches the Today read-only control typography and keeps compact dates out of visible timezone wrapping', () => {
+    const today = source('public/css/today.css');
+    const command = source('public/js/command-center-page.js');
+    const commandCss = source('public/css/demo-dashboard.css');
+
+    expect(today).toMatch(/\.today-readonly-badge\s*\{[\s\S]*min-height:\s*44px;[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*400;[\s\S]*justify-content:\s*center;/);
+    expect(today).toMatch(/\.today-state-badge,[\s\S]*font-family:\s*var\(--font-body, inherit\);[\s\S]*font-weight:\s*600;/);
+    expect(command).toContain('function formatCompactDate(value, suppliedTimeZone)');
+    expect(command).toContain("time.title = fullDate || date");
+    expect(command).not.toContain("+ ' (' + timeZone + ')'" );
+    expect(command).not.toContain("summary.appendChild(element('div', '', 'The chart remains empty");
+    expect(commandCss).toMatch(/\.command-center-blueprint-header\s*\{\s*position:\s*sticky;\s*top:\s*0;\s*z-index:\s*300;/);
   });
 
   test('keeps Reload actions consistently separated from state copy and card boundaries', () => {

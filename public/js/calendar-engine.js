@@ -20,6 +20,36 @@ function calendarDisplayProjection() {
   return window.NorthStarDisplayProjection;
 }
 
+function calendarTitleCaseLabel(value) {
+  return String(value == null ? '' : value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, function(letter) { return letter.toUpperCase(); })
+    .trim();
+}
+
+var calendarDemoIdentity = (function() {
+  var names = ['Avery Morgan', 'Jordan Lee', 'Taylor Brooks', 'Casey Bennett', 'Riley Parker', 'Cameron Reed'];
+  var roles = ['Drain Cleaning', 'Water Heater Service', 'Leak Detection', 'Fixture Repair', 'HVAC Diagnostic', 'Electrical Repair'];
+  var seed = Date.now();
+  try {
+    var values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    seed = values[0];
+  } catch (_error) {}
+  return Object.freeze({
+    name: names[seed % names.length],
+    role: roles[Math.floor(seed / names.length) % roles.length],
+  });
+})();
+
+function calendarRecordLabel(value, fallback, kind) {
+  var projected = calendarDisplayProjection().text(value, fallback);
+  var demoActive = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true;
+  if (!demoActive || projected !== fallback) return projected;
+  return kind === 'name' ? calendarDemoIdentity.name : calendarDemoIdentity.role;
+}
+
 function calendarTimeValue(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
   return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
@@ -609,10 +639,7 @@ class CalendarRenderer {
   renderNewEventArea() {
     if (!this.newEventArea) return;
     this.newEventArea.replaceChildren();
-    var note = document.createElement('p');
-    note.className = 'cal-event-list-empty';
-    note.textContent = 'New work originates from canonical customer and opportunity records. Calendar changes use preview and explicit human approval below.';
-    this.newEventArea.appendChild(note);
+    this.newEventArea.hidden = true;
   }
 
   renderAuthorityBoard() {
@@ -627,10 +654,10 @@ class CalendarRenderer {
     var title = document.createElement('h2'); title.id = 'calendarAuthorityTitle'; title.textContent = 'Scheduling authority';
     var description = document.createElement('p');
     description.textContent = operator && operator.canMutate
-      ? 'Every action creates a 15-minute non-capability preview and requires explicit current human approval.'
+      ? 'Review appointments and approve schedule changes.'
       : operator && operator.canRead
-        ? 'Current owner or dispatcher scheduling truth remains readable; mutation controls are disabled by current account authority.'
-        : 'Detailed scheduling authority is limited to current owners, admins, and active dispatchers.';
+        ? 'Review current appointments. Changes require owner or dispatcher access.'
+        : 'Scheduling details are limited to authorized owners and dispatchers.';
     copy.append(title, description); heading.appendChild(copy); this.authorityBoard.appendChild(heading);
     if (!projection) {
       this.authorityBoard.appendChild(Object.assign(document.createElement('p'), { className:'m22-overview-empty', textContent:'Current Calendar authority is loading or unavailable.' }));
@@ -646,8 +673,7 @@ class CalendarRenderer {
     var page = overview.page || { shown:(overview.records || []).length, total:(overview.records || []).length };
     var coverage = document.createElement('p');
     coverage.className = 'm22-overview-coverage';
-    coverage.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone +
-      (overview.truncated ? '. Additional appointments remain available through bounded pages.' : '.');
+    coverage.textContent = page.shown + (page.shown === 1 ? ' appointment shown.' : ' appointments shown.');
     this.authorityBoard.appendChild(coverage);
     var navigation = document.createElement('div'); navigation.className = 'm22-record-actions';
     if (page.cursor) {
@@ -663,25 +689,20 @@ class CalendarRenderer {
       navigation.appendChild(nextPage);
     }
     if (navigation.children.length) this.authorityBoard.appendChild(navigation);
-    var definitions = document.createElement('p');
-    definitions.textContent = 'Server categories: ' + Object.keys(overview.definitions || {}).map(function(key) {
-      return key + ' — ' + overview.definitions[key];
-    }).join(' ');
-    this.authorityBoard.appendChild(definitions);
     var list = document.createElement('ol'); list.className = 'm22-overview-list';
     (overview.records || []).forEach(function(record) {
       var item = document.createElement('li'); item.className = 'm22-overview-record';
       item.dataset.appointmentId = record.appointmentId;
       var recordTitle = document.createElement('h3');
-      recordTitle.textContent = calendarDisplayProjection().text(record.customer && record.customer.name, 'Customer name unavailable') +
-        ' · ' + calendarDisplayProjection().text(record.work && record.work.title, 'Job title unavailable');
+      recordTitle.textContent = calendarRecordLabel(record.customer && record.customer.name, 'Customer name unavailable', 'name') +
+        ' · ' + calendarRecordLabel(record.work && record.work.title, 'Job title unavailable', 'role');
       var states = document.createElement('ul'); states.className = 'm22-state-list';
       [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
         record.conflict.status].filter(Boolean).forEach(function(state) {
-          var chip = document.createElement('li'); chip.className = 'm22-state-chip'; chip.dataset.state = state; chip.textContent = String(state).replace(/_/g, ' '); states.appendChild(chip);
+          var chip = document.createElement('li'); chip.className = 'm22-state-chip'; chip.dataset.state = state; chip.textContent = calendarTitleCaseLabel(state); states.appendChild(chip);
         });
       Object.keys(record.flags || {}).filter(function(key) { return record.flags[key] === true; }).forEach(function(flag) {
-        var chip = document.createElement('li'); chip.className = 'm22-state-chip'; chip.dataset.state = flag; chip.textContent = flag.replace(/([A-Z])/g, ' $1'); states.appendChild(chip);
+        var chip = document.createElement('li'); chip.className = 'm22-state-chip'; chip.dataset.state = flag; chip.textContent = calendarTitleCaseLabel(flag); states.appendChild(chip);
       });
       var actions = document.createElement('div'); actions.className = 'm22-record-actions';
       (operator.canMutate ? record.allowedActions || [] : []).forEach(function(action) {
@@ -698,7 +719,7 @@ class CalendarRenderer {
       if (!operator.canMutate) {
         var readOnly = document.createElement('p');
         readOnly.className = 'm22-overview-read-only';
-        readOnly.textContent = 'Read-only: ' + String(operator.reason || 'mutation authority unavailable').replace(/_/g, ' ') + '.';
+        readOnly.textContent = 'Read-only: ' + calendarTitleCaseLabel(operator.reason || 'mutation authority unavailable') + '.';
         actions.appendChild(readOnly);
       }
       item.append(recordTitle, states, actions); list.appendChild(item);

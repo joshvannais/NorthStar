@@ -251,7 +251,10 @@ async function main() {
     });
 
     async function screenshot(label) {
-      if (evidenceRoot) await page.screenshot({ path: path.join(evidenceRoot, matrix + '-' + label + '.png'), fullPage: true });
+      if (evidenceRoot) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: path.join(evidenceRoot, matrix + '-' + label + '.png'), fullPage: true });
+      }
     }
 
     async function waitRevision(revision) {
@@ -522,6 +525,9 @@ async function main() {
     }
 
     await page.goto(origin + '/dashboard', { waitUntil: 'domcontentloaded' });
+    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Close quick start' }).click();
+    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'detached' });
     await page.getByRole('heading', { name: 'Owner and dispatcher overview' }).waitFor();
     await page.getByRole('button', { name: /Unassigned 1/ }).click();
     const commandRecord = page.locator('#commandCenterSchedulingRecords [data-appointment-id="' + appointmentId + '"]');
@@ -786,7 +792,7 @@ async function main() {
     await employeeContext.addInitScript(installSessionMetadata, 'm22-part5-employee-' + matrix);
     const employeePage = await employeeContext.newPage();
     await employeePage.goto(origin + '/dashboard/calendar', { waitUntil: 'domcontentloaded' });
-    await employeePage.getByText('Detailed scheduling authority is limited to current owners, admins, and active dispatchers.').waitFor();
+    await employeePage.getByText('Scheduling details are limited to authorized owners and dispatchers.').waitFor();
     assert.strictEqual(await employeePage.locator('#calendarAuthorityBoard .m22-action-button').count(), 0);
     await employeePage.goto(origin + '/dashboard', { waitUntil: 'domcontentloaded' });
     await employeePage.getByText(/Current owner or active-dispatcher scheduling authority is unavailable/).waitFor();

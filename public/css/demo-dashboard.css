@@ -519,7 +519,7 @@
   background: transparent;
 }
 
-.command-center-blueprint-header { width: 100%; }
+.command-center-blueprint-header { position: sticky; top: 0; z-index: 300; width: 100%; }
 .command-center-blueprint-header .demo-dashboard-header-inner,
 .command-center-blueprint-main,
 .command-center-blueprint-shell > .demo-dashboard-footer {

@@ -363,11 +363,14 @@ body { background: var(--neutral-50); }
 }
 @media (max-width: 768px) {
   body.calendar-page > .mobile-header {
-    position: static !important;
-    inset: auto !important;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    z-index: 400 !important;
   }
   body.calendar-page > .dashboard-layout {
-    padding-top: 0 !important;
+    padding-top: calc(73px + env(safe-area-inset-top)) !important;
   }
 }
 </style>
@@ -420,9 +423,9 @@ body { background: var(--neutral-50); }
       </div>
       <!-- Event List + New Event — below calendar -->
       <div class="cal-event-list" id="calendarEventList"><div class="cal-event-list-header">Today&rsquo;s Schedule</div><div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule&hellip;</div></div>
-      <div class="cal-new-event-area" id="calendarNewEventArea"><button class="cal-new-event-btn" type="button" disabled aria-hidden="true" style="width:100%;padding:7px 14px;background:#6395ff;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;">+ New Event</button></div>
+      <div class="cal-new-event-area" id="calendarNewEventArea" hidden></div>
       <section class="m22-authority-overview" id="calendarAuthorityBoard" aria-labelledby="calendarAuthorityTitle" aria-live="polite">
-        <div class="m22-authority-heading"><div><h2 id="calendarAuthorityTitle">Scheduling authority</h2><p>Loading current assignment, schedule, dispatch, review, and conflict states.</p></div></div>
+        <div class="m22-authority-heading"><div><h2 id="calendarAuthorityTitle">Scheduling authority</h2><p>Loading appointments…</p></div></div>
       </section>
     </div>
   </main>

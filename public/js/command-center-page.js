@@ -87,24 +87,23 @@
   function tenantChartBucket(value, period) {
     var parts = tenantCalendarDate(value);
     if (!parts || parts.weekday < 0) return null;
-    var timeZone = tenantTimeZone();
     var localCalendarDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
     if (period === 'monthly') {
       return {
         key: parts.year + '-' + String(parts.month).padStart(2, '0'),
-        label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', year: 'numeric' }) + ' (' + timeZone + ')',
+        label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', year: 'numeric' }),
       };
     }
     if (period === 'weekly') {
       localCalendarDate.setUTCDate(localCalendarDate.getUTCDate() - ((parts.weekday + 6) % 7));
       return {
         key: localCalendarDate.toISOString().slice(0, 10),
-        label: 'Week of ' + localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }) + ' (' + timeZone + ')',
+        label: 'Week of ' + localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }),
       };
     }
     return {
       key: [parts.year, String(parts.month).padStart(2, '0'), String(parts.day).padStart(2, '0')].join('-'),
-      label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }) + ' (' + timeZone + ')',
+      label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }),
     };
   }
 
@@ -112,6 +111,17 @@
     return presentationString(value, 'unavailable').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b\w/g, function (letter) {
       return letter.toUpperCase();
     });
+  }
+
+  function formatCompactDate(value, suppliedTimeZone) {
+    if (!value) return null;
+    var parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) return null;
+    var timeZone = suppliedTimeZone || tenantTimeZone();
+    if (!timeZone) return null;
+    try {
+      return parsed.toLocaleString([], { timeZone: timeZone, dateStyle: 'medium', timeStyle: 'short' });
+    } catch (_error) { return null; }
   }
 
   function destination(id) {
@@ -338,6 +348,7 @@
     var summary = byId('commandCenterChartSummary');
     bars.replaceChildren();
     summary.replaceChildren();
+    summary.hidden = false;
     var records = graphs.slice(0, 8).reverse().map(function (graph) {
       var timestamp = graph.work && graph.work.scheduledStart || graph.timestamps && graph.timestamps.createdAt;
       return { graph: graph, value: finiteNumber(graph.estimate && graph.estimate.customerPrice), date: timestamp ? new Date(timestamp) : null };
@@ -345,7 +356,7 @@
     if (!records.length) {
       byId('commandCenterChart').classList.add('command-center-chart-empty');
       bars.appendChild(element('p', 'command-center-empty-copy', 'No recorded opportunity values are available for this view.'));
-      summary.appendChild(element('div', '', 'The chart remains empty until a role-authorized estimate is recorded.'));
+      summary.hidden = true;
       return;
     }
     byId('commandCenterChart').classList.remove('command-center-chart-empty');
@@ -409,8 +420,10 @@
     scheduled.slice(0, 5).forEach(function (graph) {
       var item = element('li');
       var isCanonical = Boolean(graph && graph.authority);
-      var date = formatDate(isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart,
-        canonicalRecords && workspace.schedulingOverview.timeZone);
+      var scheduledStart = isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart;
+      var suppliedTimeZone = canonicalRecords && workspace.schedulingOverview.timeZone;
+      var date = formatCompactDate(scheduledStart, suppliedTimeZone);
+      var fullDate = formatDate(scheduledStart, suppliedTimeZone);
       var copy = element('div');
       var link = element('a', 'command-center-record-link', presentationString(graph.work && graph.work.title,
         presentationString(graph.lead && graph.lead.serviceLabel, 'Job title unavailable')));
@@ -420,8 +433,9 @@
       copy.append(link, element('span', '', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable') +
         (assignment ? ' · ' + assignment : ' · Assignment unavailable')));
       var time = element('time', '', date);
-      time.dateTime = isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart;
-      time.title = date;
+      time.dateTime = scheduledStart;
+      time.title = fullDate || date;
+      time.setAttribute('aria-label', fullDate || date);
       item.append(time, copy);
       list.appendChild(item);
     });
@@ -463,9 +477,7 @@
     var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
     if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
     var page = overview.page || { shown: overview.records.length, total: overview.records.length };
-    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '. ' + (schedulingCategory === 'all'
-      ? 'All appointments. Categories may overlap and are classified only by the server.'
-      : overview.definitions[schedulingCategory]);
+    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '.';
     categoryNames.forEach(function (name) {
       var count = name === 'all' ? overview.total : overview.counts[name];
       var button = element('button', 'm22-category-button');

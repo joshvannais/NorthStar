@@ -1,10 +1,4 @@
-.northstar-quick-start-button {
-  background: var(--neutral-50); border: 1px solid var(--neutral-300); border-radius: 999px;
-  bottom: 18px; color: var(--neutral-800); cursor: pointer; font: 700 13px/1 var(--font-sans, system-ui, sans-serif);
-  left: 50%; min-height: 40px; padding: 10px 16px; position: fixed; transform: translateX(-50%); z-index: 920;
-}
-.northstar-quick-start-button:focus-visible { outline: 3px solid rgba(217, 169, 34, .45); outline-offset: 3px; }
-.northstar-quick-start-dialog { background: var(--neutral-50); border: 1px solid var(--neutral-300); border-radius: 18px; color: var(--neutral-800); max-width: min(92vw, 520px); padding: 24px; width: 100%; }
+.northstar-quick-start-dialog { background: var(--neutral-50); border: 1px solid var(--neutral-300); border-radius: 18px; color: var(--neutral-800); inset: 50% auto auto 50%; margin: 0; max-height: min(82vh, 680px); max-width: min(92vw, 520px); overflow: auto; padding: 24px; position: fixed; transform: translate(-50%, -50%); width: calc(100% - 32px); }
 .northstar-quick-start-dialog::backdrop { background: rgba(2, 6, 23, .68); }
 .northstar-quick-start-heading { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
 .northstar-quick-start-heading h2 { font-size: 22px; margin: 0; }
@@ -17,4 +11,3 @@
 .northstar-quick-start-status { color: var(--neutral-500); font-size: 12px; }
 .northstar-quick-start-list li.complete .northstar-quick-start-status { color: #15803d; }
 .northstar-quick-start-progress { color: var(--neutral-600); font-size: 13px; margin: 0; text-align: right; }
-@media (min-width: 769px) { .northstar-quick-start-button { left: 132px; } }

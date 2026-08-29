@@ -185,6 +185,7 @@ async function captureEvidence(page, mode, route, viewport, phase) {
   fs.mkdirSync(directory, { recursive: true });
   const name = [mode, viewport.label, route.id, phase].join('--').replace(/[^a-z0-9_.-]+/gi, '-').toLowerCase() + '.png';
   const target = path.join(directory, name);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: target, fullPage: true });
   return target;
 }
@@ -482,11 +483,37 @@ async function exercisePolarisDisclosure(page, route, viewport) {
   console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' polaris-disclosure ' + route.id);
 }
 
+async function dismissFirstVisitGuide(page, label) {
+  const dialog = page.locator('#northstarQuickStartDialog');
+  await dialog.waitFor({ state: 'visible', timeout: 10000 });
+  const geometry = await dialog.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return {
+      centerX: rect.left + (rect.width / 2),
+      centerY: rect.top + (rect.height / 2),
+      viewportX: innerWidth / 2,
+      viewportY: innerHeight / 2,
+    };
+  });
+  assert.ok(Math.abs(geometry.centerX - geometry.viewportX) <= 2 &&
+    Math.abs(geometry.centerY - geometry.viewportY) <= 2,
+  label + ' first-visit guide is centered in the viewport');
+  if (process.env.NORTHSTAR_SCREENSHOT_DIR) {
+    const directory = path.resolve(process.env.NORTHSTAR_SCREENSHOT_DIR);
+    fs.mkdirSync(directory, { recursive: true });
+    const name = (label + '--quick-start').replace(/[^a-z0-9_.-]+/gi, '-').toLowerCase() + '.png';
+    await page.screenshot({ path: path.join(directory, name), fullPage: false });
+  }
+  await page.getByRole('button', { name: 'Close quick start' }).click();
+  await dialog.waitFor({ state: 'detached' });
+}
+
 async function enterDemo(page, origin, revision, viewport) {
   const route = ROUTES[0];
   const response = await page.goto(origin + route.path, { waitUntil: 'domcontentloaded', timeout: 15000 });
   assert.ok(response, route.path + ' entry response');
   assert.ok([200, 304].includes(response.status()), route.path + ' shell HTTP ' + response.status());
+  await dismissFirstVisitGuide(page, viewport.label + '/demo');
   return inspectCurrent(page, route, revision, viewport);
 }
 
@@ -852,6 +879,7 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger, 
   try {
     const entry = await page.goto(origin + ROUTES[0].paidPath, { waitUntil: 'domcontentloaded', timeout: 15000 });
     assert.ok(entry && [200, 304].includes(entry.status()), 'paid Command Center shell loads');
+    await dismissFirstVisitGuide(page, viewport.label + '/paid');
     const first = await inspectPaidCurrent(page, ROUTES[0], viewport, expectedLeadHref);
     await captureEvidence(page, 'paid', ROUTES[0], viewport, 'canonical');
     await exerciseMobileMenuControls(page, viewport, 'paid');
@@ -878,8 +906,8 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger, 
       viewport.label + ' paid KPI explains the absent canonical price');
     assert.ok(absentEstimate.chart.includes('No recorded opportunity values are available for this view.'),
       viewport.label + ' null estimate stays absent from the chart');
-    assert.ok(absentEstimate.chartSummary.includes('empty until a role-authorized estimate is recorded'),
-      viewport.label + ' paid chart explains its missing input');
+    assert.strictEqual(absentEstimate.chartSummary, '',
+      viewport.label + ' paid chart does not repeat a technical missing-input note');
     assert.deepStrictEqual(absentEstimate.tableValues, ['Unavailable — no recorded estimate'],
       viewport.label + ' paid table does not fabricate a zero-dollar estimate');
     assert.ok(!absentEstimate.polaris.includes('A recorded customer-facing estimate is available for review.'),
@@ -1410,8 +1438,9 @@ async function captureBaselineDemoViewport(browser, origin, viewport) {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   try {
     for (const route of ROUTES) {
-      const response = await page.goto(origin + route.path, { waitUntil: 'networkidle', timeout: 15000 });
+      const response = await page.goto(origin + route.path, { waitUntil: 'domcontentloaded', timeout: 15000 });
       assert.ok(response && [200, 304].includes(response.status()), 'baseline ' + route.path + ' response');
+      if (route.id === 'command-center') await dismissFirstVisitGuide(page, viewport.label + '/baseline-demo');
       await page.waitForFunction(({ marker, surface }) => {
         const workspace = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.getWorkspace &&
           window.NorthStarDemoRuntime.getWorkspace();
@@ -1440,8 +1469,9 @@ async function captureBaselinePaidViewport(browser, origin, viewport, session) {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   try {
     for (const route of ROUTES) {
-      const response = await page.goto(origin + route.paidPath, { waitUntil: 'networkidle', timeout: 15000 });
+      const response = await page.goto(origin + route.paidPath, { waitUntil: 'domcontentloaded', timeout: 15000 });
       assert.ok(response && [200, 304].includes(response.status()), 'baseline ' + route.paidPath + ' response');
+      if (route.id === 'command-center') await dismissFirstVisitGuide(page, viewport.label + '/baseline-paid');
       await page.waitForFunction(({ marker, surface }) => {
         const account = window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount &&
           window.NorthStarAccountSession.getAccount();

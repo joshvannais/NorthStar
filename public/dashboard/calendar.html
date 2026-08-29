@@ -361,12 +361,21 @@ body { background: var(--neutral-50); }
   .cal-view-tab { min-height: 48px; }
   .cal-modal { width: 95vw; }
 }
+@media (max-width: 768px) {
+  body.calendar-page > .mobile-header {
+    position: static !important;
+    inset: auto !important;
+  }
+  body.calendar-page > .dashboard-layout {
+    padding-top: 0 !important;
+  }
+}
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
-<body>
+<body class="calendar-page">
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
   <aside class="sidebar" aria-hidden="true"></aside>
   <main class="main-content" id="mainContent">
@@ -427,6 +436,7 @@ body { background: var(--neutral-50); }
 <script src="/js/app-store.js"></script>
 <script src="/js/polaris-engine.js"></script>
 <script src="/js/notification-service.js"></script>
+<script src="/js/display-projection.js"></script>
 <script src="/js/scheduling-approval-ui.js"></script>
 <script src="/js/calendar-engine.js"></script>
 <script>

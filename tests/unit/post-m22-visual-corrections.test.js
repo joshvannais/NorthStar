@@ -2,9 +2,18 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const source = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
+
+function displayProjection() {
+  const sandbox = { window: {} };
+  vm.runInNewContext(source('public/js/display-projection.js'), sandbox, {
+    filename: 'public/js/display-projection.js',
+  });
+  return sandbox.window.NorthStarDisplayProjection;
+}
 
 describe('Post-Mission 22 employee and Command Center visual corrections', () => {
   test('keeps the Today header at the true top and removes duplicate count and accent painters', () => {
@@ -57,6 +66,76 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(command).toContain('function presentationString(value, fallback)');
     expect(command).toContain("presentationString(record.customer && record.customer.name, 'Customer name unavailable')");
     expect(command).toContain("presentationString(record.work && record.work.title, 'Job title unavailable')");
+  });
+
+  test('projects Calendar and scheduling-dialog labels through one presentation-only contract', () => {
+    const html = source('public/dashboard/calendar.html');
+    const dashboard = source('public/demo-dashboard.html');
+    const projection = source('public/js/display-projection.js');
+    const calendar = source('public/js/calendar-engine.js');
+    const approval = source('public/js/scheduling-approval-ui.js');
+
+    expect(html).toMatch(/display-projection\.js[\s\S]*scheduling-approval-ui\.js[\s\S]*calendar-engine\.js/);
+    expect(html).toContain('<body class="calendar-page">');
+    expect(html).toMatch(/body\.calendar-page > \.mobile-header\s*\{[\s\S]*position:\s*static\s*!important;/);
+    expect(html).toMatch(/body\.calendar-page > \.dashboard-layout\s*\{[\s\S]*padding-top:\s*0\s*!important;/);
+    expect(dashboard).toMatch(/display-projection\.js[\s\S]*scheduling-approval-ui\.js/);
+    expect(projection).toContain('NorthStarDisplayProjection');
+    expect(projection).toContain('function markupLike(value)');
+    expect(projection).toContain('function location(value, fallback)');
+    for (const placeholder of [
+      'Customer name unavailable', 'Job title unavailable', 'Employee name unavailable',
+      'Crew name unavailable', 'Service location unavailable',
+    ]) expect(calendar + approval).toContain(placeholder);
+    expect(calendar).toContain("calendarDisplayProjection().text(record.customer && record.customer.name, 'Customer name unavailable')");
+    expect(calendar).toContain("calendarDisplayProjection().text(record.work && record.work.title, 'Job title unavailable')");
+    expect(calendar).toContain("calendarDisplayProjection().text(record.customer && record.customer.phone, 'Phone unavailable')");
+    expect(calendar).toContain("calendarDisplayProjection().location(record.customer && record.customer.address, 'Service location unavailable')");
+    expect(calendar).toContain("calendarDisplayProjection().text(presentation && presentation.serviceText, 'Service type unavailable')");
+    expect(calendar).toContain('item.dataset.appointmentId = record.appointmentId');
+    expect(approval).toContain("displayProjection().text(match.label, target.kind === 'profile' ? 'Employee name unavailable' : 'Crew name unavailable')");
+    expect(approval).toContain("displayProjection().text(entry.label,");
+    expect(approval).toContain("displayProjection().text(active.reason.value.trim(), 'Approval reason unavailable')");
+  });
+
+  test('keeps legitimate contractor equals and data labels while neutralizing markup-like labels', () => {
+    const projection = displayProjection();
+    const legitimate = [
+      'Zone=Kitchen',
+      'Stone=Quartz',
+      'Someone=Assigned',
+      'Data: cabling',
+      'data: reporting',
+      '12 Stone=Quartz Way',
+      'Onsite=Yes',
+      'OnCall=Available',
+      'One=1',
+      'Only=Scheduled',
+    ];
+    for (const value of legitimate) {
+      expect(projection.markupLike(value)).toBe(false);
+      expect(projection.text(value, 'Job title unavailable')).toBe(value);
+    }
+    expect(projection.location('12 Stone=Quartz Way', 'Service location unavailable'))
+      .toBe('12 Stone=Quartz Way');
+    expect(projection.location({ street: '12 Stone=Quartz Way', city: 'Zone=Kitchen' }, 'Service location unavailable'))
+      .toBe('12 Stone=Quartz Way, Zone=Kitchen');
+
+    for (const value of [
+      '<img src=x onerror="globalThis.compromised=true">',
+      'onerror=globalThis.compromised=true',
+      'ONLOAD = globalThis.compromised=true',
+      'onclick=handleAssignment',
+      'javascript:alert(1)',
+      'vbscript:msgbox(1)',
+      'data:text/html,<svg onload=alert(1)>',
+      '&lt;img src=x&gt;',
+      '&#60;img src=x&gt;',
+      '&#x3c;img src=x&gt;',
+    ]) {
+      expect(projection.markupLike(value)).toBe(true);
+      expect(projection.text(value, 'Job title unavailable')).toBe('Job title unavailable');
+    }
   });
 
   test('uses a clear shared theme switch and a real themed Today sign-out button', () => {

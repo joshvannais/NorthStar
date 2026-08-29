@@ -15,6 +15,11 @@ function safeCalendarColor(value) {
   return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '#6395ff';
 }
 
+function calendarDisplayProjection() {
+  if (!window.NorthStarDisplayProjection) throw new Error('Calendar display projection is unavailable.');
+  return window.NorthStarDisplayProjection;
+}
+
 function calendarTimeValue(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
   return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
@@ -666,8 +671,10 @@ class CalendarRenderer {
     var list = document.createElement('ol'); list.className = 'm22-overview-list';
     (overview.records || []).forEach(function(record) {
       var item = document.createElement('li'); item.className = 'm22-overview-record';
+      item.dataset.appointmentId = record.appointmentId;
       var recordTitle = document.createElement('h3');
-      recordTitle.textContent = (record.customer && record.customer.name || 'Customer') + ' · ' + (record.work && record.work.title || 'Appointment');
+      recordTitle.textContent = calendarDisplayProjection().text(record.customer && record.customer.name, 'Customer name unavailable') +
+        ' · ' + calendarDisplayProjection().text(record.work && record.work.title, 'Job title unavailable');
       var states = document.createElement('ul'); states.className = 'm22-state-list';
       [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
         record.conflict.status].filter(Boolean).forEach(function(state) {
@@ -1252,7 +1259,7 @@ window.syncCalendarFromAppStore = function() {
       var values = presentation && presentation.values;
     return {
       id: record.id,
-      title: record.customer && record.customer.name || 'Appointment',
+      title: calendarDisplayProjection().text(record.customer && record.customer.name, 'Customer name unavailable'),
       date: zonedStart ? zonedStart.date : null,
       time: zonedStart ? zonedStart.time + ' (' + timeZone + ')' : null,
       endTime: zonedEnd ? zonedEnd.time + ' (' + timeZone + ')' : null,
@@ -1263,9 +1270,9 @@ window.syncCalendarFromAppStore = function() {
       rawScheduledEnd: record.scheduledEnd || null,
       type: 'canonical',
       leadId: record.canonical && record.canonical.ids.opportunity,
-      phone: record.customer && record.customer.phone,
-      address: record.customer && record.customer.address,
-      serviceType: presentation && presentation.serviceText ? presentation.serviceText : undefined,
+      phone: calendarDisplayProjection().text(record.customer && record.customer.phone, 'Phone unavailable'),
+      address: calendarDisplayProjection().location(record.customer && record.customer.address, 'Service location unavailable'),
+      serviceType: calendarDisplayProjection().text(presentation && presentation.serviceText, 'Service type unavailable'),
       estimatedPrice: presentation ? presentation.customerPrice : null,
       color: '#6395ff',
       status: record.status,

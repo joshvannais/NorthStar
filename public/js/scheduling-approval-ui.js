@@ -9,6 +9,13 @@
   var TARGET_DIRECTORY_ENDPOINT = '/api/v1/canonical/operator-targets';
   var TARGET_DIRECTORY_VERSION = 'm22-part5-target-directory-v1';
 
+  function displayProjection() {
+    if (!global.NorthStarDisplayProjection) {
+      throw new Error('Scheduling display projection is unavailable.');
+    }
+    return global.NorthStarDisplayProjection;
+  }
+
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
@@ -17,7 +24,7 @@
   }
 
   function value(value, fallback) {
-    return typeof value === 'string' && value ? value : (fallback || 'Unavailable');
+    return displayProjection().text(value, fallback || 'Unavailable');
   }
 
   function authority(record) {
@@ -31,13 +38,14 @@
   }
 
   function textForEvidence(entry) {
-    if (typeof entry === 'string') return entry.slice(0, 1000);
+    if (typeof entry === 'string') return displayProjection().text(entry.slice(0, 1000), 'Evidence detail unavailable');
     if (!entry || typeof entry !== 'object') return 'Evidence is unavailable.';
     var parts = ['code', 'label', 'message', 'reason', 'description', 'status'].map(function (key) {
       return typeof entry[key] === 'string' ? entry[key] : '';
     }).filter(Boolean);
-    if (parts.length) return parts.join(' — ').slice(0, 1000);
-    try { return JSON.stringify(entry).slice(0, 1000); } catch (_error) { return 'Evidence is unavailable.'; }
+    if (parts.length) return displayProjection().text(parts.join(' — ').slice(0, 1000), 'Evidence detail unavailable');
+    try { return displayProjection().text(JSON.stringify(entry).slice(0, 1000), 'Evidence detail unavailable'); }
+    catch (_error) { return 'Evidence is unavailable.'; }
   }
 
   function targetLabel(target, directory, discoveredTargets) {
@@ -47,7 +55,9 @@
     var match = entries.find(function (entry) {
       return entry.kind === target.kind && entry.id === target.id;
     });
-    return match ? match.label : target.kind + ' ' + target.id;
+    return match
+      ? displayProjection().text(match.label, target.kind === 'profile' ? 'Employee name unavailable' : 'Crew name unavailable')
+      : target.kind + ' ' + target.id;
   }
 
   function formatInstant(instant, timeZone) {
@@ -211,7 +221,7 @@
     appendTerm(terms, 'Current revision', String(active.current.revision));
     appendTerm(terms, 'Proposed states', preview.proposal.scheduleState + ' · ' + preview.proposal.dispatchState + ' · ' + preview.proposal.appointmentStatus);
     appendTerm(terms, 'Preview expires', formatInstant(preview.expiresAt, active.timeZone));
-    appendTerm(terms, 'Reason', active.reason.value.trim());
+    appendTerm(terms, 'Reason', displayProjection().text(active.reason.value.trim(), 'Approval reason unavailable'));
     summary.appendChild(terms);
     active.review.appendChild(summary);
 
@@ -469,7 +479,8 @@
       var placeholder = el('option', '', emptyLabel || 'Choose a current target'); placeholder.value = ''; select.appendChild(placeholder);
       (targets || []).filter(function (entry) { return entry.kind !== 'unassigned'; }).forEach(function (entry) {
         var kind = entry.kind === 'profile' ? 'worker' : 'crew';
-        var option = el('option', '', entry.label + ' — ' + kind + ' — ' + entry.id);
+        var option = el('option', '', displayProjection().text(entry.label,
+          entry.kind === 'profile' ? 'Employee name unavailable' : 'Crew name unavailable') + ' — ' + kind + ' — ' + entry.id);
         option.value = entry.kind + ':' + entry.id;
         select.appendChild(option);
       });
@@ -622,9 +633,9 @@
     var body = el('div', 'm22-dialog-body');
     var currentSummary = el('section', 'm22-dialog-summary'); currentSummary.appendChild(el('h3', '', 'Current canonical authority'));
     var terms = el('dl');
-    var appointmentTitle = value(record.work && record.work.title || record.title, 'Appointment');
+    var appointmentTitle = value(record.work && record.work.title || record.title, 'Job title unavailable');
     appendTerm(terms, 'Appointment', appointmentTitle);
-    appendTerm(terms, 'Customer', value(record.customer && record.customer.name, 'Customer unavailable'));
+    appendTerm(terms, 'Customer', value(record.customer && record.customer.name, 'Customer name unavailable'));
     appendTerm(terms, 'Target', targetLabel(targetForAuthority(current), directory));
     appendTerm(terms, 'Schedule', formatInstant(current.scheduledStart, timeZone) + ' to ' + formatInstant(current.scheduledEnd, timeZone));
     appendTerm(terms, 'States', current.targetState + ' · ' + current.scheduleState + ' · ' + current.dispatchState + (current.needsReview ? ' · needs review' : ''));

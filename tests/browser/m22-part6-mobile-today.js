@@ -480,11 +480,16 @@ async function main() {
       const disclosure = document.querySelector('.today-disclosure summary');
       const authority = document.getElementById('todayAuthority');
       const todayHeader = document.querySelector('.today-header');
+      const todayContent = document.querySelector('.today-main');
       const sidebar = document.querySelector('.sidebar');
       const signOut = document.querySelector('.sidebar [data-today-logout]');
       const themeToggle = document.querySelector('[data-northstar-theme-toggle]');
       const authorityRange = document.createRange();
       authorityRange.selectNodeContents(authority);
+      const todayHeaderRect = todayHeader.getBoundingClientRect();
+      const todayContentRect = todayContent.getBoundingClientRect();
+      const overlaps = (first, second) => first.left < second.right && first.right > second.left &&
+        first.top < second.bottom && first.bottom > second.top;
       return {
       authority: authority.textContent,
       authorityOneLine: authorityRange.getClientRects().length <= 1 && getComputedStyle(authority).whiteSpace === 'nowrap',
@@ -493,7 +498,16 @@ async function main() {
       labels: Array.from(document.querySelectorAll('.today-state-badge')).map(node => node.textContent.trim()),
       todayHeaderPosition: getComputedStyle(todayHeader).position,
       todayHeaderDisplay: getComputedStyle(todayHeader).display,
-      todayHeaderTop: todayHeader.getBoundingClientRect().top,
+      todayHeaderTop: todayHeaderRect.top,
+      todayHeaderGeometry: {
+        top: todayHeaderRect.top, bottom: todayHeaderRect.bottom,
+        left: todayHeaderRect.left, right: todayHeaderRect.right,
+      },
+      contentGeometry: {
+        top: todayContentRect.top, bottom: todayContentRect.bottom,
+        left: todayContentRect.left, right: todayContentRect.right,
+      },
+      todayHeaderOverlapsContent: overlaps(todayHeaderRect, todayContentRect),
       visibleHeaderBrands: Array.from(document.querySelectorAll('.today-header .demo-dashboard-brand')).filter(node => getComputedStyle(node).display !== 'none').length,
       sidebar: sidebar ? { position: getComputedStyle(sidebar).position, top: sidebar.getBoundingClientRect().top } : null,
       shellControls: {
@@ -509,7 +523,11 @@ async function main() {
         if (!node) return null;
         const style = getComputedStyle(node);
         const rect = node.getBoundingClientRect();
-        return { display: style.display, position: style.position, top: rect.top, right: rect.right };
+        return {
+          display: style.display, position: style.position,
+          top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right,
+          overlapsContent: overlaps(rect, todayContentRect),
+        };
       })(),
       documentWidth: { client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
     }; });
@@ -531,11 +549,40 @@ async function main() {
       assert.strictEqual(todayPresentation.mobileHeader.position, 'fixed', JSON.stringify(todayPresentation));
       assert.ok(Math.abs(todayPresentation.mobileHeader.top) <= 2, JSON.stringify(todayPresentation));
       assert.ok(todayPresentation.mobileHeader.right <= viewport.width + 2, JSON.stringify(todayPresentation));
+      assert.ok(todayPresentation.contentGeometry.top >= todayPresentation.mobileHeader.bottom - 2, JSON.stringify(todayPresentation));
+      assert.strictEqual(todayPresentation.mobileHeader.overlapsContent, false, JSON.stringify(todayPresentation));
       assert.strictEqual(todayPresentation.todayHeaderDisplay, 'none', JSON.stringify(todayPresentation));
     } else {
       assert.ok(Math.abs(todayPresentation.todayHeaderTop) <= 2, JSON.stringify(todayPresentation));
+      assert.ok(todayPresentation.contentGeometry.top >= todayPresentation.todayHeaderGeometry.bottom - 2, JSON.stringify(todayPresentation));
+      assert.strictEqual(todayPresentation.todayHeaderOverlapsContent, false, JSON.stringify(todayPresentation));
       assert.ok(todayPresentation.sidebar && todayPresentation.sidebar.position === 'static', JSON.stringify(todayPresentation));
       assert.ok(Math.abs(todayPresentation.sidebar.top) <= 2, JSON.stringify(todayPresentation));
+      const scrollCapacity = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      assert.ok(scrollCapacity > 0, 'Today desktop has enough content to exercise sticky header behavior');
+      await page.evaluate(() => window.scrollTo(0, Math.min(12, document.documentElement.scrollHeight - innerHeight)));
+      await page.waitForTimeout(50);
+      const stickyAfterScroll = await page.evaluate(() => {
+        const header = document.querySelector('.today-header');
+        const content = document.querySelector('.today-main');
+        const headerRect = header.getBoundingClientRect();
+        const contentRect = content.getBoundingClientRect();
+        return {
+          scrollY,
+          position: getComputedStyle(header).position,
+          headerTop: headerRect.top,
+          headerBottom: headerRect.bottom,
+          contentTop: contentRect.top,
+          overlapsContent: headerRect.left < contentRect.right && headerRect.right > contentRect.left &&
+            headerRect.top < contentRect.bottom && headerRect.bottom > contentRect.top,
+        };
+      });
+      assert.ok(stickyAfterScroll.scrollY > 0, JSON.stringify(stickyAfterScroll));
+      assert.strictEqual(stickyAfterScroll.position, 'sticky', JSON.stringify(stickyAfterScroll));
+      assert.ok(Math.abs(stickyAfterScroll.headerTop) <= 2, JSON.stringify(stickyAfterScroll));
+      assert.ok(stickyAfterScroll.contentTop >= stickyAfterScroll.headerBottom - 2, JSON.stringify(stickyAfterScroll));
+      assert.strictEqual(stickyAfterScroll.overlapsContent, false, JSON.stringify(stickyAfterScroll));
+      await page.evaluate(() => window.scrollTo(0, 0));
     }
     const serialized = JSON.stringify(primaryBody);
     WITHHELD.forEach(value => assert.ok(!serialized.includes(value), `withheld API category leaked: ${value}`));

@@ -460,6 +460,22 @@ async function main() {
     attachErrors(commandCenter);
     await commandCenter.goto(`${origin}/dashboard`, { waitUntil: 'domcontentloaded' });
     await commandCenter.locator('#commandCenterScheduling[aria-busy="false"]').waitFor({ state: 'visible' });
+    const quickStart = commandCenter.locator('#northstarQuickStartDialog');
+    await quickStart.waitFor({ state: 'visible', timeout: 10000 });
+    const quickStartGeometry = await quickStart.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return {
+        centerX: rect.left + (rect.width / 2),
+        centerY: rect.top + (rect.height / 2),
+        viewportX: innerWidth / 2,
+        viewportY: innerHeight / 2,
+      };
+    });
+    assert.ok(Math.abs(quickStartGeometry.centerX - quickStartGeometry.viewportX) <= 2 &&
+      Math.abs(quickStartGeometry.centerY - quickStartGeometry.viewportY) <= 2,
+    `Quick Start is centered before the Part 7 operational flow: ${JSON.stringify(quickStartGeometry)}`);
+    await commandCenter.getByRole('button', { name: 'Close quick start' }).click();
+    await quickStart.waitFor({ state: 'detached' });
     await commandCenter.getByRole('button', { name: /^All \d+$/ }).click();
     const commandItem = commandCenter.locator(`#commandCenterSchedulingRecords [data-appointment-id="${appointmentId}"]`);
     await commandItem.waitFor({ state: 'visible' });

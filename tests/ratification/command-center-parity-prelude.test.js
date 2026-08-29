@@ -133,7 +133,7 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(paid).toContain('demo-dashboard-analytics-grid');
     expect(paid).toContain('demo-leads-panel');
     expect(pageClient).toContain("'/api/v1/command-center/workspace'");
-    expect(pageClient).toContain("'Tenant data · role-authorized'");
+    expect(pageClient).toContain("demo ? 'Demo Data' : 'Workspace Data'");
     expect(paid).not.toMatch(/Simulate Lead|ccSim|SIM_SESSION|northstarSessionId|sessionStorage|simulator\.js|scenario|reset demo|\/api\/v1\/simulations\/leads/i);
 
     const route = read('src/routes/commandCenter.js');

@@ -169,9 +169,7 @@
   function configureMode() {
     var demo = mode === 'demo';
     byId('commandCenterHomeLink').href = demo ? '/demo' : '/dashboard';
-    byId('commandCenterAuthority').textContent = demo
-      ? 'Demo data · account-free'
-      : 'Tenant data · role-authorized';
+    byId('commandCenterAuthority').textContent = demo ? 'Demo Data' : 'Workspace Data';
     var action = byId('commandCenterHeaderAction');
     action.href = demo ? '/signup' : '/dashboard/settings';
     action.textContent = demo ? 'Start free trial' : 'Workspace settings';
@@ -463,8 +461,8 @@
     categories.replaceChildren();
     records.replaceChildren();
     if (mode === 'demo') {
-      definition.textContent = 'This isolated demo presentation is non-authoritative and read-only. It never reads or mutates paid tenant scheduling data.';
-      records.appendChild(element('li', 'm22-overview-empty', 'Canonical owner and dispatcher scheduling actions are available only inside an authorized paid tenant workspace.'));
+      definition.textContent = 'This demo is read-only.';
+      records.appendChild(element('li', 'm22-overview-empty', 'Scheduling changes are available in a paid workspace.'));
       return;
     }
     var overview = workspace && workspace.schedulingOverview;
@@ -639,14 +637,12 @@
     byId('commandCenterCoach').textContent = action
       ? presentationString(action.label, 'Recommendation unavailable') + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
       : 'No prioritized recommendation is available until a role-authorized customer, lead, or work record supplies enough evidence.';
-    byId('commandCenterWorkspaceStatus').textContent = mode === 'demo'
-      ? 'Isolated demo workspace is current'
-      : 'Tenant workspace is current';
+    byId('commandCenterWorkspaceStatus').textContent = 'Workspace context';
     byId('commandCenterWorkspaceNote').textContent = mode === 'demo'
       ? 'The demo session is isolated from production, provider, account, and billing data.'
       : 'This view contains role-authorized tenant projections only; provider readiness is not inferred.';
-    byId('commandCenterStatePill').replaceChildren(element('i'));
-    byId('commandCenterStatePill').appendChild(document.createTextNode(mode === 'demo' ? 'Session ready' : 'Workspace ready'));
+    byId('commandCenterStatePill').replaceChildren();
+    byId('commandCenterStatePill').hidden = true;
   }
 
   function renderCta() {
@@ -686,9 +682,7 @@
     renderCoachAndStatus(graphs);
     renderCta();
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
-    setStatus(mode === 'demo'
-      ? 'The isolated workspace is ready. Simulate Lead updates this view and every demo destination.'
-      : '', 'ready');
+    setStatus('', 'ready');
   }
 
   function load(expected) {

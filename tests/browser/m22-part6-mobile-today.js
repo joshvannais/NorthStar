@@ -518,7 +518,7 @@ async function main() {
     assert.strictEqual(todayPresentation.authorityAccessibleName, todayPresentation.authority, JSON.stringify(todayPresentation));
     assert.strictEqual(todayPresentation.duplicateCount, 0, JSON.stringify(todayPresentation));
     todayPresentation.labels.forEach(value => assert.match(value, /^[A-Z]/, `uncapitalized Today label: ${value}`));
-    assert.strictEqual(todayPresentation.todayHeaderPosition, 'static', JSON.stringify(todayPresentation));
+    assert.strictEqual(todayPresentation.todayHeaderPosition, 'sticky', JSON.stringify(todayPresentation));
     assert.strictEqual(todayPresentation.visibleHeaderBrands, 0, JSON.stringify(todayPresentation));
     assert.deepStrictEqual(todayPresentation.shellControls, {
       signOutTag: 'BUTTON', signOutClass: 'today-sign-out',
@@ -528,7 +528,7 @@ async function main() {
     if (dark) todayPresentation.operationalContrast.forEach(value => assert.ok(value >= 4.5, `dark Today contrast ${JSON.stringify(todayPresentation)}`));
     if (mobile) {
       assert.ok(todayPresentation.mobileHeader && todayPresentation.mobileHeader.display !== 'none', JSON.stringify(todayPresentation));
-      assert.strictEqual(todayPresentation.mobileHeader.position, 'static', JSON.stringify(todayPresentation));
+      assert.strictEqual(todayPresentation.mobileHeader.position, 'fixed', JSON.stringify(todayPresentation));
       assert.ok(Math.abs(todayPresentation.mobileHeader.top) <= 2, JSON.stringify(todayPresentation));
       assert.ok(todayPresentation.mobileHeader.right <= viewport.width + 2, JSON.stringify(todayPresentation));
       assert.strictEqual(todayPresentation.todayHeaderDisplay, 'none', JSON.stringify(todayPresentation));

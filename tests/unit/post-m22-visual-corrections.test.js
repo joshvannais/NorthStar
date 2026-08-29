@@ -234,6 +234,14 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
       expect(value).not.toMatch(/canonical scheduling|canonical appointments/i);
     }
     expect(page).not.toContain('The current tenant workspace is ready.');
+    expect(page).not.toContain('Demo data · account-free');
+    expect(page).not.toContain('Canonical owner and dispatcher');
+    expect(page).not.toContain('workspace is current');
+    expect(page).not.toContain('Workspace ready');
+    expect(page).not.toContain('Session ready');
+    expect(page).not.toContain('The isolated workspace is ready.');
+    expect(page).toContain("byId('commandCenterAuthority').textContent = demo ? 'Demo Data' : 'Workspace Data';");
+    expect(page).toContain("byId('commandCenterStatePill').hidden = true;");
     expect(page).toContain('status.hidden = !message');
     expect(page).toContain("definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '.';");
     expect(page).not.toContain('overview.definitions[schedulingCategory]');

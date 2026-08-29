@@ -54,16 +54,25 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
   });
 
   test('keeps hostile authority bytes out of the Today and Command Center display projections', () => {
+    const html = source('public/dashboard/today.html');
     const today = source('public/js/today-page.js');
     const command = source('public/js/command-center-page.js');
 
     for (const placeholder of ['Job title unavailable', 'Employee name unavailable', 'Customer name unavailable', 'Service location unavailable']) {
       expect(today).toContain(placeholder);
     }
-    expect(today).toContain('function markupLike(value)');
+    expect(html).toMatch(/display-projection\.js[\s\S]*today-shell\.js[\s\S]*today-page\.js/);
+    expect(today).not.toContain('function markupLike(value)');
     expect(today).toContain('function presentationText(value, fallback)');
-    expect(command).toContain('function markupLike(value)');
+    expect(today).toContain('return displayProjection().text(value, fallback)');
+    expect(today).toContain("return displayProjection().location(location, 'Service location unavailable')");
+    expect(command).not.toContain('function markupLike(value)');
     expect(command).toContain('function presentationString(value, fallback)');
+    expect(command).toContain("return displayProjection().text(text, fallback || '')");
+    for (const consumer of [today, command]) {
+      expect(consumer).not.toMatch(/on\[a-z\].*=/);
+      expect(consumer).toContain('DISPLAY_PROJECTION_UNAVAILABLE');
+    }
     expect(command).toContain("presentationString(record.customer && record.customer.name, 'Customer name unavailable')");
     expect(command).toContain("presentationString(record.work && record.work.title, 'Job title unavailable')");
   });
@@ -111,6 +120,16 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
       'OnCall=Available',
       'One=1',
       'Only=Scheduled',
+      'Online=Available',
+      'Onboarding=Complete',
+      'Once=Confirmed',
+      'Ongoing=Yes',
+      'Owner=Operator',
+      'On Route=Yes',
+      'on call = available',
+      'contentvisibilityautostatechange=Enabled',
+      'oncontentvisibilityautostatechange-state=review',
+      'myonerror=review',
     ];
     for (const value of legitimate) {
       expect(projection.markupLike(value)).toBe(false);
@@ -136,6 +155,42 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
       expect(projection.markupLike(value)).toBe(true);
       expect(projection.text(value, 'Job title unavailable')).toBe('Job title unavailable');
     }
+  });
+
+  test('classifies the complete audited Chrome and WebKit event-handler union without broad on-prefix filtering', () => {
+    const projection = displayProjection();
+    const independentlyEnumeratedMissingHandlers = [
+      'onappinstalled', 'onbeforecopy', 'onbeforecut', 'onbeforeinstallprompt', 'onbeforeload',
+      'onbeforepaste', 'onbeforexrselect', 'oncontentvisibilityautostatechange', 'onencrypted',
+      'onenterpictureinpicture', 'onfreeze', 'ongamepadconnected', 'ongamepaddisconnected',
+      'onleavepictureinpicture', 'onorientationchange', 'onpointerlockchange', 'onpointerlockerror',
+      'onprerenderingchange', 'onreadystatechange', 'onresume', 'onscrollsnapchange',
+      'onscrollsnapchanging', 'onsearch', 'ontouchforcechange', 'onwaitingforkey',
+      'onwebkitanimationend', 'onwebkitanimationiteration', 'onwebkitanimationstart',
+      'onwebkitfullscreenchange', 'onwebkitfullscreenerror', 'onwebkitmouseforcechanged',
+      'onwebkitmouseforcedown', 'onwebkitmouseforceup', 'onwebkitmouseforcewillbegin',
+      'onwebkittransitionend',
+    ];
+    for (const name of independentlyEnumeratedMissingHandlers) {
+      expect(projection.markupLike(`${name}=handler`)).toBe(true);
+      expect(projection.text(`${name}=handler`, 'Job title unavailable')).toBe('Job title unavailable');
+    }
+    for (const value of [
+      'onclick=handler',
+      'ONCONTENTVISIBILITYAUTOSTATECHANGE = handler',
+      'onscrollsnapchange\t=handler',
+      'x,onreadystatechange=x',
+      '(onfreeze=x',
+      'x/onresume=x',
+      '[onsearch=x',
+      'onwaitingforkey&#x3d;x',
+      'onwaitingforkey&#61;x',
+    ]) expect(projection.markupLike(value)).toBe(true);
+    for (const value of [
+      'Onsite=Yes', 'OnCall=Available', 'One=1', 'Only=Scheduled',
+      'oncontentvisibilityautostatechange-state=review', 'myonerror=review',
+      'on waitingforkey=review', 'contentvisibilityautostatechange=Enabled',
+    ]) expect(projection.markupLike(value)).toBe(false);
   });
 
   test('uses a clear shared theme switch and a real themed Today sign-out button', () => {

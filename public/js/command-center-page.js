@@ -22,17 +22,16 @@
     return typeof value === 'string' && value.trim() ? value.trim() : (fallback || '');
   }
 
-  function markupLike(value) {
-    if (typeof value !== 'string') return false;
-    return /<\s*\/?\s*[a-z][^>]*>/i.test(value) ||
-      /&lt;\s*\/?\s*[a-z][\s\S]*?&gt;/i.test(value) ||
-      /(?:^|[\s"'])on[a-z]+\s*=\s*/i.test(value) ||
-      /(?:javascript\s*:|data\s*:\s*text\/html)/i.test(value);
+  function displayProjection() {
+    if (!global.NorthStarDisplayProjection || typeof global.NorthStarDisplayProjection.text !== 'function') {
+      throw new Error('DISPLAY_PROJECTION_UNAVAILABLE');
+    }
+    return global.NorthStarDisplayProjection;
   }
 
   function presentationString(value, fallback) {
     var text = safeString(value, fallback);
-    return markupLike(text) ? (fallback || '') : text;
+    return displayProjection().text(text, fallback || '');
   }
 
   function finiteNumber(value) {

@@ -20,16 +20,14 @@
   function cleanText(value, fallback) {
     return typeof value === 'string' && value ? value : fallback;
   }
-  function markupLike(value) {
-    if (typeof value !== 'string') return false;
-    return /<\s*\/?\s*[a-z][^>]*>/i.test(value) ||
-      /&lt;\s*\/?\s*[a-z][\s\S]*?&gt;/i.test(value) ||
-      /(?:^|[\s"'])on[a-z]+\s*=\s*/i.test(value) ||
-      /(?:javascript\s*:|data\s*:\s*text\/html)/i.test(value);
+  function displayProjection() {
+    if (!root.NorthStarDisplayProjection || typeof root.NorthStarDisplayProjection.text !== 'function') {
+      throw new Error('DISPLAY_PROJECTION_UNAVAILABLE');
+    }
+    return root.NorthStarDisplayProjection;
   }
   function presentationText(value, fallback) {
-    var text = cleanText(value, fallback);
-    return markupLike(text) ? fallback : text;
+    return displayProjection().text(value, fallback);
   }
   function formatInstant(value, timeZone, options) {
     var instant = new Date(value);
@@ -101,11 +99,7 @@
     return { node: node, content: content };
   }
   function serviceLocation(location) {
-    if (!location || typeof location !== 'object') return 'Service location unavailable';
-    var fields = ['street', 'line2', 'city', 'state', 'postalCode', 'country']
-      .map(function(key) { return cleanText(location[key], ''); }).filter(Boolean);
-    if (fields.some(markupLike)) return 'Service location unavailable';
-    return fields.join(', ') || 'Service location unavailable';
+    return displayProjection().location(location, 'Service location unavailable');
   }
   function scheduleText(record, timeZone) {
     var start = formatInstant(record.schedule.start, timeZone, { hour: 'numeric', minute: '2-digit' });

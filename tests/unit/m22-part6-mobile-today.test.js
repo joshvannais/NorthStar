@@ -41,6 +41,7 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
     expect(route).toContain("router.get('/', auth");
     expect(route).not.toMatch(/router\.(post|put|patch|delete)\(/);
     expect(html).toContain('/js/today-shell.js');
+    expect(html).toContain('/js/display-projection.js');
     expect(html).not.toContain('/js/auth-session.js');
     expect(html).not.toContain('/js/nav-component.js');
     expect(html).not.toContain('/js/command-center-contract.js');

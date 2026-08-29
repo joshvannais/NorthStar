@@ -362,9 +362,34 @@ async function main() {
         'Zone=Kitchen', 'Stone=Quartz', 'Someone=Assigned',
         'Data: cabling', 'data: reporting', '12 Stone=Quartz Way',
         'Onsite=Yes', 'OnCall=Available', 'One=1', 'Only=Scheduled',
+        'Online=Available', 'Onboarding=Complete', 'Once=Confirmed',
+        'Ongoing=Yes', 'Owner=Operator', 'On Route=Yes', 'on call = available',
+        'contentvisibilityautostatechange=Enabled',
+        'oncontentvisibilityautostatechange-state=review', 'myonerror=review',
+      ];
+      const auditedHandlerGaps = [
+        'onappinstalled', 'onbeforecopy', 'onbeforecut', 'onbeforeinstallprompt', 'onbeforeload',
+        'onbeforepaste', 'onbeforexrselect', 'oncontentvisibilityautostatechange', 'onencrypted',
+        'onenterpictureinpicture', 'onfreeze', 'ongamepadconnected', 'ongamepaddisconnected',
+        'onleavepictureinpicture', 'onorientationchange', 'onpointerlockchange', 'onpointerlockerror',
+        'onprerenderingchange', 'onreadystatechange', 'onresume', 'onscrollsnapchange',
+        'onscrollsnapchanging', 'onsearch', 'ontouchforcechange', 'onwaitingforkey',
+        'onwebkitanimationend', 'onwebkitanimationiteration', 'onwebkitanimationstart',
+        'onwebkitfullscreenchange', 'onwebkitfullscreenerror', 'onwebkitmouseforcechanged',
+        'onwebkitmouseforcedown', 'onwebkitmouseforceup', 'onwebkitmouseforcewillbegin',
+        'onwebkittransitionend',
+      ];
+      const hostileBoundaries = [
+        'ONCONTENTVISIBILITYAUTOSTATECHANGE = handler', 'onscrollsnapchange\t=handler',
+        'x,onreadystatechange=x', '(onfreeze=x', 'x/onresume=x', '[onsearch=x',
+        'onwaitingforkey&#x3d;x', 'onwaitingforkey&#61;x',
       ];
       return {
         legitimate: legitimate.map(value => projection.text(value, 'Job title unavailable')),
+        auditedHandlersNeutralized: auditedHandlerGaps.every(name =>
+          projection.text(`${name}=handler`, 'Job title unavailable') === 'Job title unavailable'),
+        hostileBoundariesNeutralized: hostileBoundaries.every(value =>
+          projection.text(value, 'Job title unavailable') === 'Job title unavailable'),
         location: projection.location('12 Stone=Quartz Way', 'Service location unavailable'),
         structuredLocation: projection.location({
           street: '12 Stone=Quartz Way', city: 'Zone=Kitchen',
@@ -378,7 +403,13 @@ async function main() {
         'Zone=Kitchen', 'Stone=Quartz', 'Someone=Assigned',
         'Data: cabling', 'data: reporting', '12 Stone=Quartz Way',
         'Onsite=Yes', 'OnCall=Available', 'One=1', 'Only=Scheduled',
+        'Online=Available', 'Onboarding=Complete', 'Once=Confirmed',
+        'Ongoing=Yes', 'Owner=Operator', 'On Route=Yes', 'on call = available',
+        'contentvisibilityautostatechange=Enabled',
+        'oncontentvisibilityautostatechange-state=review', 'myonerror=review',
       ],
+      auditedHandlersNeutralized: true,
+      hostileBoundariesNeutralized: true,
       location: '12 Stone=Quartz Way',
       structuredLocation: '12 Stone=Quartz Way, Zone=Kitchen',
       hostile: 'Job title unavailable',

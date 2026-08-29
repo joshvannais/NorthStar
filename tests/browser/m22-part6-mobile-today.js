@@ -596,7 +596,7 @@ async function main() {
     assert.strictEqual(realisticBody.data.identity.displayName, REALISTIC.employee);
     assert.strictEqual(network.some(entry => entry.pathname === '/api/auth/me'), false);
     const allowedEmployeePaths = new Set([
-      '/dashboard/today', '/api/v1/today', '/js/theme.js', '/js/today-shell.js', '/js/today-page.js',
+      '/dashboard/today', '/api/v1/today', '/js/theme.js', '/js/display-projection.js', '/js/today-shell.js', '/js/today-page.js',
       '/css/style.css', '/css/homepage-refresh.css', '/css/demo-dashboard.css', '/css/today.css',
       '/css/site-professionalism.css', '/assets/logo.png',
     ]);

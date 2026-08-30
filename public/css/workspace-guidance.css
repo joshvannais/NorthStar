@@ -11,3 +11,12 @@
 .northstar-quick-start-status { color: var(--neutral-500); font-size: 12px; }
 .northstar-quick-start-list li.complete .northstar-quick-start-status { color: #15803d; }
 .northstar-quick-start-progress { color: var(--neutral-600); font-size: 13px; margin: 0; text-align: right; }
+.northstar-quick-start-reopen { width: 100%; }
+.sidebar-quick-start { flex: 0 0 auto; margin: 0 0 8px; }
+.sidebar-quick-start > .northstar-quick-start-reopen,
+.mobile-menu-nav > .northstar-quick-start-reopen { margin-top: 8px; }
+.northstar-quick-start-dialog:focus-visible { outline: 3px solid var(--theme-focus); outline-offset: 3px; }
+@media (max-width: 430px) {
+  .northstar-quick-start-dialog { max-height: calc(100dvh - 24px); padding: 18px; width: calc(100% - 24px); }
+  .northstar-quick-start-list { margin-block: 14px; }
+}

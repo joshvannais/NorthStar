@@ -19,10 +19,51 @@ window.CustomerDetail = (function() {
   var _injected = false;
   var _commIdToTranscript = {};
   var _returnFocus = null;
+  var _backgroundState = [];
 
   // ── Helpers ──
 
   function $(id) { return document.getElementById(id); }
+
+  function focusableControls() {
+    if (!_drawerEl) return [];
+    return Array.prototype.slice.call(_drawerEl.querySelectorAll(
+      'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    )).filter(function(control) { return !control.hidden && control.getAttribute('aria-hidden') !== 'true'; });
+  }
+
+  function trapDrawerFocus(event) {
+    if (!_drawerEl || _drawerEl.hidden || event.key !== 'Tab') return;
+    var controls = focusableControls();
+    if (!controls.length) { event.preventDefault(); _drawerEl.focus(); return; }
+    var first = controls[0];
+    var last = controls[controls.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !_drawerEl.contains(document.activeElement))) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  }
+
+  function setBackgroundInert(inert) {
+    var container = document.getElementById('cdContainer');
+    if (inert) {
+      _backgroundState = Array.prototype.slice.call(document.body.children).filter(function(node) {
+        return node && node !== container && node.tagName !== 'SCRIPT' && typeof node.setAttribute === 'function';
+      }).map(function(node) {
+        var state = { node: node, inert: typeof node.hasAttribute === 'function' && node.hasAttribute('inert') };
+        node.setAttribute('inert', '');
+        return state;
+      });
+      return;
+    }
+    _backgroundState.forEach(function(state) {
+      if (!state.inert && state.node && state.node.isConnected && typeof state.node.removeAttribute === 'function') {
+        state.node.removeAttribute('inert');
+      }
+    });
+    _backgroundState = [];
+  }
 
   function presentationFormat() {
     return window.NorthStarPresentationFormat || null;
@@ -117,7 +158,7 @@ window.CustomerDetail = (function() {
     if (_injected) return;
     var html = '';
     html += '<div class="drawer-overlay" id="cdDrawerOverlay" hidden></div>';
-    html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" aria-hidden="true" tabindex="-1" hidden>';
+    html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" aria-describedby="cdMissingSummary cdPolarisActionReason" aria-hidden="true" tabindex="-1" hidden>';
     html += '  <div class="drawer-header">';
     html += '    <h2 id="cdDrawerTitle">Customer Details</h2>';
     html += '    <button class="drawer-close drawer-close-btn" id="cdDrawerClose" type="button" aria-label="Close customer details">&times;</button>';
@@ -148,6 +189,7 @@ window.CustomerDetail = (function() {
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Total Jobs</span><span class="drawer-detail-value" id="cdProfileJobs">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Total Revenue</span><span class="drawer-detail-value" id="cdProfileRevenue">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Last Interaction</span><span class="drawer-detail-value" id="cdProfileLastInteraction">\u2014</span></div>';
+    html += '        <p class="drawer-missing-summary" id="cdMissingSummary" role="status" aria-live="polite" hidden></p>';
     html += '      </div>';
 
     // Job Details
@@ -198,8 +240,9 @@ window.CustomerDetail = (function() {
     html += '      <div class="drawer-section">';
     html += '        <h3>Actions</h3>';
     html += '        <div style="display:flex;gap:8px;flex-wrap:wrap;">';
-    html += '          <button class="btn btn-secondary btn-sm" id="cdBtnAskPolaris" disabled>Ask Polaris</button>';
-    html += '          <button class="btn btn-primary btn-sm" id="cdBtnSchedule">Schedule</button>';
+    html += '          <button class="btn btn-secondary btn-sm" id="cdBtnAskPolaris" aria-describedby="cdPolarisActionReason" disabled>Ask Polaris</button>';
+    html += '          <button class="btn btn-primary btn-sm" id="cdBtnSchedule" aria-describedby="cdPolarisActionReason">Schedule</button>';
+    html += '          <p class="drawer-action-reason" id="cdPolarisActionReason">Actions become available after this customer record finishes loading.</p>';
     html += '        </div>';
     html += '      </div>';
 
@@ -219,7 +262,9 @@ window.CustomerDetail = (function() {
     _overlayEl.addEventListener('click', function(event) { event.preventDefault(); close(); });
     $('cdDrawerClose').addEventListener('click', function(event) { event.preventDefault(); event.stopPropagation(); close(); });
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') close();
+      if (!_drawerEl || _drawerEl.hidden) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      trapDrawerFocus(e);
     });
     $('cdBtnSchedule').addEventListener('click', function() {
       if (!_currentData) return;
@@ -229,7 +274,6 @@ window.CustomerDetail = (function() {
       if (_currentData.leadId) query.set('leadId', _currentData.leadId);
       window.location.assign(prefix + '/calendar' + (query.toString() ? '?' + query.toString() : ''));
     });
-    $('cdBtnAskPolaris').disabled = false;
     $('cdBtnAskPolaris').addEventListener('click', function() {
       if (!_currentData) return;
       var prefix = window.location.pathname.indexOf('/demo') === 0 ? '/demo' : '/dashboard';
@@ -507,6 +551,8 @@ window.CustomerDetail = (function() {
     _overlayEl.hidden = false;
     _drawerEl.hidden = false;
     _drawerEl.setAttribute('aria-hidden', 'false');
+    _drawerEl.setAttribute('aria-busy', 'true');
+    setBackgroundInert(true);
     document.body.style.overflow = 'hidden';
     $('cdDrawerContent').style.display = 'none';
     $('cdDrawerLoading').style.display = '';
@@ -520,7 +566,14 @@ window.CustomerDetail = (function() {
       populateDrawer(data);
     }).catch(function(err) {
       console.error('[CustomerDetail] Fetch error:', err);
-      $('cdDrawerLoading').innerHTML = '<p style="color:var(--danger, #ef4444);">Failed to load customer data. Please try again.</p>';
+      _drawerEl.setAttribute('aria-busy', 'false');
+      var loading = $('cdDrawerLoading');
+      while (loading.firstChild) loading.removeChild(loading.firstChild);
+      var errorMessage = document.createElement('p');
+      errorMessage.style.color = 'var(--danger, #ef4444)';
+      errorMessage.setAttribute('role', 'alert');
+      errorMessage.textContent = 'Customer details could not be loaded. Close this panel and try again.';
+      loading.appendChild(errorMessage);
     });
   }
 
@@ -528,11 +581,16 @@ window.CustomerDetail = (function() {
     $('cdDrawerLoading').style.display = 'none';
     $('cdDrawerContent').style.display = '';
     $('cdDrawerTitle').textContent = data.name || 'Customer Details';
+    _drawerEl.setAttribute('aria-busy', 'false');
 
     // Contact Information
-    $('cdName').textContent = data.name || 'Unavailable — no customer name is recorded.';
-    $('cdPhone').textContent = data.phone || 'Unavailable — no phone number is recorded.';
-    $('cdEmail').textContent = data.email || 'Unavailable — no email address is recorded.';
+    var missing = [];
+    $('cdName').textContent = data.name || '\u2014';
+    if (!data.name) missing.push('customer name');
+    $('cdPhone').textContent = data.phone || '\u2014';
+    if (!data.phone) missing.push('phone number');
+    $('cdEmail').textContent = data.email || '\u2014';
+    if (!data.email) missing.push('email address');
     var canonicalAddress = typeof data.address === 'string' && data.address.trim()
       ? data.address
       : null;
@@ -540,7 +598,8 @@ window.CustomerDetail = (function() {
     var navigationLauncher = typeof NorthStarNavigationLauncher === 'undefined'
       ? null
       : NorthStarNavigationLauncher;
-    $('cdAddress').textContent = canonicalAddress || 'Address unavailable';
+    $('cdAddress').textContent = canonicalAddress || '\u2014';
+    if (!canonicalAddress) missing.push('service address');
     if (!navigationLauncher || typeof navigationLauncher.mount !== 'function') {
       navigationRoot.className = 'navigation-launcher';
       var navigationStatus = document.createElement('p');
@@ -556,16 +615,22 @@ window.CustomerDetail = (function() {
       );
       $('cdAddress').textContent = navigationMount.destination
         ? navigationMount.destination.address
-        : 'Address unavailable';
+        : '\u2014';
     }
 
     // Customer Profile
     $('cdProfileStatus').innerHTML = getStatusBadge(data.status || 'active');
-    $('cdProfileJobs').textContent = data.totalJobs == null
-      ? 'Unavailable — no completed-job count is recorded.'
-      : data.totalJobs;
-    $('cdProfileRevenue').textContent = fmtCurrency(data.totalRevenue);
-    $('cdProfileLastInteraction').textContent = fmtDate(data.lastInteraction);
+    $('cdProfileJobs').textContent = data.totalJobs == null ? '\u2014' : data.totalJobs;
+    if (data.totalJobs == null) missing.push('completed-job count');
+    $('cdProfileRevenue').textContent = data.totalRevenue == null ? '\u2014' : fmtCurrency(data.totalRevenue);
+    if (data.totalRevenue == null) missing.push('recorded revenue');
+    $('cdProfileLastInteraction').textContent = data.lastInteraction ? fmtDate(data.lastInteraction) : '\u2014';
+    if (!data.lastInteraction) missing.push('last interaction');
+    var missingSummary = $('cdMissingSummary');
+    missingSummary.hidden = missing.length === 0;
+    missingSummary.textContent = missing.length
+      ? 'Not yet recorded: ' + missing.join(', ') + '. Add these details in the customer or work record when they become available.'
+      : '';
 
     // Job Details
     $('cdService').textContent = data.service || 'Unavailable — no service is recorded.';
@@ -596,6 +661,21 @@ window.CustomerDetail = (function() {
 
     // Transcript
     renderTranscript(data.primaryTranscript, data.name);
+
+    var identifier = data.leadId || data.customerId;
+    var askPolaris = $('cdBtnAskPolaris');
+    var schedule = $('cdBtnSchedule');
+    var reason = $('cdPolarisActionReason');
+    var demo = String(window.location && window.location.pathname || '').indexOf('/demo') === 0;
+    askPolaris.disabled = !identifier;
+    schedule.disabled = !identifier;
+    if (!identifier) {
+      reason.textContent = 'These actions require a role-authorized customer or lead identifier. Add the missing record before continuing.';
+    } else if (demo) {
+      reason.textContent = 'Ask Polaris opens this fictional record. Demo Calendar is read-only; Schedule opens its context without saving a change.';
+    } else {
+      reason.textContent = 'Ask Polaris keeps this exact record selected. Schedule opens the authorized Calendar flow for this customer.';
+    }
   }
 
   function close() {
@@ -607,6 +687,7 @@ window.CustomerDetail = (function() {
       _drawerEl.setAttribute('aria-hidden', 'true');
     }
     document.body.style.overflow = '';
+    setBackgroundInert(false);
     _currentData = null;
     if (_returnFocus && typeof document.contains === 'function' && document.contains(_returnFocus)) _returnFocus.focus();
     _returnFocus = null;

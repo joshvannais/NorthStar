@@ -129,6 +129,31 @@ window.CustomerCard = (function() {
     return '<span class="call-status-badge ' + cls + '">' + escapeMarkup(label) + '</span>';
   }
 
+  function communicationKind(value) {
+    var normalized = String(value || 'call').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    if (normalized === 'sms' || normalized === 'text' || normalized === 'email' || normalized === 'message') {
+      return { key:'message', label:'Message', icon:'<path d="M4 5h16v11H8l-4 3V5Z"/><path d="M8 9h8M8 12h5"/>' };
+    }
+    if (normalized === 'summary' || normalized === 'call-summary') {
+      return { key:'summary', label:'Summary', icon:'<path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/>' };
+    }
+    if (normalized === 'follow-up' || normalized === 'followup') {
+      return { key:'follow-up', label:'Follow-up', icon:'<path d="M4 12h12"/><path d="m12 7 5 5-5 5"/><path d="M20 5v14"/>' };
+    }
+    return { key:'call', label:'Call', icon:'<path d="M6 3h4l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v4c0 2-2 3-4 3C9 20 4 15 3 7c0-2 1-4 3-4Z"/>' };
+  }
+
+  function communicationKinds(lead) {
+    var values = Array.isArray(lead.communicationKinds) && lead.communicationKinds.length
+      ? lead.communicationKinds : [lead.communicationType || lead.type || 'call'];
+    var seen = Object.create(null);
+    return values.map(communicationKind).filter(function(kind) {
+      if (seen[kind.key]) return false;
+      seen[kind.key] = true;
+      return true;
+    });
+  }
+
   // ─── Render Functions ──────────────────────────────────────────
 
   /**
@@ -201,6 +226,10 @@ window.CustomerCard = (function() {
     var metaHtml = metaItems.map(function(value) {
       return '<span class="call-meta-item">' + escapeMarkup(value) + '</span>';
     }).join('');
+    var kindHtml = communicationKinds(lead).map(function(kind) {
+      return '<span class="communication-kind" data-communication-kind="' + escapeMarkup(kind.key) + '">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + kind.icon + '</svg>' + escapeMarkup(kind.label) + '</span>';
+    }).join('');
 
     return '<div class="call-card" id="call-' + index + '">' +
       '<div class="call-card-header" data-customer-card-action="open-call" data-lead-index="' + index + '" role="button" tabindex="0" aria-label="Open details for ' + escapeMarkup(name) + '">' +
@@ -209,6 +238,7 @@ window.CustomerCard = (function() {
           '<div class="call-info">' +
             '<div class="call-name">' + escapeMarkup(name) + '</div>' +
             '<div class="call-meta">' + metaHtml + '</div>' +
+            '<div class="communication-kind-list" aria-label="Communication types">' + kindHtml + '</div>' +
           '</div>' +
         '</div>' +
         statusHtml +
@@ -228,8 +258,9 @@ window.CustomerCard = (function() {
     var phone = safe(lead.phone || lead.phoneNumber, 'Not recorded');
     var statusHtml = getStatusBadge(lead.status || 'new');
     var index = normalizedIndex(options.index);
+    var unavailableActionsId = 'northstarUnavailableLeadActions-' + index;
 
-    return '<tr style="cursor:pointer;" data-customer-card-action="open-lead" data-lead-index="' + index + '">' +
+    return '<tr style="cursor:pointer;" data-customer-card-action="open-lead" data-lead-index="' + index + '" role="button" tabindex="0" aria-label="Open details for ' + escapeMarkup(name) + '">' +
       '<td data-label="Customer"><strong>' + escapeMarkup(name) + '</strong></td>' +
       '<td data-label="Phone">' + escapeMarkup(phone) + '</td>' +
       '<td data-label="Service" style="text-align:center"><span class="lead-service-badge">' + escapeMarkup(svc) + '</span></td>' +
@@ -244,8 +275,9 @@ window.CustomerCard = (function() {
             '<button class="more-dropdown-item" data-customer-card-action="update-status" data-lead-index="' + index + '" data-lead-status="contacted">📞 Mark Contacted</button>' +
             '<button class="more-dropdown-item" data-customer-card-action="update-status" data-lead-index="' + index + '" data-lead-status="scheduled">📅 Schedule</button>' +
             '<button class="more-dropdown-item" data-customer-card-action="update-status" data-lead-index="' + index + '" data-lead-status="completed">✅ Mark Completed</button>' +
-            '<button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;">🔧 Assign Technician</button>' +
-            '<button class="more-dropdown-item" style="opacity:0.5;pointer-events:none;">📁 Archive</button>' +
+            '<span class="sr-only" id="' + unavailableActionsId + '">These actions require assignment and archive authorities that are not available on this read-only lead list.</span>' +
+            '<button class="more-dropdown-item" disabled aria-describedby="' + unavailableActionsId + '" title="Requires assignment authority">Assign Technician</button>' +
+            '<button class="more-dropdown-item" disabled aria-describedby="' + unavailableActionsId + '" title="Requires archive authority">Archive</button>' +
             '<button class="more-dropdown-item danger" data-customer-card-action="remove-lead" data-lead-index="' + index + '">🗑️ Delete</button>' +
           '</div>' +
         '</div>' +

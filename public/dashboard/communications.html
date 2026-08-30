@@ -465,8 +465,9 @@
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/pre-m23-p3.css">
 </head>
-<body>
+<body class="communications-page">
 <a href="#mainContent" class="skip-link">Skip to main content</a><div class="dashboard-layout">
   <aside class="sidebar" aria-hidden="true"></aside>
   <main class="main-content" id="mainContent">
@@ -502,13 +503,13 @@
       <div class="filter-btn-wrapper">
         <button class="filter-btn" id="filterToggleBtn" onclick="toggleFilterDropdown()" aria-expanded="false" aria-controls="filterDropdown">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
-          Filters
+          Advanced filters
           <span class="filter-badge" id="filterCountBadge" style="display:none;">0</span>
         </button>
         <!-- Filter Dropdown Panel -->
         <div class="filter-dropdown" id="filterDropdown">
           <div class="filter-dropdown-header">
-            <div class="filter-dropdown-title">Filter Communications</div>
+            <div class="filter-dropdown-title">Advanced communication filters</div>
             <button class="filter-dropdown-close" onclick="closeFilterDropdown()" aria-label="Close filters">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -579,7 +580,7 @@
           <button class="filter-reset-btn" onclick="resetAllFilters()">↺ Reset All Filters</button>
         </div>
       </div>
-      <button class="filter-btn-danger" onclick="resetAllFilters()">Clear Filters</button>
+      <button class="filter-btn-danger" onclick="resetAllFilters()">Reset view</button>
       <span class="results-count" id="resultsCount"></span>
     </div>
 <!-- Call List -->
@@ -646,14 +647,22 @@ function toggleFilterDropdown() {
     populateServiceTypes();
   }
 }
-function closeFilterDropdown() {
+function closeFilterDropdown(restoreFocus) {
   document.getElementById('filterDropdown').classList.remove('open');
-  document.getElementById('filterToggleBtn').setAttribute('aria-expanded', 'false');
+  var toggle = document.getElementById('filterToggleBtn');
+  toggle.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) toggle.focus();
 }
 document.addEventListener('click', function(e) {
   var wrapper = document.querySelector('.filter-btn-wrapper');
   if (wrapper && !wrapper.contains(e.target)) {
     closeFilterDropdown();
+  }
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('filterDropdown').classList.contains('open')) {
+    e.preventDefault();
+    closeFilterDropdown(true);
   }
 });
 
@@ -755,6 +764,7 @@ function resetAllFilters() {
   filterState.revenueMin = null;
   filterState.revenueMax = null;
   curSearch = '';
+  curSort = 'newest';
   updateStatusUI();
   document.querySelectorAll('#filterDateOptions .filter-option-btn').forEach(function(b) {
     b.classList.toggle('selected', b.dataset.range === 'all');
@@ -766,6 +776,11 @@ function resetAllFilters() {
   document.getElementById('filterRevenueMin').value = '';
   document.getElementById('filterRevenueMax').value = '';
   document.getElementById('callSearchInput').value = '';
+  document.querySelectorAll('#sortOptions .sort-option').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.sort === 'newest');
+  });
+  closeFilterDropdown();
+  if (window.history && window.location) window.history.replaceState(null, '', window.location.pathname);
   updateFilterUI();
   renderCalls();
 }
@@ -849,6 +864,7 @@ function fetchCommunications() {
           jobDetail: comm.content || comm.subject || '',
           description: comm.content || comm.subject || '',
           status: comm.status || 'completed', outcome: comm.status || 'completed',
+          type: comm.type || 'call', communicationType: comm.type || 'call',
           receivedAt: comm.createdAt, time: comm.createdAt, createdAt: comm.createdAt,
           duration: comm.duration || '', transcript: comm.content || '',
           summary: comm.subject || '', source: 'canonical-postgresql', canonical: comm.canonical, readOnly: true
@@ -970,9 +986,15 @@ function renderCalls() {
     if (!key) key = 'communication-' + grouped.length;
     if (groupIndex[key] === undefined) {
       groupIndex[key] = grouped.length;
-      grouped.push(Object.assign({}, call, { communicationCount: 1 }));
+      grouped.push(Object.assign({}, call, {
+        communicationCount: 1,
+        communicationKinds: [call.communicationType || call.type || 'call']
+      }));
     } else {
-      grouped[groupIndex[key]].communicationCount += 1;
+      var currentGroup = grouped[groupIndex[key]];
+      currentGroup.communicationCount += 1;
+      var kind = call.communicationType || call.type || 'call';
+      if (currentGroup.communicationKinds.indexOf(kind) < 0) currentGroup.communicationKinds.push(kind);
     }
   });
   currentFilteredCalls = grouped;

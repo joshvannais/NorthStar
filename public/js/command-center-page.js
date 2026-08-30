@@ -532,7 +532,7 @@
         button.addEventListener('click', function () {
           global.NorthStarSchedulingApproval.open({
             record: record, directory: operator, action: action, timeZone: overview.timeZone,
-            returnFocus: button, source: 'Command Center canonical overview', onApplied: load,
+            returnFocus: button, source: 'Command Center scheduling overview', onApplied: load,
           });
         });
         actions.appendChild(button);
@@ -640,7 +640,7 @@
     byId('commandCenterWorkspaceStatus').textContent = 'Workspace context';
     byId('commandCenterWorkspaceNote').textContent = mode === 'demo'
       ? 'The demo session is isolated from production, provider, account, and billing data.'
-      : 'This view contains role-authorized tenant projections only; provider readiness is not inferred.';
+      : 'This view shows only the workspace information available to your current account; connected-provider readiness is not inferred.';
     byId('commandCenterStatePill').replaceChildren();
     byId('commandCenterStatePill').hidden = true;
   }

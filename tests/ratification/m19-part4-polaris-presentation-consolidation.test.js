@@ -11,6 +11,7 @@ const CALENDAR_PATH = path.join(ROOT, 'public', 'js', 'calendar-engine.js');
 const SCHEDULING_TIME_PATH = path.join(ROOT, 'public', 'js', 'scheduling-time-contract.js');
 const CUSTOMER_DETAIL_PATH = path.join(ROOT, 'public', 'js', 'customer-detail.js');
 const PRESENTATION_FORMAT_PATH = path.join(ROOT, 'public', 'js', 'presentation-format.js');
+const DISPLAY_PROJECTION_PATH = path.join(ROOT, 'public', 'js', 'display-projection.js');
 const TRANSCRIPT_RENDERER_PATH = path.join(ROOT, 'public', 'js', 'transcript-renderer.js');
 const LEAD_PATH = path.join(ROOT, 'public', 'dashboard', 'lead.html');
 const CANONICAL_ADDRESS = '100 Cedar Lane, Testville, NY 10001';
@@ -325,6 +326,7 @@ function createConsumerRuntime(source, options) {
   sandbox.window.document = document;
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(PRESENTATION_FORMAT_PATH, 'utf8'), sandbox, { filename: 'presentation-format.js' });
+  vm.runInContext(fs.readFileSync(DISPLAY_PROJECTION_PATH, 'utf8'), sandbox, { filename: 'display-projection.js' });
   vm.runInContext(fs.readFileSync(TRANSCRIPT_RENDERER_PATH, 'utf8'), sandbox, { filename: 'transcript-renderer.js' });
   vm.runInContext(fs.readFileSync(ENGINE_PATH, 'utf8'), sandbox, { filename: 'polaris-engine.js' });
   vm.runInContext(fs.readFileSync(SCHEDULING_TIME_PATH, 'utf8'), sandbox, { filename: 'scheduling-time-contract.js' });
@@ -739,7 +741,7 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.selectorCalls).toEqual([source]);
     expect(result.html).toBe('');
     expect(result.events).toHaveLength(1);
-    expect(result.events[0].serviceType).toBe('Zero & <Service>');
+    expect(result.events[0].serviceType).toBe('Service type unavailable');
     expect(result.events[0].estimatedPrice).toBe(0);
     expect(result.events[0].duration).toBe(0);
   });

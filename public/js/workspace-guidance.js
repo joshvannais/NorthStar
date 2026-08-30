@@ -24,13 +24,17 @@
     try { storage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch (_error) {}
   }
 
-  function hasSeenGuide(mode) {
-    try { return global.localStorage.getItem(SEEN_KEY + ':' + mode) === 'true'; }
+  function seenStorageKey(mode, accountKey) {
+    return SEEN_KEY + ':' + mode + ':' + String(accountKey || mode);
+  }
+
+  function hasSeenGuide(mode, accountKey) {
+    try { return global.localStorage.getItem(seenStorageKey(mode, accountKey)) === 'true'; }
     catch (_error) { return false; }
   }
 
-  function markGuideSeen(mode) {
-    try { global.localStorage.setItem(SEEN_KEY + ':' + mode, 'true'); }
+  function markGuideSeen(mode, accountKey) {
+    try { global.localStorage.setItem(seenStorageKey(mode, accountKey), 'true'); }
     catch (_error) {}
   }
 
@@ -44,15 +48,13 @@
   function stepsFor(mode) {
     if (mode === 'demo') return [
       { id: 'command-center', label: 'See today’s priorities', href: '/demo' },
-      { id: 'simulate', label: 'Run one guided scenario', href: '/demo#northstarDemoToolbar' },
-      { id: 'leads', label: 'Review the captured lead', href: '/demo/leads' },
-      { id: 'polaris', label: 'Ask Polaris about the workspace', href: '/demo/polaris' }
+      { id: 'simulate', label: 'Run a guided scenario', href: '/demo#northstarDemoToolbar' },
+      { id: 'leads', label: 'Review the result', href: '/demo/leads' }
     ];
     return [
-      { id: 'command-center', label: 'Review the Command Center', href: '/dashboard' },
-      { id: 'business-profile', label: 'Complete the Business Profile', href: '/dashboard/business-profile' },
-      { id: 'settings', label: 'Confirm AI and notification settings', href: '/dashboard/settings' },
-      { id: 'integrations', label: 'Review integration readiness', href: '/dashboard/integrations' }
+      { id: 'command-center', label: 'Review today’s priorities', href: '/dashboard' },
+      { id: 'business-profile', label: 'Add your business essentials', href: '/dashboard/business-profile' },
+      { id: 'settings', label: 'Confirm workspace settings', href: '/dashboard/settings' }
     ];
   }
 
@@ -60,16 +62,13 @@
     if (document.getElementById('northstarQuickStartDialog')) return;
     var mode = options && options.mode === 'demo' ? 'demo' : 'paid';
     var activePage = options && options.activePage || '';
+    var accountKey = options && options.accountKey || mode;
     var state = readState(mode);
     if (activePage) state[activePage] = true;
     try {
       if (mode === 'demo' && global.sessionStorage.getItem('northstarOnboardingSimulated') === 'true') state.simulate = true;
     } catch (_error) {}
     writeState(mode, state);
-
-    // The guide is an intentional first-arrival experience on Command Center,
-    // not a floating control that can cover operational content on every page.
-    if (activePage !== 'command-center' || hasSeenGuide(mode)) return;
 
     var dialog = element('dialog', 'northstar-quick-start-dialog');
     dialog.id = 'northstarQuickStartDialog';
@@ -82,8 +81,8 @@
     close.setAttribute('aria-label', 'Close quick start');
     headingRow.append(heading, close);
     var intro = element('p', 'northstar-quick-start-intro', mode === 'demo'
-      ? 'A short path through the working shared demo.'
-      : 'Complete the essentials before relying on NorthStar operationally.');
+      ? 'Three quick steps show how one call becomes organized work.'
+      : 'Three quick steps prepare your workspace for daily use.');
     var list = element('ol', 'northstar-quick-start-list');
     var steps = stepsFor(mode);
     steps.forEach(function (step) {
@@ -100,21 +99,32 @@
     dialog.append(headingRow, intro, list, progress);
     document.body.appendChild(dialog);
 
+    var returnFocus = null;
     function dismiss() {
-      markGuideSeen(mode);
+      markGuideSeen(mode, accountKey);
       if (dialog.open) dialog.close();
-      dialog.remove();
+      if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll:true });
+      returnFocus = null;
+    }
+
+    function openGuide(trigger) {
+      returnFocus = trigger && typeof trigger.focus === 'function' ? trigger : document.activeElement;
+      if (!dialog.open) dialog.showModal();
+      global.requestAnimationFrame(function() { if (close.isConnected) close.focus({ preventScroll:true }); });
     }
 
     close.addEventListener('click', dismiss);
     dialog.addEventListener('cancel', function (event) { event.preventDefault(); dismiss(); });
     dialog.addEventListener('click', function (event) { if (event.target === dialog) dismiss(); });
     list.addEventListener('click', function (event) {
-      if (event.target.closest('a[data-quick-start-step]')) markGuideSeen(mode);
+      if (event.target.closest('a[data-quick-start-step]')) markGuideSeen(mode, accountKey);
     });
-    global.requestAnimationFrame(function () {
-      if (dialog.isConnected && !dialog.open) dialog.showModal();
+    document.querySelectorAll('[data-quick-start-reopen]').forEach(function(trigger) {
+      trigger.addEventListener('click', function() { openGuide(trigger); });
     });
+    if (activePage === 'command-center' && !hasSeenGuide(mode, accountKey)) {
+      global.requestAnimationFrame(function () { if (dialog.isConnected) openGuide(null); });
+    }
   }
 
   global.NorthStarWorkspaceGuidance = Object.freeze({ init: init });

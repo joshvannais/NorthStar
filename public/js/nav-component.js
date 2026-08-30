@@ -66,6 +66,12 @@
       '<path d="M9 9h6M9 13h6M12 17h.01"/></svg><span>Report a Bug</span></a>';
   }
 
+  function quickStartAction() {
+    return '<button type="button" class="northstar-nav-action northstar-quick-start-reopen" data-quick-start-reopen aria-label="Open Quick Start">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg>' +
+      '<span>Quick Start</span></button>';
+  }
+
   function buildMobileNav(items, mode) {
     var homePath = mode === 'demo' ? '/demo' : '/dashboard';
     var footerLink = mode === 'demo'
@@ -94,6 +100,7 @@
         '</div>' +
         '<nav class="mobile-menu-nav" aria-label="Mobile primary navigation">' +
           makeNavLinks(true, items) +
+          quickStartAction() +
         '</nav>' +
         '<div class="mobile-menu-footer">' +
           footerLink +
@@ -113,6 +120,7 @@
           '<img src="/assets/logo.png" alt="" class="logo-img">' +
           'NorthStar' +
         '</a>' +
+        '<div class="sidebar-quick-start">' + quickStartAction() + '</div>' +
         '<nav class="sidebar-nav">' +
           makeNavLinks(false, items) +
         '</nav>' +
@@ -335,7 +343,10 @@
           }
           var startGuidance = function () {
             if (window.NorthStarWorkspaceGuidance) {
-              window.NorthStarWorkspaceGuidance.init({ mode: mode, activePage: ACTIVE_PAGE });
+              var accountKey = account && account.organization && account.user
+                ? String(account.organization.id) + ':' + String(account.user.id || account.user.userId)
+                : mode;
+              window.NorthStarWorkspaceGuidance.init({ mode: mode, activePage: ACTIVE_PAGE, accountKey: accountKey });
             }
           };
           if (window.NorthStarWorkspaceGuidance) startGuidance();

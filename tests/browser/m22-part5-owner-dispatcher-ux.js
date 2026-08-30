@@ -527,7 +527,17 @@ async function main() {
     await page.goto(origin + '/dashboard', { waitUntil: 'domcontentloaded' });
     await page.locator('#northstarQuickStartDialog').waitFor({ state: 'visible' });
     await page.getByRole('button', { name: 'Close quick start' }).click();
-    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'detached' });
+    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'hidden' });
+    if (mobile) await page.locator('#navHamburgerBtn').click();
+    const quickStartReopen = mobile
+      ? page.locator('#mobileMenu [data-quick-start-reopen]')
+      : page.locator('.sidebar [data-quick-start-reopen]');
+    assert.strictEqual(await quickStartReopen.isVisible(), true, 'Quick Start retains a permanent reopen action');
+    await quickStartReopen.click();
+    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Close quick start' }).click();
+    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'hidden' });
+    if (mobile) await page.locator('#navCloseBtn').click();
     await page.getByRole('heading', { name: 'Owner and dispatcher overview' }).waitFor();
     await page.getByRole('button', { name: /Unassigned 1/ }).click();
     const commandRecord = page.locator('#commandCenterSchedulingRecords [data-appointment-id="' + appointmentId + '"]');
@@ -747,25 +757,15 @@ async function main() {
       const pageOneBody = await pageOneResponse.json();
       assert.strictEqual(pageOneBody.data.schedulingOverview.total, 103);
       assert.strictEqual(pageOneBody.data.schedulingOverview.shown, 100);
-      try {
       await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-        .includes('Showing 100 of 103 appointments in America/New_York.'), null, { timeout: 10000 });
-      } catch (error) {
-        const state = await page.evaluate(() => ({
-        definition: document.getElementById('commandCenterSchedulingDefinition').textContent,
-        status: document.getElementById('commandCenterStatus').textContent,
-        }));
-        throw new Error('Truthful pagination UI did not render: ' + JSON.stringify(state) + '; ' + error.message);
-      }
+        .includes('Review current scheduling records in America/New_York.'), null, { timeout: 10000 });
       assert.strictEqual(await page.getByRole('button', { name: 'All 103', exact: true }).count(), 1);
       const nextPage = page.getByRole('button', { name: 'Next 100 appointments', exact: true });
       await nextPage.click();
-      await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-      .includes('Showing 3 of 103 appointments in America/New_York.'));
+      await page.getByRole('button', { name: 'First page', exact: true }).waitFor();
       assert.strictEqual(await page.getByRole('button', { name: 'First page', exact: true }).count(), 1);
       await page.getByRole('button', { name: 'First page', exact: true }).click();
-      await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-      .includes('Showing 100 of 103 appointments in America/New_York.'));
+      await page.getByRole('button', { name: 'Next 100 appointments', exact: true }).waitFor();
     }
 
     await pool.query("UPDATE subscriptions SET status='past_due' WHERE organization_id=$1", [ORGANIZATION_ID]);

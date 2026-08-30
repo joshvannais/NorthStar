@@ -7,6 +7,12 @@
   var signupSubmitted = false;
   var pendingDeadClicks = Object.create(null);
   var pendingExitKey = 'northstar:product-telemetry:pending-exit:v1';
+  var CONSENT_KEY = 'northstar_telemetry_consent_v1';
+
+  function consentGranted() {
+    try { return global.localStorage.getItem(CONSENT_KEY) === 'granted'; }
+    catch (_error) { return false; }
+  }
 
   function privacyOptOut() {
     var dnt = String(global.navigator.doNotTrack || global.doNotTrack || '').toLowerCase();
@@ -68,7 +74,7 @@
   }
 
   function send(event, action) {
-    if (privacyOptOut()) return false;
+    if (!consentGranted() || privacyOptOut()) return false;
     postEnvelope(envelope(event, action));
     return true;
   }
@@ -89,7 +95,7 @@
   }
 
   function queuePendingExit(values) {
-    if (privacyOptOut()) {
+    if (!consentGranted() || privacyOptOut()) {
       clearPendingExit();
       return;
     }
@@ -106,7 +112,7 @@
     } catch (_) {
       return;
     }
-    if (!raw || raw.length > 4096 || privacyOptOut()) return;
+    if (!raw || raw.length > 4096 || !consentGranted() || privacyOptOut()) return;
     try {
       var values = JSON.parse(raw);
       if (!Array.isArray(values) || values.length > 2) return;
@@ -146,7 +152,7 @@
   }
 
   function initialize() {
-    if (privacyOptOut()) {
+    if (!consentGranted() || privacyOptOut()) {
       clearPendingExit();
       return;
     }
@@ -165,7 +171,7 @@
     send('page_view', 'none');
   }
 
-  global.NorthStarProductTelemetry = Object.freeze({ send: send });
+  global.NorthStarProductTelemetry = Object.freeze({ send: send, consentGranted: consentGranted });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });
   else initialize();
 })(window);

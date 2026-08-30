@@ -25,7 +25,11 @@
           <h1>Settings</h1>
           <p>Manage your account and AI Office Manager configuration.</p>
         </div>
-        <button class="btn btn-primary btn-sm" id="saveSettingsBtn" data-settings-mutable onclick="saveSettings()" aria-describedby="settingsAccessStatus" disabled>Loading access…</button>
+        <div class="settings-header-actions">
+          <span class="settings-role-badge" id="settingsRoleBadge">Loading access…</span>
+          <button class="btn btn-secondary btn-sm" id="reloadSettingsBtn" type="button" hidden>Reload settings</button>
+          <button class="btn btn-primary btn-sm" id="saveSettingsBtn" data-settings-mutable onclick="saveSettings()" aria-describedby="settingsAccessStatus settingsDirtyStatus" disabled>Loading access…</button>
+        </div>
       </div>
 
       <!-- Company Info -->
@@ -57,6 +61,8 @@
         <h2>Notification Preferences</h2>
         <p class="description" id="notificationPreferencesAuthorityNote">Operational delivery choices are stored as role-authorized workspace preferences.</p>
         <p id="settingsAccessStatus" role="status" aria-live="polite">Loading your durable account access. Editing remains disabled.</p>
+        <p id="settingsDirtyStatus" class="settings-dirty-status" role="status" aria-live="polite">No unsaved changes.</p>
+        <div class="notification-preference-grid">
         <div class="integration-card">
           <div class="icon">📧</div>
           <div class="info">
@@ -90,7 +96,7 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <div class="form-group" style="margin-top:8px;">
+        <div class="form-group notification-destination">
           <label for="emailAddress">Notification Email</label>
           <input type="email" id="emailAddress" data-settings-mutable placeholder="you@example.com" disabled>
         </div>
@@ -116,11 +122,11 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <div class="form-group" style="margin-top:8px;">
+        <div class="form-group notification-destination">
           <label for="smsNumber">SMS Phone Number</label>
           <input type="tel" id="smsNumber" data-settings-mutable placeholder="(555) 123-4567" disabled>
         </div>
-        <div class="integration-card" aria-live="polite">
+        <div class="integration-card notification-security" aria-live="polite">
           <div class="icon">🔒</div>
           <div class="info">
             <h4>Account-security email</h4>
@@ -130,6 +136,7 @@
             <input type="checkbox" checked disabled>
             <span class="toggle-slider"></span>
           </label>
+        </div>
         </div>
       </div>
 
@@ -158,13 +165,16 @@
         <p class="km-intro">See exactly what NorthStar knows, where it came from, which immutable version is eligible for use, and whether provider-neutral synchronization is current.</p>
         <div data-km-mode hidden></div>
         <p class="km-status" data-km-status role="status" aria-live="polite" aria-atomic="true">Loading canonical tenant knowledge. Controls remain read-only until authority resolves…</p>
-        <div class="km-filters" data-km-filters aria-label="Knowledge filters"></div>
-        <ul class="km-counts" data-km-counts aria-label="Knowledge counts"></ul>
+        <details class="km-list-evidence" data-km-list-evidence>
+          <summary>Advanced list filters and counts</summary>
+          <div class="km-filters" data-km-filters aria-label="Knowledge filters"></div>
+          <ul class="km-counts" data-km-counts aria-label="Knowledge counts"></ul>
+        </details>
         <div class="km-layout">
           <section class="km-panel" aria-labelledby="knowledgeManagementSettingsListHeading">
             <div class="km-panel-heading">
               <h3 id="knowledgeManagementSettingsListHeading">Knowledge items</h3>
-              <span class="km-item-key">Exact latest versions</span>
+              <span class="km-item-key">Plain-language view</span>
             </div>
             <ul class="km-list" data-km-list aria-label="Canonical knowledge items">
               <li class="km-empty">Loading tenant-scoped knowledge…</li>
@@ -232,6 +242,16 @@
 .integration-card .info h4 { font-size:14px;font-weight:600;color:var(--neutral-900);margin:0; }
 .integration-card .info p { font-size:12px;color:var(--neutral-500);margin:2px 0 0; }
 .integration-catalogue-note { font-size:12px;color:var(--neutral-500);line-height:1.45; }
+.settings-header-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap; }
+.settings-role-badge { display:inline-flex;align-items:center;min-height:30px;padding:4px 10px;border:1px solid var(--neutral-300);border-radius:999px;background:var(--neutral-50);color:var(--neutral-700);font-size:12px;font-weight:700; }
+.settings-dirty-status { margin:0 0 14px;color:var(--neutral-600);font-size:12px;font-weight:700; }
+.settings-dirty-status[data-state="dirty"] { color:var(--brand-700); }
+.settings-dirty-status[data-state="conflict"] { color:var(--danger); }
+.notification-preference-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch; }
+.notification-preference-grid .integration-card { display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;height:100%;padding:14px; }
+.notification-preference-grid .notification-destination { align-self:stretch;margin:0;padding:14px;border:1px solid var(--neutral-200);border-radius:var(--radius-md);background:var(--neutral-100); }
+.notification-preference-grid .notification-security { grid-column:1/-1;border-style:dashed; }
+@media (max-width:760px) { .settings-header-actions{justify-content:flex-start}.notification-preference-grid{grid-template-columns:1fr}.notification-preference-grid .notification-security{grid-column:auto}.notification-preference-grid .integration-card{grid-template-columns:auto minmax(0,1fr) auto} }
 .btn-ghost {
   background:transparent;
   border:1px solid var(--neutral-300);
@@ -251,6 +271,27 @@
     let settingsState = {};
     let settingsAccount = null;
     let settingsCanEdit = false;
+    let settingsVersion = null;
+    let settingsConflicted = false;
+    let settingsDirty = false;
+    let settingsFormState = null;
+
+    function setSettingsDirty(dirty) {
+      settingsDirty = Boolean(dirty);
+      const status = document.getElementById('settingsDirtyStatus');
+      if (settingsConflicted) {
+        status.dataset.state = 'conflict';
+        status.textContent = 'Conflict detected. Your values remain here; reload before saving.';
+      } else if (settingsDirty) {
+        status.dataset.state = 'dirty';
+        status.textContent = 'Unsaved changes.';
+      } else {
+        status.dataset.state = 'clean';
+        status.textContent = 'No unsaved changes.';
+      }
+      const saveButton = document.getElementById('saveSettingsBtn');
+      if (saveButton) saveButton.disabled = !settingsCanEdit || settingsConflicted || !settingsDirty;
+    }
 
     function synchronizeCompanyInfoControls(source) {
       const companyInfo = document.getElementById('companyInfo');
@@ -263,16 +304,22 @@
     function applySettingsAccess(account) {
       const role = account && account.membership ? account.membership.role : '';
       settingsCanEdit = role === 'owner' || role === 'admin';
+      const demo = window.location.pathname.startsWith('/demo/');
+      const roleLabel = role === 'owner' ? 'Owner' : role === 'admin' ? 'Admin'
+        : role === 'viewer' ? 'Viewer' : role === 'member' ? 'Member' : 'Unavailable';
+      document.getElementById('settingsRoleBadge').textContent = demo
+        ? 'Demo preview · Read only'
+        : (settingsCanEdit ? 'Editable · ' : 'Read only · ') + roleLabel;
       document.querySelectorAll('[data-settings-mutable]').forEach(element => {
         element.disabled = !settingsCanEdit;
       });
       const saveButton = document.getElementById('saveSettingsBtn');
-      saveButton.disabled = !settingsCanEdit;
-      saveButton.hidden = !settingsCanEdit;
+      saveButton.disabled = true;
+      saveButton.hidden = false;
       saveButton.textContent = 'Save Changes';
       document.getElementById('settingsAccessStatus').textContent = settingsCanEdit
-        ? 'Your durable account membership can edit these settings.'
-        : 'These settings are protected by your account role.';
+        ? 'Your role can edit these workspace settings.'
+        : 'Read-only access. An owner or admin can make changes.';
     }
 
     function renderSettingsState() {
@@ -302,10 +349,15 @@
           NorthStarAccountSession.load(),
           NorthStarAccountSession.json('/api/account/preferences', { method: 'GET' }),
         ]);
-        settingsAccount = account;
-        settingsState = stored.preferences || {};
-        renderSettingsState();
-        applySettingsAccess(account);
+          settingsAccount = account;
+          settingsState = stored.preferences || {};
+          settingsVersion = stored.version || null;
+          settingsConflicted = false;
+          renderSettingsState();
+          applySettingsAccess(account);
+          if (settingsFormState) settingsFormState.clear();
+          setSettingsDirty(false);
+          document.getElementById('reloadSettingsBtn').hidden = true;
         authority.dataset.state = 'ready';
       } catch (error) {
         settingsCanEdit = false;
@@ -338,17 +390,27 @@
       saveButton.disabled = true;
       saveButton.textContent = 'Saving…';
       try {
+        const payload = { ...writableSettings(settings), expectedVersion: settingsVersion };
         const saved = await NorthStarAccountSession.json('/api/account/preferences', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(settings)),
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
         });
         settingsState = saved.preferences || settings;
+        settingsVersion = saved.version || settingsVersion;
+        settingsConflicted = false;
         renderSettingsState();
         window.dispatchEvent(new CustomEvent('northstar:form-saved'));
-        showToast('✅ Settings saved successfully!');
+        setSettingsDirty(false);
+        showToast('Settings saved successfully.');
       } catch (error) {
+        if (error && (error.status === 409 || error.code === 'preferences_version_conflict')) {
+          settingsConflicted = true;
+          document.getElementById('reloadSettingsBtn').hidden = false;
+          setSettingsDirty(true);
+          window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
+        }
         showToast(error.message || 'Settings could not be saved.', 'error');
       } finally {
-        saveButton.disabled = !settingsCanEdit;
+        saveButton.disabled = !settingsCanEdit || settingsConflicted || !settingsDirty;
         saveButton.textContent = 'Save Changes';
       }
     }
@@ -369,12 +431,22 @@
     function saveContacts(contacts) {
       if (!settingsCanEdit) return;
       const nextState = Object.assign({}, settingsState, { contacts: contacts });
+      const payload = Object.assign({}, writableSettings(nextState), { expectedVersion: settingsVersion });
       NorthStarAccountSession.json('/api/account/preferences', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(writableSettings(nextState)),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       }).then(function(saved) {
         settingsState = saved.preferences || nextState;
+        settingsVersion = saved.version || settingsVersion;
         renderContacts();
-      }).catch(function(error) { showToast(error.message, 'error'); });
+      }).catch(function(error) {
+        if (error && (error.status === 409 || error.code === 'preferences_version_conflict')) {
+          settingsConflicted = true;
+          document.getElementById('reloadSettingsBtn').hidden = false;
+          setSettingsDirty(true);
+          window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
+        }
+        showToast(error.message, 'error');
+      });
     }
 
     function renderContacts() {
@@ -462,6 +534,15 @@
     document.getElementById('companyInfoAiContext').addEventListener('input', function() {
       synchronizeCompanyInfoControls(this);
     });
+    document.getElementById('mainContent').addEventListener('input', function(event) {
+      if (event.target.matches('[data-settings-mutable]')) setSettingsDirty(true);
+    });
+    document.getElementById('mainContent').addEventListener('change', function(event) {
+      if (event.target.matches('[data-settings-mutable]')) setSettingsDirty(true);
+    });
+    document.getElementById('reloadSettingsBtn').addEventListener('click', function() {
+      loadSettings().catch(function(error) { showToast(error.message || 'Settings unavailable', 'error'); });
+    });
     loadSettings().catch(function(error) { showToast(error.message || 'Settings unavailable', 'error'); });
   </script>
   <script src="/js/notification-service.js"></script>
@@ -470,7 +551,7 @@
   <script src="/js/nav-component.js"></script>
   <script src="/js/knowledge-management.js"></script>
   <script src="/js/workspace-form-state.js"></script>
-  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn' });</script>
+  <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn' });</script>
   <script>NavComponent.init("settings");</script>
 </body>
 </html>

@@ -12,7 +12,8 @@
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <style>
-    .wf-shell{display:grid;gap:20px;max-width:1240px}.wf-panel{background:var(--theme-surface);border:1px solid var(--neutral-200);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)}
+    .wf-shell{display:grid;gap:20px;width:100%;max-width:none}.wf-panel{background:var(--theme-surface);border:1px solid var(--neutral-200);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)}
+    .wf-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;width:100%;margin-bottom:20px}.wf-overview-card{min-width:0;padding:16px;border:1px solid var(--neutral-200);border-radius:var(--radius-md);background:var(--theme-surface)}.wf-overview-label{display:block;color:var(--neutral-500);font-size:12px;font-weight:700}.wf-overview-value{display:block;margin-top:6px;color:var(--neutral-900);font-family:var(--font-numeric);font-size:24px;font-weight:700;overflow-wrap:anywhere}.wf-overview-access{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border:1px solid var(--neutral-200);border-radius:var(--radius-md);background:var(--neutral-50);color:var(--neutral-700);font-size:13px}.wf-overview-access strong{color:var(--neutral-900)}
     .wf-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.wf-panel h2{font-size:18px;margin:0}.wf-panel-desc{color:var(--neutral-500);font-size:13px;margin:5px 0 0}
     .wf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.wf-card{border:1px solid var(--neutral-200);border-radius:var(--radius-md);padding:16px;background:var(--theme-surface);min-width:0}
     .wf-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.wf-card h3{font-size:16px;margin:0;overflow-wrap:anywhere}.wf-meta{font-size:12px;color:var(--neutral-500);margin:5px 0 13px;overflow-wrap:anywhere}
@@ -25,7 +26,7 @@
     .wf-readonly{padding:10px 12px;border-radius:var(--radius-sm);background:var(--neutral-50);font-size:12px;color:var(--neutral-500);margin-bottom:14px}
     .wf-summary{display:grid;gap:10px;margin-top:14px}.wf-summary-row{display:grid;grid-template-columns:minmax(110px,.45fr) minmax(0,1fr);gap:12px;padding-top:10px;border-top:1px solid var(--neutral-200)}.wf-summary-label{color:var(--neutral-500);font-size:12px;font-weight:700;margin:0}.wf-summary-value{color:var(--neutral-800);font-size:13px;overflow-wrap:anywhere;margin:0}
     [data-theme="dark"] .wf-panel,[data-theme="dark"] .wf-card{background:var(--neutral-50);border-color:var(--neutral-200)}[data-theme="dark"] .wf-readonly{background:var(--neutral-100)}
-    @media(max-width:700px){.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-checks,.wf-crew-members{grid-template-columns:minmax(0,1fr)}.wf-check>label{flex:1 1 auto}.wf-check>input[type="radio"]{margin-left:auto}.wf-actions .btn{width:100%}.wf-summary-row{grid-template-columns:1fr;gap:4px}}
+    @media(max-width:700px){.wf-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.wf-overview-access{align-items:flex-start;flex-direction:column}.wf-panel{padding:16px}.wf-panel-head{flex-direction:column}.wf-form-grid{grid-template-columns:1fr}.wf-grid{grid-template-columns:1fr}.wf-checks,.wf-crew-members{grid-template-columns:minmax(0,1fr)}.wf-check>label{flex:1 1 auto}.wf-check>input[type="radio"]{margin-left:auto}.wf-actions .btn{width:100%}.wf-summary-row{grid-template-columns:1fr;gap:4px}}
   </style>
   <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
@@ -38,6 +39,13 @@
         <span class="wf-badge" id="workforceAuthority">Role-authorized workspace</span>
       </div>
       <p id="workforceStatus" class="wf-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      <section class="wf-overview" id="workforceSummary" aria-label="Team summary" aria-busy="true">
+        <div class="wf-overview-card"><span class="wf-overview-label">People</span><span class="wf-overview-value" data-workforce-summary="members">—</span></div>
+        <div class="wf-overview-card"><span class="wf-overview-label">Crews</span><span class="wf-overview-value" data-workforce-summary="crews">—</span></div>
+        <div class="wf-overview-card"><span class="wf-overview-label">Skills</span><span class="wf-overview-value" data-workforce-summary="skills">—</span></div>
+        <div class="wf-overview-card"><span class="wf-overview-label">Pending invites</span><span class="wf-overview-value" data-workforce-summary="invitations">—</span></div>
+        <div class="wf-overview-access"><strong>Workspace access</strong><span id="workforceAccessSummary">Loading role authority…</span></div>
+      </section>
       <div class="wf-shell" id="workforceShell" aria-busy="true">
         <section class="wf-panel" id="invitePanel" hidden aria-labelledby="inviteTitle">
           <div class="wf-panel-head"><div><h2 id="inviteTitle">Invite a team member</h2><p class="wf-panel-desc">Each person receives an individual account. Owner credentials are never shared.</p></div></div>
@@ -134,6 +142,26 @@
     function isDemoMode() { return window.location.pathname.startsWith('/demo/'); }
     function canManage() { return !isDemoMode() && state.account && ['owner','admin'].includes(state.account.membership.role); }
     function isOwner() { return !isDemoMode() && state.account && state.account.membership.role === 'owner'; }
+    function accessSummary() {
+      if (isDemoMode()) return 'Demo preview · Read only';
+      var role = state.account && state.account.membership ? state.account.membership.role : 'unavailable';
+      return (canManage() ? 'Editable · ' : 'Read only · ') + labelFor([['owner','Owner'],['admin','Admin'],['member','Member'],['viewer','Viewer']], role, role);
+    }
+    function renderSummary() {
+      var counts = {
+        members: state.data.members.length,
+        crews: state.data.crews.length,
+        skills: state.data.skills.length,
+        invitations: isOwner() ? state.data.invitations.length : 0
+      };
+      Object.keys(counts).forEach(function(key) {
+        var target = document.querySelector('[data-workforce-summary="' + key + '"]');
+        if (target) target.textContent = String(counts[key]);
+      });
+      document.getElementById('workforceAccessSummary').textContent = accessSummary();
+      document.getElementById('workforceAuthority').textContent = accessSummary();
+      document.getElementById('workforceSummary').setAttribute('aria-busy', 'false');
+    }
     function fillSelect(select, entries, selected, emptyLabel) {
       select.replaceChildren();
       if (emptyLabel) select.appendChild(option(null, emptyLabel, selected));
@@ -455,7 +483,7 @@
     }
     function render() {
       state.policies = JSON.parse(JSON.stringify(state.data.policies || []));
-      renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
+      renderSummary(); renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
       document.getElementById('workforceShell').removeAttribute('inert');
       document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
       document.documentElement.setAttribute('data-workforce-state', 'ready');

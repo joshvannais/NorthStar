@@ -43,7 +43,8 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(page).not.toContain("node('p', 'km-item-key', detail.entry.canonicalKey)");
     expect(page).toContain('detailDisclosed: false');
     expect(page).toContain('if (!state.detailDisclosed)');
-    expect(page).toContain('Choose this knowledge item to inspect its exact version, provenance, lifecycle, and synchronization details.');
+    expect(page).toContain('Choose an available knowledge item to see its approved information.');
+    expect(page).toContain("node('summary', '', 'Advanced evidence')");
     expect(css).toMatch(/\.km-item-key, \.km-mono\s*\{\s*font-family:\s*var\(--font-body, inherit\);/);
     expect(css).not.toMatch(/\.km-item-key, \.km-mono\s*\{[^}]*monospace/);
   });

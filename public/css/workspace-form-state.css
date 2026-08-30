@@ -5,4 +5,13 @@
   padding: 10px 12px 10px 16px; position: fixed; transform: translateX(-50%); width: calc(100% - 32px); z-index: 950;
 }
 .northstar-sticky-save[hidden] { display: none; }
+.northstar-sticky-save-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.northstar-sticky-save-copy strong { overflow-wrap: anywhere; }
+.northstar-sticky-save-role { color: var(--neutral-500); font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
+.northstar-sticky-save-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; }
+@media (max-width: 520px) {
+  .northstar-sticky-save { align-items: stretch; flex-direction: column; gap: 8px; }
+  .northstar-sticky-save-actions { width: 100%; }
+  .northstar-sticky-save-actions .btn { flex: 1 1 auto; }
+}
 @media (min-width: 769px) { .northstar-sticky-save { left: calc(50% + 120px); } }

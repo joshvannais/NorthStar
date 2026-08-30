@@ -14,6 +14,13 @@ function rows(result) {
   return result && Array.isArray(result.rows) ? result.rows : [];
 }
 
+function preferenceVersion(value) {
+  if (!value) return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 async function expireAccountEmailJobs(client, batchSize) {
   const result = await client.query(
     `WITH active AS MATERIALIZED (
@@ -606,7 +613,11 @@ class AccountRepository {
               notification.sms_urgent,
               notification.notification_email,
               notification.notification_phone,
-              account.preferences AS internal_preferences
+              account.preferences AS internal_preferences,
+              TO_CHAR(
+                GREATEST(notification.updated_at AT TIME ZONE 'UTC', account.updated_at) AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+              ) AS preference_version
          FROM public.notification_preferences notification
          JOIN public.organization_account_preferences account
            ON account.organization_id = notification.organization_id
@@ -616,11 +627,15 @@ class AccountRepository {
     return rows(result)[0] || null;
   }
 
-  async updateAccountPreferences(organizationId, notification, internalPreferences) {
+  async updateAccountPreferences(organizationId, notification, internalPreferences, expectedVersion = null) {
     try {
       return await this.transaction(async client => {
         const authority = await client.query(
-          `SELECT notification.organization_id
+          `SELECT notification.organization_id,
+                  TO_CHAR(
+                    GREATEST(notification.updated_at AT TIME ZONE 'UTC', account.updated_at) AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                  ) AS preference_version
              FROM public.notification_preferences notification
              JOIN public.organization_account_preferences account
                ON account.organization_id = notification.organization_id
@@ -629,6 +644,10 @@ class AccountRepository {
           [organizationId]
         );
         if (authority.rowCount !== 1) return null;
+        const currentVersion = preferenceVersion(authority.rows[0].preference_version);
+        if (expectedVersion && expectedVersion !== currentVersion) {
+          return { conflict: true, preference_version: authority.rows[0].preference_version };
+        }
 
         const notificationResult = await client.query(
           `UPDATE public.notification_preferences
@@ -642,7 +661,8 @@ class AccountRepository {
                   updated_at = NOW()
             WHERE organization_id = $1
             RETURNING email_new_lead, email_call_summary, email_appointment,
-                      sms_new_lead, sms_urgent, notification_email, notification_phone`,
+                      sms_new_lead, sms_urgent, notification_email, notification_phone,
+                      TO_CHAR(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS preference_version`,
           [
             organizationId,
             notification.emailNewLead,
@@ -667,6 +687,7 @@ class AccountRepository {
         return {
           ...notificationResult.rows[0],
           internal_preferences: internalResult.rows[0].preferences,
+          preference_version: notificationResult.rows[0].preference_version,
         };
       });
     } catch (error) {

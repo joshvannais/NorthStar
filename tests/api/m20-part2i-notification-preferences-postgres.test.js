@@ -219,6 +219,39 @@ realPostgres('Mission 20 Part 2I mounted canonical notification preferences', ()
     ]);
   });
 
+  test('stale Settings saves fail with a durable version conflict and preserve the winning bytes', async () => {
+    const loaded = await request(app)
+      .get('/api/account/preferences')
+      .set(sessions.owner.headers);
+    expect(loaded.status).toBe(200);
+    expect(loaded.body.version).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
+
+    const winning = writable({
+      emailAddress: 'winner@example.test',
+      smsNumber: '+1 860 555 0140',
+    });
+    const saved = await request(app)
+      .put('/api/account/preferences')
+      .set(sessions.admin.headers)
+      .send({ ...winning, expectedVersion: loaded.body.version });
+    expect(saved.status).toBe(200);
+    expect(saved.body.version).not.toBe(loaded.body.version);
+
+    const stale = await request(app)
+      .put('/api/account/preferences')
+      .set(sessions.owner.headers)
+      .send({ ...writable({ emailAddress: 'stale@example.test' }), expectedVersion: loaded.body.version });
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({ code: 'preferences_version_conflict', version: saved.body.version });
+
+    const readback = await request(app)
+      .get('/api/account/preferences')
+      .set(sessions.viewer.headers);
+    expect(readback.status).toBe(200);
+    expect(readback.body.version).toBe(saved.body.version);
+    expect(readback.body.preferences).toMatchObject(winning);
+  });
+
   test('malformed, unknown, read-only, oversized, and foreign-tenant values fail closed', async () => {
     const missing = writable();
     delete missing.smsUrgent;

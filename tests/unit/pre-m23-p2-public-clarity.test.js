@@ -93,12 +93,15 @@ describe('Pre-Mission-23 P2 public clarity', () => {
     expect(html).toContain('does not replace acceptance on every physical device');
   });
 
-  test('prepares a support email without pretending a local draft is a received case', () => {
+  test('routes bug reports to durable authenticated authority and keeps general email drafts truthful', () => {
     const html = read('public/contact.html');
     expect(html).toContain('id="contactDraftForm"');
-    expect(html).toContain('<option value="Report a bug">Report a bug</option>');
+    expect(html).not.toContain('<option value="Report a bug">Report a bug</option>');
+    expect(html).toContain('href="/dashboard/report-a-bug"');
+    expect(html).toContain('A successful submission receives a durable case reference and organization history');
+    expect(html).toContain('public visitors cannot submit a case or see report history');
     expect(html).toContain('id="contactTitle"');
-    expect(html).toContain('attach it in your email app');
+    expect(html).toContain('Use the signed-in Report a Bug page for a bounded screenshot and durable case.');
     expect(html).toContain("'NS-DRAFT-'");
     expect(html).toContain("localStorage.setItem('northstar_support_drafts'");
     expect(html).toContain('It is not a received support case, ticket number, or delivery confirmation.');

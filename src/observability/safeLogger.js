@@ -10,6 +10,7 @@ const COMPONENTS = new Set([
   'observability',
   'retell',
   'smtp',
+  'support',
   'twilio',
   'voice',
 ]);
@@ -44,6 +45,8 @@ const EVENTS = new Set([
   'escalation_resolved',
   'headers_create_failed',
   'headers_created',
+  'forwarding_failed',
+  'forwarding_tick_failed',
   'invalid_log_event',
   'intelligence_context_unavailable',
   'intelligence_context_updated',

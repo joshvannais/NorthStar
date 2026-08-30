@@ -12,6 +12,7 @@
   'use strict';
 
   var ACTIVE_PAGE = '';
+  var AUXILIARY_PAGES = { 'report-a-bug': true };
   var bodyOverflowBeforeMenu = '';
 
   var NAV_ITEMS = [
@@ -58,11 +59,18 @@
     return html;
   }
 
+  function supportAction() {
+    return '<a class="northstar-nav-action" href="/dashboard/report-a-bug" data-support-action>' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+      '<path d="M8 2h8l1 4 3 2v8l-3 2-1 4H8l-1-4-3-2V8l3-2 1-4Z"/>' +
+      '<path d="M9 9h6M9 13h6M12 17h.01"/></svg><span>Report a Bug</span></a>';
+  }
+
   function buildMobileNav(items, mode) {
     var homePath = mode === 'demo' ? '/demo' : '/dashboard';
     var footerLink = mode === 'demo'
       ? '<a class="northstar-nav-action" href="/" id="navExitDemo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg><span>Exit Demo</span></a>'
-      : '<button type="button" class="northstar-nav-action" id="navSignOut" data-account-logout aria-label="Sign Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></button>';
+      : supportAction() + '<button type="button" class="northstar-nav-action" id="navSignOut" data-account-logout aria-label="Sign Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></button>';
     return '' +
       '<style id="nav-critical-css">' +
         '#mobileOverlay.mobile-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;}' +
@@ -97,7 +105,7 @@
     var homePath = mode === 'demo' ? '/demo' : '/dashboard';
     var footerLink = mode === 'demo'
       ? '<a class="northstar-nav-action" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg><span>Exit Demo</span></a>'
-      : '<button type="button" class="northstar-nav-action" data-account-logout aria-label="Sign Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></button>';
+      : supportAction() + '<button type="button" class="northstar-nav-action" data-account-logout aria-label="Sign Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></button>';
     return '' +
       '<aside class="sidebar">' +
         '<a href="' + homePath + '" class="sidebar-logo northstar-lockup">' +
@@ -248,7 +256,8 @@
           return null;
         }
 
-        var activeAllowed = items.some(function(item) { return item.id === ACTIVE_PAGE; });
+        var activeAllowed = AUXILIARY_PAGES[ACTIVE_PAGE] === true ||
+          items.some(function(item) { return item.id === ACTIVE_PAGE; });
         if (!activeAllowed) {
           root.setAttribute('data-northstar-navigation', 'denied');
           if (items.some(function(item) { return item.id === 'command-center'; })) {
@@ -315,7 +324,7 @@
         // Profile, Settings, and Integrations. That setup authority is useful on
         // broad operator pages but is intentionally not applicable to the
         // minimized employee Today surface.
-        if (ACTIVE_PAGE !== 'today') {
+        if (ACTIVE_PAGE !== 'today' && AUXILIARY_PAGES[ACTIVE_PAGE] !== true) {
           if (!document.querySelector('link[data-northstar-workspace-guidance]')) {
             var guidanceStyles = document.createElement('link');
             guidanceStyles.rel = 'stylesheet';

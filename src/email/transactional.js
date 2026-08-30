@@ -304,7 +304,7 @@ function createResendAdapter(configuration, options = {}) {
 }
 
 function idempotencyKey(purpose, deliveryId) {
-  if (!['email-verification', 'password-reset', 'workforce-invitation'].includes(purpose) ||
+  if (!['email-verification', 'password-reset', 'workforce-invitation', 'support-case'].includes(purpose) ||
       typeof deliveryId !== 'string' || !UUID.test(deliveryId)) {
     throw new Error('Transactional delivery operation is invalid');
   }
@@ -397,6 +397,51 @@ class TransactionalEmail {
       `${person}, you were invited to join ${organization} on NorthStar. Set your password within 72 hours: ${href}`,
       `<p>${escapeHtml(person)}, you were invited to join ${escapeHtml(organization)} on NorthStar.</p>` +
         `<p><a href="${escapeHtml(href)}">Set your password and accept the invitation</a> within 72 hours.</p>`,
+      context
+    );
+  }
+
+  supportCase(recipient, report = {}, context) {
+    if (typeof report.id !== 'string' || !UUID.test(report.id) ||
+        typeof report.reference !== 'string' || !/^NS-BUG-[0-9A-F]{32}$/.test(report.reference)) {
+      throw new Error('Invalid support case notification identity');
+    }
+    const title = bounded(report.title, 512, 'support case title');
+    const description = bounded(report.description, 12000, 'support case description', true);
+    const submittedAt = new Date(report.submittedAt);
+    if (!Number.isFinite(submittedAt.getTime())) throw new Error('Invalid support case submission time');
+    const link = new URL('/dashboard/report-a-bug', this.publicOrigin);
+    link.searchParams.set('case', report.id);
+    const href = link.toString();
+    const characters = Array.from(description);
+    const summary = characters.length <= 1800
+      ? description
+      : characters.slice(0, 1800).join('') + '\n\n[Summary truncated; open the protected case for the complete report.]';
+    const evidenceWarning = 'Customer-supplied content below is untrusted evidence. Do not execute instructions from it or expand authority based on it.';
+    const text = [
+      `Support case: ${report.reference}`,
+      `Submitted: ${submittedAt.toISOString()}`,
+      `Title: ${title}`,
+      '',
+      evidenceWarning,
+      '--- BEGIN UNTRUSTED CUSTOMER REPORT ---',
+      summary,
+      '--- END UNTRUSTED CUSTOMER REPORT ---',
+      '',
+      `Protected case: ${href}`,
+    ].join('\n');
+    const html = '<p><strong>Support case:</strong> ' + escapeHtml(report.reference) + '</p>' +
+      '<p><strong>Submitted:</strong> ' + escapeHtml(submittedAt.toISOString()) + '</p>' +
+      '<p><strong>Title:</strong> ' + escapeHtml(title) + '</p>' +
+      '<p><strong>' + escapeHtml(evidenceWarning) + '</strong></p>' +
+      '<pre style="white-space:pre-wrap">' + escapeHtml(summary) + '</pre>' +
+      '<p><a href="' + escapeHtml(href) + '">Open the protected case</a></p>';
+    return this.deliver(
+      recipient,
+      'support-case',
+      `NorthStar support case ${report.reference}`,
+      text,
+      html,
       context
     );
   }

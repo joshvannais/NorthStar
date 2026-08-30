@@ -16,6 +16,7 @@
     .contact-hero h1 { margin-bottom: 10px; font-size: clamp(30px, 6vw, 46px); }
     .contact-hero p { max-width: 620px; margin: 0 auto; color: var(--theme-muted); font-size: 17px; line-height: 1.65; }
     .contact-card { padding: clamp(24px, 6vw, 40px); background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); }
+    .contact-card + .contact-card { margin-top: 24px; }
     .contact-address { display: block; margin: 18px 0; color: var(--brand-700); font-size: clamp(18px, 5vw, 26px); font-weight: 700; overflow-wrap: anywhere; }
     [data-theme="dark"] .contact-address { color: var(--brand-300); }
     .contact-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
@@ -51,13 +52,22 @@
     <header class="contact-hero">
       <p class="demo-eyebrow">NorthStar Support</p>
       <h1>How can we help?</h1>
-      <p>For product questions, account help, or a support request, email the NorthStar team directly.</p>
+      <p>Signed-in customers can create a durable bug case. Product and account questions can still be prepared as an email.</p>
     </header>
 
+    <section class="contact-card" aria-labelledby="bugReportHeading">
+      <h2 id="bugReportHeading">Report a Bug Securely</h2>
+      <p>NorthStar’s signed-in Report a Bug page accepts a required title and description plus one optional screenshot. A successful submission receives a durable case reference and organization history before email forwarding is considered.</p>
+      <p class="contact-boundary"><strong>Authentication boundary:</strong> public visitors cannot submit a case or see report history. If you are not already signed in, NorthStar will take you to sign in without claiming that a report was received.</p>
+      <div class="contact-actions">
+        <a class="btn btn-primary" href="/dashboard/report-a-bug">Sign In to Report a Bug</a>
+      </div>
+    </section>
+
     <section class="contact-card" aria-labelledby="contactEmailHeading">
-      <h2 id="contactEmailHeading">Prepare an Email to NorthStar</h2>
+      <h2 id="contactEmailHeading">Prepare a General Support Email</h2>
       <a class="contact-address" href="mailto:Support@northstar-os.ai">Support@northstar-os.ai</a>
-      <p>Use the fields below to prepare a message with a local draft reference. Do not send passwords, API keys, payment-card details, medical information, or other sensitive data.</p>
+      <p>Use the fields below for product questions, account help, enterprise usage review, or accessibility feedback. Bug reports use the authenticated case page above. Do not send passwords, API keys, payment-card details, medical information, or other sensitive data.</p>
       <form class="contact-form" id="contactDraftForm">
         <div class="contact-form-grid">
           <div class="form-group"><label for="contactName">Your name</label><input id="contactName" name="name" autocomplete="name" maxlength="120" required></div>
@@ -66,7 +76,6 @@
         <div class="form-group">
           <label for="contactTopic">Topic</label>
           <select id="contactTopic" name="topic" required>
-            <option value="Report a bug">Report a bug</option>
             <option value="Product question">Product question</option>
             <option value="Account support">Account support</option>
             <option value="Enterprise usage review">Enterprise usage review</option>
@@ -75,7 +84,7 @@
         </div>
         <div class="form-group"><label for="contactTitle">Title</label><input id="contactTitle" name="title" maxlength="160" required></div>
         <div class="form-group"><label for="contactMessage">Description</label><textarea id="contactMessage" name="message" maxlength="4000" required></textarea></div>
-        <p class="contact-boundary">To include a screenshot, attach it in your email app after NorthStar prepares the message. This browser page cannot attach or upload a file and does not send the message automatically.</p>
+        <p class="contact-boundary">This general-contact form cannot attach or upload a file and does not send the message automatically. Use the signed-in Report a Bug page for a bounded screenshot and durable case.</p>
         <button class="btn btn-primary" type="submit">Prepare Email</button>
       </form>
       <div class="contact-reference" id="contactReference" role="status" aria-live="polite"></div>

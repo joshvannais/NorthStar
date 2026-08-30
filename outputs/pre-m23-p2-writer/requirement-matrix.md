@@ -2,7 +2,7 @@
 
 Scope: `PUB-01..PUB-20` only, based exactly on released P1 main `f4c1092e0b99f14be79ef4866fc208e523032ce5`.
 
-P2 changes presentation, navigation, and conservative public copy. It does not create plan allowances, Enterprise eligibility, a support-ticket backend, provider connectivity, new legal terms, or production authority.
+P2 changes presentation, navigation, conservative public copy, and the specifically authorized durable Report-a-Bug authority. It does not create plan allowances, Enterprise eligibility, live-provider readiness, new legal terms, or unrelated production authority.
 
 | ID | Writer implementation and verification |
 |---|---|
@@ -19,7 +19,7 @@ P2 changes presentation, navigation, and conservative public copy. It does not c
 | PUB-11 | Homepage and FAQ use one explicit readiness vocabulary: available now, account-free demo, requires setup, coming soon, and awaiting approval. No static copy claims a live provider connection. |
 | PUB-12 | FAQ “On this page” destinations are shared-theme button controls with visible keyboard focus and responsive stacking. |
 | PUB-13 | FAQ coverage expands to onboarding, demo data, privacy/control, human approval, accessibility, pricing, integrations, maps, and support without adding plan/provider/legal facts. |
-| PUB-14 | Contact provides a labeled Report-a-bug/support email preparation flow with title, description, reply address, and a local draft reference. The UI states that the reference is not a received case and that screenshots must be attached in the email application. A durable support case/history remains unavailable without an authorized support backend. |
+| PUB-14 | Contact routes signed-in customers to an authenticated Report-a-Bug page. Required title and description plus one optional bounded PNG/JPEG/WebP screenshot commit atomically to tenant-scoped PostgreSQL case, immutable history, attachment provenance, and provider-neutral forwarding outbox authority. The UI shows a durable reference, a conservative no-response-time expectation, and truthful pending/retry/provider-accepted/unavailable forwarding state; public general-email drafts remain explicitly non-authoritative. |
 | PUB-15 | Sign-in includes a direct, clearly labeled account-free demo path. |
 | PUB-16 | Forgot-password includes the common footer and a non-enumerating, provider-dependent delivery expectation. |
 | PUB-17 | Privacy gains keyboard contents/navigation only. The existing exact-base retention period and provider-category sentences are preserved verbatim; P2 adds no attorney-dependent facts. |
@@ -33,6 +33,7 @@ P2 changes presentation, navigation, and conservative public copy. It does not c
 - No plan allocation, allowance, Enterprise threshold/price, annual term, provider readiness, certification, SLA, retention period, or legal entitlement is introduced.
 - The exact-base 14-day-trial, retention, provider-category, billing, refund, and service-description statements are carried forward without substantive expansion.
 - A prepared `mailto:` draft is not an automatic send, a received support case, a provider delivery result, or an authenticated support history.
+- A committed support case is authoritative before notification; it does not claim live provider delivery, mailbox receipt, user visual approval, or a retention term.
 
 ## Evidence boundaries
 

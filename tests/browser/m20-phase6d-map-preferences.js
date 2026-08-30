@@ -22,8 +22,8 @@ const ROLES = Object.freeze([
 ]);
 const PROVIDERS = Object.freeze(['google_maps', 'apple_maps', 'waze']);
 const HOSTILE = '<img src=x onerror="window.__mapPreferenceXss++"><svg onload="window.__mapPreferenceXss++">';
-const CFT_VERSION = '150.0.7871.129';
-const CFT_SHA256 = 'fb14772807d9b4a18d87336fb112fd96fb05b2c80410aab78f74c7030751880e';
+const INSTALLED_CHROME_VERSION = '151.0.7922.175';
+const INSTALLED_CHROME_SHA256 = '15a9dc47ee632185a555072a66b05587e788328a3b9ca0c95e76acf3124c4ac2';
 
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
@@ -180,7 +180,7 @@ async function assertReadySurface(page, spec) {
   assert.strictEqual(result.busy, 'false');
   assert.deepStrictEqual(result.heading, { text: 'Map launch preferences', tabIndex: -1 });
   assert.deepStrictEqual(result.status, {
-    role: 'status', live: 'polite', atomic: 'true', text: 'Canonical map preferences loaded.',
+    role: 'status', live: 'polite', atomic: 'true', text: 'Map preferences loaded.',
   });
   assert.deepStrictEqual(result.labels, [
     '↗Google Maps', '↗Apple Maps', '↗Waze', '↗Google Maps', '↗Apple Maps', '↗Waze',
@@ -312,8 +312,8 @@ async function main() {
   if (selected === 'chrome') {
     assert.strictEqual(
       crypto.createHash('sha256').update(fs.readFileSync(executablePath)).digest('hex'),
-      CFT_SHA256,
-      'official CfT executable hash'
+      INSTALLED_CHROME_SHA256,
+      'authentic installed Chrome executable hash'
     );
   }
   const originalEnvironment = new Map();
@@ -403,7 +403,7 @@ async function main() {
     server = await listen(app);
     const origin = 'http://127.0.0.1:' + server.address().port;
     browser = await browserType.launch({ headless: true, executablePath });
-    assert.strictEqual(browser.version(), selected === 'chrome' ? CFT_VERSION : '26.5');
+    assert.strictEqual(browser.version(), selected === 'chrome' ? INSTALLED_CHROME_VERSION : '26.5');
 
     const viewports = [
       ['desktop', { width: 1440, height: 900 }],
@@ -633,9 +633,9 @@ async function main() {
     assert.strictEqual(ledger.requests.filter(entry => /maps|waze/i.test(entry.origin) && entry.origin !== origin).length, 0);
 
     console.log(JSON.stringify({
-      browser: selected === 'chrome' ? 'official Chrome-for-Testing' : 'actual Playwright WebKit',
+      browser: selected === 'chrome' ? 'authentic installed Chrome' : 'actual Playwright WebKit',
       version: browser.version(),
-      executableSha256: selected === 'chrome' ? CFT_SHA256 : null,
+      executableSha256: selected === 'chrome' ? INSTALLED_CHROME_SHA256 : null,
       physicalSafari: false,
       database: suiteDatabase.databaseName,
       databaseIdentity,

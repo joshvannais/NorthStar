@@ -164,7 +164,7 @@ async function authorityDigest(pool) {
 }
 
 async function integrationSnapshot(page) {
-  return page.evaluate(() => ({
+  return page.evaluate(({ internalProviderKeys, mapProviderKeys }) => ({
     state: document.getElementById('integrationCatalogueRoot').dataset.state,
     authority: document.getElementById('integrationAuthority').textContent,
     retell: document.getElementById('integration-provider-retell-status').textContent.trim(),
@@ -177,10 +177,10 @@ async function integrationSnapshot(page) {
     stripeState: document.getElementById('integration-provider-stripe-status').dataset.status,
     categoryKeys: Array.from(document.querySelectorAll('[data-category-key]'), node => node.dataset.categoryKey),
     providerKeys: Array.from(document.querySelectorAll('[data-provider-key]'), node => node.dataset.providerKey),
-    internalProviderKeys: INTERNAL_PROVIDER_KEYS.filter(key => document.querySelector('[data-provider-key="' + key + '"]')),
+    internalProviderKeys: internalProviderKeys.filter(key => document.querySelector('[data-provider-key="' + key + '"]')),
     detailedProviderKeys: Array.from(document.querySelectorAll('[data-provider-key] .integration-details'), node =>
       node.closest('[data-provider-key]').dataset.providerKey),
-    compactMapProviders: MAP_PROVIDER_KEYS.map(key => {
+    compactMapProviders: mapProviderKeys.map(key => {
       const card = document.querySelector('[data-provider-key="' + key + '"]');
       return card ? {
         key,
@@ -204,7 +204,7 @@ async function integrationSnapshot(page) {
     xss: window.__integrationXss,
     poisonVisible: /LEGACY STRIPE MUST NOT CONNECT|legacy-calendar|onerror=/.test(document.body.textContent),
     overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-  }));
+  }), { internalProviderKeys: INTERNAL_PROVIDER_KEYS, mapProviderKeys: MAP_PROVIDER_KEYS });
 }
 
 function assertIntegrationSnapshot(value, label) {

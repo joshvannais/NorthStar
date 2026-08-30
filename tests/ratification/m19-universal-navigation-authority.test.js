@@ -86,7 +86,8 @@ describe('Mission 19 universal navigation authority', () => {
     expect(source).toMatch(/contractRoute\.demoPath/);
     expect(source).toMatch(/data-northstar-navigation/);
     expect(source).not.toMatch(/ROLE_PERMISSIONS|owner\s*:\s*\[|viewer\s*:\s*\[/);
-    expect(source).toMatch(/href="\/login"[^>]*data-account-logout/);
+    expect(source).toMatch(/<button[^>]*class="northstar-nav-action"[^>]*data-account-logout/);
+    expect(source).not.toMatch(/href="\/login"[^>]*data-account-logout/);
   });
 
   test('all three mounted exceptions contain only a canonical placeholder and delegate once', () => {

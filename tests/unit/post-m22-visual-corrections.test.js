@@ -269,7 +269,8 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(page).toContain("byId('commandCenterAuthority').textContent = demo ? 'Demo Data' : 'Workspace Data';");
     expect(page).toContain("byId('commandCenterStatePill').hidden = true;");
     expect(page).toContain('status.hidden = !message');
-    expect(page).toContain("definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '.';");
+    expect(page).toContain("definition.textContent = 'Review current scheduling records in ' + overview.timeZone + '.';");
+    expect(page).not.toContain("definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments");
     expect(page).not.toContain('overview.definitions[schedulingCategory]');
     expect(scheduling).toMatch(/\.m22-authority-heading > div\s*\{\s*display:\s*grid;\s*gap:\s*6px;/);
     expect(calendar).not.toContain('New work originates from');
@@ -283,7 +284,8 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     const command = source('public/js/command-center-page.js');
     const commandCss = source('public/css/demo-dashboard.css');
 
-    expect(today).toMatch(/\.today-readonly-badge\s*\{[\s\S]*min-height:\s*44px;[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*400;[\s\S]*justify-content:\s*center;/);
+    expect(today).toMatch(/\.today-refresh\s*\{[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*600;/);
+    expect(today).toMatch(/\.today-readonly-badge\s*\{[\s\S]*min-height:\s*44px;[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*600;[\s\S]*justify-content:\s*center;/);
     expect(today).toMatch(/\.today-state-badge,[\s\S]*font-family:\s*var\(--font-body, inherit\);[\s\S]*font-weight:\s*600;/);
     expect(command).toContain('function formatCompactDate(value, suppliedTimeZone)');
     expect(command).toContain("time.title = fullDate || date");
@@ -295,9 +297,10 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
   test('keeps Reload actions consistently separated from state copy and card boundaries', () => {
     const css = source('public/css/today.css');
 
-    expect(css).toMatch(/\.today-state-panel\s*\{[\s\S]*row-gap:\s*18px;/);
-    expect(css).toMatch(/\.today-state-action\s*\{\s*grid-column:\s*2;[\s\S]*justify-self:\s*start;/);
-    expect(css).toMatch(/@media \(max-width:\s*768px\)[\s\S]*\.today-state-action\s*\{\s*grid-column:\s*1 \/ -1;[\s\S]*margin-top:\s*0;/);
+    expect(css).toMatch(/\.today-state-panel\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*justify-items:\s*center;[\s\S]*gap:\s*20px;[\s\S]*text-align:\s*center;/);
+    expect(css).toMatch(/\.today-state-copy\s*\{[\s\S]*gap:\s*10px;/);
+    expect(css).toMatch(/\.today-state-action\s*\{[\s\S]*justify-self:\s*center;[\s\S]*margin-top:\s*2px;/);
+    expect(css).toMatch(/@media \(max-width:\s*768px\)[\s\S]*\.today-state-action\s*\{\s*width:\s*min\(100%, 360px\);[\s\S]*margin-top:\s*0;/);
   });
 
   test('uses structured scheduling state rows and deduplicated attention indicators', () => {

@@ -72,6 +72,38 @@
     return svg;
   }
 
+  function menuIcon() {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    ['M4 7h16', 'M4 12h16', 'M4 17h16'].forEach(function(pathData) {
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', pathData);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  function closeIcon() {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    ['M6 6l12 12', 'M18 6 6 18'].forEach(function(pathData) {
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', pathData);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
   function signOutButton() {
     var button = node('button', 'today-sign-out');
     button.type = 'button';
@@ -113,12 +145,13 @@
     var fragment = document.createDocumentFragment();
     var header = node('div', 'mobile-header');
     header.dataset.northstarFixedHeader = '';
-    var toggle = node('button', 'hamburger-btn', 'NorthStar');
+    var toggle = node('button', 'hamburger-btn');
     toggle.type = 'button';
     toggle.id = 'todayMenuToggle';
     toggle.setAttribute('aria-controls', 'todayMobileMenu');
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-label', 'Open navigation menu');
+    toggle.append(menuIcon(), node('span', '', 'NorthStar'));
     var headerActions = node('div', 'mobile-header-actions');
     var logo = image();
     logo.alt = 'NorthStar';
@@ -140,10 +173,11 @@
     menu.setAttribute('inert', '');
     var menuHeader = node('div', 'mobile-menu-header');
     menuHeader.appendChild(brand());
-    var close = node('button', 'mobile-menu-close', '×');
+    var close = node('button', 'mobile-menu-close');
     close.type = 'button';
     close.id = 'todayMenuClose';
     close.setAttribute('aria-label', 'Close navigation menu');
+    close.appendChild(closeIcon());
     menuHeader.appendChild(close);
     var navigation = node('nav', 'mobile-menu-nav');
     navigation.setAttribute('aria-label', 'Today navigation');

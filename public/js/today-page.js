@@ -29,6 +29,15 @@
   function presentationText(value, fallback) {
     return displayProjection().text(value, fallback);
   }
+  function stableDomIdentifier(value) {
+    var text = String(value || 'unavailable');
+    var hash = 2166136261;
+    for (var index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return 'today-job-' + (hash >>> 0).toString(16);
+  }
   function formatInstant(value, timeZone, options) {
     var instant = new Date(value);
     if (!Number.isFinite(instant.getTime())) return 'Time unavailable';
@@ -112,11 +121,12 @@
     var accent = element('div', 'today-card-accent');
     accent.setAttribute('aria-hidden', 'true');
     var body = element('article', 'today-card-body');
-    body.setAttribute('aria-labelledby', 'today-job-' + record.appointmentId);
+    var headingId = stableDomIdentifier(record.appointmentId);
+    body.setAttribute('aria-labelledby', headingId);
     var heading = element('div', 'today-card-heading');
     var title = element('div');
     var jobTitle = element('h3', '', presentationText(record.title, 'Job title unavailable'));
-    jobTitle.id = 'today-job-' + record.appointmentId;
+    jobTitle.id = headingId;
     append(title, jobTitle, element('p', 'today-card-service', presentationText(record.serviceType, 'Service type unavailable')));
     var badges = element('div', 'today-badges', null);
     append(badges,

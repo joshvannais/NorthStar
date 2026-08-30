@@ -103,6 +103,7 @@
 
   function buildSidebar(items, mode) {
     var homePath = mode === 'demo' ? '/demo' : '/dashboard';
+    var footerClass = mode === 'demo' ? 'sidebar-footer' : 'sidebar-footer sidebar-footer-paid';
     var footerLink = mode === 'demo'
       ? '<a class="northstar-nav-action" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg><span>Exit Demo</span></a>'
       : supportAction() + '<button type="button" class="northstar-nav-action" data-account-logout aria-label="Sign Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></button>';
@@ -115,7 +116,7 @@
         '<nav class="sidebar-nav">' +
           makeNavLinks(false, items) +
         '</nav>' +
-        '<div class="sidebar-footer">' +
+        '<div class="' + footerClass + '">' +
           footerLink +
           '<span class="northstar-theme-slot" data-northstar-theme-slot data-northstar-theme-location="desktop" aria-label="Theme controls"></span>' +
         '</div>' +

@@ -153,6 +153,120 @@ async function assertNoOverflow(page, label) {
   }));
   assert.ok(Math.max(result.body, result.root) <= result.viewport + 1, `${label} overflowed: ${JSON.stringify(result)}`);
 }
+function assertSeparated(first, second, label) {
+  const overlapX = Math.min(first.right, second.right) - Math.max(first.left, second.left);
+  const overlapY = Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top);
+  assert.ok(overlapX <= 0 || overlapY <= 0, `${label} controls overlap: ${JSON.stringify({ first, second })}`);
+}
+async function controlGeometry(page, selector) {
+  return page.locator(selector).evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const label = element.querySelector('span:not(.sr-only)');
+    const labelRect = label ? label.getBoundingClientRect() : null;
+    return {
+      left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+      width: rect.width, height: rect.height,
+      clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+      clientHeight: element.clientHeight, scrollHeight: element.scrollHeight,
+      labelLeft: labelRect && labelRect.left, labelRight: labelRect && labelRect.right,
+      text: (element.textContent || '').trim(), ariaLabel: element.getAttribute('aria-label') || '',
+    };
+  });
+}
+function assertControlLegible(control, label, viewportWidth, hasVisibleText) {
+  assert.ok(control.width > 0 && control.height > 0, `${label} has no rendered box: ${JSON.stringify(control)}`);
+  assert.ok(control.left >= -1 && control.right <= viewportWidth + 1, `${label} left the viewport: ${JSON.stringify(control)}`);
+  if (hasVisibleText) {
+    assert.ok(control.scrollWidth <= control.clientWidth + 1, `${label} clips horizontally: ${JSON.stringify(control)}`);
+    assert.ok(control.labelLeft >= control.left - 1 && control.labelRight <= control.right + 1,
+      `${label} text leaves its control: ${JSON.stringify(control)}`);
+  }
+}
+async function waitForMobileMenuSettled(page, open) {
+  await page.waitForFunction(expectedOpen => {
+    const menu = document.querySelector('#mobileMenu');
+    if (!menu) return false;
+    const rect = menu.getBoundingClientRect();
+    return expectedOpen ? Math.abs(rect.left) <= 1 : rect.right <= 1;
+  }, open);
+}
+async function captureNavigationEvidence(page, evidenceRoot, fixture) {
+  const mobile = fixture.viewport.width <= 768;
+  const supportSelector = mobile
+    ? '#mobileMenu [data-support-action]'
+    : '.sidebar-footer-paid > [data-support-action]';
+  const signOutSelector = mobile
+    ? '#mobileMenu [data-account-logout]'
+    : '.sidebar-footer-paid > [data-account-logout]';
+  const themeSelector = mobile
+    ? '.mobile-header [data-northstar-theme-toggle]'
+    : '.sidebar-footer-paid [data-northstar-theme-toggle]';
+  if (mobile) {
+    await page.locator('#navHamburgerBtn').focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#mobileMenu[data-state="open"]').waitFor({ state: 'visible' });
+    await waitForMobileMenuSettled(page, true);
+    await page.locator(supportSelector).scrollIntoViewIfNeeded();
+  }
+  for (const selector of [supportSelector, signOutSelector, themeSelector]) {
+    await page.locator(selector).waitFor({ state: 'visible' });
+  }
+  assert.strictEqual((await page.locator(supportSelector).innerText()).trim(), 'Report a Bug');
+  assert.strictEqual((await page.locator(signOutSelector).innerText()).trim(), 'Sign Out');
+  assert.match(await page.locator(themeSelector).getAttribute('aria-label'), /^Switch to (?:light|dark) theme$/);
+  assert.strictEqual(await page.locator(themeSelector).getAttribute('data-current-theme'), fixture.theme);
+
+  const support = await controlGeometry(page, supportSelector);
+  const signOut = await controlGeometry(page, signOutSelector);
+  const theme = await controlGeometry(page, themeSelector);
+  assertControlLegible(support, `${fixture.label} Report a Bug`, fixture.viewport.width, true);
+  assertControlLegible(signOut, `${fixture.label} Sign Out`, fixture.viewport.width, true);
+  assertControlLegible(theme, `${fixture.label} theme`, fixture.viewport.width, false);
+  assertSeparated(support, signOut, `${fixture.label} support/sign-out`);
+  if (!mobile) {
+    assertSeparated(support, theme, `${fixture.label} support/theme`);
+    assertSeparated(signOut, theme, `${fixture.label} sign-out/theme`);
+  }
+
+  await page.locator(supportSelector).focus();
+  assert.strictEqual(await page.evaluate(selector => document.activeElement === document.querySelector(selector), supportSelector), true);
+  await page.keyboard.press('Tab');
+  assert.strictEqual(await page.evaluate(selector => document.activeElement === document.querySelector(selector), signOutSelector), true);
+  if (mobile) {
+    await page.keyboard.press('Escape');
+    await page.locator('#mobileMenu[data-state="closed"]').waitFor({ state: 'attached' });
+    await waitForMobileMenuSettled(page, false);
+  } else {
+    await page.keyboard.press('Tab');
+    assert.strictEqual(await page.evaluate(selector => document.activeElement === document.querySelector(selector), themeSelector), true);
+  }
+  await page.locator(themeSelector).focus();
+  await page.keyboard.press('Enter');
+  const toggledTheme = fixture.theme === 'dark' ? 'light' : 'dark';
+  await page.locator(`html[data-theme="${toggledTheme}"]`).waitFor({ state: 'attached' });
+  await page.keyboard.press('Enter');
+  await page.locator(`html[data-theme="${fixture.theme}"]`).waitFor({ state: 'attached' });
+
+  if (mobile) {
+    await page.locator('#navHamburgerBtn').focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#mobileMenu[data-state="open"]').waitFor({ state: 'visible' });
+    await waitForMobileMenuSettled(page, true);
+    await page.locator(supportSelector).scrollIntoViewIfNeeded();
+    await page.locator(signOutSelector).focus();
+  }
+  const filename = path.join(evidenceRoot, `${fixture.label}-navigation.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  if (mobile) {
+    await page.keyboard.press('Escape');
+    await page.locator('#mobileMenu[data-state="closed"]').waitFor({ state: 'attached' });
+    await waitForMobileMenuSettled(page, false);
+  }
+  return {
+    file: path.basename(filename), sha256: fileHash(filename), viewport: fixture.viewport,
+    theme: fixture.theme, kind: fixture.kind, controls: ['Report a Bug', 'Sign Out', 'theme'],
+  };
+}
 async function createPage(browser, origin, session, fixture) {
   const context = await browser.newContext({ viewport: fixture.viewport, colorScheme: fixture.theme });
   await context.addCookies(cookies(session, origin));
@@ -181,6 +295,7 @@ async function submitFixture(browser, origin, session, evidenceRoot, fixture) {
   assert.ok(await page.locator('[data-support-action][href="/dashboard/report-a-bug"]').count() >= 1);
   assert.ok(await page.locator('footer a[href="/dashboard/report-a-bug"]').count() >= 1);
   await assertNoOverflow(page, fixture.label);
+  const navigation = await captureNavigationEvidence(page, evidenceRoot, fixture);
 
   await page.locator('#supportTitle').fill(fixture.title);
   await page.locator('#supportDescription').fill(fixture.description);
@@ -223,7 +338,25 @@ async function submitFixture(browser, origin, session, evidenceRoot, fixture) {
   return {
     file: path.basename(filename), sha256: fileHash(filename), reference,
     viewport: fixture.viewport, theme: fixture.theme, kind: fixture.kind,
+    navigation,
   };
+}
+async function captureNavigationFixture(browser, origin, session, evidenceRoot, fixture) {
+  const runtime = await createPage(browser, origin, session, fixture);
+  const { context, page, errors, external } = runtime;
+  try {
+    await page.goto(origin + '/dashboard/report-a-bug', { waitUntil: 'domcontentloaded' });
+    await page.locator('#supportFormSection:not([hidden])').waitFor({ state: 'visible' });
+    await page.locator('html[data-northstar-navigation="ready"]').waitFor({ state: 'attached' });
+    assert.strictEqual(await page.locator('html').getAttribute('data-theme'), fixture.theme);
+    await assertNoOverflow(page, fixture.label);
+    const evidence = await captureNavigationEvidence(page, evidenceRoot, fixture);
+    assert.deepStrictEqual(errors, []);
+    assert.deepStrictEqual(external, []);
+    return evidence;
+  } finally {
+    await context.close();
+  }
 }
 async function unauthenticatedBoundary(browser, origin) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -274,6 +407,14 @@ async function main() {
     browser = await resolved.browserType.launch({ headless: true, executablePath: resolved.executablePath });
     await unauthenticatedBoundary(browser, origin);
 
+    const navigationOnly = [];
+    for (const fixture of [
+      { label: `${browserName}-desktop-1440-dark-ordinary`, viewport: { width: 1440, height: 900 }, theme: 'dark', kind: 'ordinary' },
+      { label: `${browserName}-mobile-390-light-ordinary`, viewport: { width: 390, height: 844 }, theme: 'light', kind: 'ordinary' },
+    ]) {
+      navigationOnly.push(await captureNavigationFixture(browser, origin, sessions.owner, ordinaryRoot, fixture));
+    }
+
     const ordinary = await submitFixture(browser, origin, sessions.owner, ordinaryRoot, {
       label: `${browserName}-desktop-light-keyboard-ordinary`,
       viewport: { width: 1280, height: 900 }, theme: 'light', keyboard: true, attachment: true,
@@ -291,12 +432,13 @@ async function main() {
     const manifest = {
       version: 'pre-m23-p2-support-browser-v1', browser: browserName,
       testedRevision, testedTree, generatedAt: new Date().toISOString(), providerCalls: 0,
-      evidence: [ordinary, hostile], unavailable: { physicalSafari: true, physicalDevices: true },
+      evidence: [ordinary, hostile], navigationOnly, unavailable: { physicalSafari: true, physicalDevices: true },
     };
     const manifestPath = path.join(baseEvidence, `${browserName}-manifest.json`);
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
     console.log(JSON.stringify({
-      browser: browserName, manifestPath, ordinary, hostile, providerCalls: 0, testedRevision, testedTree,
+      browser: browserName, manifestPath, ordinary, hostile, navigationOnly,
+      providerCalls: 0, testedRevision, testedTree,
     }, null, 2));
   } finally {
     if (browser) await browser.close().catch(() => {});

@@ -109,6 +109,16 @@ describe('Pre-Mission-23 P2 public clarity', () => {
     expect(html).not.toContain('/api/contact');
   });
 
+  test('gives every paid desktop sidebar action a bounded legible grid area', () => {
+    const navigation = read('public/js/nav-component.js');
+    const css = read('public/css/site-professionalism.css');
+    expect(navigation).toContain("mode === 'demo' ? 'sidebar-footer' : 'sidebar-footer sidebar-footer-paid'");
+    expect(css).toMatch(/\.sidebar-footer-paid\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/s);
+    expect(css).toMatch(/\.sidebar-footer-paid\s*>\s*\[data-support-action\]\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*width:\s*100%;/s);
+    expect(css).toMatch(/\.sidebar-footer-paid\s*>\s*\[data-account-logout\]\s*\{[^}]*width:\s*100%;/s);
+    expect(css).toMatch(/\.sidebar-footer-paid \.northstar-theme-slot\s*\{[^}]*margin-left:\s*0;[^}]*justify-self:\s*end;/s);
+  });
+
   test('keeps signup minimal, login demo-forward, and reset delivery non-enumerating', () => {
     const signup = read('public/signup.html');
     const login = read('public/login.html');

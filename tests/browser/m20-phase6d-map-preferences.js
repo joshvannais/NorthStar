@@ -24,12 +24,6 @@ const PROVIDERS = Object.freeze(['google_maps', 'apple_maps', 'waze']);
 const HOSTILE = '<img src=x onerror="window.__mapPreferenceXss++"><svg onload="window.__mapPreferenceXss++">';
 const CFT_VERSION = '150.0.7871.129';
 const CFT_SHA256 = 'fb14772807d9b4a18d87336fb112fd96fb05b2c80410aab78f74c7030751880e';
-const MAP_CATALOGUE_DESCRIPTION =
-  'Canonical provider preferences are managed in the Map launch preferences panel below; ' +
-  'provider connection and destination-launch/navigation actions are not included.';
-const MAP_CATALOGUE_BASIS =
-  'Connection catalogue only; canonical provider preferences are managed below; ' +
-  'destination-launch/navigation actions are deferred';
 
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
@@ -144,6 +138,15 @@ async function assertReadySurface(page, spec) {
         state: catalogue.dataset.state,
         categories: document.querySelectorAll('#integrationCategoryList > li').length,
         providers: document.querySelectorAll('#integrationCategoryList [data-provider-key]').length,
+        internalProviders: ['twilio', 'openai', 'elevenlabs'].filter(key =>
+          document.querySelector('[data-provider-key="' + key + '"]')),
+        allCustomerFacingFilter: (() => {
+          const button = document.querySelector('[data-integration-filter="all"]');
+          return button ? {
+            pressed: button.getAttribute('aria-pressed'),
+            text: button.textContent.trim(),
+          } : null;
+        })(),
       },
       jobber: jobber ? {
         status: jobber.querySelector('.integration-status').textContent.trim(),
@@ -152,16 +155,21 @@ async function assertReadySurface(page, spec) {
       } : null,
       mapCatalogue: ['google_maps', 'apple_maps', 'waze'].map(function(key) {
         const card = document.querySelector('[data-provider-key="' + key + '"]');
-        const details = Array.from(card.querySelectorAll('dt,dd')).map(node => node.textContent.trim());
-        const basisIndex = details.indexOf('Status basis');
         return {
           key,
-          description: card.querySelector('.integration-card-description').textContent.trim(),
+          compact: card.classList.contains('integration-card-map'),
+          name: card.querySelector('h4').textContent.trim(),
           status: card.querySelector('.integration-status').textContent.trim(),
-          basis: details[basisIndex + 1],
+          descriptions: card.querySelectorAll('.integration-card-description').length,
+          details: card.querySelectorAll('.integration-details').length,
           actions: card.querySelectorAll('button,a').length,
         };
       }),
+      preferenceScopes: [organization, user].map(scope => ({
+        id: scope.id,
+        summary: scope.querySelector('summary').textContent.trim(),
+        providerKeys: Array.from(scope.querySelectorAll('[data-map-provider]'), node => node.dataset.mapProvider),
+      })),
       unsafe: root.querySelectorAll('img,svg,script,a[href]').length,
       urls: Array.from(root.querySelectorAll('[href]')).map(node => node.getAttribute('href')),
       xss: window.__mapPreferenceXss,
@@ -180,20 +188,27 @@ async function assertReadySurface(page, spec) {
   assert.ok(result.glyphs.every(glyph => glyph.text === '↗' && glyph.hidden === 'true'));
   assert.strictEqual(result.organizationLabel, 'organizationMapPreferencesHeading');
   assert.strictEqual(result.userLabel, 'userMapPreferencesHeading');
-  assert.deepStrictEqual(result.catalogue, { state: 'ready', categories: 7, providers: 26 });
+  assert.deepStrictEqual(result.catalogue, {
+    state: 'ready', categories: 7, providers: 23, internalProviders: [],
+    allCustomerFacingFilter: { pressed: 'true', text: 'All customer-facing23 providers' },
+  });
   assert.ok(result.jobber);
   assert.strictEqual(result.jobber.status, 'Coming soon');
   assert.strictEqual(result.jobber.buttons, 0);
   assert.match(result.jobber.text, /Source-disabled|source-disabled/i);
   assert.deepStrictEqual(result.mapCatalogue, PROVIDERS.map(key => ({
     key,
-    description: MAP_CATALOGUE_DESCRIPTION,
+    compact: true,
+    name: key === 'google_maps' ? 'Google Maps' : key === 'apple_maps' ? 'Apple Maps' : 'Waze',
     status: 'Coming soon',
-    basis: MAP_CATALOGUE_BASIS,
+    descriptions: 0,
+    details: 0,
     actions: 0,
   })));
-  assert.ok(result.mapCatalogue.every(provider =>
-    !/preference(?:s)?(?: and launcher logic)? (?:are )?(?:absent|not included)/i.test(provider.description)));
+  assert.deepStrictEqual(result.preferenceScopes, [
+    { id: 'mapPreferencesOrganization', summary: 'Company default', providerKeys: PROVIDERS },
+    { id: 'mapPreferencesUser', summary: 'My preference', providerKeys: PROVIDERS },
+  ], 'compact catalogue cards do not replace separately durable Company default and My preference authority');
   assert.strictEqual(result.unsafe, 0);
   assert.deepStrictEqual(result.urls, []);
   assert.strictEqual(result.xss, 0);

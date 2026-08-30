@@ -27,7 +27,7 @@ const EXPECTED_CATEGORIES = Object.freeze([
   'enterprise_assets_inventory',
 ]);
 const EXPECTED_PROVIDERS = Object.freeze([
-  'retell', 'voice', 'twilio', 'openai', 'elevenlabs', 'email',
+  'retell', 'voice', 'email',
   'google_calendar', 'microsoft_calendar', 'apple_calendar',
   'quickbooks', 'stripe', 'square',
   'jobber', 'housecall_pro', 'servicetitan', 'salesforce',
@@ -35,6 +35,11 @@ const EXPECTED_PROVIDERS = Object.freeze([
   'google_maps', 'apple_maps', 'waze',
   'procore', 'netsuite', 'dynamics_365', 'samsara', 'fleetio',
 ]);
+const INTERNAL_PROVIDER_KEYS = Object.freeze(['twilio', 'openai', 'elevenlabs']);
+const MAP_PROVIDER_KEYS = Object.freeze(['google_maps', 'apple_maps', 'waze']);
+const DETAILED_PROVIDER_KEYS = Object.freeze(EXPECTED_PROVIDERS.filter(
+  key => !MAP_PROVIDER_KEYS.includes(key)
+));
 
 const LEGACY_INTEGRATIONS = Object.freeze({
   retell: Object.freeze({ enabled: false, label: '  </span><img src=x onerror=window.__integrationXss++>  ' }),
@@ -172,7 +177,26 @@ async function integrationSnapshot(page) {
     stripeState: document.getElementById('integration-provider-stripe-status').dataset.status,
     categoryKeys: Array.from(document.querySelectorAll('[data-category-key]'), node => node.dataset.categoryKey),
     providerKeys: Array.from(document.querySelectorAll('[data-provider-key]'), node => node.dataset.providerKey),
-    detailCount: document.querySelectorAll('.integration-details').length,
+    internalProviderKeys: INTERNAL_PROVIDER_KEYS.filter(key => document.querySelector('[data-provider-key="' + key + '"]')),
+    detailedProviderKeys: Array.from(document.querySelectorAll('[data-provider-key] .integration-details'), node =>
+      node.closest('[data-provider-key]').dataset.providerKey),
+    compactMapProviders: MAP_PROVIDER_KEYS.map(key => {
+      const card = document.querySelector('[data-provider-key="' + key + '"]');
+      return card ? {
+        key,
+        compact: card.classList.contains('integration-card-map'),
+        descriptionCount: card.querySelectorAll('.integration-card-description').length,
+        detailCount: card.querySelectorAll('.integration-details').length,
+        status: card.querySelector('.integration-status').textContent.trim(),
+      } : null;
+    }),
+    allCustomerFacingFilter: (() => {
+      const button = document.querySelector('[data-integration-filter="all"]');
+      return button ? {
+        pressed: button.getAttribute('aria-pressed'),
+        text: button.textContent.trim(),
+      } : null;
+    })(),
     providerActions: document.querySelectorAll('[data-provider-key] button,[data-provider-key] a[href],form').length,
     modalCount: document.querySelectorAll('.modal-overlay,#connectModal').length,
     inputCount: document.querySelectorAll('#integrationCatalogueRoot input').length,
@@ -192,8 +216,18 @@ function assertIntegrationSnapshot(value, label) {
   assert.deepStrictEqual([value.jobberState, value.jobber], ['coming_soon', 'Coming soon'], label + ': source-disabled Jobber is not presented as connected or disconnected');
   assert.deepStrictEqual([value.stripeState, value.stripe], ['requires_provider_approval', 'Requires provider approval'], label + ': subscription is not provider connection authority');
   assert.deepStrictEqual(value.categoryKeys, EXPECTED_CATEGORIES, label + ': exact stable category order');
-  assert.deepStrictEqual(value.providerKeys, EXPECTED_PROVIDERS, label + ': exact stable provider order');
-  assert.strictEqual(value.detailCount, EXPECTED_PROVIDERS.length, label + ': every provider exposes read-only authority detail');
+  assert.deepStrictEqual(value.providerKeys, EXPECTED_PROVIDERS,
+    label + ': exact customer-facing provider order excludes internal implementation entries');
+  assert.deepStrictEqual(value.internalProviderKeys, [],
+    label + ': Twilio, OpenAI, and ElevenLabs remain absent from the customer-facing catalogue');
+  assert.deepStrictEqual(value.detailedProviderKeys, DETAILED_PROVIDER_KEYS,
+    label + ': non-map providers retain their read-only authority disclosures');
+  assert.deepStrictEqual(value.compactMapProviders, MAP_PROVIDER_KEYS.map(key => ({
+    key, compact: true, descriptionCount: 0, detailCount: 0, status: 'Coming soon',
+  })), label + ': map catalogue cards remain compact while preserving truthful availability');
+  assert.deepStrictEqual(value.allCustomerFacingFilter, {
+    pressed: 'true', text: 'All customer-facing23 providers',
+  }, label + ': the selected filter truthfully identifies the complete customer-facing catalogue');
   assert.strictEqual(value.providerActions, 0, label + ': provider cards expose no actions or forms');
   assert.strictEqual(value.modalCount, 0, label + ': decorative connection modal is retired');
   assert.strictEqual(value.inputCount, 0, label + ': no credentials or decorative values are collected');

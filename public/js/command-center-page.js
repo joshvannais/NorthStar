@@ -475,7 +475,7 @@
     var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
     if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
     var page = overview.page || { shown: overview.records.length, total: overview.records.length };
-    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '.';
+    definition.textContent = 'Review current scheduling records in ' + overview.timeZone + '.';
     categoryNames.forEach(function (name) {
       var count = name === 'all' ? overview.total : overview.counts[name];
       var button = element('button', 'm22-category-button');

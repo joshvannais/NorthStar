@@ -33,6 +33,22 @@ html body option {
 html {
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: var(--font-sans);
+  --font-numeric: var(--font-sans);
+
+  /* Pre-Mission-23 P1 presentation contract. Page modules retain their own
+     authority and behavior; these tokens give every mounted route one visual
+     vocabulary for rails, cards, controls, headings, and responsive gutters. */
+  --northstar-rail-max: 1400px;
+  --northstar-reading-rail: 1120px;
+  --northstar-page-gutter: clamp(16px, 3vw, 40px);
+  --northstar-page-block-gap: clamp(20px, 3vw, 32px);
+  --northstar-card-padding: clamp(18px, 2.4vw, 26px);
+  --northstar-card-radius: 18px;
+  --northstar-control-height: 44px;
+  --northstar-control-radius: 12px;
+  --northstar-page-title-size: clamp(30px, 4vw, 42px);
+  --northstar-page-title-line: 1.08;
 }
 
 html body {
@@ -49,7 +65,7 @@ html body :is(h1, h2, h3, h4, h5, h6, .page-title, .bp-title, .stat-label, .ds-k
 html body :is(h1, h2, h3, h4, h5, h6, .page-title, .bp-title) {
   font-weight: 700;
   letter-spacing: -.02em;
-  text-transform: capitalize;
+  text-transform: none;
 }
 
 html body .theme-toggle {
@@ -1102,5 +1118,281 @@ html body .demo-table-wrap th {
 
   html body .company-information-row > .form-group:first-child {
     margin-bottom: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Pre-Mission-23 P1 shared design-system and shell foundation
+   -------------------------------------------------------------------------- */
+
+html body {
+  font-family: var(--font-body) !important;
+  font-synthesis: none;
+}
+
+html body :is(
+  .stat-value,
+  .ds-kpi-value,
+  .ds-hero-kpi-value,
+  .demo-kpi-card strong,
+  .demo-polaris-metrics strong,
+  .cc-kpi-value,
+  .cc-rev-val,
+  .eb-stat-value,
+  .cal-kpi-num,
+  .price,
+  .stats-bar-value,
+  .polaris-report-value,
+  .polaris-report-kpi-value,
+  [data-northstar-numeric]
+) {
+  font-family: var(--font-numeric) !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: -.02em;
+}
+
+html body :is(
+  .main-content,
+  .dashboard-main,
+  .dashboard-content,
+  .demo-dashboard-main,
+  .command-center-blueprint-main
+) {
+  min-width: 0;
+}
+
+html body :is(
+  .dashboard-main,
+  .dashboard-content,
+  .demo-dashboard-main,
+  .command-center-blueprint-main
+) {
+  width: min(calc(100% - (2 * var(--northstar-page-gutter))), var(--northstar-rail-max));
+  max-width: var(--northstar-rail-max);
+  margin-inline: auto;
+}
+
+html body :is(
+  .page-header h1,
+  .page-title,
+  .bp-title,
+  .cal-title,
+  .polaris-inline-name,
+  .command-center-blueprint-main > .page-header h1
+) {
+  font-family: var(--font-display) !important;
+  font-size: var(--northstar-page-title-size) !important;
+  font-weight: 700 !important;
+  line-height: var(--northstar-page-title-line) !important;
+  letter-spacing: -.035em !important;
+}
+
+html body .polaris-inline-brand {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+html body :is(.polaris-inline-star, .polaris-welcome-icon, .polaris-card-mark, .demo-polaris-mark, .polaris-empty-state-icon) {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  min-width: 1em;
+  color: transparent !important;
+  font-family: var(--font-body) !important;
+  line-height: 1;
+}
+
+html body :is(.polaris-inline-star, .polaris-welcome-icon, .polaris-card-mark, .demo-polaris-mark, .polaris-empty-state-icon)::before {
+  content: '';
+  display: block;
+  width: .72em;
+  height: .72em;
+  background: var(--northstar-brand-gold);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+}
+
+html body :is(
+  .card,
+  .settings-section,
+  .stat-card,
+  .ds-card,
+  .ds-kpi-card,
+  .demo-panel,
+  .demo-kpi-card,
+  .m22-authority-overview
+) {
+  border-color: var(--theme-border);
+  border-radius: var(--northstar-card-radius);
+}
+
+html body :is(
+  .card,
+  .settings-section,
+  .stat-card,
+  .ds-card,
+  .ds-kpi-card,
+  .demo-kpi-card,
+  .m22-authority-overview
+) {
+  padding: var(--northstar-card-padding);
+}
+
+html body :is(
+  .btn,
+  .today-sign-out,
+  .northstar-nav-action,
+  .m22-action-button,
+  .m22-category-button
+) {
+  min-height: var(--northstar-control-height);
+  border-radius: var(--northstar-control-radius);
+  font-family: var(--font-body) !important;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+html body :is(
+  .btn,
+  .today-sign-out,
+  .northstar-nav-action,
+  .m22-action-button,
+  .m22-category-button
+):disabled,
+html body :is(.btn, .today-sign-out, .northstar-nav-action)[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: .58;
+  transform: none !important;
+}
+
+html body .northstar-nav-action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: auto;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text);
+  background: var(--theme-surface-soft);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+html body .northstar-nav-action:hover {
+  border-color: color-mix(in srgb, var(--northstar-brand-gold) 48%, var(--theme-border));
+  color: var(--northstar-brand-gold);
+  background: var(--theme-surface);
+}
+
+html body .northstar-nav-action svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+html body .sidebar-footer .northstar-nav-action {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+html body .mobile-menu-footer .northstar-nav-action {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+html body .northstar-site-footer {
+  align-self: stretch;
+  width: 100%;
+  margin-top: clamp(38px, 7vw, 80px);
+  padding-inline: var(--northstar-page-gutter);
+  border-top-color: var(--theme-border);
+  background: transparent;
+}
+
+html body .northstar-site-footer .footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px clamp(14px, 2vw, 24px);
+  max-width: var(--northstar-reading-rail);
+  margin: 0 auto;
+  text-align: center;
+}
+
+html body .northstar-site-footer .footer-links a {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  line-height: 1.2;
+}
+
+html body .northstar-site-footer .footer-links a:focus-visible {
+  outline-offset: 2px;
+}
+
+html body :is(.mobile-header, .demo-dashboard-header, .command-center-blueprint-header) {
+  max-width: 100%;
+}
+
+html body .mobile-header[data-northstar-fixed-header] {
+  inset: 0 0 auto 0;
+  width: 100%;
+}
+
+html body .m22-state-summary {
+  gap: 10px;
+}
+
+html body .m22-state-item {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 76%, transparent);
+  background: var(--theme-surface-soft);
+}
+
+html body .m22-state-list {
+  gap: 8px;
+}
+
+html body .m22-state-chip {
+  font-family: var(--font-body) !important;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+@media (max-width: 768px) {
+  html body {
+    --northstar-page-gutter: 12px;
+    --northstar-card-padding: 16px;
+    --northstar-page-title-size: clamp(28px, 9vw, 36px);
+  }
+
+  html body :is(
+    .dashboard-main,
+    .dashboard-content,
+    .demo-dashboard-main,
+    .command-center-blueprint-main
+  ) {
+    width: calc(100% - (2 * var(--northstar-page-gutter)));
+  }
+
+  html body .mobile-header[data-northstar-fixed-header] {
+    position: fixed !important;
+    top: 0 !important;
+  }
+}
+
+@media (max-width: 430px), (max-resolution: 1dppx) and (max-width: 860px) {
+  html body :is(.card, .stat-card, .ds-card, .ds-kpi-card, .demo-panel, .demo-kpi-card) {
+    max-width: 100%;
+    min-width: 0;
   }
 }

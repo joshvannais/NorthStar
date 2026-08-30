@@ -3,10 +3,21 @@
 .today-page *::before,
 .today-page *::after { box-sizing: border-box; }
 .today-page .command-center-blueprint-shell { min-width: 0; padding: 0; }
-.today-header { position: sticky; top: 0; z-index: 300; }
+.today-header {
+  position: sticky;
+  top: 0;
+  z-index: 300;
+  width: 100%;
+  margin: 0;
+  background: var(--theme-header);
+  isolation: isolate;
+}
 .today-header .demo-dashboard-brand { display: none; }
-.today-header .demo-dashboard-header-inner { justify-content: flex-end; }
+.today-header .demo-dashboard-header-inner { min-width: 0; justify-content: flex-end; }
+.today-header .demo-dashboard-header-actions { min-width: 0; max-width: 100%; }
 .today-header #todayAuthority {
+  flex: 0 1 auto;
+  min-width: 0;
   min-height: 0;
   max-width: min(55vw, 56ch);
   padding: 0;
@@ -26,11 +37,13 @@
   border: 1px solid var(--theme-border);
   background: var(--theme-surface);
   cursor: pointer;
-  font: inherit;
+  font-family: var(--font-body, inherit);
   font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
 }
 .today-refresh:disabled { cursor: wait; opacity: 0.68; }
-.today-main { width: min(calc(100% - 32px), 1040px); padding-top: clamp(26px, 5vw, 52px); }
+.today-main { width: min(calc(100% - (2 * var(--northstar-page-gutter, 16px))), 1040px); padding-top: clamp(26px, 5vw, 52px); }
 .today-page-title { align-items: flex-end; margin-bottom: 22px; }
 .today-page-actions {
   display: flex;
@@ -38,9 +51,10 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 5px;
+  min-width: 0;
+  padding: 6px;
   border: 1px solid var(--theme-border);
-  border-radius: 12px;
+  border-radius: var(--northstar-control-radius, 12px);
   background: var(--theme-surface-soft);
 }
 .today-page-title .demo-panel-kicker { margin-bottom: 6px; }
@@ -74,9 +88,10 @@
   padding: 9px 14px;
   border: 0;
   background: transparent;
-  font: inherit;
+  font-family: var(--font-body, inherit);
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 650;
+  line-height: 1.2;
   justify-content: center;
 }
 .today-scope-note,
@@ -114,16 +129,25 @@
 @keyframes today-shimmer { to { background-position: -220% 0; } }
 .today-state-panel {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   align-items: center;
-  column-gap: 20px;
-  row-gap: 18px;
+  gap: 20px;
   padding: clamp(20px, 5vw, 34px);
+  text-align: center;
 }
-.today-state-icon { color: var(--northstar-brand-gold); font-size: 28px; }
+.today-state-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  color: var(--northstar-brand-gold);
+}
+.today-state-icon svg { display: block; width: 34px; height: 34px; }
+.today-state-copy { display: grid; gap: 10px; width: min(100%, 620px); }
 .today-state-panel h2 { margin: 0 0 6px; color: var(--theme-text); font-size: 20px; }
 .today-state-panel p { margin: 0; color: var(--theme-muted); line-height: 1.55; }
-.today-state-action { grid-column: 2; min-width: 140px; min-height: 44px; justify-self: start; align-self: center; }
+.today-state-action { min-width: 160px; min-height: 44px; justify-self: center; align-self: center; margin-top: 2px; }
 .today-work-list { margin-top: 6px; }
 .today-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .today-section-heading h2 { margin: 0; color: var(--theme-text); font-size: clamp(20px, 4vw, 26px); }
@@ -134,7 +158,8 @@
    provide one stable edge instead. */
 .today-card-accent { display: none; }
 .today-card-body { display: grid; gap: 18px; padding: clamp(18px, 4vw, 26px); }
-.today-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.today-card-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.today-card-heading > div:first-child { min-width: 0; }
 .today-card-heading h3 { margin: 0; color: var(--theme-text); font-size: clamp(19px, 4vw, 24px); line-height: 1.2; overflow-wrap: anywhere; }
 .today-card-service { margin: 6px 0 0; color: var(--theme-muted); font-size: 13px; overflow-wrap: anywhere; }
 .today-badges { display: flex; min-width: 0; max-width: 100%; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
@@ -244,13 +269,14 @@
   .today-card-heading { display: grid; }
   .today-badges { justify-content: flex-start; }
   .today-detail-grid { grid-template-columns: 1fr; }
-  .today-state-panel { grid-template-columns: auto minmax(0,1fr); row-gap: 18px; }
-  .today-state-action { grid-column: 1 / -1; width: 100%; margin-top: 0; }
+  .today-state-panel { grid-template-columns: minmax(0,1fr); gap: 18px; }
+  .today-state-action { width: min(100%, 360px); margin-top: 0; }
 }
 @media (max-width: 390px) {
   .today-main { width: min(calc(100% - 20px), 1040px); }
   .today-page-title { align-items: flex-start; }
-  .today-page-actions { justify-content: flex-start; }
+  .today-page-actions { width: 100%; justify-content: stretch; }
+  .today-page-actions > * { flex: 1 1 0; min-width: 0; }
   .today-scope-note,
   .today-section-heading { align-items: flex-start; flex-direction: column; }
   .today-scope-note > span { align-self: flex-start; }

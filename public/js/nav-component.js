@@ -61,8 +61,8 @@
   function buildMobileNav(items, mode) {
     var homePath = mode === 'demo' ? '/demo' : '/dashboard';
     var footerLink = mode === 'demo'
-      ? '<a href="/" id="navExitDemo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg>Exit demo</a>'
-      : '<a href="/login" id="navSignOut" data-account-logout><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Sign Out</a>';
+      ? '<a class="northstar-nav-action" href="/" id="navExitDemo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg><span>Exit Demo</span></a>'
+      : '<button type="button" class="northstar-nav-action" id="navSignOut" data-account-logout aria-label="Sign Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></button>';
     return '' +
       '<style id="nav-critical-css">' +
         '#mobileOverlay.mobile-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;}' +
@@ -96,8 +96,8 @@
   function buildSidebar(items, mode) {
     var homePath = mode === 'demo' ? '/demo' : '/dashboard';
     var footerLink = mode === 'demo'
-      ? '<a href="/" tabindex="0" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg><span>Exit demo</span></a>'
-      : '<a href="/login" data-account-logout tabindex="0" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;font-size:14px;font-weight:500;color:var(--neutral-500);margin-top:auto;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></a>';
+      ? '<a class="northstar-nav-action" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18l6-6-6-6"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></svg><span>Exit Demo</span></a>'
+      : '<button type="button" class="northstar-nav-action" data-account-logout aria-label="Sign Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span>Sign Out</span></button>';
     return '' +
       '<aside class="sidebar">' +
         '<a href="' + homePath + '" class="sidebar-logo northstar-lockup">' +

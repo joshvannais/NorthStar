@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>NorthStar — AI Office Manager and Business Operating System</title>
   <meta name="description" content="NorthStar is an AI Office Manager and business operating system for home-service contractors, connecting calls, leads, estimates, schedules, and next actions.">
+  <link rel="canonical" href="https://northstar-os.ai/">
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
@@ -737,20 +738,15 @@
     [data-theme="dark"] .polaris-adj-total .polaris-adj-value { color: #a78bfa; }
   </style>
   <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/public-site.css">
 </head>
 <body class="homepage-refresh">
 
   <!-- Notification banner -->
   <div class="demo-notification" id="demoNotification"></div>
 
-  <!-- Try Before You Buy + Navigation — one natural-height sticky header -->
+  <!-- One natural-height sticky public header. -->
   <header class="homepage-header-stack">
-    <div class="demo-banner">
-      ⚡ No credit card needed —
-      <a href="/demo">Explore the account-free demo dashboard</a>
-      — sample data only, no sign-in required
-    </div>
-
     <nav class="nav">
       <div class="nav-inner">
         <a href="/" class="nav-logo northstar-lockup" aria-label="NorthStar homepage">
@@ -789,16 +785,12 @@
          <a data-telemetry-action="homepage_start_trial" href="/signup" class="btn btn-secondary">Start Free Trial</a>
        </div>
 
-      <div class="guided-preview-disclosure" id="simulationModeBanner">
-        <strong>Browser Web Call readiness.</strong> This optional microphone demonstration appears only when its attorney and provider approvals are active. The working account-free dashboard is available now.
-      </div>
-
       <div class="demo-web-call-pending" id="demoWebCallPending" role="status">
-        <strong>Account-free browser Web Call: awaiting approval</strong>
-        <span>Explore the dashboard now; this optional demonstration will appear when its legal and provider gates are approved.</span>
+        <strong>Account-Free Browser Web Call &mdash; Awaiting Approval</strong>
+        <span>This optional microphone demonstration will appear only after its legal and provider gates are approved. The working account-free dashboard is available now.</span>
       </div>
 
-      <div class="demo-form-card" id="demoFormCard">
+      <div class="demo-form-card" id="demoFormCard" hidden>
         <label for="demoBusinessName">Business Name</label>
         <input type="text" id="demoBusinessName" placeholder="e.g., Acme Roofing" autocomplete="organization">
 
@@ -1166,43 +1158,71 @@
   <!-- Pricing -->
   <section class="section section-alt" id="pricing">
     <div class="section-header">
-      <h2>Queued Monthly List Pricing</h2>
-      <p>These are the approved monthly list prices. Plan contents and commercial terms are not published until they are finalized.</p>
+      <h2>Published Monthly List Pricing</h2>
+      <p>These three monthly prices are published. Plan-specific features, limits, taxes, discounts, and trial-to-paid terms will appear before anyone chooses a paid plan.</p>
     </div>
     <div class="pricing-grid">
       <div class="pricing-card">
+        <p class="pricing-card-kicker">Published Price</p>
         <h3>Starter</h3>
         <div class="price">$149<span>/mo</span></div>
-        <p class="pricing-note">Monthly list price. Plan details are finalized before launch.</p>
+        <p class="pricing-note">Monthly list price. Included features and usage limits are not yet published.</p>
         <a href="/signup" class="btn btn-secondary" style="width:100%">Start Free Trial</a>
       </div>
       <div class="pricing-card featured">
+        <p class="pricing-card-kicker">Published Price</p>
         <h3>Growth</h3>
         <div class="price">$299<span>/mo</span></div>
-        <p class="pricing-note">Monthly list price. Plan details are finalized before launch.</p>
+        <p class="pricing-note">Monthly list price. Included features and usage limits are not yet published.</p>
         <a href="/signup" class="btn btn-primary" style="width:100%">Start Free Trial</a>
       </div>
       <div class="pricing-card">
+        <p class="pricing-card-kicker">Published Price</p>
         <h3>Complete</h3>
         <div class="price">$499<span>/mo</span></div>
-        <p class="pricing-note">Monthly list price. Plan details are finalized before launch.</p>
+        <p class="pricing-note">Monthly list price. Included features and usage limits are not yet published.</p>
         <a href="/signup" class="btn btn-secondary" style="width:100%">Start Free Trial</a>
       </div>
+      <div class="pricing-card enterprise">
+        <p class="pricing-card-kicker">Tailored Usage Review</p>
+        <h3>Enterprise</h3>
+        <div class="price">Contact NorthStar</div>
+        <p class="pricing-note">For organizations that want to discuss larger-team, higher-volume, multi-location, or custom operating needs. Eligibility thresholds, price, included usage, and overage terms are not yet published.</p>
+        <a href="/contact?topic=enterprise" class="btn btn-secondary" style="width:100%">Discuss Your Needs</a>
+      </div>
     </div>
+    <section class="pricing-common-outcomes" aria-labelledby="publishedOutcomesHeading">
+      <h3 id="publishedOutcomesHeading">Product Outcomes Published Across NorthStar</h3>
+      <p>These are published NorthStar capabilities, not a promise that every paid plan includes every outcome. Plan allocations remain unpublished.</p>
+      <ul class="pricing-outcome-grid">
+        <li>Calls and Lead Context</li>
+        <li>Customer and Work Records</li>
+        <li>Explainable Polaris Estimates</li>
+        <li>Schedules and Attention</li>
+        <li>Operational Next Actions</li>
+        <li>Outcome Learning</li>
+      </ul>
+    </section>
     <div class="pricing-readiness" aria-labelledby="pricingComparisonHeading">
       <h3 id="pricingComparisonHeading">Compare what is published today</h3>
       <div class="pricing-table-scroll" tabindex="0" aria-label="Scrollable pricing readiness comparison">
         <table class="pricing-comparison">
-          <thead><tr><th scope="col">Published detail</th><th scope="col">Starter</th><th scope="col">Growth</th><th scope="col">Complete</th></tr></thead>
+          <thead><tr><th scope="col">Published detail</th><th scope="col">Starter</th><th scope="col">Growth</th><th scope="col">Complete</th><th scope="col">Enterprise</th></tr></thead>
           <tbody>
-            <tr><th scope="row">Monthly list price</th><td>$149</td><td>$299</td><td>$499</td></tr>
-            <tr><th scope="row">Account-free product demo</th><td>Available</td><td>Available</td><td>Available</td></tr>
-            <tr><th scope="row">Provider activation</th><td>Separate setup and approval</td><td>Separate setup and approval</td><td>Separate setup and approval</td></tr>
-            <tr><th scope="row">Plan features and limits</th><td>Not yet published</td><td>Not yet published</td><td>Not yet published</td></tr>
+            <tr><th scope="row">Monthly list price</th><td>$149</td><td>$299</td><td>$499</td><td>Not published; contact NorthStar</td></tr>
+            <tr><th scope="row">Account-free product demo</th><td>Available to everyone</td><td>Available to everyone</td><td>Available to everyone</td><td>Available to everyone</td></tr>
+            <tr><th scope="row">Provider activation</th><td>Separate setup and approval</td><td>Separate setup and approval</td><td>Separate setup and approval</td><td>Discuss during usage review</td></tr>
+            <tr><th scope="row">Calls and Lead Context</th><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Discuss during usage review</td></tr>
+            <tr><th scope="row">Customer and Work Records</th><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Discuss during usage review</td></tr>
+            <tr><th scope="row">Explainable Polaris Estimates</th><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Discuss during usage review</td></tr>
+            <tr><th scope="row">Schedules and Attention</th><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Discuss during usage review</td></tr>
+            <tr><th scope="row">Operational Next Actions</th><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Discuss during usage review</td></tr>
+            <tr><th scope="row">Outcome Learning</th><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Plan allocation not yet published</td><td>Discuss during usage review</td></tr>
+            <tr><th scope="row">Plan features and limits</th><td>Not yet published</td><td>Not yet published</td><td>Not yet published</td><td>Tailored review; no public allowance promised</td></tr>
           </tbody>
         </table>
       </div>
-      <p>NorthStar will publish included outcomes, plan limits, taxes, discounts, and complete commercial terms before asking a customer to choose between plans.</p>
+      <p>NorthStar will publish included outcomes, plan limits, taxes, discounts, and complete commercial terms before asking a customer to choose between Starter, Growth, or Complete.</p>
     </div>
   </section>
 

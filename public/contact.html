@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contact — NorthStar</title>
   <meta name="description" content="Contact NorthStar product support at Support@northstar-os.ai.">
+  <link rel="canonical" href="https://northstar-os.ai/contact">
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <style>
@@ -27,8 +28,9 @@
     }
   </style>
   <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/public-site.css">
 </head>
-<body>
+<body class="public-site-page">
   <nav class="nav">
     <div class="nav-inner">
       <a href="/" class="nav-logo northstar-lockup" aria-label="NorthStar homepage">
@@ -45,7 +47,7 @@
     </div>
   </nav>
 
-  <main class="contact-shell">
+  <main class="contact-shell public-site-shell">
     <header class="contact-hero">
       <p class="demo-eyebrow">NorthStar Support</p>
       <h1>How can we help?</h1>
@@ -53,14 +55,35 @@
     </header>
 
     <section class="contact-card" aria-labelledby="contactEmailHeading">
-      <h2 id="contactEmailHeading">Email NorthStar Support</h2>
+      <h2 id="contactEmailHeading">Prepare an Email to NorthStar</h2>
       <a class="contact-address" href="mailto:Support@northstar-os.ai">Support@northstar-os.ai</a>
-      <p>Include the page you were using and a brief description of what happened. Do not send passwords, API keys, payment-card details, medical information, or other sensitive data.</p>
+      <p>Use the fields below to prepare a message with a local draft reference. Do not send passwords, API keys, payment-card details, medical information, or other sensitive data.</p>
+      <form class="contact-form" id="contactDraftForm">
+        <div class="contact-form-grid">
+          <div class="form-group"><label for="contactName">Your name</label><input id="contactName" name="name" autocomplete="name" maxlength="120" required></div>
+          <div class="form-group"><label for="contactEmail">Reply email</label><input id="contactEmail" name="email" type="email" autocomplete="email" maxlength="254" required></div>
+        </div>
+        <div class="form-group">
+          <label for="contactTopic">Topic</label>
+          <select id="contactTopic" name="topic" required>
+            <option value="Report a bug">Report a bug</option>
+            <option value="Product question">Product question</option>
+            <option value="Account support">Account support</option>
+            <option value="Enterprise usage review">Enterprise usage review</option>
+            <option value="Accessibility feedback">Accessibility feedback</option>
+          </select>
+        </div>
+        <div class="form-group"><label for="contactTitle">Title</label><input id="contactTitle" name="title" maxlength="160" required></div>
+        <div class="form-group"><label for="contactMessage">Description</label><textarea id="contactMessage" name="message" maxlength="4000" required></textarea></div>
+        <p class="contact-boundary">To include a screenshot, attach it in your email app after NorthStar prepares the message. This browser page cannot attach or upload a file and does not send the message automatically.</p>
+        <button class="btn btn-primary" type="submit">Prepare Email</button>
+      </form>
+      <div class="contact-reference" id="contactReference" role="status" aria-live="polite"></div>
       <div class="contact-actions">
-        <a class="btn btn-primary" href="mailto:Support@northstar-os.ai?subject=NorthStar%20Support%20Request">Open Your Email App</a>
+        <a class="btn btn-primary" id="contactEmailLink" href="mailto:Support@northstar-os.ai?subject=NorthStar%20Support%20Request" hidden>Open Your Email App</a>
         <a class="btn btn-secondary" href="/demo">Explore the Demo Dashboard</a>
       </div>
-      <p class="contact-boundary"><strong>Delivery boundary:</strong> this page opens a message addressed to Support@northstar-os.ai. Your email app and provider send it and determine delivery; NorthStar does not claim delivery until that provider confirms it.</p>
+      <p class="contact-boundary"><strong>Delivery boundary:</strong> a draft reference is stored only in this browser so you can recognize the prepared message. It is not a received support case, ticket number, or delivery confirmation. Your email app and provider must send the message; NorthStar does not claim receipt until its support mailbox receives it.</p>
     </section>
   </main>
 
@@ -78,5 +101,46 @@
     </div>
     <p>© 2026 NorthStar Solutions LLC. All rights reserved.</p>
   </footer>
+  <script>
+    (function () {
+      var form = document.getElementById('contactDraftForm');
+      var result = document.getElementById('contactReference');
+      var emailLink = document.getElementById('contactEmailLink');
+      var topic = document.getElementById('contactTopic');
+      if (new URLSearchParams(window.location.search).get('topic') === 'enterprise') topic.value = 'Enterprise usage review';
+
+      function createReference() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          return 'NS-DRAFT-' + window.crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+        }
+        return 'NS-DRAFT-' + Date.now().toString(36).toUpperCase();
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        var reference = createReference();
+        var subject = '[' + reference + '] ' + topic.value + ': ' + document.getElementById('contactTitle').value;
+        var body = [
+          'Draft reference: ' + reference,
+          'Name: ' + document.getElementById('contactName').value,
+          'Reply email: ' + document.getElementById('contactEmail').value,
+          '',
+          document.getElementById('contactMessage').value
+        ].join('\n');
+        try {
+          var saved = JSON.parse(localStorage.getItem('northstar_support_drafts') || '[]');
+          if (!Array.isArray(saved)) saved = [];
+          saved.unshift({ reference: reference, createdAt: new Date().toISOString(), topic: topic.value });
+          localStorage.setItem('northstar_support_drafts', JSON.stringify(saved.slice(0, 10)));
+        } catch (_) {}
+        emailLink.href = 'mailto:Support@northstar-os.ai?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+        emailLink.hidden = false;
+        result.dataset.visible = 'true';
+        result.textContent = 'Email draft ' + reference + ' is ready. Open your email app and send it to create a real support request.';
+        emailLink.focus();
+      });
+    })();
+  </script>
 </body>
 </html>

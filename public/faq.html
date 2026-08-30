@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Frequently Asked Questions — NorthStar</title>
   <meta name="description" content="Answers about NorthStar, its account-free demos, public pricing, and provider-readiness boundaries.">
+  <link rel="canonical" href="https://northstar-os.ai/faq">
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <style>
@@ -15,11 +16,6 @@
     .faq-hero h1 { margin-bottom: 12px; font-size: clamp(30px, 6vw, 46px); }
     .faq-hero p { color: var(--theme-muted); font-size: 17px; line-height: 1.65; }
     .faq-list { display: grid; gap: 14px; }
-    .faq-contents { margin: 0 0 22px; padding: 18px 20px; background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-lg); }
-    .faq-contents strong { display: block; margin-bottom: 10px; color: var(--theme-text); }
-    .faq-contents ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin: 0; padding-left: 20px; }
-    .faq-contents a { color: var(--brand-700); font-weight: 600; }
-    [data-theme="dark"] .faq-contents a { color: var(--brand-300); }
     .faq-item { padding: clamp(20px, 5vw, 28px); background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-lg); }
     .faq-item summary { cursor: pointer; color: var(--theme-text); list-style-position: outside; }
     .faq-item summary::marker { color: var(--brand-600); }
@@ -34,12 +30,12 @@
       .faq-actions > * { width: 100%; }
       .nav-inner { flex-wrap: wrap; }
       .nav-links { order: 3; width: 100%; justify-content: center; }
-      .faq-contents ul { grid-template-columns: 1fr; }
     }
   </style>
   <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/public-site.css">
 </head>
-<body>
+<body class="public-site-page">
   <nav class="nav">
     <div class="nav-inner">
       <a href="/" class="nav-logo northstar-lockup" aria-label="NorthStar homepage">
@@ -57,16 +53,16 @@
     </div>
   </nav>
 
-  <main class="faq-shell">
+  <main class="faq-shell public-site-shell">
     <header class="faq-hero">
       <p class="demo-eyebrow">Straight answers</p>
       <h1>Frequently Asked Questions</h1>
       <p>What NorthStar and its public demos do today—and which commercial, legal, and provider details remain intentionally unclaimed.</p>
     </header>
 
-    <nav class="faq-contents" aria-label="Frequently asked question topics">
+    <nav class="public-contents" aria-label="Frequently asked question topics">
       <strong>On this page</strong>
-      <ul>
+      <ul class="public-contents-links">
         <li><a href="#about-northstar">About NorthStar</a></li>
         <li><a href="#account-free-demo">Account-free demo</a></li>
         <li><a href="#browser-web-call">Browser Web Call</a></li>
@@ -76,6 +72,9 @@
         <li><a href="#integration-readiness">Integrations</a></li>
         <li><a href="#map-preferences">Map preferences</a></li>
         <li><a href="#support">Support</a></li>
+        <li><a href="#getting-started">Getting started</a></li>
+        <li><a href="#privacy-controls">Privacy and control</a></li>
+        <li><a href="#accessibility">Accessibility</a></li>
       </ul>
     </nav>
 
@@ -102,7 +101,7 @@
       </details>
       <details class="faq-item" id="pricing-plans">
         <summary><h2>What are the published prices?</h2></summary>
-        <p>The queued monthly list prices are Starter $149, Growth $299, and Complete $499. Plan contents, allowances, provider readiness, taxes, discounts, and other commercial terms are not inferred or promised on the public site.</p>
+        <p>The published monthly list prices are Starter $149, Growth $299, and Complete $499. Plan contents, allowances, provider readiness, taxes, discounts, and other commercial terms are not inferred or promised on the public site. Enterprise is an unpriced contact path for organizations that want to discuss larger-team, higher-volume, multi-location, or custom operating needs. Eligibility thresholds, included usage, and overage terms are not yet published.</p>
       </details>
       <details class="faq-item" id="readiness-language">
         <summary><h2>What do NorthStar readiness labels mean?</h2></summary>
@@ -118,7 +117,23 @@
       </details>
       <details class="faq-item" id="support">
         <summary><h2>How do I get support?</h2></summary>
-        <p>Email <a href="mailto:Support@northstar-os.ai">Support@northstar-os.ai</a>. The <a href="/contact">contact page</a> explains the email-provider delivery boundary and does not pretend a retired website form sent a message.</p>
+        <p>Email <a href="mailto:Support@northstar-os.ai">Support@northstar-os.ai</a>. The <a href="/contact">contact page</a> can prepare an email with a local draft reference and explains that the reference is not a received support case until your email provider sends the message.</p>
+      </details>
+      <details class="faq-item" id="getting-started">
+        <summary><h2>What information is needed to start?</h2></summary>
+        <p>Account creation asks for business name, your name, email, and password confirmation. Business phone, service area, and operating details are collected later during setup. Prospects can use the <a href="/demo">account-free demo</a> without creating an account.</p>
+      </details>
+      <details class="faq-item">
+        <summary><h2>Does the demo use real customer information?</h2></summary>
+        <p>No. The account-free workspace uses isolated demonstration data. Do not enter real customer details, credentials, payment information, medical information, or other sensitive data into public demonstration inputs.</p>
+      </details>
+      <details class="faq-item" id="privacy-controls">
+        <summary><h2>Does NorthStar act without human approval?</h2></summary>
+        <p>NorthStar separates recommendations and previews from consequential actions. Current scheduling and provider-dependent actions require the applicable account authority, setup, and explicit confirmation. See the <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms</a> for the governing public statements.</p>
+      </details>
+      <details class="faq-item" id="accessibility">
+        <summary><h2>How is accessibility handled?</h2></summary>
+        <p>NorthStar public pages provide visible labels, keyboard-operable controls, focus indicators, semantic headings, light and dark themes, and responsive layouts. Browser testing does not replace acceptance on every physical device or assistive-technology combination; accessibility problems can be reported through <a href="/contact">Support</a>.</p>
       </details>
     </div>
 

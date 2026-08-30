@@ -9,6 +9,7 @@ import subprocess
 
 PAGES = (
     "public/account/pending.html",
+    "public/contact.html",
     "public/dashboard.html",
     "public/dashboard/ai-settings.html",
     "public/dashboard/business-profile.html",
@@ -23,9 +24,15 @@ PAGES = (
     "public/dashboard/polaris.html",
     "public/dashboard/settings.html",
     "public/forgot-password.html",
+    "public/faq.html",
+    "public/index.html",
+    "public/legal.html",
     "public/login.html",
+    "public/privacy.html",
+    "public/refund.html",
     "public/reset-password.html",
     "public/signup.html",
+    "public/terms.html",
     "public/verify-email.html",
 )
 

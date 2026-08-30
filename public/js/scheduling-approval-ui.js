@@ -123,7 +123,7 @@
       };
     }
     var contract = global.NorthStarSchedulingTime;
-    if (!contract) throw new Error('Tenant scheduling time authority is unavailable.');
+    if (!contract) throw new Error('Workspace scheduling time authority is unavailable.');
     var start = contract.resolveWallTime(active.startDate.value, active.startTime.value, active.timeZone);
     var end = active.preserveElapsedDuration ? null
       : contract.resolveWallTime(active.endDate.value, active.endTime.value, active.timeZone);
@@ -217,7 +217,7 @@
     appendTerm(terms, 'Appointment', active.title);
     appendTerm(terms, 'Target', targetLabel(preview.proposal.target, active.directory, active.targetPageTargets));
     appendTerm(terms, 'Schedule', formatInstant(preview.proposal.scheduledStart, active.timeZone) + ' to ' + formatInstant(preview.proposal.scheduledEnd, active.timeZone));
-    appendTerm(terms, 'Tenant time zone', active.timeZone);
+    appendTerm(terms, 'Workspace time zone', active.timeZone);
     appendTerm(terms, 'Current revision', String(active.current.revision));
     appendTerm(terms, 'Proposed states', preview.proposal.scheduleState + ' · ' + preview.proposal.dispatchState + ' · ' + preview.proposal.appointmentStatus);
     appendTerm(terms, 'Preview expires', formatInstant(preview.expiresAt, active.timeZone));
@@ -621,7 +621,7 @@
     if (Array.isArray(allowed) && !allowed.includes(action)) throw new Error('That action is not available for the current appointment state.');
     var timeZone = options.timeZone || current.timeZone || record.timeZone;
     if (!global.NorthStarSchedulingTime || !global.NorthStarSchedulingTime.isValidTimeZone(timeZone)) {
-      throw new Error('Current tenant IANA time-zone authority is unavailable.');
+      throw new Error('Current workspace IANA time-zone authority is unavailable.');
     }
 
     var layer = el('div', 'm22-dialog-layer');
@@ -631,7 +631,7 @@
     var closeButton = el('button', 'm22-dialog-close', '×'); closeButton.type = 'button'; closeButton.setAttribute('aria-label', 'Cancel scheduling action'); closeButton.addEventListener('click', close);
     header.append(title, closeButton);
     var body = el('div', 'm22-dialog-body');
-    var currentSummary = el('section', 'm22-dialog-summary'); currentSummary.appendChild(el('h3', '', 'Current canonical authority'));
+    var currentSummary = el('section', 'm22-dialog-summary'); currentSummary.appendChild(el('h3', '', 'Current scheduling record'));
     var terms = el('dl');
     var appointmentTitle = value(record.work && record.work.title || record.title, 'Job title unavailable');
     appendTerm(terms, 'Appointment', appointmentTitle);

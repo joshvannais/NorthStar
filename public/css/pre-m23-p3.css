@@ -1,0 +1,147 @@
+/* Pre-Mission-23 P3: operational interaction and layout corrections. */
+
+/* Command Center */
+.command-center-blueprint-page .demo-kpi-card,
+.command-center-blueprint-page .demo-status-panel {
+  padding: var(--northstar-card-padding);
+}
+
+.command-center-blueprint-page .demo-kpi-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.command-center-blueprint-page .demo-kpi-card > * { margin: 0 !important; }
+
+.command-center-record-link {
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.command-center-record-link:hover,
+.command-center-record-link:focus-visible {
+  text-decoration: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-focus) 45%, transparent);
+}
+
+.command-center-blueprint-page .m22-state-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.command-center-blueprint-page .m22-record-status { gap: 10px; }
+.command-center-blueprint-page .m22-state-list { margin: 0; }
+
+/* Leads and shared customer detail */
+.customer-drawer {
+  width: min(920px, calc(100vw - 64px)) !important;
+  max-width: 920px !important;
+  height: min(820px, calc(100vh - 48px)) !important;
+  max-height: calc(100vh - 48px) !important;
+}
+
+.customer-drawer .drawer-body { flex: 1 1 auto !important; }
+
+.drawer-missing-summary,
+.drawer-action-reason {
+  margin: 10px 0 0;
+  color: var(--neutral-600);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.drawer-missing-summary[hidden] { display: none; }
+.drawer-action-reason { flex: 1 1 100%; }
+
+.customer-drawer[aria-busy="true"] .drawer-body { cursor: progress; }
+
+/* Communications */
+.communications-page .call-card { margin-bottom: 8px; }
+.communications-page .call-card-header { padding: 12px 14px; }
+.communications-page .call-meta { gap: 6px; }
+.communications-page .communication-kind-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.communication-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  color: var(--theme-muted);
+  background: var(--theme-surface-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.communication-kind svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+/* Calendar */
+.calendar-page .cal-title {
+  font-size: var(--northstar-page-title-size) !important;
+  line-height: var(--northstar-page-title-line) !important;
+}
+
+.calendar-page .cal-kpi-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.calendar-page .cal-kpi-pill {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "icon value" "label label";
+  align-items: center;
+  min-width: 0;
+  min-height: 88px;
+  padding: 14px 16px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--northstar-card-radius);
+  background: var(--theme-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-page .cal-kpi-icon { grid-area: icon; }
+.calendar-page .cal-kpi-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.calendar-page .cal-kpi-num { grid-area: value; font-size: clamp(20px, 2.4vw, 30px) !important; }
+.calendar-page .cal-kpi-label { grid-area: label; color: var(--theme-muted); font-size: 12px; }
+
+.calendar-page .m22-authority-overview { padding: var(--northstar-card-padding); }
+.calendar-page .m22-authority-heading { margin-bottom: 16px; }
+.calendar-page .m22-authority-heading h2,
+.calendar-page .m22-authority-heading p { margin: 0; }
+.calendar-page .m22-authority-heading p { margin-top: 8px; line-height: 1.5; }
+
+.cal-context-match {
+  border-color: color-mix(in srgb, var(--northstar-brand-gold) 68%, var(--theme-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--northstar-brand-gold) 18%, transparent);
+}
+
+.cal-context-note { margin: 0 0 12px; color: var(--theme-muted); font-size: 13px; }
+
+@media (max-width: 768px) {
+  .northstar-demo-toolbar { scroll-margin-top: 76px; }
+  .command-center-blueprint-page .m22-state-summary { grid-template-columns: 1fr; }
+  .customer-drawer { inset: 0 !important; width: 100vw !important; max-width: none !important; height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; }
+  .calendar-page .cal-kpi-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-page .cal-kpi-pill { min-height: 82px; padding: 12px; }
+}
+
+@media (max-width: 390px) {
+  .calendar-page .cal-kpi-bar { gap: 8px; }
+  .calendar-page .cal-kpi-pill { min-height: 78px; }
+}
+
+@media (forced-colors: active) {
+  .command-center-record-link:focus-visible,
+  .cal-context-match { outline: 2px solid CanvasText; }
+}

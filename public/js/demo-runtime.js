@@ -509,29 +509,18 @@
     } catch (_storageError) {}
     returnToToolbarRequested = false;
     if (!matchesSession) return;
-    var root = document.documentElement;
-    var previousInlineScrollBehavior = root && root.style.scrollBehavior || '';
-    if (root) root.style.scrollBehavior = 'auto';
-    var scrollToTop = function () {
+    var toolbar = document.getElementById('northstarDemoToolbar');
+    var summary = toolbar && toolbar.querySelector('summary');
+    if (!toolbar || !summary) {
       global.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      if (root) root.scrollTop = 0;
-      if (document.body) document.body.scrollTop = 0;
-    };
-    scrollToTop();
-    if (typeof global.requestAnimationFrame === 'function') {
-      global.requestAnimationFrame(function () {
-        scrollToTop();
-        global.requestAnimationFrame(scrollToTop);
-      });
+      return;
     }
-    global.setTimeout(scrollToTop, 50);
-    global.setTimeout(scrollToTop, 150);
-    global.setTimeout(scrollToTop, 300);
-    global.addEventListener('load', scrollToTop, { once: true });
-    global.addEventListener('pageshow', scrollToTop, { once: true });
-    global.setTimeout(function () {
-      if (root) root.style.scrollBehavior = previousInlineScrollBehavior;
-    }, 600);
+    var details = toolbar.querySelector('details');
+    if (details) details.open = false;
+    toolbar.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    summary.focus({ preventScroll: true });
+    var announce = document.getElementById('northstarDemoStatus');
+    if (announce) announce.textContent = 'Lead added. Your scenario choices are saved; the builder is ready for another run.';
   }
 
   function performMutation(endpoint, intent, body, button, status) {

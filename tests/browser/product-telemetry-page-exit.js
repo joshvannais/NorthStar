@@ -72,6 +72,7 @@ async function run() {
     });
     await page.exposeFunction('__northstarObserveTelemetryTransport', value => transports.push(value));
     await page.addInitScript(() => {
+      localStorage.setItem('northstar_telemetry_consent_v1', 'granted');
       const nativeFetch = window.fetch.bind(window);
       window.fetch = function (input, init) {
         const url = new URL(typeof input === 'string' ? input : input.url, window.location.href);

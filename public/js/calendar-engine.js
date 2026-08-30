@@ -50,6 +50,21 @@ function calendarRecordLabel(value, fallback, kind) {
   return kind === 'name' ? calendarDemoIdentity.name : calendarDemoIdentity.role;
 }
 
+function calendarRequestedContext() {
+  var params;
+  try { params = new URLSearchParams(window.location.search || ''); }
+  catch (_error) { return null; }
+  var customerId = params.get('customerId');
+  var leadId = params.get('leadId');
+  return customerId || leadId ? { customerId:customerId, leadId:leadId } : null;
+}
+
+function calendarRecordMatchesContext(record, context) {
+  if (!record || !context) return false;
+  return Boolean((context.customerId && record.customer && String(record.customer.id) === context.customerId) ||
+    (context.leadId && record.work && String(record.work.opportunityId) === context.leadId));
+}
+
 function calendarTimeValue(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
   return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
@@ -399,15 +414,14 @@ class CalendarRenderer {
     var monthValue = unavailable ? '\u2014' : monthEvents.length;
     var todayValue = unavailable ? '\u2014' : todayEvents.length;
     var totalValue = unavailable ? '\u2014' : totalEvents;
-    var pipelineText = unavailable ? '\u2014' : (pipelineValue == null
-      ? 'Unavailable — no role-authorized estimate is recorded'
-      : '$' + Number(pipelineValue).toLocaleString());
+    var pipelineText = unavailable || pipelineValue == null ? '\u2014' : '$' + Number(pipelineValue).toLocaleString();
+    var pipelineNote = unavailable ? 'Loading' : pipelineValue == null ? 'No recorded estimate' : 'Recorded estimate total';
 
     this.kpiBar.innerHTML = `
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📅</span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📞</span><span class="cal-kpi-num">${todayValue}</span><span class="cal-kpi-label">Today</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">📊</span><span class="cal-kpi-num">${totalValue}</span><span class="cal-kpi-label">Events</span></span>
-      <span class="cal-kpi-pill"><span class="cal-kpi-icon">💰</span><span class="cal-kpi-num">${pipelineText}</span><span class="cal-kpi-label">Pipeline</span></span>`;
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments this month</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="cal-kpi-num">${todayValue}</span><span class="cal-kpi-label">Today</span></span>
+      <span class="cal-kpi-pill"><span class="cal-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 20V9M12 20V4M19 20v-7"/></svg></span><span class="cal-kpi-num">${totalValue}</span><span class="cal-kpi-label">Visible events</span></span>
+      <span class="cal-kpi-pill" title="${escapeCalendarMarkup(pipelineNote)}"><span class="cal-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><span class="cal-kpi-num">${pipelineText}</span><span class="cal-kpi-label">Pipeline · ${escapeCalendarMarkup(pipelineNote)}</span></span>`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -639,7 +653,48 @@ class CalendarRenderer {
   renderNewEventArea() {
     if (!this.newEventArea) return;
     this.newEventArea.replaceChildren();
-    this.newEventArea.hidden = true;
+    this.newEventArea.hidden = false;
+    var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+    var operator = projection && projection.schedulingOperator;
+    var overview = projection && projection.schedulingOverview;
+    var demo = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true;
+    var note = document.createElement('p');
+    note.className = 'cal-context-note';
+    if (demo) {
+      note.textContent = 'Demo Calendar is read-only. Explore schedule details here; saving changes requires an authorized paid workspace.';
+      this.newEventArea.appendChild(note);
+      return;
+    }
+    if (!operator || operator.canMutate !== true || !overview) {
+      note.textContent = operator && operator.canRead
+        ? 'Calendar changes require current owner, admin, or dispatcher access.'
+        : 'Scheduling controls are unavailable for this account.';
+      this.newEventArea.appendChild(note);
+      return;
+    }
+    var unscheduled = (overview.records || []).find(function(record) {
+      return record && record.authority && record.authority.scheduleState !== 'scheduled' &&
+        (record.allowedActions || []).indexOf('schedule') >= 0;
+    });
+    var create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'cal-new-event-btn';
+    create.textContent = 'Create scheduled work';
+    if (!unscheduled) {
+      create.disabled = true;
+      create.setAttribute('aria-describedby', 'calendarCreateReason');
+      note.id = 'calendarCreateReason';
+      note.textContent = 'No unscheduled role-authorized work is available on this page. Create a lead or work record first, then return here to schedule it.';
+    } else {
+      note.textContent = 'Schedule an existing role-authorized work record through preview and explicit approval.';
+      create.addEventListener('click', function() {
+        window.NorthStarSchedulingApproval.open({
+          record:unscheduled, directory:operator, action:'schedule', timeZone:overview.timeZone,
+          returnFocus:create, source:'Calendar create scheduled work', onApplied:window.refreshCalendar
+        });
+      });
+    }
+    this.newEventArea.append(create, note);
   }
 
   renderAuthorityBoard() {
@@ -690,9 +745,26 @@ class CalendarRenderer {
     }
     if (navigation.children.length) this.authorityBoard.appendChild(navigation);
     var list = document.createElement('ol'); list.className = 'm22-overview-list';
-    (overview.records || []).forEach(function(record) {
+    var requestedContext = calendarRequestedContext();
+    var records = overview.records || [];
+    var hasContextMatch = requestedContext && records.some(function(record) {
+      return calendarRecordMatchesContext(record, requestedContext);
+    });
+    if (requestedContext) {
+      var contextNote = document.createElement('p');
+      contextNote.className = 'cal-context-note';
+      contextNote.textContent = hasContextMatch
+        ? 'Showing the exact scheduling record carried from the selected customer.'
+        : 'The selected customer has no scheduling record in this view. Use Create scheduled work when an authorized unscheduled record is available.';
+      this.authorityBoard.appendChild(contextNote);
+    }
+    records.forEach(function(record) {
       var item = document.createElement('li'); item.className = 'm22-overview-record';
       item.dataset.appointmentId = record.appointmentId;
+      if (calendarRecordMatchesContext(record, requestedContext)) {
+        item.classList.add('cal-context-match');
+        item.setAttribute('data-calendar-context-match', 'true');
+      }
       var recordTitle = document.createElement('h3');
       recordTitle.textContent = calendarRecordLabel(record.customer && record.customer.name, 'Customer name unavailable', 'name') +
         ' · ' + calendarRecordLabel(record.work && record.work.title, 'Job title unavailable', 'role');
@@ -797,33 +869,19 @@ class CalendarData {
 class CalendarModal {
   _formatDate(date) { const y=date.getFullYear(); const m=String(date.getMonth()+1).padStart(2,'0'); const d=String(date.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
 
-  openCreateEvent(date) {
-    const dateStr = date ? this._formatDate(date) : this._formatDate(new Date());
-    const html = `
-      <div class="cal-modal-overlay" id="calModalOverlay" onclick="window.calModal.close()">
-        <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle" onclick="event.stopPropagation()">
-          <div class="cal-modal-header"><h2 id="calModalTitle">New Event</h2><button class="cal-modal-close" onclick="window.calModal.close()" aria-label="Close new event dialog">×</button></div>
-          <div class="cal-modal-body">
-            <div class="cal-modal-field"><label for="calEventTitle">Title</label><input type="text" id="calEventTitle" placeholder="Event title" required></div>
-            <div class="cal-modal-field"><label for="calEventDate">Date</label><input type="date" id="calEventDate" value="${dateStr}" required></div>
-            <div class="cal-modal-row">
-              <div class="cal-modal-field"><label for="calEventTime">Start Time</label><input type="time" id="calEventTime" value="09:00"></div>
-              <div class="cal-modal-field"><label for="calEventEndTime">End Time</label><input type="time" id="calEventEndTime" value="10:00"></div>
-            </div>
-            <div class="cal-modal-field"><label for="calEventDescription">Description</label><textarea id="calEventDescription" rows="3" placeholder="Event description"></textarea></div>
-            <fieldset class="cal-modal-field"><legend>Color</legend><div class="cal-color-picker">
-              ${['#6395ff','#22c55e','#f59e0b','#ef4444','#a855f7','#14b8a6'].map(c =>
-                `<button type="button" class="cal-color-option" aria-label="Select ${c} event color" style="background:${c}" data-color="${c}" onclick="document.querySelectorAll('.cal-color-option').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');"></button>`
-              ).join('')}
-            </div></fieldset>
-          </div>
-          <div class="cal-modal-footer">
-            <button class="cal-modal-btn cal-modal-cancel" onclick="window.calModal.close()">Cancel</button>
-            <button class="cal-modal-btn cal-modal-save" onclick="window.calModal.saveEvent()">Create Event</button>
-          </div>
-        </div>
-      </div>`;
-    this._show(html);
+  openCreateEvent() {
+    var authorizedAction = document.querySelector('.cal-new-event-btn:not(:disabled)');
+    if (authorizedAction) {
+      authorizedAction.focus({ preventScroll:true });
+      authorizedAction.click();
+      return true;
+    }
+    var explanation = document.querySelector('#calendarNewEventArea .cal-context-note');
+    if (explanation) {
+      explanation.setAttribute('tabindex', '-1');
+      explanation.focus({ preventScroll:true });
+    }
+    return false;
   }
 
   openEditEvent(event, options) {
@@ -990,9 +1048,7 @@ class CalendarModal {
   }
 
   saveEvent() {
-    const data = this._getFormData();
-    if (!data) return;
-    window.calData.createEvent(data).then(() => { window.calModal.close(); window.refreshCalendar(); });
+    throw new Error('Direct Calendar creation is retired. Use the current preview and explicit approval flow.');
   }
 
   _bindScheduleFields() {

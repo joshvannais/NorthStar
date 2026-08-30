@@ -34,9 +34,14 @@ const PAID_NAV_ROUTES = Object.freeze([
   ...ROUTES.slice(1),
 ]);
 const VIEWPORTS = Object.freeze([
+  Object.freeze({ label: 'desktop-1280x720', width: 1280, height: 720 }),
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
+  Object.freeze({ label: 'desktop-large', width: 1728, height: 1117 }),
   Object.freeze({ label: 'tablet', width: 1024, height: 768 }),
+  Object.freeze({ label: 'mobile-320', width: 320, height: 800 }),
+  Object.freeze({ label: 'mobile-375', width: 375, height: 812 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
+  Object.freeze({ label: 'mobile-430', width: 430, height: 932 }),
   Object.freeze({ label: 'mobile-compact', width: 360, height: 800 }),
 ]);
 const POLARIS_PLACEMENT_ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
@@ -521,7 +526,9 @@ async function dismissFirstVisitGuide(page, label) {
     await page.screenshot({ path: path.join(directory, name), fullPage: false });
   }
   await page.getByRole('button', { name: 'Close quick start' }).click();
-  await dialog.waitFor({ state: 'detached' });
+  await dialog.waitFor({ state: 'hidden' });
+  assert.strictEqual(await dialog.getAttribute('open'), null,
+    label + ' dismissed guide remains mounted for the permanent reopen action but is no longer modal');
 }
 
 async function enterDemo(page, origin, revision, viewport) {
@@ -1006,6 +1013,9 @@ async function exerciseTheme(page, viewport) {
 async function exerciseViewport(browser, origin, viewport, ledger) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
   context.setDefaultTimeout(10000);
+  await context.addInitScript(() => {
+    localStorage.setItem('northstar_telemetry_consent_v1', 'granted');
+  });
   const page = await context.newPage();
   page.on('request', request => ledger.requests.push({ viewport: viewport.label, method: request.method(), url: request.url() }));
   page.on('response', response => {
@@ -1085,19 +1095,52 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
         .map(control => [control.dataset.scenarioDimension, control.value])),
       builderOpen: document.querySelector('.northstar-demo-scenario-builder').open,
+      toolbarTop: document.getElementById('northstarDemoToolbar').getBoundingClientRect().top,
+      focusedBuilderSummary: document.activeElement === document.querySelector('.northstar-demo-scenario-builder > summary'),
       scrollY: window.scrollY,
     }));
     assert.deepStrictEqual(postSimulationControls.selection, scenarioSelection,
       viewport.label + ' manually selected scenario survives simulation reload');
-    assert.strictEqual(postSimulationControls.builderOpen, true,
-      viewport.label + ' scenario builder remains open for a back-to-back lead');
-    assert.ok(postSimulationControls.scrollY <= 1,
-      viewport.label + ' simulation reload returns to the top controls');
+    assert.strictEqual(postSimulationControls.builderOpen, false,
+      viewport.label + ' scenario builder collapses after generation to return the destination to its working surface');
+    assert.strictEqual(postSimulationControls.focusedBuilderSummary, true,
+      viewport.label + ' simulation reload returns keyboard focus to the exact scenario control');
+    assert.ok(postSimulationControls.toolbarTop >= -1 && postSimulationControls.toolbarTop <= Math.max(120, viewport.height * 0.25),
+      viewport.label + ' simulation reload returns the exact compact toolbar to the visible control area: ' +
+        JSON.stringify(postSimulationControls));
+    for (let generation = 2; generation <= 3; generation += 1) {
+      const currentBuilder = page.locator('.northstar-demo-scenario-builder');
+      if (!(await currentBuilder.evaluate(node => node.open))) await currentBuilder.locator('summary').click();
+      const beforeGeneration = await page.evaluate(() => Object.fromEntries(
+        Array.from(document.querySelectorAll('[data-scenario-dimension]'))
+          .map(control => [control.dataset.scenarioDimension, control.value])
+      ));
+      assert.deepStrictEqual(beforeGeneration, scenarioSelection,
+        viewport.label + ' chosen scenario survives before generation ' + generation);
+      await page.waitForTimeout(800);
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+        page.click('#demoSimulateLead'),
+      ]);
+      await waitReady(page, ROUTES[0], generation + 1);
+      const afterGeneration = await page.evaluate(() => ({
+        selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
+          .map(control => [control.dataset.scenarioDimension, control.value])),
+        builderOpen: document.querySelector('.northstar-demo-scenario-builder').open,
+        focusedBuilderSummary: document.activeElement === document.querySelector('.northstar-demo-scenario-builder > summary'),
+      }));
+      assert.deepStrictEqual(afterGeneration.selection, scenarioSelection,
+        viewport.label + ' chosen scenario survives generation ' + generation);
+      assert.strictEqual(afterGeneration.builderOpen, false,
+        viewport.label + ' builder remains compact after generation ' + generation);
+      assert.strictEqual(afterGeneration.focusedBuilderSummary, true,
+        viewport.label + ' focus returns to the scenario control after generation ' + generation);
+    }
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' simulated');
     const simulated = await page.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
     assert.strictEqual(simulated.session.durable, true, viewport.label + ' explicit mutation creates durable session');
-    assert.strictEqual(simulated.session.simulationCount, 1, viewport.label + ' simulation count');
-    assert.strictEqual(simulated.graphs.length, 4, viewport.label + ' one added graph');
+    assert.strictEqual(simulated.session.simulationCount, 3, viewport.label + ' three-generation persistence count');
+    assert.strictEqual(simulated.graphs.length, 6, viewport.label + ' three scenario-selected graphs');
     assert.notStrictEqual(simulated.integrity.digest, initialDigest, viewport.label + ' state digest advances');
     assert.deepStrictEqual(simulated.configuration.businessProfile, simulated.graphs[0].businessProfile,
       viewport.label + ' selected Business Profile owns the simulated graph');
@@ -1118,14 +1161,14 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       viewport.label + ' caller intent changes the generated conversation');
     assert.strictEqual(added.polaris.completeDetail, true, viewport.label + ' complete Polaris detail');
     assert.match(added.polaris.snapshotDigest, /^[0-9a-f]{64}$/, viewport.label + ' snapshot digest');
-    const simulatedCommandCard = await inspectCurrent(page, ROUTES[0], 2, viewport);
+    const simulatedCommandCard = await inspectCurrent(page, ROUTES[0], 4, viewport);
     await captureEvidence(page, 'demo', ROUTES[0], viewport, 'simulated');
     assert.ok(simulatedCommandCard.polarisObjectHrefs.some(href => href && href.includes(encodeURIComponent(added.ids.lead))),
       viewport.label + ' Command Center card links to the simulated lead detail');
 
     const leadsRoute = ROUTES.find(route => route.id === 'leads');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' leads-revisit-start');
-    const leads = await clickRoute(page, origin, leadsRoute, 2, viewport);
+    const leads = await clickRoute(page, origin, leadsRoute, 4, viewport);
     await page.waitForFunction(expected => Array.from(document.querySelectorAll('#leadsContent tr'))
       .some(row => row.textContent.includes(expected.name) && row.textContent.includes(expected.service)), {
       name: added.customer.name,
@@ -1342,7 +1385,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
 
     for (const id of ['communications', 'calendar', 'command-center']) {
       const route = ROUTES.find(candidate => candidate.id === id);
-      const snapshot = await clickRoute(page, origin, route, 2, viewport);
+      const snapshot = await clickRoute(page, origin, route, 4, viewport);
       if (id === 'communications') {
         const initialResults = await page.locator('#resultsCount').innerText();
         await page.locator('#callSearchInput').fill(added.customer.name);
@@ -1353,12 +1396,13 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         await page.locator('#callSearchInput').fill('');
         await page.waitForFunction(expected => document.getElementById('resultsCount').textContent === expected,
           initialResults);
+        await page.evaluate(() => history.replaceState(null, '', location.pathname + '?search=stale&status=booked'));
         await page.locator('#callSearchInput').fill(added.customer.name);
-        await page.locator('.filter-btn-danger', { hasText: 'Clear Filters' }).click();
+        await page.locator('.filter-btn-danger', { hasText: 'Reset view' }).click();
         await page.waitForFunction(expected => {
           const search = document.getElementById('callSearchInput');
           const results = document.getElementById('resultsCount');
-          return search && search.value === '' && results && results.textContent === expected;
+          return search && search.value === '' && results && results.textContent === expected && location.search === '';
         }, initialResults);
       }
       if (id === 'calendar') {
@@ -1392,8 +1436,8 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         }
         assert.strictEqual(await page.locator('.cal-new-event-btn').count(), 0,
           viewport.label + ' Calendar does not restore the retired direct New Event control');
-        assert.strictEqual(await page.locator('#calendarNewEventArea').isHidden(), true,
-          viewport.label + ' Calendar keeps direct mutation retired in the account-free demo');
+        assert.match(await page.locator('#calendarNewEventArea').innerText(), /Demo Calendar is read-only/i,
+          viewport.label + ' Calendar truthfully explains why direct mutation is unavailable in the account-free demo');
       }
       await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
       if (!hasPolarisSurface(id)) {
@@ -1411,7 +1455,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       page.waitForURL(url => url.origin === origin && url.pathname + url.search === detailPath, { timeout: 15000 }),
       detailLink.click(),
     ]);
-    const detail = await inspectCurrent(page, polarisRoute, 2, viewport);
+    const detail = await inspectCurrent(page, polarisRoute, 4, viewport);
     await captureEvidence(page, 'demo', polarisRoute, viewport, 'object-detail');
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' polaris-detail');
     assert.strictEqual(detail.polarisCardCount, 0, viewport.label + ' Polaris remains chat-centric without a duplicate surface card');
@@ -1436,7 +1480,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
 
     for (const id of ['team', 'business-profile', 'settings', 'integrations']) {
       const route = ROUTES.find(candidate => candidate.id === id);
-      const snapshot = await clickRoute(page, origin, route, 2, viewport);
+      const snapshot = await clickRoute(page, origin, route, 4, viewport);
       assert.deepStrictEqual(snapshot.workspace.configuration, simulated.configuration,
         route.path + ' reads the selected Business Profile configuration');
       assert.strictEqual(snapshot.polarisCardCount, 0, route.path + ' has no misplaced Polaris card after simulation');
@@ -1446,12 +1490,12 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' config ' + id);
     }
 
-    await clickRoute(page, origin, ROUTES[0], 2, viewport);
+    await clickRoute(page, origin, ROUTES[0], 4, viewport);
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
       page.click('#demoReset'),
     ]);
-    await waitReady(page, ROUTES[0], 3);
+    await waitReady(page, ROUTES[0], 5);
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' reset');
     const reset = await page.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
     assert.strictEqual(reset.graphs.length, 3, viewport.label + ' reset restores seed graph count');
@@ -1460,7 +1504,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.ok(!reset.graphs.some(graph => graph.ids.graph === added.ids.graph), viewport.label + ' reset removes only session-added graph');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitReady(page, ROUTES[0], 3);
+    await waitReady(page, ROUTES[0], 5);
     const reloaded = await page.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
     assert.strictEqual(reloaded.session.durable, true, viewport.label + ' durable state survives reload');
     assert.strictEqual(reloaded.integrity.digest, reset.integrity.digest, viewport.label + ' reload digest');
@@ -1563,7 +1607,7 @@ async function main() {
     ? VIEWPORTS.filter(viewport => viewport.label === process.env.NORTHSTAR_VIEWPORT)
     : VIEWPORTS;
   assert.ok(selectedViewports.length > 0,
-    'NORTHSTAR_VIEWPORT must be desktop, tablet, mobile, or mobile-compact when provided');
+    'NORTHSTAR_VIEWPORT must name one of the route-complete viewport labels when provided');
   const suiteDatabase = await createSuiteDatabase('cc-parity-browser');
   const originalEnvironment = new Map();
   for (const name of PROVIDER_ENVIRONMENT.concat(['DATABASE_URL', 'NODE_ENV', 'AUTH_ACCESS_SECRET'])) {
@@ -1681,7 +1725,7 @@ async function main() {
     assert.deepStrictEqual(external, [], 'all browser traffic remains on the disposable loopback origin');
     assert.ok(telemetryRequests.length > 0, 'privacy-bounded product telemetry is exercised');
     assert.ok(telemetryRequests.every(entry => entry.method === 'POST'), 'telemetry uses only the bounded POST envelope');
-    assert.strictEqual(mutations.length, selectedViewports.length * 2, 'one simulate and one reset per viewport');
+    assert.strictEqual(mutations.length, selectedViewports.length * 4, 'three simulations and one reset per viewport');
     assert.ok(mutations.every(entry => {
       const pathname = new URL(entry.url).pathname;
       return entry.method === 'POST' && (pathname === '/api/demo/command-center/simulations/leads' || pathname === '/api/demo/command-center/reset');
@@ -1689,7 +1733,7 @@ async function main() {
     assert.deepStrictEqual(ledger.httpErrors, [], 'browser HTTP errors');
     assert.deepStrictEqual(ledger.warnings, [], 'browser console warnings');
     assert.deepStrictEqual(ledger.consoleErrors, [], 'browser console errors');
-    assert.deepStrictEqual(ledger.pageErrors, [], 'browser page errors');
+    assert.deepStrictEqual(ledger.pageErrors, [], 'browser page errors: ' + JSON.stringify(ledger.pageErrors));
 
     const rows = (await pool.query(
       `SELECT count(*)::int AS sessions,
@@ -1702,7 +1746,7 @@ async function main() {
     assert.deepStrictEqual(rows, {
       sessions: selectedViewports.length,
       tenants: selectedViewports.length,
-      minimum_revision: 3,
+      minimum_revision: 5,
       maximum_simulation_count: 0,
       token_hashes_only: true,
     }, 'one isolated durable tenant/session per browser context');

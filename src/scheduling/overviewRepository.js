@@ -104,6 +104,7 @@ function recordProjection(item, conflict, now) {
     graphId: item.ids.graph,
     customer: { id: item.customer.id, name: item.customer.name },
     work: {
+      opportunityId: item.ids.opportunity,
       serviceType: item.opportunity.serviceType,
       title: item.snapshot && item.snapshot.service && item.snapshot.service.label || item.opportunity.serviceType || 'Appointment',
       appointmentStatus: authority.appointmentStatus,

@@ -31,6 +31,7 @@ function page(sharedStorage, options = {}) {
       globalPrivacyControl: options.globalPrivacyControl === true,
     },
     sessionStorage: sharedStorage,
+    localStorage: storage(),
     fetch(url, request) {
       requests.push({ url, request, body: JSON.parse(request.body) });
       return Promise.resolve({ status: 202 });
@@ -43,6 +44,7 @@ function page(sharedStorage, options = {}) {
     clearTimeout() {},
     setTimeout() { return 1; },
   };
+  if (options.consent !== false) window.localStorage.setItem('northstar_telemetry_consent_v1', 'granted');
   window.window = window;
   const context = vm.createContext({ window, document, Date, JSON, Object, Array, String, Boolean, RegExp });
   vm.runInContext(source, context, { filename: 'product-telemetry.js' });
@@ -55,6 +57,13 @@ function page(sharedStorage, options = {}) {
 }
 
 describe('browser product telemetry exit delivery', () => {
+  test('stays inactive until the privacy decision records explicit consent', () => {
+    const sharedStorage = storage();
+    const inactive = page(sharedStorage, { pathname: '/demo', consent: false });
+    inactive.dispatch('pagehide');
+    expect(inactive.requests).toEqual([]);
+  });
+
   test('pagehide performs no network request and the next page flushes the bounded exit event', () => {
     const sharedStorage = storage();
     const first = page(sharedStorage, { pathname: '/demo' });

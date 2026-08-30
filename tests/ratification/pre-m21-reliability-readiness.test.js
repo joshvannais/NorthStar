@@ -47,7 +47,9 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(detail).toContain('_drawerEl.hidden = true');
     expect(detail).toContain("window.location.assign(prefix + '/calendar'");
     expect(detail).toContain("window.location.assign(prefix + '/polaris?kind='");
-    expect(detail).toContain("if (e.key === 'Escape') close()");
+    expect(detail).toContain("if (e.key === 'Escape') { e.preventDefault(); close(); return; }");
+    expect(detail).toContain('trapDrawerFocus(e)');
+    expect(detail).toContain('setBackgroundInert(true)');
   });
 
   test('communications reset clears the search field and non-actions are not keyboard links', () => {

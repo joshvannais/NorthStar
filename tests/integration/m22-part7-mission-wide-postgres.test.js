@@ -708,7 +708,7 @@ realPostgres('Mission 22 Part 7 coherent mission-wide mounted acceptance trace',
     expect(ledgerBefore.map(row => ({ filename: row.filename, checksum: row.checksum }))).toEqual(
       migrations.map(row => ({ filename: row.file, checksum: row.digest }))
     );
-    expect(ledgerBefore.at(-1).filename).toBe('035_schedule_human_preview_approval.sql');
+    expect(ledgerBefore.at(-1).filename).toBe('036_support_case_authority.sql');
     expect((await migrationPool.query("SELECT current_setting('TimeZone') AS value")).rows[0].value).toBe('UTC');
     const restartedRuntime = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
     try { expect(await db.runMigrations({ pool: migrationPool, runtimePool: restartedRuntime })).toBe(true); }

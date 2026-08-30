@@ -111,7 +111,8 @@ describe('mounted site-wide theme inventory', () => {
     expect(stylesheets).toHaveLength(1);
     expect(html.indexOf(themeScripts[0])).toBeLessThan(html.indexOf(stylesheets[0]));
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?northstar-theme[\s\S]*?<\/script>/i);
-    expect(html).not.toMatch(/<(?:script|link|img)\b[^>]*(?:src|href)=["']https?:\/\//i);
+    const runtimeHtml = html.replace(/<link\b[^>]*\brel=["']canonical["'][^>]*>/gi, '');
+    expect(runtimeHtml).not.toMatch(/<(?:script|link|img)\b[^>]*(?:src|href)=["']https?:\/\//i);
     expect(visibleText(html)).not.toMatch(INTERNAL_LANGUAGE);
   });
 
@@ -120,7 +121,7 @@ describe('mounted site-wide theme inventory', () => {
     { route: '/reset-password', form: 'resetForm', status: 'resetStatus' },
   ])('$route uses the shared recovery shell without changing mounted form authority', async page => {
     const response = await request(app).get(page.route).expect(200).expect('Content-Type', /html/);
-    expect(response.text).toContain('class="account-auth-page"');
+    expect(response.text).toMatch(/<body\b[^>]*\bclass=["'][^"']*\baccount-auth-page\b[^"']*["']/i);
     expect(response.text).toContain('class="account-auth-shell"');
     expect(response.text).toContain('class="account-auth-card"');
     expect(response.text).toContain(`id="${page.form}"`);

@@ -26,6 +26,7 @@ const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/dashboard/business-profile', file: 'public/dashboard/business-profile.html', surface: 'dashboard' },
   { route: '/dashboard/settings', file: 'public/dashboard/settings.html', surface: 'dashboard' },
   { route: '/dashboard/integrations', file: 'public/dashboard/integrations.html', surface: 'dashboard' },
+  { route: '/dashboard/report-a-bug', file: 'public/dashboard/report-a-bug.html', surface: 'dashboard' },
   { route: '/dashboard/lead', file: 'public/dashboard/lead.html', surface: 'dashboard' },
   { route: '/dashboard/polaris', file: 'public/dashboard/polaris.html', surface: 'dashboard' },
   { route: '/contact', file: 'public/contact.html', surface: 'public' },

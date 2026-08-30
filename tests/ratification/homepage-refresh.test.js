@@ -50,7 +50,7 @@ describe('authorized Homepage Refresh contracts', () => {
     expect(homepage).not.toMatch(/no forwarding|no new numbers to hand out|starts answering calls immediately/i);
   });
 
-  test('pricing publishes only the three authorized monthly list prices without entitlements', () => {
+  test('pricing preserves the three authorized monthly list prices and adds a conservative unpriced enterprise path', () => {
     const pricing = blockById(homepage, 'pricing');
     expect(pricing).toContain('Starter');
     expect(pricing).toContain('$149');
@@ -59,8 +59,12 @@ describe('authorized Homepage Refresh contracts', () => {
     expect(pricing).toContain('Complete');
     expect(pricing).toContain('$499');
     expect(pricing).toContain('Monthly list price');
-    expect(pricing).toContain('Plan details are finalized before launch');
-    expect(pricing).not.toMatch(/\$99|\$199|Professional|Enterprise|<ul\b|Everything in|phone number|minutes|calls|seats|allowance|overage|add-on/i);
+    expect(pricing).toContain('Plan-specific features, limits, taxes, discounts, and trial-to-paid terms will appear before anyone chooses a paid plan');
+    expect(pricing).toContain('Enterprise');
+    expect(pricing).toContain('Contact NorthStar');
+    expect(pricing).toContain('Eligibility thresholds, price, included usage, and overage terms are not yet published.');
+    expect(pricing).not.toMatch(/\b30\s+(?:or more\s+)?employees\b/i);
+    expect(pricing).not.toMatch(/\$99|\$199|Professional|Everything in|phone number|included minutes|included calls|included seats|overage price|add-on price/i);
   });
 
   test('the account-free browser Web Call exposes only mounted supported industries and no scripted scenario catalogue', () => {
@@ -113,7 +117,7 @@ describe('authorized Homepage Refresh contracts', () => {
   });
 
   test('the page drives a user-initiated Retell browser Web Call with audible consent and fail-closed deletion', () => {
-    expect(homepage).toContain('Account-free browser Web Call');
+    expect(homepage).toContain('Account-Free Browser Web Call');
     expect(homepage).toContain('id="demoConsentCheckbox"');
     expect(homepage).toContain('Withdraw &amp; Delete');
     expect(homepage).toContain('Retry Verified Deletion');

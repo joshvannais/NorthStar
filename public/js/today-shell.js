@@ -114,6 +114,13 @@
     return button;
   }
 
+  function supportLink() {
+    var link = node('a', 'today-sign-out today-support-link');
+    link.href = '/dashboard/report-a-bug';
+    link.appendChild(node('span', '', 'Report a Bug'));
+    return link;
+  }
+
   function brand() {
     var link = node('a', 'northstar-lockup');
     link.href = TODAY_PATH;
@@ -131,6 +138,7 @@
     navigation.setAttribute('aria-label', 'Today navigation');
     navigation.appendChild(todayLink());
     var footer = node('div', 'sidebar-footer');
+    footer.appendChild(supportLink());
     footer.appendChild(signOutButton());
     var theme = node('span', 'northstar-theme-slot');
     theme.dataset.northstarThemeSlot = '';
@@ -183,6 +191,7 @@
     navigation.setAttribute('aria-label', 'Today navigation');
     navigation.appendChild(todayLink());
     var footer = node('div', 'mobile-menu-footer');
+    footer.appendChild(supportLink());
     footer.appendChild(signOutButton());
     menu.append(menuHeader, navigation, footer);
     fragment.append(header, overlay, menu);

@@ -133,6 +133,26 @@ html body .sidebar-footer .northstar-theme-slot {
   margin-left: auto;
 }
 
+html body .sidebar-footer-paid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+html body .sidebar-footer-paid > [data-support-action] {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+html body .sidebar-footer-paid > [data-account-logout] {
+  width: 100%;
+}
+
+html body .sidebar-footer-paid .northstar-theme-slot {
+  margin-left: 0;
+  justify-self: end;
+}
+
 html body .mobile-header .theme-toggle {
   width: 40px;
   height: 40px;

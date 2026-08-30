@@ -37,6 +37,8 @@ const { createIntegrationStatusRouter } = require('./routes/integrationStatus');
 const { createCommandCenterRouter } = require('./routes/commandCenter');
 const { createTodayRouter } = require('./routes/today');
 const { createKnowledgeManagementRouter } = require('./routes/knowledgeManagement');
+const { createSupportRouter } = require('./routes/support');
+const { SupportCaseOutboxWorker } = require('./support/outbox');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
 const { HomepageDemoAdmissionHousekeepingWorker } = require('./services/homepageDemoAdmission');
 const commandCenterContract = require('../public/js/command-center-contract');
@@ -108,6 +110,7 @@ const pages = {
   '/dashboard/integrations': 'public/dashboard/integrations.html',
   '/dashboard/lead': 'public/dashboard/lead.html',
   '/dashboard/polaris': 'public/dashboard/polaris.html',
+  '/dashboard/report-a-bug': 'public/dashboard/report-a-bug.html',
   '/contact': 'public/contact.html',
   '/faq': 'public/faq.html',
   '/privacy': 'public/privacy.html',
@@ -186,6 +189,10 @@ const productionWorkforceService = new WorkforceService(undefined, {
 const productionEmailOutboxWorker = new AccountEmailOutboxWorker({
   transactionalEmail: productionTransactionalEmail,
 });
+const productionSupportCaseOutboxWorker = new SupportCaseOutboxWorker({
+  transactionalEmail: productionTransactionalEmail,
+  supportRecipient: config.support.recipient,
+});
 const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
 const productionHomepageDemoAdmissionHousekeepingWorker = new HomepageDemoAdmissionHousekeepingWorker();
 app.locals.workforceService = productionWorkforceService;
@@ -229,6 +236,7 @@ app.use('/api/v1/business-profile', businessProfileRoutes);
 app.use('/api/v1/knowledge-management', createKnowledgeManagementRouter());
 app.use('/api/v1/voice', voiceRoutes);
 app.use('/api/v1/integrations', createIntegrationStatusRouter());
+app.use('/api/v1/support', createSupportRouter());
 app.use('/api/v1', createLegacyAuthorityRetirementRouter());
 
 // Canonical /api lead adapters precede the file-era router. The compatibility
@@ -258,6 +266,7 @@ async function start(options) {
   await cache.init();
   await audit.ensureTable();
   productionEmailOutboxWorker.start();
+  productionSupportCaseOutboxWorker.start();
   productionDemoHousekeepingWorker.start();
   productionHomepageDemoAdmissionHousekeepingWorker.start();
 
@@ -298,6 +307,7 @@ async function start(options) {
 
   server.once('close', () => {
     productionEmailOutboxWorker.stop();
+    productionSupportCaseOutboxWorker.stop();
     productionDemoHousekeepingWorker.stop();
     productionHomepageDemoAdmissionHousekeepingWorker.stop();
     voiceWebhook.shutdown();

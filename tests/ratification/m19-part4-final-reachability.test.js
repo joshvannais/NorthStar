@@ -39,6 +39,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/command-center-page.js',
   'public/js/demo-command-center.js',
   'public/js/demo-runtime.js',
+  'public/js/display-projection.js',
   'public/js/homepage-demo.js',
   'public/js/knowledge-management.js',
   'public/js/navigation-launcher.js',
@@ -46,6 +47,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/polaris-surface-card.js',
   'public/js/presentation-format.js',
   'public/js/product-telemetry.js',
+  'public/js/report-a-bug.js',
   'public/js/scheduling-approval-ui.js',
   'public/js/scheduling-time-contract.js',
   'public/js/today-page.js',
@@ -219,9 +221,9 @@ describe('Mission 19 Part 4 Slice 5 final reachability retirement', () => {
       .toEqual(['public/site.webmanifest']);
   });
 
-  test('the real package entrypoint mounts all 38 canonical pages and retires legacy and direct/deep asset URLs', async () => {
+  test('the real package entrypoint mounts all 39 canonical pages and retires legacy and direct/deep asset URLs', async () => {
     const mounted = mountedRoutePaths();
-    expect(MOUNTED_THEME_PAGES).toHaveLength(38);
+    expect(MOUNTED_THEME_PAGES).toHaveLength(39);
     for (const page of MOUNTED_THEME_PAGES) expect(mounted).toContain(page.route);
     for (const route of MOUNTED_REDIRECTS) expect(mounted).toContain(route);
 

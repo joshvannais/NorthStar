@@ -60,6 +60,12 @@ const config = {
     pass: process.env.SMTP_PASS,
   },
 
+  // The support forwarding destination is configuration authority. Source
+  // code, browser input, and canonical case content cannot select a recipient.
+  support: {
+    recipient: process.env.NORTHSTAR_SUPPORT_EMAIL,
+  },
+
   // Calendar
   calendar: {
     type: process.env.CALENDAR_TYPE || 'google',

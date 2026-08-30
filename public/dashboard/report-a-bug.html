@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <script src="/js/theme.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report a Bug — NorthStar</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/report-a-bug.css">
+  <script src="/js/auth-session.js"></script>
+</head>
+<body class="support-page">
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
+  <div class="dashboard-layout">
+    <main class="main-content" id="mainContent" tabindex="-1">
+      <div class="support-shell">
+        <header class="page-header support-header">
+          <div>
+            <p class="support-kicker">Customer support</p>
+            <h1>Report a Bug</h1>
+            <p>Send a durable report to NorthStar and keep its case reference and history with your organization.</p>
+          </div>
+        </header>
+
+        <p class="support-auth-state" id="supportAuthState" role="status" aria-live="polite">
+          Checking your signed-in organization…
+        </p>
+
+        <section class="support-card" id="supportFormSection" aria-labelledby="supportFormHeading" hidden>
+          <h2 id="supportFormHeading">Create a support case</h2>
+          <p>Title and description are required. One optional PNG, JPEG, or WebP screenshot may be included, up to 5 MB.</p>
+          <p class="support-warning" id="supportScreenshotWarning">
+            Do not include passwords, payment details, API keys, or unnecessary personal information.
+          </p>
+          <form id="supportReportForm" enctype="multipart/form-data">
+            <div class="form-group">
+              <label for="supportTitle">Title</label>
+              <input id="supportTitle" name="title" maxlength="120" required aria-describedby="supportTitleHelp">
+              <span class="support-help" id="supportTitleHelp">Briefly name the unexpected behavior.</span>
+            </div>
+            <div class="form-group">
+              <label for="supportDescription">Description</label>
+              <textarea id="supportDescription" name="description" rows="7" maxlength="8000" required aria-describedby="supportDescriptionHelp"></textarea>
+              <span class="support-help" id="supportDescriptionHelp">Include what happened, what you expected, and repeatable steps when possible.</span>
+            </div>
+            <div class="form-group">
+              <label for="supportScreenshot">Screenshot <span class="support-optional">(optional)</span></label>
+              <input id="supportScreenshot" name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="supportScreenshotWarning supportScreenshotHelp">
+              <span class="support-help" id="supportScreenshotHelp">Image metadata is removed before the screenshot is stored.</span>
+            </div>
+            <div class="support-form-actions">
+              <button class="btn btn-primary" id="supportSubmit" type="submit">Submit Bug Report</button>
+              <span id="supportSubmitProgress" role="status" aria-live="polite" aria-atomic="true"></span>
+            </div>
+          </form>
+          <div class="support-result" id="supportResult" tabindex="-1" hidden></div>
+        </section>
+
+        <section class="support-history" aria-labelledby="supportHistoryHeading">
+          <div class="support-history-heading">
+            <div>
+              <h2 id="supportHistoryHeading">Your organization’s report history</h2>
+              <p>Up to the 50 most recent cases are shown.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="supportReload" type="button" disabled>Reload History</button>
+          </div>
+          <p id="supportHistoryStatus" role="status" aria-live="polite">History is available after sign-in.</p>
+          <div id="supportHistoryList"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/js/command-center-contract.js"></script>
+  <script src="/js/nav-component.js"></script>
+  <script src="/js/report-a-bug.js"></script>
+  <script>NavComponent.init('report-a-bug');</script>
+</body>
+</html>

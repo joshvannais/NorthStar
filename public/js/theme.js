@@ -254,6 +254,12 @@
       link.textContent = item.label;
       navigation.appendChild(link);
     });
+    if (global.location && global.location.pathname.indexOf('/dashboard') === 0) {
+      var supportLink = document.createElement('a');
+      supportLink.href = '/dashboard/report-a-bug';
+      supportLink.textContent = 'Report a Bug';
+      navigation.appendChild(supportLink);
+    }
 
     var copyright = document.createElement('p');
     copyright.textContent = '© 2026 NorthStar Solutions LLC. All rights reserved.';

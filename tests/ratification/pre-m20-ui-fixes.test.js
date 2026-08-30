@@ -41,8 +41,9 @@ describe('pre-Mission 20 public UI corrections', () => {
     expect(homepage.match(/href=["']\/demo["']/g).length).toBeGreaterThanOrEqual(2);
     expect(homepage).not.toMatch(/href=["']\/demo-dashboard["']/i);
     expect(homepage).not.toMatch(/href=["']\/demo-login["']/i);
-    expect(homepage).toContain('Explore the account-free demo dashboard');
-    expect(homepage).toContain('sample data only, no sign-in required');
+    expect(homepage).toContain('Explore the Account-Free Demo');
+    expect(homepage).toContain('The working account-free dashboard is available now');
+    expect(homepage).not.toContain('class="demo-banner"');
   });
 
   test('the account-free dashboard has one canonical public route and a compatibility redirect', async () => {

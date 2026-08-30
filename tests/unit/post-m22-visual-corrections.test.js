@@ -48,6 +48,18 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(css).not.toMatch(/\.km-item-key, \.km-mono\s*\{[^}]*monospace/);
   });
 
+  test('ratifies current Scheduling Authority instead of the retired direct Calendar event control', () => {
+    const browser = source('tests/browser/command-center-parity-prelude.js');
+
+    expect(browser).toContain('async function exerciseCurrentSchedulingAuthority(page, viewport)');
+    expect(browser).toContain("getByRole('button', { name: 'Create non-capability preview' })");
+    expect(browser).toContain("getByRole('button', { name: 'Approve current preview' })");
+    expect(browser).toContain("getByRole('button', { name: 'Cancel scheduling action' })");
+    expect(browser).toContain("page.locator('.cal-new-event-btn').count()");
+    expect(browser).not.toContain("page.locator('.cal-new-event-btn').click()");
+    expect(browser).toContain("mode === 'paid' ? PAID_NAV_ROUTES.length : ROUTES.length");
+  });
+
   test('uses a single NorthStar lockup in the desktop Command Center shell', () => {
     const shared = source('public/css/site-professionalism.css');
 

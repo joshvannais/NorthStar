@@ -678,7 +678,8 @@ async function exerciseMobileMenuControls(page, viewport, mode) {
     assert.notStrictEqual(initial.sidebarDisplay, 'none', label + ': desktop/tablet sidebar remains visible');
     assert.ok(initial.sidebarRect && initial.sidebarRect.left >= 0 && initial.sidebarRect.right <= initial.viewport.width,
       label + ': desktop/tablet sidebar stays in the viewport');
-    assert.strictEqual(initial.sidebarLinkCount, ROUTES.length, label + ': desktop/tablet keeps every route link');
+    assert.strictEqual(initial.sidebarLinkCount, mode === 'paid' ? PAID_NAV_ROUTES.length : ROUTES.length,
+      label + ': desktop/tablet keeps every route link');
     assert.strictEqual(initial.sidebarLinkOwnsHit, true,
       label + ': desktop/tablet route link owns its hit target: ' + JSON.stringify({
         sidebar: initial.sidebarRect,
@@ -873,6 +874,33 @@ async function clickPaidRoute(page, origin, route, viewport, expectedLeadHref) {
   return snapshot;
 }
 
+async function exerciseCurrentSchedulingAuthority(page, viewport) {
+  const overview = page.locator('#commandCenterScheduling[aria-busy="false"]');
+  await overview.waitFor({ state: 'visible' });
+  const action = overview.locator('.m22-action-button').first();
+  await action.waitFor({ state: 'visible' });
+  await action.focus();
+  await page.keyboard.press('Enter');
+
+  const dialog = page.locator('.m22-dialog[role="dialog"][aria-modal="true"]');
+  await dialog.waitFor({ state: 'visible' });
+  assert.ok(await dialog.getByRole('heading', { level: 2 }).textContent(),
+    viewport.label + ' Scheduling Authority opens a labelled accessible dialog');
+  assert.strictEqual(await dialog.getByLabel('Human approval reason').count(), 1,
+    viewport.label + ' Scheduling Authority exposes the required human approval reason');
+  assert.strictEqual(await dialog.getByRole('button', { name: 'Create non-capability preview' }).isVisible(), true,
+    viewport.label + ' Scheduling Authority exposes an explicit non-capability preview step');
+  assert.strictEqual(await dialog.getByRole('button', { name: 'Approve current preview' }).isVisible(), false,
+    viewport.label + ' Scheduling Authority never exposes approval before a current preview');
+  const close = dialog.getByRole('button', { name: 'Cancel scheduling action' });
+  assert.strictEqual(await close.isVisible(), true,
+    viewport.label + ' Scheduling Authority exposes an accessible close control');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+  assert.strictEqual(await action.evaluate(element => element === document.activeElement), true,
+    viewport.label + ' Scheduling Authority restores focus after Escape');
+}
+
 async function exercisePaidViewport(browser, origin, viewport, session, ledger, expectedLeadHref) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
   context.setDefaultTimeout(10000);
@@ -897,6 +925,7 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger, 
     assert.ok(entry && [200, 304].includes(entry.status()), 'paid Command Center shell loads');
     await dismissFirstVisitGuide(page, viewport.label + '/paid');
     const first = await inspectPaidCurrent(page, ROUTES[0], viewport, expectedLeadHref);
+    await exerciseCurrentSchedulingAuthority(page, viewport);
     await captureEvidence(page, 'paid', ROUTES[0], viewport, 'canonical');
     await exerciseMobileMenuControls(page, viewport, 'paid');
     await exerciseTheme(page, viewport);
@@ -1361,14 +1390,10 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
           assert.ok(agendaConsistency.todayLabels.length > 0 && agendaConsistency.todayLabels.every(label => label.includes('Today')),
             viewport.label + ' Calendar Agenda uses the same Today classification as Day view');
         }
-        await page.locator('.cal-new-event-btn').click();
-        assert.strictEqual(await page.locator('.cal-modal[role="dialog"][aria-modal="true"]').isVisible(), true,
-          viewport.label + ' New Event opens as an accessible modal dialog');
-        assert.ok(await page.locator('.cal-modal label[for]').count() >= 4,
-          viewport.label + ' New Event dialog associates visible labels with its controls');
-        await page.keyboard.press('Escape');
-        assert.strictEqual(await page.locator('#calModalOverlay').count(), 0,
-          viewport.label + ' Escape closes the New Event dialog');
+        assert.strictEqual(await page.locator('.cal-new-event-btn').count(), 0,
+          viewport.label + ' Calendar does not restore the retired direct New Event control');
+        assert.strictEqual(await page.locator('#calendarNewEventArea').isHidden(), true,
+          viewport.label + ' Calendar keeps direct mutation retired in the account-free demo');
       }
       await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
       if (!hasPolarisSurface(id)) {

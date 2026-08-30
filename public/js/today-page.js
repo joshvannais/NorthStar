@@ -20,6 +20,15 @@
   function cleanText(value, fallback) {
     return typeof value === 'string' && value ? value : fallback;
   }
+  function displayProjection() {
+    if (!root.NorthStarDisplayProjection || typeof root.NorthStarDisplayProjection.text !== 'function') {
+      throw new Error('DISPLAY_PROJECTION_UNAVAILABLE');
+    }
+    return root.NorthStarDisplayProjection;
+  }
+  function presentationText(value, fallback) {
+    return displayProjection().text(value, fallback);
+  }
   function formatInstant(value, timeZone, options) {
     var instant = new Date(value);
     if (!Number.isFinite(instant.getTime())) return 'Time unavailable';
@@ -30,7 +39,9 @@
     }
   }
   function label(value) {
-    return cleanText(value, 'unavailable').replace(/_/g, ' ');
+    return presentationText(value, 'Unavailable').replace(/[_-]+/g, ' ').replace(/\b\w/g, function(letter) {
+      return letter.toUpperCase();
+    });
   }
   function validate(data) {
     if (!data || data.version !== 'm22-part6-today-v1' || data.readOnly !== true ||
@@ -54,8 +65,7 @@
     document.body.setAttribute('data-today-state', name);
     if (name !== 'ready') {
       byId('todayRecords').replaceChildren();
-      byId('todayWorkCount').textContent = '0 appointments';
-      byId('todayCount').textContent = name === 'loading' ? 'Checking today…' : 'No work shown';
+      byId('todayCount').textContent = name === 'loading' ? 'Checking Today…' : 'No Work Shown';
     }
     byId('todayLoading').hidden = name !== 'loading';
     byId('todayWork').hidden = name !== 'ready';
@@ -66,6 +76,8 @@
       byId('todayStateCopy').textContent = copy;
       byId('todayStateAction').hidden = action === false;
     }
+    byId('todayRefresh').hidden = !panel.hidden && action !== false;
+    byId('todayStatus').classList.toggle('sr-only', !panel.hidden);
     byId('todayStatus').textContent = copy;
   }
   function badge(text, state) {
@@ -87,9 +99,7 @@
     return { node: node, content: content };
   }
   function serviceLocation(location) {
-    if (!location || typeof location !== 'object') return 'Service location unavailable';
-    return ['street', 'line2', 'city', 'state', 'postalCode', 'country']
-      .map(function(key) { return cleanText(location[key], ''); }).filter(Boolean).join(', ') || 'Service location unavailable';
+    return displayProjection().location(location, 'Service location unavailable');
   }
   function scheduleText(record, timeZone) {
     var start = formatInstant(record.schedule.start, timeZone, { hour: 'numeric', minute: '2-digit' });
@@ -105,9 +115,9 @@
     body.setAttribute('aria-labelledby', 'today-job-' + record.appointmentId);
     var heading = element('div', 'today-card-heading');
     var title = element('div');
-    var jobTitle = element('h3', '', cleanText(record.title, 'Service appointment'));
+    var jobTitle = element('h3', '', presentationText(record.title, 'Job title unavailable'));
     jobTitle.id = 'today-job-' + record.appointmentId;
-    append(title, jobTitle, element('p', 'today-card-service', cleanText(record.serviceType, 'Service type unavailable')));
+    append(title, jobTitle, element('p', 'today-card-service', presentationText(record.serviceType, 'Service type unavailable')));
     var badges = element('div', 'today-badges', null);
     append(badges,
       badge(record.assignment.direct ? 'Assigned to you' : 'Current crew', record.assignment.direct ? 'direct' : 'crew'),
@@ -119,28 +129,28 @@
     var grid = element('div', 'today-detail-grid');
     append(grid,
       detail('Schedule', scheduleText(record, timeZone), record.schedule.spansDayBoundary ? 'Continues across a calendar day' : timeZone),
-      detail('Assignment', cleanText(record.assignment.label, record.assignment.direct ? 'You' : 'Current crew'), record.assignment.direct ? 'Direct assignment' : 'Current active crew'),
-      detail('Customer', cleanText(record.customer && record.customer.name, 'Customer'), cleanText(record.customer && record.customer.phone, 'Phone unavailable')),
+      detail('Assignment', presentationText(record.assignment.label, record.assignment.direct ? 'Employee name unavailable' : 'Crew name unavailable'), record.assignment.direct ? 'Direct assignment' : 'Current active crew'),
+      detail('Customer', presentationText(record.customer && record.customer.name, 'Customer name unavailable'), presentationText(record.customer && record.customer.phone, 'Phone unavailable')),
       detail('Service location', serviceLocation(record.customer && record.customer.serviceLocation), 'Use the current job location shown here')
     );
     var instructions = disclosure('Operational instructions');
-    instructions.content.appendChild(element('p', '', record.instructions && record.instructions.text
-      ? record.instructions.text : 'No current operational instructions are available.'));
+    instructions.content.appendChild(element('p', '', presentationText(record.instructions && record.instructions.text,
+      'Operational instructions unavailable')));
     if (record.instructions && record.instructions.truncated) instructions.content.appendChild(element('p', '', 'Instructions were safely limited for this mobile view.'));
     var route = disclosure('Route and travel evidence');
     route.content.appendChild(element('p', '', 'Status: ' + label(record.route.status) + '.'));
     (Array.isArray(record.route.implications) ? record.route.implications : []).forEach(function(value) {
-      route.content.appendChild(element('p', '', value));
+      route.content.appendChild(element('p', '', presentationText(value, 'Route detail unavailable')));
     });
     (Array.isArray(record.route.uncertainty) ? record.route.uncertainty : []).forEach(function(value) {
-      route.content.appendChild(element('p', '', value));
+      route.content.appendChild(element('p', '', presentationText(value, 'Route detail unavailable')));
     });
     if (record.crew) {
       var crew = disclosure('Current crew context');
-      crew.content.appendChild(element('p', '', cleanText(record.crew.name, 'Current crew')));
+      crew.content.appendChild(element('p', '', presentationText(record.crew.name, 'Crew name unavailable')));
       var list = element('ul', 'today-team-list');
       (Array.isArray(record.crew.teammates) ? record.crew.teammates : []).forEach(function(member) {
-        list.appendChild(element('li', '', cleanText(member.name, 'Teammate') + (member.self ? ' (you)' : '') + ' — ' + label(member.role)));
+        list.appendChild(element('li', '', presentationText(member.name, 'Employee name unavailable') + (member.self ? ' (you)' : '') + ' — ' + label(member.role)));
       });
       crew.content.appendChild(list);
       if (record.crew.truncated) crew.content.appendChild(element('p', '', record.crew.shown + ' of ' + record.crew.total + ' current teammates shown.'));
@@ -153,10 +163,15 @@
   }
   function render(data) {
     var timeZone = data.day.timeZone;
-    byId('todayAuthority').textContent = cleanText(data.identity && data.identity.displayName, 'Current worker') + ' · personal work only';
+    var authority = byId('todayAuthority');
+    var identity = presentationText(data.identity && data.identity.displayName, 'Employee name unavailable');
+    var role = label(data.identity && data.identity.operationalRole);
+    var authorityText = role === 'Owner Operator' ? 'Owner Operator · Personal Work Only' : identity + ' · Personal Work Only';
+    authority.textContent = authorityText;
+    authority.title = authorityText;
+    authority.setAttribute('aria-label', authorityText);
     byId('todayDate').textContent = formatInstant(data.day.start, timeZone, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + ' · ' + timeZone;
-    byId('todayCount').textContent = data.records.length + (data.records.length === 1 ? ' appointment' : ' appointments');
-    byId('todayWorkCount').textContent = byId('todayCount').textContent;
+    byId('todayCount').textContent = data.records.length + (data.records.length === 1 ? ' Appointment' : ' Appointments');
     var records = byId('todayRecords');
     records.replaceChildren();
     data.records.forEach(function(record) { records.appendChild(renderRecord(record, timeZone)); });

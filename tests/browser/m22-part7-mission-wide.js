@@ -193,7 +193,10 @@ async function main() {
         `Alex Technician ${HOSTILE}`, `Morgan Technician ${HOSTILE}`]
     );
     const { putBusinessProfile } = require('../../src/services/organizationAuthority');
-    const business = canonicalFenceProfile({ companyName: 'Mission 22 Part 7 Browser Tenant' });
+    const business = canonicalFenceProfile({
+      companyName: 'Mission 22 Part 7 Browser Tenant',
+      serviceName: `Persisted Profile Fence ${HOSTILE}`,
+    });
     business.company.timeZone = fixturePlan.timeZone;
     business.scheduling = { maxJobsPerDay: 20, workDayLength: 24, appointmentBuffer: 0, travelBuffer: 0 };
     business.hours = {};
@@ -308,7 +311,7 @@ async function main() {
 
     async function screenshot(page, surface, state) {
       if (!evidenceRoot) return;
-      const filename = `${matrix}-${surface}-${state}.png`;
+      const filename = `${matrix}-hostile-security-${surface}-${state}.png`;
       const absolute = path.join(evidenceRoot, filename);
       await page.screenshot({ path: absolute, fullPage: true });
       screenshots.push({ filename, sha256: sha256File(absolute), surface, state });
@@ -339,7 +342,113 @@ async function main() {
     assert.strictEqual(calendarRecord.authority.revision, exact.revision);
     assert.strictEqual(calendarRecord.authority.digest, exact.digest);
     assert.strictEqual(calendarRecord.authority.dispatchState, 'revoked');
-    assert.ok(JSON.stringify(calendarRecord).includes(MARKER), 'Calendar projection preserves hostile stored bytes as data');
+    assert.ok(JSON.stringify(calendarRecord).includes(MARKER),
+      'Authorized Calendar transport projection preserves hostile stored bytes as inert data');
+    const calendarTransport = await calendar.evaluate(async () => {
+      const response = await fetch('/api/v1/canonical/compat/calendar?limit=100', {
+        credentials: 'same-origin', cache: 'no-store', headers: {
+          Accept: 'application/json',
+          'X-NorthStar-Session-ID': sessionStorage.getItem('northstarSessionId') || '',
+        },
+      });
+      return { status: response.status, body: await response.json() };
+    });
+    assert.strictEqual(calendarTransport.status, 200);
+    assert.ok(JSON.stringify(calendarTransport.body).includes(MARKER),
+      'Authorized Calendar HTTP transport preserves hostile authority bytes');
+    const displayProjectionSemantics = await calendar.evaluate(hostile => {
+      const projection = window.NorthStarDisplayProjection;
+      const legitimate = [
+        'Zone=Kitchen', 'Stone=Quartz', 'Someone=Assigned',
+        'Data: cabling', 'data: reporting', '12 Stone=Quartz Way',
+        'Onsite=Yes', 'OnCall=Available', 'One=1', 'Only=Scheduled',
+        'Online=Available', 'Onboarding=Complete', 'Once=Confirmed',
+        'Ongoing=Yes', 'Owner=Operator', 'On Route=Yes', 'on call = available',
+        'contentvisibilityautostatechange=Enabled',
+        'oncontentvisibilityautostatechange-state=review', 'myonerror=review',
+      ];
+      const auditedHandlerGaps = [
+        'onappinstalled', 'onbeforecopy', 'onbeforecut', 'onbeforeinstallprompt', 'onbeforeload',
+        'onbeforepaste', 'onbeforexrselect', 'oncontentvisibilityautostatechange', 'onencrypted',
+        'onenterpictureinpicture', 'onfreeze', 'ongamepadconnected', 'ongamepaddisconnected',
+        'onleavepictureinpicture', 'onorientationchange', 'onpointerlockchange', 'onpointerlockerror',
+        'onprerenderingchange', 'onreadystatechange', 'onresume', 'onscrollsnapchange',
+        'onscrollsnapchanging', 'onsearch', 'ontouchforcechange', 'onwaitingforkey',
+        'onwebkitanimationend', 'onwebkitanimationiteration', 'onwebkitanimationstart',
+        'onwebkitfullscreenchange', 'onwebkitfullscreenerror', 'onwebkitmouseforcechanged',
+        'onwebkitmouseforcedown', 'onwebkitmouseforceup', 'onwebkitmouseforcewillbegin',
+        'onwebkittransitionend',
+      ];
+      const hostileBoundaries = [
+        'ONCONTENTVISIBILITYAUTOSTATECHANGE = handler', 'onscrollsnapchange\t=handler',
+        'x,onreadystatechange=x', '(onfreeze=x', 'x/onresume=x', '[onsearch=x',
+        'onwaitingforkey&#x3d;x', 'onwaitingforkey&#61;x',
+      ];
+      return {
+        legitimate: legitimate.map(value => projection.text(value, 'Job title unavailable')),
+        auditedHandlersNeutralized: auditedHandlerGaps.every(name =>
+          projection.text(`${name}=handler`, 'Job title unavailable') === 'Job title unavailable'),
+        hostileBoundariesNeutralized: hostileBoundaries.every(value =>
+          projection.text(value, 'Job title unavailable') === 'Job title unavailable'),
+        location: projection.location('12 Stone=Quartz Way', 'Service location unavailable'),
+        structuredLocation: projection.location({
+          street: '12 Stone=Quartz Way', city: 'Zone=Kitchen',
+        }, 'Service location unavailable'),
+        hostile: projection.text(hostile, 'Job title unavailable'),
+        hostileLocation: projection.location(hostile, 'Service location unavailable'),
+      };
+    }, HOSTILE);
+    assert.deepStrictEqual(displayProjectionSemantics, {
+      legitimate: [
+        'Zone=Kitchen', 'Stone=Quartz', 'Someone=Assigned',
+        'Data: cabling', 'data: reporting', '12 Stone=Quartz Way',
+        'Onsite=Yes', 'OnCall=Available', 'One=1', 'Only=Scheduled',
+        'Online=Available', 'Onboarding=Complete', 'Once=Confirmed',
+        'Ongoing=Yes', 'Owner=Operator', 'On Route=Yes', 'on call = available',
+        'contentvisibilityautostatechange=Enabled',
+        'oncontentvisibilityautostatechange-state=review', 'myonerror=review',
+      ],
+      auditedHandlersNeutralized: true,
+      hostileBoundariesNeutralized: true,
+      location: '12 Stone=Quartz Way',
+      structuredLocation: '12 Stone=Quartz Way, Zone=Kitchen',
+      hostile: 'Job title unavailable',
+      hostileLocation: 'Service location unavailable',
+    });
+    const calendarText = await calendar.locator('body').innerText();
+    assert.ok(!calendarText.toLowerCase().includes(MARKER.toLowerCase()),
+      `Calendar ordinary DOM excludes hostile code-like text: ${JSON.stringify(calendarText)}`);
+    for (const placeholder of ['customer name unavailable', 'job title unavailable']) {
+      assert.ok(calendarText.toLowerCase().includes(placeholder),
+        `${placeholder} is rendered in Calendar: ${JSON.stringify(calendarText)}`);
+    }
+    const safeCalendarEvent = await calendar.evaluate(id => {
+      const event = window.calState && window.calState.events.find(entry => entry.id === id);
+      return event && { title: event.title, address: event.address, phone: event.phone, serviceType: event.serviceType };
+    }, appointmentId);
+    assert.deepStrictEqual({
+      title: safeCalendarEvent.title, address: safeCalendarEvent.address, serviceType: safeCalendarEvent.serviceType,
+    }, {
+      title: 'Customer name unavailable', address: 'Service location unavailable', serviceType: 'Service type unavailable',
+    });
+    assert.ok(!JSON.stringify(safeCalendarEvent).includes(MARKER));
+    const calendarRecordNode = calendar.locator(`.m22-overview-record:has-text("Job title unavailable")`).first();
+    await calendarRecordNode.waitFor({ state: 'visible' });
+    const reassign = calendarRecordNode.getByRole('button', { name: 'Reassign', exact: true });
+    assert.strictEqual(await reassign.count(), 1, 'Calendar exposes the authorized reassign action');
+    await reassign.click();
+    const dialog = calendar.getByRole('dialog');
+    await dialog.waitFor({ state: 'visible' });
+    const dialogText = await dialog.innerText();
+    assert.ok(!dialogText.toLowerCase().includes(MARKER.toLowerCase()),
+      `Calendar scheduling dialog excludes hostile code-like text: ${JSON.stringify(dialogText)}`);
+    for (const placeholder of ['customer name unavailable', 'job title unavailable', 'crew name unavailable']) {
+      assert.ok(dialogText.toLowerCase().includes(placeholder), `${placeholder} is rendered in the scheduling dialog`);
+    }
+    const targetOptions = await dialog.locator('select option').allInnerTexts();
+    assert.ok(targetOptions.some(value => value.includes('Employee name unavailable')),
+      `Employee name unavailable is rendered in the scheduling target options: ${JSON.stringify(targetOptions)}`);
+    await dialog.getByRole('button', { name: 'Cancel scheduling action' }).click();
     assert.strictEqual(await calendar.evaluate(() => Boolean(globalThis.m22Part7Compromised)), false);
     assert.strictEqual(await calendar.locator('img[src="x"]').count(), 0);
     await calendar.keyboard.press('Tab');
@@ -351,12 +460,31 @@ async function main() {
     attachErrors(commandCenter);
     await commandCenter.goto(`${origin}/dashboard`, { waitUntil: 'domcontentloaded' });
     await commandCenter.locator('#commandCenterScheduling[aria-busy="false"]').waitFor({ state: 'visible' });
+    const quickStart = commandCenter.locator('#northstarQuickStartDialog');
+    await quickStart.waitFor({ state: 'visible', timeout: 10000 });
+    const quickStartGeometry = await quickStart.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return {
+        centerX: rect.left + (rect.width / 2),
+        centerY: rect.top + (rect.height / 2),
+        viewportX: innerWidth / 2,
+        viewportY: innerHeight / 2,
+      };
+    });
+    assert.ok(Math.abs(quickStartGeometry.centerX - quickStartGeometry.viewportX) <= 2 &&
+      Math.abs(quickStartGeometry.centerY - quickStartGeometry.viewportY) <= 2,
+    `Quick Start is centered before the Part 7 operational flow: ${JSON.stringify(quickStartGeometry)}`);
+    await commandCenter.getByRole('button', { name: 'Close quick start' }).click();
+    await quickStart.waitFor({ state: 'detached' });
     await commandCenter.getByRole('button', { name: /^All \d+$/ }).click();
     const commandItem = commandCenter.locator(`#commandCenterSchedulingRecords [data-appointment-id="${appointmentId}"]`);
     await commandItem.waitFor({ state: 'visible' });
     const commandItemText = await commandItem.innerText();
-    assert.ok(commandItemText.toLowerCase().includes(MARKER.toLowerCase()),
-      `Command Center renders hostile bytes as inert text: ${JSON.stringify(commandItemText)}`);
+    assert.ok(!commandItemText.toLowerCase().includes(MARKER.toLowerCase()),
+      `Command Center ordinary DOM excludes hostile code-like text: ${JSON.stringify(commandItemText)}`);
+    for (const placeholder of ['customer name unavailable', 'job title unavailable']) {
+      assert.ok(commandItemText.toLowerCase().includes(placeholder), `${placeholder} is rendered in Command Center`);
+    }
     const commandResponse = await commandCenter.evaluate(async () => {
       const response = await fetch('/api/v1/command-center/workspace', { credentials: 'same-origin', cache: 'no-store' });
       return { status: response.status, body: await response.json() };
@@ -368,6 +496,8 @@ async function main() {
     assert.strictEqual(commandRecord.authority.revision, exact.revision);
     assert.strictEqual(commandRecord.authority.digest, exact.digest);
     assert.strictEqual(commandRecord.authority.dispatchState, 'revoked');
+    assert.ok(JSON.stringify(commandRecord).includes(MARKER),
+      'Authorized Command Center transport preserves hostile authority bytes');
     assert.strictEqual(await commandCenter.evaluate(() => Boolean(globalThis.m22Part7Compromised)), false);
     assert.strictEqual(await commandCenter.locator('img[src="x"]').count(), 0);
     assertViewportGeometry(await pageGeometry(commandCenter));
@@ -393,9 +523,15 @@ async function main() {
     assert.strictEqual(todayRecord.route.travelDurationMinutes, null);
     const todayItem = today.locator(`#todayRecords [data-appointment-id="${appointmentId}"]`);
     await todayItem.waitFor({ state: 'visible' });
-    assert.ok((await todayItem.innerText()).toLowerCase().includes(MARKER.toLowerCase()),
-      'Today renders permitted hostile bytes as inert text');
+    const todayItemText = await todayItem.innerText();
+    assert.ok(!todayItemText.toLowerCase().includes(MARKER.toLowerCase()),
+      `Today ordinary DOM excludes hostile code-like text: ${JSON.stringify(todayItemText)}`);
+    for (const placeholder of [
+      'job title unavailable', 'customer name unavailable', 'crew name unavailable',
+      'service location unavailable',
+    ]) assert.ok(todayItemText.toLowerCase().includes(placeholder), `${placeholder} is rendered in Today`);
     const todayBytes = JSON.stringify(todayResponse.body);
+    assert.ok(todayBytes.includes(MARKER), 'Authorized minimized Today transport preserves permitted hostile authority bytes');
     for (const forbidden of [
       'SECRET_FINANCIAL_MARGIN', 'SECRET_INVOICE', 'SECRET_PAYROLL', 'SECRET_HISTORY',
       'SECRET-GATE', 'private-history@example.test', 'PRIVATE TRANSCRIPT',
@@ -436,7 +572,8 @@ async function main() {
         `employee network requested ${forbiddenPath}`);
     }
     const evidence = {
-      version: 'm22-part7-browser-trace-v1', matrix,
+      version: 'm22-part7-browser-trace-v2', matrix,
+      evidenceKind: 'hostile-security-fixture-not-for-ordinary-visual-approval',
       browser: { requested: selected, runtimeName: runtime.name, version: browser.version(), physicalSafari: false },
       viewport, theme: dark ? 'dark' : 'light', reducedMotion: 'reduce',
       testedRevision, testedTree, appointmentId, assignmentRevision: exact.revision,

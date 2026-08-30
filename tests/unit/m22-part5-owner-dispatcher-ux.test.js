@@ -86,12 +86,13 @@ describe('Mission 22 Part 5 owner and dispatcher UX contracts', () => {
     expect(approval).toContain('Idempotency-Key');
   });
 
-  test('Command Center consumes server categories and demo remains explicitly non-authoritative', () => {
+  test('Command Center consumes server categories and keeps demo scheduling read-only', () => {
     const page = fs.readFileSync(path.join(ROOT, 'public/js/command-center-page.js'), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, 'public/demo-dashboard.html'), 'utf8');
     expect(page).toContain('overview.categories[schedulingCategory]');
     expect(page).toContain('server-defined category');
-    expect(page).toContain('non-authoritative and read-only');
+    expect(page).toContain("definition.textContent = 'This demo is read-only.'");
+    expect(page).toContain('Scheduling changes are available in a paid workspace.');
     expect(page).not.toMatch(/fetch\([^)]*canonical\/compat\/calendar/);
     expect(html).toContain('scheduling-approval-ui.js');
   });

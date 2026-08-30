@@ -15,6 +15,8 @@ const { provisionDurableSession } = fromRoot('tests/helpers/account-session-fixt
 const { resolveBrowserRuntime } = fromRoot('tests/helpers/playwright-runtime');
 const { ingestRetell } = fromRoot('src/services/canonicalGraphService');
 const CAPTURE_BASELINE = process.env.NORTHSTAR_CAPTURE_BASELINE_ONLY === '1';
+const SETTINGS_PRESENTATION_ONLY = process.env.NORTHSTAR_SETTINGS_PRESENTATION_ONLY === '1';
+const SETTINGS_PRESENTATION_THEME = process.env.NORTHSTAR_SETTINGS_THEME || 'light';
 const ROUTES = Object.freeze([
   Object.freeze({ id: 'command-center', path: '/demo', paidPath: '/dashboard', marker: 'One operating view for the day ahead.', surface: '.command-center-blueprint-main' }),
   Object.freeze({ id: 'polaris', path: '/demo/polaris', paidPath: '/dashboard/polaris', marker: 'POLARIS', surface: '.polaris-workspace' }),
@@ -185,6 +187,7 @@ async function captureEvidence(page, mode, route, viewport, phase) {
   fs.mkdirSync(directory, { recursive: true });
   const name = [mode, viewport.label, route.id, phase].join('--').replace(/[^a-z0-9_.-]+/gi, '-').toLowerCase() + '.png';
   const target = path.join(directory, name);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: target, fullPage: true });
   return target;
 }
@@ -377,6 +380,12 @@ async function inspectCurrent(page, route, revision, viewport) {
       catalogueProviderNames: routeId === 'integrations'
         ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim())
         : [],
+      knowledgePresentation: routeId === 'settings' ? {
+        exposesInternalIdentityKey: document.body.textContent.includes('generated.identity'),
+        visibleTechnicalFontFamilies: Array.from(document.querySelectorAll('[data-knowledge-management] .km-item-key, [data-knowledge-management] .km-mono'))
+          .filter(visible)
+          .map(node => getComputedStyle(node).fontFamily),
+      } : null,
       routeId,
       routePath,
       mobile,
@@ -395,6 +404,14 @@ async function inspectCurrent(page, route, revision, viewport) {
   assert.strictEqual(snapshot.mobileHeaderVisible, viewport.width <= 768, route.path + ' responsive mobile header visibility');
   assert.strictEqual(snapshot.genericShells, 0, route.path + ' generic Parity shell removed');
   assert.ok(snapshot.overflow <= 1, route.path + ' no horizontal overflow');
+  if (route.id === 'settings') {
+    assert.strictEqual(snapshot.knowledgePresentation.exposesInternalIdentityKey, false,
+      route.path + ' does not expose the internal generated.identity key');
+    assert.ok(snapshot.knowledgePresentation.visibleTechnicalFontFamilies.every(family =>
+      !/(?:ui-monospace|sfmono|consolas|monospace)/i.test(family)),
+    route.path + ' knowledge presentation uses the approved native type stack: ' +
+      JSON.stringify(snapshot.knowledgePresentation.visibleTechnicalFontFamilies));
+  }
   if (DEMO_TOOLBAR_ALLOWLIST.includes(route.id)) {
     assert.ok(snapshot.toolbarRect.left - snapshot.mainRect.left >= 11 &&
       snapshot.mainRect.right - snapshot.toolbarRect.right >= 11,
@@ -482,11 +499,37 @@ async function exercisePolarisDisclosure(page, route, viewport) {
   console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' polaris-disclosure ' + route.id);
 }
 
+async function dismissFirstVisitGuide(page, label) {
+  const dialog = page.locator('#northstarQuickStartDialog');
+  await dialog.waitFor({ state: 'visible', timeout: 10000 });
+  const geometry = await dialog.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return {
+      centerX: rect.left + (rect.width / 2),
+      centerY: rect.top + (rect.height / 2),
+      viewportX: innerWidth / 2,
+      viewportY: innerHeight / 2,
+    };
+  });
+  assert.ok(Math.abs(geometry.centerX - geometry.viewportX) <= 2 &&
+    Math.abs(geometry.centerY - geometry.viewportY) <= 2,
+  label + ' first-visit guide is centered in the viewport');
+  if (process.env.NORTHSTAR_SCREENSHOT_DIR) {
+    const directory = path.resolve(process.env.NORTHSTAR_SCREENSHOT_DIR);
+    fs.mkdirSync(directory, { recursive: true });
+    const name = (label + '--quick-start').replace(/[^a-z0-9_.-]+/gi, '-').toLowerCase() + '.png';
+    await page.screenshot({ path: path.join(directory, name), fullPage: false });
+  }
+  await page.getByRole('button', { name: 'Close quick start' }).click();
+  await dialog.waitFor({ state: 'detached' });
+}
+
 async function enterDemo(page, origin, revision, viewport) {
   const route = ROUTES[0];
   const response = await page.goto(origin + route.path, { waitUntil: 'domcontentloaded', timeout: 15000 });
   assert.ok(response, route.path + ' entry response');
   assert.ok([200, 304].includes(response.status()), route.path + ' shell HTTP ' + response.status());
+  await dismissFirstVisitGuide(page, viewport.label + '/demo');
   return inspectCurrent(page, route, revision, viewport);
 }
 
@@ -635,7 +678,8 @@ async function exerciseMobileMenuControls(page, viewport, mode) {
     assert.notStrictEqual(initial.sidebarDisplay, 'none', label + ': desktop/tablet sidebar remains visible');
     assert.ok(initial.sidebarRect && initial.sidebarRect.left >= 0 && initial.sidebarRect.right <= initial.viewport.width,
       label + ': desktop/tablet sidebar stays in the viewport');
-    assert.strictEqual(initial.sidebarLinkCount, ROUTES.length, label + ': desktop/tablet keeps every route link');
+    assert.strictEqual(initial.sidebarLinkCount, mode === 'paid' ? PAID_NAV_ROUTES.length : ROUTES.length,
+      label + ': desktop/tablet keeps every route link');
     assert.strictEqual(initial.sidebarLinkOwnsHit, true,
       label + ': desktop/tablet route link owns its hit target: ' + JSON.stringify({
         sidebar: initial.sidebarRect,
@@ -830,6 +874,33 @@ async function clickPaidRoute(page, origin, route, viewport, expectedLeadHref) {
   return snapshot;
 }
 
+async function exerciseCurrentSchedulingAuthority(page, viewport) {
+  const overview = page.locator('#commandCenterScheduling[aria-busy="false"]');
+  await overview.waitFor({ state: 'visible' });
+  const action = overview.locator('.m22-action-button').first();
+  await action.waitFor({ state: 'visible' });
+  await action.focus();
+  await page.keyboard.press('Enter');
+
+  const dialog = page.locator('.m22-dialog[role="dialog"][aria-modal="true"]');
+  await dialog.waitFor({ state: 'visible' });
+  assert.ok(await dialog.getByRole('heading', { level: 2 }).textContent(),
+    viewport.label + ' Scheduling Authority opens a labelled accessible dialog');
+  assert.strictEqual(await dialog.getByLabel('Human approval reason').count(), 1,
+    viewport.label + ' Scheduling Authority exposes the required human approval reason');
+  assert.strictEqual(await dialog.getByRole('button', { name: 'Create non-capability preview' }).isVisible(), true,
+    viewport.label + ' Scheduling Authority exposes an explicit non-capability preview step');
+  assert.strictEqual(await dialog.getByRole('button', { name: 'Approve current preview' }).isVisible(), false,
+    viewport.label + ' Scheduling Authority never exposes approval before a current preview');
+  const close = dialog.getByRole('button', { name: 'Cancel scheduling action' });
+  assert.strictEqual(await close.isVisible(), true,
+    viewport.label + ' Scheduling Authority exposes an accessible close control');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+  assert.strictEqual(await action.evaluate(element => element === document.activeElement), true,
+    viewport.label + ' Scheduling Authority restores focus after Escape');
+}
+
 async function exercisePaidViewport(browser, origin, viewport, session, ledger, expectedLeadHref) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
   context.setDefaultTimeout(10000);
@@ -852,7 +923,9 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger, 
   try {
     const entry = await page.goto(origin + ROUTES[0].paidPath, { waitUntil: 'domcontentloaded', timeout: 15000 });
     assert.ok(entry && [200, 304].includes(entry.status()), 'paid Command Center shell loads');
+    await dismissFirstVisitGuide(page, viewport.label + '/paid');
     const first = await inspectPaidCurrent(page, ROUTES[0], viewport, expectedLeadHref);
+    await exerciseCurrentSchedulingAuthority(page, viewport);
     await captureEvidence(page, 'paid', ROUTES[0], viewport, 'canonical');
     await exerciseMobileMenuControls(page, viewport, 'paid');
     await exerciseTheme(page, viewport);
@@ -878,8 +951,8 @@ async function exercisePaidViewport(browser, origin, viewport, session, ledger, 
       viewport.label + ' paid KPI explains the absent canonical price');
     assert.ok(absentEstimate.chart.includes('No recorded opportunity values are available for this view.'),
       viewport.label + ' null estimate stays absent from the chart');
-    assert.ok(absentEstimate.chartSummary.includes('empty until a role-authorized estimate is recorded'),
-      viewport.label + ' paid chart explains its missing input');
+    assert.strictEqual(absentEstimate.chartSummary, '',
+      viewport.label + ' paid chart does not repeat a technical missing-input note');
     assert.deepStrictEqual(absentEstimate.tableValues, ['Unavailable — no recorded estimate'],
       viewport.label + ' paid table does not fabricate a zero-dollar estimate');
     assert.ok(!absentEstimate.polaris.includes('A recorded customer-facing estimate is available for review.'),
@@ -1317,14 +1390,10 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
           assert.ok(agendaConsistency.todayLabels.length > 0 && agendaConsistency.todayLabels.every(label => label.includes('Today')),
             viewport.label + ' Calendar Agenda uses the same Today classification as Day view');
         }
-        await page.locator('.cal-new-event-btn').click();
-        assert.strictEqual(await page.locator('.cal-modal[role="dialog"][aria-modal="true"]').isVisible(), true,
-          viewport.label + ' New Event opens as an accessible modal dialog');
-        assert.ok(await page.locator('.cal-modal label[for]').count() >= 4,
-          viewport.label + ' New Event dialog associates visible labels with its controls');
-        await page.keyboard.press('Escape');
-        assert.strictEqual(await page.locator('#calModalOverlay').count(), 0,
-          viewport.label + ' Escape closes the New Event dialog');
+        assert.strictEqual(await page.locator('.cal-new-event-btn').count(), 0,
+          viewport.label + ' Calendar does not restore the retired direct New Event control');
+        assert.strictEqual(await page.locator('#calendarNewEventArea').isHidden(), true,
+          viewport.label + ' Calendar keeps direct mutation retired in the account-free demo');
       }
       await page.waitForFunction(name => document.body.textContent.includes(name), added.customer.name);
       if (!hasPolarisSurface(id)) {
@@ -1410,8 +1479,9 @@ async function captureBaselineDemoViewport(browser, origin, viewport) {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   try {
     for (const route of ROUTES) {
-      const response = await page.goto(origin + route.path, { waitUntil: 'networkidle', timeout: 15000 });
+      const response = await page.goto(origin + route.path, { waitUntil: 'domcontentloaded', timeout: 15000 });
       assert.ok(response && [200, 304].includes(response.status()), 'baseline ' + route.path + ' response');
+      if (route.id === 'command-center') await dismissFirstVisitGuide(page, viewport.label + '/baseline-demo');
       await page.waitForFunction(({ marker, surface }) => {
         const workspace = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.getWorkspace &&
           window.NorthStarDemoRuntime.getWorkspace();
@@ -1440,8 +1510,9 @@ async function captureBaselinePaidViewport(browser, origin, viewport, session) {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   try {
     for (const route of ROUTES) {
-      const response = await page.goto(origin + route.paidPath, { waitUntil: 'networkidle', timeout: 15000 });
+      const response = await page.goto(origin + route.paidPath, { waitUntil: 'domcontentloaded', timeout: 15000 });
       assert.ok(response && [200, 304].includes(response.status()), 'baseline ' + route.paidPath + ' response');
+      if (route.id === 'command-center') await dismissFirstVisitGuide(page, viewport.label + '/baseline-paid');
       await page.waitForFunction(({ marker, surface }) => {
         const account = window.NorthStarAccountSession && window.NorthStarAccountSession.getAccount &&
           window.NorthStarAccountSession.getAccount();
@@ -1453,6 +1524,32 @@ async function captureBaselinePaidViewport(browser, origin, viewport, session) {
       await captureEvidence(page, 'paid', route, viewport, 'before');
     }
     return { viewport: viewport.label, routes: ROUTES.length, browserErrors: errors };
+  } finally {
+    await context.close();
+  }
+}
+
+async function exerciseSettingsPresentationOnly(browser, origin, viewport) {
+  assert.ok(['light', 'dark'].includes(SETTINGS_PRESENTATION_THEME),
+    'NORTHSTAR_SETTINGS_THEME must be light or dark');
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block',
+  });
+  await context.addInitScript(theme => localStorage.setItem('northstar-theme', theme), SETTINGS_PRESENTATION_THEME);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  try {
+    const route = ROUTES.find(candidate => candidate.id === 'settings');
+    const response = await page.goto(origin + route.path, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    assert.ok(response && [200, 304].includes(response.status()), route.path + ' focused shell response');
+    await inspectCurrent(page, route, 1, viewport);
+    assert.strictEqual(await page.locator('html').getAttribute('data-theme'), SETTINGS_PRESENTATION_THEME,
+      route.path + ' focused presentation theme');
+    assert.deepStrictEqual(errors, [], route.path + ' focused browser errors');
+    await captureEvidence(page, 'demo-settings-' + SETTINGS_PRESENTATION_THEME, route, viewport, 'focused');
+    return { viewport: viewport.label, theme: SETTINGS_PRESENTATION_THEME, route: route.path };
   } finally {
     await context.close();
   }
@@ -1541,6 +1638,17 @@ async function main() {
     server = await listen(app);
     const origin = 'http://127.0.0.1:' + server.address().port;
     browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
+    if (SETTINGS_PRESENTATION_ONLY) {
+      const receipts = [];
+      for (const viewport of selectedViewports) receipts.push(await exerciseSettingsPresentationOnly(browser, origin, viewport));
+      console.log('PR151_SETTINGS_PRESENTATION_RECEIPT ' + JSON.stringify({
+        browser: selected,
+        version: browser.version(),
+        theme: SETTINGS_PRESENTATION_THEME,
+        receipts,
+      }));
+      return;
+    }
     if (CAPTURE_BASELINE) {
       const demo = [];
       const paid = [];

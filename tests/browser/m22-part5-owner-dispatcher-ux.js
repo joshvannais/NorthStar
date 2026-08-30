@@ -251,7 +251,10 @@ async function main() {
     });
 
     async function screenshot(label) {
-      if (evidenceRoot) await page.screenshot({ path: path.join(evidenceRoot, matrix + '-' + label + '.png'), fullPage: true });
+      if (evidenceRoot) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: path.join(evidenceRoot, matrix + '-' + label + '.png'), fullPage: true });
+      }
     }
 
     async function waitRevision(revision) {
@@ -283,12 +286,22 @@ async function main() {
     }
 
     function actionButton(name) {
-      return page.locator('#calendarAuthorityBoard .m22-overview-record').filter({ hasText: HOSTILE })
+      return page.locator('#calendarAuthorityBoard [data-appointment-id="' + appointmentId + '"]')
         .getByRole('button', { name, exact: true });
     }
 
     await page.goto(origin + '/dashboard/calendar', { waitUntil: 'domcontentloaded' });
     await waitRevision(1);
+    const calendarAuthorityBytes = await page.evaluate(id => {
+      const projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+      return projection && projection.schedulingOverview.records.find(record => record.appointmentId === id);
+    }, appointmentId);
+    const calendarAuthorityHasHostileBytes = JSON.stringify(calendarAuthorityBytes).includes('m22Part5Compromised=true');
+    assert.ok(!(await page.locator('body').innerText()).includes(HOSTILE), 'ordinary Calendar DOM uses neutral display placeholders');
+    if (calendarAuthorityHasHostileBytes) {
+      assert.match(await page.locator('#calendarAuthorityBoard [data-appointment-id="' + appointmentId + '"]').innerText(),
+        /customer name unavailable/i);
+    }
     assert.strictEqual(await page.evaluate(() => Boolean(globalThis.m22Part5Compromised)), false);
     const calendarDirectory = await page.evaluate(() => window.CanonicalIntelligence.getProjection('calendar').schedulingOperator);
     assert.deepStrictEqual({
@@ -494,10 +507,11 @@ async function main() {
           assert.strictEqual(action.disabled, false, action.label);
           assert.notStrictEqual(action.pointerEvents, 'none', action.label);
         }
-        const hostileTitle = geometry.titles.find(title => title.text.includes(HOSTILE));
-        assert.ok(hostileTitle, 'hostile durable title remains visible');
-        assert.ok(hostileTitle.height > hostileTitle.lineHeight,
-          'hostile durable title wraps rather than truncates: ' + JSON.stringify(hostileTitle));
+        if (calendarAuthorityHasHostileBytes) {
+          const placeholderTitle = geometry.titles.find(title => /customer name unavailable/i.test(title.text));
+          assert.ok(placeholderTitle, 'truthful neutral customer placeholder remains visible');
+        }
+        assert.ok(!geometry.titles.some(title => title.text.includes(HOSTILE)), 'ordinary Calendar title excludes raw code-like bytes');
       };
       const normal = await measureCalendar('normal-390');
       assertCalendarReflow(normal);
@@ -511,9 +525,12 @@ async function main() {
     }
 
     await page.goto(origin + '/dashboard', { waitUntil: 'domcontentloaded' });
+    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Close quick start' }).click();
+    await page.locator('#northstarQuickStartDialog').waitFor({ state: 'detached' });
     await page.getByRole('heading', { name: 'Owner and dispatcher overview' }).waitFor();
     await page.getByRole('button', { name: /Unassigned 1/ }).click();
-    const commandRecord = page.locator('#commandCenterSchedulingRecords .m22-overview-record').filter({ hasText: HOSTILE });
+    const commandRecord = page.locator('#commandCenterSchedulingRecords [data-appointment-id="' + appointmentId + '"]');
     assert.strictEqual(await commandRecord.count(), 1);
     await beginFromButton(commandRecord.getByRole('button', { name: 'Assign', exact: true }));
     await completeDialog(async () => {
@@ -597,6 +614,7 @@ async function main() {
       }),
     }), scheduledPins.scheduledStart);
     const commandRecordText = await commandRecord.innerText();
+    assert.ok(!commandRecordText.includes(HOSTILE), 'ordinary Command Center DOM uses neutral display placeholders');
     assert.strictEqual(displayTruth.browserTimeZone, 'America/Los_Angeles');
     assert.ok(commandRecordText.includes(displayTruth.tenantLocal), JSON.stringify({ commandRecordText, displayTruth }));
     assert.ok(commandRecordText.includes('America/New_York'), commandRecordText);
@@ -731,7 +749,7 @@ async function main() {
       assert.strictEqual(pageOneBody.data.schedulingOverview.shown, 100);
       try {
       await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-        .includes('Showing 100 of 103 canonical appointments in America/New_York.'), null, { timeout: 10000 });
+        .includes('Showing 100 of 103 appointments in America/New_York.'), null, { timeout: 10000 });
       } catch (error) {
         const state = await page.evaluate(() => ({
         definition: document.getElementById('commandCenterSchedulingDefinition').textContent,
@@ -743,11 +761,11 @@ async function main() {
       const nextPage = page.getByRole('button', { name: 'Next 100 appointments', exact: true });
       await nextPage.click();
       await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-      .includes('Showing 3 of 103 canonical appointments in America/New_York.'));
+      .includes('Showing 3 of 103 appointments in America/New_York.'));
       assert.strictEqual(await page.getByRole('button', { name: 'First page', exact: true }).count(), 1);
       await page.getByRole('button', { name: 'First page', exact: true }).click();
       await page.waitForFunction(() => document.getElementById('commandCenterSchedulingDefinition').textContent
-      .includes('Showing 100 of 103 canonical appointments in America/New_York.'));
+      .includes('Showing 100 of 103 appointments in America/New_York.'));
     }
 
     await pool.query("UPDATE subscriptions SET status='past_due' WHERE organization_id=$1", [ORGANIZATION_ID]);
@@ -774,7 +792,7 @@ async function main() {
     await employeeContext.addInitScript(installSessionMetadata, 'm22-part5-employee-' + matrix);
     const employeePage = await employeeContext.newPage();
     await employeePage.goto(origin + '/dashboard/calendar', { waitUntil: 'domcontentloaded' });
-    await employeePage.getByText('Detailed scheduling authority is limited to current owners, admins, and active dispatchers.').waitFor();
+    await employeePage.getByText('Scheduling details are limited to authorized owners and dispatchers.').waitFor();
     assert.strictEqual(await employeePage.locator('#calendarAuthorityBoard .m22-action-button').count(), 0);
     await employeePage.goto(origin + '/dashboard', { waitUntil: 'domcontentloaded' });
     await employeePage.getByText(/Current owner or active-dispatcher scheduling authority is unavailable/).waitFor();

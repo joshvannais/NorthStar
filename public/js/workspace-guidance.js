@@ -2,6 +2,7 @@
   'use strict';
 
   var STORAGE_KEY = 'northstar_workspace_quick_start_v1';
+  var SEEN_KEY = 'northstar_workspace_quick_start_seen_v2';
 
   function safeStorage(mode) {
     try { return mode === 'demo' ? global.sessionStorage : global.localStorage; }
@@ -21,6 +22,16 @@
     var storage = safeStorage(mode);
     if (!storage) return;
     try { storage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch (_error) {}
+  }
+
+  function hasSeenGuide(mode) {
+    try { return global.localStorage.getItem(SEEN_KEY + ':' + mode) === 'true'; }
+    catch (_error) { return false; }
+  }
+
+  function markGuideSeen(mode) {
+    try { global.localStorage.setItem(SEEN_KEY + ':' + mode, 'true'); }
+    catch (_error) {}
   }
 
   function element(tag, className, text) {
@@ -46,7 +57,7 @@
   }
 
   function init(options) {
-    if (document.getElementById('northstarQuickStartButton')) return;
+    if (document.getElementById('northstarQuickStartDialog')) return;
     var mode = options && options.mode === 'demo' ? 'demo' : 'paid';
     var activePage = options && options.activePage || '';
     var state = readState(mode);
@@ -56,10 +67,9 @@
     } catch (_error) {}
     writeState(mode, state);
 
-    var button = element('button', 'northstar-quick-start-button', 'Quick Start');
-    button.id = 'northstarQuickStartButton';
-    button.type = 'button';
-    button.setAttribute('aria-haspopup', 'dialog');
+    // The guide is an intentional first-arrival experience on Command Center,
+    // not a floating control that can cover operational content on every page.
+    if (activePage !== 'command-center' || hasSeenGuide(mode)) return;
 
     var dialog = element('dialog', 'northstar-quick-start-dialog');
     dialog.id = 'northstarQuickStartDialog';
@@ -88,11 +98,23 @@
     var completeCount = steps.filter(function (step) { return state[step.id]; }).length;
     var progress = element('p', 'northstar-quick-start-progress', completeCount + ' of ' + steps.length + ' complete');
     dialog.append(headingRow, intro, list, progress);
-    document.body.append(button, dialog);
+    document.body.appendChild(dialog);
 
-    button.addEventListener('click', function () { dialog.showModal(); });
-    close.addEventListener('click', function () { dialog.close(); });
-    dialog.addEventListener('click', function (event) { if (event.target === dialog) dialog.close(); });
+    function dismiss() {
+      markGuideSeen(mode);
+      if (dialog.open) dialog.close();
+      dialog.remove();
+    }
+
+    close.addEventListener('click', dismiss);
+    dialog.addEventListener('cancel', function (event) { event.preventDefault(); dismiss(); });
+    dialog.addEventListener('click', function (event) { if (event.target === dialog) dismiss(); });
+    list.addEventListener('click', function (event) {
+      if (event.target.closest('a[data-quick-start-step]')) markGuideSeen(mode);
+    });
+    global.requestAnimationFrame(function () {
+      if (dialog.isConnected && !dialog.open) dialog.showModal();
+    });
   }
 
   global.NorthStarWorkspaceGuidance = Object.freeze({ init: init });

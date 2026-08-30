@@ -303,8 +303,8 @@
 .demo-schedule-list span { margin-top: 3px; font-size: 12px; }
 
 .demo-leads-panel { margin-bottom: 20px; }
-.demo-table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
-.demo-table-wrap table { width: max(100%, 760px); border-collapse: collapse; table-layout: auto; }
+.demo-table-wrap { width: 100%; max-width: 100%; overflow: visible; }
+.demo-table-wrap table { width: 100%; min-width: 0; border-collapse: collapse; table-layout: auto; }
 .demo-table-wrap th { padding: 10px 12px; color: var(--theme-muted); border-bottom: 1px solid var(--theme-border); font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: 0.06em; }
 .demo-table-wrap td { padding: 15px 12px; color: var(--theme-text); border-bottom: 1px solid var(--theme-border); font-size: 13px; }
 .demo-table-wrap tbody tr:last-child td { border-bottom: 0; }
@@ -519,7 +519,7 @@
   background: transparent;
 }
 
-.command-center-blueprint-header { width: 100%; }
+.command-center-blueprint-header { position: sticky; top: 0; z-index: 300; width: 100%; }
 .command-center-blueprint-header .demo-dashboard-header-inner,
 .command-center-blueprint-main,
 .command-center-blueprint-shell > .demo-dashboard-footer {
@@ -564,8 +564,42 @@
 }
 .command-center-record-link:hover,
 .command-center-record-link:focus-visible { color: var(--northstar-brand-gold); }
+.command-center-customer-group { width: 22%; min-width: 150px; vertical-align: top; }
+.command-center-customer-group > span { display: block; margin-top: 5px; }
+.command-center-customer-record-count { color: var(--theme-muted); font-size: 11px; font-weight: 700; }
+.command-center-customer-recorded-at { color: var(--theme-muted); font-size: 11px; }
 .command-center-table-empty { padding-block: 28px !important; color: var(--theme-muted) !important; text-align: center; }
 .demo-count-pill { flex: 0 0 auto; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.command-center-mobile-leads { display: none; }
+.command-center-mobile-customer {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  background: var(--theme-surface-soft);
+}
+.command-center-mobile-customer-header {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 15px 16px;
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-surface);
+}
+.command-center-mobile-customer-header > * { min-width: 0; overflow-wrap: anywhere; }
+.command-center-mobile-work-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.command-center-mobile-work {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+}
+.command-center-mobile-work + .command-center-mobile-work { border-top: 1px solid var(--theme-border); }
+.command-center-mobile-work h3 { margin: 0; color: var(--theme-text); font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.command-center-mobile-work dl { display: grid; grid-template-columns: minmax(96px, .42fr) minmax(0, 1fr); gap: 8px 12px; min-width: 0; margin: 0; }
+.command-center-mobile-work dt { color: var(--theme-muted); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.command-center-mobile-work dd { min-width: 0; margin: 0; color: var(--theme-text); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.command-center-mobile-empty { margin: 0; padding: 20px; color: var(--theme-muted); text-align: center; }
 
 .command-center-chart-empty .demo-chart-grid { display: none; }
 .command-center-chart-empty .demo-chart-bars {
@@ -597,5 +631,11 @@
   .demo-daily-brief .demo-panel-heading > div,
   .demo-daily-brief .demo-updated { width: 100%; min-width: 0; max-width: 100%; }
   .demo-daily-brief .demo-updated { flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }
-  .demo-table-wrap table { width: 760px; min-width: 760px; }
+  .demo-leads-panel .demo-table-wrap { display: none; }
+  .command-center-mobile-leads { display: grid; min-width: 0; max-width: 100%; gap: 12px; }
+}
+
+@media (max-width: 420px) {
+  .command-center-mobile-work dl { grid-template-columns: 1fr; gap: 3px; }
+  .command-center-mobile-work dd { margin-bottom: 7px; }
 }

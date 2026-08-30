@@ -27,7 +27,7 @@
             <span>NorthStar</span>
           </a>
           <div class="demo-dashboard-header-actions">
-            <span class="demo-data-pill" id="todayAuthority">Personal work only</span>
+            <span class="demo-data-pill" id="todayAuthority" aria-label="Personal Work Only">Personal Work Only</span>
           </div>
         </div>
       </header>
@@ -40,17 +40,17 @@
             <p id="todayDate">Your current direct and crew-assigned appointments.</p>
           </div>
           <div class="today-page-actions">
-            <span class="today-readonly-badge" aria-label="Read-only view">Read-only</span>
+            <span class="today-readonly-badge" aria-label="Read-only view">Read-only View</span>
             <button class="btn btn-secondary today-refresh" id="todayRefresh" type="button">Reload Today</button>
           </div>
         </div>
 
         <section class="today-scope-note" aria-labelledby="todayScopeTitle">
           <div>
-            <h2 id="todayScopeTitle">Only work currently assigned to you</h2>
+            <h2 id="todayScopeTitle">Only Work Currently Assigned to You</h2>
             <p>Direct assignments and your current crews appear here. This view does not change job or field status.</p>
           </div>
-          <span id="todayCount">Checking today…</span>
+          <span id="todayCount">Checking Today…</span>
         </section>
 
         <p class="today-live-state" id="todayStatus" role="status" aria-live="polite" aria-atomic="true">Loading your current work…</p>
@@ -76,7 +76,6 @@
               <p class="demo-panel-kicker">Schedule</p>
               <h2 id="todayWorkTitle">Current work for today</h2>
             </div>
-            <span class="demo-count-pill" id="todayWorkCount">0 appointments</span>
           </div>
           <ol id="todayRecords"></ol>
         </section>
@@ -91,6 +90,7 @@
     </main>
   </div>
 
+  <script src="/js/display-projection.js"></script>
   <script src="/js/today-shell.js"></script>
   <script src="/js/today-page.js"></script>
 </body>

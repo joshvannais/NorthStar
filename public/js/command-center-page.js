@@ -22,6 +22,18 @@
     return typeof value === 'string' && value.trim() ? value.trim() : (fallback || '');
   }
 
+  function displayProjection() {
+    if (!global.NorthStarDisplayProjection || typeof global.NorthStarDisplayProjection.text !== 'function') {
+      throw new Error('DISPLAY_PROJECTION_UNAVAILABLE');
+    }
+    return global.NorthStarDisplayProjection;
+  }
+
+  function presentationString(value, fallback) {
+    var text = safeString(value, fallback);
+    return displayProjection().text(text, fallback || '');
+  }
+
   function finiteNumber(value) {
     if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
     var number = Number(value);
@@ -75,31 +87,41 @@
   function tenantChartBucket(value, period) {
     var parts = tenantCalendarDate(value);
     if (!parts || parts.weekday < 0) return null;
-    var timeZone = tenantTimeZone();
     var localCalendarDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
     if (period === 'monthly') {
       return {
         key: parts.year + '-' + String(parts.month).padStart(2, '0'),
-        label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', year: 'numeric' }) + ' (' + timeZone + ')',
+        label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', year: 'numeric' }),
       };
     }
     if (period === 'weekly') {
       localCalendarDate.setUTCDate(localCalendarDate.getUTCDate() - ((parts.weekday + 6) % 7));
       return {
         key: localCalendarDate.toISOString().slice(0, 10),
-        label: 'Week of ' + localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }) + ' (' + timeZone + ')',
+        label: 'Week of ' + localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }),
       };
     }
     return {
       key: [parts.year, String(parts.month).padStart(2, '0'), String(parts.day).padStart(2, '0')].join('-'),
-      label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }) + ' (' + timeZone + ')',
+      label: localCalendarDate.toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric' }),
     };
   }
 
   function titleCase(value) {
-    return safeString(value, 'unavailable').replace(/[_-]+/g, ' ').replace(/\b\w/g, function (letter) {
+    return presentationString(value, 'unavailable').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b\w/g, function (letter) {
       return letter.toUpperCase();
     });
+  }
+
+  function formatCompactDate(value, suppliedTimeZone) {
+    if (!value) return null;
+    var parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) return null;
+    var timeZone = suppliedTimeZone || tenantTimeZone();
+    if (!timeZone) return null;
+    try {
+      return parsed.toLocaleString([], { timeZone: timeZone, dateStyle: 'medium', timeStyle: 'short' });
+    } catch (_error) { return null; }
   }
 
   function destination(id) {
@@ -139,16 +161,15 @@
 
   function setStatus(message, state) {
     var status = byId('commandCenterStatus');
-    status.textContent = message;
+    status.textContent = message || '';
     status.dataset.state = state || 'ready';
+    status.hidden = !message;
   }
 
   function configureMode() {
     var demo = mode === 'demo';
     byId('commandCenterHomeLink').href = demo ? '/demo' : '/dashboard';
-    byId('commandCenterAuthority').textContent = demo
-      ? 'Demo data · account-free'
-      : 'Tenant data · role-authorized';
+    byId('commandCenterAuthority').textContent = demo ? 'Demo Data' : 'Workspace Data';
     var action = byId('commandCenterHeaderAction');
     action.href = demo ? '/signup' : '/dashboard/settings';
     action.textContent = demo ? 'Start free trial' : 'Workspace settings';
@@ -203,9 +224,9 @@
       var item = element('li');
       var body = element('div');
       body.append(
-        element('strong', '', safeString(graph.customer && graph.customer.name, 'Customer record') + ' · ' +
-          safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType))),
-        element('p', '', action ? action.label : safeString(graph.lead && graph.lead.summary,
+        element('strong', '', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable') + ' · ' +
+          presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType))),
+        element('p', '', action ? presentationString(action.label, 'Recommendation unavailable') : presentationString(graph.lead && graph.lead.summary,
           'Review the current role-authorized record before taking action.'))
       );
       var badge = element('span', 'demo-priority-badge' + (risk.emergency === true ? ' demo-priority-high' : ''),
@@ -217,7 +238,7 @@
 
   function humanEvidence(graph) {
     var facts = graph && graph.polaris && Array.isArray(graph.polaris.facts) ? graph.polaris.facts : [];
-    return facts.map(function (fact) { return safeString(fact && fact.evidenceText); }).filter(Boolean).slice(0, 6);
+    return facts.map(function (fact) { return presentationString(fact && fact.evidenceText, ''); }).filter(Boolean).slice(0, 6);
   }
 
   function missingInputs(graph) {
@@ -225,14 +246,14 @@
     var result = [];
     if (Array.isArray(value.missingInformation)) {
       value.missingInformation.forEach(function (entry) {
-        var text = safeString(entry && typeof entry === 'object' ? (entry.reason || entry.label) : entry);
+        var text = presentationString(entry && typeof entry === 'object' ? (entry.reason || entry.label) : entry, '');
         if (text) result.push(text);
       });
     }
     if (Array.isArray(value.notCalculated)) {
       value.notCalculated.forEach(function (entry) {
         var field = titleCase(entry && entry.field);
-        var reason = safeString(entry && entry.reason);
+        var reason = presentationString(entry && entry.reason, '');
         if (reason) result.push(field + ': ' + reason);
       });
     }
@@ -263,14 +284,14 @@
     var value = snapshot(graph);
     var confidence = finiteNumber(value.confidence && value.confidence.score);
     var risk = value.risk || {};
-    var customer = safeString(graph.customer && graph.customer.name, 'Current customer');
-    var service = safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
+    var customer = presentationString(graph.customer && graph.customer.name, 'Customer name unavailable');
+    var service = presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
     var recommendations = actionEntries(graph).map(function (entry) {
-      return { label: entry.label, priority: safeString(entry.priority), href: detailHref(graph) };
+      return { label: presentationString(entry.label, 'Recommendation unavailable'), priority: safeString(entry.priority), href: detailHref(graph) };
     });
     var risks = [];
-    if (risk.emergency === true) risks.push(safeString(risk.evidence, 'An emergency signal requires immediate review.'));
-    else if (safeString(risk.signal)) risks.push('Current risk signal: ' + safeString(risk.signal) + '.');
+    if (risk.emergency === true) risks.push(presentationString(risk.evidence, 'An emergency signal requires immediate review.'));
+    else if (presentationString(risk.signal, '')) risks.push('Current risk signal: ' + presentationString(risk.signal, 'Risk detail unavailable') + '.');
     var opportunities = [];
     if (graph.work && graph.work.scheduledStart) opportunities.push('A scheduled work window is already present for coordinated follow-through.');
     if (finiteNumber(graph.estimate && graph.estimate.customerPrice) !== null) opportunities.push('A recorded customer-facing estimate is available for review.');
@@ -279,7 +300,7 @@
       surface: 'command-center',
       detailed: true,
       title: customer + ' · ' + service,
-      summary: safeString(graph.lead && graph.lead.summary, 'The latest role-authorized record is ready for operational review.'),
+      summary: presentationString(graph.lead && graph.lead.summary, 'The latest role-authorized record is ready for operational review.'),
       confidence: confidence,
       confidenceExplanation: confidence === null
         ? 'No supported confidence score is present in the current Polaris snapshot.'
@@ -325,6 +346,7 @@
     var summary = byId('commandCenterChartSummary');
     bars.replaceChildren();
     summary.replaceChildren();
+    summary.hidden = false;
     var records = graphs.slice(0, 8).reverse().map(function (graph) {
       var timestamp = graph.work && graph.work.scheduledStart || graph.timestamps && graph.timestamps.createdAt;
       return { graph: graph, value: finiteNumber(graph.estimate && graph.estimate.customerPrice), date: timestamp ? new Date(timestamp) : null };
@@ -332,7 +354,7 @@
     if (!records.length) {
       byId('commandCenterChart').classList.add('command-center-chart-empty');
       bars.appendChild(element('p', 'command-center-empty-copy', 'No recorded opportunity values are available for this view.'));
-      summary.appendChild(element('div', '', 'The chart remains empty until a role-authorized estimate is recorded.'));
+      summary.hidden = true;
       return;
     }
     byId('commandCenterChart').classList.remove('command-center-chart-empty');
@@ -396,25 +418,35 @@
     scheduled.slice(0, 5).forEach(function (graph) {
       var item = element('li');
       var isCanonical = Boolean(graph && graph.authority);
-      var date = formatDate(isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart,
-        canonicalRecords && workspace.schedulingOverview.timeZone);
+      var scheduledStart = isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart;
+      var suppliedTimeZone = canonicalRecords && workspace.schedulingOverview.timeZone;
+      var date = formatCompactDate(scheduledStart, suppliedTimeZone);
+      var fullDate = formatDate(scheduledStart, suppliedTimeZone);
       var copy = element('div');
-      var link = element('a', 'command-center-record-link', safeString(graph.work && graph.work.title,
-        safeString(graph.lead && graph.lead.serviceLabel, 'Scheduled work')));
+      var link = element('a', 'command-center-record-link', presentationString(graph.work && graph.work.title,
+        presentationString(graph.lead && graph.lead.serviceLabel, 'Job title unavailable')));
       var linkedGraph = isCanonical ? graphs.find(function (candidate) { return candidate.ids && candidate.ids.appointment === graph.appointmentId; }) : graph;
       link.href = linkedGraph ? detailHref(linkedGraph) : destination('calendar');
       var assignment = isCanonical ? titleCase(graph.authority.targetState) : graph.work && graph.work.assignedTo;
-      copy.append(link, element('span', '', safeString(graph.customer && graph.customer.name, 'Customer') +
+      copy.append(link, element('span', '', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable') +
         (assignment ? ' · ' + assignment : ' · Assignment unavailable')));
       var time = element('time', '', date);
-      time.dateTime = isCanonical ? graph.authority.scheduledStart : graph.work.scheduledStart;
-      time.title = date;
+      time.dateTime = scheduledStart;
+      time.title = fullDate || date;
+      time.setAttribute('aria-label', fullDate || date);
       item.append(time, copy);
       list.appendChild(item);
     });
   }
 
-  function schedulingStateChip(state) {
+  function schedulingStateItem(labelText, state) {
+    var item = element('div', 'm22-state-item');
+    item.dataset.state = state;
+    item.append(element('dt', '', labelText), element('dd', '', titleCase(state)));
+    return item;
+  }
+
+  function schedulingAttentionChip(state) {
     var chip = element('li', 'm22-state-chip', titleCase(state));
     chip.dataset.state = state;
     return chip;
@@ -429,8 +461,8 @@
     categories.replaceChildren();
     records.replaceChildren();
     if (mode === 'demo') {
-      definition.textContent = 'This isolated demo presentation is non-authoritative and read-only. It never reads or mutates paid tenant scheduling data.';
-      records.appendChild(element('li', 'm22-overview-empty', 'Canonical owner and dispatcher scheduling actions are available only inside an authorized paid tenant workspace.'));
+      definition.textContent = 'This demo is read-only.';
+      records.appendChild(element('li', 'm22-overview-empty', 'Scheduling changes are available in a paid workspace.'));
       return;
     }
     var overview = workspace && workspace.schedulingOverview;
@@ -443,12 +475,11 @@
     var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
     if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
     var page = overview.page || { shown: overview.records.length, total: overview.records.length };
-    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' canonical appointments in ' + overview.timeZone + '. ' + (schedulingCategory === 'all'
-      ? 'All canonical appointments. Categories may overlap and are classified only by the server.'
-      : overview.definitions[schedulingCategory]);
+    definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments in ' + overview.timeZone + '.';
     categoryNames.forEach(function (name) {
       var count = name === 'all' ? overview.total : overview.counts[name];
-      var button = element('button', 'm22-category-button', titleCase(name) + ' ' + count);
+      var button = element('button', 'm22-category-button');
+      button.append(element('span', 'm22-category-label', titleCase(name)), element('span', 'm22-category-count', count));
       button.type = 'button'; button.setAttribute('aria-pressed', name === schedulingCategory ? 'true' : 'false');
       button.addEventListener('click', function () { schedulingCategory = name; renderSchedulingOverview(); });
       categories.appendChild(button);
@@ -470,14 +501,28 @@
     selected.forEach(function (record) {
       var item = element('li', 'm22-overview-record');
       item.dataset.appointmentId = record.appointmentId;
-      item.appendChild(element('h3', '', safeString(record.customer && record.customer.name, 'Customer') + ' · ' + safeString(record.work && record.work.title, 'Appointment')));
-      item.appendChild(element('p', '', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Unscheduled in ' + overview.timeZone));
-      var states = element('ul', 'm22-state-list');
-      [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
-        record.conflict.status].filter(Boolean).forEach(function (state) { states.appendChild(schedulingStateChip(state)); });
-      Object.keys(record.flags || {}).filter(function (key) { return record.flags[key] === true; })
-        .forEach(function (flag) { states.appendChild(schedulingStateChip(flag)); });
-      item.appendChild(states);
+      var summary = element('div', 'm22-record-summary');
+      summary.append(element('h3', '', presentationString(record.customer && record.customer.name, 'Customer name unavailable') + ' · ' + presentationString(record.work && record.work.title, 'Job title unavailable')),
+        element('p', 'm22-record-time', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Unscheduled in ' + overview.timeZone));
+      var states = element('dl', 'm22-state-summary');
+      states.append(
+        schedulingStateItem('Assignment', record.authority.targetState),
+        schedulingStateItem('Schedule', record.authority.scheduleState),
+        schedulingStateItem('Dispatch', record.authority.dispatchState)
+      );
+      var attention = [];
+      if (record.authority.needsReview === true || record.conflict && record.conflict.needsReview === true) attention.push('needs_review');
+      if (record.flags && record.flags.due === true) attention.push('due');
+      if (record.flags && record.flags.overdue === true) attention.push('overdue');
+      if (record.flags && record.flags.atRisk === true) attention.push('at_risk');
+      if (record.flags && record.flags.conflicting === true) attention.push('conflicting');
+      var uniqueAttention = Array.from(new Set(attention));
+      var attentionList = element('ul', 'm22-state-list');
+      uniqueAttention.forEach(function (state) { attentionList.appendChild(schedulingAttentionChip(state)); });
+      var status = element('div', 'm22-record-status');
+      status.appendChild(states);
+      if (uniqueAttention.length) status.appendChild(attentionList);
+      item.append(summary, status);
       if (record.conflict && record.conflict.hardConflicts && record.conflict.hardConflicts.length) {
         item.appendChild(element('p', 'm22-hard-block', record.conflict.hardConflicts.length + ' hard conflict' + (record.conflict.hardConflicts.length === 1 ? '' : 's') + '. No override is available.'));
       }
@@ -502,7 +547,9 @@
 
   function renderLeads(graphs) {
     var rows = byId('commandCenterLeadRows');
+    var mobileCards = byId('commandCenterLeadCards');
     rows.replaceChildren();
+    mobileCards.replaceChildren();
     byId('commandCenterLeadCount').textContent = graphs.length + (graphs.length === 1 ? ' active lead' : ' active leads');
     if (!graphs.length) {
       var row = document.createElement('tr');
@@ -510,23 +557,77 @@
       cell.colSpan = 5;
       row.appendChild(cell);
       rows.appendChild(row);
+      mobileCards.appendChild(element('p', 'command-center-mobile-empty', 'No role-authorized lead records are available.'));
       return;
     }
-    graphs.slice(0, 8).forEach(function (graph) {
+    var visible = graphs.slice(0, 8);
+    var groups = [];
+    var groupByCustomer = new Map();
+    visible.forEach(function(graph) {
+      var key = safeString(graph.ids && graph.ids.customer, safeString(graph.customer && graph.customer.name, 'Customer'));
+      var group = groupByCustomer.get(key);
+      if (!group) {
+        group = { key: key, records: [] };
+        groupByCustomer.set(key, group);
+        groups.push(group);
+      }
+      group.records.push(graph);
+    });
+    groups.forEach(function(group) {
+      group.records.forEach(function (graph, index) {
       var row = document.createElement('tr');
-      var customerCell = document.createElement('td');
-      var link = element('a', 'command-center-record-link', safeString(graph.customer && graph.customer.name, 'Customer record'));
-      link.href = detailHref(graph);
-      customerCell.append(link, element('span', '', formatDate(graph.timestamps && graph.timestamps.createdAt) || 'Recorded time unavailable'));
-      var serviceCell = element('td', '', safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType)));
+      if (index === 0) {
+        var customerCell = document.createElement('td');
+        customerCell.className = 'command-center-customer-group';
+        customerCell.rowSpan = group.records.length;
+        var link = element('a', 'command-center-record-link', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable'));
+        link.href = detailHref(graph);
+        customerCell.appendChild(link);
+        customerCell.appendChild(element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records')));
+        var recordedAt = formatDate(graph.timestamps && graph.timestamps.createdAt);
+        if (recordedAt) customerCell.appendChild(element('span', 'command-center-customer-recorded-at', recordedAt));
+        row.appendChild(customerCell);
+      }
+      var serviceCell = element('td', '', presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType)));
       var recorded = formatMoney(graph.estimate && graph.estimate.customerPrice);
       var valueCell = element('td', '', recorded || 'Unavailable — no recorded estimate');
       var statusCell = document.createElement('td');
       statusCell.appendChild(element('span', 'demo-status', titleCase(graph.lead && graph.lead.status)));
       var action = actionEntries(graph)[0];
-      var actionCell = element('td', '', action ? action.label : 'Review complete Polaris detail');
-      row.append(customerCell, serviceCell, valueCell, statusCell, actionCell);
+      var actionCell = element('td', '', action ? presentationString(action.label, 'Recommendation unavailable') : 'Review complete Polaris detail');
+      row.append(serviceCell, valueCell, statusCell, actionCell);
       rows.appendChild(row);
+      });
+
+      var firstGraph = group.records[0];
+      var customerCard = element('article', 'command-center-mobile-customer');
+      var customerHeader = element('header', 'command-center-mobile-customer-header');
+      var customerLink = element('a', 'command-center-record-link', presentationString(firstGraph.customer && firstGraph.customer.name, 'Customer name unavailable'));
+      customerLink.href = detailHref(firstGraph);
+      customerHeader.append(
+        customerLink,
+        element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records'))
+      );
+      var groupRecordedAt = formatDate(firstGraph.timestamps && firstGraph.timestamps.createdAt);
+      if (groupRecordedAt) customerHeader.appendChild(element('span', 'command-center-customer-recorded-at', groupRecordedAt));
+      var workList = element('ol', 'command-center-mobile-work-list');
+      group.records.forEach(function (graph) {
+        var workItem = element('li', 'command-center-mobile-work');
+        var mobileService = presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
+        var mobileRecorded = formatMoney(graph.estimate && graph.estimate.customerPrice) || 'Unavailable — no recorded estimate';
+        var mobileStatus = titleCase(graph.lead && graph.lead.status);
+        var mobileAction = actionEntries(graph)[0];
+        var details = element('dl', 'command-center-mobile-work-details');
+        details.append(
+          element('dt', '', 'Recorded Value'), element('dd', '', mobileRecorded),
+          element('dt', '', 'Status'), element('dd', '', mobileStatus),
+          element('dt', '', 'Next Action'), element('dd', '', mobileAction ? presentationString(mobileAction.label, 'Recommendation unavailable') : 'Review complete Polaris detail')
+        );
+        workItem.append(element('h3', '', mobileService), details);
+        workList.appendChild(workItem);
+      });
+      customerCard.append(customerHeader, workList);
+      mobileCards.appendChild(customerCard);
     });
   }
 
@@ -534,16 +635,14 @@
     var first = graphs[0];
     var action = first && actionEntries(first)[0];
     byId('commandCenterCoach').textContent = action
-      ? action.label + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
+      ? presentationString(action.label, 'Recommendation unavailable') + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
       : 'No prioritized recommendation is available until a role-authorized customer, lead, or work record supplies enough evidence.';
-    byId('commandCenterWorkspaceStatus').textContent = mode === 'demo'
-      ? 'Isolated demo workspace is current'
-      : 'Tenant workspace is current';
+    byId('commandCenterWorkspaceStatus').textContent = 'Workspace context';
     byId('commandCenterWorkspaceNote').textContent = mode === 'demo'
       ? 'The demo session is isolated from production, provider, account, and billing data.'
       : 'This view contains role-authorized tenant projections only; provider readiness is not inferred.';
-    byId('commandCenterStatePill').replaceChildren(element('i'));
-    byId('commandCenterStatePill').appendChild(document.createTextNode(mode === 'demo' ? 'Session ready' : 'Workspace ready'));
+    byId('commandCenterStatePill').replaceChildren();
+    byId('commandCenterStatePill').hidden = true;
   }
 
   function renderCta() {
@@ -583,9 +682,7 @@
     renderCoachAndStatus(graphs);
     renderCta();
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
-    setStatus(mode === 'demo'
-      ? 'The isolated workspace is ready. Simulate Lead updates this view and every demo destination.'
-      : 'The current tenant workspace is ready.', 'ready');
+    setStatus('', 'ready');
   }
 
   function load(expected) {

@@ -103,7 +103,7 @@
               typeof record.authority.digest !== 'string' || !/^[0-9a-f]{64}$/.test(record.authority.digest) ||
               !Array.isArray(record.allowedActions) || !record.flags || !record.conflict;
           })) {
-        throw new Error('The canonical scheduling overview contract is unavailable.');
+        throw new Error('The scheduling overview is unavailable.');
       }
     }
     return value;

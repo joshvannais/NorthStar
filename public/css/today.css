@@ -218,6 +218,7 @@
 [data-theme="dark"] .today-detail-label,
 [data-theme="dark"] .today-disclosure summary::after { color: var(--brand-200); }
 @media (min-width: 769px) {
+  .today-page .today-main { margin-top: 16px; }
   .today-page .app-layout > .sidebar {
     position: static;
     align-self: stretch;

@@ -73,7 +73,7 @@
 .km-item-button:hover { border-color: var(--brand-500); }
 .km-item-button[aria-current="true"] { border-color: var(--brand-600); box-shadow: 0 0 0 2px rgba(37, 99, 235, .18); }
 .km-item-title { color: var(--neutral-900); font-weight: 700; overflow-wrap: anywhere; }
-.km-item-key, .km-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.km-item-key, .km-mono { font-family: var(--font-body, inherit); font-size: 11px; overflow-wrap: anywhere; }
 .km-meta, .km-badges, .km-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
 .km-badge { align-items: center; background: var(--km-muted-surface); border: 1px solid var(--km-border); border-radius: 999px; display: inline-flex; font-size: 11px; font-weight: 700; gap: 4px; padding: 4px 7px; }
 .km-badge::before { content: "●"; font-size: 8px; }

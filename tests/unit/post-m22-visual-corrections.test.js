@@ -30,8 +30,22 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(css).toMatch(/\.today-header \.demo-dashboard-brand\s*\{\s*display:\s*none;/);
     expect(css).toMatch(/\.today-header #todayAuthority[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*ellipsis;/);
     expect(css).toMatch(/\.today-page \.app-layout > \.sidebar[\s\S]*position:\s*static;[\s\S]*min-height:\s*100vh;/);
+    expect(css).toMatch(/@media \(min-width:\s*769px\)[\s\S]*\.today-page \.today-main\s*\{\s*margin-top:\s*16px;/);
     expect(css).toMatch(/\.today-disclosure\[open\][\s\S]*border-top:\s*0/);
     expect(css).toMatch(/summary:focus-visible\s*\{[\s\S]*outline:\s*0;[\s\S]*box-shadow:\s*inset/);
+  });
+
+  test('keeps internal knowledge keys out of presentation and uses the approved type stack', () => {
+    const page = source('public/js/knowledge-management.js');
+    const css = source('public/css/knowledge-management.css');
+
+    expect(page).not.toContain("node('span', 'km-item-key', item.canonicalKey)");
+    expect(page).not.toContain("node('p', 'km-item-key', detail.entry.canonicalKey)");
+    expect(page).toContain('detailDisclosed: false');
+    expect(page).toContain('if (!state.detailDisclosed)');
+    expect(page).toContain('Choose this knowledge item to inspect its exact version, provenance, lifecycle, and synchronization details.');
+    expect(css).toMatch(/\.km-item-key, \.km-mono\s*\{\s*font-family:\s*var\(--font-body, inherit\);/);
+    expect(css).not.toMatch(/\.km-item-key, \.km-mono\s*\{[^}]*monospace/);
   });
 
   test('uses a single NorthStar lockup in the desktop Command Center shell', () => {

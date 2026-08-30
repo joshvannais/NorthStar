@@ -133,6 +133,7 @@
       account: null,
       data: null,
       detail: null,
+      detailDisclosed: false,
       detailRequestSequence: 0,
       filters: {},
       instance: instance,
@@ -199,6 +200,8 @@
     function selectItem(entryId, versionNumber, restoreFocus) {
       var requestSequence = state.detailRequestSequence + 1;
       state.detailRequestSequence = requestSequence;
+      if (restoreFocus) state.detailDisclosed = true;
+      else if (state.selectedEntryId !== entryId) state.detailDisclosed = false;
       state.selectedEntryId = entryId;
       listRoot.querySelectorAll('.km-item-button').forEach(function (button) {
         button.setAttribute('aria-current', button.dataset.entryId === entryId ? 'true' : 'false');
@@ -263,7 +266,6 @@
         append(meta, badge(item.workflowStatus), node('span', 'km-badge', titleCase(item.version.sensitivity)));
         append(button,
           node('span', 'km-item-title', item.version.label),
-          node('span', 'km-item-key', item.canonicalKey),
           meta,
           node('span', 'km-item-key', 'Version ' + item.version.number + ' · ' + shortDigest(item.version.digest))
         );
@@ -508,12 +510,27 @@
       heading.tabIndex = -1;
       var badges = node('div', 'km-badges');
       append(badges, badge(detail.workflow.status), node('span', 'km-badge', titleCase(detail.version.sensitivity)), node('span', 'km-badge', 'Version ' + detail.version.number));
-      append(header, heading, node('p', 'km-item-key', detail.entry.canonicalKey), badges);
+      append(header, heading, badges);
       if (!detail.permissions.canMutate) {
         var readOnlyExplanation = detail.permissions.mutationRestriction === 'subscription_read_only'
           ? 'Read-only subscription: knowledge remains visible, but review, approval, publication, lifecycle, and reconciliation actions require current subscription access.'
           : 'Read-only membership: review, approval, publication, lifecycle, and reconciliation actions require an active owner or administrator.';
         header.appendChild(node('div', 'km-readonly-note', readOnlyExplanation));
+      }
+      if (!state.detailDisclosed) {
+        var presentation = node('section', 'km-section km-presentation-summary');
+        append(presentation,
+          node('h4', '', 'Knowledge summary'),
+          node('p', 'km-action-explanation',
+            'Choose this knowledge item to inspect its exact version, provenance, lifecycle, and synchronization details.'),
+          node('p', '', 'Generated and authoritative facts are corrected at their source, then regenerated as a new immutable version.')
+        );
+        var correctionLink = node('a', 'km-correction-link', detail.sourceCorrection.label);
+        correctionLink.href = correctionUrl(detail.sourceCorrection.url);
+        presentation.appendChild(correctionLink);
+        append(fragment, header, presentation);
+        detailRoot.replaceChildren(fragment);
+        return;
       }
       var tablist = node('div', 'km-tabs');
       tablist.setAttribute('role', 'tablist');

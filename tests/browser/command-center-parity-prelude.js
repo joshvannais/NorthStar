@@ -15,6 +15,8 @@ const { provisionDurableSession } = fromRoot('tests/helpers/account-session-fixt
 const { resolveBrowserRuntime } = fromRoot('tests/helpers/playwright-runtime');
 const { ingestRetell } = fromRoot('src/services/canonicalGraphService');
 const CAPTURE_BASELINE = process.env.NORTHSTAR_CAPTURE_BASELINE_ONLY === '1';
+const SETTINGS_PRESENTATION_ONLY = process.env.NORTHSTAR_SETTINGS_PRESENTATION_ONLY === '1';
+const SETTINGS_PRESENTATION_THEME = process.env.NORTHSTAR_SETTINGS_THEME || 'light';
 const ROUTES = Object.freeze([
   Object.freeze({ id: 'command-center', path: '/demo', paidPath: '/dashboard', marker: 'One operating view for the day ahead.', surface: '.command-center-blueprint-main' }),
   Object.freeze({ id: 'polaris', path: '/demo/polaris', paidPath: '/dashboard/polaris', marker: 'POLARIS', surface: '.polaris-workspace' }),
@@ -378,6 +380,12 @@ async function inspectCurrent(page, route, revision, viewport) {
       catalogueProviderNames: routeId === 'integrations'
         ? Array.from(document.querySelectorAll('#integrationCategoryList .integration-card h3')).map(node => node.textContent.trim())
         : [],
+      knowledgePresentation: routeId === 'settings' ? {
+        exposesInternalIdentityKey: document.body.textContent.includes('generated.identity'),
+        visibleTechnicalFontFamilies: Array.from(document.querySelectorAll('[data-knowledge-management] .km-item-key, [data-knowledge-management] .km-mono'))
+          .filter(visible)
+          .map(node => getComputedStyle(node).fontFamily),
+      } : null,
       routeId,
       routePath,
       mobile,
@@ -396,6 +404,14 @@ async function inspectCurrent(page, route, revision, viewport) {
   assert.strictEqual(snapshot.mobileHeaderVisible, viewport.width <= 768, route.path + ' responsive mobile header visibility');
   assert.strictEqual(snapshot.genericShells, 0, route.path + ' generic Parity shell removed');
   assert.ok(snapshot.overflow <= 1, route.path + ' no horizontal overflow');
+  if (route.id === 'settings') {
+    assert.strictEqual(snapshot.knowledgePresentation.exposesInternalIdentityKey, false,
+      route.path + ' does not expose the internal generated.identity key');
+    assert.ok(snapshot.knowledgePresentation.visibleTechnicalFontFamilies.every(family =>
+      !/(?:ui-monospace|sfmono|consolas|monospace)/i.test(family)),
+    route.path + ' knowledge presentation uses the approved native type stack: ' +
+      JSON.stringify(snapshot.knowledgePresentation.visibleTechnicalFontFamilies));
+  }
   if (DEMO_TOOLBAR_ALLOWLIST.includes(route.id)) {
     assert.ok(snapshot.toolbarRect.left - snapshot.mainRect.left >= 11 &&
       snapshot.mainRect.right - snapshot.toolbarRect.right >= 11,
@@ -1488,6 +1504,32 @@ async function captureBaselinePaidViewport(browser, origin, viewport, session) {
   }
 }
 
+async function exerciseSettingsPresentationOnly(browser, origin, viewport) {
+  assert.ok(['light', 'dark'].includes(SETTINGS_PRESENTATION_THEME),
+    'NORTHSTAR_SETTINGS_THEME must be light or dark');
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block',
+  });
+  await context.addInitScript(theme => localStorage.setItem('northstar-theme', theme), SETTINGS_PRESENTATION_THEME);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  try {
+    const route = ROUTES.find(candidate => candidate.id === 'settings');
+    const response = await page.goto(origin + route.path, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    assert.ok(response && [200, 304].includes(response.status()), route.path + ' focused shell response');
+    await inspectCurrent(page, route, 1, viewport);
+    assert.strictEqual(await page.locator('html').getAttribute('data-theme'), SETTINGS_PRESENTATION_THEME,
+      route.path + ' focused presentation theme');
+    assert.deepStrictEqual(errors, [], route.path + ' focused browser errors');
+    await captureEvidence(page, 'demo-settings-' + SETTINGS_PRESENTATION_THEME, route, viewport, 'focused');
+    return { viewport: viewport.label, theme: SETTINGS_PRESENTATION_THEME, route: route.path };
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   const selected = process.env.NORTHSTAR_BROWSER;
   assert.ok(selected === 'chrome' || selected === 'webkit', 'NORTHSTAR_BROWSER must be chrome or webkit');
@@ -1571,6 +1613,17 @@ async function main() {
     server = await listen(app);
     const origin = 'http://127.0.0.1:' + server.address().port;
     browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
+    if (SETTINGS_PRESENTATION_ONLY) {
+      const receipts = [];
+      for (const viewport of selectedViewports) receipts.push(await exerciseSettingsPresentationOnly(browser, origin, viewport));
+      console.log('PR151_SETTINGS_PRESENTATION_RECEIPT ' + JSON.stringify({
+        browser: selected,
+        version: browser.version(),
+        theme: SETTINGS_PRESENTATION_THEME,
+        receipts,
+      }));
+      return;
+    }
     if (CAPTURE_BASELINE) {
       const demo = [];
       const paid = [];

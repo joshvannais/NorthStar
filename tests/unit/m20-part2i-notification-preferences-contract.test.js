@@ -34,8 +34,8 @@ describe('Mission 20 Part 2I notification preference presentation contract', () 
     expect(settings).toMatch(/(?:let|var) settingsCanEdit = false;/);
     expect(settings).toMatch(/account\s*&&\s*account\.membership\s*\?\s*account\.membership\.role/);
     expect(settings).toMatch(/role === 'owner' \|\| role === 'admin'/);
-    expect(settings).toMatch(/function saveSettings\(\)\s*{\s*if \(!settingsCanEdit\) return;/);
-    expect(settings).toMatch(/function saveContacts\(contacts\)\s*{\s*if \(!settingsCanEdit\) return;/);
+    expect(settings).toMatch(/async function saveSettings\(\)\s*{\s*if \(!settingsCanEdit \|\| settingsSaving \|\| contactMutationPending\) return;/);
+    expect(settings).toMatch(/async function saveContacts\(contacts\)\s*{\s*if \(!settingsCanEdit \|\| settingsSaving \|\| contactMutationPending \|\| settingsConflicted\) return false;/);
     expect(settings).toMatch(/const checkboxes = \[[^\]]*'emailEnabled'[^\]]*'emailCallSummary'[^\]]*'emailAppointment'[^\]]*'smsEnabled'[^\]]*'smsUrgent'/s);
     expect(settings).not.toMatch(/settings\.emailCallSummary = settingsState\.emailCallSummary/);
     expect(settings).not.toMatch(/settings\.emailAppointment = settingsState\.emailAppointment/);

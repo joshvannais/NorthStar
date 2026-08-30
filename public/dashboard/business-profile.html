@@ -3462,7 +3462,7 @@
       var validSections = Array.prototype.map.call(document.querySelectorAll('.bp-nav-btn[data-section]'), function(button) {
         return button.dataset.section;
       });
-      if (!requested || validSections.indexOf(requested) < 0) return;
+      if (!requested || validSections.indexOf(requested) < 0) requested = 'company';
       switchSection(requested, { preserveLocation: true });
       window.setTimeout(function() {
         var target = targetId ? document.getElementById(targetId) : null;
@@ -3527,7 +3527,7 @@
   <script src="/js/nav-component.js"></script>
   <script src="/js/knowledge-management.js"></script>
   <script src="/js/workspace-form-state.js"></script>
-  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn', role: '#businessProfileRole', reload: '#reloadProfileBtn, #reloadOperationalConfigurationBtn, #reloadFinancialConfigurationBtn, #reloadVoiceAssistantBtn, #reloadProfileReadinessBtn' });</script>
+  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn', role: '#businessProfileRole', reload: '#reloadProfileBtn, #reloadOperationalConfigurationBtn, #reloadFinancialConfigurationBtn, #reloadVoiceAssistantBtn, #reloadProfileReadinessBtn', durable: '.bp-section input, .bp-section textarea, .bp-section select', ignore: '[data-knowledge-management]' });</script>
   <script>NavComponent.init("business-profile");</script>
 </body>
 </html>

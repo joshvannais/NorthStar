@@ -80,6 +80,14 @@ function hex(value) {
   return Buffer.from(value, 'utf8').toString('hex');
 }
 
+async function captureEvidence(page, browserLabel, category, filename) {
+  const root = process.env.P4_CORRECTION_EVIDENCE_DIR;
+  if (!root) return;
+  const directory = path.join(root, category, browserLabel);
+  fs.mkdirSync(directory, { recursive: true });
+  await page.screenshot({ path: path.join(directory, filename), fullPage: true });
+}
+
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
@@ -137,7 +145,12 @@ async function contextFor(browser, origin, session, input, ledger) {
 }
 
 function attachPage(page, ledger, role) {
-  page.on('pageerror', error => ledger.pageErrors.push(role + ': ' + (error.stack || error.message)));
+  page.on('pageerror', error => {
+    const detail = error.stack || error.message;
+    const expectedRedirectCancellation = role === 'owner-profile'
+      && /^Fetch API cannot load http:\/\/127\.0\.0\.1:\d+\/api\/v1\/business-profile\/profileReadiness due to access control checks\./.test(detail);
+    (expectedRedirectCancellation ? ledger.expectedPageErrors : ledger.pageErrors).push(role + ': ' + detail);
+  });
   page.on('console', message => {
     if (message.type() === 'error') ledger.consoleErrors.push(role + ': ' + message.text());
   });
@@ -192,7 +205,7 @@ function assertSettingsSnapshot(snapshot, input, lifecycle) {
   assert.strictEqual(snapshot.canonicalControlCount, 7, label + ': complete canonical field set');
   assert.ok(snapshot.mutableCount >= 7, label + ': mutable controls are identified');
   assert.strictEqual(snapshot.allMutableDisabled, !input.canEdit, label + ': role controls fail closed');
-  assert.strictEqual(snapshot.saveDisabled, !input.canEdit, label + ': role save action fails closed');
+  assert.strictEqual(snapshot.saveDisabled, true, label + ': save remains disabled until a real dirty state');
   assert.strictEqual(snapshot.securityMandatory, true, label + ': security email remains mandatory');
   assert.strictEqual(snapshot.securityDisabled, true, label + ': security email remains separate and read only');
   assert.strictEqual(snapshot.injectedNodes, 0, label + ': persisted values create no DOM nodes');
@@ -209,7 +222,7 @@ async function assertAccessibleNotificationControls(page, input, lifecycle) {
   }
 }
 
-async function exerciseCell(browser, origin, session, input, ledger) {
+async function exerciseCell(browser, browserLabel, origin, session, input, ledger) {
   const context = await contextFor(browser, origin, session, input, ledger);
   try {
     const page = await context.newPage();
@@ -219,6 +232,12 @@ async function exerciseCell(browser, origin, session, input, ledger) {
     await waitForSettings(page);
     assertSettingsSnapshot(await settingsSnapshot(page), input, 'initial');
     await assertAccessibleNotificationControls(page, input, 'initial');
+    if (input.role === 'owner' && input.theme === 'light' && input.viewportLabel === 'desktop') {
+      await captureEvidence(page, browserLabel, 'hostile-security', 'stored-hostile-notification-text-inert.png');
+    }
+    if (input.role === 'owner' && input.theme === 'light' && input.viewportLabel === 'mobile') {
+      await captureEvidence(page, browserLabel, 'ordinary', 'settings-clean-responsive-390.png');
+    }
 
     await page.evaluate(() => renderSettingsState());
     assertSettingsSnapshot(await settingsSnapshot(page), input, 'rerender');
@@ -260,7 +279,17 @@ async function exerciseOwnerMutation(browser, origin, session, pool, ledger) {
     attachPage(page, ledger, input.role);
     await page.goto(origin + '/dashboard/settings', { waitUntil: 'domcontentloaded' });
     await waitForSettings(page);
+    assert.strictEqual(await page.locator('#saveSettingsBtn').isDisabled(), true,
+      'owner Save starts disabled while canonical settings are clean');
+    await page.route(origin + '/api/account/preferences', async route => {
+      if (route.request().method() === 'PUT') await new Promise(resolve => setTimeout(resolve, 150));
+      await route.continue();
+    });
     await page.locator('label.toggle:has(#emailEnabled)').click();
+    assert.strictEqual(await page.locator('#saveSettingsBtn').isEnabled(), true,
+      'a real durable preference edit enables Save');
+    assert.strictEqual(await page.locator('#northstarStickySaveBar').isVisible(), true,
+      'a real durable preference edit opens the shared unsaved state');
     await page.locator('label.toggle:has(#emailCallSummary)').click();
     await page.locator('label.toggle:has(#emailAppointment)').click();
     await page.locator('label.toggle:has(#smsEnabled)').click();
@@ -272,7 +301,16 @@ async function exerciseOwnerMutation(browser, origin, session, pool, ledger) {
     );
     await page.locator('#saveSettingsBtn').focus();
     await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.getElementById('saveSettingsBtn').textContent === 'Saving…');
+    assert.strictEqual(await page.locator('#saveSettingsBtn').isDisabled(), true,
+      'Save is disabled while the mounted write is pending');
     assert.strictEqual((await saved).status(), 200, 'owner keyboard save reaches mounted canonical route');
+    await page.waitForFunction(() => document.getElementById('settingsDirtyStatus').dataset.state === 'clean');
+    assert.strictEqual(await page.locator('#saveSettingsBtn').isDisabled(), true,
+      'Save returns to disabled after durable success');
+    assert.strictEqual(await page.locator('#northstarStickySaveBar').isHidden(), true,
+      'durable success clears the shared unsaved state');
+    await page.unroute(origin + '/api/account/preferences');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForSettings(page);
     const values = (await settingsSnapshot(page)).values;
@@ -306,6 +344,146 @@ async function exerciseOwnerMutation(browser, origin, session, pool, ledger) {
   }], 'owner UI writes the exact tenant row');
 }
 
+async function exerciseContactPersistence(browser, browserLabel, origin, session, pool, ledger) {
+  const input = { role: 'owner-contacts', viewport: { width: 1280, height: 900 }, viewportLabel: 'desktop', theme: 'light' };
+  const serialContext = await contextFor(browser, origin, session, input, ledger);
+  let winnerContext;
+  let staleContext;
+  try {
+    const page = await serialContext.newPage();
+    attachPage(page, ledger, input.role);
+    await page.route(origin + '/api/account/preferences', async route => {
+      if (route.request().method() === 'PUT') await new Promise(resolve => setTimeout(resolve, 200));
+      await route.continue();
+    });
+    await page.goto(origin + '/dashboard/settings', { waitUntil: 'domcontentloaded' });
+    await waitForSettings(page);
+    await page.fill('#contactName', 'Serial Alpha');
+    await page.fill('#contactPhone', '+1 860 555 0201');
+    const firstWrite = page.waitForResponse(response =>
+      response.url() === origin + '/api/account/preferences' && response.request().method() === 'PUT'
+    );
+    await page.click('#addContactBtn');
+    assert.strictEqual(await page.locator('#contactName').isDisabled(), true,
+      'contact draft controls are disabled while persistence is pending');
+    assert.strictEqual(await page.evaluate(() => addContact()), false,
+      'a concurrent contact mutation is rejected before a second request');
+    assert.strictEqual((await firstWrite).status(), 200, 'first serialized contact write persists');
+    await page.waitForFunction(() => document.getElementById('contactName').value === '');
+    await page.unroute(origin + '/api/account/preferences');
+
+    await page.fill('#contactName', 'Serial Beta');
+    await page.fill('#contactPhone', '+1 860 555 0202');
+    const secondWrite = page.waitForResponse(response =>
+      response.url() === origin + '/api/account/preferences' && response.request().method() === 'PUT'
+    );
+    await page.click('#addContactBtn');
+    assert.strictEqual((await secondWrite).status(), 200, 'second contact write starts only after the first completed');
+    await page.waitForFunction(() => document.getElementById('contactName').value === '');
+    let durable = await pool.query(
+      "SELECT preferences->'contacts' AS contacts FROM organization_account_preferences WHERE organization_id = $1",
+      [ORG_A]
+    );
+    assert.deepStrictEqual(durable.rows[0].contacts.slice(-2), [
+      { name: 'Serial Alpha', phone: '+1 860 555 0201' },
+      { name: 'Serial Beta', phone: '+1 860 555 0202' },
+    ], 'serialized winning contact bytes read back exactly from PostgreSQL');
+
+    await page.route(origin + '/api/account/preferences', route => {
+      if (route.request().method() === 'PUT') return route.abort('failed');
+      return route.continue();
+    });
+    const failureConsoleStart = ledger.consoleErrors.length;
+    await page.fill('#contactName', 'Failure Draft');
+    await page.fill('#contactPhone', '+1 860 555 0203');
+    const failedWrite = page.waitForEvent('requestfailed', request =>
+      request.url() === origin + '/api/account/preferences' && request.method() === 'PUT'
+    );
+    await page.click('#addContactBtn');
+    await failedWrite;
+    await page.waitForFunction(() => document.getElementById('contactDraftStatus').dataset.state === 'error');
+    await page.waitForTimeout(50);
+    const failureDiagnostics = ledger.consoleErrors.splice(failureConsoleStart);
+    assert.ok(failureDiagnostics.every(message =>
+      message.startsWith(input.role + ': ') && /ERR_FAILED|Failed to load resource/.test(message)
+    ), 'only the deliberately failed contact transport diagnostic is classified as expected');
+    ledger.expectedConsoleErrors.push(...failureDiagnostics);
+    assert.deepStrictEqual(await page.evaluate(() => ({
+      name: document.getElementById('contactName').value,
+      phone: document.getElementById('contactPhone').value,
+    })), { name: 'Failure Draft', phone: '+1 860 555 0203' },
+    'non-conflict transport failure retains exact contact draft bytes');
+    await page.unroute(origin + '/api/account/preferences');
+    await captureEvidence(page, browserLabel, 'hostile-security', 'settings-hostile-and-failure-retention.png');
+
+    winnerContext = await contextFor(browser, origin, session, { ...input, role: 'owner-contact-winner' }, ledger);
+    staleContext = await contextFor(browser, origin, session, { ...input, role: 'owner-contact-stale' }, ledger);
+    const winner = await winnerContext.newPage();
+    const stale = await staleContext.newPage();
+    attachPage(winner, ledger, 'owner-contact-winner');
+    attachPage(stale, ledger, 'owner-contact-stale');
+    await Promise.all([
+      winner.goto(origin + '/dashboard/settings', { waitUntil: 'domcontentloaded' }),
+      stale.goto(origin + '/dashboard/settings', { waitUntil: 'domcontentloaded' }),
+    ]);
+    await Promise.all([waitForSettings(winner), waitForSettings(stale)]);
+    await winner.fill('#contactName', 'Winning Contact');
+    await winner.fill('#contactPhone', '+1 860 555 0204');
+    const winningWrite = winner.waitForResponse(response =>
+      response.url() === origin + '/api/account/preferences' && response.request().method() === 'PUT'
+    );
+    await winner.click('#addContactBtn');
+    assert.strictEqual((await winningWrite).status(), 200, 'winning mounted contact write succeeds');
+    await stale.fill('#contactName', 'Stale Recoverable Draft');
+    await stale.fill('#contactPhone', '+1 860 555 0205');
+    const staleConsoleStart = ledger.consoleErrors.length;
+    const staleWrite = stale.waitForResponse(response =>
+      response.url() === origin + '/api/account/preferences' && response.request().method() === 'PUT'
+    );
+    await stale.click('#addContactBtn');
+    assert.strictEqual((await staleWrite).status(), 409, 'stale mounted contact write fails closed');
+    await stale.waitForFunction(() => !document.getElementById('reloadSettingsBtn').hidden);
+    await stale.waitForTimeout(50);
+    const staleDiagnostics = ledger.consoleErrors.splice(staleConsoleStart);
+    assert.ok(staleDiagnostics.every(message =>
+      message.startsWith('owner-contact-stale: ') && /409 \(Conflict\)/.test(message)
+    ), 'only the expected stale-write 409 diagnostic is classified as expected');
+    ledger.expectedConsoleErrors.push(...staleDiagnostics);
+    assert.deepStrictEqual(await stale.evaluate(() => ({
+      name: document.getElementById('contactName').value,
+      phone: document.getElementById('contactPhone').value,
+      addDisabled: document.getElementById('addContactBtn').disabled,
+    })), { name: 'Stale Recoverable Draft', phone: '+1 860 555 0205', addDisabled: true },
+    '409 retains exact losing draft and blocks mutation until reload');
+    await stale.click('#reloadSettingsBtn');
+    await waitForSettings(stale);
+    assert.deepStrictEqual(await stale.evaluate(() => ({
+      name: document.getElementById('contactName').value,
+      phone: document.getElementById('contactPhone').value,
+      addDisabled: document.getElementById('addContactBtn').disabled,
+    })), { name: 'Stale Recoverable Draft', phone: '+1 860 555 0205', addDisabled: false },
+    'reload advances version authority without discarding the recoverable draft');
+    const retryWrite = stale.waitForResponse(response =>
+      response.url() === origin + '/api/account/preferences' && response.request().method() === 'PUT'
+    );
+    await stale.click('#addContactBtn');
+    assert.strictEqual((await retryWrite).status(), 200, 'retained stale draft can be retried after reload');
+    durable = await pool.query(
+      "SELECT preferences->'contacts' AS contacts FROM organization_account_preferences WHERE organization_id = $1",
+      [ORG_A]
+    );
+    assert.deepStrictEqual(durable.rows[0].contacts.slice(-2), [
+      { name: 'Winning Contact', phone: '+1 860 555 0204' },
+      { name: 'Stale Recoverable Draft', phone: '+1 860 555 0205' },
+    ], 'winning and recovered losing contact bytes are both durable');
+    await captureEvidence(stale, browserLabel, 'ordinary', 'contact-serialized-conflict-recovery.png');
+  } finally {
+    await serialContext.close();
+    if (winnerContext) await winnerContext.close();
+    if (staleContext) await staleContext.close();
+  }
+}
+
 async function exerciseReadOnlyGuards(browser, origin, sessions, ledger) {
   for (const role of ['member', 'viewer']) {
     const input = { role: role + '-guard', viewport: { width: 390, height: 844 }, viewportLabel: 'mobile', theme: 'dark' };
@@ -330,7 +508,7 @@ async function exerciseReadOnlyGuards(browser, origin, sessions, ledger) {
   }
 }
 
-async function inspectBusinessProfile(browser, origin, sessions, pool, ledger) {
+async function inspectBusinessProfile(browser, browserLabel, origin, sessions, pool, ledger) {
   const input = { role: 'owner-profile', viewport: { width: 1280, height: 900 }, viewportLabel: 'desktop', theme: 'light' };
   const context = await contextFor(browser, origin, sessions.owner, input, ledger);
   try {
@@ -338,6 +516,39 @@ async function inspectBusinessProfile(browser, origin, sessions, pool, ledger) {
     attachPage(page, ledger, input.role);
     await page.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.getElementById('company-name').value === 'Notification Presentation A');
+    await page.waitForLoadState('networkidle');
+    assert.strictEqual(await page.locator('.bp-nav-btn.active').getAttribute('data-section'), 'company',
+      'sectionless Business Profile starts at Company');
+    await page.click('[data-section="services"]');
+    await page.waitForFunction(() => new URLSearchParams(location.search).get('section') === 'services');
+    await page.waitForLoadState('networkidle');
+    await page.goBack();
+    await page.waitForFunction(() => !new URLSearchParams(location.search).has('section'));
+    await page.waitForLoadState('networkidle');
+    assert.strictEqual(await page.locator('.bp-nav-btn.active').getAttribute('data-section'), 'company',
+      'Back to the sectionless canonical URL restores Company');
+    await page.goto(origin + '/dashboard/business-profile?section=services', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.getElementById('company-name').value === 'Notification Presentation A');
+    await page.waitForLoadState('networkidle');
+    assert.strictEqual(await page.locator('.bp-nav-btn.active').getAttribute('data-section'), 'services',
+      'query deep link restores Services');
+    await page.goto(origin + '/dashboard/business-profile?section=company#business-number', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'business-number');
+    await page.waitForLoadState('networkidle');
+    assert.strictEqual(await page.locator('.bp-nav-btn.active').getAttribute('data-section'), 'company',
+      'hash deep link restores Company and its focus target');
+    await page.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.getElementById('company-name').value === 'Notification Presentation A');
+    await page.waitForLoadState('networkidle');
+    await page.fill('#businessProfileSectionSearch', 'knowledge');
+    assert.strictEqual(await page.locator('#northstarStickySaveBar').isHidden(), true,
+      'section search never creates a false durable dirty state');
+    await page.fill('#businessProfileSectionSearch', '');
+    await page.click('[data-section="company"]');
+    await page.fill('#company-dba', 'Unrelated notification-safe edit');
+    assert.strictEqual(await page.locator('#northstarStickySaveBar').isVisible(), true,
+      'a real Business Profile field still creates the shared dirty state');
+    await captureEvidence(page, browserLabel, 'ordinary', 'business-profile-search-history-and-real-dirty.png');
     await page.click('[data-section="notifications"]');
     const presentation = await page.evaluate(() => ({
       controls: document.querySelectorAll('#section-notifications input,#section-notifications select,#section-notifications textarea').length,
@@ -357,12 +568,47 @@ async function inspectBusinessProfile(browser, origin, sessions, pool, ledger) {
     assert.strictEqual(await page.locator('#canonicalNotificationsLink').evaluate(node => document.activeElement === node), true);
 
     await page.click('[data-section="company"]');
-    await page.fill('#company-dba', 'Unrelated notification-safe edit');
     const saved = page.waitForResponse(response =>
       response.url() === origin + '/api/v1/business-profile' && response.request().method() === 'PUT'
     );
     await page.click('#saveBtn');
     assert.strictEqual((await saved).status(), 200, 'owner saves unrelated Business Profile field');
+
+    await page.goto(origin + '/dashboard/ai-settings', { waitUntil: 'domcontentloaded' });
+    assert.strictEqual(new URL(page.url()).pathname + new URL(page.url()).hash, '/dashboard/settings#ai-settings',
+      'paid AI Settings legacy route redirects to canonical Settings focus');
+    await page.waitForLoadState('networkidle');
+    await page.goto(origin + '/dashboard/my-number', { waitUntil: 'domcontentloaded' });
+    assert.strictEqual(new URL(page.url()).pathname + new URL(page.url()).search + new URL(page.url()).hash,
+      '/dashboard/business-profile?section=company#business-number',
+      'paid My Number legacy route redirects to canonical Company number');
+    await page.waitForLoadState('networkidle');
+    await page.goto(origin + '/demo/ai-settings', { waitUntil: 'domcontentloaded' });
+    assert.strictEqual(new URL(page.url()).pathname + new URL(page.url()).hash, '/demo/settings#ai-settings',
+      'demo AI Settings legacy route redirects mode-safely');
+    await page.waitForLoadState('networkidle');
+    await page.goto(origin + '/demo/my-number', { waitUntil: 'domcontentloaded' });
+    assert.strictEqual(new URL(page.url()).pathname + new URL(page.url()).search + new URL(page.url()).hash,
+      '/demo/business-profile?section=company#business-number',
+      'demo My Number legacy route redirects mode-safely');
+    await page.waitForLoadState('networkidle');
+    await page.goto(origin + '/demo/business-profile', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.getElementById('businessProfileRoot').getAttribute('aria-busy') === 'false');
+    await page.waitForLoadState('networkidle');
+    assert.strictEqual(await page.locator('.bp-nav-btn.active').getAttribute('data-section'), 'company',
+      'demo sectionless Business Profile starts at Company');
+    await page.click('[data-section="services"]');
+    await page.waitForFunction(() => new URLSearchParams(location.search).get('section') === 'services');
+    await page.waitForLoadState('networkidle');
+    await page.goBack();
+    await page.waitForFunction(() => !new URLSearchParams(location.search).has('section'));
+    await page.waitForLoadState('networkidle');
+    assert.strictEqual(await page.locator('.bp-nav-btn.active').getAttribute('data-section'), 'company',
+      'demo Back to sectionless Business Profile restores Company');
+    await page.fill('#businessProfileSectionSearch', 'knowledge');
+    assert.strictEqual(await page.locator('#northstarStickySaveBar').isHidden(), true,
+      'demo section search remains navigation-only and clean');
+    await page.waitForLoadState('networkidle');
   } finally {
     await context.close();
   }
@@ -407,7 +653,10 @@ async function main() {
   let db;
   let server;
   let browser;
-  const ledger = { requests: [], providers: [], external: [], consoleErrors: [], pageErrors: [] };
+  const ledger = {
+    requests: [], providers: [], external: [], consoleErrors: [], expectedConsoleErrors: [],
+    pageErrors: [], expectedPageErrors: [],
+  };
   try {
     process.env.DATABASE_URL = suiteDatabase.connectionString;
     process.env.AUTH_ACCESS_SECRET = crypto.randomBytes(48).toString('hex');
@@ -480,10 +729,11 @@ async function main() {
       { label: 'mobile', width: 390, height: 844 },
     ];
     const themes = ['light', 'dark'];
+    const browserLabel = selected === 'chrome' ? 'chrome' : 'webkit';
     for (const role of ['owner', 'admin', 'member', 'viewer']) {
       for (const viewport of viewports) {
         for (const theme of themes) {
-          await exerciseCell(browser, origin, sessions[role], {
+          await exerciseCell(browser, browserLabel, origin, sessions[role], {
             role,
             canEdit: role === 'owner' || role === 'admin',
             viewport: { width: viewport.width, height: viewport.height },
@@ -495,8 +745,9 @@ async function main() {
     }
 
     await exerciseOwnerMutation(browser, origin, sessions.owner, pool, ledger);
+    await exerciseContactPersistence(browser, browserLabel, origin, sessions.owner, pool, ledger);
     await exerciseReadOnlyGuards(browser, origin, sessions, ledger);
-    await inspectBusinessProfile(browser, origin, sessions, pool, ledger);
+    await inspectBusinessProfile(browser, browserLabel, origin, sessions, pool, ledger);
     assert.strictEqual((await pool.query(
       'SELECT id FROM canonical_business_profiles WHERE organization_id = $1 AND is_active = TRUE', [ORG_B]
     )).rows[0].id, otherProfile.id, 'other tenant profile remains unchanged');
@@ -511,11 +762,15 @@ async function main() {
     assert.deepStrictEqual(ledger.providers, [], 'provider requests remain zero');
     assert.deepStrictEqual(ledger.external, [], 'unexpected external requests remain zero');
     assert.strictEqual(ledger.pageErrors.length, 0, ledger.pageErrors.join('\n'));
+    assert.ok(selected === 'webkit'
+      ? ledger.expectedPageErrors.length <= 1
+      : ledger.expectedPageErrors.length === 0,
+    'only WebKit may emit at most one exact legacy-route navigation cancellation diagnostic');
     assert.strictEqual(ledger.consoleErrors.length, 0, ledger.consoleErrors.join('\n'));
     assert.ok(ledger.requests.filter(entry => entry.path === '/api/account/preferences' && entry.method === 'GET').length >= 16 * 2,
       'every initial and reload lifecycle consumes the mounted canonical preferences route');
-    assert.strictEqual(ledger.requests.filter(entry => entry.path === '/api/account/preferences' && entry.method === 'PUT').length, 1,
-      'only the explicit owner mutation writes canonical preferences');
+    assert.strictEqual(ledger.requests.filter(entry => entry.path === '/api/account/preferences' && entry.method === 'PUT').length, 7,
+      'only the explicit owner and contact persistence scenarios write canonical preferences');
     assert.ok(ledger.requests.every(entry => entry.authorization === null), 'browser never sends bearer authorization');
     assert.strictEqual(dataDigest(), beforeData, 'data files remain byte-identical');
 
@@ -528,7 +783,8 @@ async function main() {
       themes,
       cartesianCombinations: 16,
       lifecycle: ['initial', 'rerender', 'reload'],
-      ownerPreferenceWrites: 1,
+      ownerPreferenceWrites: 7,
+      contactPersistence: ['serialized', 'failure-retained', 'stale-409-retained', 'reload-retry-durable'],
       readOnlyPreferenceWrites: 0,
       businessProfileWrites: 1,
       providerRequests: ledger.providers.length,
@@ -538,6 +794,8 @@ async function main() {
       tenantIsolation: 'exact',
       xssExecutions: 0,
       unexpectedConsoleErrors: ledger.consoleErrors.length,
+      expectedFailureDiagnostics: ledger.expectedConsoleErrors.length,
+      expectedRedirectCancellationDiagnostics: ledger.expectedPageErrors.length,
       pageErrors: ledger.pageErrors.length,
       physicalSafari: false,
     }));

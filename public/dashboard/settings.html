@@ -215,10 +215,11 @@
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <input type="text" id="contactName" data-settings-mutable aria-label="Known contact name" placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
-          <input type="tel" id="contactPhone" data-settings-mutable aria-label="Known contact phone number" placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
-          <button class="btn btn-primary btn-sm" data-settings-mutable onclick="addContact()" disabled>+ Add</button>
+          <input type="text" id="contactName" data-contact-draft aria-label="Known contact name" placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
+          <input type="tel" id="contactPhone" data-contact-draft aria-label="Known contact phone number" placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
+          <button class="btn btn-primary btn-sm" id="addContactBtn" data-contact-action onclick="addContact()" disabled>+ Add</button>
         </div>
+        <p id="contactDraftStatus" class="description" role="status" aria-live="polite">No unsaved contact draft.</p>
 
       </div>
 <style>
@@ -274,6 +275,8 @@
     let settingsVersion = null;
     let settingsConflicted = false;
     let settingsDirty = false;
+    let settingsSaving = false;
+    let contactMutationPending = false;
     let settingsFormState = null;
 
     function setSettingsDirty(dirty) {
@@ -290,7 +293,24 @@
         status.textContent = 'No unsaved changes.';
       }
       const saveButton = document.getElementById('saveSettingsBtn');
-      if (saveButton) saveButton.disabled = !settingsCanEdit || settingsConflicted || !settingsDirty;
+      if (saveButton) saveButton.disabled = !settingsCanEdit || settingsConflicted || settingsSaving || contactMutationPending || !settingsDirty;
+    }
+
+    function setContactDraftStatus(message, state) {
+      const status = document.getElementById('contactDraftStatus');
+      status.dataset.state = state || 'clean';
+      status.textContent = message;
+    }
+
+    function setContactMutationPending(pending) {
+      contactMutationPending = Boolean(pending);
+      document.querySelectorAll('[data-contact-draft]').forEach(element => {
+        element.disabled = !settingsCanEdit || contactMutationPending || settingsSaving;
+      });
+      document.querySelectorAll('[data-contact-action]').forEach(element => {
+        element.disabled = !settingsCanEdit || contactMutationPending || settingsSaving || settingsConflicted;
+      });
+      setSettingsDirty(settingsDirty);
     }
 
     function synchronizeCompanyInfoControls(source) {
@@ -313,6 +333,7 @@
       document.querySelectorAll('[data-settings-mutable]').forEach(element => {
         element.disabled = !settingsCanEdit;
       });
+      setContactMutationPending(contactMutationPending);
       const saveButton = document.getElementById('saveSettingsBtn');
       saveButton.disabled = true;
       saveButton.hidden = false;
@@ -353,6 +374,7 @@
           settingsState = stored.preferences || {};
           settingsVersion = stored.version || null;
           settingsConflicted = false;
+          settingsSaving = false;
           renderSettingsState();
           applySettingsAccess(account);
           if (settingsFormState) settingsFormState.clear();
@@ -369,7 +391,7 @@
     }
 
     async function saveSettings() {
-      if (!settingsCanEdit) return;
+      if (!settingsCanEdit || settingsSaving || contactMutationPending) return;
       const fields = ['companyName', 'companyPhone', 'services', 'companyInfo', 'smsNumber', 'emailAddress'];
       const checkboxes = ['emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled', 'smsUrgent', 'smartRouting'];
       const settings = writableSettings(settingsState);
@@ -387,6 +409,8 @@
       settings.contacts = contacts;
 
       const saveButton = document.getElementById('saveSettingsBtn');
+      settingsSaving = true;
+      setContactMutationPending(contactMutationPending);
       saveButton.disabled = true;
       saveButton.textContent = 'Saving…';
       try {
@@ -397,6 +421,7 @@
         settingsState = saved.preferences || settings;
         settingsVersion = saved.version || settingsVersion;
         settingsConflicted = false;
+        settingsDirty = false;
         renderSettingsState();
         window.dispatchEvent(new CustomEvent('northstar:form-saved'));
         setSettingsDirty(false);
@@ -410,6 +435,8 @@
         }
         showToast(error.message || 'Settings could not be saved.', 'error');
       } finally {
+        settingsSaving = false;
+        setContactMutationPending(contactMutationPending);
         saveButton.disabled = !settingsCanEdit || settingsConflicted || !settingsDirty;
         saveButton.textContent = 'Save Changes';
       }
@@ -428,25 +455,32 @@
       return result;
     }
 
-    function saveContacts(contacts) {
-      if (!settingsCanEdit) return;
+    async function saveContacts(contacts) {
+      if (!settingsCanEdit || settingsSaving || contactMutationPending || settingsConflicted) return false;
+      setContactMutationPending(true);
       const nextState = Object.assign({}, settingsState, { contacts: contacts });
       const payload = Object.assign({}, writableSettings(nextState), { expectedVersion: settingsVersion });
-      NorthStarAccountSession.json('/api/account/preferences', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      }).then(function(saved) {
+      try {
+        const saved = await NorthStarAccountSession.json('/api/account/preferences', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
         settingsState = saved.preferences || nextState;
         settingsVersion = saved.version || settingsVersion;
         renderContacts();
-      }).catch(function(error) {
+        return true;
+      } catch (error) {
         if (error && (error.status === 409 || error.code === 'preferences_version_conflict')) {
           settingsConflicted = true;
           document.getElementById('reloadSettingsBtn').hidden = false;
           setSettingsDirty(true);
           window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
         }
-        showToast(error.message, 'error');
-      });
+        setContactDraftStatus('Contact draft retained. Resolve the error and try again.', 'error');
+        showToast(error.message || 'Known contacts could not be saved.', 'error');
+        return false;
+      } finally {
+        setContactMutationPending(false);
+      }
     }
 
     function renderContacts() {
@@ -491,7 +525,7 @@
         remove.style.cssText = 'color:var(--danger);font-size:12px;';
         remove.textContent = 'Remove';
         remove.setAttribute('aria-label', 'Remove known contact ' + contact.name);
-        remove.setAttribute('data-settings-mutable', '');
+        remove.setAttribute('data-contact-action', '');
         remove.disabled = !settingsCanEdit;
         remove.addEventListener('click', () => removeContact(index));
 
@@ -501,30 +535,34 @@
       list.replaceChildren(fragment);
     }
 
-    function addContact() {
-      if (!settingsCanEdit) return;
+    async function addContact() {
+      if (!settingsCanEdit || settingsSaving || contactMutationPending || settingsConflicted) return false;
       const name = document.getElementById('contactName').value.trim();
       const phone = document.getElementById('contactPhone').value.trim();
       if (!name || !phone) {
         showToast('Please enter both a name and phone number.', 'error');
-        return;
+        return false;
       }
 
       const contacts = getContacts();
       contacts.push({ name, phone });
-      saveContacts(contacts);
+      const saved = await saveContacts(contacts);
+      if (!saved) return false;
 
       document.getElementById('contactName').value = '';
       document.getElementById('contactPhone').value = '';
+      setContactDraftStatus('No unsaved contact draft.', 'clean');
       showToast(`✅ "${name}" added to known contacts.`);
+      return true;
     }
 
-    function removeContact(index) {
-      if (!settingsCanEdit) return;
+    async function removeContact(index) {
+      if (!settingsCanEdit || settingsSaving || contactMutationPending || settingsConflicted) return false;
       const contacts = getContacts();
       const removed = contacts.splice(index, 1)[0];
-      saveContacts(contacts);
+      if (!removed || !(await saveContacts(contacts))) return false;
       showToast(`Removed "${removed.name}" from known contacts.`);
+      return true;
     }
 
     // Load contacts on page load
@@ -540,6 +578,11 @@
     document.getElementById('mainContent').addEventListener('change', function(event) {
       if (event.target.matches('[data-settings-mutable]')) setSettingsDirty(true);
     });
+    document.querySelectorAll('[data-contact-draft]').forEach(function(control) {
+      control.addEventListener('input', function() {
+        setContactDraftStatus('Contact draft not saved yet. Use Add to persist it.', 'dirty');
+      });
+    });
     document.getElementById('reloadSettingsBtn').addEventListener('click', function() {
       loadSettings().catch(function(error) { showToast(error.message || 'Settings unavailable', 'error'); });
     });
@@ -551,7 +594,7 @@
   <script src="/js/nav-component.js"></script>
   <script src="/js/knowledge-management.js"></script>
   <script src="/js/workspace-form-state.js"></script>
-  <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn' });</script>
+  <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>
 </body>
 </html>

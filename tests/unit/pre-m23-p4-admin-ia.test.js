@@ -13,6 +13,8 @@ describe('Pre-Mission-23 P4 administrative information architecture', () => {
   const settings = read('public/dashboard/settings.html');
   const integrations = read('public/dashboard/integrations.html');
   const knowledge = read('public/js/knowledge-management.js');
+  const workspaceFormState = read('public/js/workspace-form-state.js');
+  const notificationBrowser = read('tests/browser/m20-part2i-notification-preferences.js');
   const accountRoute = read('src/routes/account.js');
   const accountRepository = read('src/accounts/repository.js');
   const server = read('src/server.js');
@@ -58,6 +60,18 @@ describe('Pre-Mission-23 P4 administrative information architecture', () => {
     expect(settings).toContain('expectedVersion: settingsVersion');
     expect(accountRoute).toContain('preferences_version_conflict');
     expect(accountRepository).toContain('preference_version');
+    expect(settings).toContain('async function saveContacts(contacts)');
+    expect(settings).toContain('const saved = await saveContacts(contacts);');
+    expect(settings).toContain("setContactDraftStatus('Contact draft retained. Resolve the error and try again.'");
+    expect(settings).not.toContain('saveContacts(contacts);\n\n      document.getElementById(\'contactName\').value = \'\';');
+  });
+
+  test('ADM-20 tracks only durable controls and restores the canonical Company section', () => {
+    expect(workspaceFormState).toContain("var durableControlSelector = options.durable || 'input,textarea,select';");
+    expect(profile).toContain("durable: '.bp-section input, .bp-section textarea, .bp-section select'");
+    expect(profile).toContain("ignore: '[data-knowledge-management]'");
+    expect(profile).toContain("if (!requested || validSections.indexOf(requested) < 0) requested = 'company';");
+    expect(notificationBrowser).toContain("assert.strictEqual(snapshot.saveDisabled, true, label + ': save remains disabled until a real dirty state');");
   });
 
   test('ADM-11..16 knowledge defaults to plain language and gates exact evidence explicitly', () => {

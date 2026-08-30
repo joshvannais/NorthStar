@@ -4,6 +4,8 @@
   function create(options) {
     var root = document.querySelector(options.root);
     var saves = Array.prototype.slice.call(document.querySelectorAll(options.save));
+    var durableControlSelector = options.durable || 'input,textarea,select';
+    var ignoredControlAncestor = options.ignore || '';
     if (!root || !saves.length || document.getElementById('northstarStickySaveBar')) return null;
     var dirty = false;
     var conflicted = false;
@@ -57,11 +59,16 @@
       }) || saves[0];
     }
 
+    function isDurableControl(target) {
+      return Boolean(target && target.matches && target.matches(durableControlSelector) &&
+        !(ignoredControlAncestor && target.closest(ignoredControlAncestor)));
+    }
+
     root.addEventListener('input', function (event) {
-      if (event.target.matches('input,textarea,select')) setDirty(true);
+      if (isDurableControl(event.target)) setDirty(true);
     });
     root.addEventListener('change', function (event) {
-      if (event.target.matches('input,textarea,select')) setDirty(true);
+      if (isDurableControl(event.target)) setDirty(true);
     });
     action.addEventListener('click', function () {
       var save = activeSave();

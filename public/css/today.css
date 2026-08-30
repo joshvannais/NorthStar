@@ -39,7 +39,7 @@
   cursor: pointer;
   font-family: var(--font-body, inherit);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.2;
 }
 .today-refresh:disabled { cursor: wait; opacity: 0.68; }
@@ -90,7 +90,7 @@
   background: transparent;
   font-family: var(--font-body, inherit);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.2;
   justify-content: center;
 }

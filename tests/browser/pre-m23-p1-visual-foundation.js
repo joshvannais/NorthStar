@@ -148,7 +148,8 @@ async function renderToday(browser, origin, evidenceRoot, securityRoot, entries,
   assert.ok(await page.locator('button.today-sign-out').count() >= 1);
   const toggle = page.locator('[data-northstar-theme-toggle]').first();
   assert.strictEqual(await toggle.getAttribute('data-current-theme'), fixture.theme);
-  assert.match(await toggle.getAttribute('aria-label'), new RegExp(`Current theme: ${fixture.theme}`));
+  assert.strictEqual(await toggle.getAttribute('aria-label'), `Switch to ${fixture.theme === 'dark' ? 'light' : 'dark'} theme`);
+  assert.strictEqual(await toggle.getAttribute('aria-pressed'), fixture.theme === 'dark' ? 'true' : 'false');
   if (fixture.hostile) {
     assert.strictEqual(await page.evaluate(() => globalThis.preM23P1Compromised), false);
     assert.strictEqual(await page.locator('#todayRecords img[src="x"]').count(), 0);

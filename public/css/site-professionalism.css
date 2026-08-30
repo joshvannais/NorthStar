@@ -1127,7 +1127,6 @@ html body .demo-table-wrap th {
 
 html body {
   font-family: var(--font-body) !important;
-  font-synthesis: none;
 }
 
 html body :is(
@@ -1250,7 +1249,7 @@ html body :is(
   min-height: var(--northstar-control-height);
   border-radius: var(--northstar-control-radius);
   font-family: var(--font-body) !important;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -1363,7 +1362,7 @@ html body .m22-state-list {
 html body .m22-state-chip {
   font-family: var(--font-body) !important;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
 }

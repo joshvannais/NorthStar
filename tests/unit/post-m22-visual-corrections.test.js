@@ -284,8 +284,8 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     const command = source('public/js/command-center-page.js');
     const commandCss = source('public/css/demo-dashboard.css');
 
-    expect(today).toMatch(/\.today-refresh\s*\{[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*650;/);
-    expect(today).toMatch(/\.today-readonly-badge\s*\{[\s\S]*min-height:\s*44px;[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*650;[\s\S]*justify-content:\s*center;/);
+    expect(today).toMatch(/\.today-refresh\s*\{[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*600;/);
+    expect(today).toMatch(/\.today-readonly-badge\s*\{[\s\S]*min-height:\s*44px;[\s\S]*font-size:\s*13px;[\s\S]*font-weight:\s*600;[\s\S]*justify-content:\s*center;/);
     expect(today).toMatch(/\.today-state-badge,[\s\S]*font-family:\s*var\(--font-body, inherit\);[\s\S]*font-weight:\s*600;/);
     expect(command).toContain('function formatCompactDate(value, suppliedTimeZone)');
     expect(command).toContain("time.title = fullDate || date");

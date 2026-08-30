@@ -58,7 +58,7 @@
     var dark = theme === 'dark';
     var next = dark ? 'light' : 'dark';
     button.setAttribute('aria-pressed', dark ? 'true' : 'false');
-    button.setAttribute('aria-label', 'Current theme: ' + theme + '. Switch to ' + next + ' theme');
+    button.setAttribute('aria-label', 'Switch to ' + next + ' theme');
     button.setAttribute('title', 'Current theme: ' + theme + '. Switch to ' + next + ' theme');
     button.setAttribute('data-current-theme', theme);
     var label = button.querySelector('[data-theme-label]');

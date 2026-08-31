@@ -106,11 +106,11 @@ function pendingColor(theme) {
 }
 
 describe('Mission 20 Phase 6B Profile Readiness presentation contract', () => {
-  test('renders the exact Polaris guidance directly beneath the Business Profile heading', () => {
-    const guidance = 'Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile. The more relevant detail you provide, the better Polaris can tailor its recommendations to your business.';
+  test('renders the consolidated P4 guidance directly beneath the text-only Business Profile heading', () => {
+    const guidance = 'Keep the business details NorthStar uses for customer service, planning, and provider-neutral AI guidance in one place.';
     expect(HTML).toMatch(new RegExp(
-      '<h1 class="bp-title">⚙️ Business Profile</h1>\\s*' +
-      '<p id="polarisProfileGuidance" class="bp-guidance">' +
+      '<h1 class="bp-title">Business Profile</h1>\\s*' +
+      '<p id="polarisProfileGuidance" class="bp-subtitle">' +
       guidance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
       '</p>'
     ));

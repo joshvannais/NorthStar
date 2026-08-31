@@ -159,7 +159,13 @@ async function contextFor(browser, origin, session, input, ledger, demo = false)
 }
 
 function attachPage(page, ledger, role) {
-  page.on('pageerror', error => ledger.pageErrors.push(`${role}: ${error.message}`));
+  page.on('response', response => {
+    if (response.status() >= 400) console.error(`${role} response ${response.status()}: ${response.url()}`);
+  });
+  page.on('pageerror', error => {
+    ledger.pageErrors.push(`${role}: ${error.message}`);
+    console.error(`${role} pageerror: ${error.message}`);
+  });
   page.on('console', message => {
     if (message.type() !== 'error') return;
     if (/409 \(Conflict\)/.test(message.text())) ledger.expectedConsole.push(`${role}: ${message.text()}`);
@@ -168,10 +174,18 @@ function attachPage(page, ledger, role) {
 }
 
 async function waitForKnowledge(page) {
-  await page.waitForFunction(() => {
-    const root = document.querySelector('[data-knowledge-management]');
-    return root && root.dataset.state === 'ready' && root.querySelector('[data-km-detail] h3');
-  });
+  try {
+    await page.waitForFunction(() => {
+      const root = document.querySelector('[data-knowledge-management]');
+      return root && root.dataset.state === 'ready' && root.querySelector('[data-km-detail] h3');
+    });
+  } catch (error) {
+    const diagnostic = await page.evaluate(() => {
+      const root = document.querySelector('[data-knowledge-management]');
+      return root ? { state: root.dataset.state, text: root.textContent.slice(0, 1000) } : { state: 'missing' };
+    });
+    throw new Error(`${error.message}; knowledge diagnostic: ${JSON.stringify(diagnostic)}`);
+  }
 }
 
 async function openSettings(page, origin, demo = false) {
@@ -262,6 +276,14 @@ async function selectItem(page, label) {
   return button;
 }
 
+async function openAdvancedEvidence(page) {
+  const disclosure = page.locator('.km-advanced-evidence');
+  if (!(await disclosure.getAttribute('open'))) {
+    await disclosure.getByText('Advanced evidence', { exact: true }).click();
+  }
+  await page.getByRole('tab').first().waitFor({ state: 'visible' });
+}
+
 async function openDialogWithReorderedDetail(page, staleEntryId, targetLabel, actionName, prepare) {
   let release;
   let observed;
@@ -276,6 +298,7 @@ async function openDialogWithReorderedDetail(page, staleEntryId, targetLabel, ac
   await page.locator(`.km-item-button[data-entry-id="${staleEntryId}"]`).click();
   await seen;
   const targetButton = await selectItem(page, targetLabel);
+  await openAdvancedEvidence(page);
   if (prepare) await prepare();
   const opener = page.getByRole('button', { name: actionName, exact: true }).first();
   await opener.click();
@@ -288,7 +311,8 @@ async function openDialogWithReorderedDetail(page, staleEntryId, targetLabel, ac
   await page.waitForTimeout(25);
   assert.strictEqual(await targetButton.getAttribute('aria-current'), 'true');
   assert.strictEqual(await page.locator('[data-km-detail] h3').textContent(), targetLabel);
-  assert.match(await dialog.textContent(), new RegExp(targetLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  const evidenceLabel = targetLabel === 'Business identity' ? 'Generated business identity' : targetLabel;
+  assert.match(await dialog.textContent(), new RegExp(evidenceLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   return dialog;
 }
 
@@ -308,10 +332,82 @@ async function screenshot(page, directory, filename) {
   await page.screenshot({ path: path.join(directory, filename), fullPage: true, animations: 'disabled' });
 }
 
+async function assertP4OwnerSurfaces(page, origin, directory, browserName) {
+  await page.goto(origin + '/dashboard/ai-settings', { waitUntil: 'domcontentloaded' });
+  await page.waitForURL(/\/dashboard\/settings#ai-settings$/);
+  await page.waitForFunction(() => document.getElementById('settingsRoleBadge').textContent.includes('Owner'));
+  assert.strictEqual(await page.locator('.notification-preference-grid').evaluate(element =>
+    getComputedStyle(element).gridTemplateColumns.split(' ').length
+  ), 2);
+  assert.strictEqual(await page.locator('#saveSettingsBtn').isDisabled(), true);
+  await page.locator('.integration-card').filter({ has: page.locator('#emailEnabled') }).locator('label.toggle').click();
+  assert.strictEqual(await page.locator('#northstarStickySaveBar').isVisible(), true);
+  assert.match(await page.locator('#northstarStickySaveBar').textContent(), /Unsaved changes.*Editable.*Owner/s);
+  await screenshot(page, directory, `${browserName}-settings-owner-dirty.png`);
+  await page.evaluate(async () => {
+    const current = await NorthStarAccountSession.json('/api/account/preferences', { method: 'GET' });
+    const preferences = current.preferences;
+    await NorthStarAccountSession.json('/api/account/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailEnabled: preferences.emailEnabled,
+        emailCallSummary: !preferences.emailCallSummary,
+        emailAppointment: preferences.emailAppointment,
+        smsEnabled: preferences.smsEnabled,
+        smsUrgent: preferences.smsUrgent,
+        emailAddress: preferences.emailAddress,
+        smsNumber: preferences.smsNumber,
+        expectedVersion: current.version,
+      }),
+    });
+  });
+  await page.locator('#saveSettingsBtn').click();
+  await page.waitForFunction(() => document.getElementById('settingsDirtyStatus').dataset.state === 'conflict');
+  assert.strictEqual(await page.locator('#reloadSettingsBtn').isVisible(), true);
+  assert.match(await page.locator('#northstarStickySaveBar').textContent(), /Conflict detected.*reload.*Editable.*Owner/s);
+  await screenshot(page, directory, `${browserName}-settings-owner-conflict.png`);
+
+  await page.goto(origin + '/dashboard/my-number', { waitUntil: 'domcontentloaded' });
+  await page.waitForURL(/\/dashboard\/business-profile\?section=company#business-number$/);
+  await page.waitForFunction(() => document.getElementById('businessProfileRoot').dataset.state === 'ready');
+  assert.strictEqual(await page.locator('.bp-nav-group').count(), 7);
+  assert.strictEqual(await page.locator('.bp-title').textContent(), 'Business Profile');
+  assert.match(await page.locator('#businessProfileRole').textContent(), /Editable.*Owner/);
+  assert.strictEqual(await page.locator('#business-number').evaluate(element => element === document.activeElement), true);
+  await page.getByLabel('Find a setup section in the checklist').fill('knowledge');
+  const visibleSetupMatches = await page.locator('.bp-nav-btn:not([hidden])').allTextContents();
+  assert.ok(visibleSetupMatches.length >= 1 && visibleSetupMatches.every(value => /knowledge/i.test(value)));
+  await screenshot(page, directory, `${browserName}-business-profile-seven-group-search.png`);
+
+  await page.goto(origin + '/dashboard/integrations', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.getElementById('integrationCatalogueRoot').dataset.state === 'ready' &&
+    document.getElementById('mapPreferencesRoot').dataset.state === 'ready');
+  assert.strictEqual(await page.locator('.integration-category-details').count(), 7);
+  assert.strictEqual(await page.locator('.map-preference-scope').count(), 2);
+  const planned = page.locator('.integration-category[data-availability="planned"]');
+  assert.ok(await planned.count() >= 1);
+  assert.strictEqual(await planned.locator('details').first().getAttribute('open'), null);
+  await planned.locator('summary').first().click();
+  assert.notStrictEqual(await planned.locator('details').first().getAttribute('open'), null);
+  assert.strictEqual(await page.locator('#mapPreferencesOrganization').getAttribute('open') !== null, true);
+  assert.strictEqual(await page.locator('#mapPreferencesUser').getAttribute('open') !== null, true);
+  await screenshot(page, directory, `${browserName}-integrations-disclosures.png`);
+
+  await page.goto(origin + '/dashboard/team', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.getElementById('workforceSummary').textContent.includes('People'));
+  assert.strictEqual(await page.locator('#workforceSummary').count(), 1);
+  assert.ok(await page.locator('.wf-shell').evaluate(element =>
+    element.getBoundingClientRect().width / element.parentElement.getBoundingClientRect().width >= 0.9
+  ));
+  await screenshot(page, directory, `${browserName}-team-summary-full-width.png`);
+}
+
 async function run() {
   const selected = (process.argv.find(value => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
   assert.ok(selected === 'chrome' || selected === 'webkit', 'browser must be chrome or webkit');
   const evidenceDirectory = process.env.M21_PART7_EVIDENCE_DIR || '';
+  const p4EvidenceDirectory = process.env.PRE_M23_P4_EVIDENCE_DIR || '';
   const { browserType, executablePath } = resolveBrowserRuntime(selected);
   const original = new Map();
   for (const name of [
@@ -527,7 +623,8 @@ async function run() {
     await assertNoOverflow(ownerLight);
     await screenshot(ownerLight, evidenceDirectory, `${selected}-settings-desktop-light-main.png`);
 
-    await selectItem(ownerLight, 'Generated business identity');
+    await selectItem(ownerLight, 'Business identity');
+    await openAdvancedEvidence(ownerLight);
     const tabs = ownerLight.getByRole('tab');
     await tabs.first().focus();
     await ownerLight.keyboard.press('End');
@@ -542,7 +639,7 @@ async function run() {
     assert.match(await ownerLight.locator('[role="tabpanel"]:visible').textContent(), /Version 2/);
     await screenshot(ownerLight, evidenceDirectory, `${selected}-settings-desktop-light-lifecycle.png`);
     let dialog = await openDialogWithReorderedDetail(
-      ownerLight, stale.id, 'Generated business identity', 'Reconcile exact target',
+      ownerLight, stale.id, 'Business identity', 'Reconcile exact target',
       async () => activateTab(ownerLight, 'Synchronization')
     );
     assert.match(await ownerLight.locator('[role="tabpanel"]:visible').textContent(), /Drift detected/);
@@ -558,7 +655,7 @@ async function run() {
     assert.ok(['drift', 'pending', 'retry'].includes(reconciledState.state.status));
 
     dialog = await openDialogWithReorderedDetail(
-      ownerLight, stale.id, 'Generated business identity', 'Retry exact target',
+      ownerLight, stale.id, 'Business identity', 'Retry exact target',
       async () => activateTab(ownerLight, 'Synchronization')
     );
     const retryResponse = ownerLight.waitForResponse(response =>
@@ -595,6 +692,7 @@ async function run() {
     await ownerLight.waitForFunction(() => !document.querySelector('dialog.km-dialog'));
 
     await selectItem(ownerLight, 'Unresolved evidence item');
+    await openAdvancedEvidence(ownerLight);
     assert.match(await ownerLight.locator('[data-km-detail]').textContent(),
       /Direct revision is disabled for generated or authoritative-source content/);
     assert.strictEqual(await ownerLight.getByRole('button', { name: 'Create revision' }).count(), 0);
@@ -664,10 +762,9 @@ async function run() {
     response = ownerLight.waitForResponse(value => value.url().endsWith(`/items/${lifecycle.id}/tombstone`) && value.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'Create a tombstone version' }).click();
     assert.strictEqual((await response).status(), 201);
-    await ownerLight.waitForFunction(() => {
-      const badges = document.querySelector('[data-km-detail] .km-badges');
-      return badges && /Version 2/.test(badges.textContent);
-    });
+    await ownerLight.waitForFunction(() => Array.from(document.querySelectorAll('[data-km-detail] dt')).some(label =>
+      label.textContent === 'Version number' && label.nextElementSibling && label.nextElementSibling.textContent === '2'
+    ));
     dialog = await openDialogWithReorderedDetail(
       ownerLight, stale.id, 'Workflow lifecycle item', 'Rollback as new version'
     );
@@ -681,10 +778,9 @@ async function run() {
     if (rollbackDetail.status() !== 200) {
       throw new Error(`Rollback detail refresh failed: ${rollbackDetail.status()} ${await rollbackDetail.text()}`);
     }
-    await ownerLight.waitForFunction(() => {
-      const badges = document.querySelector('[data-km-detail] .km-badges');
-      return badges && /Version 3/.test(badges.textContent);
-    });
+    await ownerLight.waitForFunction(() => Array.from(document.querySelectorAll('[data-km-detail] dt')).some(label =>
+      label.textContent === 'Version number' && label.nextElementSibling && label.nextElementSibling.textContent === '3'
+    ));
     const lifecycleEvidence = await pool.query(
       'SELECT version_number, lifecycle_action FROM canonical_knowledge_versions WHERE organization_id = $1 AND entry_id = $2 ORDER BY version_number',
       [ORG, lifecycle.id]
@@ -697,6 +793,7 @@ async function run() {
     assert.deepStrictEqual(staleRetargetWrites, []);
 
     await selectItem(ownerLight, 'Stale conflict item');
+    await openAdvancedEvidence(ownerLight);
     const staleRevision = await knowledge.createKnowledgeRevision(pool, {
       ...draft(OWNER, 'human.stale', {
         label: 'Stale conflict item',
@@ -725,6 +822,7 @@ async function run() {
     await ownerLight.keyboard.press('Escape');
     await ownerLight.waitForFunction(element => document.activeElement === element, await staleOpener.elementHandle());
     assert.strictEqual(await staleOpener.evaluate(element => element === document.activeElement), true);
+    await assertP4OwnerSurfaces(ownerLight, origin, p4EvidenceDirectory, selected);
     await ownerLightContext.close();
 
     for (let index = 0; index < 202; index += 1) {
@@ -750,7 +848,8 @@ async function run() {
     const ownerDark = await ownerDarkContext.newPage();
     attachPage(ownerDark, ledger, 'paid-owner-desktop-dark');
     await openProfile(ownerDark, origin);
-    await selectItem(ownerDark, 'Generated business identity');
+    await selectItem(ownerDark, 'Business identity');
+    await openAdvancedEvidence(ownerDark);
     await activateTab(ownerDark, 'Changes & provenance');
     await assertNoOverflow(ownerDark);
     await screenshot(ownerDark, evidenceDirectory, `${selected}-business-profile-desktop-dark-diff.png`);
@@ -772,6 +871,12 @@ async function run() {
     assert.match(await correction.getAttribute('href'), /^\/dashboard\/business-profile\?section=/);
     await assertNoOverflow(memberPage);
     await screenshot(memberPage, evidenceDirectory, `${selected}-business-profile-mobile-dark-readonly.png`);
+    await memberPage.goto(origin + '/dashboard/settings', { waitUntil: 'domcontentloaded' });
+    await memberPage.waitForFunction(() => document.getElementById('settingsRoleBadge').textContent.includes('Read only'));
+    assert.strictEqual(await memberPage.locator('#saveSettingsBtn').isDisabled(), true);
+    assert.strictEqual(await memberPage.locator('.notification-preference-grid').evaluate(element =>
+      getComputedStyle(element).gridTemplateColumns.split(' ').length
+    ), 1);
     const paidMemberWrites = ledger.requests.filter(entry => entry.role === 'paid-member-mobile-dark' &&
       entry.path.startsWith('/api/v1/knowledge-management') &&
       ['POST', 'PUT', 'PATCH', 'DELETE'].includes(entry.method));
@@ -792,6 +897,7 @@ async function run() {
       return root && root.dataset.state === 'ready' && !root.querySelector('.km-list-continuation button');
     });
     assert.ok(await mobileLight.locator('.km-item-button').count() > 200);
+    await mobileLight.locator('.km-list-evidence').getByText('Advanced list filters and counts', { exact: true }).click();
     await mobileLight.locator('[data-filter="source"]').selectOption('imported_record');
     await mobileLight.waitForFunction(() => {
       const root = document.querySelector('[data-knowledge-management]');
@@ -856,10 +962,13 @@ async function run() {
     attachPage(demoDark, ledger, 'demo-mobile-dark');
     await openSettings(demoDark, origin, true);
     assert.match(await demoDark.locator('[data-km-mode]').textContent(), /isolated shared demo authority is simulated and read-only/);
+    assert.strictEqual(await demoDark.locator('#settingsRoleBadge').textContent(), 'Demo preview · Read only');
+    assert.strictEqual(await demoDark.locator('#saveSettingsBtn').isDisabled(), true);
     assert.strictEqual((await demoDark.locator('[data-knowledge-management]').textContent()).includes('Part 7 Browser Company'), false);
     assert.strictEqual(await demoDark.locator('.km-actions button').count(), 0);
     assert.match(await demoDark.locator('.km-correction-link').getAttribute('href'), /^\/demo\/business-profile\?section=/);
     await selectItem(demoDark, 'Customer and workforce guidance');
+    await openAdvancedEvidence(demoDark);
     await activateTab(demoDark, 'Synchronization');
     assert.match(await demoDark.locator('[role="tabpanel"]:visible').textContent(), /Drift detected/);
     assert.match(await demoDark.locator('[role="tabpanel"]:visible').textContent(), /No live provider connection is claimed|demo_voice_preview/);
@@ -868,6 +977,11 @@ async function run() {
     const demoWrites = ledger.requests.filter(entry => entry.role === 'demo-mobile-dark' &&
       entry.path.startsWith('/api/v1/knowledge-management') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(entry.method));
     assert.deepStrictEqual(demoWrites, []);
+    await demoDark.goto(origin + '/demo/team', { waitUntil: 'domcontentloaded' });
+    await demoDark.waitForFunction(() => document.getElementById('workforceSummary').textContent.includes('Demo preview'));
+    assert.strictEqual(await demoDark.locator('#inviteForm').isHidden(), true);
+    assert.strictEqual(await demoDark.locator('#crewForm').isHidden(), true);
+    await screenshot(demoDark, p4EvidenceDirectory, `${selected}-demo-team-summary-readonly.png`);
     await demoDarkContext.close();
 
     const demoLightContext = await contextFor(browser, origin, null, {

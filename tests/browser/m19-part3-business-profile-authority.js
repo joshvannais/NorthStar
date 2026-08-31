@@ -11,10 +11,10 @@ const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const ORG_A = '43000000-0000-0000-0000-000000000001';
-const ORG_B = '43000000-0000-0000-0000-000000000002';
-const OWNER_A = '44000000-0000-0000-0000-000000000001';
-const OWNER_B = '44000000-0000-0000-0000-000000000002';
+const ORG_A = '43000000-0000-4000-8000-000000000001';
+const ORG_B = '43000000-0000-4000-8000-000000000002';
+const OWNER_A = '44000000-0000-4000-8000-000000000001';
+const OWNER_B = '44000000-0000-4000-8000-000000000002';
 
 function completeProfile(companyName, overrides) {
   const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'business-profile.json'), 'utf8'));

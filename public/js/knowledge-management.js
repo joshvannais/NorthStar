@@ -36,6 +36,31 @@
     return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, function (letter) { return letter.toUpperCase(); });
   }
 
+  function displayLabel(label, canonicalKey) {
+    var normalized = String(label || '').trim();
+    if (canonicalKey === 'generated.identity' || canonicalKey === 'organization.identity' ||
+        /^generated business identity$/i.test(normalized)) return 'Business identity';
+    return normalized || 'Knowledge item';
+  }
+
+  function plainContentRows(value, prefix, rows) {
+    if (rows.length >= 12 || value === null || value === undefined) return rows;
+    if (Array.isArray(value)) {
+      var primitives = value.filter(function(item) { return ['string', 'number', 'boolean'].includes(typeof item); });
+      if (primitives.length === value.length && primitives.length) rows.push([titleCase(prefix), primitives.join(', ')]);
+      return rows;
+    }
+    if (typeof value === 'object') {
+      Object.keys(value).forEach(function(key) {
+        if (key === 'state' || rows.length >= 12) return;
+        plainContentRows(value[key], prefix ? prefix + ' ' + key : key, rows);
+      });
+      return rows;
+    }
+    rows.push([titleCase(prefix || 'Value'), String(value)]);
+    return rows;
+  }
+
   function shortDigest(value) {
     var text = String(value || '');
     return text.length > 16 ? text.slice(0, 12) + '…' + text.slice(-4) : text;
@@ -251,7 +276,7 @@
         state.detail = null;
         state.renderedTargetKey = null;
         delete detailRoot.dataset.targetKey;
-        detailRoot.replaceChildren(node('div', 'km-empty', 'Choose an available knowledge item to inspect its exact authority.'));
+        detailRoot.replaceChildren(node('div', 'km-empty', 'Choose an available knowledge item to see its approved information.'));
         return;
       }
       var fragment = document.createDocumentFragment();
@@ -261,15 +286,15 @@
         button.type = 'button';
         button.dataset.entryId = item.entryId;
         button.setAttribute('aria-current', item.entryId === state.selectedEntryId ? 'true' : 'false');
-        button.setAttribute('aria-label', 'Open ' + item.version.label + ', ' + (STATUS_LABELS[item.workflowStatus] || item.workflowStatus));
+        var label = displayLabel(item.version.label, item.canonicalKey);
+        button.setAttribute('aria-label', 'Open ' + label + ', ' + (STATUS_LABELS[item.workflowStatus] || item.workflowStatus));
         var meta = node('span', 'km-meta');
         append(meta, badge(item.workflowStatus), node('span', 'km-badge', titleCase(item.version.sensitivity)));
         append(button,
-          node('span', 'km-item-title', item.version.label),
-          meta,
-          node('span', 'km-item-key', 'Version ' + item.version.number + ' · ' + shortDigest(item.version.digest))
+          node('span', 'km-item-title', label),
+          meta
         );
-        button.addEventListener('click', function () { selectItem(item.entryId, null, true); });
+        button.addEventListener('click', function () { selectItem(item.entryId, null, false); });
         wrapper.appendChild(button);
         fragment.appendChild(wrapper);
       });
@@ -336,9 +361,9 @@
       var applicability = node('section', 'km-section');
       append(applicability, node('h4', '', 'Applicability'), node('pre', 'km-document', JSON.stringify(version.applicability || {}, null, 2)));
       var source = node('section', 'km-section');
-      append(source, node('h4', '', 'Source correction'));
-      var sourceText = node('p', '', 'Generated and authoritative facts are corrected at their source, then regenerated as a new immutable version.');
-      var link = node('a', 'km-correction-link', detail.sourceCorrection.label);
+      append(source, node('h4', '', 'Update this information'));
+      var sourceText = node('p', '', 'Update the original source so NorthStar can create a new reviewed version. Existing history stays unchanged.');
+      var link = node('a', 'km-correction-link', 'Open the source editor');
       link.href = correctionUrl(detail.sourceCorrection.url);
       append(source, sourceText, link);
       append(panel, summary, published, content, applicability, source);
@@ -506,10 +531,10 @@
       detailRoot.dataset.targetKey = state.renderedTargetKey;
       var fragment = document.createDocumentFragment();
       var header = node('header', 'km-detail-header');
-      var heading = node('h3', '', detail.version.label);
+      var heading = node('h3', '', displayLabel(detail.version.label, detail.entry.canonicalKey));
       heading.tabIndex = -1;
       var badges = node('div', 'km-badges');
-      append(badges, badge(detail.workflow.status), node('span', 'km-badge', titleCase(detail.version.sensitivity)), node('span', 'km-badge', 'Version ' + detail.version.number));
+      append(badges, badge(detail.workflow.status), node('span', 'km-badge', titleCase(detail.version.sensitivity)));
       append(header, heading, badges);
       if (!detail.permissions.canMutate) {
         var readOnlyExplanation = detail.permissions.mutationRestriction === 'subscription_read_only'
@@ -517,18 +542,39 @@
           : 'Read-only membership: review, approval, publication, lifecycle, and reconciliation actions require an active owner or administrator.';
         header.appendChild(node('div', 'km-readonly-note', readOnlyExplanation));
       }
+      var presentation = node('section', 'km-section km-presentation-summary');
+      var plainRows = [
+        ['Source', titleCase(detail.version.origin)],
+        ['Last updated', when(detail.version.createdAt)],
+        ['Approval state', STATUS_LABELS[detail.workflow.status] || titleCase(detail.workflow.status)],
+      ];
+      plainContentRows(detail.version.document && detail.version.document.content || {}, '', plainRows);
+      append(presentation, node('h4', '', 'At a glance'), definition(plainRows));
+      var correction = node('section', 'km-section km-source-guidance');
+      append(correction,
+        node('h4', '', 'Update this information'),
+        node('p', '', 'Why: changes begin at the original source so the workspace does not create competing facts.'),
+        node('p', '', 'What happens: NorthStar creates a new reviewed version. Existing history stays unchanged.'),
+        node('p', '', detail.permissions.canMutate
+          ? 'Who can act: your current owner or administrator access can open the source editor.'
+          : 'Who can act: an owner or administrator can update the source and complete the review workflow.')
+      );
+      var correctionLink = node('a', 'km-correction-link', 'Open the source editor');
+      correctionLink.href = correctionUrl(detail.sourceCorrection.url);
+      correction.appendChild(correctionLink);
+      append(fragment, header, presentation, correction);
+
+      var advanced = node('details', 'km-advanced-evidence');
+      var advancedSummary = node('summary', '', 'Advanced evidence');
+      advanced.appendChild(advancedSummary);
+      advanced.open = state.detailDisclosed;
       if (!state.detailDisclosed) {
-        var presentation = node('section', 'km-section km-presentation-summary');
-        append(presentation,
-          node('h4', '', 'Knowledge summary'),
-          node('p', 'km-action-explanation',
-            'Choose this knowledge item to inspect its exact version, provenance, lifecycle, and synchronization details.'),
-          node('p', '', 'Generated and authoritative facts are corrected at their source, then regenerated as a new immutable version.')
-        );
-        var correctionLink = node('a', 'km-correction-link', detail.sourceCorrection.label);
-        correctionLink.href = correctionUrl(detail.sourceCorrection.url);
-        presentation.appendChild(correctionLink);
-        append(fragment, header, presentation);
+        advanced.addEventListener('toggle', function() {
+          if (!advanced.open) return;
+          state.detailDisclosed = true;
+          renderDetail();
+        }, { once: true });
+        fragment.appendChild(advanced);
         detailRoot.replaceChildren(fragment);
         return;
       }
@@ -552,8 +598,9 @@
       renderDiff(panels[1], detail); renderProvenance(panels[1], detail);
       renderHistory(panels[2], detail);
       renderSync(panels[3], detail);
-      append(fragment, header, tablist);
-      panels.forEach(function (panel) { fragment.appendChild(panel); });
+      advanced.appendChild(tablist);
+      panels.forEach(function (panel) { advanced.appendChild(panel); });
+      fragment.appendChild(advanced);
       detailRoot.replaceChildren(fragment);
     }
 

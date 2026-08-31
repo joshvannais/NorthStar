@@ -87,12 +87,20 @@ function projectPreferences(row, securityEmail) {
   };
 }
 
+function preferenceVersion(row) {
+  const value = row && row.preference_version;
+  if (!value) return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 function parsePreferences(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body) ||
       Buffer.byteLength(JSON.stringify(body), 'utf8') > 32768) return null;
   const keys = Object.keys(body);
   if (keys.some(key => READ_ONLY_KEYS.has(key) ||
-      (!NOTIFICATION_KEYS.has(key) && !INTERNAL_KEYS.has(key)))) return null;
+      (key !== 'expectedVersion' && !NOTIFICATION_KEYS.has(key) && !INTERNAL_KEYS.has(key)))) return null;
   if ([...NOTIFICATION_KEYS].some(key => !Object.prototype.hasOwnProperty.call(body, key))) return null;
   for (const key of ['emailEnabled', 'emailCallSummary', 'emailAppointment', 'smsEnabled', 'smsUrgent']) {
     if (typeof body[key] !== 'boolean') return null;
@@ -102,6 +110,9 @@ function parsePreferences(body) {
   const phone = body.smsNumber.trim();
   if (email.length > 254 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return null;
   if (phone.length > 50 || (phone && !/^[+\d\s().-]+$/.test(phone))) return null;
+  const expectedVersion = body.expectedVersion === undefined ? null : body.expectedVersion;
+  if (expectedVersion !== null && (typeof expectedVersion !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.(?:\d{3}|\d{6})Z$/.test(expectedVersion))) return null;
 
   const internal = cleanInternalPreferences(body);
   for (const key of INTERNAL_KEYS) {
@@ -119,6 +130,7 @@ function parsePreferences(body) {
       notificationPhone: phone,
     },
     internal,
+    expectedVersion,
   };
 }
 
@@ -128,6 +140,7 @@ router.get('/preferences', requireTenantAccess, async (req, res) => {
     if (!stored) return unavailable(req, res);
     return res.json({
       preferences: projectPreferences(stored, req.user.email),
+      version: preferenceVersion(stored),
       requestId: requestId(req),
     });
   } catch (_error) {
@@ -142,11 +155,21 @@ router.put('/preferences', requireAccountMutation, requirePermission('settings',
     const stored = await new AccountRepository().updateAccountPreferences(
       req.tenantContext.organizationId,
       parsed.notification,
-      parsed.internal
+      parsed.internal,
+      parsed.expectedVersion
     );
     if (!stored) return unavailable(req, res);
+    if (stored.conflict) {
+      return res.status(409).json({
+        error: 'Account preferences changed. Reload before saving.',
+        code: 'preferences_version_conflict',
+        version: preferenceVersion(stored),
+        requestId: requestId(req),
+      });
+    }
     return res.json({
       preferences: projectPreferences(stored, req.user.email),
+      version: preferenceVersion(stored),
       requestId: requestId(req),
     });
   } catch (_error) {

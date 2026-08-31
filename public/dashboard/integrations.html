@@ -96,6 +96,11 @@
       list-style-position: inside;
       padding: 2px 0 10px;
     }
+    .integration-category-details > summary:focus-visible,
+    .map-preference-scope > summary:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .35);
+      outline-offset: 3px;
+    }
     .integration-category-details > summary h3 { display: inline; margin: 0; }
     .integration-category-count {
       color: var(--neutral-500);
@@ -290,8 +295,28 @@
       border: 1px solid var(--neutral-200);
       border-radius: var(--radius-md);
       min-width: 0;
+      padding: 0;
+    }
+    .map-preference-scope > summary {
+      align-items: center;
+      color: var(--neutral-900);
+      cursor: pointer;
+      display: flex;
+      font-size: 16px;
+      font-weight: 700;
+      gap: 10px;
+      justify-content: space-between;
+      list-style-position: inside;
       padding: 16px;
     }
+    .map-preference-scope > summary::after {
+      color: var(--neutral-500);
+      content: 'Show';
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .map-preference-scope[open] > summary::after { content: 'Hide'; }
+    .map-preference-scope-body { border-top: 1px solid var(--neutral-200); padding: 0 16px 16px; }
     .map-preference-scope h3 { color: var(--neutral-900); font-size: 16px; margin: 0; }
     .map-preference-scope-copy {
       color: var(--neutral-500);
@@ -384,7 +409,8 @@
       .integration-detail-list { grid-template-columns: 1fr; gap: 3px; }
       .integration-detail-list dd { margin-bottom: 7px; }
       .map-preferences-grid { grid-template-columns: 1fr; }
-      .map-preference-scope { padding: 14px; }
+      .map-preference-scope > summary { padding: 14px; }
+      .map-preference-scope-body { padding: 0 14px 14px; }
       .map-preference-actions .btn { width: 100%; }
     }
   </style>
@@ -458,8 +484,9 @@
           </div>
 
           <div class="map-preferences-grid" id="mapPreferencesContent" hidden>
-            <section class="map-preference-scope" id="mapPreferencesOrganization" aria-labelledby="organizationMapPreferencesHeading">
-              <h3 id="organizationMapPreferencesHeading">Company default</h3>
+            <details class="map-preference-scope" id="mapPreferencesOrganization" aria-labelledby="organizationMapPreferencesHeading" open>
+              <summary id="organizationMapPreferencesHeading">Company default</summary>
+              <div class="map-preference-scope-body">
               <p class="map-preference-scope-copy" id="organizationMapPreferencesCopy">Owners and admins can update the company default. Other roles can review it.</p>
               <div class="map-provider-list" data-map-preference-scope="organization">
                 <div class="map-provider-row" data-map-provider="google_maps">
@@ -490,10 +517,12 @@
               <div class="map-preference-actions">
                 <button class="btn btn-primary btn-sm" id="saveOrganizationMapPreferences" type="button">Save company default</button>
               </div>
-            </section>
+              </div>
+            </details>
 
-            <section class="map-preference-scope" id="mapPreferencesUser" aria-labelledby="userMapPreferencesHeading">
-              <h3 id="userMapPreferencesHeading">My preference</h3>
+            <details class="map-preference-scope" id="mapPreferencesUser" aria-labelledby="userMapPreferencesHeading" open>
+              <summary id="userMapPreferencesHeading">My preference</summary>
+              <div class="map-preference-scope-body">
               <p class="map-preference-scope-copy" id="userMapPreferencesCopy">You currently inherit the company default. Saving creates a complete personal override.</p>
               <div class="map-provider-list" data-map-preference-scope="user">
                 <div class="map-provider-row" data-map-provider="google_maps">
@@ -525,7 +554,8 @@
                 <button class="btn btn-primary btn-sm" id="saveUserMapPreferences" type="button">Save my override</button>
                 <button class="btn btn-ghost btn-sm" id="inheritMapPreferences" type="button">Use company default</button>
               </div>
-            </section>
+              </div>
+            </details>
           </div>
           <p class="map-preference-status" id="mapPreferencesStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Loading map preferences.</p>
         </div>
@@ -610,6 +640,30 @@
         Object.freeze({ key: 'approval', label: 'Requires approval', states: Object.freeze(['requires_provider_approval', 'needs_attention']) }),
         Object.freeze({ key: 'planned', label: 'Planned', states: Object.freeze(['coming_soon']) })
       ]);
+
+      function integrationDisclosureKey(categoryKey) {
+        var mode = window.location.pathname.indexOf('/demo/') === 0 ? 'demo' : 'paid';
+        return 'northstar.integration.disclosure.' + mode + '.' + categoryKey;
+      }
+
+      function storedDisclosure(categoryKey, defaultOpen) {
+        try {
+          var stored = window.sessionStorage.getItem(integrationDisclosureKey(categoryKey));
+          if (stored === 'open') return true;
+          if (stored === 'closed') return false;
+        } catch (_storageError) {
+          // Disclosure remains fully usable when session storage is unavailable.
+        }
+        return defaultOpen;
+      }
+
+      function persistDisclosure(categoryKey, open) {
+        try {
+          window.sessionStorage.setItem(integrationDisclosureKey(categoryKey), open ? 'open' : 'closed');
+        } catch (_storageError) {
+          // Disclosure state persistence is optional; provider authority is not.
+        }
+      }
 
       function exactKeys(value, expected) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -755,20 +809,21 @@
           var plannedOnly = visibleProviders.every(function(provider) {
             return provider.presentation.state === 'coming_soon';
           });
-          if (plannedOnly) {
-            var categoryDetails = createElement('details', 'integration-category-details');
-            var categorySummary = createElement('summary', '');
-            var count = createElement(
-              'span',
-              'integration-category-count',
-              String(visibleProviders.length) + (visibleProviders.length === 1 ? ' planned provider' : ' planned providers')
-            );
-            categorySummary.append(heading, count);
-            categoryDetails.append(categorySummary, providerList);
-            categoryItem.append(categoryDetails);
-          } else {
-            categoryItem.append(heading, providerList);
-          }
+          categoryItem.dataset.availability = plannedOnly ? 'planned' : 'mixed';
+          var categoryDetails = createElement('details', 'integration-category-details');
+          categoryDetails.open = storedDisclosure(category.key, !plannedOnly);
+          var categorySummary = createElement('summary', '');
+          var count = createElement(
+            'span',
+            'integration-category-count',
+            String(visibleProviders.length) + (visibleProviders.length === 1 ? ' provider' : ' providers')
+          );
+          categorySummary.append(heading, count);
+          categoryDetails.append(categorySummary, providerList);
+          categoryDetails.addEventListener('toggle', function() {
+            persistDisclosure(category.key, categoryDetails.open);
+          });
+          categoryItem.append(categoryDetails);
           fragment.append(categoryItem);
         });
         list.replaceChildren(fragment);
@@ -899,11 +954,34 @@
       var mapStatus = document.getElementById('mapPreferencesStatus');
       var organizationCopy = document.getElementById('organizationMapPreferencesCopy');
       var userCopy = document.getElementById('userMapPreferencesCopy');
+      var organizationDisclosure = document.getElementById('mapPreferencesOrganization');
+      var userDisclosure = document.getElementById('mapPreferencesUser');
       var saveOrganization = document.getElementById('saveOrganizationMapPreferences');
       var saveUser = document.getElementById('saveUserMapPreferences');
       var inheritUser = document.getElementById('inheritMapPreferences');
       var mapState = null;
       var mapBusy = false;
+
+      function mapDisclosureKey(scope) {
+        var mode = window.location.pathname.indexOf('/demo/') === 0 ? 'demo' : 'paid';
+        return 'northstar.map.disclosure.' + mode + '.' + scope;
+      }
+
+      function restoreMapDisclosure(scope, disclosure) {
+        try {
+          var stored = window.sessionStorage.getItem(mapDisclosureKey(scope));
+          if (stored === 'open' || stored === 'closed') disclosure.open = stored === 'open';
+        } catch (_storageError) {
+          // Native disclosure behavior remains available without persistence.
+        }
+        disclosure.addEventListener('toggle', function() {
+          try {
+            window.sessionStorage.setItem(mapDisclosureKey(scope), disclosure.open ? 'open' : 'closed');
+          } catch (_storageError) {
+            // Map preference authority and values never depend on browser storage.
+          }
+        });
+      }
 
       function exactKeys(value, expected) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -1150,6 +1228,8 @@
           });
         });
       });
+      restoreMapDisclosure('organization', organizationDisclosure);
+      restoreMapDisclosure('user', userDisclosure);
       saveOrganization.addEventListener('click', function() { saveMapPreferences('organization', 'override'); });
       saveUser.addEventListener('click', function() { saveMapPreferences('user', 'override'); });
       inheritUser.addEventListener('click', function() { saveMapPreferences('user', 'inherit'); });

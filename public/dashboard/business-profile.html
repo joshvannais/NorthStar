@@ -14,11 +14,12 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: var(--font-sans); color: inherit; background: inherit; }
-    .bp-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .bp-container { width: 100%; max-width: var(--northstar-rail-max, 1440px); margin: 0 auto; padding: 24px; }
     .bp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
     .bp-header-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     .bp-title { font-size: 24px; font-weight: 700; color: var(--neutral-900); }
     .bp-subtitle { font-size: 14px; color: var(--neutral-500); margin-top: 4px; }
+    .bp-role-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border: 1px solid var(--neutral-300); border-radius: 999px; background: var(--neutral-50); color: var(--neutral-700); font-size: 12px; font-weight: 700; }
     .bp-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; margin-bottom: 24px; padding: 8px; background: var(--neutral-100); border-radius: var(--radius); }
     .bp-nav-group { border: 1px solid var(--neutral-200); border-radius: var(--radius-sm); display: grid; gap: 6px; min-width: 0; padding: 8px; }
     .bp-nav-group-title { color: var(--neutral-500); font-size: 11px; font-weight: 800; letter-spacing: .06em; margin: 2px 5px; text-transform: uppercase; }
@@ -152,15 +153,16 @@
       <div class="bp-container" id="businessProfileRoot" data-state="loading" aria-busy="true">
         <div class="bp-header">
           <div>
-            <h1 class="bp-title">⚙️ Business Profile</h1>
-            <p id="polarisProfileGuidance" class="bp-guidance">Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile. The more relevant detail you provide, the better Polaris can tailor its recommendations to your business.</p>
-            <div class="bp-subtitle">Configure how your business operates — this is the DNA of your NorthStar platform.</div>
+            <h1 class="bp-title">Business Profile</h1>
+            <p id="polarisProfileGuidance" class="bp-subtitle">Keep the business details NorthStar uses for customer service, planning, and provider-neutral AI guidance in one place.</p>
             <p id="businessProfileStatus" role="status" aria-live="polite" aria-atomic="true">Loading your durable Business Profile authority. Editing remains disabled.</p>
           </div>
           <div class="bp-header-actions">
+            <span class="bp-role-badge" id="businessProfileRole">Loading access…</span>
+            <button class="bp-add-btn" id="reloadProfileBtn" type="button" hidden>Reload Business Profile</button>
             <button class="bp-add-btn" id="reloadOperationalConfigurationBtn" type="button" hidden disabled>Reload operational policies</button>
             <button class="bp-save-btn" id="saveOperationalConfigurationBtn" type="button" disabled>Save operational policies</button>
-            <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" disabled>💾 Save Profile</button>
+            <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" disabled>Save Profile</button>
           </div>
         </div>
         <div id="operationalConfigurationError" class="bp-validation-error" role="alert" tabindex="-1"></div>
@@ -186,7 +188,7 @@
 
         <!-- Navigation Tabs -->
         <div class="bp-section-search">
-          <label for="businessProfileSectionSearch">Find a setup section</label>
+          <label for="businessProfileSectionSearch">Find a setup section in the checklist</label>
           <input id="businessProfileSectionSearch" type="search" autocomplete="off" placeholder="Search services, hours, crews, voice, notifications…">
           <p id="businessProfileSectionSearchStatus" class="bp-section-search-status" role="status" aria-live="polite"></p>
         </div>
@@ -195,8 +197,9 @@
           <div class="bp-nav-group"><span class="bp-nav-group-title">Services &amp; Pricing</span><button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button><button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Schedule &amp; Area</span><button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button><button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button><button class="bp-nav-btn" data-section="routing" onclick="switchSection('routing')">🧭 Routing</button><button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Team &amp; Assets</span><button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button><button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Assets &amp; Fleet</button><button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button></div>
-          <div class="bp-nav-group"><span class="bp-nav-group-title">AI &amp; Voice</span><button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button><button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button><button class="bp-nav-btn" data-section="knowledge" onclick="switchSection('knowledge')">📚 Knowledge Management</button></div>
-          <div class="bp-nav-group"><span class="bp-nav-group-title">Notifications &amp; Apps</span><button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button><button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">AI &amp; Voice</span><button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button><button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Knowledge</span><button class="bp-nav-btn" data-section="knowledge" onclick="switchSection('knowledge')">📚 Knowledge Management</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Connections</span><button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button><button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button></div>
         </div>
 
         <!-- Section: Company -->
@@ -561,13 +564,16 @@
             <p class="km-intro">Inspect the generated knowledge that follows this Business Profile, its exact provenance and lifecycle, and the provider-neutral synchronization state.</p>
             <div data-km-mode hidden></div>
             <p class="km-status" data-km-status role="status" aria-live="polite" aria-atomic="true">Loading canonical tenant knowledge. Controls remain read-only until authority resolves…</p>
-            <div class="km-filters" data-km-filters aria-label="Knowledge filters"></div>
-            <ul class="km-counts" data-km-counts aria-label="Knowledge counts"></ul>
+            <details class="km-list-evidence" data-km-list-evidence>
+              <summary>Advanced list filters and counts</summary>
+              <div class="km-filters" data-km-filters aria-label="Knowledge filters"></div>
+              <ul class="km-counts" data-km-counts aria-label="Knowledge counts"></ul>
+            </details>
             <div class="km-layout">
               <section class="km-panel" aria-labelledby="knowledgeManagementProfileListHeading">
                 <div class="km-panel-heading">
                   <h3 id="knowledgeManagementProfileListHeading">Knowledge items</h3>
-                  <span class="km-item-key">Exact latest versions</span>
+                  <span class="km-item-key">Plain-language view</span>
                 </div>
                 <ul class="km-list" data-km-list aria-label="Canonical knowledge items">
                   <li class="km-empty">Loading tenant-scoped knowledge…</li>
@@ -672,7 +678,7 @@
     // ====================================================================
     // Section navigation
     // ====================================================================
-    function switchSection(section) {
+    function switchSection(section, options) {
       var selectedPanel = document.getElementById('section-' + section);
       var selectedTab = document.querySelector('[data-section="' + section + '"]');
       if (!selectedPanel || !selectedTab) return;
@@ -687,6 +693,15 @@
         el.setAttribute('aria-selected', active ? 'true' : 'false');
         el.tabIndex = active ? 0 : -1;
       });
+      if (!(options && options.preserveLocation)) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('section', section);
+        if (!url.hash || !selectedPanel.contains(document.getElementById(url.hash.slice(1)))) url.hash = '';
+        var next = url.pathname + url.search + url.hash;
+        if (next !== window.location.pathname + window.location.search + window.location.hash) {
+          window.history.pushState({ businessProfileSection: section }, '', next);
+        }
+      }
     }
 
     function handleProfileTabKeydown(event) {
@@ -766,13 +781,16 @@
       saveButton.disabled = !editable || generalProfileConflicted;
       saveButton.hidden = !profileCanEdit;
       saveButton.textContent = generalProfileConflicted ? 'Reload Page Before Saving'
-        : editable ? '💾 Save Profile'
+        : editable ? 'Save Profile'
         : state === 'loading' ? 'Loading profile…'
         : 'Profile Unavailable';
+      var reloadButton = document.getElementById('reloadProfileBtn');
+      if (reloadButton) reloadButton.hidden = !generalProfileConflicted;
     }
 
     function latchGeneralProfileConflict() {
       generalProfileConflicted = true;
+      window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
       var status = document.getElementById('businessProfileStatus');
       if (status) {
         status.textContent = 'Business Profile changed. Your unsaved general profile values remain in this form, but Save Profile is blocked until you reload the page.';
@@ -1068,6 +1086,7 @@
           if (response.status === 409 && payload.error &&
               payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
             profileReadinessConflicted = true;
+            window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
             showProfileReadinessError(
               'Business Profile changed. Your pending readiness choices remain visible, but Save is blocked until you reload readiness.',
               false
@@ -1126,6 +1145,12 @@
     function applyProfileAccess(account) {
       var role = account && account.membership ? account.membership.role : '';
       profileCanEdit = role === 'owner' || role === 'admin';
+      var demo = window.location.pathname.indexOf('/demo/') === 0;
+      var label = role === 'owner' ? 'Owner' : role === 'admin' ? 'Admin'
+        : role === 'viewer' ? 'Viewer' : role === 'member' ? 'Member' : 'Unavailable';
+      document.getElementById('businessProfileRole').textContent = demo
+        ? 'Demo preview · Read only'
+        : (profileCanEdit ? 'Editable · ' : 'Read only · ') + label;
       [
         'saveOperationalConfigurationBtn', 'saveBtn', 'reloadProfileReadinessBtn',
         'saveProfileReadinessBtn', 'saveFinancialConfigurationBtn', 'saveVoiceAssistantBtn'
@@ -1150,8 +1175,8 @@
             renderProfile(profileData);
             associateProfileLabels(document);
             setProfileInteractionState('ready', profileCanEdit
-              ? 'Your account role can edit this Business Profile.'
-              : 'This Business Profile is protected by your account role.');
+              ? 'Changes are saved to your versioned Business Profile.'
+              : 'Read-only access. An owner or admin can make changes.');
             activateRequestedProfileSection();
           } else {
             setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
@@ -1729,6 +1754,7 @@
         if (!payload.success) {
           if (response.status === 409 && payload.error && payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
             operationalConfigurationConflicted = true;
+            window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
             showOperationalConfigurationError('Business Profile changed; reload operational policies and try again. Your unsaved operational values remain in this form.', true);
             var reload = document.getElementById('reloadOperationalConfigurationBtn');
             if (reload) {
@@ -1978,6 +2004,7 @@
         if (!payload.success) {
           if (response.status === 409 && payload.error && payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
             financialConfigurationConflicted = true;
+            window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
             showCanonicalError('Business Profile changed; reload Financial Configuration and try again. Your unsaved financial values remain in this form.');
             var reload = document.getElementById('reloadFinancialConfigurationBtn');
             if (reload) {
@@ -2374,6 +2401,7 @@
         if (!payload.success) {
           if (response.status === 409 && payload.error && payload.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT') {
             voiceAssistantConflicted = true;
+            window.dispatchEvent(new CustomEvent('northstar:form-conflict'));
             showVoiceAssistantError('Business Profile changed; reload and try again. Your unsaved AI configuration remains in this form.', true);
             var reload = document.getElementById('reloadVoiceAssistantBtn');
             if (reload) {
@@ -3434,8 +3462,8 @@
       var validSections = Array.prototype.map.call(document.querySelectorAll('.bp-nav-btn[data-section]'), function(button) {
         return button.dataset.section;
       });
-      if (!requested || validSections.indexOf(requested) < 0) return;
-      switchSection(requested);
+      if (!requested || validSections.indexOf(requested) < 0) requested = 'company';
+      switchSection(requested, { preserveLocation: true });
       window.setTimeout(function() {
         var target = targetId ? document.getElementById(targetId) : null;
         if (target) {
@@ -3454,6 +3482,8 @@
       setProfileReadinessState('loading', 'Loading Profile Readiness. Actions remain disabled.');
       document.getElementById('saveProfileReadinessBtn').addEventListener('click', saveProfileReadiness);
       document.getElementById('reloadProfileReadinessBtn').addEventListener('click', reloadProfileReadiness);
+      document.getElementById('reloadProfileBtn').addEventListener('click', function() { window.location.reload(); });
+      window.addEventListener('popstate', activateRequestedProfileSection);
       var addAssetButton = document.getElementById('addAssetButton');
       if (addAssetButton) addAssetButton.addEventListener('click', addAssetCard);
       var addServiceButton = document.getElementById('addServiceButton');
@@ -3497,7 +3527,7 @@
   <script src="/js/nav-component.js"></script>
   <script src="/js/knowledge-management.js"></script>
   <script src="/js/workspace-form-state.js"></script>
-  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn' });</script>
+  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn', role: '#businessProfileRole', reload: '#reloadProfileBtn, #reloadOperationalConfigurationBtn, #reloadFinancialConfigurationBtn, #reloadVoiceAssistantBtn, #reloadProfileReadinessBtn', durable: '.bp-section input, .bp-section textarea, .bp-section select', ignore: '[data-knowledge-management]' });</script>
   <script>NavComponent.init("business-profile");</script>
 </body>
 </html>

@@ -225,10 +225,11 @@ async function assertReadySurface(page, spec) {
 
   const summary = page.locator('#integrationCategoryList details summary').first();
   await summary.focus();
-  await page.keyboard.press('Enter');
   assert.strictEqual(await summary.evaluate(node => node.parentElement.open), true);
   await page.keyboard.press('Enter');
   assert.strictEqual(await summary.evaluate(node => node.parentElement.open), false);
+  await page.keyboard.press('Enter');
+  assert.strictEqual(await summary.evaluate(node => node.parentElement.open), true);
   await page.evaluate(() => {
     document.getElementById('user-google_maps-visible').__phase6dStableNode = true;
     return window.NorthStarMapPreferences.reload();

@@ -525,7 +525,7 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
     }
   }, 180000);
 
-  test('uses fresh PostgreSQL 18 UTC and preserves exact released migrations 001-035 with no durable Part 3 recommendation schema', async () => {
+  test('uses fresh PostgreSQL 18 UTC and preserves exact released migrations 001-036 with no durable Part 3 recommendation schema', async () => {
     const identity = (await runtimePool.query(
       `SELECT current_setting('server_version') AS version,current_setting('TimeZone') AS timezone,
               current_user AS runtime_role,current_setting('session_replication_role') AS replication_role`
@@ -534,7 +534,7 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
       version: expect.stringMatching(/^18\./), timezone: 'UTC', runtime_role: roles.runtimeRole, replication_role: 'origin',
     });
     const files = fs.readdirSync(MIGRATIONS).filter(name => /^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
-    expect(files.at(-1)).toBe('035_schedule_human_preview_approval.sql');
+    expect(files.at(-1)).toBe('036_support_case_authority.sql');
     const ledgers = (await migrationPool.query('SELECT filename,checksum FROM public._migrations ORDER BY filename')).rows;
     expect(ledgers).toHaveLength(files.length);
     for (const row of ledgers) {

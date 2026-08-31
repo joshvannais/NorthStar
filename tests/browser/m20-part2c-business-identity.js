@@ -10,11 +10,11 @@ const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const ORG_A = '73000000-0000-0000-0000-000000000001';
-const ORG_B = '73000000-0000-0000-0000-000000000002';
-const OWNER_A = '74000000-0000-0000-0000-000000000001';
-const VIEWER_A = '74000000-0000-0000-0000-000000000002';
-const OWNER_B = '74000000-0000-0000-0000-000000000003';
+const ORG_A = '73000000-0000-4000-8000-000000000001';
+const ORG_B = '73000000-0000-4000-8000-000000000002';
+const OWNER_A = '74000000-0000-4000-8000-000000000001';
+const VIEWER_A = '74000000-0000-4000-8000-000000000002';
+const OWNER_B = '74000000-0000-4000-8000-000000000003';
 
 const INITIAL = Object.freeze({
   company: '  Identity <Company> Caf\u00e9  ',
@@ -167,13 +167,20 @@ async function authoritySnapshot(pool, organizationId) {
   };
 }
 
-async function assertViewerSaveDisabled(page, label) {
-  const state = await page.locator('#saveBtn').evaluate((button) => ({
-    disabled: button.disabled,
-    hasDisabledAttribute: button.hasAttribute('disabled'),
+async function assertViewerWriteActionHidden(page, label) {
+  const state = await page.evaluate(() => ({
+    saveAction: (() => {
+      const button = document.getElementById('saveBtn');
+      return button ? { hidden: button.hidden, visible: !!(button.offsetWidth || button.offsetHeight || button.getClientRects().length) } : null;
+    })(),
+    role: document.getElementById('businessProfileRole').textContent,
+    status: document.getElementById('businessProfileStatus').textContent,
   }));
-  assert.strictEqual(state.disabled, true, label + ': Save is natively disabled');
-  assert.strictEqual(state.hasDisabledAttribute, true, label + ': Save retains its native disabled attribute');
+  assert.ok(state.saveAction, label + ': Save write action remains present for the programmatic guard');
+  assert.strictEqual(state.saveAction.hidden, true, label + ': Save write action is hidden for a read-only viewer');
+  assert.strictEqual(state.saveAction.visible, false, label + ': hidden Save write action has no visible layout');
+  assert.ok(state.role.includes('Read only'), label + ': viewer role remains explicitly read only');
+  assert.ok(state.status.includes('Read-only access'), label + ': read-only authority explanation remains visible');
 }
 
 function viewerRequestLedger(requests, origin) {
@@ -312,10 +319,10 @@ async function main() {
     await viewerPage.goto(origin + '/dashboard/business-profile', { waitUntil: 'domcontentloaded' });
     await waitForCompany(viewerPage, EDITED.company);
     await assertRendered(viewerPage, EDITED);
-    await assertViewerSaveDisabled(viewerPage, 'viewer/initial');
+    await assertViewerWriteActionHidden(viewerPage, 'viewer/initial');
     await viewerPage.evaluate(() => renderProfile(profileData));
     await assertRendered(viewerPage, EDITED);
-    await assertViewerSaveDisabled(viewerPage, 'viewer/rerender');
+    await assertViewerWriteActionHidden(viewerPage, 'viewer/rerender');
     await viewerPage.locator('#company-name').fill('Forbidden viewer mutation');
     const viewerAuthorityBefore = await authoritySnapshot(pool, ORG_A);
     assert.deepStrictEqual(
@@ -323,30 +330,21 @@ async function main() {
       [],
       'automatic viewer requests are GET-only before interaction'
     );
-    const viewerSave = viewerPage.locator('#saveBtn');
-    const viewerSaveBox = await viewerSave.boundingBox();
-    assert.ok(viewerSaveBox && viewerSaveBox.width > 0 && viewerSaveBox.height > 0,
-      'disabled viewer Save remains visibly present');
-    await viewerPage.mouse.click(
-      viewerSaveBox.x + viewerSaveBox.width / 2,
-      viewerSaveBox.y + viewerSaveBox.height / 2
-    );
-    await viewerSave.press('Enter');
-    await viewerSave.press('Space');
+    await viewerPage.evaluate(() => saveProfile());
     await viewerPage.waitForTimeout(150);
-    await assertViewerSaveDisabled(viewerPage, 'viewer/after-attempts');
+    await assertViewerWriteActionHidden(viewerPage, 'viewer/after-programmatic-guard-attempt');
     const viewerMethods = viewerRequestLedger(requests, origin);
     assert.deepStrictEqual(viewerMethods.filter((entry) => entry.method !== 'GET'), [],
-      'trusted viewer mouse and keyboard attempts emit zero non-GET requests');
+      'viewer programmatic guard attempt emits zero non-GET requests');
     assert.strictEqual(viewerMethods.filter((entry) => entry.method === 'PUT').length, 0,
-      'trusted viewer mouse and keyboard attempts emit exactly zero PUT requests');
+      'viewer programmatic guard attempt emits exactly zero PUT requests');
     assert.deepStrictEqual(await authoritySnapshot(pool, ORG_A), viewerAuthorityBefore,
       'viewer attempts preserve PostgreSQL authority bytes and protected digest');
     assert.strictEqual((await getActiveBusinessProfile(pool, ORG_A)).id, stored.id, 'viewer must not advance authority');
     await viewerPage.reload({ waitUntil: 'domcontentloaded' });
     await waitForCompany(viewerPage, EDITED.company);
     await assertRendered(viewerPage, EDITED);
-    await assertViewerSaveDisabled(viewerPage, 'viewer/reload');
+    await assertViewerWriteActionHidden(viewerPage, 'viewer/reload');
     assert.deepStrictEqual(await authoritySnapshot(pool, ORG_A), viewerAuthorityBefore,
       'viewer reload confirms unchanged PostgreSQL authority bytes and protected digest');
     await viewerPage.setViewportSize({ width: 390, height: 844 });

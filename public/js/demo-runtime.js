@@ -17,10 +17,30 @@
   var SCENARIO_PREFERENCES_KEY = 'northstarDemoScenarioPreferences';
   var RETURN_TO_TOOLBAR_KEY = 'northstarDemoReturnToToolbar';
   var returnToToolbarRequested = false;
+  var requestedScrollRestoration = 'auto';
+  var scrollRestorationTimer = null;
+
+  function ownToolbarScrollRestoration(restoreMode) {
+    if (!global.history || !('scrollRestoration' in global.history)) return;
+    requestedScrollRestoration = restoreMode === 'manual' ? 'manual' : 'auto';
+    global.history.scrollRestoration = 'manual';
+    if (scrollRestorationTimer) global.clearTimeout(scrollRestorationTimer);
+    scrollRestorationTimer = global.setTimeout(restoreToolbarScrollMode, 2000);
+  }
+
+  function restoreToolbarScrollMode() {
+    if (scrollRestorationTimer) global.clearTimeout(scrollRestorationTimer);
+    scrollRestorationTimer = null;
+    if (global.history && 'scrollRestoration' in global.history) {
+      global.history.scrollRestoration = requestedScrollRestoration;
+    }
+  }
+
   try {
-    returnToToolbarRequested = Boolean(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY));
-    if (returnToToolbarRequested && global.history && 'scrollRestoration' in global.history) {
-      global.history.scrollRestoration = 'manual';
+    var storedToolbarReturn = JSON.parse(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY) || 'null');
+    returnToToolbarRequested = Boolean(storedToolbarReturn);
+    if (returnToToolbarRequested) {
+      ownToolbarScrollRestoration(storedToolbarReturn.scrollRestoration);
     }
   } catch (_storageError) {}
   var TOOLBAR_EXCLUDED_PATHS = Object.freeze([
@@ -83,7 +103,7 @@
         userId: value.viewer.id,
         status: 'active',
         name: value.viewer.label,
-        email: 'account-free-demo@northstar.invalid',
+        email: value.configuration.businessProfile.email,
         phone: value.configuration.myNumber.displayNumber,
       },
       organization: { id: value.tenant.id, name: value.tenant.name },
@@ -105,12 +125,10 @@
     return {
       companyName: value.tenant.name,
       companyPhone: value.configuration.myNumber.displayNumber,
-      services: value.graphs.map(function (graph) { return graph.lead.serviceLabel; }).filter(function (item, index, list) {
-        return list.indexOf(item) === index;
-      }).join(', '),
-      companyInfo: 'Isolated home-service workspace for the NorthStar product demo.',
+      services: value.configuration.businessProfile.services.map(function (service) { return service.label; }).join(', '),
+      companyInfo: value.configuration.businessProfile.description,
       smsNumber: value.configuration.myNumber.displayNumber,
-      emailAddress: 'demo@northstar.invalid',
+      emailAddress: value.configuration.businessProfile.email,
       emailEnabled: true,
       emailCallSummary: true,
       emailAppointment: true,
@@ -119,7 +137,7 @@
       smartRouting: true,
       contacts: [],
       securityEmailMandatory: true,
-      securityEmailAddress: 'demo@northstar.invalid',
+      securityEmailAddress: value.configuration.businessProfile.email,
     };
   }
 
@@ -134,8 +152,8 @@
             profileId: member.id,
             membershipId: 'demo-membership-' + String(index + 1),
             name: member.name,
-            email: member.name.toLowerCase().replace(/[^a-z]+/g, '.') + '@northstar.invalid',
-            phone: '',
+            email: member.email,
+            phone: member.phone,
             accessRole: member.accessRole,
             membershipStatus: 'active',
             operationalRole: member.operationalRole.toLowerCase().replace(/\s+/g, '_'),
@@ -155,8 +173,10 @@
             }),
           };
         }),
-        locations: [{ id: locationId, name: 'Main service area' }],
-        services: [{ id: 'demo-service-home', name: 'Home services' }],
+        locations: [{ id: locationId, name: value.configuration.businessProfile.serviceArea }],
+        services: value.configuration.businessProfile.services.map(function (service) {
+          return { id: service.id, name: service.label };
+        }),
         policies: [{ id: 'demo-policy-review', name: 'Review before dispatch', description: 'Confirm scope and appointment details before dispatch.', enabled: true }],
         businessProfile: { version: 'demo-v1' },
       },
@@ -201,32 +221,43 @@
     return {
       canonicalAuthority: { version: 'demo-v1', legacyMigration: { pending: false } },
       company: {
-        name: configuration.company, dba: '', email: 'demo@northstar.invalid',
+        name: configuration.company, dba: '', email: configuration.email,
         phone: value.configuration.myNumber.displayNumber, website: '', logo: '', taxId: '',
-        timeZone: 'America/New_York', currency: 'USD',
+        timeZone: configuration.timeZone, currency: 'USD',
       },
-      headquarters: { street: '', city: 'Sample City', state: 'NC', zip: '28000', country: 'US', latitude: '', longitude: '', additionalOffices: [] },
-      serviceArea: { maxRadiusMiles: 35, maxTravelMinutes: 60, primaryTerritory: 'Demo service area', polygon: [] },
+      headquarters: {
+        street: configuration.headquarters.street,
+        city: configuration.headquarters.city,
+        state: configuration.headquarters.state,
+        zip: configuration.headquarters.postalCode,
+        country: configuration.headquarters.country,
+        latitude: configuration.headquarters.coordinates.latitude,
+        longitude: configuration.headquarters.coordinates.longitude,
+        additionalOffices: [],
+      },
+      serviceArea: { maxRadiusMiles: configuration.serviceRadiusMiles, maxTravelMinutes: 60, primaryTerritory: configuration.serviceArea, polygon: [] },
       routing: { preferredProvider: 'google_maps', dispatchFrom: 'headquarters', trafficEnabled: true, useLiveTraffic: false, avoidTolls: false, avoidHighways: false, avoidFerries: false },
       hours: hours,
       policies: { customer_guidance: 'Confirm scope and appointment details before dispatch.' },
-      services: [],
+      services: configuration.services.map(function (service) {
+        return { id: service.id, name: service.label, description: 'Fictional ' + service.label.toLowerCase() + ' capability.', enabled: true };
+      }),
       crew: { defaultCrewSize: 2, maxCrewSize: 4, shopTime: 30 },
-      vehicles: { truckCount: 2, trailerCount: 1, averageMpg: 15, equipmentTransportCapacity: '' },
-      scheduling: { maxJobsPerDay: 6, travelBuffer: 30, appointmentBuffer: 15, workDayLength: 8, maxDailyTravel: 180, preferredDispatchStrategy: 'balanced' },
+      vehicles: { truckCount: Math.max(2, configuration.crewCount), trailerCount: 1, averageMpg: 15, equipmentTransportCapacity: '' },
+      scheduling: { maxJobsPerDay: Math.max(4, configuration.crewCount * 3), travelBuffer: 30, appointmentBuffer: 15, workDayLength: 8, maxDailyTravel: 180, preferredDispatchStrategy: 'balanced' },
       canonicalPricing: {},
       canonicalCosts: {},
       polaris: { responseStyle: 'professional', detailLevel: 'balanced', recommendationStyle: 'actionable', showCalculations: true, showConfidence: true, showExecutiveReasoning: true, conciseMode: false, executiveMode: false },
       industry: configuration.industry,
-      ownerName: 'Maria Rivera',
-      businessDescription: 'Home-service contractor used only for this isolated product demo.',
+      ownerName: configuration.ownerName,
+      businessDescription: configuration.description,
       emergencyPolicy: 'Escalate urgent safety risks to the on-call owner.',
       customPrompt: '',
       faq: [],
       companyValues: ['Clear communication', 'Reliable follow-through'],
       voiceAssistant: {
         name: 'NorthStar Office Manager', style: value.configuration.aiSettings.voiceStyle,
-        greeting: 'Thank you for calling Rivera Home Services. How can I help today?',
+        greeting: configuration.voiceAssistant.greeting,
         personality: 'professional', conversationStyle: 'concise', escalationRules: { rules: [] },
       },
       notifications: {},
@@ -492,11 +523,17 @@
   }
 
   function requestToolbarReturn(value) {
+    var currentScrollRestoration = global.history && 'scrollRestoration' in global.history
+      ? global.history.scrollRestoration : 'auto';
     try {
       global.sessionStorage.setItem(RETURN_TO_TOOLBAR_KEY, JSON.stringify({
         sessionId: value && value.session && value.session.id,
+        scrollRestoration: currentScrollRestoration === 'manual' ? 'manual' : 'auto',
       }));
-    } catch (_storageError) {}
+      ownToolbarScrollRestoration(currentScrollRestoration);
+    } catch (_storageError) {
+      restoreToolbarScrollMode();
+    }
   }
 
   function returnToToolbar(value) {
@@ -508,17 +545,33 @@
       global.sessionStorage.removeItem(RETURN_TO_TOOLBAR_KEY);
     } catch (_storageError) {}
     returnToToolbarRequested = false;
-    if (!matchesSession) return;
+    if (!matchesSession) {
+      restoreToolbarScrollMode();
+      return;
+    }
     var toolbar = document.getElementById('northstarDemoToolbar');
     var summary = toolbar && toolbar.querySelector('summary');
     if (!toolbar || !summary) {
       global.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      global.setTimeout(restoreToolbarScrollMode, 500);
       return;
     }
     var details = toolbar.querySelector('details');
     if (details) details.open = false;
-    toolbar.scrollIntoView({ block: 'start', behavior: 'smooth' });
     summary.focus({ preventScroll: true });
+    var positionToolbar = function () {
+      if (!toolbar.isConnected) return;
+      toolbar.scrollIntoView({ block: 'start', behavior: 'auto' });
+    };
+    positionToolbar();
+    global.requestAnimationFrame(function () {
+      positionToolbar();
+      global.requestAnimationFrame(positionToolbar);
+    });
+    [50, 150, 350].forEach(function (delay) {
+      global.setTimeout(positionToolbar, delay);
+    });
+    global.setTimeout(restoreToolbarScrollMode, 500);
     var announce = document.getElementById('northstarDemoStatus');
     if (announce) announce.textContent = 'Lead added. Your scenario choices are saved; the builder is ready for another run.';
   }
@@ -537,7 +590,7 @@
         try {
           global.sessionStorage.setItem('northstarSessionId', workspace.session.id);
           global.sessionStorage.setItem('northstarDemoNotice', intent === 'reset'
-            ? 'Demo restored to its starting state.' : 'One demo lead was added across every demo destination.');
+            ? 'A new fictional demo workspace was created for this session.' : 'One demo lead was added across every demo destination.');
           if (intent === 'simulate-lead') {
             global.sessionStorage.setItem('northstarOnboardingSimulated', 'true');
             requestToolbarReturn(workspace);
@@ -572,7 +625,7 @@
     section.setAttribute('aria-label', 'Account-free demo controls');
     var copy = control('div', '', 'northstar-demo-toolbar-copy');
     copy.append(control('strong', 'Account-free demo workspace', 'northstar-demo-toolbar-title'));
-    var metadata = control('span', 'Demo Data · Shared Across Every Demo Page', 'northstar-demo-toolbar-meta');
+    var metadata = control('span', 'Demo Data · ' + value.tenant.name + ' · Shared Across Every Demo Page', 'northstar-demo-toolbar-meta');
     metadata.id = 'northstarDemoRevision';
     copy.append(metadata);
     var builder = document.createElement('details');

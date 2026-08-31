@@ -10,6 +10,12 @@ const {
   createInitialDemoState,
   tenantIdFromTokenHash,
 } = require('./workspace');
+const {
+  FIXTURE_CONTRACT,
+  createDemoWorkspaceFixture,
+  validateDemoGraphAgainstWorkspace,
+  validateDemoWorkspaceFixture,
+} = require('./demoWorkspaceGenerator');
 const { DEFAULT_SELECTION, normalizeSelection } = require('./scenarioSpace');
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -46,11 +52,55 @@ function date(value) {
 }
 
 function state(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || value.schemaVersion !== 1 ||
+  const seeded = value && value.schemaVersion === 2 && /^[0-9a-f]{64}$/.test(String(value.seed || '')) &&
+    Number.isSafeInteger(value.generation) && value.generation >= 1 && value.workspace &&
+    value.workspace.contract === FIXTURE_CONTRACT;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !seeded ||
       !Array.isArray(value.graphs) || typeof value.createdAt !== 'string') {
     fail(503, 'DEMO_STATE_INVALID', 'The isolated demo state is unavailable.');
   }
+  try {
+    const createdAt = date(value.createdAt);
+    validateDemoWorkspaceFixture(value.workspace);
+    const expectedWorkspace = createDemoWorkspaceFixture({
+      seedDigest: value.seed,
+      anchorTime: createdAt,
+    });
+    if (sha256(expectedWorkspace) !== sha256(value.workspace)) {
+      throw new Error('The persisted demo workspace disagrees with its seed authority.');
+    }
+    if (value.graphs.length < 3 || value.graphs.length > 15) {
+      throw new Error('The persisted demo graph count is outside the bounded lifecycle.');
+    }
+    value.graphs.forEach(graph => validateDemoGraphAgainstWorkspace(graph, value.workspace));
+    const graphIds = value.graphs.map(graph => graph.ids.graph);
+    if (new Set(graphIds).size !== graphIds.length) {
+      throw new Error('The persisted demo state contains duplicate graph authority.');
+    }
+  } catch (_error) {
+    fail(503, 'DEMO_STATE_INVALID', 'The isolated demo state is unavailable.');
+  }
   return stableValue(value);
+}
+
+function legacyState(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) &&
+    value.schemaVersion === 1 && typeof value.createdAt === 'string' &&
+    Number.isFinite(Date.parse(value.createdAt)) && Array.isArray(value.graphs));
+}
+
+function workspaceSeedForToken(tokenHash) {
+  return sha256({ contract: 'northstar_demo_workspace_admission_seed_v1', tokenHash: digest(tokenHash) });
+}
+
+function nextWorkspaceSeed(currentState, idempotencyHash) {
+  const priorSeed = currentState && /^[0-9a-f]{64}$/.test(String(currentState.seed || ''))
+    ? currentState.seed : sha256({ legacyCreatedAt: currentState && currentState.createdAt || null });
+  return sha256({
+    contract: 'northstar_demo_workspace_reset_seed_v1',
+    priorSeed,
+    idempotencyHash: digest(idempotencyHash),
+  });
 }
 
 function revision(value) {
@@ -152,13 +202,22 @@ function mutationInput(input) {
   return normalized;
 }
 
+function assertRowAuthority(row, token) {
+  if (!row || String(row.token_hash).trim() !== token.tokenHash ||
+      String(row.tenant_id) !== token.tenantId || String(row.id) !== token.sessionId) {
+    fail(503, 'DEMO_STATE_INVALID', 'The isolated demo authority is unavailable.');
+  }
+}
+
 function recordFromRow(row, token, persisted) {
   if (!row) {
     return {
       token,
       tenantId: token.tenantId,
       sessionId: token.sessionId,
-      state: createInitialDemoState(token.tenantId, token.issuedAt),
+      state: createInitialDemoState(token.tenantId, token.issuedAt, {
+        seed: workspaceSeedForToken(token.tokenHash),
+      }),
       revision: 1,
       simulationCount: 0,
       mutationCount: 0,
@@ -167,17 +226,19 @@ function recordFromRow(row, token, persisted) {
       lastSimulatedAt: null,
     };
   }
-  if (String(row.token_hash).trim() !== token.tokenHash || String(row.tenant_id) !== token.tenantId ||
-      String(row.id) !== token.sessionId) {
-    fail(503, 'DEMO_STATE_INVALID', 'The isolated demo authority is unavailable.');
+  assertRowAuthority(row, token);
+  const parsedState = state(row.state);
+  const simulationCount = count(row.simulation_count, 12);
+  if (parsedState.graphs.length !== simulationCount + 3) {
+    fail(503, 'DEMO_STATE_INVALID', 'The isolated demo graph count is unavailable.');
   }
   return {
     token,
     tenantId: token.tenantId,
     sessionId: token.sessionId,
-    state: state(row.state),
+    state: parsedState,
     revision: revision(row.revision),
-    simulationCount: count(row.simulation_count, 12),
+    simulationCount,
     mutationCount: count(row.mutation_count, MAX_MUTATIONS),
     persisted: persisted !== false,
     expiresAt: date(row.expires_at),
@@ -219,14 +280,78 @@ class DemoCommandCenterRepository {
   }
 
   async read(token) {
-    const result = await this.pool().query(
+    const now = date(this.clock());
+    const initial = await this.pool().query(
       `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
               last_simulated_at, expires_at
          FROM demo_command_center_sessions
         WHERE token_hash = $1 AND expires_at > $2`,
-      [token.tokenHash, this.clock()]
+      [token.tokenHash, now]
     );
-    return recordFromRow(result.rows[0] || null, token, Boolean(result.rows[0]));
+    if (!initial.rows[0] || !legacyState(initial.rows[0].state)) {
+      return recordFromRow(initial.rows[0] || null, token, Boolean(initial.rows[0]));
+    }
+    const client = await this.pool().connect();
+    let open = false;
+    try {
+      await client.query('BEGIN');
+      open = true;
+      const result = await client.query(
+        `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+                last_simulated_at, expires_at
+           FROM demo_command_center_sessions
+          WHERE token_hash = $1 AND expires_at > $2
+          FOR UPDATE`,
+        [token.tokenHash, now]
+      );
+      const normalized = result.rows[0]
+        ? await this.normalizePersistedRow(client, result.rows[0], token, now)
+        : { row: null, migrated: false };
+      const record = recordFromRow(normalized.row, token, Boolean(normalized.row));
+      await client.query('COMMIT');
+      open = false;
+      return record;
+    } catch (error) {
+      if (open) {
+        try { await client.query('ROLLBACK'); } catch (_) {}
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async normalizePersistedRow(client, row, token, now) {
+    assertRowAuthority(row, token);
+    if (!legacyState(row.state)) {
+      state(row.state);
+      return { row, migrated: false };
+    }
+    const currentRevision = revision(row.revision);
+    if (currentRevision >= Number.MAX_SAFE_INTEGER) {
+      fail(503, 'DEMO_STATE_INVALID', 'The isolated demo revision is unavailable.');
+    }
+    const migratedState = createInitialDemoState(token.tenantId, token.issuedAt, {
+      seed: workspaceSeedForToken(token.tokenHash),
+    });
+    await client.query(
+      'DELETE FROM demo_command_center_mutations WHERE session_id = $1',
+      [token.sessionId]
+    );
+    const updated = await client.query(
+      `UPDATE demo_command_center_sessions
+          SET state = $2, revision = $3, simulation_count = 0,
+              last_simulated_at = NULL, updated_at = $4
+        WHERE id = $1 AND revision = $5 AND state ->> 'schemaVersion' = '1'
+        RETURNING id, tenant_id, token_hash, state, revision, simulation_count,
+                  mutation_count, last_simulated_at, expires_at`,
+      [token.sessionId, migratedState, currentRevision + 1, now, currentRevision]
+    );
+    if (updated.rowCount !== 1) {
+      fail(503, 'DEMO_STATE_INVALID', 'The isolated demo state could not be migrated.');
+    }
+    state(updated.rows[0].state);
+    return { row: updated.rows[0], migrated: true };
   }
 
   async deleteExpiredBatch(client, now, batchSize) {
@@ -326,7 +451,9 @@ class DemoCommandCenterRepository {
     if (activeCount >= this.maxActiveSessions) {
       fail(429, 'DEMO_CAPACITY_LIMIT', 'The bounded account-free demo is at capacity. Try again later.');
     }
-    const initial = createInitialDemoState(token.tenantId, token.issuedAt);
+    const initial = createInitialDemoState(token.tenantId, token.issuedAt, {
+      seed: workspaceSeedForToken(token.tokenHash),
+    });
     await client.query(
       `INSERT INTO demo_command_center_sessions
          (id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
@@ -376,9 +503,18 @@ class DemoCommandCenterRepository {
           );
         }
       }
-      const current = recordFromRow(locked.rows[0] || null, token, true);
-      if (current.expiresAt.getTime() <= now.getTime()) {
+      const lockedRow = locked.rows[0] || null;
+      if (!lockedRow) fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
+      assertRowAuthority(lockedRow, token);
+      if (date(lockedRow.expires_at).getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
+      }
+      const normalized = await this.normalizePersistedRow(client, lockedRow, token, now);
+      const current = recordFromRow(normalized.row, token, true);
+      if (normalized.migrated) {
+        await client.query('COMMIT');
+        open = false;
+        fail(409, 'DEMO_REVISION_CONFLICT', 'The demo was refreshed to the current fictional workspace. Refresh before trying that action again.');
       }
       const replay = await client.query(
         `SELECT operation, request_digest, response_revision, response_digest
@@ -416,8 +552,11 @@ class DemoCommandCenterRepository {
           fail(429, 'DEMO_SIMULATION_RATE_LIMIT', 'Wait briefly before simulating another lead.');
         }
         const key = 'session-lead-' + String(current.revision + 1) + '-' + input.idempotencyHash.slice(0, 12);
+        const seededWorkspace = current.state.workspace && current.state.workspace.contract === FIXTURE_CONTRACT
+          ? current.state.workspace : null;
         const graph = buildSimulatedGraph({
-          tenantId: current.tenantId,
+          tenantId: seededWorkspace ? seededWorkspace.tenant.id : current.tenantId,
+          workspace: seededWorkspace,
           key,
           scenarioSelection: input.scenarioSelection,
           createdAt: now,
@@ -426,7 +565,10 @@ class DemoCommandCenterRepository {
         nextSimulationCount += 1;
         lastSimulatedAt = now;
       } else {
-        nextState = createInitialDemoState(current.tenantId, now);
+        nextState = createInitialDemoState(current.tenantId, now, {
+          seed: nextWorkspaceSeed(current.state, input.idempotencyHash),
+          generation: Number.isSafeInteger(current.state.generation) ? current.state.generation + 1 : 2,
+        });
         nextSimulationCount = 0;
         lastSimulatedAt = null;
       }
@@ -539,4 +681,6 @@ module.exports = {
   TOKEN_LIFETIME_MS,
   issueToken,
   normalizeToken,
+  nextWorkspaceSeed,
+  workspaceSeedForToken,
 };

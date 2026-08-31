@@ -458,12 +458,13 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     }
   });
 
-  test('one canonical demo state updates meaningful surfaces and binds the selected business authority', () => {
+  test('one canonical demo state updates meaningful surfaces without replacing the seeded business authority', () => {
     const tenantId = tenantIdFromTokenHash(TOKEN_HASH);
     const createdAt = new Date('2026-08-15T20:00:00.000Z');
     const initial = createInitialDemoState(tenantId, createdAt);
     const graph = buildSimulatedGraph({
-      tenantId,
+      tenantId: initial.workspace.tenant.id,
+      workspace: initial.workspace,
       key: 'ratification-simulation',
       serviceKey: 'fence',
       createdAt: new Date('2026-08-15T20:01:00.000Z'),
@@ -489,12 +490,8 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
 
     expect(after.graphs).toHaveLength(before.graphs.length + 1);
     expect(after.integrity.digest).not.toBe(before.integrity.digest);
-    expect(before.tenant).toEqual(expect.objectContaining({
-      name: 'Rivera Home Services', businessProfileKey: 'owner_operator',
-    }));
-    expect(after.tenant).toEqual(expect.objectContaining({
-      name: 'Pine & Peak Residential', businessProfileKey: 'growing_residential',
-    }));
+    expect(before.tenant).toEqual(initial.workspace.tenant);
+    expect(after.tenant).toEqual(before.tenant);
     expect(after.configuration.businessProfile).toEqual(graph.businessProfile);
     expect(after.configuration.scenarioSpace).toEqual(before.configuration.scenarioSpace);
     expect(after.configuration.workforce).toEqual(before.configuration.workforce);
@@ -526,7 +523,7 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     expect(canonical[0].businessProfileInputHash).toBe(sha256(graph.businessProfile));
   });
 
-  test('every selectable business owns its demo profile and configuration facts never impersonate transcript evidence', () => {
+  test('every selectable business remains scenario input while seeded configuration facts never impersonate transcript evidence', () => {
     const tenantId = tenantIdFromTokenHash('d'.repeat(64));
     const createdAt = new Date('2026-08-16T12:00:00.000Z');
     const initial = createInitialDemoState(tenantId, createdAt);
@@ -535,7 +532,8 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
     for (const business of scenarioSpace.DIMENSIONS.business.options) {
       const scenarioSelection = { ...scenarioSpace.DEFAULT_SELECTION, business: business.id };
       const graph = buildSimulatedGraph({
-        tenantId,
+        tenantId: initial.workspace.tenant.id,
+        workspace: initial.workspace,
         key: 'business-authority-' + business.id,
         scenarioSelection,
         createdAt,
@@ -551,24 +549,23 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       });
       const canonical = demoCanonicalItems(workspace)[0];
       const factsByVariable = new Map(graph.polaris.facts.map(fact => [fact.variable, fact]));
-      const profileFactVariables = ['businessContext', 'serviceRadiusMiles', 'crewCount', 'pricingModel'];
+      const profileFactVariables = ['serviceRadiusMiles', 'crewCount', 'pricingModel'];
       const transcriptFacts = graph.polaris.facts.filter(fact => fact.evidenceSource === 'transcript');
 
-      expect(workspace.tenant).toEqual(expect.objectContaining({
-        name: business.label,
-        businessProfileKey: business.id,
-      }));
-      expect(workspace.configuration.businessProfile).toEqual(expect.objectContaining({
-        businessKey: business.id,
-        company: business.label,
-        serviceRadiusMiles: business.material.serviceRadiusMiles,
-        crewCount: business.material.crewCount,
-        pricingModel: business.material.pricingModel,
-      }));
+      expect(workspace.tenant).toEqual(initial.workspace.tenant);
+      expect(workspace.configuration.businessProfile).toEqual(initial.workspace.businessProfile);
+      expect(graph.scenario.labels.business).toBe(business.label);
       expect(graph.businessProfile).toEqual(workspace.configuration.businessProfile);
       expect(canonical.businessProfileInputHash).toBe(sha256(graph.businessProfile));
       expect(canonical.businessProfileAuthorityId).toMatch(/^[0-9a-f-]{36}$/);
       authorityIds.add(canonical.businessProfileAuthorityId);
+
+      expect(factsByVariable.get('businessContext')).toEqual(expect.objectContaining({
+        evidenceSource: 'scenario_selection',
+        speaker: 'system',
+      }));
+      expect(graph.polaris.snapshot.supportingTranscriptFactIds)
+        .not.toContain(factsByVariable.get('businessContext').id);
 
       for (const variable of profileFactVariables) {
         expect(factsByVariable.get(variable)).toEqual(expect.objectContaining({
@@ -591,7 +588,7 @@ describe('Demo/Paid Command Center Parity Prelude contracts', () => {
       expect(canonical.supportingTranscriptFactIds).toHaveLength(transcriptFacts.length);
     }
 
-    expect(authorityIds.size).toBe(scenarioSpace.DIMENSIONS.business.options.length);
+    expect(authorityIds.size).toBe(1);
   });
 
   test('accepted readiness, integration, branding, and map-preference language is reused without readiness invention', () => {

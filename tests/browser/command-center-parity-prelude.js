@@ -127,6 +127,19 @@ function treeDigest(directory) {
   return hash.digest('hex');
 }
 
+function deepKeys(value, keys = []) {
+  if (!value || typeof value !== 'object') return keys;
+  if (Array.isArray(value)) {
+    value.forEach(entry => deepKeys(entry, keys));
+    return keys;
+  }
+  Object.entries(value).forEach(([key, entry]) => {
+    keys.push(key);
+    deepKeys(entry, keys);
+  });
+  return keys;
+}
+
 function hasPolarisSurface(routeId) {
   return POLARIS_PLACEMENT_ALLOWLIST.includes(routeId);
 }
@@ -144,7 +157,7 @@ async function inspectProfessionalPresentation(page, label) {
       .filter(visible);
     const normalizedWeight = value => value === 'normal' ? '400' : value === 'bold' ? '700' : value;
     const families = Array.from(new Set(nodes.map(node => getComputedStyle(node).fontFamily)));
-    const nativeFamily = /(?:-apple-system|BlinkMacSystemFont|Segoe UI|Helvetica Neue|Arial|sans-serif)/i;
+    const nativeFamily = /(?:-apple-system|-webkit-standard|BlinkMacSystemFont|Segoe UI|Helvetica Neue|Arial|sans-serif)/i;
     const fontOffenders = nodes.filter(node => !nativeFamily.test(getComputedStyle(node).fontFamily)).map(node => ({
       tag: node.tagName,
       id: node.id,
@@ -1010,6 +1023,37 @@ async function exerciseTheme(page, viewport) {
     viewport.label + ' theme control stays flush and visible');
 }
 
+async function inspectSettledToolbarReturn(page, viewport, label) {
+  const samples = [];
+  for (const delay of [0, 50, 150, 350, 750, 1550]) {
+    if (delay > 0) await page.waitForTimeout(delay - samples[samples.length - 1].delay);
+    samples.push(await page.evaluate(sampleDelay => {
+      const toolbar = document.getElementById('northstarDemoToolbar');
+      const summary = toolbar && toolbar.querySelector('.northstar-demo-scenario-builder > summary');
+      const rect = toolbar && toolbar.getBoundingClientRect();
+      return {
+        delay: sampleDelay,
+        toolbarTop: rect && rect.top,
+        toolbarBottom: rect && rect.bottom,
+        scrollY: window.scrollY,
+        focusedBuilderSummary: document.activeElement === summary,
+        scrollRestoration: history.scrollRestoration,
+      };
+    }, delay));
+  }
+  for (const sample of samples.filter(value => value.delay >= 350)) {
+    assert.strictEqual(sample.focusedBuilderSummary, true,
+      label + ' keeps keyboard focus on the returned scenario control: ' + JSON.stringify(samples));
+    assert.ok(sample.toolbarTop >= -1 && sample.toolbarTop <= Math.max(120, viewport.height * 0.25),
+      label + ' keeps the toolbar settled in the visible control area: ' + JSON.stringify(samples));
+    assert.ok(sample.toolbarBottom > 0,
+      label + ' keeps the focused toolbar intersecting the viewport: ' + JSON.stringify(samples));
+  }
+  assert.strictEqual(samples[samples.length - 1].scrollRestoration, 'auto',
+    label + ' restores native history behavior after bounded toolbar ownership: ' + JSON.stringify(samples));
+  return samples;
+}
+
 async function exerciseViewport(browser, origin, viewport, ledger) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
   context.setDefaultTimeout(10000);
@@ -1042,6 +1086,28 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const initialConfiguration = initial.workspace.configuration;
     const initialNavigation = initial.workspace.navigation;
     const initialDigest = initial.workspace.integrity.digest;
+    const initialTenant = initial.workspace.tenant;
+    assert.strictEqual(initial.workspace.session.workspaceGeneration, 1,
+      viewport.label + ' starts with one session-scoped fictional workspace generation');
+    assert.ok(!deepKeys(initial.workspace).includes('seed'),
+      viewport.label + ' does not expose the server-side fixture seed');
+
+    const siblingTab = await context.newPage();
+    try {
+      const response = await siblingTab.goto(origin + '/demo/leads', {
+        waitUntil: 'domcontentloaded', timeout: 15000,
+      });
+      assert.ok(response && [200, 304].includes(response.status()),
+        viewport.label + ' same-session sibling tab response');
+      await waitReady(siblingTab, ROUTES.find(route => route.id === 'leads'), 1);
+      const siblingWorkspace = await siblingTab.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
+      assert.deepStrictEqual(siblingWorkspace.tenant, initialTenant,
+        viewport.label + ' same-session sibling tab reads the exact fictional tenant');
+      assert.strictEqual(siblingWorkspace.integrity.digest, initialDigest,
+        viewport.label + ' same-session sibling tab reads the byte-consistent workspace graph');
+    } finally {
+      await siblingTab.close();
+    }
     await exerciseMobileMenuControls(page, viewport, 'demo');
     await exerciseTheme(page, viewport);
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' theme');
@@ -1091,6 +1157,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       page.click('#demoSimulateLead'),
     ]);
     await waitReady(page, ROUTES[0], 2);
+    await inspectSettledToolbarReturn(page, viewport, viewport.label + ' generation 1');
     const postSimulationControls = await page.evaluate(() => ({
       selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
         .map(control => [control.dataset.scenarioDimension, control.value])),
@@ -1123,6 +1190,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         page.click('#demoSimulateLead'),
       ]);
       await waitReady(page, ROUTES[0], generation + 1);
+      await inspectSettledToolbarReturn(page, viewport, viewport.label + ' generation ' + generation);
       const afterGeneration = await page.evaluate(() => ({
         selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
           .map(control => [control.dataset.scenarioDimension, control.value])),
@@ -1143,9 +1211,11 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(simulated.graphs.length, 6, viewport.label + ' three scenario-selected graphs');
     assert.notStrictEqual(simulated.integrity.digest, initialDigest, viewport.label + ' state digest advances');
     assert.deepStrictEqual(simulated.configuration.businessProfile, simulated.graphs[0].businessProfile,
-      viewport.label + ' selected Business Profile owns the simulated graph');
-    assert.notDeepStrictEqual(simulated.configuration.businessProfile, initialConfiguration.businessProfile,
-      viewport.label + ' selected Business Profile replaces the default authority');
+      viewport.label + ' generated Business Profile owns the simulated graph');
+    assert.deepStrictEqual(simulated.configuration.businessProfile, initialConfiguration.businessProfile,
+      viewport.label + ' manual scenario choices do not replace the generated tenant authority');
+    assert.deepStrictEqual(simulated.tenant, initialTenant,
+      viewport.label + ' repeated lead generation preserves the active fictional tenant');
     assert.deepStrictEqual(simulated.configuration.scenarioSpace, initialConfiguration.scenarioSpace,
       viewport.label + ' scenario space remains stable');
     assert.deepStrictEqual(simulated.configuration.workforce, initialConfiguration.workforce,
@@ -1154,6 +1224,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       viewport.label + ' integrations remain stable');
     assert.deepStrictEqual(simulated.navigation, initialNavigation, viewport.label + ' navigation remains stable');
     const added = simulated.graphs[0];
+    const addedNameCount = simulated.graphs.filter(graph => graph.customer.name === added.customer.name).length;
     assert.strictEqual(added.lead.serviceType, 'roofing', viewport.label + ' selected service');
     assert.deepStrictEqual(added.scenario.selection, scenarioSelection, viewport.label + ' complete selected scenario');
     assert.strictEqual(added.polaris.snapshot.risk.emergency, true, viewport.label + ' urgency changes Polaris risk');
@@ -1356,7 +1427,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     });
     assert.strictEqual(await page.locator('#cdCustomerDrawer').getAttribute('aria-hidden'), 'true',
       viewport.label + ' close button restores hidden dialog semantics');
-    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).first().click();
     await page.waitForFunction(name => {
       const drawer = document.getElementById('cdCustomerDrawer');
       return drawer && !drawer.hidden && drawer.getAttribute('aria-hidden') === 'false' && drawer.textContent.includes(name);
@@ -1367,7 +1438,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       return drawer && drawer.hidden && drawer.getAttribute('aria-hidden') === 'true';
     });
     await captureEvidence(page, 'demo', leadsRoute, viewport, 'simulated');
-    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).first().click();
     await page.waitForFunction(name => {
       const drawer = document.getElementById('cdCustomerDrawer');
       return drawer && !drawer.hidden && drawer.textContent.includes(name) &&
@@ -1389,10 +1460,11 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       if (id === 'communications') {
         const initialResults = await page.locator('#resultsCount').innerText();
         await page.locator('#callSearchInput').fill(added.customer.name);
-        await page.waitForFunction(name => {
+        await page.waitForFunction(expected => {
           const results = document.getElementById('resultsCount');
-          return results && results.textContent.startsWith('1 customer') && document.body.textContent.includes(name);
-        }, added.customer.name);
+          return results && results.textContent.startsWith(expected.count + ' customer') &&
+            document.body.textContent.includes(expected.name);
+        }, { name: added.customer.name, count: addedNameCount });
         await page.locator('#callSearchInput').fill('');
         await page.waitForFunction(expected => document.getElementById('resultsCount').textContent === expected,
           initialResults);
@@ -1413,23 +1485,33 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         await page.locator('.cal-view-tab', { hasText: 'Day' }).click();
         await page.waitForFunction(() => window.calState && window.calState.view === 'day');
         await page.locator('.cal-today-btn').click();
-        const calendarToday = await page.evaluate(() => ({
-          expected: window.calState._formatDate(new Date()),
-          selected: window.calState.selectedDate,
-          title: document.querySelector('.cal-day-title').textContent,
-        }));
+        const calendarToday = await page.evaluate(() => {
+          const projection = window.CanonicalIntelligence.getProjection('calendar');
+          return {
+            expected: window.NorthStarSchedulingTime.formatInstant(
+              new Date(), projection.timeZoneAuthority.timeZone
+            ).date,
+            selected: window.calState.selectedDate,
+            title: document.querySelector('.cal-day-title').textContent,
+          };
+        });
         assert.strictEqual(calendarToday.selected, calendarToday.expected,
-          viewport.label + ' Calendar Day view and Today action use the same local date');
+          viewport.label + ' Calendar Day view and Today action use the same tenant-zone date');
         assert.ok(calendarToday.title.includes('Today'),
           viewport.label + ' Calendar Day view marks the selected local date as Today');
         const agendaButton = page.locator('.cal-view-tab', { hasText: 'Agenda' });
         await agendaButton.click();
         await page.waitForFunction(() => window.calState && window.calState.view === 'agenda');
-        const agendaConsistency = await page.evaluate(() => ({
-          expected: window.calState._formatDate(new Date()),
-          todayEvents: window.calState.getTodayEvents().length,
-          todayLabels: Array.from(document.querySelectorAll('.cal-agenda-date-today')).map(node => node.textContent),
-        }));
+        const agendaConsistency = await page.evaluate(() => {
+          const projection = window.CanonicalIntelligence.getProjection('calendar');
+          return {
+            expected: window.NorthStarSchedulingTime.formatInstant(
+              new Date(), projection.timeZoneAuthority.timeZone
+            ).date,
+            todayEvents: window.calState.getTodayEvents().length,
+            todayLabels: Array.from(document.querySelectorAll('.cal-agenda-date-today')).map(node => node.textContent),
+          };
+        });
         if (agendaConsistency.todayEvents > 0) {
           assert.ok(agendaConsistency.todayLabels.length > 0 && agendaConsistency.todayLabels.every(label => label.includes('Today')),
             viewport.label + ' Calendar Agenda uses the same Today classification as Day view');
@@ -1482,7 +1564,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 4, viewport);
       assert.deepStrictEqual(snapshot.workspace.configuration, simulated.configuration,
-        route.path + ' reads the selected Business Profile configuration');
+        route.path + ' reads the generated Business Profile configuration');
       assert.strictEqual(snapshot.polarisCardCount, 0, route.path + ' has no misplaced Polaris card after simulation');
       assert.ok(snapshot.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
         route.path + ' retains the one canonical simulated state without a standalone Polaris projection');
@@ -1500,7 +1582,15 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const reset = await page.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
     assert.strictEqual(reset.graphs.length, 3, viewport.label + ' reset restores seed graph count');
     assert.strictEqual(reset.session.simulationCount, 0, viewport.label + ' reset count');
-    assert.deepStrictEqual(reset.configuration, initialConfiguration, viewport.label + ' reset preserves configuration');
+    assert.strictEqual(reset.session.workspaceGeneration, 2,
+      viewport.label + ' reset atomically advances the fictional workspace generation');
+    assert.notDeepStrictEqual(reset.configuration, initialConfiguration,
+      viewport.label + ' reset creates a new coherent fictional workspace configuration');
+    assert.notStrictEqual(reset.tenant.id, initialTenant.id,
+      viewport.label + ' reset atomically creates a new fictional tenant identity');
+    assert.deepStrictEqual(reset.configuration.businessProfile, reset.graphs[0].businessProfile,
+      viewport.label + ' reset graph and configuration share one generated authority');
+    assert.ok(!deepKeys(reset).includes('seed'), viewport.label + ' reset does not expose the server-side seed');
     assert.ok(!reset.graphs.some(graph => graph.ids.graph === added.ids.graph), viewport.label + ' reset removes only session-added graph');
 
     await page.reload({ waitUntil: 'domcontentloaded' });

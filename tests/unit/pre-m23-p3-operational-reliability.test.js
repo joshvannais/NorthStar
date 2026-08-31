@@ -28,7 +28,10 @@ describe('Pre-Mission-23 P3 operational interaction and layout contract', () => 
     expect(runtime).toContain('Urgent missed-call recovery');
     expect(runtime).toContain('High-value estimate');
     expect(runtime).toContain('Schedule conflict and follow-up');
-    expect(runtime).toContain("toolbar.scrollIntoView({ block: 'start', behavior: 'smooth' })");
+    expect(runtime).toContain("global.history.scrollRestoration = 'manual'");
+    expect(runtime).toContain("toolbar.scrollIntoView({ block: 'start', behavior: 'auto' })");
+    expect(runtime).toContain('restoreToolbarScrollMode');
+    expect(runtime).not.toContain("toolbar.scrollIntoView({ block: 'start', behavior: 'smooth' })");
     expect(runtime).toContain("summary.focus({ preventScroll: true })");
     expect(runtime).toContain("details.open = false");
   });

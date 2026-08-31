@@ -1,10 +1,15 @@
 'use strict';
 
+const childProcess = require('child_process');
+const Module = require('module');
+const path = require('path');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ORIGIN = 'http://northstar.test';
+const ROOT = path.resolve(__dirname, '../..');
+const P5_BASE = '41bc295542dcb57b6b8af3aee73affba76d76411';
 const RICH_SCENARIO = Object.freeze({
   business: 'multi_crew',
   service: 'roofing',
@@ -34,6 +39,56 @@ function mutation(agent, cookie, path, intent, key, body) {
 
 function settleAuditLogger() {
   return new Promise(resolve => setTimeout(resolve, 25));
+}
+
+function deepKeys(value, keys = []) {
+  if (Array.isArray(value)) value.forEach(item => deepKeys(item, keys));
+  else if (value && typeof value === 'object') Object.keys(value).forEach(key => {
+    keys.push(key);
+    deepKeys(value[key], keys);
+  });
+  return keys;
+}
+
+function loadGitBlobModule(revision, relativePath) {
+  const source = childProcess.execFileSync(
+    'git', ['show', revision + ':' + relativePath],
+    { cwd: ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }
+  );
+  const filename = path.join(ROOT, relativePath);
+  const loaded = new Module(filename, module);
+  loaded.filename = filename;
+  loaded.paths = Module._nodeModulePaths(path.dirname(filename));
+  loaded._compile(source, filename);
+  return loaded.exports;
+}
+
+function tokenCookie(token) {
+  return 'northstar_demo_workspace=' + encodeURIComponent(token.token);
+}
+
+function resignGraph(graph) {
+  const { sha256 } = require('../../src/services/businessProfileAdapter');
+  const projection = { ...graph };
+  delete projection.projectionDigest;
+  graph.projectionDigest = sha256(projection);
+}
+
+async function insertPersistedDemoState(pool, token, state, options = {}) {
+  const revision = options.revision || 1;
+  const simulationCount = options.simulationCount || 0;
+  const mutationCount = options.mutationCount || 0;
+  await pool.query(
+    `INSERT INTO demo_command_center_sessions
+       (id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+        last_simulated_at, created_at, updated_at, expires_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10)`,
+    [
+      token.sessionId, token.tenantId, token.tokenHash, state, revision,
+      simulationCount, mutationCount, options.lastSimulatedAt || null,
+      token.issuedAt, token.expiresAt,
+    ]
+  );
 }
 
 realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authority', () => {
@@ -116,6 +171,212 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect((await pool.query('SELECT count(*)::int AS count FROM audit_logs')).rows[0].count).toBe(0);
   });
 
+  test('independent cookie sessions stay isolated while reload and same-session route reads stay byte-consistent', async () => {
+    const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
+    const second = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
+    const firstCookie = cookieFrom(first);
+    const secondCookie = cookieFrom(second);
+
+    expect(firstCookie).not.toBe(secondCookie);
+    expect(first.body.data.tenant.id).not.toBe(second.body.data.tenant.id);
+    expect(first.body.data.integrity.digest).not.toBe(second.body.data.integrity.digest);
+    expect(deepKeys(first.body.data).some(key => /seed/i.test(key))).toBe(false);
+    expect(deepKeys(second.body.data).some(key => /seed/i.test(key))).toBe(false);
+
+    const reloaded = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', firstCookie).expect(200);
+    expect(reloaded.body.data).toEqual(first.body.data);
+
+    for (const surface of ['leads', 'communications', 'calendar']) {
+      const projected = await request(app)
+        .get('/api/demo/command-center/canonical/compat/' + surface)
+        .set('Host', 'northstar.test').set('Cookie', firstCookie).expect(200);
+      expect(projected.body.data.authority.organizationId).toBe(first.body.data.tenant.id);
+      expect(projected.body.data.metrics.graphCount).toBe(first.body.data.graphs.length);
+      expect(projected.body.data.records[0].canonical.ids.graph).toBe(first.body.data.graphs[0].ids.graph);
+    }
+  });
+
+  test('persisted legacy state migrates once while corrupt schema-v2 graph authority fails closed', async () => {
+    const { issueToken } = require('../../src/commandCenter/demoRepository');
+    const { createInitialDemoState } = require('../../src/commandCenter/workspace');
+    const baseWorkspace = loadGitBlobModule(P5_BASE, 'src/commandCenter/workspace.js');
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+
+    const legacyToken = issueToken(new Date());
+    const authenticLegacy = baseWorkspace.createInitialDemoState(legacyToken.tenantId, legacyToken.issuedAt);
+    expect(authenticLegacy.schemaVersion).toBe(1);
+    expect(authenticLegacy.graphs[0].customer.email).toBe('maria@example.demo');
+    await insertPersistedDemoState(pool, legacyToken, authenticLegacy, {
+      revision: 4,
+      simulationCount: 2,
+      mutationCount: 3,
+      lastSimulatedAt: legacyToken.issuedAt,
+    });
+    await pool.query(
+      `INSERT INTO demo_command_center_mutations
+         (session_id, idempotency_hash, operation, request_digest, response_revision, response_digest)
+       VALUES ($1,$2,'simulate_lead',$3,4,$4)`,
+      [legacyToken.sessionId, '1'.repeat(64), '2'.repeat(64), '3'.repeat(64)]
+    );
+
+    const legacyCookie = tokenCookie(legacyToken);
+    const [firstRead, concurrentRead] = await Promise.all([
+      request(app).get('/api/demo/command-center').set('Host', 'northstar.test').set('Cookie', legacyCookie),
+      request(app).get('/api/demo/command-center').set('Host', 'northstar.test').set('Cookie', legacyCookie),
+    ]);
+    expect(firstRead.status).toBe(200);
+    expect(concurrentRead.status).toBe(200);
+    expect(firstRead.body.data).toEqual(concurrentRead.body.data);
+    expect(firstRead.body.data.integrity.revision).toBe(5);
+    expect(firstRead.body.data.session).toEqual(expect.objectContaining({
+      durable: true,
+      simulationCount: 0,
+      workspaceGeneration: 1,
+    }));
+    expect(firstRead.body.data.graphs).toHaveLength(3);
+    expect(firstRead.body.data.graphs.every(graph =>
+      /^[a-z0-9.-]+@example\.com$/.test(graph.customer.email) &&
+      /^\([2-9][0-9]{2}\) 555-01[0-9]{2}$/.test(graph.customer.phone) &&
+      / (?:Demo|Example|Fixture|Sample)$/.test(graph.customer.name)
+    )).toBe(true);
+    expect(JSON.stringify(firstRead.body.data)).not.toMatch(/example\.demo|Maria Rivera|Dev Patel|Avery Lewis/);
+
+    const migrated = (await pool.query(
+      `SELECT state, revision, simulation_count, mutation_count, last_simulated_at
+         FROM demo_command_center_sessions WHERE id = $1`,
+      [legacyToken.sessionId]
+    )).rows[0];
+    expect(migrated.state).toEqual(expect.objectContaining({ schemaVersion: 2, generation: 1 }));
+    expect(migrated.revision).toBe('5');
+    expect(migrated.simulation_count).toBe(0);
+    expect(migrated.mutation_count).toBe(3);
+    expect(migrated.last_simulated_at).toBeNull();
+    expect((await pool.query(
+      'SELECT count(*)::int AS count FROM demo_command_center_mutations WHERE session_id = $1',
+      [legacyToken.sessionId]
+    )).rows[0].count).toBe(0);
+
+    const stale = await mutation(
+      request(app), legacyCookie, '/api/demo/command-center/simulations/leads',
+      'simulate-lead', 'legacy-migration-stale-0000000001',
+      { scenario: RICH_SCENARIO, expectedRevision: 4 }
+    ).expect(409);
+    expect(stale.body.error.code).toBe('demo_revision_conflict');
+    const created = await mutation(
+      request(app), legacyCookie, '/api/demo/command-center/simulations/leads',
+      'simulate-lead', 'legacy-migration-current-000000001',
+      { scenario: RICH_SCENARIO, expectedRevision: 5 }
+    ).expect(201);
+    expect(created.body.data.integrity.revision).toBe(6);
+    const replay = await mutation(
+      request(app), legacyCookie, '/api/demo/command-center/simulations/leads',
+      'simulate-lead', 'legacy-migration-current-000000001',
+      { scenario: RICH_SCENARIO, expectedRevision: 5 }
+    ).expect(200);
+    expect(replay.body.replayed).toBe(true);
+    expect(replay.body.data.integrity.digest).toBe(created.body.data.integrity.digest);
+
+    const directMutationToken = issueToken(new Date());
+    const directMutationLegacy = baseWorkspace.createInitialDemoState(
+      directMutationToken.tenantId, directMutationToken.issuedAt
+    );
+    await insertPersistedDemoState(pool, directMutationToken, directMutationLegacy);
+    const migratedConflict = await mutation(
+      request(app), tokenCookie(directMutationToken),
+      '/api/demo/command-center/simulations/leads', 'simulate-lead',
+      'legacy-direct-mutation-00000000001',
+      { scenario: RICH_SCENARIO, expectedRevision: 1 }
+    ).expect(409);
+    expect(migratedConflict.body.error.code).toBe('demo_revision_conflict');
+    const directReadback = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(directMutationToken)).expect(200);
+    expect(directReadback.body.data.integrity.revision).toBe(2);
+    expect(directReadback.body.data.session.simulationCount).toBe(0);
+    expect(directReadback.body.data.graphs.every(graph => graph.customer.email.endsWith('@example.com'))).toBe(true);
+
+    const validToken = issueToken(new Date());
+    const validState = createInitialDemoState(validToken.tenantId, validToken.issuedAt, {
+      seed: require('../../src/commandCenter/demoRepository').workspaceSeedForToken(validToken.tokenHash),
+    });
+    await insertPersistedDemoState(pool, validToken, validState);
+    const validRead = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(validToken)).expect(200);
+    expect(validRead.body.data.graphs).toHaveLength(3);
+
+    const corruptGraphToken = issueToken(new Date());
+    const corruptGraphState = createInitialDemoState(corruptGraphToken.tenantId, corruptGraphToken.issuedAt, {
+      seed: require('../../src/commandCenter/demoRepository').workspaceSeedForToken(corruptGraphToken.tokenHash),
+    });
+    corruptGraphState.graphs[0].customer.name = 'Real Person';
+    corruptGraphState.graphs[0].customer.email = 'real.person@gmail.com';
+    resignGraph(corruptGraphState.graphs[0]);
+    await insertPersistedDemoState(pool, corruptGraphToken, corruptGraphState);
+    const corruptGraphRead = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptGraphToken)).expect(503);
+    expect(corruptGraphRead.body.error.code).toBe('demo_state_invalid');
+
+    const corruptReferenceToken = issueToken(new Date());
+    const corruptReferenceState = createInitialDemoState(corruptReferenceToken.tenantId, corruptReferenceToken.issuedAt, {
+      seed: require('../../src/commandCenter/demoRepository').workspaceSeedForToken(corruptReferenceToken.tokenHash),
+    });
+    corruptReferenceState.graphs[0].lead.serviceType = 'unsupported-private-service';
+    resignGraph(corruptReferenceState.graphs[0]);
+    await insertPersistedDemoState(pool, corruptReferenceToken, corruptReferenceState);
+    const corruptReferenceRead = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptReferenceToken)).expect(503);
+    expect(corruptReferenceRead.body.error.code).toBe('demo_state_invalid');
+
+    const corruptWorkspaceToken = issueToken(new Date());
+    const corruptWorkspaceState = createInitialDemoState(corruptWorkspaceToken.tenantId, corruptWorkspaceToken.issuedAt, {
+      seed: require('../../src/commandCenter/demoRepository').workspaceSeedForToken(corruptWorkspaceToken.tokenHash),
+    });
+    corruptWorkspaceState.workspace.company.email = 'not-reserved@example.net';
+    await insertPersistedDemoState(pool, corruptWorkspaceToken, corruptWorkspaceState);
+    const corruptWorkspaceRead = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptWorkspaceToken)).expect(503);
+    expect(corruptWorkspaceRead.body.error.code).toBe('demo_state_invalid');
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    await settleAuditLogger();
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+    await pool.query('TRUNCATE audit_logs');
+  });
+
+  test('a re-signed schema-v2 graph cannot bypass its canonical Polaris snapshot digest', async () => {
+    const { issueToken, workspaceSeedForToken } = require('../../src/commandCenter/demoRepository');
+    const { createInitialDemoState } = require('../../src/commandCenter/workspace');
+    const { validateDemoGraphAgainstWorkspace } = require('../../src/commandCenter/demoWorkspaceGenerator');
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+
+    const token = issueToken(new Date());
+    const state = createInitialDemoState(token.tenantId, token.issuedAt, {
+      seed: workspaceSeedForToken(token.tokenHash),
+    });
+    state.graphs[0].polaris.snapshotDigest = '0'.repeat(64);
+    resignGraph(state.graphs[0]);
+
+    expect(() => validateDemoGraphAgainstWorkspace(state.graphs[0], state.workspace))
+      .toThrow('Polaris snapshot digest');
+    await insertPersistedDemoState(pool, token, state);
+
+    for (const route of [
+      '/api/demo/command-center',
+      '/api/demo/command-center/canonical/compat/leads',
+    ]) {
+      const response = await request(app).get(route)
+        .set('Host', 'northstar.test')
+        .set('Cookie', tokenCookie(token))
+        .expect(503);
+      expect(response.body.error.code).toBe('demo_state_invalid');
+    }
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    await settleAuditLogger();
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+    await pool.query('TRUNCATE audit_logs');
+  });
+
   test('one durable CAS graph updates all relevant surfaces and replays without duplication', async () => {
     const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
     const cookie = cookieFrom(first);
@@ -144,7 +405,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect(created.body.data.configuration.businessProfile)
       .toEqual(created.body.data.graphs[0].businessProfile);
     expect(created.body.data.configuration.businessProfile)
-      .not.toEqual(beforeConfiguration.businessProfile);
+      .toEqual(beforeConfiguration.businessProfile);
     expect(created.body.data.configuration.scenarioSpace).toEqual(beforeConfiguration.scenarioSpace);
     expect(created.body.data.configuration.workforce).toEqual(beforeConfiguration.workforce);
     expect(created.body.data.configuration.integrations).toEqual(beforeConfiguration.integrations);
@@ -279,10 +540,11 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect((await pool.query('SELECT count(*)::int AS count FROM audit_logs')).rows[0].count).toBe(0);
   });
 
-  test('reset is isolated, CAS-fenced, and restores the default Business Profile authority', async () => {
+  test('reset is isolated, CAS-fenced, and atomically creates a new fictional tenant authority', async () => {
     const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
     const cookie = cookieFrom(first);
     const initialConfiguration = first.body.data.configuration;
+    const initialTenant = first.body.data.tenant;
     const created = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', 'reset-seed-00000000000000000000001', {
       service: 'plumbing', expectedRevision: 1,
     }).expect(201);
@@ -291,9 +553,12 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     }).expect(200);
     expect(reset.body.data.integrity).toEqual(expect.objectContaining({ revision: 3, graphCount: 3 }));
     expect(reset.body.data.session.simulationCount).toBe(0);
-    expect(reset.body.data.configuration).toEqual(initialConfiguration);
+    expect(reset.body.data.session.workspaceGeneration).toBe(2);
+    expect(created.body.data.tenant).toEqual(initialTenant);
+    expect(created.body.data.configuration).toEqual(initialConfiguration);
+    expect(reset.body.data.tenant.id).not.toBe(initialTenant.id);
     expect(reset.body.data.configuration.businessProfile)
-      .not.toEqual(created.body.data.configuration.businessProfile);
+      .not.toEqual(initialConfiguration.businessProfile);
 
     const stale = await mutation(request(app), cookie, '/api/demo/command-center/reset', 'reset', 'stale-reset-0000000000000000000001', {
       expectedRevision: 2,

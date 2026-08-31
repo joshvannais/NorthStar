@@ -45,7 +45,7 @@ function card(hostile) {
   const injected = hostile ? HOSTILE : '';
   return {
     schemaVersion: CARD_SCHEMA, kind: 'customer_intelligence', tone: 'purple',
-    title: hostile ? `Cedar Customer ${injected}` : 'Cedar Customer',
+    title: 'Cedar Customer',
     subtitle: 'Tree service',
     answer: hostile ? `Stored instructions are data only: ${injected}` : 'Remove the marked tree beside the driveway.',
     evidence: [{
@@ -63,6 +63,27 @@ function card(hostile) {
     },
     advisoryOnly: true, canonicalMutationAllowed: false,
   };
+}
+
+function messageResponse(body) {
+  const response = contextResponse(false);
+  response.requestId = body.idempotencyKey;
+  response.responseId = crypto.createHash('sha256').update(`browser:${body.idempotencyKey}`).digest('hex');
+  response.source = 'interceptor';
+  response.answer.text = 'Bounded intercepted browser answer.';
+  return response;
+}
+
+function malformedResponse(name, response) {
+  if (name === 'missing') delete response.cards[0].confidence.basis;
+  else if (name === 'extra') response.cards[0].evidence[0].source.extra = true;
+  else if (name === 'type') response.cards[0].unknowns[0].label = 42;
+  else if (name === 'length') response.cards[0].title = 'x'.repeat(201);
+  else if (name === 'version') response.cards[0].schemaVersion = 'northstar.polaris.customer-intelligence-card.v2';
+  else if (name === 'prototype-key') {
+    response.cards[0].confidence = JSON.parse('{"value":0.8,"level":"high","basis":"Recorded confidence.","__proto__":{"polluted":true}}');
+  }
+  return response;
 }
 
 function contextResponse(hostile) {
@@ -152,36 +173,42 @@ async function installRoutes(page, state) {
     if (url.pathname === '/api/account/preferences') return route.fulfill(json({ preferences: {} }));
     if (url.pathname === '/api/demo/command-center') return route.fulfill(json({ success: true, data: demoWorkspace() }));
     if (url.pathname === '/api/v1/canonical/polaris/assistant/status') {
-      return route.fulfill(json({ success: true, data: {
+      const assistantStatus = {
         schemaVersion: 'northstar.polaris.assistant-status.v1', requestId: 'browser-status',
         state: state.unconfigured ? 'unconfigured' : 'available',
-        label: state.unconfigured ? 'Provider-backed conversation unavailable' : 'Intercepted browser fixture available',
+        label: state.malformed === 'status-length' ? 'x'.repeat(161) :
+          state.unconfigured ? 'Provider-backed conversation unavailable' : 'Intercepted browser fixture available',
         localCustomerIntelligence: 'available', providerRequestsEnabled: false, providerRequestsSent: 0,
         decisionsRequired: ['credential_source', 'current_official_documentation_review', 'model', 'budget_and_rate',
           'timeout_and_retry', 'retention_and_logging', 'user_facing_failure_policy'],
-      } }));
+      };
+      if (!state.unconfigured) assistantStatus.intercepted = true;
+      return route.fulfill(json({ success: true, data: assistantStatus }));
     }
     if (url.pathname === '/api/v1/canonical/polaris/assistant/context') {
       const body = JSON.parse(route.request().postData() || '{}');
       assert.deepStrictEqual(body, {
         schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: LEAD },
       });
-      return route.fulfill(json({ success: true, data: contextResponse(state.hostile) }));
+      const response = contextResponse(state.hostile);
+      if (state.malformed && state.malformed !== 'status-length' && state.malformed !== 'message-extra') {
+        malformedResponse(state.malformed, response);
+      }
+      return route.fulfill(json({ success: true, data: response }));
     }
     if (url.pathname === '/api/v1/canonical/polaris/assistant/messages') {
       state.messageCalls += 1;
+      const body = JSON.parse(route.request().postData() || '{}');
+      state.messageKeys.push(body.idempotencyKey);
       if (state.unconfigured) return route.fulfill(json({
         success: false, error: { code: 'POLARIS_PROVIDER_DECISIONS_REQUIRED',
           message: 'Provider-backed conversation remains unavailable pending user decisions.' },
       }, 503));
-      const body = JSON.parse(route.request().postData() || '{}');
       assert.strictEqual(body.schemaVersion, 'northstar.polaris.message-request.v1');
       assert.match(body.idempotencyKey, /^[0-9a-f-]{36}$/);
-      return route.fulfill(json({ success: true, data: {
-        schemaVersion: RESPONSE_SCHEMA, requestId: body.idempotencyKey, cards: [],
-        answer: { text: 'Bounded intercepted browser answer.' }, advisoryOnly: true,
-        canonicalMutationAllowed: false,
-      } }));
+      const response = messageResponse(body);
+      if (state.malformed === 'message-extra') response.cards[0].authority.extra = true;
+      return route.fulfill(json({ success: true, data: response }));
     }
     return route.fulfill(json({ success: false, error: { code: 'BROWSER_FIXTURE_UNAVAILABLE' } }, 404));
   });
@@ -196,7 +223,8 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
-  const state = { external: [], api: [], messageCalls: 0, hostile: false, unconfigured: profile.unconfigured };
+  const state = { external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed: null, unconfigured: profile.unconfigured };
   await installRoutes(page, state);
   const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
@@ -217,10 +245,14 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
   if (profile.unconfigured) {
     await page.getByRole('button', { name: 'Retry this message' }).waitFor({ state: 'visible' });
     assert.match(await page.locator('.polaris-chat-error .polaris-chat-text').textContent(), /pending user decisions/);
+    await page.getByRole('button', { name: 'Retry this message' }).click();
+    await page.getByRole('button', { name: 'Retry this message' }).waitFor({ state: 'visible' });
+    assert.strictEqual(state.messageCalls, 2);
+    assert.deepStrictEqual(state.messageKeys, [state.messageKeys[0], state.messageKeys[0]], 'UI retry must retain the original key');
   } else {
     await page.getByText('Bounded intercepted browser answer.').waitFor({ state: 'visible' });
+    assert.strictEqual(state.messageCalls, 1);
   }
-  assert.strictEqual(state.messageCalls, 1);
   assert.deepStrictEqual(state.external, [], `${profile.label} external requests`);
   assert.deepStrictEqual(errors, [], `${profile.label} page errors`);
   const filename = path.join(outputRoot, `${selected}-${profile.label}.png`);
@@ -235,7 +267,8 @@ async function runDemo(browser, origin, outputRoot, manifest, selected) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
-  const state = { external: [], api: [], messageCalls: 0, hostile: false, unconfigured: false };
+  const state = { external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed: null, unconfigured: false };
   await installRoutes(page, state);
   const route = `/demo/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
@@ -266,7 +299,8 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
-  const state = { external: [], api: [], messageCalls: 0, hostile: true, unconfigured: true };
+  const state = { external: [], api: [], messageCalls: 0, messageKeys: [], hostile: true,
+    malformed: null, unconfigured: true };
   await installRoutes(page, state);
   const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
@@ -282,6 +316,38 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
   await page.screenshot({ path: filename, fullPage: true });
   manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
     route, viewport: { width: 390, height: 844 }, theme: 'dark', fixture: 'hostile-xss-and-prompt-injection' });
+  await context.close();
+}
+
+async function runMalformed(browser, origin, securityRoot, manifest, selected, malformed) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  const state = { external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed, unconfigured: false };
+  await installRoutes(page, state);
+  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  if (malformed === 'status-length') {
+    await page.locator('.polaris-native-card').waitFor({ state: 'visible' });
+    assert.strictEqual((await page.locator('#polarisProviderStatusLabel').textContent()).trim(), 'Error');
+  } else if (malformed === 'message-extra') {
+    await page.locator('.polaris-native-card').waitFor({ state: 'visible' });
+    await page.locator('.polaris-quick-prompt').first().click();
+    await page.getByRole('alert').waitFor({ state: 'visible' });
+    assert.match(await page.locator('.polaris-chat-error .polaris-chat-text').textContent(), /unsupported structured response/);
+  } else {
+    await page.getByRole('alert').waitFor({ state: 'visible' });
+    assert.match(await page.getByRole('alert').textContent(), /structured response was rejected/);
+    assert.strictEqual(await page.locator('.polaris-native-card').count(), 0);
+  }
+  assert.deepStrictEqual(errors, [], `${selected}-${malformed} page errors`);
+  assert.deepStrictEqual(state.external, [], `${selected}-${malformed} external requests`);
+  const filename = path.join(securityRoot, `${selected}-mobile-dark-malformed-${malformed}.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
+    route, viewport: { width: 390, height: 844 }, theme: 'dark', fixture: `malformed-contract-${malformed}-fail-closed` });
   await context.close();
 }
 
@@ -311,6 +377,9 @@ async function main() {
     for (const profile of profiles) await runOrdinary(browser, origin, outputRoot, ordinary, selected, profile);
     await runDemo(browser, origin, outputRoot, ordinary, selected);
     await runHostile(browser, origin, securityRoot, security, selected);
+    for (const malformed of ['missing', 'extra', 'type', 'length', 'version', 'prototype-key', 'status-length', 'message-extra']) {
+      await runMalformed(browser, origin, securityRoot, security, selected, malformed);
+    }
     const common = { testedRevision, testedTree, browser: selected, generatedAt: new Date().toISOString() };
     fs.writeFileSync(path.join(outputRoot, `${selected}-manifest.json`), JSON.stringify({ ...common, kind: 'ordinary-final-green', screenshots: ordinary }, null, 2) + '\n');
     fs.writeFileSync(path.join(securityRoot, `${selected}-manifest.json`), JSON.stringify({ ...common, kind: 'hostile-security', screenshots: security }, null, 2) + '\n');

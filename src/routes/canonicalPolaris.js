@@ -16,7 +16,9 @@ const {
   validateMessageRequest,
 } = require('../polaris/assistantContract');
 const {
+  createIdempotencyRegistry,
   executeIntercepted,
+  executeIdempotentMessage,
   statusForRuntime,
 } = require('../polaris/assistantRuntime');
 const { sha256, stableStringify, stableValue } = require('../services/businessProfileAdapter');
@@ -751,6 +753,7 @@ function createDependencies(options) {
     operatorTargetDirectory: supplied.operatorTargetDirectory || loadSchedulingOperatorTargetPage,
     assistantContextLoader: supplied.assistantContextLoader || getCanonicalGraph,
     assistantRuntime: supplied.assistantRuntime || null,
+    assistantIdempotency: supplied.assistantIdempotency || createIdempotencyRegistry(),
   };
 }
 
@@ -939,28 +942,27 @@ function createCanonicalRouter(options) {
           }
         }
         const context = requestContext(req);
-        let localContext = null;
-        if (request.selected) {
-          const item = await dependencies.assistantContextLoader(
-            resolvePool(dependencies.poolProvider), context, request.selected.id
-          );
-          if (!item || !selectedMatchesItem(item, request.selected)) {
-            const notFound = new Error('The selected record was not found in the current organization.');
-            notFound.code = 'POLARIS_SELECTED_RECORD_NOT_FOUND';
-            notFound.statusCode = 404;
-            throw notFound;
-          }
-          localContext = buildContextResponse(item, request.selected, {
-            organizationId: context.organizationId,
-            userId: context.userId,
-            role,
-          }, request.idempotencyKey);
-        }
-        const data = await executeIntercepted(dependencies.assistantRuntime, request, {
+        const authority = {
           organizationId: context.organizationId,
           userId: context.userId,
           role,
-        }, localContext);
+        };
+        const data = await executeIdempotentMessage(dependencies.assistantIdempotency, request, authority, async function () {
+          let localContext = null;
+          if (request.selected) {
+            const item = await dependencies.assistantContextLoader(
+              resolvePool(dependencies.poolProvider), context, request.selected.id
+            );
+            if (!item || !selectedMatchesItem(item, request.selected)) {
+              const notFound = new Error('The selected record was not found in the current organization.');
+              notFound.code = 'POLARIS_SELECTED_RECORD_NOT_FOUND';
+              notFound.statusCode = 404;
+              throw notFound;
+            }
+            localContext = buildContextResponse(item, request.selected, authority, request.idempotencyKey);
+          }
+          return executeIntercepted(dependencies.assistantRuntime, request, authority, localContext);
+        });
         return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
       } catch (_error) {
         return handleEndpointError(res, _error, req);

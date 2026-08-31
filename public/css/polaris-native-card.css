@@ -33,6 +33,15 @@
 .polaris-native-card-empty { margin: 0; line-height: 1.55; overflow-wrap: anywhere; }
 .polaris-native-card-basis,
 .polaris-native-card-empty { margin-top: 4px; color: var(--neutral-600); font-size: 12px; }
+.polaris-native-card-error {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--warning);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 10%, var(--theme-surface, #fff));
+  color: var(--theme-text, var(--neutral-900));
+  line-height: 1.5;
+}
 .polaris-native-card-list { display: grid; gap: 7px; margin: 0; padding-left: 20px; }
 .polaris-native-card-evidence { padding-left: 2px; overflow-wrap: anywhere; }
 .polaris-native-card-label { font-weight: 700; }

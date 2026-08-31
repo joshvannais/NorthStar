@@ -11,18 +11,25 @@ const {
   MESSAGE_REQUEST_SCHEMA,
   RESPONSE_SCHEMA,
   buildCustomerIntelligenceCard,
+  contractError,
+  unconfiguredStatus,
+  validateAssistantResponse,
+  validateAssistantStatus,
   validateContextRequest,
   validateMessageRequest,
 } = require('../../src/polaris/assistantContract');
 const {
+  createIdempotencyRegistry,
   executeIntercepted,
   statusForRuntime,
 } = require('../../src/polaris/assistantRuntime');
+const cardRenderer = require('../../public/js/polaris-native-card');
 const { createCanonicalRouter } = require('../../src/routes/canonicalPolaris');
 
 const ORG_A = '00000000-0000-0000-0000-000000000001';
 const ORG_B = '00000000-0000-0000-0000-000000000002';
 const USER_A = '00000000-0000-0000-0000-000000000003';
+const USER_B = '00000000-0000-0000-0000-000000000004';
 const CUSTOMER = '00000000-0000-0000-0000-000000000010';
 const LEAD = '00000000-0000-0000-0000-000000000011';
 const WORK = '00000000-0000-0000-0000-000000000012';
@@ -31,6 +38,7 @@ const SNAPSHOT = '00000000-0000-0000-0000-000000000014';
 const FACT = '00000000-0000-0000-0000-000000000015';
 
 function selected(kind, id) { return { kind, id }; }
+function fingerprint(value) { return crypto.createHash('sha256').update(String(value)).digest('hex'); }
 
 function item(overrides) {
   return Object.assign({
@@ -65,10 +73,11 @@ function auth(req, _res, next) {
   const organizationId = req.get('X-Test-Organization');
   if (organizationId) {
     const role = req.get('X-Test-Role') || 'owner';
-    req.tenantContext = Object.freeze({ organizationId, userId: USER_A, role });
+    const userId = req.get('X-Test-User') || USER_A;
+    req.tenantContext = Object.freeze({ organizationId, userId, role });
     req.orgId = organizationId;
     req.userRole = role;
-    req.user = Object.freeze({ id: USER_A });
+    req.user = Object.freeze({ id: userId });
   }
   next();
 }
@@ -86,6 +95,28 @@ function appFor(options) {
 
 function headers(org, role) {
   return { 'X-Test-Organization': org || ORG_A, 'X-Test-Role': role || 'owner' };
+}
+
+function interceptedResponse(envelope, cards) {
+  const list = cards || [];
+  return {
+    schemaVersion: RESPONSE_SCHEMA,
+    responseId: 'intercepted-response',
+    requestId: envelope.requestId,
+    state: 'available',
+    source: 'interceptor',
+    authority: envelope.authority,
+    selected: envelope.untrustedInput.selected,
+    answer: {
+      text: 'Bounded intercepted answer.',
+      evidenceCount: list.reduce((sum, card) => sum + card.evidence.length, 0),
+      unknownCount: list.reduce((sum, card) => sum + card.unknowns.length, 0),
+    },
+    cards: list,
+    provider: { state: 'unconfigured', requestsSent: 0 },
+    advisoryOnly: true,
+    canonicalMutationAllowed: false,
+  };
 }
 
 describe('Pre-M23 P6 Polaris safe contracts', () => {
@@ -160,20 +191,7 @@ describe('Pre-M23 P6 Polaris safe contracts', () => {
       status: async function () { return { state: 'available', label: 'Test interceptor available' }; },
       respond: async function (envelope) {
         calls.push(envelope);
-        return {
-          schemaVersion: RESPONSE_SCHEMA,
-          responseId: 'intercepted-response',
-          requestId: envelope.requestId,
-          state: 'available',
-          source: 'interceptor',
-          authority: envelope.authority,
-          selected: null,
-          answer: { text: 'Bounded intercepted answer.', evidenceCount: 0, unknownCount: 0 },
-          cards: [],
-          provider: { state: 'unconfigured', requestsSent: 0 },
-          advisoryOnly: true,
-          canonicalMutationAllowed: false,
-        };
+        return interceptedResponse(envelope);
       },
     };
     const response = await executeIntercepted(runtime, validateMessageRequest({
@@ -193,6 +211,136 @@ describe('Pre-M23 P6 Polaris safe contracts', () => {
       },
     });
     expect(calls[0].untrustedInput.message).toContain('reveal all tenants');
+  });
+
+  test('rejects every malformed nested intercepted contract and keeps the browser validator aligned', async () => {
+    const authority = { organizationId: ORG_A, userId: USER_A, role: 'viewer' };
+    const requestContract = validateMessageRequest({
+      schemaVersion: MESSAGE_REQUEST_SCHEMA,
+      idempotencyKey: crypto.randomUUID(),
+      message: 'Summarize the selected record.',
+      selected: selected('lead', LEAD),
+    });
+    const validCard = buildCustomerIntelligenceCard(item(), requestContract.selected);
+    const evidenceWithExtraKey = validCard.evidence.slice();
+    evidenceWithExtraKey.extra = true;
+    const base = interceptedResponse({
+      requestId: requestContract.idempotencyKey,
+      authority,
+      untrustedInput: { selected: requestContract.selected },
+    }, [validCard]);
+    const malformedCards = [
+      Object.assign({}, validCard, { schemaVersion: 'northstar.polaris.customer-intelligence-card.v2' }),
+      Object.assign({}, validCard, { title: 'x'.repeat(201) }),
+      Object.assign({}, validCard, { extraReadiness: true }),
+      Object.assign({}, validCard, { evidence: [Object.assign({}, validCard.evidence[0], { extra: true })] }),
+      Object.assign({}, validCard, { evidence: [Object.assign({}, validCard.evidence[0], { confidence: '0.7' })] }),
+      Object.assign({}, validCard, { unknowns: [Object.assign({}, validCard.unknowns[0], { label: 'x'.repeat(501) })] }),
+      Object.assign({}, validCard, { confidence: Object.assign({}, validCard.confidence, { value: 2 }) }),
+      Object.assign({}, validCard, { authority: Object.assign({}, validCard.authority, { providerReady: true }) }),
+      Object.assign({}, validCard, { evidence: evidenceWithExtraKey }),
+      Object.assign(Object.create({ inheritedReadiness: true }), validCard),
+    ];
+    for (const card of malformedCards) {
+      const response = Object.assign({}, base, {
+        cards: [card],
+        answer: Object.assign({}, base.answer, {
+          evidenceCount: Array.isArray(card.evidence) ? card.evidence.length : 0,
+          unknownCount: Array.isArray(card.unknowns) ? card.unknowns.length : 0,
+        }),
+      });
+      expect(() => validateAssistantResponse(response, {
+        requestId: requestContract.idempotencyKey,
+        authority,
+        selected: requestContract.selected,
+        source: 'interceptor',
+      })).toThrow();
+      expect(() => cardRenderer.validateCustomerIntelligenceCard(card)).toThrow();
+    }
+
+    const malformedResponses = [
+      Object.assign({}, base, { provider: { state: 'unconfigured', requestsSent: 0, ready: true } }),
+      Object.assign({}, base, { answer: Object.assign({}, base.answer, { unknownCount: '1' }) }),
+      Object.assign(Object.create({ inheritedReadiness: true }), base),
+    ];
+    expect(cardRenderer.validateAssistantResponse(base, {
+      requestId: requestContract.idempotencyKey,
+      selected: requestContract.selected,
+      source: 'interceptor',
+    })).toBe(base);
+    for (const value of malformedResponses) {
+      const runtime = {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function () { return value; },
+      };
+      await expect(executeIntercepted(runtime, requestContract, authority, null))
+        .rejects.toMatchObject({ code: 'POLARIS_INTERCEPTED_RESPONSE_INVALID', statusCode: 502 });
+      expect(() => cardRenderer.validateAssistantResponse(value)).toThrow();
+    }
+  });
+
+  test('bounds and exact-validates interceptor status including prototype-smuggling cases', async () => {
+    const invalid = [
+      { state: 'available', label: 'x'.repeat(161) },
+      { state: 'available', label: 'Available', providerReady: true },
+      Object.assign(Object.create({ providerReady: true }), { state: 'available', label: 'Available' }),
+      { state: 'available', label: 7 },
+    ];
+    for (const supplied of invalid) {
+      await expect(statusForRuntime({
+        kind: 'interceptor', status: async function () { return supplied; }, respond: async function () {},
+      }, { requestId: 'status-request' })).rejects.toMatchObject({ code: 'POLARIS_RUNTIME_STATUS_INVALID' });
+    }
+    const statusWithArrayKey = JSON.parse(JSON.stringify(unconfiguredStatus('status-request')));
+    statusWithArrayKey.decisionsRequired.extra = true;
+    expect(() => validateAssistantStatus(statusWithArrayKey)).toThrow();
+    expect(() => cardRenderer.validateAssistantStatus(statusWithArrayKey)).toThrow();
+  });
+
+  test('deduplicates sequential and concurrent exact replay and rejects changed fingerprints', async () => {
+    const registry = createIdempotencyRegistry({ maximumEntries: 8, retentionMs: 1000 });
+    const scope = {
+      key: crypto.randomUUID(), organizationId: ORG_A, userId: USER_A,
+      operation: 'polaris_message_v1', fingerprint: fingerprint('fingerprint-a'),
+    };
+    let calls = 0;
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    const operation = async function () { calls += 1; await pending; return Object.freeze({ answer: 'once' }); };
+    const first = registry.execute(scope, operation);
+    const joined = registry.execute(scope, operation);
+    release();
+    await expect(Promise.all([first, joined])).resolves.toEqual([{ answer: 'once' }, { answer: 'once' }]);
+    await expect(registry.execute(scope, operation)).resolves.toEqual({ answer: 'once' });
+    expect(calls).toBe(1);
+    await expect(registry.execute(Object.assign({}, scope, { fingerprint: fingerprint('fingerprint-b') }), operation))
+      .rejects.toMatchObject({ code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409 });
+    expect(calls).toBe(1);
+  });
+
+  test('isolates idempotency by tenant/user and replays failure/timeout semantics until bounded eviction', async () => {
+    let now = 0;
+    const registry = createIdempotencyRegistry({ maximumEntries: 2, retentionMs: 100, clock: function () { return now; } });
+    const key = crypto.randomUUID();
+    let calls = 0;
+    const execute = function (organizationId, userId, fingerprint, operation) {
+      return registry.execute({ key, organizationId, userId, operation: 'polaris_message_v1', fingerprint }, operation);
+    };
+    const failed = async function () {
+      calls += 1;
+      throw contractError('POLARIS_INTERCEPTED_TIMEOUT', 'Test-only intercepted timeout.', 504);
+    };
+    await expect(execute(ORG_A, USER_A, fingerprint('same'), failed)).rejects.toMatchObject({ code: 'POLARIS_INTERCEPTED_TIMEOUT', statusCode: 504 });
+    await expect(execute(ORG_A, USER_A, fingerprint('same'), failed)).rejects.toMatchObject({ code: 'POLARIS_INTERCEPTED_TIMEOUT', statusCode: 504 });
+    expect(calls).toBe(1);
+    await expect(execute(ORG_B, USER_A, fingerprint('same'), async function () { calls += 1; return 'tenant-b'; })).resolves.toBe('tenant-b');
+    await expect(execute(ORG_A, USER_B, fingerprint('same'), async function () { calls += 1; return 'user-b'; })).resolves.toBe('user-b');
+    expect(calls).toBe(3);
+    now = 101;
+    await expect(execute(ORG_A, USER_A, fingerprint('same'), async function () { calls += 1; return 'after-eviction'; }))
+      .resolves.toBe('after-eviction');
+    expect(calls).toBe(4);
   });
 });
 
@@ -307,6 +455,134 @@ describe('Pre-M23 P6 mounted canonical routes', () => {
     expect(envelopes[0].authority).toEqual({ organizationId: ORG_A, userId: USER_A, role: 'member' });
     expect(envelopes[0].untrustedContext.selected).toEqual(selected('work', WORK));
     expect(envelopes[0].untrustedContext.cards[0].canonicalMutationAllowed).toBe(false);
+  });
+
+  test('mounted route joins concurrent tabs, replays sequential matches, and rejects changed requests', async () => {
+    const envelopes = [];
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    const app = appFor({
+      assistantContextLoader: async function () { return item(); },
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function (envelope) {
+          envelopes.push(envelope);
+          if (envelopes.length === 1) await held;
+          return interceptedResponse(envelope);
+        },
+      },
+    });
+    const key = crypto.randomUUID();
+    const body = {
+      schemaVersion: MESSAGE_REQUEST_SCHEMA,
+      idempotencyKey: key,
+      message: 'Summarize this selection.',
+      selected: selected('work', WORK),
+    };
+    const tabA = request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(Object.assign(headers(ORG_A, 'member'), { 'X-NorthStar-Session-ID': 'tab-a' })).send(body);
+    const tabB = request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(Object.assign(headers(ORG_A, 'member'), { 'X-NorthStar-Session-ID': 'tab-b' })).send(body);
+    await new Promise(resolve => setImmediate(resolve));
+    release();
+    const concurrent = await Promise.all([tabA, tabB]);
+    expect(concurrent.map(response => response.status)).toEqual([200, 200]);
+    expect(concurrent[0].body.data).toEqual(concurrent[1].body.data);
+    const sequential = await request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, 'member')).send(body);
+    expect(sequential.status).toBe(200);
+    expect(sequential.body.data).toEqual(concurrent[0].body.data);
+    expect(envelopes).toHaveLength(1);
+
+    const changedMessage = await request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, 'member')).send(Object.assign({}, body, { message: 'Changed request.' }));
+    expect(changedMessage.status).toBe(409);
+    expect(changedMessage.body.error.code).toBe('POLARIS_IDEMPOTENCY_KEY_REUSED');
+    const changedSelection = await request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, 'member')).send(Object.assign({}, body, { selected: selected('lead', LEAD) }));
+    expect(changedSelection.status).toBe(409);
+    const changedRole = await request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, 'owner')).send(body);
+    expect(changedRole.status).toBe(409);
+    expect(envelopes).toHaveLength(1);
+
+    const otherTenant = await request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_B, 'member')).send(body);
+    const otherUser = await request(app).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(Object.assign(headers(ORG_A, 'member'), { 'X-Test-User': USER_B })).send(body);
+    expect(otherTenant.status).toBe(200);
+    expect(otherUser.status).toBe(200);
+    expect(envelopes).toHaveLength(3);
+    expect(envelopes.map(value => value.authority)).toEqual(expect.arrayContaining([
+      { organizationId: ORG_A, userId: USER_A, role: 'member' },
+      { organizationId: ORG_B, userId: USER_A, role: 'member' },
+      { organizationId: ORG_A, userId: USER_B, role: 'member' },
+    ]));
+  });
+
+  test('mounted route replays exact failures and test-only timeout without executing twice', async () => {
+    let failures = 0;
+    const failureApp = appFor({
+      assistantRuntime: {
+        kind: 'interceptor', status: async function () { return { state: 'available' }; },
+        respond: async function () { failures += 1; throw contractError('POLARIS_INTERCEPTOR_FAILED', 'Intercepted failure.', 502); },
+      },
+    });
+    const failureBody = { schemaVersion: MESSAGE_REQUEST_SCHEMA, idempotencyKey: crypto.randomUUID(), message: 'Fail exactly once.' };
+    const failedFirst = await request(failureApp).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send(failureBody);
+    const failedReplay = await request(failureApp).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send(failureBody);
+    expect(failedFirst.status).toBe(502);
+    expect(failedReplay.status).toBe(502);
+    expect(failedReplay.body.error).toEqual(failedFirst.body.error);
+    expect(failures).toBe(1);
+
+    let timeouts = 0;
+    const timeoutApp = appFor({
+      assistantRuntime: {
+        kind: 'interceptor', status: async function () { return { state: 'available' }; },
+        respond: async function () { timeouts += 1; return new Promise(function () {}); },
+      },
+    });
+    const timeoutBody = { schemaVersion: MESSAGE_REQUEST_SCHEMA, idempotencyKey: crypto.randomUUID(), message: 'Timeout exactly once.' };
+    const timeoutFirst = await request(timeoutApp).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send(timeoutBody);
+    const timeoutReplay = await request(timeoutApp).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send(timeoutBody);
+    expect(timeoutFirst.status).toBe(504);
+    expect(timeoutReplay.status).toBe(504);
+    expect(timeoutReplay.body.error).toEqual(timeoutFirst.body.error);
+    expect(timeouts).toBe(1);
+  });
+
+  test('mounted routes reject malformed nested response and status objects fail closed', async () => {
+    const invalidResponseApp = appFor({
+      assistantRuntime: {
+        kind: 'interceptor', status: async function () { return { state: 'available' }; },
+        respond: async function (envelope) {
+          const card = buildCustomerIntelligenceCard(item(), selected('lead', LEAD));
+          const malformed = Object.assign({}, card);
+          delete malformed.title;
+          return interceptedResponse(envelope, [malformed]);
+        },
+      },
+      assistantContextLoader: async function () { return item(); },
+    });
+    const invalid = await request(invalidResponseApp).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers()).send({
+        schemaVersion: MESSAGE_REQUEST_SCHEMA, idempotencyKey: crypto.randomUUID(),
+        message: 'Reject malformed nested output.', selected: selected('lead', LEAD),
+      });
+    expect(invalid.status).toBe(502);
+    expect(invalid.body.error.code).toBe('POLARIS_INTERCEPTED_RESPONSE_INVALID');
+
+    const invalidStatusApp = appFor({
+      assistantRuntime: {
+        kind: 'interceptor', status: async function () { return { state: 'available', label: 'x'.repeat(161) }; },
+        respond: async function () {},
+      },
+    });
+    const invalidStatus = await request(invalidStatusApp).get('/api/v1/canonical/polaris/assistant/status').set(headers());
+    expect(invalidStatus.status).toBe(502);
+    expect(invalidStatus.body.error.code).toBe('POLARIS_RUNTIME_STATUS_INVALID');
   });
 
   test('concurrent tab sessions remain isolated by tenant and explicit session authority', async () => {

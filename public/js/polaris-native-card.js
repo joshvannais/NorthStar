@@ -7,7 +7,191 @@
   'use strict';
 
   var CARD_SCHEMA = 'northstar.polaris.customer-intelligence-card.v1';
+  var RESPONSE_SCHEMA = 'northstar.polaris.assistant-response.v1';
+  var STATUS_SCHEMA = 'northstar.polaris.assistant-status.v1';
+  var PROVIDER_DECISIONS = [
+    'credential_source', 'current_official_documentation_review', 'model', 'budget_and_rate',
+    'timeout_and_retry', 'retention_and_logging', 'user_facing_failure_policy'
+  ];
+  var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var DIGEST = /^[0-9a-f]{64}$/i;
+  var UNKNOWN_CODE = /^[a-z0-9_]{1,100}$/;
   var renderSequence = 0;
+
+  function invalidContract() {
+    throw new Error('Unsupported Polaris structured contract.');
+  }
+
+  function exactObject(value, expected) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
+      return invalidContract();
+    }
+    var keys = Reflect.ownKeys(value);
+    if (keys.some(function (key) { return typeof key !== 'string'; })) return invalidContract();
+    keys.sort();
+    expected = expected.slice().sort();
+    if (keys.length !== expected.length || keys.some(function (key, index) { return key !== expected[index]; })) {
+      return invalidContract();
+    }
+    if (keys.some(function (key) {
+      var descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return !descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value') || descriptor.enumerable !== true;
+    })) return invalidContract();
+    return value;
+  }
+
+  function exactArray(value, maximum) {
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || value.length > maximum) {
+      return invalidContract();
+    }
+    var keys = Reflect.ownKeys(value);
+    var expected = ['length'];
+    for (var index = 0; index < value.length; index += 1) expected.push(String(index));
+    if (keys.some(function (key) { return typeof key !== 'string'; }) || keys.length !== expected.length ||
+        expected.some(function (key) { return keys.indexOf(key) < 0; }) || expected.slice(1).some(function (key) {
+          var descriptor = Object.getOwnPropertyDescriptor(value, key);
+          return !descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value') || descriptor.enumerable !== true;
+        })) return invalidContract();
+    return value;
+  }
+
+  function boundedString(value, minimum, maximum) {
+    return typeof value === 'string' && value.length >= minimum && value.length <= maximum && !/\u0000/.test(value);
+  }
+
+  function selection(value) {
+    var selected = exactObject(value, ['id', 'kind']);
+    if (['customer', 'lead', 'work'].indexOf(selected.kind) < 0 || !boundedString(selected.id, 36, 36) || !UUID.test(selected.id)) {
+      return invalidContract();
+    }
+    return selected;
+  }
+
+  function sameSelection(left, right) {
+    if (!left || !right) return left === right;
+    return left.kind === right.kind && left.id === right.id;
+  }
+
+  function validateEvidence(value) {
+    var entry = exactObject(value, ['confidence', 'id', 'label', 'source', 'untrustedText', 'value']);
+    var source = exactObject(entry.source, ['id', 'kind']);
+    if (!boundedString(entry.id, 1, 128) || !boundedString(entry.label, 1, 100) ||
+        !boundedString(entry.value, 1, 2000) ||
+        !(entry.confidence === null || (typeof entry.confidence === 'number' && Number.isFinite(entry.confidence) &&
+          entry.confidence >= 0 && entry.confidence <= 1)) || entry.untrustedText !== true ||
+        ['canonical_fact', 'deterministic_demo'].indexOf(source.kind) < 0 || !boundedString(source.id, 1, 128)) {
+      return invalidContract();
+    }
+    return entry;
+  }
+
+  function validateUnknown(value) {
+    var entry = exactObject(value, ['code', 'label']);
+    if (typeof entry.code !== 'string' || !UNKNOWN_CODE.test(entry.code) || !boundedString(entry.label, 1, 500)) {
+      return invalidContract();
+    }
+    return entry;
+  }
+
+  function validateConfidence(value) {
+    var confidence = exactObject(value, ['basis', 'level', 'value']);
+    if (!(confidence.value === null || (typeof confidence.value === 'number' && Number.isFinite(confidence.value) &&
+        confidence.value >= 0 && confidence.value <= 1)) ||
+        ['unknown', 'low', 'medium', 'high'].indexOf(confidence.level) < 0 ||
+        !boundedString(confidence.basis, 1, 500) || (confidence.value === null && confidence.level !== 'unknown')) {
+      return invalidContract();
+    }
+    return confidence;
+  }
+
+  function validateCardAuthority(value, expectedSelected) {
+    var authority;
+    if (value && Object.prototype.hasOwnProperty.call(value, 'source')) {
+      authority = exactObject(value, ['selected', 'source']);
+      if (authority.source !== 'deterministic_demo_session') return invalidContract();
+    } else {
+      authority = exactObject(value, [
+        'calculationVersion', 'graphId', 'projectionDigest', 'readModelVersion', 'selected',
+        'snapshotDigest', 'snapshotId'
+      ]);
+      if (!UUID.test(authority.graphId || '') || !UUID.test(authority.snapshotId || '') ||
+          !DIGEST.test(authority.snapshotDigest || '') || !DIGEST.test(authority.projectionDigest || '') ||
+          !boundedString(authority.calculationVersion, 1, 128) || !boundedString(authority.readModelVersion, 1, 128)) {
+        return invalidContract();
+      }
+    }
+    var selected = selection(authority.selected);
+    if (expectedSelected && !sameSelection(selected, expectedSelected)) return invalidContract();
+    return authority;
+  }
+
+  function validateCustomerIntelligenceCard(value, expectedSelected) {
+    var card = exactObject(value, [
+      'advisoryOnly', 'answer', 'authority', 'canonicalMutationAllowed', 'confidence', 'evidence',
+      'kind', 'schemaVersion', 'subtitle', 'title', 'tone', 'unknowns'
+    ]);
+    if (card.schemaVersion !== CARD_SCHEMA || card.kind !== 'customer_intelligence' || card.tone !== 'purple' ||
+        !boundedString(card.title, 1, 200) || !boundedString(card.subtitle, 1, 200) ||
+        !boundedString(card.answer, 1, 2000) || card.advisoryOnly !== true || card.canonicalMutationAllowed !== false) {
+      return invalidContract();
+    }
+    exactArray(card.evidence, 12).forEach(validateEvidence);
+    exactArray(card.unknowns, 12).forEach(validateUnknown);
+    validateConfidence(card.confidence);
+    validateCardAuthority(card.authority, expectedSelected || null);
+    return card;
+  }
+
+  function validateAssistantResponse(value, expected) {
+    expected = expected || {};
+    var response = exactObject(value, [
+      'advisoryOnly', 'answer', 'authority', 'canonicalMutationAllowed', 'cards', 'provider',
+      'requestId', 'responseId', 'schemaVersion', 'selected', 'source', 'state'
+    ]);
+    var authority = exactObject(response.authority, ['organizationId', 'role', 'userId']);
+    var selected = response.selected === null ? null : selection(response.selected);
+    var answer = exactObject(response.answer, ['evidenceCount', 'text', 'unknownCount']);
+    var provider = exactObject(response.provider, ['requestsSent', 'state']);
+    var cards = exactArray(response.cards, 4);
+    if (response.schemaVersion !== RESPONSE_SCHEMA || !boundedString(response.requestId, 1, 128) ||
+        !boundedString(response.responseId, 1, 128) || response.state !== 'available' ||
+        ['canonical_local', 'interceptor'].indexOf(response.source) < 0 ||
+        !UUID.test(authority.organizationId || '') || !UUID.test(authority.userId || '') || !boundedString(authority.role, 1, 64) ||
+        !boundedString(answer.text, 1, 8000) || !Number.isSafeInteger(answer.evidenceCount) ||
+        answer.evidenceCount < 0 || answer.evidenceCount > 48 || !Number.isSafeInteger(answer.unknownCount) ||
+        answer.unknownCount < 0 || answer.unknownCount > 48 || provider.state !== 'unconfigured' ||
+        provider.requestsSent !== 0 || response.advisoryOnly !== true || response.canonicalMutationAllowed !== false ||
+        (!selected && cards.length) || (expected.requestId && response.requestId !== expected.requestId) ||
+        (expected.source && response.source !== expected.source) ||
+        (Object.prototype.hasOwnProperty.call(expected, 'selected') && !sameSelection(selected, expected.selected))) {
+      return invalidContract();
+    }
+    cards.forEach(function (card) { validateCustomerIntelligenceCard(card, selected); });
+    if (answer.evidenceCount !== cards.reduce(function (sum, card) { return sum + card.evidence.length; }, 0) ||
+        answer.unknownCount !== cards.reduce(function (sum, card) { return sum + card.unknowns.length; }, 0)) {
+      return invalidContract();
+    }
+    return response;
+  }
+
+  function validateAssistantStatus(value) {
+    var hasIntercepted = value && Object.prototype.hasOwnProperty.call(value, 'intercepted');
+    var keys = ['decisionsRequired', 'label', 'localCustomerIntelligence', 'providerRequestsEnabled',
+      'providerRequestsSent', 'requestId', 'schemaVersion', 'state'];
+    if (hasIntercepted) keys.push('intercepted');
+    var status = exactObject(value, keys);
+    var decisions = exactArray(status.decisionsRequired, PROVIDER_DECISIONS.length);
+    if (status.schemaVersion !== STATUS_SCHEMA || !boundedString(status.requestId, 1, 128) ||
+        ['local', 'unconfigured', 'error', 'available'].indexOf(status.state) < 0 ||
+        !boundedString(status.label, 1, 160) || status.localCustomerIntelligence !== 'available' ||
+        status.providerRequestsEnabled !== false || status.providerRequestsSent !== 0 ||
+        decisions.length !== PROVIDER_DECISIONS.length || decisions.some(function (entry, index) {
+          return entry !== PROVIDER_DECISIONS[index];
+        }) || (hasIntercepted && status.intercepted !== true)) {
+      return invalidContract();
+    }
+    return status;
+  }
 
   function text(value, fallback) {
     if (value === null || value === undefined || value === '') return fallback || '';
@@ -32,13 +216,7 @@
   }
 
   function assertCard(card) {
-    if (!card || card.schemaVersion !== CARD_SCHEMA || card.kind !== 'customer_intelligence' ||
-        card.tone !== 'purple' || card.advisoryOnly !== true ||
-        card.canonicalMutationAllowed !== false || !Array.isArray(card.evidence) ||
-        !Array.isArray(card.unknowns) || !card.confidence) {
-      throw new Error('Unsupported Polaris customer-intelligence card.');
-    }
-    return card;
+    return validateCustomerIntelligenceCard(card);
   }
 
   function renderCustomerIntelligenceCard(container, rawCard) {
@@ -147,7 +325,12 @@
 
   return {
     CARD_SCHEMA: CARD_SCHEMA,
+    RESPONSE_SCHEMA: RESPONSE_SCHEMA,
+    STATUS_SCHEMA: STATUS_SCHEMA,
     buildDemoCard: buildDemoCard,
-    renderCustomerIntelligenceCard: renderCustomerIntelligenceCard
+    renderCustomerIntelligenceCard: renderCustomerIntelligenceCard,
+    validateAssistantResponse: validateAssistantResponse,
+    validateAssistantStatus: validateAssistantStatus,
+    validateCustomerIntelligenceCard: validateCustomerIntelligenceCard
   };
 });

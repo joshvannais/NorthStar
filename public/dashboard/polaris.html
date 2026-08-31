@@ -693,7 +693,12 @@
             setStatus('unavailable', 'error', 0);
             return;
           }
-          setStatus(payload.data.localCustomerIntelligence, payload.data.state, payload.data.providerRequestsSent);
+          try {
+            var assistantStatus = NorthStarPolarisCard.validateAssistantStatus(payload.data);
+            setStatus(assistantStatus.localCustomerIntelligence, assistantStatus.state, assistantStatus.providerRequestsSent);
+          } catch (_contractError) {
+            setStatus('unavailable', 'error', 0);
+          }
         });
       }
 
@@ -705,13 +710,29 @@
         section.hidden = false;
       }
 
+      function showStructuredContractUnavailable() {
+        var host = document.getElementById('polarisNativeCardHost');
+        var alert = document.createElement('div');
+        alert.className = 'polaris-native-card-error';
+        alert.setAttribute('role', 'alert');
+        alert.textContent = 'Customer intelligence is unavailable because the structured response was rejected. No data was changed.';
+        host.replaceChildren(alert);
+      }
+
       function renderCards(cards) {
         var host = document.getElementById('polarisNativeCardHost');
         if (!window.NorthStarPolarisCard || !Array.isArray(cards) || !cards.length) {
           host.replaceChildren();
-          return;
+          return true;
         }
-        NorthStarPolarisCard.renderCustomerIntelligenceCard(host, cards[0]);
+        try {
+          cards.forEach(function(card) { NorthStarPolarisCard.validateCustomerIntelligenceCard(card); });
+          NorthStarPolarisCard.renderCustomerIntelligenceCard(host, cards[0]);
+          return true;
+        } catch (_contractError) {
+          showStructuredContractUnavailable();
+          return false;
+        }
       }
 
       function renderSelectedContext() {
@@ -735,7 +756,10 @@
               (graph.lead && (graph.lead.serviceLabel || graph.lead.serviceType) || 'Requested work');
             document.getElementById('polarisSelectedContextSummary').textContent =
               graph.lead && (graph.lead.summary || graph.lead.scope) || 'No work scope is recorded.';
-            renderCards([NorthStarPolarisCard.buildDemoCard(graph, activeSelection)]);
+            if (!renderCards([NorthStarPolarisCard.buildDemoCard(graph, activeSelection)])) {
+              document.getElementById('polarisSelectedContextTitle').textContent = 'Selected record unavailable';
+              document.getElementById('polarisSelectedContextSummary').textContent = 'The local structured record was rejected. No fallback record is shown.';
+            }
           }).catch(function() {
             showSelectedUnavailable('The deterministic demo session is unavailable. No fallback record is shown.');
           });
@@ -750,11 +774,19 @@
             showSelectedUnavailable(message || 'The exact selected record could not be loaded for this organization and role.');
             return;
           }
-          var data = payload.data;
-          var card = data.cards && data.cards[0];
-          document.getElementById('polarisSelectedContextTitle').textContent = card && card.title || 'Selected record';
-          document.getElementById('polarisSelectedContextSummary').textContent = data.answer && data.answer.text || 'No answer is recorded.';
-          renderCards(data.cards);
+          try {
+            var data = NorthStarPolarisCard.validateAssistantResponse(payload.data, {
+              source: 'canonical_local',
+              selected: { kind: activeSelection.kind, id: activeSelection.identifier }
+            });
+            var card = data.cards && data.cards[0];
+            document.getElementById('polarisSelectedContextTitle').textContent = card && card.title || 'Selected record';
+            document.getElementById('polarisSelectedContextSummary').textContent = data.answer.text;
+            if (!renderCards(data.cards)) throw new Error('structured_response_rejected');
+          } catch (_contractError) {
+            showSelectedUnavailable('The structured response was rejected. No fallback record is shown.');
+            showStructuredContractUnavailable();
+          }
         });
       }
 
@@ -771,7 +803,7 @@
 
       // ── Rendering ──
 
-      function addMessage(role, text, status) {
+      function addMessage(role, text, status, requestKey, retryText) {
         status = status || 'sent';
         var id = 'msg-' + (++msgCounter);
         var ts = getTimestamp();
@@ -819,14 +851,13 @@
         meta.appendChild(timeEl);
 
         // Retry button for errors
-        if (status === 'error') {
+        if (status === 'error' && retryText) {
           var retryBtn = document.createElement('button');
           retryBtn.className = 'polaris-chat-retry';
           retryBtn.textContent = '↻ Retry';
           retryBtn.setAttribute('aria-label', 'Retry this message');
           retryBtn.addEventListener('click', function() {
-            var userMessage = messages.slice().reverse().find(function(message) { return message.role === 'user'; });
-            if (userMessage) retryLastMessage(userMessage.text);
+            retryLastMessage(retryText, requestKey, id);
           });
           meta.appendChild(retryBtn);
         }
@@ -841,7 +872,8 @@
           role: role,
           text: text,
           timestamp: ts,
-          status: status
+          status: status,
+          idempotencyKey: requestKey || null
         });
 
         // Enforce max
@@ -986,12 +1018,13 @@
           value.slice(16, 20) + '-' + value.slice(20);
       }
 
-      function sendPaidMessage(message) {
+      function sendPaidMessage(message, requestKey) {
         showTyping();
         setLoading(true);
+        var key = requestKey || idempotencyKey();
         var request = {
           schemaVersion: MESSAGE_SCHEMA,
-          idempotencyKey: idempotencyKey(),
+          idempotencyKey: key,
           message: message
         };
         if (activeSelection) request.selected = { kind: activeSelection.kind, id: activeSelection.identifier };
@@ -1000,38 +1033,46 @@
           setLoading(false);
           input.focus();
           if (!error && status >= 200 && status < 300 && payload && payload.data) {
-            var data = payload.data;
-            addMessage('assistant', data.answer && data.answer.text || 'The intercepted runtime returned no displayable answer.', 'sent');
-            if (data.cards && data.cards.length) renderCards(data.cards);
+            try {
+              var data = NorthStarPolarisCard.validateAssistantResponse(payload.data, {
+                requestId: key,
+                source: 'interceptor',
+                selected: activeSelection ? { kind: activeSelection.kind, id: activeSelection.identifier } : null
+              });
+              if (data.cards.length && !renderCards(data.cards)) throw new Error('structured_response_rejected');
+              addMessage('assistant', data.answer.text, 'sent', key);
+            } catch (_contractError) {
+              showStructuredContractUnavailable();
+              addMessage('assistant', 'The intercepted runtime returned an unsupported structured response. No data was changed.', 'error', key, message);
+            }
             return;
           }
           var messageText = payload && payload.error && payload.error.message;
-          addMessage('assistant', messageText || 'Provider-backed conversation is unavailable. Local customer intelligence remains read-only.', 'error');
+          addMessage('assistant', messageText || 'Provider-backed conversation is unavailable. Local customer intelligence remains read-only.', 'error', key, message);
         });
       }
 
       function sendMessage() {
         var message = input.value.trim();
         if (!message || isLoading) return;
-        addMessage('user', message, 'sent');
+        var requestKey = idempotencyKey();
+        addMessage('user', message, 'sent', requestKey);
         input.value = '';
         resetInputHeight();
         if (respondToAccountFreeDemoChat(message)) return;
-        sendPaidMessage(message);
+        sendPaidMessage(message, requestKey);
       }
 
-      function retryLastMessage(text) {
+      function retryLastMessage(text, requestKey, errorId) {
         if (isLoading) return;
         if (respondToAccountFreeDemoChat(text)) return;
-        if (messages.length > 0) {
-          var last = messages[messages.length - 1];
-          if (last.role === 'assistant' && last.status === 'error') {
-            var el = document.getElementById(last.id);
-            if (el) el.remove();
-            messages.pop();
-          }
+        var errorIndex = messages.findIndex(function(message) { return message.id === errorId; });
+        if (errorIndex >= 0 && messages[errorIndex].role === 'assistant' && messages[errorIndex].status === 'error') {
+          var el = document.getElementById(errorId);
+          if (el) el.remove();
+          messages.splice(errorIndex, 1);
         }
-        sendPaidMessage(text);
+        sendPaidMessage(text, requestKey);
       }
 
       function setLoading(loading) {

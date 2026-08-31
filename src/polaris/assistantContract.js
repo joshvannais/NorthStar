@@ -7,7 +7,11 @@ const MESSAGE_REQUEST_SCHEMA = 'northstar.polaris.message-request.v1';
 const RESPONSE_SCHEMA = 'northstar.polaris.assistant-response.v1';
 const CARD_SCHEMA = 'northstar.polaris.customer-intelligence-card.v1';
 const STATUS_SCHEMA = 'northstar.polaris.assistant-status.v1';
+const MESSAGE_OPERATION = 'polaris_message_v1';
+const MAX_STATUS_LABEL = 160;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DIGEST = /^[0-9a-f]{64}$/i;
+const UNKNOWN_CODE = /^[a-z0-9_]{1,100}$/;
 const SELECTIONS = Object.freeze({
   customer: Object.freeze({ idKey: 'customer', resource: 'leads' }),
   lead: Object.freeze({ idKey: 'opportunity', resource: 'leads' }),
@@ -31,15 +35,55 @@ function contractError(code, message, statusCode = 400) {
 }
 
 function exactKeys(value, keys, code, label) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  const prototype = value && typeof value === 'object' ? Object.getPrototypeOf(value) : null;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || prototype !== Object.prototype) {
     throw contractError(code, `${label} must be an object.`);
   }
-  const actual = Object.keys(value).sort();
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.some(key => typeof key !== 'string')) {
+    throw contractError(code, `${label} contains unsupported or missing fields.`);
+  }
+  const actual = ownKeys.sort();
   const expected = keys.slice().sort();
   if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
     throw contractError(code, `${label} contains unsupported or missing fields.`);
   }
+  if (actual.some(key => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return !descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value') || descriptor.enumerable !== true;
+  })) {
+    throw contractError(code, `${label} contains unsupported fields.`);
+  }
   return value;
+}
+
+function exactArray(value, maximum, code, label) {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || value.length > maximum) {
+    throw contractError(code, `${label} must be a bounded array.`);
+  }
+  const actual = Reflect.ownKeys(value);
+  const expected = ['length', ...Array.from({ length: value.length }, (_unused, index) => String(index))];
+  if (actual.some(key => typeof key !== 'string') || actual.length !== expected.length ||
+      expected.some(key => !actual.includes(key)) || expected.slice(1).some(key => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        return !descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value') || descriptor.enumerable !== true;
+      })) {
+    throw contractError(code, `${label} must be an exact bounded array.`);
+  }
+  return value;
+}
+
+function textWithin(value, minimum, maximum) {
+  return typeof value === 'string' && value.length >= minimum && value.length <= maximum && !/\u0000/.test(value);
+}
+
+function uuidWithin(value) {
+  return typeof value === 'string' && UUID.test(value);
+}
+
+function sameSelection(left, right) {
+  if (!left || !right) return left === right;
+  return left.kind === right.kind && left.id === right.id;
 }
 
 function validateSelection(raw) {
@@ -80,6 +124,166 @@ function validateMessageRequest(body) {
     message: request.message,
     selected: request.selected ? validateSelection(request.selected) : null,
   });
+}
+
+function validateEvidence(raw, code, label) {
+  const evidence = exactKeys(raw, ['confidence', 'id', 'label', 'source', 'untrustedText', 'value'], code, label);
+  const source = exactKeys(evidence.source, ['id', 'kind'], code, `${label}.source`);
+  if (!textWithin(evidence.id, 1, 128) || !textWithin(evidence.label, 1, 100) ||
+      !textWithin(evidence.value, 1, 2000) ||
+      !(evidence.confidence === null || (typeof evidence.confidence === 'number' &&
+        Number.isFinite(evidence.confidence) && evidence.confidence >= 0 && evidence.confidence <= 1)) ||
+      evidence.untrustedText !== true || source.kind !== 'canonical_fact' || !textWithin(source.id, 1, 128)) {
+    throw contractError(code, `${label} is invalid.`);
+  }
+  return evidence;
+}
+
+function validateUnknown(raw, code, label) {
+  const unknown = exactKeys(raw, ['code', 'label'], code, label);
+  if (typeof unknown.code !== 'string' || !UNKNOWN_CODE.test(unknown.code) || !textWithin(unknown.label, 1, 500)) {
+    throw contractError(code, `${label} is invalid.`);
+  }
+  return unknown;
+}
+
+function validateConfidence(raw, code, label) {
+  const confidence = exactKeys(raw, ['basis', 'level', 'value'], code, label);
+  if (!(confidence.value === null || (typeof confidence.value === 'number' && Number.isFinite(confidence.value) &&
+      confidence.value >= 0 && confidence.value <= 1)) ||
+      !['unknown', 'low', 'medium', 'high'].includes(confidence.level) || !textWithin(confidence.basis, 1, 500) ||
+      (confidence.value === null && confidence.level !== 'unknown')) {
+    throw contractError(code, `${label} is invalid.`);
+  }
+  return confidence;
+}
+
+function validateCardAuthority(raw, expectedSelected, code, label) {
+  const authority = exactKeys(raw, [
+    'calculationVersion', 'graphId', 'projectionDigest', 'readModelVersion', 'selected',
+    'snapshotDigest', 'snapshotId',
+  ], code, label);
+  const selected = validateSelection(authority.selected);
+  if (!uuidWithin(authority.graphId) || !uuidWithin(authority.snapshotId) ||
+      typeof authority.snapshotDigest !== 'string' || !DIGEST.test(authority.snapshotDigest) ||
+      typeof authority.projectionDigest !== 'string' || !DIGEST.test(authority.projectionDigest) ||
+      !textWithin(authority.calculationVersion, 1, 128) || !textWithin(authority.readModelVersion, 1, 128) ||
+      (expectedSelected && !sameSelection(selected, expectedSelected))) {
+    throw contractError(code, `${label} is invalid.`);
+  }
+  return authority;
+}
+
+function validateCustomerIntelligenceCard(raw, options = {}) {
+  const code = options.code || 'POLARIS_INTERCEPTED_RESPONSE_INVALID';
+  const label = options.label || 'card';
+  const card = exactKeys(raw, [
+    'advisoryOnly', 'answer', 'authority', 'canonicalMutationAllowed', 'confidence', 'evidence',
+    'kind', 'schemaVersion', 'subtitle', 'title', 'tone', 'unknowns',
+  ], code, label);
+  if (card.schemaVersion !== CARD_SCHEMA || card.kind !== 'customer_intelligence' || card.tone !== 'purple' ||
+      !textWithin(card.title, 1, 200) || !textWithin(card.subtitle, 1, 200) || !textWithin(card.answer, 1, 2000) ||
+      card.advisoryOnly !== true || card.canonicalMutationAllowed !== false) {
+    throw contractError(code, `${label} is invalid.`);
+  }
+  exactArray(card.evidence, 12, code, `${label}.evidence`).forEach((entry, index) =>
+    validateEvidence(entry, code, `${label}.evidence[${index}]`));
+  exactArray(card.unknowns, 12, code, `${label}.unknowns`).forEach((entry, index) =>
+    validateUnknown(entry, code, `${label}.unknowns[${index}]`));
+  validateConfidence(card.confidence, code, `${label}.confidence`);
+  validateCardAuthority(card.authority, options.selected || null, code, `${label}.authority`);
+  return card;
+}
+
+function validateResponseAuthority(raw, code) {
+  const authority = exactKeys(raw, ['organizationId', 'role', 'userId'], code, 'response.authority');
+  if (!uuidWithin(authority.organizationId) || !uuidWithin(authority.userId) || !textWithin(authority.role, 1, 64)) {
+    throw contractError(code, 'response.authority is invalid.');
+  }
+  return authority;
+}
+
+function validateAssistantResponse(raw, expected = {}) {
+  const code = 'POLARIS_INTERCEPTED_RESPONSE_INVALID';
+  const response = exactKeys(raw, [
+    'advisoryOnly', 'answer', 'authority', 'canonicalMutationAllowed', 'cards', 'provider',
+    'requestId', 'responseId', 'schemaVersion', 'selected', 'source', 'state',
+  ], code, 'response');
+  const authority = validateResponseAuthority(response.authority, code);
+  const selected = response.selected === null ? null : validateSelection(response.selected);
+  const answer = exactKeys(response.answer, ['evidenceCount', 'text', 'unknownCount'], code, 'response.answer');
+  const provider = exactKeys(response.provider, ['requestsSent', 'state'], code, 'response.provider');
+  const cards = exactArray(response.cards, 4, code, 'response.cards');
+  if (response.schemaVersion !== RESPONSE_SCHEMA || !textWithin(response.requestId, 1, 128) ||
+      !textWithin(response.responseId, 1, 128) || response.state !== 'available' ||
+      !['canonical_local', 'interceptor'].includes(response.source) || !textWithin(answer.text, 1, 8000) ||
+      !Number.isSafeInteger(answer.evidenceCount) || answer.evidenceCount < 0 || answer.evidenceCount > 48 ||
+      !Number.isSafeInteger(answer.unknownCount) || answer.unknownCount < 0 || answer.unknownCount > 48 ||
+      provider.state !== 'unconfigured' || provider.requestsSent !== 0 ||
+      response.advisoryOnly !== true || response.canonicalMutationAllowed !== false ||
+      (expected.requestId && response.requestId !== expected.requestId) ||
+      (expected.source && response.source !== expected.source) ||
+      (Object.prototype.hasOwnProperty.call(expected, 'selected') && !sameSelection(selected, expected.selected)) ||
+      (expected.authority && (authority.organizationId !== expected.authority.organizationId ||
+        authority.userId !== expected.authority.userId || authority.role !== expected.authority.role))) {
+    throw contractError(code, 'Intercepted runtime returned an invalid assistant response.', 502);
+  }
+  if (!selected && cards.length) {
+    throw contractError(code, 'A customer-intelligence card requires one exact selected record.', 502);
+  }
+  cards.forEach((card, index) => validateCustomerIntelligenceCard(card, {
+    code, label: `response.cards[${index}]`, selected,
+  }));
+  const evidenceCount = cards.reduce((sum, card) => sum + card.evidence.length, 0);
+  const unknownCount = cards.reduce((sum, card) => sum + card.unknowns.length, 0);
+  if (answer.evidenceCount !== evidenceCount || answer.unknownCount !== unknownCount) {
+    throw contractError(code, 'Assistant response counts do not match the bounded cards.', 502);
+  }
+  return response;
+}
+
+function validateRuntimeStatusInput(raw) {
+  const code = 'POLARIS_RUNTIME_STATUS_INVALID';
+  const keys = raw && Object.prototype.hasOwnProperty.call(raw, 'label') ? ['label', 'state'] : ['state'];
+  const status = exactKeys(raw, keys, code, 'intercepted status');
+  if (!['local', 'unconfigured', 'error', 'available'].includes(status.state) ||
+      (Object.prototype.hasOwnProperty.call(status, 'label') && !textWithin(status.label, 1, MAX_STATUS_LABEL))) {
+    throw contractError(code, 'Intercepted runtime returned an invalid status.', 502);
+  }
+  return status;
+}
+
+function validateAssistantStatus(raw) {
+  const code = 'POLARIS_RUNTIME_STATUS_INVALID';
+  const keys = raw && Object.prototype.hasOwnProperty.call(raw, 'intercepted')
+    ? ['decisionsRequired', 'intercepted', 'label', 'localCustomerIntelligence', 'providerRequestsEnabled',
+      'providerRequestsSent', 'requestId', 'schemaVersion', 'state']
+    : ['decisionsRequired', 'label', 'localCustomerIntelligence', 'providerRequestsEnabled',
+      'providerRequestsSent', 'requestId', 'schemaVersion', 'state'];
+  const status = exactKeys(raw, keys, code, 'assistant status');
+  const decisions = exactArray(status.decisionsRequired, PROVIDER_DECISIONS.length, code, 'assistant status decisions');
+  if (status.schemaVersion !== STATUS_SCHEMA || !textWithin(status.requestId, 1, 128) ||
+      !['local', 'unconfigured', 'error', 'available'].includes(status.state) ||
+      !textWithin(status.label, 1, MAX_STATUS_LABEL) || status.localCustomerIntelligence !== 'available' ||
+      status.providerRequestsEnabled !== false || status.providerRequestsSent !== 0 ||
+      decisions.length !== PROVIDER_DECISIONS.length || decisions.some((value, index) => value !== PROVIDER_DECISIONS[index]) ||
+      (Object.prototype.hasOwnProperty.call(status, 'intercepted') && status.intercepted !== true)) {
+    throw contractError(code, 'Assistant status is invalid.', 502);
+  }
+  return status;
+}
+
+function messageRequestFingerprint(request, authority) {
+  const selected = request.selected ? { id: request.selected.id.toLowerCase(), kind: request.selected.kind } : null;
+  return crypto.createHash('sha256').update(JSON.stringify({
+    operation: MESSAGE_OPERATION,
+    organizationId: authority.organizationId.toLowerCase(),
+    userId: authority.userId.toLowerCase(),
+    role: authority.role,
+    schemaVersion: request.schemaVersion,
+    message: request.message,
+    selected,
+  })).digest('hex');
 }
 
 function boundedText(value, maximum = 500) {
@@ -191,7 +395,7 @@ function responseId(requestId, card) {
 
 function buildContextResponse(item, selected, authority, requestId) {
   const card = buildCustomerIntelligenceCard(item, selected);
-  return Object.freeze({
+  const response = Object.freeze({
     schemaVersion: RESPONSE_SCHEMA,
     responseId: responseId(requestId, card),
     requestId,
@@ -213,6 +417,8 @@ function buildContextResponse(item, selected, authority, requestId) {
     advisoryOnly: true,
     canonicalMutationAllowed: false,
   });
+  validateAssistantResponse(response, { requestId, authority, selected, source: 'canonical_local' });
+  return response;
 }
 
 function unconfiguredStatus(requestId) {
@@ -231,6 +437,8 @@ function unconfiguredStatus(requestId) {
 module.exports = {
   CARD_SCHEMA,
   CONTEXT_REQUEST_SCHEMA,
+  MAX_STATUS_LABEL,
+  MESSAGE_OPERATION,
   MESSAGE_REQUEST_SCHEMA,
   PROVIDER_DECISIONS,
   RESPONSE_SCHEMA,
@@ -240,8 +448,13 @@ module.exports = {
   buildContextResponse,
   buildCustomerIntelligenceCard,
   contractError,
+  messageRequestFingerprint,
   selectedMatchesItem,
   unconfiguredStatus,
+  validateAssistantResponse,
+  validateAssistantStatus,
   validateContextRequest,
+  validateCustomerIntelligenceCard,
   validateMessageRequest,
+  validateRuntimeStatusInput,
 };

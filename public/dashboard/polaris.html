@@ -727,7 +727,7 @@
         }
         try {
           cards.forEach(function(card) { NorthStarPolarisCard.validateCustomerIntelligenceCard(card); });
-          NorthStarPolarisCard.renderCustomerIntelligenceCard(host, cards[0]);
+          NorthStarPolarisCard.renderCustomerIntelligenceCards(host, cards);
           return true;
         } catch (_contractError) {
           showStructuredContractUnavailable();

@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const http = require('http');
 const express = require('express');
 const request = require('supertest');
 const {
@@ -19,6 +20,7 @@ const {
   validateMessageRequest,
 } = require('../../src/polaris/assistantContract');
 const {
+  INTERCEPTED_TIMEOUT_MS,
   createIdempotencyRegistry,
   executeIntercepted,
   statusForRuntime,
@@ -106,7 +108,7 @@ function interceptedResponse(envelope, cards) {
     state: 'available',
     source: 'interceptor',
     authority: envelope.authority,
-    selected: envelope.untrustedInput.selected,
+    selected: envelope.untrustedInput.selected || null,
     answer: {
       text: 'Bounded intercepted answer.',
       evidenceCount: list.reduce((sum, card) => sum + card.evidence.length, 0),
@@ -342,6 +344,101 @@ describe('Pre-M23 P6 Polaris safe contracts', () => {
       .resolves.toBe('after-eviction');
     expect(calls).toBe(4);
   });
+
+  test.each([
+    ['NaN', [0, Number.NaN, 1, 2]],
+    ['positive infinity', [0, Number.POSITIVE_INFINITY, 1, 2]],
+    ['negative infinity', [0, Number.NEGATIVE_INFINITY, 1, 2]],
+    ['negative settlement', [0, -1, 1, 2]],
+    ['regressive settlement', [10, 9, 11, 12]],
+    ['overflowing expiry', [Number.MAX_SAFE_INTEGER - 2, Number.MAX_SAFE_INTEGER - 1]],
+  ])('fails closed and releases capacity for an invalid fulfillment clock: %s', async (_label, values) => {
+    let cursor = 0;
+    const registry = createIdempotencyRegistry({
+      maximumEntries: 1,
+      retentionMs: 10,
+      clock: function () { return values[cursor++]; },
+    });
+    const scope = {
+      key: crypto.randomUUID(), organizationId: ORG_A, userId: USER_A,
+      operation: 'polaris_message_v1', fingerprint: fingerprint('invalid-fulfillment-clock'),
+    };
+    await expect(registry.execute(scope, async function () { return 'must-not-be-retained'; }))
+      .rejects.toMatchObject({ code: 'POLARIS_IDEMPOTENCY_CLOCK_INVALID', statusCode: 500 });
+    if (values.length > 2) {
+      const recoveryScope = Object.assign({}, scope, {
+        key: crypto.randomUUID(), fingerprint: fingerprint(`fulfillment-recovery-${_label}`),
+      });
+      await expect(registry.execute(recoveryScope, async function () { return 'recovered'; })).resolves.toBe('recovered');
+      expect(cursor).toBe(4);
+    } else {
+      expect(cursor).toBe(2);
+    }
+  });
+
+  test.each([
+    ['NaN', [0, Number.NaN, 1, 2]],
+    ['positive infinity', [0, Number.POSITIVE_INFINITY, 1, 2]],
+    ['negative settlement', [0, -1, 1, 2]],
+    ['regressive settlement', [10, 9, 11, 12]],
+    ['overflowing expiry', [Number.MAX_SAFE_INTEGER - 2, Number.MAX_SAFE_INTEGER - 1]],
+  ])('fails closed and releases capacity for an invalid rejection clock: %s', async (_label, values) => {
+    let cursor = 0;
+    const registry = createIdempotencyRegistry({
+      maximumEntries: 1,
+      retentionMs: 10,
+      clock: function () { return values[cursor++]; },
+    });
+    const scope = {
+      key: crypto.randomUUID(), organizationId: ORG_A, userId: USER_A,
+      operation: 'polaris_message_v1', fingerprint: fingerprint('invalid-rejection-clock'),
+    };
+    await expect(registry.execute(scope, async function () { throw new Error('original failure'); }))
+      .rejects.toMatchObject({ code: 'POLARIS_IDEMPOTENCY_CLOCK_INVALID', statusCode: 500 });
+    if (values.length > 2) {
+      const recoveryScope = Object.assign({}, scope, {
+        key: crypto.randomUUID(), fingerprint: fingerprint(`rejection-recovery-${_label}`),
+      });
+      await expect(registry.execute(recoveryScope, async function () { return 'recovered'; })).resolves.toBe('recovered');
+      expect(cursor).toBe(4);
+    } else {
+      expect(cursor).toBe(2);
+    }
+  });
+
+  test('rejects an invalid start clock before executing or consuming bounded capacity', async () => {
+    const values = [Number.NaN, 0, 1];
+    const registry = createIdempotencyRegistry({
+      maximumEntries: 1,
+      retentionMs: 10,
+      clock: function () { return values.shift(); },
+    });
+    let calls = 0;
+    const firstScope = {
+      key: crypto.randomUUID(), organizationId: ORG_A, userId: USER_A,
+      operation: 'polaris_message_v1', fingerprint: fingerprint('invalid-start'),
+    };
+    await expect(registry.execute(firstScope, async function () { calls += 1; return 'no'; }))
+      .rejects.toMatchObject({ code: 'POLARIS_IDEMPOTENCY_CLOCK_INVALID', statusCode: 500 });
+    const recoveredScope = Object.assign({}, firstScope, {
+      key: crypto.randomUUID(), fingerprint: fingerprint('recovered-start'),
+    });
+    await expect(registry.execute(recoveredScope, async function () { calls += 1; return 'recovered'; }))
+      .resolves.toBe('recovered');
+    expect(calls).toBe(1);
+  });
+
+  test.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects the invalid start clock value %s', async invalid => {
+      const registry = createIdempotencyRegistry({ maximumEntries: 1, retentionMs: 10, clock: function () { return invalid; } });
+      await expect(registry.execute({
+        key: crypto.randomUUID(), organizationId: ORG_A, userId: USER_A,
+        operation: 'polaris_message_v1', fingerprint: fingerprint(`invalid-start-${invalid}`),
+      }, async function () { return 'no'; })).rejects.toMatchObject({
+        code: 'POLARIS_IDEMPOTENCY_CLOCK_INVALID', statusCode: 500,
+      });
+    }
+  );
 });
 
 describe('Pre-M23 P6 mounted canonical routes', () => {
@@ -551,6 +648,178 @@ describe('Pre-M23 P6 mounted canonical routes', () => {
     expect(timeoutReplay.status).toBe(504);
     expect(timeoutReplay.body.error).toEqual(timeoutFirst.body.error);
     expect(timeouts).toBe(1);
+  });
+
+  test.each(['status', 'respond'])('never-settling intercepted %s releases a full idempotency registry after the shared deadline', async phase => {
+    let statusCalls = 0;
+    let respondCalls = 0;
+    let statusAborts = 0;
+    let respondAborts = 0;
+    const never = new Promise(function () {});
+    const runtime = {
+      kind: 'interceptor',
+      status: async function (options) {
+        statusCalls += 1;
+        if (phase === 'status') options.signal.addEventListener('abort', function () { statusAborts += 1; }, { once: true });
+        return phase === 'status' ? never : { state: 'available' };
+      },
+      respond: async function (_envelope, options) {
+        respondCalls += 1;
+        if (phase === 'respond') options.signal.addEventListener('abort', function () { respondAborts += 1; }, { once: true });
+        return phase === 'respond' ? never : null;
+      },
+    };
+    const app = appFor({
+      assistantRuntime: runtime,
+      assistantIdempotency: createIdempotencyRegistry({ maximumEntries: 2, retentionMs: 10 }),
+    });
+    const send = function (key) {
+      return request(app).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send({
+        schemaVersion: MESSAGE_REQUEST_SCHEMA,
+        idempotencyKey: key,
+        message: `Exercise ${phase} deadline.`,
+      }).then(value => value);
+    };
+    const first = send(crypto.randomUUID());
+    const second = send(crypto.randomUUID());
+    await new Promise(resolve => setTimeout(resolve, 25));
+    const atCapacity = await send(crypto.randomUUID());
+    expect(atCapacity.status).toBe(429);
+    const timedOut = await Promise.all([first, second]);
+    expect(timedOut.map(value => value.status)).toEqual([504, 504]);
+    expect(timedOut.map(value => value.body.error.code)).toEqual([
+      'POLARIS_INTERCEPTED_TIMEOUT', 'POLARIS_INTERCEPTED_TIMEOUT',
+    ]);
+    await new Promise(resolve => setTimeout(resolve, INTERCEPTED_TIMEOUT_MS > 10 ? 15 : 1));
+    const recovered = await send(crypto.randomUUID());
+    expect(recovered.status).toBe(504);
+    expect(recovered.body.error.code).toBe('POLARIS_INTERCEPTED_TIMEOUT');
+    expect(statusCalls).toBe(3);
+    expect(respondCalls).toBe(phase === 'respond' ? 3 : 0);
+    expect(statusAborts).toBe(phase === 'status' ? 3 : 0);
+    expect(respondAborts).toBe(phase === 'respond' ? 3 : 0);
+  }, 10000);
+
+  test('client abort settles the pending entry and a one-entry mounted registry recovers', async () => {
+    let respondCalls = 0;
+    let markStarted;
+    let markAborted;
+    const started = new Promise(resolve => { markStarted = resolve; });
+    const aborted = new Promise(resolve => { markAborted = resolve; });
+    const app = appFor({
+      assistantIdempotency: createIdempotencyRegistry({ maximumEntries: 1, retentionMs: 1000 }),
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function (envelope, options) {
+          respondCalls += 1;
+          if (respondCalls === 1) {
+            options.signal.addEventListener('abort', markAborted, { once: true });
+            markStarted();
+            return new Promise(function () {});
+          }
+          return interceptedResponse(envelope);
+        },
+      },
+    });
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
+    try {
+      const body = JSON.stringify({
+        schemaVersion: MESSAGE_REQUEST_SCHEMA,
+        idempotencyKey: crypto.randomUUID(),
+        message: 'Abort this mounted request.',
+      });
+      const clientDone = new Promise(resolve => {
+        const client = http.request({
+          hostname: '127.0.0.1', port: server.address().port,
+          path: '/api/v1/canonical/polaris/assistant/messages', method: 'POST',
+          headers: Object.assign(headers(), {
+            'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body),
+          }),
+        });
+        client.on('error', resolve);
+        client.on('response', response => { response.resume(); response.once('end', resolve); });
+        client.end(body);
+        started.then(() => client.destroy());
+      });
+      await started;
+      await Promise.all([aborted, clientDone]);
+      await new Promise(resolve => setImmediate(resolve));
+      const recovered = await request(app).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send({
+        schemaVersion: MESSAGE_REQUEST_SCHEMA,
+        idempotencyKey: crypto.randomUUID(),
+        message: 'Registry must recover after abort.',
+      });
+      expect(recovered.status).toBe(200);
+      expect(recovered.body.data.answer.text).toBe('Bounded intercepted answer.');
+      expect(respondCalls).toBe(2);
+    } finally {
+      await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  }, 10000);
+
+  test('exact joins consume one bounded slot while distinct concurrent work reaches and recovers from capacity', async () => {
+    let calls = 0;
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    const app = appFor({
+      assistantIdempotency: createIdempotencyRegistry({ maximumEntries: 2, retentionMs: 1000 }),
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function (envelope) {
+          calls += 1;
+          if (calls <= 2) await held;
+          return interceptedResponse(envelope);
+        },
+      },
+    });
+    const exactKey = crypto.randomUUID();
+    const distinctKey = crypto.randomUUID();
+    const send = key => request(app).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send({
+      schemaVersion: MESSAGE_REQUEST_SCHEMA, idempotencyKey: key, message: 'Bounded concurrent request.',
+    }).then(value => value);
+    const exactA = send(exactKey);
+    const exactB = send(exactKey);
+    const distinct = send(distinctKey);
+    await new Promise(resolve => setTimeout(resolve, 25));
+    const atCapacity = await send(crypto.randomUUID());
+    expect(atCapacity.status).toBe(429);
+    release();
+    expect((await Promise.all([exactA, exactB, distinct])).map(value => value.status)).toEqual([200, 200, 200]);
+    expect(calls).toBe(2);
+    const recovered = await send(crypto.randomUUID());
+    expect(recovered.status).toBe(200);
+    expect(calls).toBe(3);
+  }, 10000);
+
+  test('a rejected entry is bounded and evictable at one-entry capacity without changing its exact replay', async () => {
+    let calls = 0;
+    const app = appFor({
+      assistantIdempotency: createIdempotencyRegistry({ maximumEntries: 1, retentionMs: 1000 }),
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function (envelope) {
+          calls += 1;
+          if (calls === 1) throw contractError('POLARIS_INTERCEPTOR_FAILED', 'Bounded rejection.', 502);
+          return interceptedResponse(envelope);
+        },
+      },
+    });
+    const failedKey = crypto.randomUUID();
+    const send = key => request(app).post('/api/v1/canonical/polaris/assistant/messages').set(headers()).send({
+      schemaVersion: MESSAGE_REQUEST_SCHEMA, idempotencyKey: key, message: 'Bounded rejection request.',
+    });
+    const failed = await send(failedKey);
+    const replay = await send(failedKey);
+    expect(failed.status).toBe(502);
+    expect(replay.body.error).toEqual(failed.body.error);
+    expect(calls).toBe(1);
+    const recovered = await send(crypto.randomUUID());
+    expect(recovered.status).toBe(200);
+    expect(calls).toBe(2);
   });
 
   test('mounted routes reject malformed nested response and status objects fail closed', async () => {

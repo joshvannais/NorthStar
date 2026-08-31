@@ -928,6 +928,11 @@ function createCanonicalRouter(options) {
 
   router.post('/polaris/assistant/messages', dependencies.auth, requireCanonicalContext,
     dependencies.permission('ai', 'read'), async function (req, res) {
+      const requestAbort = new AbortController();
+      const abortRequest = function () { requestAbort.abort(); };
+      const abortOnClose = function () { if (!res.writableEnded) requestAbort.abort(); };
+      req.once('aborted', abortRequest);
+      res.once('close', abortOnClose);
       try {
         const request = validateMessageRequest(req.body);
         const role = req.userRole || req.tenantContext.role;
@@ -947,7 +952,7 @@ function createCanonicalRouter(options) {
           userId: context.userId,
           role,
         };
-        const data = await executeIdempotentMessage(dependencies.assistantIdempotency, request, authority, async function () {
+        const data = await executeIdempotentMessage(dependencies.assistantIdempotency, request, authority, async function (signal) {
           let localContext = null;
           if (request.selected) {
             const item = await dependencies.assistantContextLoader(
@@ -961,11 +966,14 @@ function createCanonicalRouter(options) {
             }
             localContext = buildContextResponse(item, request.selected, authority, request.idempotencyKey);
           }
-          return executeIntercepted(dependencies.assistantRuntime, request, authority, localContext);
-        });
+          return executeIntercepted(dependencies.assistantRuntime, request, authority, localContext, { signal });
+        }, { signal: requestAbort.signal });
         return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
       } catch (_error) {
         return handleEndpointError(res, _error, req);
+      } finally {
+        req.removeListener('aborted', abortRequest);
+        res.removeListener('close', abortOnClose);
       }
     });
 

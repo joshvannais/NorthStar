@@ -4,6 +4,10 @@
   margin: 0 0 24px;
 }
 .polaris-native-card-host:empty { display: none; }
+.polaris-native-card-stack {
+  display: grid;
+  gap: 16px;
+}
 .polaris-native-card {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, #7c3aed 62%, var(--neutral-200));

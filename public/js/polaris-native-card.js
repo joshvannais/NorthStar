@@ -280,6 +280,23 @@
     return article;
   }
 
+  function renderCustomerIntelligenceCards(container, rawCards) {
+    var cards = exactArray(rawCards, 4);
+    if (!cards.length) return invalidContract();
+    cards.forEach(function (card) { validateCustomerIntelligenceCard(card); });
+    var stack = child('section', 'polaris-native-card-stack');
+    stack.setAttribute('aria-label', cards.length === 1
+      ? 'Customer intelligence card' : cards.length + ' customer intelligence cards');
+    cards.forEach(function (card, index) {
+      var slot = child('div', 'polaris-native-card-item');
+      slot.setAttribute('data-card-position', String(index + 1));
+      renderCustomerIntelligenceCard(slot, card);
+      stack.appendChild(slot);
+    });
+    container.replaceChildren(stack);
+    return stack;
+  }
+
   function demoEvidence(graph) {
     var entries = [];
     function add(id, label, value) {
@@ -329,6 +346,7 @@
     STATUS_SCHEMA: STATUS_SCHEMA,
     buildDemoCard: buildDemoCard,
     renderCustomerIntelligenceCard: renderCustomerIntelligenceCard,
+    renderCustomerIntelligenceCards: renderCustomerIntelligenceCards,
     validateAssistantResponse: validateAssistantResponse,
     validateAssistantStatus: validateAssistantStatus,
     validateCustomerIntelligenceCard: validateCustomerIntelligenceCard

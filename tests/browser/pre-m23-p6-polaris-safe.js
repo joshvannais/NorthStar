@@ -201,6 +201,22 @@ async function installRoutes(page, state) {
       state.messageCalls += 1;
       const body = JSON.parse(route.request().postData() || '{}');
       state.messageKeys.push(body.idempotencyKey);
+      if (state.rateLimited) return route.fulfill({
+        ...json({
+          error: {
+            code: 'rate_limited',
+            message: 'Rate limit exceeded. Try again in 60 seconds.',
+            details: { retryAfterSeconds: 60, limit: 1000, window: '1m' },
+          },
+        }, 429),
+        headers: {
+          'Cache-Control': 'no-store',
+          'X-RateLimit-Limit': '1000',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': '1788188460',
+          'Retry-After': '60',
+        },
+      });
       if (state.unconfigured) return route.fulfill(json({
         success: false, error: { code: 'POLARIS_PROVIDER_DECISIONS_REQUIRED',
           message: 'Provider-backed conversation remains unavailable pending user decisions.' },
@@ -362,6 +378,36 @@ async function runMalformed(browser, origin, securityRoot, manifest, selected, m
   await context.close();
 }
 
+async function runRateLimited(browser, origin, securityRoot, manifest, selected) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  const state = { external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed: null, unconfigured: false, rateLimited: true };
+  await installRoutes(page, state);
+  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  await page.locator('.polaris-quick-prompt').first().click();
+  await page.getByRole('button', { name: 'Retry this message' }).waitFor({ state: 'visible' });
+  assert.match(await page.locator('.polaris-chat-error .polaris-chat-text').textContent(),
+    /Rate limit exceeded\. Try again in 60 seconds\./);
+  await page.getByRole('button', { name: 'Retry this message' }).click();
+  await page.getByRole('button', { name: 'Retry this message' }).waitFor({ state: 'visible' });
+  assert.strictEqual(state.messageCalls, 2);
+  assert.deepStrictEqual(state.messageKeys, [state.messageKeys[0], state.messageKeys[0]],
+    'rate-limited UI retry must retain the original idempotency key');
+  assert.deepStrictEqual(errors, [], `${selected}-rate-limited page errors`);
+  assert.deepStrictEqual(state.external, [], `${selected}-rate-limited external requests`);
+  const filename = path.join(securityRoot, `${selected}-mobile-dark-rate-limited-retry.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
+    route, viewport: { width: 390, height: 844 }, theme: 'dark',
+    fixture: 'authenticated-rate-limit-429-retry-key-retained' });
+  await context.close();
+}
+
 async function main() {
   const selected = (process.argv.find(value => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
   const outputRoot = path.resolve(process.env.PRE_M23_P6_VISUAL_DIR || 'outputs/pre-m23-p6-visual');
@@ -391,6 +437,7 @@ async function main() {
     for (const malformed of ['missing', 'extra', 'type', 'length', 'version', 'prototype-key', 'status-length', 'message-extra']) {
       await runMalformed(browser, origin, securityRoot, security, selected, malformed);
     }
+    await runRateLimited(browser, origin, securityRoot, security, selected);
     const common = { testedRevision, testedTree, browser: selected, generatedAt: new Date().toISOString() };
     fs.writeFileSync(path.join(outputRoot, `${selected}-manifest.json`), JSON.stringify({ ...common, kind: 'ordinary-final-green', screenshots: ordinary }, null, 2) + '\n');
     fs.writeFileSync(path.join(securityRoot, `${selected}-manifest.json`), JSON.stringify({ ...common, kind: 'hostile-security', screenshots: security }, null, 2) + '\n');

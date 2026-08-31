@@ -442,6 +442,140 @@ describe('Pre-M23 P6 Polaris safe contracts', () => {
 });
 
 describe('Pre-M23 P6 mounted canonical routes', () => {
+  test('bounds the shared assistant route budget before backing work and recovers after the internal window', async () => {
+    const now = 1788181200000;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    const organizationId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    let queries = 0;
+    let contextLoads = 0;
+    let interceptorExecutions = 0;
+    const app = appFor({
+      poolProvider: function () {
+        return { query: async function () { queries += 1; return { rows: [] }; } };
+      },
+      assistantContextLoader: async function () { contextLoads += 1; return item(); },
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function (envelope) {
+          interceptorExecutions += 1;
+          return interceptedResponse(envelope);
+        },
+      },
+    });
+    const scopedHeaders = Object.assign(headers(organizationId, 'owner'), {
+      'X-Test-User': userId,
+      'X-NorthStar-Session-ID': 'tab-a',
+    });
+
+    try {
+      let lastAllowed;
+      for (let index = 0; index < 1000; index += 1) {
+        lastAllowed = await request(app).get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+        expect(lastAllowed.status).toBe(200);
+      }
+      expect(lastAllowed.headers).toMatchObject({
+        'x-ratelimit-limit': '1000',
+        'x-ratelimit-remaining': '0',
+        'x-ratelimit-reset': String(Math.ceil((now + 60000) / 1000)),
+      });
+
+      const limitedStatus = await request(app)
+        .get('/api/v1/canonical/polaris/assistant/status')
+        .set(Object.assign({}, scopedHeaders, { 'X-Test-Role': 'viewer', 'X-NorthStar-Session-ID': 'tab-b' }));
+      const limitedContext = await request(app)
+        .post('/api/v1/canonical/polaris/assistant/context').set(scopedHeaders)
+        .send({ schemaVersion: CONTEXT_REQUEST_SCHEMA, selected: selected('lead', LEAD) });
+      const limitedMessage = await request(app)
+        .post('/api/v1/canonical/polaris/assistant/messages').set(scopedHeaders)
+        .send({
+          schemaVersion: MESSAGE_REQUEST_SCHEMA,
+          idempotencyKey: crypto.randomUUID(),
+          message: 'This must be rate limited before interception.',
+          selected: selected('lead', LEAD),
+        });
+      for (const response of [limitedStatus, limitedContext, limitedMessage]) {
+        expect(response.status).toBe(429);
+        expect(response.headers).toMatchObject({
+          'x-ratelimit-limit': '1000',
+          'x-ratelimit-remaining': '0',
+          'retry-after': '60',
+        });
+        expect(response.body.error).toMatchObject({
+          code: 'rate_limited',
+          details: { retryAfterSeconds: 60, limit: 1000, window: '1m' },
+        });
+      }
+      expect(queries).toBe(1000);
+      expect(contextLoads).toBe(0);
+      expect(interceptorExecutions).toBe(0);
+
+      const otherUser = await request(app).get('/api/v1/canonical/polaris/assistant/status').set(Object.assign(
+        {}, scopedHeaders, { 'X-Test-User': crypto.randomUUID() }
+      ));
+      const otherTenant = await request(app).get('/api/v1/canonical/polaris/assistant/status').set(Object.assign(
+        {}, scopedHeaders, { 'X-Test-Organization': crypto.randomUUID() }
+      ));
+      expect([otherUser.status, otherTenant.status]).toEqual([200, 200]);
+      expect(queries).toBe(1002);
+
+      clock.mockReturnValue(now + 60001);
+      const recovered = await request(app).get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+      expect(recovered.status).toBe(200);
+      expect(recovered.headers['x-ratelimit-remaining']).toBe('999');
+      expect(queries).toBe(1003);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test('enforces the internal assistant budget under concurrency while auth and malformed requests fail at their boundaries', async () => {
+    const now = 1788184800000;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    const organizationId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    let queries = 0;
+    const app = appFor({
+      poolProvider: function () {
+        return {
+          query: async function () {
+            queries += 1;
+            await new Promise(resolve => setImmediate(resolve));
+            return { rows: [] };
+          },
+        };
+      },
+    });
+    const scopedHeaders = Object.assign(headers(organizationId, 'owner'), { 'X-Test-User': userId });
+
+    try {
+      const anonymous = await request(app).get('/api/v1/canonical/polaris/assistant/status');
+      expect(anonymous.status).toBe(401);
+      expect(anonymous.headers['x-ratelimit-limit']).toBeUndefined();
+
+      const malformedHeaders = Object.assign(headers(crypto.randomUUID(), 'owner'), {
+        'X-Test-User': crypto.randomUUID(),
+      });
+      const malformed = await request(app)
+        .post('/api/v1/canonical/polaris/assistant/messages').set(malformedHeaders).send({});
+      expect(malformed.status).toBe(400);
+      expect(malformed.headers).toMatchObject({
+        'x-ratelimit-limit': '1000',
+        'x-ratelimit-remaining': '999',
+      });
+
+      const responses = await Promise.all(Array.from({ length: 1001 }, function () {
+        return request(app).get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+      }));
+      expect(responses.filter(response => response.status === 200)).toHaveLength(1000);
+      expect(responses.filter(response => response.status === 429)).toHaveLength(1);
+      expect(queries).toBe(1000);
+    } finally {
+      clock.mockRestore();
+    }
+  }, 30000);
+
   test('status is auth/role bounded and truthfully unconfigured', async () => {
     const app = appFor();
     const anonymous = await request(app).get('/api/v1/canonical/polaris/assistant/status');

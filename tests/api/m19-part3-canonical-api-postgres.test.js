@@ -376,6 +376,75 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(unavailable.body.error.code).toBe('POLARIS_PROVIDER_DECISIONS_REQUIRED');
   });
 
+  test('mounted PostgreSQL assistant routes enforce one organization-user budget before query or interceptor work', async () => {
+    const now = 1788188400000;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    const organizationId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    let backingQueries = 0;
+    let contextLoads = 0;
+    let interceptorExecutions = 0;
+    const limitedApp = createApp(function () {
+      return {
+        query: async function () {
+          backingQueries += 1;
+          return pool.query('SELECT 1 AS polaris_local_authority');
+        },
+      };
+    }, null, null, {
+      assistantContextLoader: async function () { contextLoads += 1; return graphA; },
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function (envelope) {
+          interceptorExecutions += 1;
+          return interceptedAssistantResponse(envelope);
+        },
+      },
+    });
+    const scopedHeaders = headers(organizationId, userId, 'rate-tab-a');
+
+    try {
+      for (let index = 0; index < 1000; index += 1) {
+        const response = await request(limitedApp)
+          .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+        expect(response.status).toBe(200);
+      }
+      const limitedStatus = await request(limitedApp)
+        .get('/api/v1/canonical/polaris/assistant/status')
+        .set(Object.assign({}, scopedHeaders, { 'X-NorthStar-Session-ID': 'rate-tab-b' }));
+      const limitedContext = await request(limitedApp)
+        .post('/api/v1/canonical/polaris/assistant/context').set(scopedHeaders)
+        .send({ schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: graphA.body.ids.opportunity } });
+      const limitedMessage = await request(limitedApp)
+        .post('/api/v1/canonical/polaris/assistant/messages').set(scopedHeaders)
+        .send({
+          schemaVersion: 'northstar.polaris.message-request.v1',
+          idempotencyKey: crypto.randomUUID(),
+          message: 'Do not reach the mounted interceptor after exhaustion.',
+          selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+        });
+      expect([limitedStatus.status, limitedContext.status, limitedMessage.status]).toEqual([429, 429, 429]);
+      expect([limitedStatus, limitedContext, limitedMessage].every(function (response) {
+        return response.headers['x-ratelimit-limit'] === '1000'
+          && response.headers['x-ratelimit-remaining'] === '0'
+          && response.headers['retry-after'] === '60';
+      })).toBe(true);
+      expect(backingQueries).toBe(1000);
+      expect(contextLoads).toBe(0);
+      expect(interceptorExecutions).toBe(0);
+
+      clock.mockReturnValue(now + 60001);
+      const recovered = await request(limitedApp)
+        .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+      expect(recovered.status).toBe(200);
+      expect(recovered.headers['x-ratelimit-remaining']).toBe('999');
+      expect(backingQueries).toBe(1001);
+    } finally {
+      clock.mockRestore();
+    }
+  }, 30000);
+
   test('mounted PostgreSQL assistant route joins and replays exact idempotent requests while isolating authority and context', async () => {
     let executions = 0;
     const assistantRuntime = {

@@ -9,6 +9,7 @@ const {
   requireVerifiedExternalAction,
 } = require('../auth/middleware');
 const { hasPermission, requirePermission } = require('../auth/permissions');
+const { rateLimit } = require('../middleware/rateLimit');
 const {
   buildContextResponse,
   selectedMatchesItem,
@@ -754,7 +755,17 @@ function createDependencies(options) {
     assistantContextLoader: supplied.assistantContextLoader || getCanonicalGraph,
     assistantRuntime: supplied.assistantRuntime || null,
     assistantIdempotency: supplied.assistantIdempotency || createIdempotencyRegistry(),
+    assistantRateLimit: supplied.assistantRateLimit || rateLimit('internal-api', assistantRateLimitKey),
   };
+}
+
+function assistantRateLimitKey(req) {
+  const context = requestContext(req);
+  if (!context) return 'polaris-assistant:unauthenticated';
+  return 'polaris-assistant:' + sha256({
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 }
 
 function sendPersistenceUnavailable(res, req) {
@@ -881,7 +892,7 @@ function createCanonicalRouter(options) {
   });
 
   router.get('/polaris/assistant/status', dependencies.auth, requireCanonicalContext,
-    dependencies.permission('ai', 'read'), async function (req, res) {
+    dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
       try {
         await resolvePool(dependencies.poolProvider).query('SELECT 1 AS polaris_local_authority');
         const data = await statusForRuntime(dependencies.assistantRuntime, req);
@@ -892,7 +903,7 @@ function createCanonicalRouter(options) {
     });
 
   router.post('/polaris/assistant/context', dependencies.auth, requireCanonicalContext,
-    dependencies.permission('ai', 'read'), async function (req, res) {
+    dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
       try {
         const request = validateContextRequest(req.body);
         const role = req.userRole || req.tenantContext.role;
@@ -927,7 +938,7 @@ function createCanonicalRouter(options) {
     });
 
   router.post('/polaris/assistant/messages', dependencies.auth, requireCanonicalContext,
-    dependencies.permission('ai', 'read'), async function (req, res) {
+    dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
       const requestAbort = new AbortController();
       const abortRequest = function () { requestAbort.abort(); };
       const abortOnClose = function () { if (!res.writableEnded) requestAbort.abort(); };

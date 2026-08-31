@@ -8,8 +8,10 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <script src="/js/demo-runtime.js"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
+  <script src="/js/polaris-native-card.js"></script>
+  <link rel="stylesheet" href="/css/polaris-native-card.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>POLARIS™ — NorthStar Solutions</title>
+  <title>Polaris — NorthStar</title>
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <style>
@@ -47,6 +49,17 @@
       font-size: 16px;
       font-weight: 700;
       color: var(--neutral-900);
+    }
+    .polaris-page-title {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+      color: var(--neutral-900);
+    }
+    .polaris-inline-subtitle {
+      margin: 2px 0 0;
+      color: var(--neutral-600);
+      font-size: 12px;
     }
     .polaris-inline-badge {
       font-size: 11px;
@@ -164,6 +177,7 @@
       text-align: left;
       transition: all 0.2s ease;
       line-height: 1.4;
+      font: inherit;
     }
     .polaris-quick-prompt:hover {
       background: var(--neutral-200);
@@ -214,6 +228,7 @@
     .polaris-sidebar-item {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
       padding: 6px 0;
       font-size: 13px;
@@ -226,6 +241,7 @@
       flex-shrink: 0;
     }
     .polaris-sidebar-status-label {
+      margin-left: auto;
       font-size: 12px;
       color: var(--neutral-500);
     }
@@ -466,7 +482,10 @@
 
     /* Responsive */
     @media (max-width: 900px) {
-      .polaris-sidebar { display: none; }
+      .polaris-main { flex-direction: column; }
+      .polaris-sidebar { display: block; width: 100%; overflow: visible; order: -1; }
+      .polaris-sidebar-section { padding: 10px 16px; }
+      .polaris-sidebar-item { display: inline-flex; margin-right: 16px; }
       .polaris-conversation { border-right: none; }
     }
     @media (max-width: 640px) {
@@ -485,12 +504,14 @@
 <div class="app-layout">
     <main class="main-content" id="mainContent">
       <div class="polaris-workspace">
-        <h1 class="sr-only">Polaris Intelligence Workspace</h1>
         <!-- Inline Polaris brand header (minimal, inherits shell) -->
         <div class="polaris-inline-header">
           <div class="polaris-inline-brand">
-            <span class="polaris-inline-star">✦</span>
-            <span class="polaris-inline-name">POLARIS™</span>
+            <span class="polaris-inline-star" aria-hidden="true">✦</span>
+            <div>
+              <h1 class="polaris-page-title">Polaris</h1>
+              <p class="polaris-inline-subtitle">Customer intelligence workspace</p>
+            </div>
             <span class="polaris-inline-badge">Intelligence Workspace</span>
           </div>
         </div>
@@ -512,184 +533,81 @@
                 <h2 id="polarisSelectedContextTitle"></h2>
                 <p id="polarisSelectedContextSummary"></p>
               </section>
+              <div class="polaris-native-card-host" id="polarisNativeCardHost" aria-live="polite"></div>
               <div class="polaris-welcome">
                 <div class="polaris-welcome-icon">✦</div>
                 <div class="polaris-welcome-title">Welcome to POLARIS™</div>
                 <div class="polaris-welcome-text">
-                  Your AI-powered intelligence workspace. Ask questions about your business,
-                  analyze data, and get actionable recommendations — all in one place.
+                  Review exact customer, lead, and work context. The local demo is deterministic;
+                  provider-backed conversation is shown as unavailable unless an intercepted runtime is explicitly present.
                 </div>
 
                 <!-- Executive Quick Prompts -->
                 <div class="polaris-quick-prompts">
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What's my pipeline health?">
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: What's my pipeline health?">
                     <span class="polaris-quick-icon">📈</span>
                     <span class="polaris-quick-label">What's my pipeline health?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which leads need immediate attention?">
+                  </button>
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: Which leads need immediate attention?">
                     <span class="polaris-quick-icon">🔥</span>
                     <span class="polaris-quick-label">Which leads need immediate attention?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What revenue is at risk this week?">
+                  </button>
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: What revenue is at risk this week?">
                     <span class="polaris-quick-icon">💰</span>
                     <span class="polaris-quick-label">What revenue is at risk this week?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What's on today's schedule?">
+                  </button>
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: What's on today's schedule?">
                     <span class="polaris-quick-icon">📅</span>
                     <span class="polaris-quick-label">What's on today's schedule?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which jobs are falling behind?">
+                  </button>
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: Which jobs are falling behind?">
                     <span class="polaris-quick-icon">🚧</span>
                     <span class="polaris-quick-label">Which jobs are falling behind?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which customers haven't been contacted recently?">
+                  </button>
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: Which customers haven't been contacted recently?">
                     <span class="polaris-quick-icon">👥</span>
                     <span class="polaris-quick-label">Which customers haven't been contacted recently?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Where can I increase profit today?">
+                  </button>
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: Where can I increase profit today?">
                     <span class="polaris-quick-icon">💵</span>
                     <span class="polaris-quick-label">Where can I increase profit today?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Summarize my business in 60 seconds">
+                  </button>
+                  <button type="button" class="polaris-quick-prompt" aria-label="Ask: Summarize my business in 60 seconds">
                     <span class="polaris-quick-icon">📊</span>
                     <span class="polaris-quick-label">Summarize my business in 60 seconds</span>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- Right: Intelligence Sidebar -->
-          <div class="polaris-sidebar">
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">System Status</div>
+          <aside class="polaris-sidebar" aria-labelledby="polarisStatusHeading">
+            <section class="polaris-sidebar-section">
+              <h2 class="polaris-sidebar-heading" id="polarisStatusHeading">System Status</h2>
               <div class="polaris-sidebar-item">
-                <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Account-free demo data ready</span>
+                <span class="polaris-sidebar-dot" id="polarisLocalStatusDot" aria-hidden="true"></span>
+                <span>Local customer intelligence</span>
+                <span class="polaris-sidebar-status-label" id="polarisLocalStatusLabel">Checking</span>
               </div>
               <div class="polaris-sidebar-item">
-                <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Polaris demo projection</span>
-                <span class="polaris-sidebar-status-label">Available</span>
+                <span class="polaris-sidebar-dot" id="polarisProviderStatusDot" aria-hidden="true"></span>
+                <span>Provider conversation</span>
+                <span class="polaris-sidebar-status-label" id="polarisProviderStatusLabel">Checking</span>
               </div>
               <div class="polaris-sidebar-item">
-                <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
+                <span class="polaris-sidebar-dot" id="polarisRequestsStatusDot" aria-hidden="true"></span>
                 <span>Live provider requests</span>
-                <span class="polaris-sidebar-status-label">Not used</span>
+                <span class="polaris-sidebar-status-label" id="polarisRequestsStatusLabel">0 sent</span>
               </div>
-            </div>
-
-          </div>
+            </section>
+          </aside>
         </div>
 
         <!-- Bottom Prompt Bar -->
         <div class="polaris-prompt-bar">
           <div class="polaris-prompt-input-wrapper">
-            <textarea class="polaris-prompt-input" id="polarisPromptInput" placeholder="Ask Polaris anything..." rows="1" aria-label="Ask Polaris a question" enterkeyhint="send"></textarea>
-            <button class="polaris-prompt-send" id="polarisSendBtn" aria-label="Send message">Send</button>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-<div class="app-layout" hidden aria-hidden="true">
-    <main class="main-content" id="mainContent">
-      <div class="polaris-workspace">
-        <!-- Inline Polaris brand header (minimal, inherits shell) -->
-        <div class="polaris-inline-header">
-          <div class="polaris-inline-brand">
-            <span class="polaris-inline-star">✦</span>
-            <span class="polaris-inline-name">POLARIS™</span>
-            <span class="polaris-inline-badge">Intelligence Workspace</span>
-          </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="polaris-main">
-          <!-- Left: Conversation Panel -->
-          <div class="polaris-conversation">
-            <div class="polaris-conversation-header">
-              <span>Conversation</span>
-              <button class="polaris-clear-btn" id="polarisClearBtn" aria-label="Clear conversation" title="Clear conversation">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                Clear
-              </button>
-            </div>
-            <div class="polaris-conversation-body">
-              <div class="polaris-welcome">
-                <div class="polaris-welcome-icon">✦</div>
-                <div class="polaris-welcome-title">Welcome to POLARIS™</div>
-                <div class="polaris-welcome-text">
-                  Your AI-powered intelligence workspace. Ask questions about your business,
-                  analyze data, and get actionable recommendations — all in one place.
-                </div>
-
-                <!-- Executive Quick Prompts -->
-                <div class="polaris-quick-prompts">
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What's my pipeline health?">
-                    <span class="polaris-quick-icon">📈</span>
-                    <span class="polaris-quick-label">What's my pipeline health?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which leads need immediate attention?">
-                    <span class="polaris-quick-icon">🔥</span>
-                    <span class="polaris-quick-label">Which leads need immediate attention?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What revenue is at risk this week?">
-                    <span class="polaris-quick-icon">💰</span>
-                    <span class="polaris-quick-label">What revenue is at risk this week?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: What's on today's schedule?">
-                    <span class="polaris-quick-icon">📅</span>
-                    <span class="polaris-quick-label">What's on today's schedule?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which jobs are falling behind?">
-                    <span class="polaris-quick-icon">🚧</span>
-                    <span class="polaris-quick-label">Which jobs are falling behind?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Which customers haven't been contacted recently?">
-                    <span class="polaris-quick-icon">👥</span>
-                    <span class="polaris-quick-label">Which customers haven't been contacted recently?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Where can I increase profit today?">
-                    <span class="polaris-quick-icon">💵</span>
-                    <span class="polaris-quick-label">Where can I increase profit today?</span>
-                  </div>
-                  <div class="polaris-quick-prompt" role="button" tabindex="0" aria-label="Ask: Summarize my business in 60 seconds">
-                    <span class="polaris-quick-icon">📊</span>
-                    <span class="polaris-quick-label">Summarize my business in 60 seconds</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right: Intelligence Sidebar -->
-          <div class="polaris-sidebar">
-            <div class="polaris-sidebar-section">
-              <div class="polaris-sidebar-heading">System Status</div>
-              <div class="polaris-sidebar-item">
-                <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Workspace data ready</span>
-              </div>
-              <div class="polaris-sidebar-item">
-                <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Polaris calculation</span>
-                <span class="polaris-sidebar-status-label">Available</span>
-              </div>
-              <div class="polaris-sidebar-item">
-                <span class="polaris-sidebar-dot" style="background:var(--success);"></span>
-                <span>Live provider requests</span>
-                <span class="polaris-sidebar-status-label">Not inferred</span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Bottom Prompt Bar -->
-        <div class="polaris-prompt-bar">
-          <div class="polaris-prompt-input-wrapper">
-            <textarea class="polaris-prompt-input" id="polarisPromptInput" placeholder="Ask Polaris anything..." rows="1" aria-label="Ask Polaris a question" enterkeyhint="send"></textarea>
+            <textarea class="polaris-prompt-input" id="polarisPromptInput" placeholder="Ask about your selected context" rows="1" maxlength="4000" aria-label="Ask Polaris a question" aria-describedby="polarisProviderStatusLabel" enterkeyhint="send"></textarea>
             <button class="polaris-prompt-send" id="polarisSendBtn" aria-label="Send message">Send</button>
           </div>
         </div>
@@ -713,81 +631,132 @@
       var msgCounter = 0;
       var MAX_MESSAGES = 100; // safety limit
 
-      // ── Business Context Cache (canonical Polaris data for AI context) ──
-                var _businessContext = null;
+      var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      var CONTEXT_SCHEMA = 'northstar.polaris.context-request.v1';
+      var MESSAGE_SCHEMA = 'northstar.polaris.message-request.v1';
+      var activeSelection = null;
 
-                function preloadBusinessContext() {
-                  if (typeof PolarisApi === 'undefined') return;
-                  PolarisApi.getCustomers().then(function(data) {
-                    _businessContext = _businessContext || {};
-                    _businessContext.customerCount = data.total || 0;
-                  }).catch(function() {});
-                  PolarisApi.getPipeline().then(function(data) {
-                    _businessContext = _businessContext || {};
-                    if (data && data.metrics) {
-                      _businessContext.activeDeals = data.metrics.activeDeals || 0;
-                      _businessContext.pipelineValue = data.metrics.totalPipelineValue || 0;
-                    }
-                  }).catch(function() {});
-                }
+      function selectedQuery() {
+        var query = new URLSearchParams(window.location.search);
+        var kind = query.get('kind') || (query.get('leadId') ? 'lead' : '');
+        var identifier = query.get('id') || query.get('leadId') || '';
+        if (['customer', 'lead', 'work'].indexOf(kind) < 0 || !UUID.test(identifier)) return null;
+        return { kind: kind, identifier: identifier.toLowerCase() };
+      }
 
-                // ── Page Context ──
-                function getPageContext() {
-                  var ctx = { page: 'polaris' };
-                  var query = new URLSearchParams(window.location.search);
-                  var kind = query.get('kind') || (query.get('leadId') ? 'lead' : '');
-                  var identifier = query.get('id') || query.get('leadId');
-                  if (kind && identifier && ['customer', 'lead', 'work'].indexOf(kind) >= 0) {
-                    ctx.selectedObject = { kind: kind, id: identifier };
-                    if (kind === 'lead') ctx.leadId = identifier;
-                    if (kind === 'customer') ctx.customerId = identifier;
-                    if (kind === 'work') ctx.workId = identifier;
-                  }
-                  // Include live business context when available
-                  if (_businessContext) ctx.business = _businessContext;
-                  return ctx;
-                }
+      function findSelectedGraph(workspace, selection) {
+        var graphs = workspace && Array.isArray(workspace.graphs) ? workspace.graphs : [];
+        var idKey = selection.kind === 'lead' ? 'opportunity' : selection.kind === 'work' ? 'appointment' : 'customer';
+        return graphs.find(function(graph) {
+          return graph && graph.ids && graph.ids[idKey] === selection.identifier;
+        }) || null;
+      }
 
-                function selectedQuery() {
-                  var query = new URLSearchParams(window.location.search);
-                  var kind = query.get('kind') || (query.get('leadId') ? 'lead' : '');
-                  var identifier = query.get('id') || query.get('leadId');
-                  return kind && identifier ? { kind: kind, identifier: identifier } : null;
-                }
+      function requestJson(method, path, body, callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open(method, path, true);
+        xhr.setRequestHeader('Accept', 'application/json');
+        if (body) xhr.setRequestHeader('Content-Type', 'application/json');
+        if (window.NorthStarAccountSession) NorthStarAccountSession.prepareXhr(xhr, method);
+        xhr.onload = function() {
+          var payload = null;
+          try { payload = JSON.parse(xhr.responseText); } catch (_error) {}
+          callback(null, xhr.status, payload);
+        };
+        xhr.onerror = function() { callback(new Error('network_unavailable'), 0, null); };
+        xhr.send(body ? JSON.stringify(body) : null);
+      }
 
-                function findSelectedGraph(workspace, selection) {
-                  var graphs = workspace && Array.isArray(workspace.graphs) ? workspace.graphs : [];
-                  var key = selection.kind === 'lead' ? 'lead' : selection.kind;
-                  return graphs.find(function(graph) {
-                    return graph && graph.ids && (graph.ids[key] === selection.identifier ||
-                      (key === 'lead' && graph.ids.opportunity === selection.identifier) ||
-                      (key === 'work' && graph.ids.appointment === selection.identifier));
-                  }) || null;
-                }
+      function setStatus(localState, providerState, sent) {
+        var localLabel = document.getElementById('polarisLocalStatusLabel');
+        var providerLabel = document.getElementById('polarisProviderStatusLabel');
+        var requestsLabel = document.getElementById('polarisRequestsStatusLabel');
+        var localDot = document.getElementById('polarisLocalStatusDot');
+        var providerDot = document.getElementById('polarisProviderStatusDot');
+        var requestsDot = document.getElementById('polarisRequestsStatusDot');
+        localLabel.textContent = localState === 'available' ? 'Available' : 'Unavailable';
+        providerLabel.textContent = providerState === 'available' ? 'Intercepted runtime available' :
+          providerState === 'local' ? 'Local only' : providerState === 'error' ? 'Error' : 'Unconfigured';
+        requestsLabel.textContent = String(Number(sent) || 0) + ' sent';
+        localDot.style.background = localState === 'available' ? 'var(--success)' : 'var(--warning)';
+        providerDot.style.background = providerState === 'available' ? 'var(--success)' : 'var(--warning)';
+        requestsDot.style.background = 'var(--neutral-400)';
+      }
 
-                function renderSelectedContext() {
-                  var selection = selectedQuery();
-                  var section = document.getElementById('polarisSelectedContext');
-                  if (!selection || !section || !window.NorthStarDemoRuntime ||
-                      typeof window.NorthStarDemoRuntime.loadWorkspace !== 'function') return;
-                  window.NorthStarDemoRuntime.loadWorkspace(false).then(function(workspace) {
-                    var graph = findSelectedGraph(workspace, selection);
-                    var title = document.getElementById('polarisSelectedContextTitle');
-                    var summary = document.getElementById('polarisSelectedContextSummary');
-                    if (!graph) {
-                      title.textContent = 'Selected record unavailable';
-                      summary.textContent = 'This record is not present in the current demo workspace. No fallback record is shown.';
-                    } else {
-                      title.textContent = (graph.customer && graph.customer.name || 'Customer') + ' · ' +
-                        (graph.lead && (graph.lead.serviceLabel || graph.lead.serviceType) || 'Requested work');
-                      summary.textContent = graph.lead && graph.lead.summary ||
-                        'Polaris is ready to answer questions about this selected customer, lead, and work record.';
-                    }
-                    section.hidden = false;
-                  }).catch(function() {
-                    section.hidden = true;
-                  });
-                }
+      function loadAssistantStatus() {
+        if (window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true) {
+          setStatus('available', 'local', 0);
+          return;
+        }
+        requestJson('GET', '/api/v1/canonical/polaris/assistant/status', null, function(error, status, payload) {
+          if (error || status < 200 || status >= 300 || !payload || !payload.data) {
+            setStatus('unavailable', 'error', 0);
+            return;
+          }
+          setStatus(payload.data.localCustomerIntelligence, payload.data.state, payload.data.providerRequestsSent);
+        });
+      }
+
+      function showSelectedUnavailable(message) {
+        var section = document.getElementById('polarisSelectedContext');
+        document.getElementById('polarisSelectedContextTitle').textContent = 'Selected record unavailable';
+        document.getElementById('polarisSelectedContextSummary').textContent = message;
+        document.getElementById('polarisNativeCardHost').replaceChildren();
+        section.hidden = false;
+      }
+
+      function renderCards(cards) {
+        var host = document.getElementById('polarisNativeCardHost');
+        if (!window.NorthStarPolarisCard || !Array.isArray(cards) || !cards.length) {
+          host.replaceChildren();
+          return;
+        }
+        NorthStarPolarisCard.renderCustomerIntelligenceCard(host, cards[0]);
+      }
+
+      function renderSelectedContext() {
+        activeSelection = selectedQuery();
+        var section = document.getElementById('polarisSelectedContext');
+        if (!activeSelection) {
+          section.hidden = true;
+          document.getElementById('polarisNativeCardHost').replaceChildren();
+          return;
+        }
+        section.hidden = false;
+        document.getElementById('polarisSelectedContextTitle').textContent = 'Loading selected record';
+        document.getElementById('polarisSelectedContextSummary').textContent = 'Checking exact record and organization authority.';
+        if (window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true &&
+            typeof window.NorthStarDemoRuntime.loadWorkspace === 'function') {
+          window.NorthStarDemoRuntime.loadWorkspace(false).then(function(workspace) {
+            var graph = findSelectedGraph(workspace, activeSelection);
+            if (!graph) return showSelectedUnavailable('This exact record is not present in the current demo session. No fallback record is shown.');
+            document.getElementById('polarisSelectedContextTitle').textContent =
+              (graph.customer && graph.customer.name || 'Customer') + ' · ' +
+              (graph.lead && (graph.lead.serviceLabel || graph.lead.serviceType) || 'Requested work');
+            document.getElementById('polarisSelectedContextSummary').textContent =
+              graph.lead && (graph.lead.summary || graph.lead.scope) || 'No work scope is recorded.';
+            renderCards([NorthStarPolarisCard.buildDemoCard(graph, activeSelection)]);
+          }).catch(function() {
+            showSelectedUnavailable('The deterministic demo session is unavailable. No fallback record is shown.');
+          });
+          return;
+        }
+        requestJson('POST', '/api/v1/canonical/polaris/assistant/context', {
+          schemaVersion: CONTEXT_SCHEMA,
+          selected: { kind: activeSelection.kind, id: activeSelection.identifier }
+        }, function(error, status, payload) {
+          if (error || status < 200 || status >= 300 || !payload || !payload.data) {
+            var message = payload && payload.error && payload.error.message;
+            showSelectedUnavailable(message || 'The exact selected record could not be loaded for this organization and role.');
+            return;
+          }
+          var data = payload.data;
+          var card = data.cards && data.cards[0];
+          document.getElementById('polarisSelectedContextTitle').textContent = card && card.title || 'Selected record';
+          document.getElementById('polarisSelectedContextSummary').textContent = data.answer && data.answer.text || 'No answer is recorded.';
+          renderCards(data.cards);
+        });
+      }
 
       // ── Utilities ──
 
@@ -853,10 +822,11 @@
         if (status === 'error') {
           var retryBtn = document.createElement('button');
           retryBtn.className = 'polaris-chat-retry';
-          retryBtn.innerHTML = '↻ Retry';
+          retryBtn.textContent = '↻ Retry';
           retryBtn.setAttribute('aria-label', 'Retry this message');
           retryBtn.addEventListener('click', function() {
-            retryLastMessage(text);
+            var userMessage = messages.slice().reverse().find(function(message) { return message.role === 'user'; });
+            if (userMessage) retryLastMessage(userMessage.text);
           });
           meta.appendChild(retryBtn);
         }
@@ -943,6 +913,11 @@
       function demoPolarisResponse(message) {
         var workspace = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.getWorkspace();
         var graphs = workspace && Array.isArray(workspace.graphs) ? workspace.graphs : [];
+        if (activeSelection) {
+          var selectedGraph = findSelectedGraph(workspace, activeSelection);
+          if (!selectedGraph) return 'The exact selected demo record is unavailable. No fallback record was used.';
+          graphs = [selectedGraph];
+        }
         if (!graphs.length) return 'The demo workspace has no recorded customer or work data yet. Simulate a lead from Command Center, then ask again.';
         var normalized = String(message || '').toLowerCase();
         var total = graphs.reduce(function(sum, graph) {
@@ -1000,71 +975,54 @@
         return true;
       }
 
-      function sendMessage() {
-        var message = input.value.trim();
-        if (!message || isLoading) return;
+      function idempotencyKey() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+        var bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 15) | 64;
+        bytes[8] = (bytes[8] & 63) | 128;
+        var value = Array.from(bytes, function(byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+        return value.slice(0, 8) + '-' + value.slice(8, 12) + '-' + value.slice(12, 16) + '-' +
+          value.slice(16, 20) + '-' + value.slice(20);
+      }
 
-        // Show user message
-        addMessage('user', message, 'sent');
-        input.value = '';
-        resetInputHeight();
-
-        // Demo pages preserve the canonical presentation without invoking the
-        // retired paid-only chat transport or creating a server audit record.
-        if (respondToAccountFreeDemoChat(message)) return;
-
-        // Show typing indicator
+      function sendPaidMessage(message) {
         showTyping();
         setLoading(true);
-
-        // Send to backend
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/v1/polaris/chat', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        NorthStarAccountSession.prepareXhr(xhr, 'POST');
-
-        xhr.onload = function() {
+        var request = {
+          schemaVersion: MESSAGE_SCHEMA,
+          idempotencyKey: idempotencyKey(),
+          message: message
+        };
+        if (activeSelection) request.selected = { kind: activeSelection.kind, id: activeSelection.identifier };
+        requestJson('POST', '/api/v1/canonical/polaris/assistant/messages', request, function(error, status, payload) {
           hideTyping();
           setLoading(false);
           input.focus();
-
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              var data = JSON.parse(xhr.responseText);
-              if (data.success && data.response) {
-                addMessage('assistant', data.response, 'sent');
-              } else {
-                addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
-              }
-            } catch(e) {
-              addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
-            }
-          } else if (xhr.status === 429) {
-            addMessage('assistant', 'Polaris is busy right now. Please wait a moment and try again.', 'error');
-          } else if (xhr.status >= 500) {
-            addMessage('assistant', 'Polaris encountered a server error. Please try again.', 'error');
-          } else {
-            addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
+          if (!error && status >= 200 && status < 300 && payload && payload.data) {
+            var data = payload.data;
+            addMessage('assistant', data.answer && data.answer.text || 'The intercepted runtime returned no displayable answer.', 'sent');
+            if (data.cards && data.cards.length) renderCards(data.cards);
+            return;
           }
-        };
+          var messageText = payload && payload.error && payload.error.message;
+          addMessage('assistant', messageText || 'Provider-backed conversation is unavailable. Local customer intelligence remains read-only.', 'error');
+        });
+      }
 
-        xhr.onerror = function() {
-          hideTyping();
-          setLoading(false);
-          addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
-        };
-
-        xhr.send(JSON.stringify({ message: message, context: getPageContext() }));
+      function sendMessage() {
+        var message = input.value.trim();
+        if (!message || isLoading) return;
+        addMessage('user', message, 'sent');
+        input.value = '';
+        resetInputHeight();
+        if (respondToAccountFreeDemoChat(message)) return;
+        sendPaidMessage(message);
       }
 
       function retryLastMessage(text) {
         if (isLoading) return;
-
-        // Defensive parity with Send: a legacy retry must also stay entirely
-        // inside the browser when this paid shell is mounted at /demo/polaris.
         if (respondToAccountFreeDemoChat(text)) return;
-
-        // Remove last error message
         if (messages.length > 0) {
           var last = messages[messages.length - 1];
           if (last.role === 'assistant' && last.status === 'error') {
@@ -1073,44 +1031,7 @@
             messages.pop();
           }
         }
-
-        // Show typing and resend
-        showTyping();
-        setLoading(true);
-
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/v1/polaris/chat', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        NorthStarAccountSession.prepareXhr(xhr, 'POST');
-
-        xhr.onload = function() {
-          hideTyping();
-          setLoading(false);
-          input.focus();
-
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              var data = JSON.parse(xhr.responseText);
-              if (data.success && data.response) {
-                addMessage('assistant', data.response, 'sent');
-              } else {
-                addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
-              }
-            } catch(e) {
-              addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
-            }
-          } else {
-            addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
-          }
-        };
-
-        xhr.onerror = function() {
-          hideTyping();
-          setLoading(false);
-          addMessage('assistant', 'Polaris couldn\'t complete that request. Please try again.', 'error');
-        };
-
-        xhr.send(JSON.stringify({ message: text, context: getPageContext() }));
+        sendPaidMessage(text);
       }
 
       function setLoading(loading) {
@@ -1152,9 +1073,14 @@
             // Show empty state as fallback
             var empty = document.createElement('div');
             empty.className = 'polaris-empty-state';
-            empty.innerHTML =
-              '<div class="polaris-empty-state-icon">✦</div>' +
-              '<div class="polaris-empty-state-text">Conversation cleared. Start a new one by typing below.</div>';
+            var emptyIcon = document.createElement('div');
+            emptyIcon.className = 'polaris-empty-state-icon';
+            emptyIcon.textContent = '✦';
+            var emptyText = document.createElement('div');
+            emptyText.className = 'polaris-empty-state-text';
+            emptyText.textContent = 'Conversation cleared. Start a new one by typing below.';
+            empty.appendChild(emptyIcon);
+            empty.appendChild(emptyText);
             conversationBody.appendChild(empty);
           }
         }
@@ -1209,15 +1135,12 @@
       // ── Quick prompts ──
                 setupQuickPrompts();
 
-                // ── Preload business context for AI conversations ──
-                preloadBusinessContext();
+                loadAssistantStatus();
                 renderSelectedContext();
 
                 // ── Refresh context when a simulation completes elsewhere ──
                 if (window.EventBus) {
                   window.EventBus.on('simulation:completed', function() {
-                    console.log('[Polaris] simulation:completed received — refreshing business context');
-                    preloadBusinessContext();
                     renderSelectedContext();
                   });
                 }
@@ -1225,8 +1148,7 @@
                 // ── Scroll to bottom on resize ──
       window.addEventListener('resize', smoothScrollToBottom);
 
-      // ── Log ready state ──
-      console.log('[Polaris] Conversation engine initialized. Ready for OpenAI activation.');
+      console.log('[Polaris] Local intelligence initialized; provider conversation status is authoritative and fail-closed.');
 
     })();
   </script>

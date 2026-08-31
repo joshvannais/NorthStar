@@ -291,6 +291,72 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(operations.rows.every(row => !row.serialized.includes(RATIFICATION_KEY))).toBe(true);
   });
 
+  test('mounted Polaris assistant context uses exact PostgreSQL tenant records and remains provider-unconfigured', async () => {
+    const status = await request(app)
+      .get('/api/v1/canonical/polaris/assistant/status')
+      .set(headers(ORG_A, USER_A, 'session-a'));
+    expect(status.status).toBe(200);
+    expect(status.body.data).toMatchObject({
+      state: 'unconfigured',
+      localCustomerIntelligence: 'available',
+      providerRequestsEnabled: false,
+      providerRequestsSent: 0,
+    });
+
+    for (const [kind, id] of [
+      ['customer', graphA.body.ids.customer],
+      ['lead', graphA.body.ids.opportunity],
+      ['work', graphA.body.ids.appointment],
+    ]) {
+      const response = await request(app)
+        .post('/api/v1/canonical/polaris/assistant/context')
+        .set(headers(ORG_A, USER_A, 'session-a'))
+        .send({
+          schemaVersion: 'northstar.polaris.context-request.v1',
+          selected: { kind, id },
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.data).toMatchObject({
+        schemaVersion: 'northstar.polaris.assistant-response.v1',
+        source: 'canonical_local',
+        authority: { organizationId: ORG_A, userId: USER_A, role: 'owner' },
+        selected: { kind, id },
+        provider: { state: 'unconfigured', requestsSent: 0 },
+        advisoryOnly: true,
+        canonicalMutationAllowed: false,
+      });
+      expect(response.body.data.cards[0]).toMatchObject({
+        schemaVersion: 'northstar.polaris.customer-intelligence-card.v1',
+        tone: 'purple',
+        authority: { selected: { kind, id }, graphId: graphA.body.graphId },
+        advisoryOnly: true,
+        canonicalMutationAllowed: false,
+      });
+    }
+
+    const crossTenant = await request(app)
+      .post('/api/v1/canonical/polaris/assistant/context')
+      .set(headers(ORG_B, USER_B, 'session-b'))
+      .send({
+        schemaVersion: 'northstar.polaris.context-request.v1',
+        selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+      });
+    expect(crossTenant.status).toBe(404);
+    expect(crossTenant.body.error.code).toBe('POLARIS_SELECTED_RECORD_NOT_FOUND');
+
+    const unavailable = await request(app)
+      .post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a'))
+      .send({
+        schemaVersion: 'northstar.polaris.message-request.v1',
+        idempotencyKey: crypto.randomUUID(),
+        message: 'Summarize the exact selected lead.',
+        selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+      });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.body.error.code).toBe('POLARIS_PROVIDER_DECISIONS_REQUIRED');
+  });
+
   test('static routes precede parameter routes and status reports no Redis requirement', async () => {
     const response = await request(app).get('/api/v1/canonical/status').set(headers(ORG_A, USER_A, 'session-a'));
     expect(response.status).toBe(200);

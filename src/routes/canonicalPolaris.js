@@ -8,7 +8,17 @@ const {
   requireTenantAccess,
   requireVerifiedExternalAction,
 } = require('../auth/middleware');
-const { requirePermission } = require('../auth/permissions');
+const { hasPermission, requirePermission } = require('../auth/permissions');
+const {
+  buildContextResponse,
+  selectedMatchesItem,
+  validateContextRequest,
+  validateMessageRequest,
+} = require('../polaris/assistantContract');
+const {
+  executeIntercepted,
+  statusForRuntime,
+} = require('../polaris/assistantRuntime');
 const { sha256, stableStringify, stableValue } = require('../services/businessProfileAdapter');
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
 const { scheduleAuthority } = require('../scheduling/repository');
@@ -739,6 +749,8 @@ function createDependencies(options) {
     audit: supplied.audit || audit,
     operatorDirectory: supplied.operatorDirectory || loadSchedulingOperatorDirectory,
     operatorTargetDirectory: supplied.operatorTargetDirectory || loadSchedulingOperatorTargetPage,
+    assistantContextLoader: supplied.assistantContextLoader || getCanonicalGraph,
+    assistantRuntime: supplied.assistantRuntime || null,
   };
 }
 
@@ -864,6 +876,96 @@ function createCanonicalRouter(options) {
       return handleEndpointError(res, _error, req);
     }
   });
+
+  router.get('/polaris/assistant/status', dependencies.auth, requireCanonicalContext,
+    dependencies.permission('ai', 'read'), async function (req, res) {
+      try {
+        await resolvePool(dependencies.poolProvider).query('SELECT 1 AS polaris_local_authority');
+        const data = await statusForRuntime(dependencies.assistantRuntime, req);
+        return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
+      } catch (_error) {
+        return handleEndpointError(res, _error, req);
+      }
+    });
+
+  router.post('/polaris/assistant/context', dependencies.auth, requireCanonicalContext,
+    dependencies.permission('ai', 'read'), async function (req, res) {
+      try {
+        const request = validateContextRequest(req.body);
+        const role = req.userRole || req.tenantContext.role;
+        const selectedResource = request.selected.kind === 'work' ? 'calendar' : 'leads';
+        if (!hasPermission(role, selectedResource, 'read')) {
+          return res.status(403).json({
+            success: false,
+            requestId: req.requestId || req.correlationId || 'unavailable',
+            error: { code: 'POLARIS_SELECTED_RECORD_FORBIDDEN', message: 'The current role cannot read the selected record type.' },
+          });
+        }
+        const context = requestContext(req);
+        const item = await dependencies.assistantContextLoader(
+          resolvePool(dependencies.poolProvider), context, request.selected.id
+        );
+        if (!item || !selectedMatchesItem(item, request.selected)) {
+          const notFound = new Error('The selected record was not found in the current organization.');
+          notFound.code = 'POLARIS_SELECTED_RECORD_NOT_FOUND';
+          notFound.statusCode = 404;
+          throw notFound;
+        }
+        const requestId = req.requestId || req.correlationId || 'unavailable';
+        const data = buildContextResponse(item, request.selected, {
+          organizationId: context.organizationId,
+          userId: context.userId,
+          role,
+        }, requestId);
+        return res.json({ success: true, data, requestId });
+      } catch (_error) {
+        return handleEndpointError(res, _error, req);
+      }
+    });
+
+  router.post('/polaris/assistant/messages', dependencies.auth, requireCanonicalContext,
+    dependencies.permission('ai', 'read'), async function (req, res) {
+      try {
+        const request = validateMessageRequest(req.body);
+        const role = req.userRole || req.tenantContext.role;
+        if (request.selected) {
+          const selectedResource = request.selected.kind === 'work' ? 'calendar' : 'leads';
+          if (!hasPermission(role, selectedResource, 'read')) {
+            return res.status(403).json({
+              success: false,
+              requestId: req.requestId || req.correlationId || 'unavailable',
+              error: { code: 'POLARIS_SELECTED_RECORD_FORBIDDEN', message: 'The current role cannot read the selected record type.' },
+            });
+          }
+        }
+        const context = requestContext(req);
+        let localContext = null;
+        if (request.selected) {
+          const item = await dependencies.assistantContextLoader(
+            resolvePool(dependencies.poolProvider), context, request.selected.id
+          );
+          if (!item || !selectedMatchesItem(item, request.selected)) {
+            const notFound = new Error('The selected record was not found in the current organization.');
+            notFound.code = 'POLARIS_SELECTED_RECORD_NOT_FOUND';
+            notFound.statusCode = 404;
+            throw notFound;
+          }
+          localContext = buildContextResponse(item, request.selected, {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            role,
+          }, request.idempotencyKey);
+        }
+        const data = await executeIntercepted(dependencies.assistantRuntime, request, {
+          organizationId: context.organizationId,
+          userId: context.userId,
+          role,
+        }, localContext);
+        return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
+      } catch (_error) {
+        return handleEndpointError(res, _error, req);
+      }
+    });
 
   router.get('/graphs', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });

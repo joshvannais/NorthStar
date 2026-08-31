@@ -72,11 +72,16 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
 
   test('record-specific Polaris context is mounted and readiness copy is truthful', () => {
     const polaris = read('public/dashboard/polaris.html');
-    expect(polaris).toContain('<h1 class="sr-only">Polaris Intelligence Workspace</h1>');
+    expect(polaris).toContain('<title>Polaris — NorthStar</title>');
+    expect(polaris).toContain('<h1 class="polaris-page-title">Polaris</h1>');
     expect(polaris).toContain('id="polarisSelectedContext"');
     expect(polaris).toContain('function findSelectedGraph(workspace, selection)');
     expect(polaris).toContain('No fallback record is shown.');
+    expect(polaris).toContain('/api/v1/canonical/polaris/assistant/context');
+    expect(polaris).toContain('/api/v1/canonical/polaris/assistant/status');
+    expect(polaris).toContain("providerState === 'error' ? 'Error' : 'Unconfigured'");
     expect(polaris).toContain('Live provider requests');
+    expect(polaris).not.toContain('/api/v1/polaris/chat');
     expect(polaris).not.toContain('All systems operational');
     expect(polaris).not.toContain('Intelligence API Connected');
   });

@@ -1,0 +1,61 @@
+.polaris-native-card-host {
+  width: min(100%, 760px);
+  align-self: center;
+  margin: 0 0 24px;
+}
+.polaris-native-card-host:empty { display: none; }
+.polaris-native-card {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #7c3aed 62%, var(--neutral-200));
+  border-radius: 16px;
+  color: var(--neutral-900);
+  background: linear-gradient(145deg, color-mix(in srgb, #7c3aed 13%, var(--neutral-50)), var(--neutral-50) 48%);
+  box-shadow: 0 12px 32px rgba(76, 29, 149, .13);
+}
+.polaris-native-card-header {
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid color-mix(in srgb, #7c3aed 24%, var(--neutral-200));
+}
+.polaris-native-card-kicker {
+  color: #6d28d9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.polaris-native-card-title { margin: 5px 0 2px; font-size: 21px; }
+.polaris-native-card-subtitle { margin: 0; color: var(--neutral-600); }
+.polaris-native-card-section { padding: 15px 22px; border-bottom: 1px solid var(--neutral-200); }
+.polaris-native-card-heading { margin: 0 0 7px; color: #6d28d9; font-size: 13px; }
+.polaris-native-card-answer,
+.polaris-native-card-confidence,
+.polaris-native-card-basis,
+.polaris-native-card-empty { margin: 0; line-height: 1.55; overflow-wrap: anywhere; }
+.polaris-native-card-basis,
+.polaris-native-card-empty { margin-top: 4px; color: var(--neutral-600); font-size: 12px; }
+.polaris-native-card-list { display: grid; gap: 7px; margin: 0; padding-left: 20px; }
+.polaris-native-card-evidence { padding-left: 2px; overflow-wrap: anywhere; }
+.polaris-native-card-label { font-weight: 700; }
+.polaris-native-card-label::after { content: ": "; }
+.polaris-native-card-value { color: var(--neutral-700); }
+.polaris-native-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 22px;
+  color: var(--neutral-600);
+  font-size: 11px;
+  font-weight: 700;
+}
+[data-theme="dark"] .polaris-native-card {
+  border-color: #8b5cf6;
+  background: linear-gradient(145deg, rgba(109, 40, 217, .24), var(--neutral-50) 48%);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .3);
+}
+[data-theme="dark"] .polaris-native-card-kicker,
+[data-theme="dark"] .polaris-native-card-heading { color: #c4b5fd; }
+@media (max-width: 480px) {
+  .polaris-native-card-header,
+  .polaris-native-card-section,
+  .polaris-native-card-footer { padding-left: 16px; padding-right: 16px; }
+}

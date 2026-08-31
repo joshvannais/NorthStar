@@ -44,6 +44,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/knowledge-management.js',
   'public/js/navigation-launcher.js',
   'public/js/polaris-card.js',
+  'public/js/polaris-native-card.js',
   'public/js/polaris-surface-card.js',
   'public/js/presentation-format.js',
   'public/js/product-telemetry.js',

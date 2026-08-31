@@ -10,6 +10,10 @@ const {
   createInitialDemoState,
   tenantIdFromTokenHash,
 } = require('./workspace');
+const {
+  FIXTURE_CONTRACT,
+  validateDemoWorkspaceFixture,
+} = require('./demoWorkspaceGenerator');
 const { DEFAULT_SELECTION, normalizeSelection } = require('./scenarioSpace');
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -46,11 +50,34 @@ function date(value) {
 }
 
 function state(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || value.schemaVersion !== 1 ||
+  const legacy = value && value.schemaVersion === 1;
+  const seeded = value && value.schemaVersion === 2 && /^[0-9a-f]{64}$/.test(String(value.seed || '')) &&
+    Number.isSafeInteger(value.generation) && value.generation >= 1 && value.workspace &&
+    value.workspace.contract === FIXTURE_CONTRACT;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || (!legacy && !seeded) ||
       !Array.isArray(value.graphs) || typeof value.createdAt !== 'string') {
     fail(503, 'DEMO_STATE_INVALID', 'The isolated demo state is unavailable.');
   }
+  if (seeded) {
+    try { validateDemoWorkspaceFixture(value.workspace); } catch (_error) {
+      fail(503, 'DEMO_STATE_INVALID', 'The isolated demo state is unavailable.');
+    }
+  }
   return stableValue(value);
+}
+
+function workspaceSeedForToken(tokenHash) {
+  return sha256({ contract: 'northstar_demo_workspace_admission_seed_v1', tokenHash: digest(tokenHash) });
+}
+
+function nextWorkspaceSeed(currentState, idempotencyHash) {
+  const priorSeed = currentState && /^[0-9a-f]{64}$/.test(String(currentState.seed || ''))
+    ? currentState.seed : sha256({ legacyCreatedAt: currentState && currentState.createdAt || null });
+  return sha256({
+    contract: 'northstar_demo_workspace_reset_seed_v1',
+    priorSeed,
+    idempotencyHash: digest(idempotencyHash),
+  });
 }
 
 function revision(value) {
@@ -158,7 +185,9 @@ function recordFromRow(row, token, persisted) {
       token,
       tenantId: token.tenantId,
       sessionId: token.sessionId,
-      state: createInitialDemoState(token.tenantId, token.issuedAt),
+      state: createInitialDemoState(token.tenantId, token.issuedAt, {
+        seed: workspaceSeedForToken(token.tokenHash),
+      }),
       revision: 1,
       simulationCount: 0,
       mutationCount: 0,
@@ -326,7 +355,9 @@ class DemoCommandCenterRepository {
     if (activeCount >= this.maxActiveSessions) {
       fail(429, 'DEMO_CAPACITY_LIMIT', 'The bounded account-free demo is at capacity. Try again later.');
     }
-    const initial = createInitialDemoState(token.tenantId, token.issuedAt);
+    const initial = createInitialDemoState(token.tenantId, token.issuedAt, {
+      seed: workspaceSeedForToken(token.tokenHash),
+    });
     await client.query(
       `INSERT INTO demo_command_center_sessions
          (id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
@@ -416,8 +447,11 @@ class DemoCommandCenterRepository {
           fail(429, 'DEMO_SIMULATION_RATE_LIMIT', 'Wait briefly before simulating another lead.');
         }
         const key = 'session-lead-' + String(current.revision + 1) + '-' + input.idempotencyHash.slice(0, 12);
+        const seededWorkspace = current.state.workspace && current.state.workspace.contract === FIXTURE_CONTRACT
+          ? current.state.workspace : null;
         const graph = buildSimulatedGraph({
-          tenantId: current.tenantId,
+          tenantId: seededWorkspace ? seededWorkspace.tenant.id : current.tenantId,
+          workspace: seededWorkspace,
           key,
           scenarioSelection: input.scenarioSelection,
           createdAt: now,
@@ -426,7 +460,10 @@ class DemoCommandCenterRepository {
         nextSimulationCount += 1;
         lastSimulatedAt = now;
       } else {
-        nextState = createInitialDemoState(current.tenantId, now);
+        nextState = createInitialDemoState(current.tenantId, now, {
+          seed: nextWorkspaceSeed(current.state, input.idempotencyHash),
+          generation: Number.isSafeInteger(current.state.generation) ? current.state.generation + 1 : 2,
+        });
         nextSimulationCount = 0;
         lastSimulatedAt = null;
       }
@@ -539,4 +576,6 @@ module.exports = {
   TOKEN_LIFETIME_MS,
   issueToken,
   normalizeToken,
+  nextWorkspaceSeed,
+  workspaceSeedForToken,
 };

@@ -127,6 +127,19 @@ function treeDigest(directory) {
   return hash.digest('hex');
 }
 
+function deepKeys(value, keys = []) {
+  if (!value || typeof value !== 'object') return keys;
+  if (Array.isArray(value)) {
+    value.forEach(entry => deepKeys(entry, keys));
+    return keys;
+  }
+  Object.entries(value).forEach(([key, entry]) => {
+    keys.push(key);
+    deepKeys(entry, keys);
+  });
+  return keys;
+}
+
 function hasPolarisSurface(routeId) {
   return POLARIS_PLACEMENT_ALLOWLIST.includes(routeId);
 }
@@ -144,7 +157,7 @@ async function inspectProfessionalPresentation(page, label) {
       .filter(visible);
     const normalizedWeight = value => value === 'normal' ? '400' : value === 'bold' ? '700' : value;
     const families = Array.from(new Set(nodes.map(node => getComputedStyle(node).fontFamily)));
-    const nativeFamily = /(?:-apple-system|BlinkMacSystemFont|Segoe UI|Helvetica Neue|Arial|sans-serif)/i;
+    const nativeFamily = /(?:-apple-system|-webkit-standard|BlinkMacSystemFont|Segoe UI|Helvetica Neue|Arial|sans-serif)/i;
     const fontOffenders = nodes.filter(node => !nativeFamily.test(getComputedStyle(node).fontFamily)).map(node => ({
       tag: node.tagName,
       id: node.id,
@@ -1042,6 +1055,28 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const initialConfiguration = initial.workspace.configuration;
     const initialNavigation = initial.workspace.navigation;
     const initialDigest = initial.workspace.integrity.digest;
+    const initialTenant = initial.workspace.tenant;
+    assert.strictEqual(initial.workspace.session.workspaceGeneration, 1,
+      viewport.label + ' starts with one session-scoped fictional workspace generation');
+    assert.ok(!deepKeys(initial.workspace).includes('seed'),
+      viewport.label + ' does not expose the server-side fixture seed');
+
+    const siblingTab = await context.newPage();
+    try {
+      const response = await siblingTab.goto(origin + '/demo/leads', {
+        waitUntil: 'domcontentloaded', timeout: 15000,
+      });
+      assert.ok(response && [200, 304].includes(response.status()),
+        viewport.label + ' same-session sibling tab response');
+      await waitReady(siblingTab, ROUTES.find(route => route.id === 'leads'), 1);
+      const siblingWorkspace = await siblingTab.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
+      assert.deepStrictEqual(siblingWorkspace.tenant, initialTenant,
+        viewport.label + ' same-session sibling tab reads the exact fictional tenant');
+      assert.strictEqual(siblingWorkspace.integrity.digest, initialDigest,
+        viewport.label + ' same-session sibling tab reads the byte-consistent workspace graph');
+    } finally {
+      await siblingTab.close();
+    }
     await exerciseMobileMenuControls(page, viewport, 'demo');
     await exerciseTheme(page, viewport);
     console.log('PARITY_BROWSER_CHECKPOINT ' + viewport.label + ' theme');
@@ -1143,9 +1178,11 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     assert.strictEqual(simulated.graphs.length, 6, viewport.label + ' three scenario-selected graphs');
     assert.notStrictEqual(simulated.integrity.digest, initialDigest, viewport.label + ' state digest advances');
     assert.deepStrictEqual(simulated.configuration.businessProfile, simulated.graphs[0].businessProfile,
-      viewport.label + ' selected Business Profile owns the simulated graph');
-    assert.notDeepStrictEqual(simulated.configuration.businessProfile, initialConfiguration.businessProfile,
-      viewport.label + ' selected Business Profile replaces the default authority');
+      viewport.label + ' generated Business Profile owns the simulated graph');
+    assert.deepStrictEqual(simulated.configuration.businessProfile, initialConfiguration.businessProfile,
+      viewport.label + ' manual scenario choices do not replace the generated tenant authority');
+    assert.deepStrictEqual(simulated.tenant, initialTenant,
+      viewport.label + ' repeated lead generation preserves the active fictional tenant');
     assert.deepStrictEqual(simulated.configuration.scenarioSpace, initialConfiguration.scenarioSpace,
       viewport.label + ' scenario space remains stable');
     assert.deepStrictEqual(simulated.configuration.workforce, initialConfiguration.workforce,
@@ -1482,7 +1519,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       const route = ROUTES.find(candidate => candidate.id === id);
       const snapshot = await clickRoute(page, origin, route, 4, viewport);
       assert.deepStrictEqual(snapshot.workspace.configuration, simulated.configuration,
-        route.path + ' reads the selected Business Profile configuration');
+        route.path + ' reads the generated Business Profile configuration');
       assert.strictEqual(snapshot.polarisCardCount, 0, route.path + ' has no misplaced Polaris card after simulation');
       assert.ok(snapshot.workspace.graphs.some(graph => graph.ids.graph === added.ids.graph),
         route.path + ' retains the one canonical simulated state without a standalone Polaris projection');
@@ -1500,7 +1537,15 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     const reset = await page.evaluate(() => window.NorthStarDemoRuntime.getWorkspace());
     assert.strictEqual(reset.graphs.length, 3, viewport.label + ' reset restores seed graph count');
     assert.strictEqual(reset.session.simulationCount, 0, viewport.label + ' reset count');
-    assert.deepStrictEqual(reset.configuration, initialConfiguration, viewport.label + ' reset preserves configuration');
+    assert.strictEqual(reset.session.workspaceGeneration, 2,
+      viewport.label + ' reset atomically advances the fictional workspace generation');
+    assert.notDeepStrictEqual(reset.configuration, initialConfiguration,
+      viewport.label + ' reset creates a new coherent fictional workspace configuration');
+    assert.notStrictEqual(reset.tenant.id, initialTenant.id,
+      viewport.label + ' reset atomically creates a new fictional tenant identity');
+    assert.deepStrictEqual(reset.configuration.businessProfile, reset.graphs[0].businessProfile,
+      viewport.label + ' reset graph and configuration share one generated authority');
+    assert.ok(!deepKeys(reset).includes('seed'), viewport.label + ' reset does not expose the server-side seed');
     assert.ok(!reset.graphs.some(graph => graph.ids.graph === added.ids.graph), viewport.label + ' reset removes only session-added graph');
 
     await page.reload({ waitUntil: 'domcontentloaded' });

@@ -36,6 +36,15 @@ function settleAuditLogger() {
   return new Promise(resolve => setTimeout(resolve, 25));
 }
 
+function deepKeys(value, keys = []) {
+  if (Array.isArray(value)) value.forEach(item => deepKeys(item, keys));
+  else if (value && typeof value === 'object') Object.keys(value).forEach(key => {
+    keys.push(key);
+    deepKeys(value[key], keys);
+  });
+  return keys;
+}
+
 realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authority', () => {
   let suiteDatabase;
   let db;
@@ -116,6 +125,32 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect((await pool.query('SELECT count(*)::int AS count FROM audit_logs')).rows[0].count).toBe(0);
   });
 
+  test('independent cookie sessions stay isolated while reload and same-session route reads stay byte-consistent', async () => {
+    const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
+    const second = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
+    const firstCookie = cookieFrom(first);
+    const secondCookie = cookieFrom(second);
+
+    expect(firstCookie).not.toBe(secondCookie);
+    expect(first.body.data.tenant.id).not.toBe(second.body.data.tenant.id);
+    expect(first.body.data.integrity.digest).not.toBe(second.body.data.integrity.digest);
+    expect(deepKeys(first.body.data).some(key => /seed/i.test(key))).toBe(false);
+    expect(deepKeys(second.body.data).some(key => /seed/i.test(key))).toBe(false);
+
+    const reloaded = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', firstCookie).expect(200);
+    expect(reloaded.body.data).toEqual(first.body.data);
+
+    for (const surface of ['leads', 'communications', 'calendar']) {
+      const projected = await request(app)
+        .get('/api/demo/command-center/canonical/compat/' + surface)
+        .set('Host', 'northstar.test').set('Cookie', firstCookie).expect(200);
+      expect(projected.body.data.authority.organizationId).toBe(first.body.data.tenant.id);
+      expect(projected.body.data.metrics.graphCount).toBe(first.body.data.graphs.length);
+      expect(projected.body.data.records[0].canonical.ids.graph).toBe(first.body.data.graphs[0].ids.graph);
+    }
+  });
+
   test('one durable CAS graph updates all relevant surfaces and replays without duplication', async () => {
     const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
     const cookie = cookieFrom(first);
@@ -144,7 +179,7 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect(created.body.data.configuration.businessProfile)
       .toEqual(created.body.data.graphs[0].businessProfile);
     expect(created.body.data.configuration.businessProfile)
-      .not.toEqual(beforeConfiguration.businessProfile);
+      .toEqual(beforeConfiguration.businessProfile);
     expect(created.body.data.configuration.scenarioSpace).toEqual(beforeConfiguration.scenarioSpace);
     expect(created.body.data.configuration.workforce).toEqual(beforeConfiguration.workforce);
     expect(created.body.data.configuration.integrations).toEqual(beforeConfiguration.integrations);
@@ -279,10 +314,11 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     expect((await pool.query('SELECT count(*)::int AS count FROM audit_logs')).rows[0].count).toBe(0);
   });
 
-  test('reset is isolated, CAS-fenced, and restores the default Business Profile authority', async () => {
+  test('reset is isolated, CAS-fenced, and atomically creates a new fictional tenant authority', async () => {
     const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
     const cookie = cookieFrom(first);
     const initialConfiguration = first.body.data.configuration;
+    const initialTenant = first.body.data.tenant;
     const created = await mutation(request(app), cookie, '/api/demo/command-center/simulations/leads', 'simulate-lead', 'reset-seed-00000000000000000000001', {
       service: 'plumbing', expectedRevision: 1,
     }).expect(201);
@@ -291,9 +327,12 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     }).expect(200);
     expect(reset.body.data.integrity).toEqual(expect.objectContaining({ revision: 3, graphCount: 3 }));
     expect(reset.body.data.session.simulationCount).toBe(0);
-    expect(reset.body.data.configuration).toEqual(initialConfiguration);
+    expect(reset.body.data.session.workspaceGeneration).toBe(2);
+    expect(created.body.data.tenant).toEqual(initialTenant);
+    expect(created.body.data.configuration).toEqual(initialConfiguration);
+    expect(reset.body.data.tenant.id).not.toBe(initialTenant.id);
     expect(reset.body.data.configuration.businessProfile)
-      .not.toEqual(created.body.data.configuration.businessProfile);
+      .not.toEqual(initialConfiguration.businessProfile);
 
     const stale = await mutation(request(app), cookie, '/api/demo/command-center/reset', 'reset', 'stale-reset-0000000000000000000001', {
       expectedRevision: 2,

@@ -7,6 +7,12 @@ const { projectIntegrationCatalogue } = require('../integrations/catalogue');
 const { defaultPreferenceDocument, PROVIDERS: MAP_PROVIDERS } = require('../mapPreferences/contract');
 const pipeline = require('../routes/simulation/pipeline');
 const {
+  FIXTURE_CONTRACT,
+  createDemoWorkspaceFixture,
+  customerForSeed,
+  normalizeDemoSeed,
+} = require('./demoWorkspaceGenerator');
+const {
   DEFAULT_SELECTION,
   DIMENSIONS: SCENARIO_DIMENSIONS,
   normalizeSelection,
@@ -15,7 +21,7 @@ const {
 } = require('./scenarioSpace');
 
 const DEMO_NAMESPACE = '827bcc4d-601f-4d8b-9d3f-57570d942b11';
-const DEMO_STATE_VERSION = 1;
+const DEMO_STATE_VERSION = 2;
 const DEMO_CALCULATION_VERSION = 'command-center-demo-v1';
 const DEMO_SERVICES = Object.freeze(SCENARIO_DIMENSIONS.service.options.reduce((services, definition) => {
   services[definition.id] = Object.freeze({
@@ -68,7 +74,10 @@ function demoIntegrationCatalogue() {
   });
 }
 
-function demoBusinessProfile(selectionValue) {
+function demoBusinessProfile(selectionValue, seededWorkspace) {
+  if (seededWorkspace && seededWorkspace.contract === FIXTURE_CONTRACT) {
+    return stableValue(seededWorkspace.businessProfile);
+  }
   const fallbackSelection = { ...DEFAULT_SELECTION, business: 'owner_operator' };
   const selection = normalizeSelection(selectionValue || fallbackSelection) || fallbackSelection;
   const profile = selectionProfile(selection);
@@ -77,14 +86,30 @@ function demoBusinessProfile(selectionValue) {
     mode: 'fictional_read_only',
     businessKey: business.id,
     company: business.label,
+    email: 'demo.office@example.com',
+    phone: '(202) 555-0147',
     timeZone: 'America/New_York',
     industry: 'Home services',
     description: business.description,
     serviceArea: 'A demo ' + business.material.serviceRadiusMiles + '-mile service area',
     serviceRadiusMiles: business.material.serviceRadiusMiles,
+    serviceZones: ['Central Example Zone'],
+    headquarters: {
+      street: '100 Example Service Way', city: 'Example Falls', state: 'NC', postalCode: '00000',
+      country: 'US', timeZone: 'America/New_York', coordinates: { latitude: 35.65, longitude: -78.7 },
+      fictional: true, formatted: '100 Example Service Way, Example Falls, NC 00000',
+    },
+    services: Object.keys(DEMO_SERVICES).map(function (key) {
+      return { id: 'legacy-demo-service-' + key, key, label: DEMO_SERVICES[key].label, estimate: DEMO_SERVICES[key].estimate };
+    }),
     crewCount: business.material.crewCount,
     pricingModel: business.material.pricingModel,
     hours: 'Monday-Friday, 8:00 AM-5:00 PM',
+    ownerName: 'Avery Example',
+    voiceAssistant: {
+      name: 'NorthStar Office Manager',
+      greeting: 'Thank you for calling ' + business.label + '. How can I help today?',
+    },
     readiness: {
       state: 'needs_review',
       label: 'Review needed',
@@ -102,19 +127,22 @@ function demoBusinessProfile(selectionValue) {
   });
 }
 
-function demoConfiguration(selectionValue) {
+function demoConfiguration(selectionValue, seededWorkspace) {
+  const seeded = seededWorkspace && seededWorkspace.contract === FIXTURE_CONTRACT
+    ? seededWorkspace : null;
+  const businessProfile = demoBusinessProfile(selectionValue, seeded);
   return stableValue({
-    immutableAcrossSimulation: false,
+    immutableAcrossSimulation: Boolean(seeded),
     scenarioSpace: publicScenarioSpace(),
-    businessProfile: demoBusinessProfile(selectionValue),
-    workforce: {
+    businessProfile,
+    workforce: seeded ? seeded.team : {
       mode: 'fictional_read_only',
       members: [
-        { id: 'demo-owner', name: 'Maria Rivera', accessRole: 'owner', operationalRole: 'Owner' },
-        { id: 'demo-dispatch', name: 'Sam Lee', accessRole: 'admin', operationalRole: 'Dispatcher' },
-        { id: 'demo-crew', name: 'Alex Johnson', accessRole: 'member', operationalRole: 'Crew lead' },
+        { id: 'demo-owner', name: 'Avery Example', email: 'avery.example@example.com', phone: '(202) 555-0102', accessRole: 'owner', operationalRole: 'Owner', fictional: true },
+        { id: 'demo-dispatch', name: 'Casey Sample', email: 'casey.sample@example.com', phone: '(202) 555-0103', accessRole: 'admin', operationalRole: 'Dispatcher', fictional: true },
+        { id: 'demo-crew', name: 'Jordan Fixture', email: 'jordan.fixture@example.com', phone: '(202) 555-0104', accessRole: 'member', operationalRole: 'Crew lead', fictional: true },
       ],
-      crews: [{ id: 'demo-crew-a', name: 'Crew A', lead: 'Alex Johnson', availability: 'Available tomorrow' }],
+      crews: [{ id: 'demo-crew-a', name: 'Example Crew A', lead: 'Jordan Fixture', availability: 'Available tomorrow' }],
     },
     aiSettings: {
       mode: 'fictional_read_only',
@@ -124,7 +152,7 @@ function demoConfiguration(selectionValue) {
     },
     myNumber: {
       mode: 'fictional_read_only',
-      displayNumber: '(555) 010-0147',
+      displayNumber: seeded ? seeded.company.phone : '(202) 555-0147',
       status: 'Fictional preview number - no calls are placed or received.',
     },
     settings: {
@@ -136,6 +164,11 @@ function demoConfiguration(selectionValue) {
         note: 'Apple Maps, Google Maps, and Waze are preferences only. The demo does not launch destinations or establish provider connections.',
       },
     },
+    workspaceAuthority: seeded ? {
+      contract: seeded.contract,
+      territory: seeded.territory,
+      services: seeded.services,
+    } : null,
     integrations: demoIntegrationCatalogue(),
   });
 }
@@ -272,6 +305,7 @@ function demoCanonicalItem(tenantId, graph, configuration) {
       email: graph.customer && graph.customer.email || null,
       phone: graph.customer && graph.customer.phone || null,
       address: graph.customer && graph.customer.address || null,
+      location: graph.customer && graph.customer.location || null,
     },
     transcript: {
       id: transcriptId,
@@ -304,6 +338,7 @@ function demoCanonicalItem(tenantId, graph, configuration) {
       scheduledStart: graph.work && graph.work.scheduledStart || null,
       scheduledEnd: null,
       status: graph.work && graph.work.status || 'preferred',
+      timeZone: graph.work && graph.work.timeZone || null,
     },
     facts,
     calculationVersion: graph.polaris.calculationVersion || DEMO_CALCULATION_VERSION,
@@ -403,6 +438,7 @@ function buildDemoGraph(input) {
       phone: input.phone,
       email: input.email,
       address: input.address,
+      location: stableValue(input.customerLocation || null),
       context: input.customerContext || null,
       fictional: true,
     },
@@ -431,6 +467,7 @@ function buildDemoGraph(input) {
       scheduledStart: input.scheduledStart ? iso(input.scheduledStart) : null,
       assignedTo: input.assignedTo || null,
       schedulingConstraint: input.schedulingConstraint || null,
+      timeZone: input.timeZone || input.businessProfile && input.businessProfile.timeZone || null,
     },
     estimate: {
       id: ids.estimate,
@@ -461,49 +498,62 @@ function buildDemoGraph(input) {
   return graph;
 }
 
-function initialGraphs(tenantId, createdAt) {
-  return [
-    buildDemoGraph({
-      tenantId, key: 'seed-rivera', createdAt: shift(createdAt, -12 * 60 * 1000),
-      customerName: 'Maria Rivera', phone: '(555) 010-0112', email: 'maria@example.demo',
-      address: '48 Cedar Lane, Sample City, NC 28000', serviceKey: 'roofing', serviceLabel: 'Roof replacement',
-      estimatedValue: 14800, confidence: 92, leadStatus: 'hot', workStatus: 'follow_up_due',
-      scheduledStart: shift(createdAt, 26 * 60 * 60 * 1000), assignedTo: 'Crew A',
-      summary: 'Storm-damage roof estimate requested after the demo customer call.',
-      scope: { jobType: 'replacement', squares: 28, material: 'architectural shingle', insuranceClaim: true },
-      recommendedActions: [{ code: 'fast-follow-up', label: 'Call before 10 AM', priority: 'high' }],
-      reasoning: ['Urgency and insurance readiness support a fast follow-up.', 'Crew A has a compatible opening tomorrow.'],
-    }),
-    buildDemoGraph({
-      tenantId, key: 'seed-patel', createdAt: shift(createdAt, -38 * 60 * 1000),
-      customerName: 'Dev Patel', phone: '(555) 010-0138', email: 'dev@example.demo',
-      address: '910 Maple Way, Sample City, NC 28000', serviceKey: 'hvac', serviceLabel: 'HVAC service',
-      estimatedValue: 9600, confidence: 88, leadStatus: 'booked', workStatus: 'scheduled',
-      scheduledStart: shift(createdAt, 3 * 60 * 60 * 1000), assignedTo: 'Alex Johnson',
-      summary: 'Replacement consultation booked for a fictional aging heat-pump system.',
-      scope: { jobType: 'replacement', systemType: 'heat pump', tonnage: 3, timeline: 'this week' },
-      recommendedActions: [{ code: 'prepare-estimate', label: 'Prepare the replacement estimate', priority: 'medium' }],
-      reasoning: ['The complete system scope supports estimate preparation.', 'The requested visit is already scheduled.'],
-    }),
-    buildDemoGraph({
-      tenantId, key: 'seed-lewis', createdAt: shift(createdAt, -26 * 60 * 60 * 1000),
-      customerName: 'Avery Lewis', phone: '(555) 010-0191', email: 'avery@example.demo',
-      address: '22 Oak Court, Sample City, NC 28000', serviceKey: 'electrical', serviceLabel: 'Electrical service',
-      estimatedValue: 4250, confidence: 81, leadStatus: 'follow_up', workStatus: 'estimate_ready',
-      scheduledStart: null, assignedTo: null,
-      summary: 'Panel-upgrade estimate is ready for a fictional customer follow-up.',
-      scope: { jobType: 'panel upgrade', amperage: 200, permitRequired: true, timeline: 'within one month' },
-      recommendedActions: [{ code: 'confirm-financing', label: 'Confirm financing preference', priority: 'medium' }],
-      reasoning: ['The requested scope is collected.', 'A financing preference remains unresolved.'],
-    }),
-  ];
+function initialGraphs(seededWorkspace, createdAt) {
+  const customers = new Map(seededWorkspace.customers.map(customer => [customer.id, customer]));
+  return seededWorkspace.jobs.map(function (job, index) {
+    const customer = customers.get(job.customerId);
+    if (!customer) throw new Error('A seeded demo job has no fictional customer authority.');
+    return buildDemoGraph({
+      tenantId: seededWorkspace.tenant.id,
+      key: 'seeded-job-' + job.id,
+      createdAt: shift(createdAt, -(12 + index * 26) * 60 * 1000),
+      customerName: customer.name,
+      phone: customer.phone,
+      email: customer.email,
+      address: customer.address.formatted,
+      customerLocation: customer.address,
+      serviceKey: job.serviceKey,
+      serviceLabel: job.serviceLabel,
+      estimatedValue: job.estimatedValue,
+      confidence: job.confidence,
+      leadStatus: job.leadStatus,
+      workStatus: job.workStatus,
+      scheduledStart: job.scheduledStart,
+      assignedTo: job.assignedTo,
+      timeZone: job.timeZone,
+      summary: job.summary,
+      scope: {
+        ...job.scope,
+        serviceRadiusMiles: seededWorkspace.territory.radiusMiles,
+        customerDistanceMiles: customer.address.distanceMiles,
+        serviceZone: customer.address.serviceZone,
+        timeZone: job.timeZone,
+      },
+      recommendedActions: [{ code: 'review-fictional-job', label: 'Review the fictional job and confirm the next step.', priority: index === 0 ? 'high' : 'medium' }],
+      reasoning: [
+        'The service request matches the fictional workspace service catalogue.',
+        'The customer location is inside the configured fictional service radius.',
+      ],
+      businessProfile: seededWorkspace.businessProfile,
+    });
+  });
 }
 
-function createInitialDemoState(tenantId, createdAt) {
+function createInitialDemoState(tenantId, createdAt, options = {}) {
+  const input = typeof options === 'string' ? { seed: options } : options || {};
+  const sourceSeed = typeof input.seed === 'string' && input.seed
+    ? input.seed : 'container-tenant:' + String(tenantId);
+  const seed = normalizeDemoSeed(sourceSeed);
+  const seededWorkspace = createDemoWorkspaceFixture({ seed: sourceSeed, anchorTime: createdAt });
+  const generation = Number.isSafeInteger(input.generation) && input.generation >= 1
+    ? input.generation : 1;
   return stableValue({
     schemaVersion: DEMO_STATE_VERSION,
     createdAt: iso(createdAt),
-    graphs: initialGraphs(tenantId, createdAt),
+    generation,
+    seed,
+    workspace: seededWorkspace,
+    graphs: initialGraphs(seededWorkspace, createdAt),
   });
 }
 
@@ -520,16 +570,28 @@ function buildSimulatedGraph(input) {
     error.status = 422;
     throw error;
   }
+  const seededWorkspace = input && input.workspace && input.workspace.contract === FIXTURE_CONTRACT
+    ? input.workspace : null;
   const seed = sha256({ tenantId: input.tenantId, key: input.key, scenario: selection });
   const nameIndex = Number.parseInt(seed.slice(0, 8), 16) % DEMO_CUSTOMER_NAMES.length;
-  const customerName = DEMO_CUSTOMER_NAMES[nameIndex];
-  const serviceRadiusMiles = profile.business.material.serviceRadiusMiles;
+  const fictionalCustomer = seededWorkspace
+    ? customerForSeed(seededWorkspace, seed, Number.parseInt(seed.slice(0, 4), 16) % 1000)
+    : null;
+  const customerName = fictionalCustomer ? fictionalCustomer.name : DEMO_CUSTOMER_NAMES[nameIndex];
+  const serviceRadiusMiles = seededWorkspace
+    ? seededWorkspace.territory.radiusMiles : profile.business.material.serviceRadiusMiles;
   const distanceTenths = 10 + (
     Number.parseInt(seed.slice(8, 16), 16) % Math.max(1, serviceRadiusMiles * 10 - 9)
   );
-  const customerDistanceMiles = distanceTenths / 10;
+  const customerDistanceMiles = fictionalCustomer
+    ? fictionalCustomer.address.distanceMiles : distanceTenths / 10;
   const prepared = pipeline.withDeterministicSeed(seed, () => {
     const scenario = pipeline.generateScenario(selection.service, customerName);
+    if (fictionalCustomer) {
+      scenario.customer.phone = fictionalCustomer.phone;
+      scenario.customer.email = fictionalCustomer.email;
+      scenario.customer.address = fictionalCustomer.address.formatted;
+    }
     scenario.job.scope.callerIntent = selection.intent;
     scenario.job.scope.urgency = selection.urgency;
     scenario.job.scope.customerContext = selection.context;
@@ -560,12 +622,13 @@ function buildSimulatedGraph(input) {
     conversationOutcome: profile.outcome.label,
     serviceRadiusMiles,
     customerDistanceMiles,
-    crewCount: profile.business.material.crewCount,
-    pricingModel: profile.business.material.pricingModel,
+    crewCount: seededWorkspace ? seededWorkspace.team.crews.length : profile.business.material.crewCount,
+    pricingModel: seededWorkspace
+      ? seededWorkspace.businessProfile.pricingModel : profile.business.material.pricingModel,
   });
   const evidence = {
     ...(prepared.extracted.evidence || {}),
-    businessContext: 'Business Profile: ' + profile.business.description,
+    businessContext: 'Selected scenario template: ' + profile.business.description,
     callerIntent: profile.intent.material.customerLine,
     urgency: profile.urgency.material.customerLine,
     customerContext: profile.context.description,
@@ -573,16 +636,20 @@ function buildSimulatedGraph(input) {
     conversationOutcome: profile.outcome.material.customerLine,
     serviceRadiusMiles: 'Business Profile service radius: ' + serviceRadiusMiles + ' miles.',
     customerDistanceMiles: 'Calculated distance from the selected business origin: ' + customerDistanceMiles + ' miles.',
-    crewCount: 'Business Profile field crew count: ' + profile.business.material.crewCount + ' crew' +
-      (profile.business.material.crewCount === 1 ? '.' : 's.'),
-    pricingModel: 'Business Profile pricing model: ' + profile.business.material.pricingModel + '.',
+    crewCount: 'Business Profile field crew count: ' +
+      (seededWorkspace ? seededWorkspace.team.crews.length : profile.business.material.crewCount) + ' crew' +
+      ((seededWorkspace ? seededWorkspace.team.crews.length : profile.business.material.crewCount) === 1 ? '.' : 's.'),
+    pricingModel: 'Business Profile pricing model: ' +
+      (seededWorkspace ? seededWorkspace.businessProfile.pricingModel : profile.business.material.pricingModel) + '.',
   };
-  const businessProfileFields = new Set(['businessContext', 'serviceRadiusMiles', 'crewCount', 'pricingModel']);
+  const businessProfileFields = new Set(['serviceRadiusMiles', 'crewCount', 'pricingModel']);
+  const scenarioFields = new Set(['businessContext']);
   const calculatedFields = new Set(['customerDistanceMiles']);
   const facts = Object.keys(scope).filter(field => evidence[field]).sort().map((field, index) => {
     const evidenceSource = businessProfileFields.has(field)
       ? 'business_profile'
-      : calculatedFields.has(field) ? 'calculation' : 'transcript';
+      : scenarioFields.has(field) ? 'scenario_selection'
+        : calculatedFields.has(field) ? 'calculation' : 'transcript';
     return {
       id: input.key + '-fact-' + String(index + 1),
       variable: field,
@@ -611,14 +678,20 @@ function buildSimulatedGraph(input) {
     label: profile.outcome.material.action,
     priority: profile.urgency.material.priority,
   };
+  const assignableMembers = seededWorkspace
+    ? seededWorkspace.team.members.filter(member => member.accessRole === 'member') : [];
+  const assignedMember = assignableMembers.length
+    ? assignableMembers[Number.parseInt(seed.slice(16, 24), 16) % assignableMembers.length]
+    : null;
   return buildDemoGraph({
     tenantId: input.tenantId,
     key: input.key,
     createdAt,
     customerName,
-    phone: prepared.scenario.customer.phone,
-    email: prepared.scenario.customer.email,
-    address: prepared.scenario.customer.address,
+    phone: fictionalCustomer ? fictionalCustomer.phone : prepared.scenario.customer.phone,
+    email: fictionalCustomer ? fictionalCustomer.email : prepared.scenario.customer.email,
+    address: fictionalCustomer ? fictionalCustomer.address.formatted : prepared.scenario.customer.address,
+    customerLocation: fictionalCustomer ? fictionalCustomer.address : null,
     serviceKey: selection.service,
     serviceLabel: service.label,
     estimatedValue: service.estimate,
@@ -626,7 +699,8 @@ function buildSimulatedGraph(input) {
     leadStatus: profile.outcome.material.leadStatus,
     workStatus: profile.outcome.material.workStatus,
     scheduledStart,
-    assignedTo: profile.business.material.assignedTo,
+    assignedTo: assignedMember ? assignedMember.name : profile.business.material.assignedTo,
+    timeZone: seededWorkspace ? seededWorkspace.territory.timeZone : null,
     summary: profile.intent.label + ' for ' + service.label.toLowerCase() +
       ' with ' + profile.urgency.label.toLowerCase() + ' urgency; outcome: ' +
       profile.outcome.label.toLowerCase() + '.',
@@ -653,7 +727,7 @@ function buildSimulatedGraph(input) {
     urgency: profile.urgency.label,
     outcome: profile.outcome.label,
     schedulingConstraint: profile.scheduling.label,
-    businessProfile: demoBusinessProfile(selection),
+    businessProfile: demoBusinessProfile(selection, seededWorkspace),
     scenario: {
       contract: 'northstar_demo_scenario_selection_v1',
       signature: profile.signature,
@@ -668,10 +742,13 @@ function buildSimulatedGraph(input) {
         outcome: profile.outcome.label,
       },
       businessFactors: {
+        workspaceCompany: seededWorkspace ? seededWorkspace.company.name : profile.business.label,
+        scenarioTemplate: profile.business.label,
         serviceRadiusMiles,
         customerDistanceMiles,
-        crewCount: profile.business.material.crewCount,
-        pricingModel: profile.business.material.pricingModel,
+        crewCount: seededWorkspace ? seededWorkspace.team.crews.length : profile.business.material.crewCount,
+        pricingModel: seededWorkspace
+          ? seededWorkspace.businessProfile.pricingModel : profile.business.material.pricingModel,
         withinServiceRadius: customerDistanceMiles <= serviceRadiusMiles,
       },
     },
@@ -712,19 +789,22 @@ function workspaceBase(mode, tenant, graphs, revision, configuration) {
 }
 
 function buildDemoWorkspace(input) {
+  const seededWorkspace = input && input.state && input.state.workspace &&
+    input.state.workspace.contract === FIXTURE_CONTRACT ? input.state.workspace : null;
   const activeScenarioGraph = input.state.graphs.find(graph =>
     graph && graph.scenario && graph.scenario.selection && normalizeSelection(graph.scenario.selection));
   const activeSelection = activeScenarioGraph ? activeScenarioGraph.scenario.selection : null;
-  const configuration = demoConfiguration(activeSelection);
+  const configuration = demoConfiguration(activeSelection, seededWorkspace);
+  const tenant = seededWorkspace ? seededWorkspace.tenant : {
+    id: input.tenantId,
+    name: configuration.businessProfile.company,
+    businessProfileKey: configuration.businessProfile.businessKey,
+    fictional: true,
+    isolated: true,
+  };
   const workspace = workspaceBase(
     'demo',
-    {
-      id: input.tenantId,
-      name: configuration.businessProfile.company,
-      businessProfileKey: configuration.businessProfile.businessKey,
-      fictional: true,
-      isolated: true,
-    },
+    tenant,
     input.state.graphs,
     input.revision,
     configuration
@@ -734,9 +814,17 @@ function buildDemoWorkspace(input) {
     durable: Boolean(input.persisted),
     expiresAt: iso(input.expiresAt),
     simulationCount: input.simulationCount,
+    workspaceGeneration: Number.isSafeInteger(input.state.generation) ? input.state.generation : 1,
+    lifecycle: {
+      contract: 'new_session_or_explicit_reset_v1',
+      newSessionCreatesWorkspace: true,
+      resetCreatesWorkspace: true,
+      navigationPreservesWorkspace: true,
+      reloadPreservesWorkspace: true,
+    },
   };
   workspace.viewer = {
-    id: demoViewerId(input.tenantId),
+    id: demoViewerId(tenant.id),
     label: 'Account-free demo visitor',
   };
   return workspace;

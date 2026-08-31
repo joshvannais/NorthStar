@@ -526,6 +526,11 @@ function validateDemoGraphAgainstWorkspace(graph, workspace) {
       throw new Error('A persisted fictional demo graph fact disagrees with its workspace references.');
     }
   }
+  if (typeof graph.polaris.snapshotDigest !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(graph.polaris.snapshotDigest) ||
+      sha256(graph.polaris.snapshot) !== graph.polaris.snapshotDigest) {
+    throw new Error('A persisted fictional demo graph Polaris snapshot digest is invalid.');
+  }
   const projection = { ...graph };
   delete projection.projectionDigest;
   if (!/^[0-9a-f]{64}$/.test(String(graph.projectionDigest || '')) ||

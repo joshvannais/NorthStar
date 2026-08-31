@@ -36,6 +36,12 @@ function allContacts(fixture) {
   return [fixture.company, ...fixture.team.members, ...fixture.customers];
 }
 
+function resignGraphProjection(graph) {
+  const projection = { ...graph };
+  delete projection.projectionDigest;
+  graph.projectionDigest = sha256(projection);
+}
+
 describe('Pre-Mission 23 P5 deterministic fictional demo workspace', () => {
   test('one explicit seed produces one byte-stable fixture snapshot', () => {
     const first = createDemoWorkspaceFixture({ seed: EXPLICIT_SEED });
@@ -141,6 +147,37 @@ describe('Pre-Mission 23 P5 deterministic fictional demo workspace', () => {
     expect(graph.customer.location.withinServiceRadius).toBe(true);
     expect(graph.lead.serviceType).toBe('plumbing');
     expect(() => validateDemoGraphAgainstWorkspace(graph, state.workspace)).not.toThrow();
+  });
+
+  test('the inner Polaris snapshot digest is canonical even when the outer graph is independently re-signed', () => {
+    const state = createInitialDemoState('container-a', CREATED_AT, { seed: EXPLICIT_SEED });
+    const validGraph = state.graphs[0];
+    expect(validGraph.polaris.snapshotDigest).toBe(sha256(validGraph.polaris.snapshot));
+    expect(() => validateDemoGraphAgainstWorkspace(validGraph, state.workspace)).not.toThrow();
+
+    for (const digest of [
+      '',
+      '0'.repeat(63),
+      '0'.repeat(65),
+      'A'.repeat(64),
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      null,
+      {},
+      [],
+    ]) {
+      const graph = JSON.parse(JSON.stringify(validGraph));
+      graph.polaris.snapshotDigest = digest;
+      resignGraphProjection(graph);
+      expect(() => validateDemoGraphAgainstWorkspace(graph, state.workspace))
+        .toThrow('Polaris snapshot digest');
+    }
+
+    const alteredSnapshot = JSON.parse(JSON.stringify(validGraph));
+    alteredSnapshot.polaris.snapshot.confidence.score = 0;
+    resignGraphProjection(alteredSnapshot);
+    expect(() => validateDemoGraphAgainstWorkspace(alteredSnapshot, state.workspace))
+      .toThrow('Polaris snapshot digest');
   });
 
   test('admission and reset seeds are session-bound, deterministic, and independent of module-global state', () => {

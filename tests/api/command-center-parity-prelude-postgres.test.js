@@ -343,6 +343,40 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     await pool.query('TRUNCATE audit_logs');
   });
 
+  test('a re-signed schema-v2 graph cannot bypass its canonical Polaris snapshot digest', async () => {
+    const { issueToken, workspaceSeedForToken } = require('../../src/commandCenter/demoRepository');
+    const { createInitialDemoState } = require('../../src/commandCenter/workspace');
+    const { validateDemoGraphAgainstWorkspace } = require('../../src/commandCenter/demoWorkspaceGenerator');
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+
+    const token = issueToken(new Date());
+    const state = createInitialDemoState(token.tenantId, token.issuedAt, {
+      seed: workspaceSeedForToken(token.tokenHash),
+    });
+    state.graphs[0].polaris.snapshotDigest = '0'.repeat(64);
+    resignGraph(state.graphs[0]);
+
+    expect(() => validateDemoGraphAgainstWorkspace(state.graphs[0], state.workspace))
+      .toThrow('Polaris snapshot digest');
+    await insertPersistedDemoState(pool, token, state);
+
+    for (const route of [
+      '/api/demo/command-center',
+      '/api/demo/command-center/canonical/compat/leads',
+    ]) {
+      const response = await request(app).get(route)
+        .set('Host', 'northstar.test')
+        .set('Cookie', tokenCookie(token))
+        .expect(503);
+      expect(response.body.error.code).toBe('demo_state_invalid');
+    }
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    await settleAuditLogger();
+    await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
+    await pool.query('TRUNCATE audit_logs');
+  });
+
   test('one durable CAS graph updates all relevant surfaces and replays without duplication', async () => {
     const first = await request(app).get('/api/demo/command-center').set('Host', 'northstar.test').expect(200);
     const cookie = cookieFrom(first);

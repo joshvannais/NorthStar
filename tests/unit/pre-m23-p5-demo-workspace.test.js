@@ -5,6 +5,7 @@ const {
   FIXTURE_CONTRACT,
   createDemoWorkspaceFixture,
   distanceMiles,
+  validateDemoGraphAgainstWorkspace,
   validateDemoWorkspaceFixture,
 } = require('../../src/commandCenter/demoWorkspaceGenerator');
 const {
@@ -118,7 +119,7 @@ describe('Pre-Mission 23 P5 deterministic fictional demo workspace', () => {
     const graph = buildSimulatedGraph({
       tenantId: state.workspace.tenant.id,
       workspace: state.workspace,
-      key: 'scenario-lead-1',
+      key: 'session-lead-2-599258397429',
       scenarioSelection: SCENARIO,
       createdAt: new Date('2026-08-30T14:05:00.000Z'),
     });
@@ -139,6 +140,7 @@ describe('Pre-Mission 23 P5 deterministic fictional demo workspace', () => {
     expect(workspace.configuration.businessProfile).toEqual(state.workspace.businessProfile);
     expect(graph.customer.location.withinServiceRadius).toBe(true);
     expect(graph.lead.serviceType).toBe('plumbing');
+    expect(() => validateDemoGraphAgainstWorkspace(graph, state.workspace)).not.toThrow();
   });
 
   test('admission and reset seeds are session-bound, deterministic, and independent of module-global state', () => {

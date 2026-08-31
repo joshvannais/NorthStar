@@ -1023,6 +1023,37 @@ async function exerciseTheme(page, viewport) {
     viewport.label + ' theme control stays flush and visible');
 }
 
+async function inspectSettledToolbarReturn(page, viewport, label) {
+  const samples = [];
+  for (const delay of [0, 50, 150, 350, 750, 1550]) {
+    if (delay > 0) await page.waitForTimeout(delay - samples[samples.length - 1].delay);
+    samples.push(await page.evaluate(sampleDelay => {
+      const toolbar = document.getElementById('northstarDemoToolbar');
+      const summary = toolbar && toolbar.querySelector('.northstar-demo-scenario-builder > summary');
+      const rect = toolbar && toolbar.getBoundingClientRect();
+      return {
+        delay: sampleDelay,
+        toolbarTop: rect && rect.top,
+        toolbarBottom: rect && rect.bottom,
+        scrollY: window.scrollY,
+        focusedBuilderSummary: document.activeElement === summary,
+        scrollRestoration: history.scrollRestoration,
+      };
+    }, delay));
+  }
+  for (const sample of samples.filter(value => value.delay >= 350)) {
+    assert.strictEqual(sample.focusedBuilderSummary, true,
+      label + ' keeps keyboard focus on the returned scenario control: ' + JSON.stringify(samples));
+    assert.ok(sample.toolbarTop >= -1 && sample.toolbarTop <= Math.max(120, viewport.height * 0.25),
+      label + ' keeps the toolbar settled in the visible control area: ' + JSON.stringify(samples));
+    assert.ok(sample.toolbarBottom > 0,
+      label + ' keeps the focused toolbar intersecting the viewport: ' + JSON.stringify(samples));
+  }
+  assert.strictEqual(samples[samples.length - 1].scrollRestoration, 'auto',
+    label + ' restores native history behavior after bounded toolbar ownership: ' + JSON.stringify(samples));
+  return samples;
+}
+
 async function exerciseViewport(browser, origin, viewport, ledger) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
   context.setDefaultTimeout(10000);
@@ -1126,6 +1157,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       page.click('#demoSimulateLead'),
     ]);
     await waitReady(page, ROUTES[0], 2);
+    await inspectSettledToolbarReturn(page, viewport, viewport.label + ' generation 1');
     const postSimulationControls = await page.evaluate(() => ({
       selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
         .map(control => [control.dataset.scenarioDimension, control.value])),
@@ -1158,6 +1190,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         page.click('#demoSimulateLead'),
       ]);
       await waitReady(page, ROUTES[0], generation + 1);
+      await inspectSettledToolbarReturn(page, viewport, viewport.label + ' generation ' + generation);
       const afterGeneration = await page.evaluate(() => ({
         selection: Object.fromEntries(Array.from(document.querySelectorAll('[data-scenario-dimension]'))
           .map(control => [control.dataset.scenarioDimension, control.value])),
@@ -1191,6 +1224,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       viewport.label + ' integrations remain stable');
     assert.deepStrictEqual(simulated.navigation, initialNavigation, viewport.label + ' navigation remains stable');
     const added = simulated.graphs[0];
+    const addedNameCount = simulated.graphs.filter(graph => graph.customer.name === added.customer.name).length;
     assert.strictEqual(added.lead.serviceType, 'roofing', viewport.label + ' selected service');
     assert.deepStrictEqual(added.scenario.selection, scenarioSelection, viewport.label + ' complete selected scenario');
     assert.strictEqual(added.polaris.snapshot.risk.emergency, true, viewport.label + ' urgency changes Polaris risk');
@@ -1393,7 +1427,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     });
     assert.strictEqual(await page.locator('#cdCustomerDrawer').getAttribute('aria-hidden'), 'true',
       viewport.label + ' close button restores hidden dialog semantics');
-    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).first().click();
     await page.waitForFunction(name => {
       const drawer = document.getElementById('cdCustomerDrawer');
       return drawer && !drawer.hidden && drawer.getAttribute('aria-hidden') === 'false' && drawer.textContent.includes(name);
@@ -1404,7 +1438,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       return drawer && drawer.hidden && drawer.getAttribute('aria-hidden') === 'true';
     });
     await captureEvidence(page, 'demo', leadsRoute, viewport, 'simulated');
-    await page.locator('#leadsContent tr', { hasText: added.customer.name }).click();
+    await page.locator('#leadsContent tr', { hasText: added.customer.name }).first().click();
     await page.waitForFunction(name => {
       const drawer = document.getElementById('cdCustomerDrawer');
       return drawer && !drawer.hidden && drawer.textContent.includes(name) &&
@@ -1426,10 +1460,11 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       if (id === 'communications') {
         const initialResults = await page.locator('#resultsCount').innerText();
         await page.locator('#callSearchInput').fill(added.customer.name);
-        await page.waitForFunction(name => {
+        await page.waitForFunction(expected => {
           const results = document.getElementById('resultsCount');
-          return results && results.textContent.startsWith('1 customer') && document.body.textContent.includes(name);
-        }, added.customer.name);
+          return results && results.textContent.startsWith(expected.count + ' customer') &&
+            document.body.textContent.includes(expected.name);
+        }, { name: added.customer.name, count: addedNameCount });
         await page.locator('#callSearchInput').fill('');
         await page.waitForFunction(expected => document.getElementById('resultsCount').textContent === expected,
           initialResults);
@@ -1450,23 +1485,33 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
         await page.locator('.cal-view-tab', { hasText: 'Day' }).click();
         await page.waitForFunction(() => window.calState && window.calState.view === 'day');
         await page.locator('.cal-today-btn').click();
-        const calendarToday = await page.evaluate(() => ({
-          expected: window.calState._formatDate(new Date()),
-          selected: window.calState.selectedDate,
-          title: document.querySelector('.cal-day-title').textContent,
-        }));
+        const calendarToday = await page.evaluate(() => {
+          const projection = window.CanonicalIntelligence.getProjection('calendar');
+          return {
+            expected: window.NorthStarSchedulingTime.formatInstant(
+              new Date(), projection.timeZoneAuthority.timeZone
+            ).date,
+            selected: window.calState.selectedDate,
+            title: document.querySelector('.cal-day-title').textContent,
+          };
+        });
         assert.strictEqual(calendarToday.selected, calendarToday.expected,
-          viewport.label + ' Calendar Day view and Today action use the same local date');
+          viewport.label + ' Calendar Day view and Today action use the same tenant-zone date');
         assert.ok(calendarToday.title.includes('Today'),
           viewport.label + ' Calendar Day view marks the selected local date as Today');
         const agendaButton = page.locator('.cal-view-tab', { hasText: 'Agenda' });
         await agendaButton.click();
         await page.waitForFunction(() => window.calState && window.calState.view === 'agenda');
-        const agendaConsistency = await page.evaluate(() => ({
-          expected: window.calState._formatDate(new Date()),
-          todayEvents: window.calState.getTodayEvents().length,
-          todayLabels: Array.from(document.querySelectorAll('.cal-agenda-date-today')).map(node => node.textContent),
-        }));
+        const agendaConsistency = await page.evaluate(() => {
+          const projection = window.CanonicalIntelligence.getProjection('calendar');
+          return {
+            expected: window.NorthStarSchedulingTime.formatInstant(
+              new Date(), projection.timeZoneAuthority.timeZone
+            ).date,
+            todayEvents: window.calState.getTodayEvents().length,
+            todayLabels: Array.from(document.querySelectorAll('.cal-agenda-date-today')).map(node => node.textContent),
+          };
+        });
         if (agendaConsistency.todayEvents > 0) {
           assert.ok(agendaConsistency.todayLabels.length > 0 && agendaConsistency.todayLabels.every(label => label.includes('Today')),
             viewport.label + ' Calendar Agenda uses the same Today classification as Day view');

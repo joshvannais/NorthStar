@@ -17,10 +17,30 @@
   var SCENARIO_PREFERENCES_KEY = 'northstarDemoScenarioPreferences';
   var RETURN_TO_TOOLBAR_KEY = 'northstarDemoReturnToToolbar';
   var returnToToolbarRequested = false;
+  var requestedScrollRestoration = 'auto';
+  var scrollRestorationTimer = null;
+
+  function ownToolbarScrollRestoration(restoreMode) {
+    if (!global.history || !('scrollRestoration' in global.history)) return;
+    requestedScrollRestoration = restoreMode === 'manual' ? 'manual' : 'auto';
+    global.history.scrollRestoration = 'manual';
+    if (scrollRestorationTimer) global.clearTimeout(scrollRestorationTimer);
+    scrollRestorationTimer = global.setTimeout(restoreToolbarScrollMode, 2000);
+  }
+
+  function restoreToolbarScrollMode() {
+    if (scrollRestorationTimer) global.clearTimeout(scrollRestorationTimer);
+    scrollRestorationTimer = null;
+    if (global.history && 'scrollRestoration' in global.history) {
+      global.history.scrollRestoration = requestedScrollRestoration;
+    }
+  }
+
   try {
-    returnToToolbarRequested = Boolean(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY));
-    if (returnToToolbarRequested && global.history && 'scrollRestoration' in global.history) {
-      global.history.scrollRestoration = 'manual';
+    var storedToolbarReturn = JSON.parse(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY) || 'null');
+    returnToToolbarRequested = Boolean(storedToolbarReturn);
+    if (returnToToolbarRequested) {
+      ownToolbarScrollRestoration(storedToolbarReturn.scrollRestoration);
     }
   } catch (_storageError) {}
   var TOOLBAR_EXCLUDED_PATHS = Object.freeze([
@@ -503,11 +523,17 @@
   }
 
   function requestToolbarReturn(value) {
+    var currentScrollRestoration = global.history && 'scrollRestoration' in global.history
+      ? global.history.scrollRestoration : 'auto';
     try {
       global.sessionStorage.setItem(RETURN_TO_TOOLBAR_KEY, JSON.stringify({
         sessionId: value && value.session && value.session.id,
+        scrollRestoration: currentScrollRestoration === 'manual' ? 'manual' : 'auto',
       }));
-    } catch (_storageError) {}
+      ownToolbarScrollRestoration(currentScrollRestoration);
+    } catch (_storageError) {
+      restoreToolbarScrollMode();
+    }
   }
 
   function returnToToolbar(value) {
@@ -519,17 +545,33 @@
       global.sessionStorage.removeItem(RETURN_TO_TOOLBAR_KEY);
     } catch (_storageError) {}
     returnToToolbarRequested = false;
-    if (!matchesSession) return;
+    if (!matchesSession) {
+      restoreToolbarScrollMode();
+      return;
+    }
     var toolbar = document.getElementById('northstarDemoToolbar');
     var summary = toolbar && toolbar.querySelector('summary');
     if (!toolbar || !summary) {
       global.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      global.setTimeout(restoreToolbarScrollMode, 500);
       return;
     }
     var details = toolbar.querySelector('details');
     if (details) details.open = false;
-    toolbar.scrollIntoView({ block: 'start', behavior: 'smooth' });
     summary.focus({ preventScroll: true });
+    var positionToolbar = function () {
+      if (!toolbar.isConnected) return;
+      toolbar.scrollIntoView({ block: 'start', behavior: 'auto' });
+    };
+    positionToolbar();
+    global.requestAnimationFrame(function () {
+      positionToolbar();
+      global.requestAnimationFrame(positionToolbar);
+    });
+    [50, 150, 350].forEach(function (delay) {
+      global.setTimeout(positionToolbar, delay);
+    });
+    global.setTimeout(restoreToolbarScrollMode, 500);
     var announce = document.getElementById('northstarDemoStatus');
     if (announce) announce.textContent = 'Lead added. Your scenario choices are saved; the builder is ready for another run.';
   }

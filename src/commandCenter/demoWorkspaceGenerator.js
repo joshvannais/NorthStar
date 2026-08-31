@@ -2,13 +2,15 @@
 
 const crypto = require('crypto');
 const { v5: uuidv5 } = require('uuid');
-const { stableValue } = require('../services/businessProfileAdapter');
+const { sha256, stableValue } = require('../services/businessProfileAdapter');
 
 const FIXTURE_CONTRACT = 'northstar_seeded_fictional_demo_workspace_v1';
 const SEED_CONTRACT = 'northstar_demo_workspace_seed_v1';
 const FIXTURE_NAMESPACE = '4c298d45-b8ec-4df4-9f4b-34aa21ed9d63';
 const RESERVED_EMAIL = /^[a-z0-9.-]+@example\.com$/;
 const RESERVED_PHONE = /^\([2-9][0-9]{2}\) 555-01[0-9]{2}$/;
+const SYNTHETIC_PERSON = / (?:Demo|Example|Fixture|Sample)$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 const REGIONS = Object.freeze([
   Object.freeze({
@@ -199,7 +201,12 @@ function readiness() {
 
 function createDemoWorkspaceFixture(input) {
   const value = typeof input === 'string' ? { seed: input } : input || {};
-  const seedDigest = normalizeDemoSeed(value.seed);
+  const seedDigest = value.seedDigest === undefined
+    ? normalizeDemoSeed(value.seed)
+    : String(value.seedDigest);
+  if (!/^[0-9a-f]{64}$/.test(seedDigest)) {
+    throw new Error('A normalized demo workspace seed digest is invalid.');
+  }
   const random = seededGenerator(seedDigest);
   const region = random.pick(REGIONS);
   const radiusMiles = random.integer(24, 42);
@@ -358,6 +365,10 @@ function validateDemoWorkspaceFixture(fixture) {
       !RESERVED_PHONE.test(contact.phone))) {
     throw new Error('The fictional demo workspace contains non-reserved contact data.');
   }
+  if (!String(fixture.company.name || '').includes('Example') ||
+      [...fixture.team.members, ...fixture.customers].some(person => !SYNTHETIC_PERSON.test(String(person.name || '')))) {
+    throw new Error('The fictional demo workspace contains a non-synthetic identity.');
+  }
   if (fixture.company.timeZone !== fixture.territory.timeZone ||
       fixture.businessProfile.timeZone !== fixture.territory.timeZone ||
       fixture.company.serviceRadiusMiles !== fixture.territory.radiusMiles) {
@@ -390,6 +401,140 @@ function validateDemoWorkspaceFixture(fixture) {
   return true;
 }
 
+function sameStableValue(first, second) {
+  return JSON.stringify(stableValue(first)) === JSON.stringify(stableValue(second));
+}
+
+function validateLocationAgainstTerritory(location, territory) {
+  if (!location || location.fictional !== true || location.withinServiceRadius !== true ||
+      location.city !== territory.city || location.state !== territory.state ||
+      location.postalCode !== '00000' || location.country !== territory.country ||
+      location.timeZone !== territory.timeZone || !territory.zones.includes(location.serviceZone) ||
+      !String(location.formatted || '').includes('Example') ||
+      !location.coordinates || !Number.isFinite(Number(location.coordinates.latitude)) ||
+      !Number.isFinite(Number(location.coordinates.longitude))) {
+    throw new Error('A fictional demo graph location disagrees with its workspace territory.');
+  }
+  const calculatedDistance = Number(distanceMiles(territory.center, location.coordinates).toFixed(2));
+  if (calculatedDistance > territory.radiusMiles ||
+      Math.abs(calculatedDistance - Number(location.distanceMiles)) > 0.05) {
+    throw new Error('A fictional demo graph location falls outside its workspace radius.');
+  }
+}
+
+function validateReservedTextContacts(value) {
+  const strings = [];
+  (function collect(current) {
+    if (typeof current === 'string') strings.push(current);
+    else if (Array.isArray(current)) current.forEach(collect);
+    else if (current && typeof current === 'object') Object.values(current).forEach(collect);
+  })(value);
+  const emailPattern = /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+  const phonePattern = /(?<![0-9a-z])(?:\+?1[\s.-]?)?(?:\([2-9][0-9]{2}\)|[2-9][0-9]{2})[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9a-z])/gi;
+  for (const text of strings) {
+    const emails = text.match(emailPattern) || [];
+    if (emails.some(email => !RESERVED_EMAIL.test(email.toLowerCase()))) {
+      throw new Error('A persisted fictional demo graph contains non-reserved contact text.');
+    }
+    const phones = text.match(phonePattern) || [];
+    if (phones.some(phone => {
+      const digits = phone.replace(/[^0-9]/g, '').replace(/^1(?=[2-9][0-9]{9}$)/, '');
+      return digits.length !== 10 || digits.slice(3, 8) !== '55501';
+    })) {
+      throw new Error('A persisted fictional demo graph contains non-reserved phone text.');
+    }
+  }
+}
+
+function validateDemoGraphAgainstWorkspace(graph, workspace) {
+  validateDemoWorkspaceFixture(workspace);
+  if (!graph || typeof graph !== 'object' || Array.isArray(graph) ||
+      !graph.ids || !graph.source || graph.source.type !== 'account_free_demo' || graph.source.version !== 2 ||
+      !graph.customer || graph.customer.fictional !== true || !graph.lead || !graph.work ||
+      !graph.estimate || graph.estimate.fictional !== true || !graph.communication ||
+      !graph.polaris || graph.polaris.fictional !== true || !graph.timestamps) {
+    throw new Error('A persisted fictional demo graph is malformed.');
+  }
+  const expectedIds = {
+    customer: graph.customer.id,
+    lead: graph.lead.id,
+    opportunity: graph.lead.id,
+    work: graph.work.id,
+    appointment: graph.work.id,
+    communication: graph.communication.id,
+    estimate: graph.estimate.id,
+    polarisSnapshot: graph.polaris.id,
+  };
+  const expectedIdKeys = [
+    'appointment', 'communication', 'customer', 'estimate', 'graph', 'lead',
+    'operation', 'opportunity', 'polarisSnapshot', 'work',
+  ];
+  const distinctIds = [
+    graph.ids.appointment, graph.ids.communication, graph.ids.customer, graph.ids.estimate,
+    graph.ids.graph, graph.ids.lead, graph.ids.operation, graph.ids.polarisSnapshot,
+  ];
+  if (!sameStableValue(Object.keys(graph.ids).sort(), expectedIdKeys) ||
+      distinctIds.some(value => !UUID.test(String(value || ''))) ||
+      new Set(distinctIds).size !== distinctIds.length ||
+      Object.entries(expectedIds).some(([key, value]) => !UUID.test(String(value || '')) || graph.ids[key] !== value)) {
+    throw new Error('A persisted fictional demo graph has inconsistent object references.');
+  }
+  if (!SYNTHETIC_PERSON.test(String(graph.customer.name || '')) ||
+      !RESERVED_EMAIL.test(String(graph.customer.email || '')) ||
+      !RESERVED_PHONE.test(String(graph.customer.phone || ''))) {
+    throw new Error('A persisted fictional demo graph contains non-reserved customer identity data.');
+  }
+  validateReservedTextContacts(graph);
+  validateLocationAgainstTerritory(graph.customer.location, workspace.territory);
+  if (graph.customer.address !== graph.customer.location.formatted) {
+    throw new Error('A persisted fictional demo graph address disagrees with its location authority.');
+  }
+  const service = workspace.services.find(candidate => candidate.key === graph.lead.serviceType);
+  if (!service || graph.lead.serviceLabel !== service.label ||
+      !graph.polaris.snapshot || !graph.polaris.snapshot.service ||
+      graph.polaris.snapshot.service.key !== service.key ||
+      graph.polaris.snapshot.service.label !== service.label) {
+    throw new Error('A persisted fictional demo graph service disagrees with its workspace catalogue.');
+  }
+  if (!sameStableValue(graph.businessProfile, workspace.businessProfile) ||
+      graph.work.timeZone !== workspace.territory.timeZone ||
+      !workspace.team.members.some(member => member.name === graph.work.assignedTo)) {
+    throw new Error('A persisted fictional demo graph profile or assignment disagrees with its workspace.');
+  }
+  const scope = graph.polaris.snapshot.service.scope;
+  if (!scope || Number(scope.serviceRadiusMiles) !== workspace.territory.radiusMiles ||
+      Number(scope.customerDistanceMiles) !== Number(graph.customer.location.distanceMiles) ||
+      (scope.phone !== undefined && scope.phone !== graph.customer.phone) ||
+      (scope.email !== undefined && scope.email !== graph.customer.email) ||
+      (scope.address !== undefined && scope.address !== graph.customer.address) ||
+      (scope.customerName !== undefined && scope.customerName !== graph.customer.name) ||
+      (scope.serviceZone !== undefined && scope.serviceZone !== graph.customer.location.serviceZone) ||
+      (scope.timeZone !== undefined && scope.timeZone !== workspace.territory.timeZone) ||
+      (graph.scenario && graph.scenario.selection && graph.scenario.selection.service !== service.key)) {
+    throw new Error('A persisted fictional demo graph scope disagrees with its workspace references.');
+  }
+  const facts = new Map((Array.isArray(graph.polaris.facts) ? graph.polaris.facts : [])
+    .map(fact => [fact && fact.variable, fact && fact.normalizedValue]));
+  for (const [variable, expected] of [
+    ['phone', graph.customer.phone],
+    ['email', graph.customer.email],
+    ['address', graph.customer.address],
+    ['serviceRadiusMiles', workspace.territory.radiusMiles],
+    ['customerDistanceMiles', graph.customer.location.distanceMiles],
+  ]) {
+    if (facts.has(variable) && !sameStableValue(facts.get(variable), expected)) {
+      throw new Error('A persisted fictional demo graph fact disagrees with its workspace references.');
+    }
+  }
+  const projection = { ...graph };
+  delete projection.projectionDigest;
+  if (!/^[0-9a-f]{64}$/.test(String(graph.projectionDigest || '')) ||
+      sha256(projection) !== graph.projectionDigest) {
+    throw new Error('A persisted fictional demo graph projection digest is invalid.');
+  }
+  return true;
+}
+
 module.exports = {
   FIXTURE_CONTRACT,
   SEED_CONTRACT,
@@ -398,5 +543,6 @@ module.exports = {
   customerForSeed,
   distanceMiles,
   normalizeDemoSeed,
+  validateDemoGraphAgainstWorkspace,
   validateDemoWorkspaceFixture,
 };

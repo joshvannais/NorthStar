@@ -20,6 +20,41 @@ const cache = require('../cache/client');
 // In-memory fallback store (used when Redis is unavailable)
 const memoryStore = new Map();
 
+function rateLimitClockError(message) {
+  const error = new RangeError(message);
+  error.code = 'RATE_LIMIT_CLOCK_INVALID';
+  return error;
+}
+
+function safeWindowExpiry(now, windowMs) {
+  if (!Number.isSafeInteger(now) || now < 0
+      || !Number.isSafeInteger(windowMs) || windowMs <= 0
+      || now > Number.MAX_SAFE_INTEGER - windowMs) {
+    throw rateLimitClockError('Rate-limit clock or window is outside the safe range');
+  }
+  return now + windowMs;
+}
+
+function boundedResult(count, limit, observedAt, resetTime, windowMs) {
+  if (!Number.isSafeInteger(count) || count < 1
+      || !Number.isSafeInteger(observedAt) || observedAt < 0
+      || !Number.isSafeInteger(resetTime) || resetTime <= observedAt
+      || resetTime - observedAt > windowMs) {
+    throw rateLimitClockError('Rate-limit counter returned unsafe expiry state');
+  }
+  const retryAfterSeconds = Math.max(1, Math.min(
+    Math.ceil(windowMs / 1000),
+    Math.ceil((resetTime - observedAt) / 1000)
+  ));
+  return {
+    allowed: count <= limit,
+    remaining: Math.max(0, limit - count),
+    resetTime,
+    retryAfterSeconds,
+    count
+  };
+}
+
 /**
  * Get the rate limit configuration for a given endpoint group and plan.
  */
@@ -51,50 +86,50 @@ function getLimitConfig(group, plan = 'starter') {
  * Rate limit a key. Returns { allowed, remaining, resetTime }.
  */
 async function checkRateLimit(key, limit, windowMs) {
-  const now = Date.now();
-  const resetTime = now + windowMs;
-
   // Use the optional acceleration cache when enabled.
   if (cache.isAvailable()) {
     try {
-      const result = await cache.incr(key, windowMs / 1000);
-      const count = result;
-      return {
-        allowed: count <= limit,
-        remaining: Math.max(0, limit - count),
-        resetTime: now + windowMs,
-        count
-      };
+      const result = await cache.incrWithExpiry(key, windowMs / 1000);
+      return boundedResult(result.count, limit, result.observedAt, result.expiresAt, windowMs);
     } catch (err) {
+      if (err && err.code === 'RATE_LIMIT_CLOCK_INVALID') throw err;
       // Fall through to the middleware-local availability control.
       console.warn('[RateLimit] Cache error, falling back to local limiting:', err.message);
     }
   }
 
   // Fall back to in-memory store
-  const entry = memoryStore.get(key) || { count: 0, resetAt: now + windowMs };
+  const now = Date.now();
+  const newExpiry = safeWindowExpiry(now, windowMs);
+  const existing = memoryStore.get(key);
+  if (existing && (!Number.isSafeInteger(existing.count) || existing.count < 0
+      || !Number.isSafeInteger(existing.resetAt) || existing.resetAt < 0
+      || !Number.isSafeInteger(existing.lastObservedAt) || existing.lastObservedAt < 0)) {
+    memoryStore.delete(key);
+    throw rateLimitClockError('Rate-limit fallback contains unsafe clock state');
+  }
+  if (existing && now < existing.lastObservedAt) {
+    throw rateLimitClockError('Rate-limit fallback clock regressed');
+  }
+  const entry = existing || { count: 0, resetAt: newExpiry, lastObservedAt: now };
 
-  if (now > entry.resetAt) {
+  if (now >= entry.resetAt) {
     entry.count = 0;
-    entry.resetAt = now + windowMs;
+    entry.resetAt = newExpiry;
   }
 
-  entry.count++;
+  entry.lastObservedAt = now;
+  entry.count = Math.min(Number.MAX_SAFE_INTEGER, entry.count + 1);
   memoryStore.set(key, entry);
 
   // Cleanup old entries periodically
   if (memoryStore.size > 10000) {
     for (const [k, v] of memoryStore) {
-      if (now > v.resetAt) memoryStore.delete(k);
+      if (now >= v.resetAt) memoryStore.delete(k);
     }
   }
 
-  return {
-    allowed: entry.count <= limit,
-    remaining: Math.max(0, limit - entry.count),
-    resetTime: entry.resetAt,
-    count: entry.count
-  };
+  return boundedResult(entry.count, limit, now, entry.resetAt, windowMs);
 }
 
 /**
@@ -123,7 +158,12 @@ function rateLimit(group, getKey) {
     const config = getLimitConfig(group, plan);
     const fullKey = `rate_limit:${group}:${key}`;
 
-    const result = await checkRateLimit(fullKey, config.limit, config.window);
+    let result;
+    try {
+      result = await checkRateLimit(fullKey, config.limit, config.window);
+    } catch (error) {
+      return next(error);
+    }
 
     // Set rate limit headers
     res.setHeader('X-RateLimit-Limit', config.limit);
@@ -131,7 +171,7 @@ function rateLimit(group, getKey) {
     res.setHeader('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000));
 
     if (!result.allowed) {
-      const retryAfter = Math.ceil((result.resetTime - Date.now()) / 1000);
+      const retryAfter = result.retryAfterSeconds;
       res.setHeader('Retry-After', retryAfter);
       return res.status(429).json({
         error: {

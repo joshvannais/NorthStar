@@ -434,11 +434,23 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
       expect(contextLoads).toBe(0);
       expect(interceptorExecutions).toBe(0);
 
-      clock.mockReturnValue(now + 60001);
+      clock.mockReturnValue(now + 59999);
+      const boundaryRejection = await request(limitedApp)
+        .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+      expect(boundaryRejection.status).toBe(429);
+      expect(boundaryRejection.headers).toMatchObject({
+        'x-ratelimit-reset': String((now + 60000) / 1000),
+        'retry-after': '1',
+      });
+      expect(boundaryRejection.body.error.details.retryAfterSeconds).toBe(1);
+      expect(backingQueries).toBe(1000);
+
+      clock.mockReturnValue(now + 60000);
       const recovered = await request(limitedApp)
         .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
       expect(recovered.status).toBe(200);
       expect(recovered.headers['x-ratelimit-remaining']).toBe('999');
+      expect(recovered.headers['x-ratelimit-reset']).toBe(String((now + 120000) / 1000));
       expect(backingQueries).toBe(1001);
     } finally {
       clock.mockRestore();

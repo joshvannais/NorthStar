@@ -520,10 +520,22 @@ describe('Pre-M23 P6 mounted canonical routes', () => {
       expect([otherUser.status, otherTenant.status]).toEqual([200, 200]);
       expect(queries).toBe(1002);
 
-      clock.mockReturnValue(now + 60001);
+      clock.mockReturnValue(now + 59999);
+      const boundaryRejection = await request(app)
+        .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+      expect(boundaryRejection.status).toBe(429);
+      expect(boundaryRejection.headers).toMatchObject({
+        'x-ratelimit-reset': String((now + 60000) / 1000),
+        'retry-after': '1',
+      });
+      expect(boundaryRejection.body.error.details.retryAfterSeconds).toBe(1);
+      expect(queries).toBe(1002);
+
+      clock.mockReturnValue(now + 60000);
       const recovered = await request(app).get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
       expect(recovered.status).toBe(200);
       expect(recovered.headers['x-ratelimit-remaining']).toBe('999');
+      expect(recovered.headers['x-ratelimit-reset']).toBe(String((now + 120000) / 1000));
       expect(queries).toBe(1003);
     } finally {
       clock.mockRestore();

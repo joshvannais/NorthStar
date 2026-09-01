@@ -14,10 +14,24 @@ const FORMAT_NAME = 'northstar_polaris_customer_intelligence_v1';
 const MAX_ASSEMBLED_INPUT_BYTES = 16000;
 const MAX_OUTPUT_TOKENS = 8192;
 const PROVIDER_TIMEOUT_MS = 20000;
+const MAX_RETRY_DELAY_MS = 2000;
 const INPUT_TOKEN_NANO_USD = 200;
 const OUTPUT_TOKEN_NANO_USD = 1200;
 const SAFE_ERROR_CODES = new Set([
   'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETDOWN', 'ENETUNREACH', 'EPIPE',
+]);
+const PROFESSIONAL_TEXT_PATTERNS = Object.freeze([
+  /\b(?:POLARIS|CANONICAL|NORTHSTAR|BROWSER_FIXTURE)_[A-Z0-9_]+\b/,
+  /\b(?:req|resp)_[a-z0-9][a-z0-9_-]{2,}\b/i,
+  /\bnorthstar\.polaris\.[a-z0-9_.-]+\b/i,
+  /\{\s*"(?:[^"\\]|\\.)+"\s*:/,
+  /\[\s*(?:"(?:[^"\\]|\\.)*"|-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|\{|\[)\s*(?:,|\])/i,
+  /\bjson_schema\b|\bJSON\s+Schema\b|\badditionalProperties\b|"(?:required|\$schema|properties|items)"\s*:/i,
+  /```|~~~/,
+  /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=|\bfunction\s+[A-Za-z_$][\w$]*\s*\(|\bthrow\s+new\s+[A-Za-z_$][\w$]*\s*\(|=>/,
+  /(?:^|\n)\s*at\s+\S+(?:\s+\(|:)|\b(?:TypeError|ReferenceError|SyntaxError):/,
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
+  /\b[0-9a-f]{64}\b/i,
 ]);
 
 const STRING = (minimum, maximum) => Object.freeze({ type: 'string', minLength: minimum, maxLength: maximum });
@@ -172,6 +186,25 @@ function providerResponseError() {
   );
 }
 
+function validateProfessionalText(value) {
+  if (typeof value !== 'string' || PROFESSIONAL_TEXT_PATTERNS.some(pattern => pattern.test(value))) {
+    throw providerResponseError();
+  }
+  return value;
+}
+
+function validateProfessionalCardText(card) {
+  validateProfessionalText(card.title);
+  validateProfessionalText(card.subtitle);
+  validateProfessionalText(card.answer);
+  card.evidence.forEach(entry => {
+    validateProfessionalText(entry.label);
+    validateProfessionalText(entry.value);
+  });
+  card.unknowns.forEach(entry => validateProfessionalText(entry.label));
+  validateProfessionalText(card.confidence.basis);
+}
+
 function sameJson(left, right) {
   if (left === right) return true;
   if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
@@ -219,6 +252,7 @@ function validateProviderPayload(raw, inputEnvelope) {
   }
   const localCards = inputEnvelope && inputEnvelope.untrustedContext && inputEnvelope.untrustedContext.cards;
   if (!Array.isArray(localCards) || payload.cards.length !== localCards.length) throw providerResponseError();
+  validateProfessionalText(answer.text);
   payload.cards.forEach((card, index) => {
     try {
       validateCustomerIntelligenceCard(card, {
@@ -229,6 +263,7 @@ function validateProviderPayload(raw, inputEnvelope) {
     } catch (_error) {
       throw providerResponseError();
     }
+    validateProfessionalCardText(card);
     const local = localCards[index];
     for (const field of [
       'schemaVersion', 'kind', 'tone', 'evidence', 'unknowns', 'confidence', 'authority',
@@ -304,17 +339,27 @@ function withInternalUsage(error, usage) {
   return error;
 }
 
-function parseRetryAfter(error) {
+function retryAfterBoundary(error) {
   const headers = error && error.headers;
   let raw = null;
   if (headers && typeof headers.get === 'function') raw = headers.get('retry-after');
   else if (headers && typeof headers === 'object') raw = headers['retry-after'] || headers['Retry-After'];
   if (typeof raw !== 'string' && typeof raw !== 'number') return null;
-  const seconds = Number(raw);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(2000, Math.round(seconds * 1000));
-  const absolute = Date.parse(String(raw));
+  const normalized = String(raw).trim();
+  if (/^\d+$/.test(normalized)) {
+    const seconds = Number(normalized);
+    if (!Number.isSafeInteger(seconds) || seconds < 0 || seconds > 86400) return null;
+    return Object.freeze({
+      delayMilliseconds: seconds * 1000,
+      retryAfterSeconds: Math.max(1, seconds),
+    });
+  }
+  const absolute = Date.parse(normalized);
   if (!Number.isFinite(absolute)) return null;
-  return Math.max(0, Math.min(2000, absolute - Date.now()));
+  const delayMilliseconds = Math.max(0, absolute - Date.now());
+  const retryAfterSeconds = Math.max(1, Math.ceil(delayMilliseconds / 1000));
+  if (!Number.isSafeInteger(retryAfterSeconds) || retryAfterSeconds > 86400) return null;
+  return Object.freeze({ delayMilliseconds, retryAfterSeconds });
 }
 
 function providerFailure(error) {
@@ -342,7 +387,29 @@ function retryable(error) {
 
 function sleepBounded(milliseconds, sleeper, signal) {
   if (signal && signal.aborted) return Promise.reject(signal.reason || new Error('aborted'));
-  return Promise.resolve(sleeper(milliseconds));
+  const sleeping = Promise.resolve().then(() => sleeper(milliseconds));
+  if (!signal) return sleeping;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', abort);
+      callback(value);
+    };
+    const abort = () => finish(reject, signal.reason || new Error('aborted'));
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+    sleeping.then(value => finish(resolve, value), error => finish(reject, error));
+  });
+}
+
+function preserveRetryAfter(mapped, providerError) {
+  if (![429, 503, 504].includes(Number(providerError && providerError.status))) return mapped;
+  const boundary = retryAfterBoundary(providerError);
+  if (!boundary) return mapped;
+  mapped.retryAfterSeconds = boundary.retryAfterSeconds;
+  return mapped;
 }
 
 function createProviderSignal(parentSignal) {
@@ -443,9 +510,11 @@ function createOpenAIRuntime(options = {}) {
           break;
         } catch (error) {
           if (boundary.signal.aborted || attemptCount >= 2 || !retryable(error)) throw error;
-          const retryAfter = parseRetryAfter(error);
-          const delay = retryAfter === null ? 250 + Math.round(Math.max(0, Math.min(1, random())) * 250) : retryAfter;
-          if (Date.now() - startedAt + delay >= PROVIDER_TIMEOUT_MS) throw error;
+          const retryAfter = retryAfterBoundary(error);
+          const delay = retryAfter === null
+            ? 250 + Math.round(Math.max(0, Math.min(1, random())) * 250)
+            : retryAfter.delayMilliseconds;
+          if (delay > MAX_RETRY_DELAY_MS || Date.now() - startedAt + delay >= PROVIDER_TIMEOUT_MS) throw error;
           await sleepBounded(delay, sleeper, boundary.signal);
         }
       }
@@ -528,7 +597,7 @@ function createOpenAIRuntime(options = {}) {
       }
       const mapped = boundary.timedOut()
         ? contractError('POLARIS_PROVIDER_TIMEOUT', 'Polaris conversation did not complete before the safe deadline.', 504)
-        : providerFailure(error);
+        : preserveRetryAfter(providerFailure(error), error);
       const usage = parseUsage(response, attemptCount, startedAt, 'failed');
       logger(Object.freeze({
         requestId: inputEnvelope.requestId,

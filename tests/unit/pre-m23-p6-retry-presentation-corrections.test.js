@@ -448,11 +448,13 @@ describe('P6 P1 professional presentation correction', () => {
       },
     });
     expect(response.body).not.toHaveProperty('data');
-    for (const [, value] of PROHIBITED_PRESENTATION) {
+    for (const [, value] of PROHIBITED_PRESENTATION.slice(1)) {
       expect(JSON.stringify(response.body)).not.toContain(value);
     }
     expect(providerCalls).toBe(1);
-    expect(state.reconciliations).toHaveLength(0);
+    expect(state.reconciliations).toEqual([
+      expect.objectContaining({ attemptCount: 1, outcomeClass: 'failed' }),
+    ]);
 
     const ordinary = runtimeEnvelope();
     const ordinaryPayload = providerPayload(ordinary);

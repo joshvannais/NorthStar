@@ -16,6 +16,19 @@
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   var DIGEST = /^[0-9a-f]{64}$/i;
   var UNKNOWN_CODE = /^[a-z0-9_]{1,100}$/;
+  var PROFESSIONAL_TEXT_PATTERNS = [
+    /\b(?:POLARIS|CANONICAL|NORTHSTAR|BROWSER_FIXTURE)_[A-Z0-9_]+\b/,
+    /\b(?:req|resp)_[a-z0-9][a-z0-9_-]{2,}\b/i,
+    /\bnorthstar\.polaris\.[a-z0-9_.-]+\b/i,
+    /\{\s*"(?:[^"\\]|\\.)+"\s*:/,
+    /\[\s*(?:"(?:[^"\\]|\\.)*"|-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|\{|\[)\s*(?:,|\])/i,
+    /\bjson_schema\b|\bJSON\s+Schema\b|\badditionalProperties\b|"(?:required|\$schema|properties|items)"\s*:/i,
+    /```|~~~/,
+    /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=|\bfunction\s+[A-Za-z_$][\w$]*\s*\(|\bthrow\s+new\s+[A-Za-z_$][\w$]*\s*\(|=>/,
+    /(?:^|\n)\s*at\s+\S+(?:\s+\(|:)|\b(?:TypeError|ReferenceError|SyntaxError):/,
+    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
+    /\b[0-9a-f]{64}\b/i
+  ];
   var renderSequence = 0;
 
   function invalidContract() {
@@ -59,6 +72,13 @@
     return typeof value === 'string' && value.length >= minimum && value.length <= maximum && !/\u0000/.test(value);
   }
 
+  function validateProfessionalText(value) {
+    if (typeof value !== 'string' || PROFESSIONAL_TEXT_PATTERNS.some(function (pattern) { return pattern.test(value); })) {
+      return invalidContract();
+    }
+    return value;
+  }
+
   function selection(value) {
     var selected = exactObject(value, ['id', 'kind']);
     if (['customer', 'lead', 'work'].indexOf(selected.kind) < 0 || !boundedString(selected.id, 36, 36) || !UUID.test(selected.id)) {
@@ -82,6 +102,8 @@
         ['canonical_fact', 'deterministic_demo'].indexOf(source.kind) < 0 || !boundedString(source.id, 1, 128)) {
       return invalidContract();
     }
+    validateProfessionalText(entry.label);
+    validateProfessionalText(entry.value);
     return entry;
   }
 
@@ -90,6 +112,7 @@
     if (typeof entry.code !== 'string' || !UNKNOWN_CODE.test(entry.code) || !boundedString(entry.label, 1, 500)) {
       return invalidContract();
     }
+    validateProfessionalText(entry.label);
     return entry;
   }
 
@@ -101,6 +124,7 @@
         !boundedString(confidence.basis, 1, 500) || (confidence.value === null && confidence.level !== 'unknown')) {
       return invalidContract();
     }
+    validateProfessionalText(confidence.basis);
     return confidence;
   }
 
@@ -135,6 +159,9 @@
         !boundedString(card.answer, 1, 2000) || card.advisoryOnly !== true || card.canonicalMutationAllowed !== false) {
       return invalidContract();
     }
+    validateProfessionalText(card.title);
+    validateProfessionalText(card.subtitle);
+    validateProfessionalText(card.answer);
     exactArray(card.evidence, 12).forEach(validateEvidence);
     exactArray(card.unknowns, 12).forEach(validateUnknown);
     validateConfidence(card.confidence);
@@ -169,6 +196,7 @@
         (Object.prototype.hasOwnProperty.call(expected, 'selected') && !sameSelection(selected, expected.selected))) {
       return invalidContract();
     }
+    validateProfessionalText(answer.text);
     cards.forEach(function (card) { validateCustomerIntelligenceCard(card, selected); });
     if (answer.evidenceCount !== cards.reduce(function (sum, card) { return sum + card.evidence.length; }, 0) ||
         answer.unknownCount !== cards.reduce(function (sum, card) { return sum + card.unknowns.length; }, 0)) {
@@ -359,6 +387,7 @@
     renderCustomerIntelligenceCards: renderCustomerIntelligenceCards,
     validateAssistantResponse: validateAssistantResponse,
     validateAssistantStatus: validateAssistantStatus,
-    validateCustomerIntelligenceCard: validateCustomerIntelligenceCard
+    validateCustomerIntelligenceCard: validateCustomerIntelligenceCard,
+    validateProfessionalText: validateProfessionalText
   };
 });

@@ -66,6 +66,48 @@ function card(hostile, index = 0) {
   };
 }
 
+function terminalValue(prefix, terminal, maximum) {
+  assert.ok(prefix.length + terminal.length <= maximum);
+  const fillerLength = maximum - prefix.length - terminal.length;
+  const filler = ' bounded-safe-text '.repeat(Math.ceil(fillerLength / 19)).slice(0, fillerLength);
+  const value = prefix + filler + terminal;
+  assert.strictEqual(value.length, maximum);
+  return value;
+}
+
+function maximumBoundaryCard(index) {
+  const cardNumber = index + 1;
+  const result = card(false, index);
+  result.title = terminalValue(`Boundary customer ${cardNumber} `, `[END-TITLE-C${cardNumber}]`, 200);
+  result.subtitle = terminalValue(`Boundary service ${cardNumber} `, `[END-SUBTITLE-C${cardNumber}]`, 200);
+  result.answer = terminalValue(`Stored hostile answer data only ${HOSTILE} `, `[END-ANSWER-C${cardNumber}]`, 2000);
+  result.evidence = Array.from({ length: 12 }, (_value, evidenceIndex) => {
+    const evidenceNumber = evidenceIndex + 1;
+    const id = `boundary-evidence-c${cardNumber}-e${String(evidenceNumber).padStart(2, '0')}`;
+    return {
+      id,
+      label: terminalValue(`Evidence ${cardNumber}.${evidenceNumber} `,
+        `[END-LABEL-C${cardNumber}-E${evidenceNumber}]`, 100),
+      value: terminalValue(`Stored hostile evidence data only ${HOSTILE} `,
+        `[END-EVIDENCE-C${cardNumber}-E${evidenceNumber}]`, 2000),
+      confidence: 0.8,
+      source: { kind: 'canonical_fact', id },
+      untrustedText: true,
+    };
+  });
+  result.unknowns = Array.from({ length: 12 }, (_value, unknownIndex) => {
+    const unknownNumber = unknownIndex + 1;
+    return {
+      code: `unknown_c${cardNumber}_${String(unknownNumber).padStart(2, '0')}`,
+      label: terminalValue(`Unknown ${cardNumber}.${unknownNumber} `,
+        `[END-UNKNOWN-C${cardNumber}-U${unknownNumber}]`, 500),
+    };
+  });
+  result.confidence.basis = terminalValue(`Confidence basis ${cardNumber} `,
+    `[END-BASIS-C${cardNumber}]`, 500);
+  return result;
+}
+
 function messageResponse(body) {
   const response = contextResponse(false);
   response.requestId = body.idempotencyKey;
@@ -87,13 +129,20 @@ function malformedResponse(name, response) {
   return response;
 }
 
-function contextResponse(hostile) {
-  const cards = Array.from({ length: 4 }, (_value, index) => card(hostile, index));
+function contextResponse(hostile, boundaryCardCount) {
+  const cards = Array.from({ length: boundaryCardCount || 4 }, (_value, index) =>
+    boundaryCardCount ? maximumBoundaryCard(index) : card(hostile, index));
   return {
     schemaVersion: RESPONSE_SCHEMA, responseId: 'browser-context', requestId: 'browser-request',
     state: 'available', source: 'canonical_local', authority: { organizationId: ORG, userId: USER, role: 'owner' },
     selected: { kind: 'lead', id: LEAD },
-    answer: { text: cards.map(value => value.answer).join(' '), evidenceCount: 4, unknownCount: 4 }, cards,
+    answer: {
+      text: boundaryCardCount ? `Maximum-boundary response with ${boundaryCardCount} cards.` :
+        cards.map(value => value.answer).join(' '),
+      evidenceCount: cards.reduce((sum, value) => sum + value.evidence.length, 0),
+      unknownCount: cards.reduce((sum, value) => sum + value.unknowns.length, 0),
+    },
+    cards,
     provider: { state: 'unconfigured', requestsSent: 0 }, advisoryOnly: true, canonicalMutationAllowed: false,
   };
 }
@@ -191,7 +240,7 @@ async function installRoutes(page, state) {
       assert.deepStrictEqual(body, {
         schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: LEAD },
       });
-      const response = contextResponse(state.hostile);
+      const response = contextResponse(state.hostile, state.boundaryCardCount);
       if (state.malformed && state.malformed !== 'status-length' && state.malformed !== 'message-extra') {
         malformedResponse(state.malformed, response);
       }
@@ -346,6 +395,78 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
   await context.close();
 }
 
+async function runMaximumBoundary(browser, origin, securityRoot, manifest, selected, profile) {
+  const context = await browser.newContext({ viewport: profile.viewport, colorScheme: profile.theme });
+  await context.addInitScript(() => { globalThis.p6Compromised = false; });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  const state = {
+    external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed: null, unconfigured: true, boundaryCardCount: profile.cardCount,
+  };
+  await installRoutes(page, state);
+  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  const expectedCards = Array.from({ length: profile.cardCount }, (_value, index) => maximumBoundaryCard(index));
+  assert.strictEqual(await page.locator('.polaris-native-card').count(), profile.cardCount);
+  assert.strictEqual(await page.locator('.polaris-native-card-stack').getAttribute('aria-label'),
+    profile.cardCount === 1 ? 'Customer intelligence card' : `${profile.cardCount} customer intelligence cards`);
+  assert.deepStrictEqual(await page.locator('.polaris-native-card-item').evaluateAll(nodes =>
+    nodes.map(node => node.dataset.cardPosition)),
+  Array.from({ length: profile.cardCount }, (_value, index) => String(index + 1)));
+
+  for (let index = 0; index < expectedCards.length; index += 1) {
+    const expected = expectedCards[index];
+    const rendered = page.locator('.polaris-native-card').nth(index);
+    assert.strictEqual(await rendered.locator('.polaris-native-card-title').textContent(), expected.title);
+    assert.strictEqual(await rendered.locator('.polaris-native-card-subtitle').textContent(), expected.subtitle);
+    assert.strictEqual(await rendered.locator('.polaris-native-card-answer').textContent(), expected.answer);
+    assert.deepStrictEqual(await rendered.locator('.polaris-native-card-label').allTextContents(),
+      expected.evidence.map(entry => entry.label));
+    assert.deepStrictEqual(await rendered.locator('.polaris-native-card-value').allTextContents(),
+      expected.evidence.map(entry => entry.value));
+    assert.deepStrictEqual(await rendered.locator('.polaris-native-card-unknown').allTextContents(),
+      expected.unknowns.map(entry => entry.label));
+    assert.strictEqual(await rendered.locator('.polaris-native-card-basis').textContent(), expected.confidence.basis);
+    assert.deepStrictEqual(await rendered.locator('.polaris-native-card-heading').allTextContents(),
+      ['Answer', 'Evidence', 'Unknowns', 'Confidence']);
+    const labelledSections = await rendered.locator('.polaris-native-card-section').evaluateAll(sections =>
+      sections.map(section => {
+        const id = section.getAttribute('aria-labelledby');
+        const heading = section.querySelector('h3');
+        return { id, headingId: heading && heading.id, containsHeading: Boolean(id && heading && section.querySelector(`#${id}`)) };
+      }));
+    assert.ok(labelledSections.every(value => value.id === value.headingId && value.containsHeading));
+  }
+
+  const headingIds = await page.locator('.polaris-native-card-heading').evaluateAll(nodes => nodes.map(node => node.id));
+  assert.strictEqual(new Set(headingIds).size, headingIds.length, 'section heading IDs must remain unique');
+  assert.strictEqual(await page.locator('.polaris-native-card img, .polaris-native-card script, .polaris-native-card svg').count(), 0);
+  assert.strictEqual(await page.locator('.polaris-native-card a, .polaris-native-card button, .polaris-native-card [tabindex]').count(), 0);
+  assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
+  const dimensions = await page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    body: document.body.scrollWidth,
+    root: document.documentElement.scrollWidth,
+  }));
+  assert.ok(Math.max(dimensions.body, dimensions.root) <= dimensions.width + 1,
+    `${selected}-${profile.label} horizontal overflow: ${JSON.stringify(dimensions)}`);
+  assert.strictEqual(state.messageCalls, 0);
+  assert.deepStrictEqual(state.external, []);
+  assert.deepStrictEqual(errors, []);
+  const filename = path.join(securityRoot, `${selected}-${profile.label}.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  manifest.push({
+    file: path.basename(filename), sha256: sha256(filename), browser: selected, route,
+    viewport: profile.viewport, theme: profile.theme, cardCount: profile.cardCount,
+    evidencePerCard: 12, unknownsPerCard: 12, answerLength: 2000, evidenceValueLength: 2000,
+    fixture: 'maximum-boundary-complete-text-safe-accessible-order',
+  });
+  await context.close();
+}
+
 async function runMalformed(browser, origin, securityRoot, manifest, selected, malformed) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
   const page = await context.newPage();
@@ -433,6 +554,15 @@ async function main() {
     ];
     for (const profile of profiles) await runOrdinary(browser, origin, outputRoot, ordinary, selected, profile);
     await runDemo(browser, origin, outputRoot, ordinary, selected);
+    const maximumBoundaryProfiles = [
+      { label: 'boundary-1-card-desktop-light', cardCount: 1, viewport: { width: 1440, height: 900 }, theme: 'light' },
+      { label: 'boundary-2-cards-mobile-dark', cardCount: 2, viewport: { width: 390, height: 844 }, theme: 'dark' },
+      { label: 'boundary-3-cards-reflow-320-light', cardCount: 3, viewport: { width: 320, height: 720 }, theme: 'light' },
+      { label: 'boundary-4-cards-desktop-dark', cardCount: 4, viewport: { width: 1440, height: 900 }, theme: 'dark' },
+    ];
+    for (const profile of maximumBoundaryProfiles) {
+      await runMaximumBoundary(browser, origin, securityRoot, security, selected, profile);
+    }
     await runHostile(browser, origin, securityRoot, security, selected);
     for (const malformed of ['missing', 'extra', 'type', 'length', 'version', 'prototype-key', 'status-length', 'message-extra']) {
       await runMalformed(browser, origin, securityRoot, security, selected, malformed);

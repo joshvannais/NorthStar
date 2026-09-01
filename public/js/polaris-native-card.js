@@ -199,10 +199,15 @@
     return projected.length > 500 ? projected.slice(0, 499) + '…' : projected;
   }
 
+  function renderedText(value, fallback) {
+    if (value === null || value === undefined || value === '') return fallback || '';
+    return typeof value === 'string' ? value : String(value);
+  }
+
   function child(tag, className, value) {
     var element = document.createElement(tag);
     if (className) element.className = className;
-    if (value !== undefined) element.textContent = text(value);
+    if (value !== undefined) element.textContent = renderedText(value);
     return element;
   }
 

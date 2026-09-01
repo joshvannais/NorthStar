@@ -231,9 +231,29 @@ function responseText(response) {
 }
 
 function parseUsage(response, attemptCount, startedAt, outcomeClass) {
-  const usage = response && response.usage || {};
-  const inputTokens = Number.isSafeInteger(usage.input_tokens) && usage.input_tokens >= 0 ? usage.input_tokens : 0;
-  const outputTokens = Number.isSafeInteger(usage.output_tokens) && usage.output_tokens >= 0 ? usage.output_tokens : 0;
+  if (!response && outcomeClass === 'failed') {
+    return Object.freeze({
+      inputTokens: 0,
+      outputTokens: 0,
+      costNanoUsd: 0,
+      latencyMs: Math.max(0, Date.now() - startedAt),
+      attemptCount,
+      outcomeClass,
+      providerRequestId: null,
+    });
+  }
+  const usage = response && response.usage;
+  const inputDetails = usage && usage.input_tokens_details;
+  const inputTokens = usage && usage.input_tokens;
+  const outputTokens = usage && usage.output_tokens;
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage) ||
+      !inputDetails || typeof inputDetails !== 'object' || Array.isArray(inputDetails) ||
+      !Number.isSafeInteger(inputTokens) || inputTokens < 0 || inputTokens > 16000 ||
+      !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > MAX_OUTPUT_TOKENS ||
+      !Number.isSafeInteger(usage.total_tokens) || usage.total_tokens !== inputTokens + outputTokens ||
+      inputDetails.cached_tokens !== 0 || inputDetails.cache_write_tokens !== 0) {
+    throw providerResponseError();
+  }
   return Object.freeze({
     inputTokens,
     outputTokens,
@@ -376,6 +396,7 @@ function createOpenAIRuntime(options = {}) {
       store: false,
       truncation: 'disabled',
       max_output_tokens: MAX_OUTPUT_TOKENS,
+      prompt_cache_options: Object.freeze({ mode: 'explicit' }),
       safety_identifier: stableSafetyIdentifier(inputEnvelope.authority),
     });
     const startedAt = Date.now();
@@ -508,7 +529,7 @@ function createProductionOpenAIRuntime(environment = process.env, options = {}) 
         apiKey: environment.OPENAI_API_KEY,
         maxRetries: 0,
         timeout: PROVIDER_TIMEOUT_MS,
-        logLevel: 'error',
+        logLevel: 'off',
       });
     }
     const OpenAI = require('openai');
@@ -516,7 +537,7 @@ function createProductionOpenAIRuntime(environment = process.env, options = {}) 
       apiKey: environment.OPENAI_API_KEY,
       maxRetries: 0,
       timeout: PROVIDER_TIMEOUT_MS,
-      logLevel: 'error',
+      logLevel: 'off',
     });
   } : null;
   return createOpenAIRuntime({

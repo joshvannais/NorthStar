@@ -145,7 +145,12 @@ function completedResponse(inputEnvelope, overrides = {}) {
       type: 'message',
       content: [{ type: 'output_text', text: JSON.stringify(payload) }],
     }],
-    usage: overrides.usage || { input_tokens: 120, output_tokens: 80, total_tokens: 200 },
+    usage: overrides.usage || {
+      input_tokens: 120,
+      input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+      output_tokens: 80,
+      total_tokens: 200,
+    },
   };
 }
 
@@ -267,6 +272,7 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
       store: false,
       truncation: 'disabled',
       max_output_tokens: 8192,
+      prompt_cache_options: { mode: 'explicit' },
       safety_identifier: module.stableSafetyIdentifier(authority()),
     });
     expect(body.instructions).toMatch(/untrusted data/i);
@@ -337,6 +343,7 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
       expect(received[0]).toMatchObject({ method: 'POST', path: '/v1/responses' });
       expect(received[0].body).toMatchObject({
         model: 'gpt-5.6-luna', store: false, truncation: 'disabled', max_output_tokens: 8192,
+        prompt_cache_options: { mode: 'explicit' },
       });
     } finally {
       await new Promise(resolve => server.close(resolve));
@@ -346,9 +353,16 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
   test('production configuration stays fail-closed and exposes no credential material', async () => {
     const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
     let clientConstructions = 0;
-    const clientFactory = function () {
+    let safeClientOptions = null;
+    const clientFactory = function (clientOptions) {
       clientConstructions += 1;
-      return clientReturning(inputEnvelope => completedResponse(inputEnvelope));
+      safeClientOptions = {
+        apiKeyConfigured: typeof clientOptions.apiKey === 'string' && clientOptions.apiKey.length > 0,
+        logLevel: clientOptions.logLevel,
+        maxRetries: clientOptions.maxRetries,
+        timeout: clientOptions.timeout,
+      };
+      return clientReturning(() => completedResponse(envelope()));
     };
     const secret = 'test-only-secret-that-must-never-appear';
     const disabled = module.createProductionOpenAIRuntime({
@@ -368,6 +382,39 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
     expect(await configured.status()).toEqual({ state: 'available', label: 'Configured' });
     expect(JSON.stringify(configured)).not.toContain(secret);
     expect(clientConstructions).toBe(0);
+    await expect(configured.respond(envelope(), { signal: new AbortController().signal })).resolves.toBeTruthy();
+    expect(clientConstructions).toBe(1);
+    expect(safeClientOptions).toEqual({
+      apiKeyConfigured: true,
+      logLevel: 'off',
+      maxRetries: 0,
+      timeout: 20000,
+    });
+  });
+
+  test.each([
+    ['missing token details', { input_tokens: 120, output_tokens: 80, total_tokens: 200 }],
+    ['implicit cache write', {
+      input_tokens: 120, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 120 },
+      output_tokens: 80, total_tokens: 200,
+    }],
+    ['cache read', {
+      input_tokens: 120, input_tokens_details: { cached_tokens: 120, cache_write_tokens: 0 },
+      output_tokens: 80, total_tokens: 200,
+    }],
+    ['inconsistent total', {
+      input_tokens: 120, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+      output_tokens: 80, total_tokens: 199,
+    }],
+  ])('fails closed on %s instead of misreporting actual cost', async (_label, usage) => {
+    const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
+    const inputEnvelope = envelope();
+    const client = clientReturning(() => completedResponse(inputEnvelope, { usage }));
+    const runtime = module.createOpenAIRuntime({ client, configured: true, enabled: true });
+    await expect(runtime.respond(inputEnvelope, { signal: new AbortController().signal })).rejects.toMatchObject({
+      code: 'POLARIS_PROVIDER_RESPONSE_INVALID',
+    });
+    expect(client.responses.create).toHaveBeenCalledTimes(1);
   });
 
   test('rejects conservatively oversized assembled input before transport', async () => {

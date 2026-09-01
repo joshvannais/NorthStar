@@ -457,11 +457,12 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
   assert.deepStrictEqual(state.external, []);
   assert.deepStrictEqual(errors, []);
   const filename = path.join(securityRoot, `${selected}-${profile.label}.png`);
-  await page.screenshot({ path: filename, fullPage: true });
+  await page.screenshot({ path: filename, fullPage: false });
   manifest.push({
     file: path.basename(filename), sha256: sha256(filename), browser: selected, route,
     viewport: profile.viewport, theme: profile.theme, cardCount: profile.cardCount,
     evidencePerCard: 12, unknownsPerCard: 12, answerLength: 2000, evidenceValueLength: 2000,
+    screenshotCapture: 'viewport',
     fixture: 'maximum-boundary-complete-text-safe-accessible-order',
   });
   await context.close();

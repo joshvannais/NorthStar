@@ -116,18 +116,80 @@ function envelope(input = {}) {
   });
 }
 
+function schemaOrderedCard(card) {
+  return {
+    advisoryOnly: card.advisoryOnly,
+    answer: card.answer,
+    authority: {
+      calculationVersion: card.authority.calculationVersion,
+      graphId: card.authority.graphId,
+      projectionDigest: card.authority.projectionDigest,
+      readModelVersion: card.authority.readModelVersion,
+      selected: {
+        id: card.authority.selected.id,
+        kind: card.authority.selected.kind,
+      },
+      snapshotDigest: card.authority.snapshotDigest,
+      snapshotId: card.authority.snapshotId,
+    },
+    canonicalMutationAllowed: card.canonicalMutationAllowed,
+    confidence: {
+      basis: card.confidence.basis,
+      level: card.confidence.level,
+      value: card.confidence.value,
+    },
+    evidence: card.evidence.map(entry => ({
+      confidence: entry.confidence,
+      id: entry.id,
+      label: entry.label,
+      source: {
+        id: entry.source.id,
+        kind: entry.source.kind,
+      },
+      untrustedText: entry.untrustedText,
+      value: entry.value,
+    })),
+    kind: card.kind,
+    schemaVersion: card.schemaVersion,
+    subtitle: card.subtitle,
+    title: card.title,
+    tone: card.tone,
+    unknowns: card.unknowns.map(entry => ({ code: entry.code, label: entry.label })),
+  };
+}
+
+function schemaOrderedPayload(payload) {
+  return {
+    answer: {
+      evidenceCount: payload.answer.evidenceCount,
+      text: payload.answer.text,
+      unknownCount: payload.answer.unknownCount,
+    },
+    cards: payload.cards.map(schemaOrderedCard),
+  };
+}
+
+function reverseObjectKeys(value) {
+  if (Array.isArray(value)) return value.map(reverseObjectKeys);
+  if (!value || typeof value !== 'object') return value;
+  return Object.keys(value).reverse().reduce((result, key) => {
+    result[key] = reverseObjectKeys(value[key]);
+    return result;
+  }, {});
+}
+
 function providerOutput(inputEnvelope, overrides = {}) {
   const card = JSON.parse(JSON.stringify(inputEnvelope.untrustedContext.cards[0]));
   card.answer = overrides.cardAnswer || 'The recorded scope is to remove the marked tree beside the driveway.';
   const cards = overrides.cards || [card];
-  return {
+  return schemaOrderedPayload({
     answer: {
       text: overrides.answer || card.answer,
       evidenceCount: cards.reduce((sum, value) => sum + value.evidence.length, 0),
       unknownCount: cards.reduce((sum, value) => sum + value.unknowns.length, 0),
     },
     cards,
-  };
+  });
 }
 
 function completedResponse(inputEnvelope, overrides = {}) {
@@ -241,6 +303,71 @@ describe('Pre-Mission-23 P6 approved plan entitlement', () => {
 });
 
 describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
+  test.each([
+    ['the exact strict-schema property order', value => value],
+    ['recursive object-key permutations', reverseObjectKeys],
+  ])('accepts semantically exact provider cards in %s while preserving array order', async (_label, reorder) => {
+    const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
+    const inputEnvelope = envelope();
+    const payload = reorder(providerOutput(inputEnvelope));
+    const client = clientReturning(() => completedResponse(inputEnvelope, { payload }));
+    const runtime = module.createOpenAIRuntime({ client, configured: true, enabled: true });
+    const result = await runtime.respond(inputEnvelope, { signal: new AbortController().signal });
+    expect(result.response.cards).toHaveLength(1);
+    expect(result.response.cards[0].authority).toEqual(inputEnvelope.untrustedContext.cards[0].authority);
+    expect(result.response.cards[0].evidence).toEqual(inputEnvelope.untrustedContext.cards[0].evidence);
+  });
+
+  test.each([
+    ['added nested field', output => { output.cards[0].authority.selected.extra = true; }],
+    ['missing nested field', output => { delete output.cards[0].evidence[0].source.kind; }],
+    ['altered authority', output => { output.cards[0].authority.snapshotDigest = 'c'.repeat(64); }],
+    ['altered confidence', output => { output.cards[0].confidence.basis += ' invented'; }],
+    ['altered evidence', output => { output.cards[0].evidence[0].untrustedText = false; }],
+    ['altered unknown', output => { output.cards[0].unknowns[0].code = 'invented'; }],
+    ['altered advisory flag', output => { output.cards[0].advisoryOnly = false; }],
+  ])('rejects schema-ordered payload with %s', async (_label, mutate) => {
+    const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
+    const inputEnvelope = envelope();
+    const payload = providerOutput(inputEnvelope);
+    mutate(payload);
+    const client = clientReturning(() => completedResponse(inputEnvelope, { payload }));
+    const runtime = module.createOpenAIRuntime({ client, configured: true, enabled: true });
+    await expect(runtime.respond(inputEnvelope, { signal: new AbortController().signal })).rejects.toMatchObject({
+      code: 'POLARIS_PROVIDER_RESPONSE_INVALID', statusCode: 502,
+    });
+  });
+
+  test('rejects reordered evidence arrays even when every object key and value remains exact', async () => {
+    const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
+    const item = canonicalItem({
+      facts: [
+        canonicalItem().facts[0],
+        {
+          id: 'a8000000-0000-4000-8000-000000000002',
+          variable: 'access_note',
+          status: 'accepted',
+          normalizedValue: 'Use the west gate.',
+          evidenceText: 'Customer confirmed the west gate.',
+          confidence: 0.9,
+        },
+      ],
+    });
+    const requestContract = messageRequest();
+    const localContext = buildContextResponse(
+      item, requestContract.selected, authority(), requestContract.idempotencyKey
+    );
+    const inputEnvelope = envelope({ request: requestContract, localContext });
+    const payload = providerOutput(inputEnvelope);
+    expect(payload.cards[0].evidence).toHaveLength(2);
+    payload.cards[0].evidence.reverse();
+    const client = clientReturning(() => completedResponse(inputEnvelope, { payload }));
+    const runtime = module.createOpenAIRuntime({ client, configured: true, enabled: true });
+    await expect(runtime.respond(inputEnvelope, { signal: new AbortController().signal })).rejects.toMatchObject({
+      code: 'POLARIS_PROVIDER_RESPONSE_INVALID', statusCode: 502,
+    });
+  });
+
   test('pins the approved model, limits, strict recursive format, and zero-tool request body', async () => {
     const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
     const inputEnvelope = envelope();

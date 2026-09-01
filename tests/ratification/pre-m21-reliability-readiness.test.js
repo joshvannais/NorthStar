@@ -79,7 +79,8 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     expect(polaris).toContain('No fallback record is shown.');
     expect(polaris).toContain('/api/v1/canonical/polaris/assistant/context');
     expect(polaris).toContain('/api/v1/canonical/polaris/assistant/status');
-    expect(polaris).toContain("providerState === 'available' ? 'Available'");
+    expect(polaris).toContain("providerState === 'configured' ? 'Configured - not verified'");
+    expect(polaris).not.toContain("providerState === 'available' ? 'Available'");
     expect(polaris).toContain('Conversation requests');
     expect(polaris).not.toContain('/api/v1/polaris/chat');
     expect(polaris).not.toContain('All systems operational');

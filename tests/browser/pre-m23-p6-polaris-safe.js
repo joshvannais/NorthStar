@@ -75,20 +75,33 @@ function terminalValue(prefix, terminal, maximum) {
   return value;
 }
 
+function terminalUnbrokenValue(prefix, terminal, maximum) {
+  assert.ok(!/\s/.test(prefix));
+  assert.ok(!/\s/.test(terminal));
+  assert.ok(prefix.length + terminal.length <= maximum);
+  const fillerLength = maximum - prefix.length - terminal.length;
+  const filler = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.repeat(Math.ceil(fillerLength / 36)).slice(0, fillerLength);
+  const value = prefix + filler + terminal;
+  assert.strictEqual(value.length, maximum);
+  assert.ok(!/\s/.test(value));
+  return value;
+}
+
 function maximumBoundaryCard(index) {
   const cardNumber = index + 1;
   const result = card(false, index);
-  result.title = terminalValue(`Boundary customer ${cardNumber} `, `[END-TITLE-C${cardNumber}]`, 200);
-  result.subtitle = terminalValue(`Boundary service ${cardNumber} `, `[END-SUBTITLE-C${cardNumber}]`, 200);
-  result.answer = terminalValue(`Stored hostile answer data only ${HOSTILE} `, `[END-ANSWER-C${cardNumber}]`, 2000);
+  result.title = terminalUnbrokenValue(`BoundaryCustomerC${cardNumber}-`, `[END-TITLE-C${cardNumber}]`, 200);
+  result.subtitle = terminalUnbrokenValue(`BoundaryServiceC${cardNumber}-`, `[END-SUBTITLE-C${cardNumber}]`, 200);
+  result.answer = terminalUnbrokenValue(`StoredHostileAnswerDataOnlyC${cardNumber}-<img/src=x/onerror=globalThis.p6Compromised=true>-`,
+    `[END-ANSWER-C${cardNumber}]`, 2000);
   result.evidence = Array.from({ length: 12 }, (_value, evidenceIndex) => {
     const evidenceNumber = evidenceIndex + 1;
     const id = `boundary-evidence-c${cardNumber}-e${String(evidenceNumber).padStart(2, '0')}`;
     return {
       id,
-      label: terminalValue(`Evidence ${cardNumber}.${evidenceNumber} `,
+      label: terminalUnbrokenValue(`EvidenceC${cardNumber}E${evidenceNumber}-`,
         `[END-LABEL-C${cardNumber}-E${evidenceNumber}]`, 100),
-      value: terminalValue(`Stored hostile evidence data only ${HOSTILE} `,
+      value: terminalUnbrokenValue(`StoredHostileEvidenceDataOnlyC${cardNumber}E${evidenceNumber}-<script>globalThis.p6Compromised=true</script>-`,
         `[END-EVIDENCE-C${cardNumber}-E${evidenceNumber}]`, 2000),
       confidence: 0.8,
       source: { kind: 'canonical_fact', id },
@@ -99,11 +112,11 @@ function maximumBoundaryCard(index) {
     const unknownNumber = unknownIndex + 1;
     return {
       code: `unknown_c${cardNumber}_${String(unknownNumber).padStart(2, '0')}`,
-      label: terminalValue(`Unknown ${cardNumber}.${unknownNumber} `,
+      label: terminalUnbrokenValue(`UnknownC${cardNumber}U${unknownNumber}-`,
         `[END-UNKNOWN-C${cardNumber}-U${unknownNumber}]`, 500),
     };
   });
-  result.confidence.basis = terminalValue(`Confidence basis ${cardNumber} `,
+  result.confidence.basis = terminalUnbrokenValue(`ConfidenceBasisC${cardNumber}-`,
     `[END-BASIS-C${cardNumber}]`, 500);
   return result;
 }
@@ -409,6 +422,11 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
   const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
   await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  if (profile.zoom) {
+    await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, profile.zoom);
+    assert.strictEqual(await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).zoom)),
+      profile.zoom);
+  }
   const expectedCards = Array.from({ length: profile.cardCount }, (_value, index) => maximumBoundaryCard(index));
   assert.strictEqual(await page.locator('.polaris-native-card').count(), profile.cardCount);
   assert.strictEqual(await page.locator('.polaris-native-card-stack').getAttribute('aria-label'),
@@ -441,10 +459,75 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
     assert.ok(labelledSections.every(value => value.id === value.headingId && value.containsHeading));
   }
 
+  const layout = await page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const containers = [
+      '.polaris-native-card-host', '.polaris-native-card-stack', '.polaris-native-card-item',
+      '.polaris-native-card', '.polaris-native-card-header', '.polaris-native-card-section',
+      '.polaris-native-card-list', '.polaris-native-card-evidence', '.polaris-native-card-unknown',
+      '.polaris-native-card-footer',
+    ];
+    const visibleText = [
+      '.polaris-native-card-kicker', '.polaris-native-card-title', '.polaris-native-card-subtitle',
+      '.polaris-native-card-heading', '.polaris-native-card-answer', '.polaris-native-card-label',
+      '.polaris-native-card-value', '.polaris-native-card-unknown', '.polaris-native-card-confidence',
+      '.polaris-native-card-basis', '.polaris-native-card-empty', '.polaris-native-card-footer span',
+    ];
+    const overflow = [];
+    document.querySelectorAll(containers.join(',')).forEach(node => {
+      const rect = node.getBoundingClientRect();
+      const card = node.closest('.polaris-native-card');
+      const cardRect = card && card.getBoundingClientRect();
+      if (rect.right > viewportWidth + 1 || rect.left < -1 ||
+          (node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 1) ||
+          (cardRect && (rect.right > cardRect.right + 1 || rect.left < cardRect.left - 1))) {
+        overflow.push({ className: node.className, left: rect.left, right: rect.right,
+          clientWidth: node.clientWidth, scrollWidth: node.scrollWidth });
+      }
+    });
+    const unwrapped = [];
+    document.querySelectorAll(visibleText.join(',')).forEach(node => {
+      const style = getComputedStyle(node);
+      if (style.overflowWrap !== 'anywhere') {
+        unwrapped.push({ className: node.className, overflowWrap: style.overflowWrap, wordBreak: style.wordBreak });
+      }
+    });
+    const terminal = [];
+    const terminalSelector = [
+      '.polaris-native-card-title', '.polaris-native-card-subtitle', '.polaris-native-card-answer',
+      '.polaris-native-card-label', '.polaris-native-card-value', '.polaris-native-card-unknown',
+      '.polaris-native-card-basis',
+    ].join(',');
+    document.querySelectorAll(terminalSelector).forEach(node => {
+      const value = node.textContent;
+      const match = value.match(/\[END-[^\]]+\]$/);
+      const textNode = Array.from(node.childNodes).find(child => child.nodeType === Node.TEXT_NODE);
+      const cardRect = node.closest('.polaris-native-card').getBoundingClientRect();
+      if (!match || !textNode) {
+        terminal.push({ className: node.className, reason: 'terminal-or-text-node-missing' });
+        return;
+      }
+      const range = document.createRange();
+      range.setStart(textNode, textNode.data.length - match[0].length);
+      range.setEnd(textNode, textNode.data.length);
+      const rects = Array.from(range.getClientRects());
+      const visible = rects.length > 0 && rects.every(rect => rect.width > 0 && rect.height > 0 &&
+        rect.left >= cardRect.left - 1 && rect.right <= cardRect.right + 1 &&
+        rect.top >= cardRect.top - 1 && rect.bottom <= cardRect.bottom + 1);
+      if (!visible) terminal.push({ className: node.className, sentinel: match[0], rects: rects.length });
+    });
+    return { viewportWidth, overflow, unwrapped, terminal };
+  });
+  assert.deepStrictEqual(layout.overflow, [], `${selected}-${profile.label} card/content overflow`);
+  assert.deepStrictEqual(layout.unwrapped, [], `${selected}-${profile.label} accepted visible field wrapping`);
+  assert.deepStrictEqual(layout.terminal, [], `${selected}-${profile.label} terminal sentinel visibility`);
+
   const headingIds = await page.locator('.polaris-native-card-heading').evaluateAll(nodes => nodes.map(node => node.id));
   assert.strictEqual(new Set(headingIds).size, headingIds.length, 'section heading IDs must remain unique');
   assert.strictEqual(await page.locator('.polaris-native-card img, .polaris-native-card script, .polaris-native-card svg').count(), 0);
   assert.strictEqual(await page.locator('.polaris-native-card a, .polaris-native-card button, .polaris-native-card [tabindex]').count(), 0);
+  await page.locator('.polaris-quick-prompt').first().focus();
+  assert.strictEqual(await page.locator('.polaris-quick-prompt').first().evaluate(node => document.activeElement === node), true);
   assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
   const dimensions = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
@@ -460,7 +543,7 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
   await page.screenshot({ path: filename, fullPage: false });
   manifest.push({
     file: path.basename(filename), sha256: sha256(filename), browser: selected, route,
-    viewport: profile.viewport, theme: profile.theme, cardCount: profile.cardCount,
+    viewport: profile.viewport, theme: profile.theme, zoom: profile.zoom || 1, cardCount: profile.cardCount,
     evidencePerCard: 12, unknownsPerCard: 12, answerLength: 2000, evidenceValueLength: 2000,
     screenshotCapture: 'viewport',
     fixture: 'maximum-boundary-complete-text-safe-accessible-order',
@@ -560,6 +643,7 @@ async function main() {
       { label: 'boundary-2-cards-mobile-dark', cardCount: 2, viewport: { width: 390, height: 844 }, theme: 'dark' },
       { label: 'boundary-3-cards-reflow-320-light', cardCount: 3, viewport: { width: 320, height: 720 }, theme: 'light' },
       { label: 'boundary-4-cards-desktop-dark', cardCount: 4, viewport: { width: 1440, height: 900 }, theme: 'dark' },
+      { label: 'boundary-4-cards-zoom-200-dark', cardCount: 4, viewport: { width: 640, height: 900 }, theme: 'dark', zoom: 2 },
     ];
     for (const profile of maximumBoundaryProfiles) {
       await runMaximumBoundary(browser, origin, securityRoot, security, selected, profile);

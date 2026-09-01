@@ -1,12 +1,28 @@
 .polaris-native-card-host {
   width: min(100%, 760px);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   align-self: center;
   margin: 0 0 24px;
 }
 .polaris-native-card-host:empty { display: none; }
 .polaris-native-card-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: 16px;
+}
+.polaris-native-card-item,
+.polaris-native-card {
+  min-width: 0;
+  max-width: 100%;
+}
+.polaris-native-card,
+.polaris-native-card * {
+  overflow-wrap: anywhere;
 }
 .polaris-native-card {
   overflow: hidden;

@@ -227,6 +227,24 @@ async function assertPageAuthority(page, label) {
     `${label} horizontal overflow: ${JSON.stringify(dimensions)}`);
 }
 
+async function assertProfessionalPresentation(page, label) {
+  const visibleText = await page.locator('body').innerText();
+  const forbidden = [
+    ['internal error code', /\b(?:POLARIS|BROWSER_FIXTURE)_[A-Z0-9_]+\b/],
+    ['provider request identifier', /\bresp_[a-z0-9_]+\b/i],
+    ['internal contract identifier', /\bnorthstar\.polaris\.[a-z0-9_.-]+\b/i],
+    ['raw JSON field', /(?:^|[\s{,])"(?:schemaVersion|cards|authority|provider|input|model)"\s*:/i],
+    ['JSON Schema detail', /\bjson_schema\b|additionalProperties|"required"\s*:/i],
+    ['code block', /```/],
+    ['stack trace', /(?:^|\n)\s*at\s+\S+(?:\s+\(|:)|\b(?:TypeError|ReferenceError|SyntaxError):/],
+    ['internal UUID', /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i],
+    ['internal digest', /\b[0-9a-f]{64}\b/i],
+  ];
+  for (const [kind, pattern] of forbidden) {
+    assert.doesNotMatch(visibleText, pattern, `${label} exposed ${kind}`);
+  }
+}
+
 async function installRoutes(page, state) {
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -347,6 +365,7 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
     await page.getByText('Bounded Polaris browser answer.').waitFor({ state: 'visible' });
     assert.strictEqual(state.messageCalls, 1);
   }
+  await assertProfessionalPresentation(page, `${selected}-${profile.label}`);
   assert.deepStrictEqual(state.external, [], `${profile.label} external requests`);
   assert.deepStrictEqual(errors, [], `${profile.label} page errors`);
   const filename = path.join(outputRoot, `${selected}-${profile.label}.png`);
@@ -375,6 +394,7 @@ async function runDemo(browser, origin, outputRoot, manifest, selected) {
   assert.strictEqual((await page.locator('#polarisProviderStatusLabel').textContent()).trim(), 'Local demo');
   await page.locator('.polaris-quick-prompt').first().click();
   await page.getByText(/calculated locally from the isolated demo session/).waitFor({ state: 'visible' });
+  await assertProfessionalPresentation(page, `${selected}-demo-local`);
   assert.strictEqual(state.messageCalls, 0, 'demo must not call assistant message endpoint');
   assert.strictEqual(state.api.some(entry => entry.path.includes('/polaris/assistant/')), false,
     'demo must not call assistant server endpoints');
@@ -409,6 +429,7 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
   assert.strictEqual(state.messageCalls, 0, 'stored prompt-like content must not trigger a message call');
   await page.locator('.polaris-quick-prompt').first().click();
   await page.getByText(/Dynamic Polaris text is inert/).waitFor({ state: 'visible' });
+  await assertProfessionalPresentation(page, `${selected}-hostile`);
   assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
   assert.strictEqual(await page.locator('img[src="/p6-hostile-image"]').count(), 0);
   assert.strictEqual(state.messageCalls, 1, 'one intercepted browser fixture response is expected');
@@ -588,6 +609,7 @@ async function runMalformed(browser, origin, securityRoot, manifest, selected, m
     assert.match(await page.getByRole('alert').textContent(), /structured response was rejected/);
     assert.strictEqual(await page.locator('.polaris-native-card').count(), 0);
   }
+  await assertProfessionalPresentation(page, `${selected}-malformed-${malformed}`);
   assert.deepStrictEqual(errors, [], `${selected}-${malformed} page errors`);
   assert.deepStrictEqual(state.external, [], `${selected}-${malformed} external requests`);
   const filename = path.join(securityRoot, `${selected}-mobile-dark-malformed-${malformed}.png`);

@@ -165,6 +165,7 @@ function fakeAuth(req, _res, next) {
     req.orgId = organizationId;
     req.userRole = 'owner';
     req.user = Object.freeze({ id: userId, organizationId, role: 'owner' });
+    req.accountAuthority = Object.freeze({ plan_type: 'Complete', subscription_status: 'active' });
     req.authSession = Object.freeze({ id: req.get('X-Test-Auth-Session'), transport: 'test' });
   }
   next();

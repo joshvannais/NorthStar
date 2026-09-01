@@ -370,7 +370,10 @@ describe('mounted account authority gates on required PostgreSQL 18', () => {
     expect(rejected.disclosure).toContain('verification_required');
     expect(rejected.disclosure).not.toContain('verification_delivery_failed');
     expect(rejected.disclosure).not.toContain(valid.RESEND_API_KEY);
-  }, 180000);
+  // This mounts 21 independent production processes; the WSL-hosted full-history
+  // checkout is exercised through Windows Node, so retain every case while
+  // allowing the cross-filesystem process and 37-migration verification cost.
+  }, 300000);
 
   test('pending user reads its tenant dashboard, opens/saves onboarding, and remains unverified', async () => {
     const created = await signup('pending-gates@example.test');

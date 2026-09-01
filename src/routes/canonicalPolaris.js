@@ -18,10 +18,14 @@ const {
 } = require('../polaris/assistantContract');
 const {
   createIdempotencyRegistry,
+  buildRuntimeEnvelope,
   executeIntercepted,
   executeIdempotentMessage,
+  executeProvider,
   statusForRuntime,
 } = require('../polaris/assistantRuntime');
+const { createProviderUsageLedger } = require('../polaris/providerLedger');
+const { requireProviderEntitlement } = require('../polaris/providerPolicy');
 const { sha256, stableStringify, stableValue } = require('../services/businessProfileAdapter');
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
 const { scheduleAuthority } = require('../scheduling/repository');
@@ -743,8 +747,9 @@ function compatibilityProjection(surface, items, context, calendarTimeZoneAuthor
 
 function createDependencies(options) {
   const supplied = options || {};
+  const poolProvider = supplied.poolProvider || function () { return db.getPool(); };
   return {
-    poolProvider: supplied.poolProvider || function () { return db.getPool(); },
+    poolProvider,
     auth: supplied.auth || requireTenantAccess,
     onboardedAuth: supplied.onboardedAuth || supplied.auth || requireOnboardedInternal,
     externalAuth: supplied.externalAuth || supplied.auth || requireVerifiedExternalAction,
@@ -754,6 +759,7 @@ function createDependencies(options) {
     operatorTargetDirectory: supplied.operatorTargetDirectory || loadSchedulingOperatorTargetPage,
     assistantContextLoader: supplied.assistantContextLoader || getCanonicalGraph,
     assistantRuntime: supplied.assistantRuntime || null,
+    assistantUsageLedger: supplied.assistantUsageLedger || createProviderUsageLedger({ poolProvider }),
     assistantIdempotency: supplied.assistantIdempotency || createIdempotencyRegistry(),
     assistantRateLimit: supplied.assistantRateLimit || rateLimit('internal-api', assistantRateLimitKey),
   };
@@ -787,6 +793,9 @@ function sendInvalidCustomerId(res, req) {
 function handleEndpointError(res, _error, req) {
   if (_error && _error.code === 'INVALID_CUSTOMER_ID') return sendInvalidCustomerId(res, req);
   if (_error && Number.isInteger(_error.statusCode) && _error.code) {
+    if (_error.statusCode === 429 && Number.isSafeInteger(_error.retryAfterSeconds)) {
+      res.set('Retry-After', String(Math.max(1, Math.min(86400, _error.retryAfterSeconds))));
+    }
     return res.status(_error.statusCode).json({
       success: false,
       requestId: req && req.requestId || undefined,
@@ -894,6 +903,10 @@ function createCanonicalRouter(options) {
   router.get('/polaris/assistant/status', dependencies.auth, requireCanonicalContext,
     dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
       try {
+        requireProviderEntitlement({
+          plan: req.accountAuthority && req.accountAuthority.plan_type,
+          role: req.userRole || req.tenantContext.role,
+        });
         await resolvePool(dependencies.poolProvider).query('SELECT 1 AS polaris_local_authority');
         const data = await statusForRuntime(dependencies.assistantRuntime, req);
         return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
@@ -940,13 +953,25 @@ function createCanonicalRouter(options) {
   router.post('/polaris/assistant/messages', dependencies.auth, requireCanonicalContext,
     dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
       const requestAbort = new AbortController();
-      const abortRequest = function () { requestAbort.abort(); };
-      const abortOnClose = function () { if (!res.writableEnded) requestAbort.abort(); };
+      const abortRequest = function () { if (!requestAbort.signal.aborted) requestAbort.abort(); };
+      const abortOnClose = function () { if (!res.writableEnded && !requestAbort.signal.aborted) requestAbort.abort(); };
+      const totalDeadline = setTimeout(function () {
+        if (requestAbort.signal.aborted) return;
+        const timeout = new Error('Polaris conversation did not complete before the safe deadline.');
+        timeout.code = 'POLARIS_REQUEST_TIMEOUT';
+        timeout.statusCode = 504;
+        requestAbort.abort(timeout);
+      }, 25000);
+      if (typeof totalDeadline.unref === 'function') totalDeadline.unref();
       req.once('aborted', abortRequest);
       res.once('close', abortOnClose);
       try {
         const request = validateMessageRequest(req.body);
         const role = req.userRole || req.tenantContext.role;
+        requireProviderEntitlement({
+          plan: req.accountAuthority && req.accountAuthority.plan_type,
+          role,
+        });
         if (request.selected) {
           const selectedResource = request.selected.kind === 'work' ? 'calendar' : 'leads';
           if (!hasPermission(role, selectedResource, 'read')) {
@@ -964,6 +989,23 @@ function createCanonicalRouter(options) {
           role,
         };
         const data = await executeIdempotentMessage(dependencies.assistantIdempotency, request, authority, async function (signal) {
+          const providerBacked = dependencies.assistantRuntime && dependencies.assistantRuntime.kind === 'openai';
+          if (providerBacked && !request.selected) {
+            const selectionRequired = new Error('Select one customer, lead, or work record before starting a conversation.');
+            selectionRequired.code = 'POLARIS_SELECTED_RECORD_REQUIRED';
+            selectionRequired.statusCode = 400;
+            throw selectionRequired;
+          }
+          if (providerBacked) {
+            const providerStatus = await statusForRuntime(dependencies.assistantRuntime,
+              { requestId: request.idempotencyKey }, { signal });
+            if (providerStatus.state !== 'available' || providerStatus.providerRequestsEnabled !== true) {
+              const unavailable = new Error('Polaris conversation is not configured for this account.');
+              unavailable.code = 'POLARIS_CREDENTIAL_DISABLED';
+              unavailable.statusCode = 503;
+              throw unavailable;
+            }
+          }
           let localContext = null;
           if (request.selected) {
             const item = await dependencies.assistantContextLoader(
@@ -977,12 +1019,44 @@ function createCanonicalRouter(options) {
             }
             localContext = buildContextResponse(item, request.selected, authority, request.idempotencyKey);
           }
-          return executeIntercepted(dependencies.assistantRuntime, request, authority, localContext, { signal });
+          if (!providerBacked) {
+            return executeIntercepted(dependencies.assistantRuntime, request, authority, localContext, { signal });
+          }
+          if (typeof dependencies.assistantRuntime.preflight === 'function') {
+            dependencies.assistantRuntime.preflight(buildRuntimeEnvelope(request, authority, localContext));
+          }
+          const reservation = await dependencies.assistantUsageLedger.reserve({
+            organizationId: authority.organizationId,
+            userId: authority.userId,
+            requestId: request.idempotencyKey,
+            model: 'gpt-5.6-luna',
+            schemaVersion: 'northstar.polaris.assistant-response.v1',
+          });
+          try {
+            const result = await executeProvider(
+              dependencies.assistantRuntime, request, authority, localContext, { signal }
+            );
+            await dependencies.assistantUsageLedger.reconcile(reservation, result.usage);
+            return result.response;
+          } catch (error) {
+            const usage = error && error.polarisUsage;
+            if (usage && (usage.costNanoUsd > 0 || ['refused', 'incomplete'].includes(usage.outcomeClass) ||
+                ['POLARIS_CREDENTIAL_DISABLED', 'POLARIS_USAGE_LIMIT'].includes(error && error.code))) {
+              try { await dependencies.assistantUsageLedger.reconcile(reservation, usage); } catch (_reconcileError) {
+                const authorityUnavailable = new Error('Polaris usage authority is temporarily unavailable.');
+                authorityUnavailable.code = 'POLARIS_USAGE_AUTHORITY_UNAVAILABLE';
+                authorityUnavailable.statusCode = 503;
+                throw authorityUnavailable;
+              }
+            }
+            throw error;
+          }
         }, { signal: requestAbort.signal });
         return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
       } catch (_error) {
         return handleEndpointError(res, _error, req);
       } finally {
+        clearTimeout(totalDeadline);
         req.removeListener('aborted', abortRequest);
         res.removeListener('close', abortOnClose);
       }

@@ -1,14 +1,17 @@
 'use strict';
 
 const crypto = require('crypto');
+const http = require('http');
 const express = require('express');
 const request = require('supertest');
+const OpenAI = require('openai');
 const {
   CARD_SCHEMA,
   MESSAGE_REQUEST_SCHEMA,
   RESPONSE_SCHEMA,
   buildContextResponse,
   buildCustomerIntelligenceCard,
+  contractError,
 } = require('../../src/polaris/assistantContract');
 const { createCanonicalRouter } = require('../../src/routes/canonicalPolaris');
 
@@ -298,6 +301,48 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
     expect(JSON.stringify(records)).not.toContain(inputEnvelope.untrustedContext.cards[0].answer);
   });
 
+  test('uses the official SDK only through an intercepted loopback Responses boundary', async () => {
+    const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
+    const inputEnvelope = envelope();
+    const received = [];
+    const server = http.createServer(function (incoming, outgoing) {
+      const chunks = [];
+      incoming.on('data', chunk => chunks.push(chunk));
+      incoming.on('end', function () {
+        received.push({
+          method: incoming.method,
+          path: incoming.url,
+          body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+        });
+        outgoing.writeHead(200, { 'Content-Type': 'application/json', 'Connection': 'close' });
+        outgoing.end(JSON.stringify(completedResponse(inputEnvelope)));
+      });
+    });
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    try {
+      const address = server.address();
+      const client = new OpenAI({
+        apiKey: 'test-loopback-credential-only',
+        baseURL: `http://127.0.0.1:${address.port}/v1`,
+        maxRetries: 0,
+        timeout: 20000,
+      });
+      const runtime = module.createOpenAIRuntime({ client, configured: true, enabled: true });
+      const result = await runtime.respond(inputEnvelope, { signal: new AbortController().signal });
+      expect(result.response.source).toBe('openai');
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject({ method: 'POST', path: '/v1/responses' });
+      expect(received[0].body).toMatchObject({
+        model: 'gpt-5.6-luna', store: false, truncation: 'disabled', max_output_tokens: 8192,
+      });
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
   test('production configuration stays fail-closed and exposes no credential material', async () => {
     const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
     let clientConstructions = 0;
@@ -327,7 +372,8 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
 
   test('rejects conservatively oversized assembled input before transport', async () => {
     const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
-    const inputEnvelope = envelope();
+    const baseline = envelope();
+    const inputEnvelope = JSON.parse(JSON.stringify(baseline));
     inputEnvelope.untrustedContext.cards[0].answer = 'x'.repeat(17000);
     const client = clientReturning(() => completedResponse(inputEnvelope));
     const runtime = module.createOpenAIRuntime({ client, configured: true, enabled: true });
@@ -468,11 +514,11 @@ function mountedProviderResponse(runtimeEnvelope) {
   };
 }
 
-function mountedApp(state) {
+function mountedApp(state, overrides = {}) {
   const app = express();
   app.use(function (req, _res, next) { req.requestId = crypto.randomUUID(); next(); });
   app.use(express.json());
-  const runtime = {
+  const runtime = overrides.runtime || {
     kind: 'openai',
     status: async function () { return { state: 'available', label: 'Configured' }; },
     respond: async function (runtimeEnvelope) {
@@ -480,13 +526,15 @@ function mountedApp(state) {
       return mountedProviderResponse(runtimeEnvelope);
     },
   };
-  const ledger = {
+  const ledger = overrides.ledger || {
     reserve: async function () { state.reservations += 1; return { id: crypto.randomUUID() }; },
     reconcile: async function (_reservation, usage) { state.reconciliations.push(usage); },
   };
   app.use('/api/v1/canonical', createCanonicalRouter({
     auth: mountedAuth,
-    poolProvider: function () { return { query: async function () { state.queries += 1; return { rows: [] }; } }; },
+    poolProvider: overrides.poolProvider || function () {
+      return { query: async function () { state.queries += 1; return { rows: [] }; } };
+    },
     assistantContextLoader: async function () { state.contextLoads += 1; return canonicalItem(); },
     assistantRuntime: runtime,
     assistantUsageLedger: ledger,
@@ -499,6 +547,17 @@ function mountedHeaders(plan, role) {
 }
 
 describe('Pre-Mission-23 P6 mounted entitlement before provider work', () => {
+  test.each(['owner', 'member'])('Starter %s status fails before PostgreSQL or runtime inspection', async role => {
+    const state = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
+    const response = await request(mountedApp(state))
+      .get('/api/v1/canonical/polaris/assistant/status')
+      .set(mountedHeaders('Starter', role));
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe(role === 'owner'
+      ? 'POLARIS_PLAN_LOCKED' : 'POLARIS_CONVERSATION_UNAVAILABLE');
+    expect(state).toMatchObject({ reservations: 0, contextLoads: 0, transports: 0, queries: 0 });
+  });
+
   test.each(['owner', 'admin'])('Starter %s direct POST is plan-locked before spend, context, or transport', async role => {
     const state = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
     const response = await request(mountedApp(state))
@@ -544,6 +603,57 @@ describe('Pre-Mission-23 P6 mounted entitlement before provider work', () => {
     expect(response.body.data).toMatchObject({ source: 'openai', provider: { state: 'configured', requestsSent: 1 } });
     expect(state).toMatchObject({ reservations: 1, contextLoads: 1, transports: 1 });
     expect(state.reconciliations).toHaveLength(1);
+  });
+
+  test('emits deterministic Retry-After and performs no transport when durable admission denies', async () => {
+    const state = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
+    const denied = contractError('POLARIS_RATE_LIMIT', 'Polaris conversation is temporarily busy.', 429);
+    denied.retryAfterSeconds = 25;
+    const response = await request(mountedApp(state, {
+      ledger: {
+        reserve: async function () { state.reservations += 1; throw denied; },
+        reconcile: async function () {},
+      },
+    })).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(mountedHeaders('Growth', 'member')).send(messageRequest());
+    expect(response.status).toBe(429);
+    expect(response.headers['retry-after']).toBe('25');
+    expect(response.body.error.code).toBe('POLARIS_RATE_LIMIT');
+    expect(state).toMatchObject({ reservations: 1, contextLoads: 1, transports: 0 });
+  });
+
+  test('preflights assembled input before durable reservation or transport', async () => {
+    const state = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
+    const runtime = {
+      kind: 'openai',
+      status: async function () { return { state: 'available', label: 'Configured' }; },
+      preflight: function () { throw contractError('POLARIS_INPUT_TOO_LARGE', 'Bounded input exceeded.', 413); },
+      respond: async function () { state.transports += 1; throw new Error('must not run'); },
+    };
+    const response = await request(mountedApp(state, { runtime }))
+      .post('/api/v1/canonical/polaris/assistant/messages')
+      .set(mountedHeaders('Complete', 'owner')).send(messageRequest());
+    expect(response.status).toBe(413);
+    expect(response.body.error.code).toBe('POLARIS_INPUT_TOO_LARGE');
+    expect(state).toMatchObject({ reservations: 0, contextLoads: 1, transports: 0 });
+  });
+
+  test('withholds a provider result when actual usage cannot be durably reconciled', async () => {
+    const state = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
+    const response = await request(mountedApp(state, {
+      ledger: {
+        reserve: async function () { state.reservations += 1; return { id: crypto.randomUUID() }; },
+        reconcile: async function () {
+          state.reconciliations.push('attempted');
+          throw contractError('POLARIS_USAGE_AUTHORITY_UNAVAILABLE', 'Usage authority unavailable.', 503);
+        },
+      },
+    })).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(mountedHeaders('Complete', 'owner')).send(messageRequest());
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe('POLARIS_USAGE_AUTHORITY_UNAVAILABLE');
+    expect(state).toMatchObject({ reservations: 1, contextLoads: 1, transports: 1 });
+    expect(state.reconciliations).toEqual(['attempted']);
   });
 });
 

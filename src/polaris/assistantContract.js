@@ -216,10 +216,12 @@ function validateAssistantResponse(raw, expected = {}) {
   const cards = exactArray(response.cards, 4, code, 'response.cards');
   if (response.schemaVersion !== RESPONSE_SCHEMA || !textWithin(response.requestId, 1, 128) ||
       !textWithin(response.responseId, 1, 128) || response.state !== 'available' ||
-      !['canonical_local', 'interceptor'].includes(response.source) || !textWithin(answer.text, 1, 8000) ||
+      !['canonical_local', 'interceptor', 'openai'].includes(response.source) || !textWithin(answer.text, 1, 8000) ||
       !Number.isSafeInteger(answer.evidenceCount) || answer.evidenceCount < 0 || answer.evidenceCount > 48 ||
       !Number.isSafeInteger(answer.unknownCount) || answer.unknownCount < 0 || answer.unknownCount > 48 ||
-      provider.state !== 'unconfigured' || provider.requestsSent !== 0 ||
+      (response.source === 'openai'
+        ? provider.state !== 'configured' || ![1, 2].includes(provider.requestsSent)
+        : provider.state !== 'unconfigured' || provider.requestsSent !== 0) ||
       response.advisoryOnly !== true || response.canonicalMutationAllowed !== false ||
       (expected.requestId && response.requestId !== expected.requestId) ||
       (expected.source && response.source !== expected.source) ||
@@ -265,8 +267,11 @@ function validateAssistantStatus(raw) {
   if (status.schemaVersion !== STATUS_SCHEMA || !textWithin(status.requestId, 1, 128) ||
       !['local', 'unconfigured', 'error', 'available'].includes(status.state) ||
       !textWithin(status.label, 1, MAX_STATUS_LABEL) || status.localCustomerIntelligence !== 'available' ||
-      status.providerRequestsEnabled !== false || status.providerRequestsSent !== 0 ||
-      decisions.length !== PROVIDER_DECISIONS.length || decisions.some((value, index) => value !== PROVIDER_DECISIONS[index]) ||
+      typeof status.providerRequestsEnabled !== 'boolean' || status.providerRequestsSent !== 0 ||
+      (status.providerRequestsEnabled
+        ? status.state !== 'available' || decisions.length !== 0
+        : decisions.length !== PROVIDER_DECISIONS.length ||
+          decisions.some((value, index) => value !== PROVIDER_DECISIONS[index])) ||
       (Object.prototype.hasOwnProperty.call(status, 'intercepted') && status.intercepted !== true)) {
     throw contractError(code, 'Assistant status is invalid.', 502);
   }

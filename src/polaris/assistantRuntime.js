@@ -13,6 +13,7 @@ const {
 } = require('./assistantContract');
 
 const MAX_INTERCEPTED_RESPONSE_BYTES = 64 * 1024;
+const MAX_PROVIDER_RESPONSE_BYTES = 128 * 1024;
 const INTERCEPTED_TIMEOUT_MS = 1000;
 const IDEMPOTENCY_MAXIMUM_ENTRIES = 256;
 const IDEMPOTENCY_RETENTION_MS = 5 * 60 * 1000;
@@ -24,10 +25,11 @@ function requestId(req) {
 
 function normalizeRuntime(runtime) {
   if (!runtime) return null;
-  if (runtime.kind !== 'interceptor' || typeof runtime.status !== 'function' || typeof runtime.respond !== 'function') {
+  if (!['interceptor', 'openai'].includes(runtime.kind) ||
+      typeof runtime.status !== 'function' || typeof runtime.respond !== 'function') {
     throw contractError(
       'POLARIS_RUNTIME_FORBIDDEN',
-      'Only an explicit intercepted test runtime can cross the provider-neutral seam.',
+      'The configured Polaris runtime is unsupported.',
       500
     );
   }
@@ -98,6 +100,28 @@ function raceInterceptedAction(action, options = {}) {
 async function statusForRuntime(runtime, req, options = {}) {
   const intercepted = normalizeRuntime(runtime);
   if (!intercepted) return validateAssistantStatus(unconfiguredStatus(requestId(req)));
+  if (intercepted.kind === 'openai') {
+    let supplied;
+    try {
+      supplied = validateRuntimeStatusInput(await intercepted.status(Object.freeze({ signal: options.signal })));
+    } catch (_error) {
+      if (_error && _error.code === 'POLARIS_RUNTIME_STATUS_INVALID') throw _error;
+      return validateAssistantStatus(Object.freeze({
+        ...unconfiguredStatus(requestId(req)),
+        state: 'error',
+        label: 'Polaris conversation unavailable',
+      }));
+    }
+    const available = supplied.state === 'available';
+    return validateAssistantStatus(Object.freeze({
+      ...unconfiguredStatus(requestId(req)),
+      state: supplied.state,
+      label: supplied.label || (available ? 'Configured' : 'Unconfigured'),
+      providerRequestsEnabled: available,
+      providerRequestsSent: 0,
+      decisionsRequired: available ? Object.freeze([]) : PROVIDER_DECISIONS,
+    }));
+  }
   let supplied;
   const ownedBoundary = options.deadlineAt === undefined ? createInterceptedBoundary(options.signal) : null;
   const deadlineAt = ownedBoundary ? ownedBoundary.deadlineAt : options.deadlineAt;
@@ -313,7 +337,9 @@ function createIdempotencyRegistry(options = {}) {
         callback(value);
       }
       if (signal) {
-        abortListener = function () { finish(reject, interceptedAbortError()); };
+        abortListener = function () {
+          finish(reject, signal.reason && signal.reason.code ? signal.reason : interceptedAbortError());
+        };
         if (signal.aborted) {
           abortListener();
           return;
@@ -339,7 +365,7 @@ function executeIdempotentMessage(registry, request, authority, operation, optio
 
 async function executeIntercepted(runtime, request, authority, localContext, options = {}) {
   const intercepted = normalizeRuntime(runtime);
-  if (!intercepted) {
+  if (!intercepted || intercepted.kind !== 'interceptor') {
     throw contractError(
       'POLARIS_PROVIDER_DECISIONS_REQUIRED',
       `Provider-backed conversation remains unavailable until these decisions are approved: ${PROVIDER_DECISIONS.join(', ')}.`,
@@ -355,7 +381,19 @@ async function executeIntercepted(runtime, request, authority, localContext, opt
     if (status.state !== 'available') {
       throw contractError('POLARIS_ASSISTANT_UNAVAILABLE', `Intercepted assistant state is ${status.state}.`, 503);
     }
-    const envelope = Object.freeze({
+    const envelope = buildRuntimeEnvelope(request, authority, localContext);
+    const result = await raceInterceptedAction(
+      () => intercepted.respond(envelope, Object.freeze({ signal: boundary.signal })),
+      { deadlineAt: boundary.deadlineAt, signal: boundary.signal }
+    );
+    return boundedInterceptedResponse(result, request, authority);
+  } finally {
+    boundary.dispose();
+  }
+}
+
+function buildRuntimeEnvelope(request, authority, localContext) {
+  return Object.freeze({
     schemaVersion: request.schemaVersion,
     requestId: request.idempotencyKey,
     authority: Object.freeze({ ...authority }),
@@ -371,15 +409,61 @@ async function executeIntercepted(runtime, request, authority, localContext, opt
       canonicalMutationAllowed: false,
       secretsAllowed: false,
     }),
-    });
-    const result = await raceInterceptedAction(
-      () => intercepted.respond(envelope, Object.freeze({ signal: boundary.signal })),
-      { deadlineAt: boundary.deadlineAt, signal: boundary.signal }
-    );
-    return boundedInterceptedResponse(result, request, authority);
-  } finally {
-    boundary.dispose();
+  });
+}
+
+function validateProviderUsage(raw) {
+  const expected = [
+    'attemptCount', 'costNanoUsd', 'inputTokens', 'latencyMs', 'outcomeClass',
+    'outputTokens', 'providerRequestId',
+  ];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.getPrototypeOf(raw) !== Object.prototype ||
+      Reflect.ownKeys(raw).some(key => typeof key !== 'string') ||
+      Reflect.ownKeys(raw).slice().sort().join('|') !== expected.slice().sort().join('|') ||
+      !Number.isSafeInteger(raw.inputTokens) || raw.inputTokens < 0 ||
+      !Number.isSafeInteger(raw.outputTokens) || raw.outputTokens < 0 ||
+      !Number.isSafeInteger(raw.costNanoUsd) || raw.costNanoUsd < 0 || raw.costNanoUsd > 20000000 ||
+      !Number.isSafeInteger(raw.latencyMs) || raw.latencyMs < 0 || raw.latencyMs > 25000 ||
+      ![1, 2].includes(raw.attemptCount) || raw.outcomeClass !== 'completed' ||
+      !(raw.providerRequestId === null ||
+        (typeof raw.providerRequestId === 'string' && raw.providerRequestId.length >= 1 && raw.providerRequestId.length <= 128))) {
+    throw contractError('POLARIS_PROVIDER_RESPONSE_INVALID', 'Polaris received an unsupported structured response. No data was changed.', 502);
   }
+  return raw;
+}
+
+async function executeProvider(runtime, request, authority, localContext, options = {}) {
+  const provider = normalizeRuntime(runtime);
+  if (!provider || provider.kind !== 'openai') {
+    throw contractError('POLARIS_CREDENTIAL_DISABLED', 'Polaris conversation is not configured for this account.', 503);
+  }
+  const status = await statusForRuntime(provider, { requestId: request.idempotencyKey }, { signal: options.signal });
+  if (status.state !== 'available' || status.providerRequestsEnabled !== true) {
+    throw contractError('POLARIS_CREDENTIAL_DISABLED', 'Polaris conversation is not configured for this account.', 503);
+  }
+  const result = await provider.respond(buildRuntimeEnvelope(request, authority, localContext),
+    Object.freeze({ signal: options.signal }));
+  if (!result || typeof result !== 'object' || Array.isArray(result) ||
+      Reflect.ownKeys(result).slice().sort().join('|') !== 'response|usage') {
+    throw contractError('POLARIS_PROVIDER_RESPONSE_INVALID', 'Polaris received an unsupported structured response. No data was changed.', 502);
+  }
+  try {
+    validateAssistantResponse(result.response, {
+      requestId: request.idempotencyKey,
+      authority,
+      selected: request.selected,
+      source: 'openai',
+    });
+  } catch (_error) {
+    throw contractError('POLARIS_PROVIDER_RESPONSE_INVALID', 'Polaris received an unsupported structured response. No data was changed.', 502);
+  }
+  validateProviderUsage(result.usage);
+  let serialized;
+  try { serialized = JSON.stringify(result.response); } catch (_error) { serialized = ''; }
+  if (!serialized || Buffer.byteLength(serialized, 'utf8') > MAX_PROVIDER_RESPONSE_BYTES) {
+    throw contractError('POLARIS_PROVIDER_RESPONSE_INVALID', 'Polaris received an unsupported structured response. No data was changed.', 502);
+  }
+  return result;
 }
 
 module.exports = {
@@ -387,8 +471,11 @@ module.exports = {
   IDEMPOTENCY_RETENTION_MS,
   INTERCEPTED_TIMEOUT_MS,
   MAX_INTERCEPTED_RESPONSE_BYTES,
+  MAX_PROVIDER_RESPONSE_BYTES,
   boundedInterceptedResponse,
+  buildRuntimeEnvelope,
   createIdempotencyRegistry,
+  executeProvider,
   executeIntercepted,
   executeIdempotentMessage,
   normalizeRuntime,

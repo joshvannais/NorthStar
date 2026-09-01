@@ -155,12 +155,15 @@
     var cards = exactArray(response.cards, 4);
     if (response.schemaVersion !== RESPONSE_SCHEMA || !boundedString(response.requestId, 1, 128) ||
         !boundedString(response.responseId, 1, 128) || response.state !== 'available' ||
-        ['canonical_local', 'interceptor'].indexOf(response.source) < 0 ||
+        ['canonical_local', 'interceptor', 'openai'].indexOf(response.source) < 0 ||
         !UUID.test(authority.organizationId || '') || !UUID.test(authority.userId || '') || !boundedString(authority.role, 1, 64) ||
         !boundedString(answer.text, 1, 8000) || !Number.isSafeInteger(answer.evidenceCount) ||
         answer.evidenceCount < 0 || answer.evidenceCount > 48 || !Number.isSafeInteger(answer.unknownCount) ||
-        answer.unknownCount < 0 || answer.unknownCount > 48 || provider.state !== 'unconfigured' ||
-        provider.requestsSent !== 0 || response.advisoryOnly !== true || response.canonicalMutationAllowed !== false ||
+        answer.unknownCount < 0 || answer.unknownCount > 48 ||
+        (response.source === 'openai'
+          ? provider.state !== 'configured' || [1, 2].indexOf(provider.requestsSent) < 0
+          : provider.state !== 'unconfigured' || provider.requestsSent !== 0) ||
+        response.advisoryOnly !== true || response.canonicalMutationAllowed !== false ||
         (!selected && cards.length) || (expected.requestId && response.requestId !== expected.requestId) ||
         (expected.source && response.source !== expected.source) ||
         (Object.prototype.hasOwnProperty.call(expected, 'selected') && !sameSelection(selected, expected.selected))) {
@@ -184,10 +187,12 @@
     if (status.schemaVersion !== STATUS_SCHEMA || !boundedString(status.requestId, 1, 128) ||
         ['local', 'unconfigured', 'error', 'available'].indexOf(status.state) < 0 ||
         !boundedString(status.label, 1, 160) || status.localCustomerIntelligence !== 'available' ||
-        status.providerRequestsEnabled !== false || status.providerRequestsSent !== 0 ||
-        decisions.length !== PROVIDER_DECISIONS.length || decisions.some(function (entry, index) {
-          return entry !== PROVIDER_DECISIONS[index];
-        }) || (hasIntercepted && status.intercepted !== true)) {
+        typeof status.providerRequestsEnabled !== 'boolean' || status.providerRequestsSent !== 0 ||
+        (status.providerRequestsEnabled
+          ? status.state !== 'available' || decisions.length !== 0
+          : decisions.length !== PROVIDER_DECISIONS.length || decisions.some(function (entry, index) {
+            return entry !== PROVIDER_DECISIONS[index];
+          })) || (hasIntercepted && status.intercepted !== true)) {
       return invalidContract();
     }
     return status;

@@ -76,10 +76,23 @@ function auth(req, _res, next) {
   if (organizationId) {
     const role = req.get('X-Test-Role') || 'owner';
     const userId = req.get('X-Test-User') || USER_A;
+    const plan = req.get('X-Test-Plan') || 'Complete';
     req.tenantContext = Object.freeze({ organizationId, userId, role });
     req.orgId = organizationId;
     req.userRole = role;
     req.user = Object.freeze({ id: userId });
+    Object.defineProperty(req, 'accountAuthority', {
+      value: Object.freeze({
+        organization_id: organizationId,
+        user_id: userId,
+        role,
+        plan_type: plan,
+        subscription_status: 'active',
+      }),
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
   }
   next();
 }

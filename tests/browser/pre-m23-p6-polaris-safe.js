@@ -12,6 +12,7 @@ const { buildDemoWorkspace, createInitialDemoState } = require('../../src/comman
   'DATABASE_URL', 'RETELL_API_KEY', 'RETELL_AGENT_ID', 'RETELL_PHONE_NUMBER',
   'RETELL_WEBHOOK_SECRET', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'TWILIO_ACCOUNT_SID',
   'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER', 'RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS',
+  'OPENAI_API_KEY', 'POLARIS_OPENAI_ENABLED',
 ].forEach(name => { delete process.env[name]; });
 
 const { app } = require('../../src/server');
@@ -37,7 +38,7 @@ function account() {
     organization: { id: ORG, name: 'Polaris Browser Fixture' },
     navigation: navigationFixture(), memberships: [{ role: 'owner', status: 'active' }],
     membership: { role: 'owner', status: 'active' }, onboarding: { status: 'complete' },
-    subscription: { safe: true, state: 'active', readOnly: false, showTrialBanner: false },
+    subscription: { plan: 'Complete', safe: true, state: 'active', readOnly: false, showTrialBanner: false },
   };
 }
 

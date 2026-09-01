@@ -173,7 +173,39 @@ function providerResponseError() {
 }
 
 function sameJson(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (left === right) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+
+  const leftIsArray = Array.isArray(left);
+  if (leftIsArray !== Array.isArray(right)) return false;
+  if (leftIsArray) {
+    if (Object.getPrototypeOf(left) !== Array.prototype || Object.getPrototypeOf(right) !== Array.prototype ||
+        left.length !== right.length) return false;
+    const leftKeys = Reflect.ownKeys(left);
+    const rightKeys = Reflect.ownKeys(right);
+    if (leftKeys.length !== rightKeys.length || leftKeys.some(key => !rightKeys.includes(key))) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (!sameJson(left[index], right[index])) return false;
+    }
+    return true;
+  }
+
+  if (Object.getPrototypeOf(left) !== Object.prototype || Object.getPrototypeOf(right) !== Object.prototype) {
+    return false;
+  }
+  const leftKeys = Reflect.ownKeys(left);
+  const rightKeys = Reflect.ownKeys(right);
+  if (leftKeys.length !== rightKeys.length || leftKeys.some(key =>
+    typeof key !== 'string' || !Object.prototype.hasOwnProperty.call(right, key))) return false;
+  return leftKeys.every(key => {
+    const leftDescriptor = Object.getOwnPropertyDescriptor(left, key);
+    const rightDescriptor = Object.getOwnPropertyDescriptor(right, key);
+    return leftDescriptor && rightDescriptor &&
+      Object.prototype.hasOwnProperty.call(leftDescriptor, 'value') &&
+      Object.prototype.hasOwnProperty.call(rightDescriptor, 'value') &&
+      leftDescriptor.enumerable === true && rightDescriptor.enumerable === true &&
+      sameJson(leftDescriptor.value, rightDescriptor.value);
+  });
 }
 
 function validateProviderPayload(raw, inputEnvelope) {

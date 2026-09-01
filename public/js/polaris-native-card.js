@@ -185,11 +185,11 @@
     var status = exactObject(value, keys);
     var decisions = exactArray(status.decisionsRequired, PROVIDER_DECISIONS.length);
     if (status.schemaVersion !== STATUS_SCHEMA || !boundedString(status.requestId, 1, 128) ||
-        ['local', 'unconfigured', 'error', 'available'].indexOf(status.state) < 0 ||
+        ['local', 'unconfigured', 'error', 'available', 'configured'].indexOf(status.state) < 0 ||
         !boundedString(status.label, 1, 160) || status.localCustomerIntelligence !== 'available' ||
         typeof status.providerRequestsEnabled !== 'boolean' || status.providerRequestsSent !== 0 ||
         (status.providerRequestsEnabled
-          ? status.state !== 'available' || decisions.length !== 0
+          ? status.state !== 'configured' || decisions.length !== 0
           : decisions.length !== PROVIDER_DECISIONS.length || decisions.some(function (entry, index) {
             return entry !== PROVIDER_DECISIONS[index];
           })) || (hasIntercepted && status.intercepted !== true)) {

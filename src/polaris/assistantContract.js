@@ -248,7 +248,7 @@ function validateRuntimeStatusInput(raw) {
   const code = 'POLARIS_RUNTIME_STATUS_INVALID';
   const keys = raw && Object.prototype.hasOwnProperty.call(raw, 'label') ? ['label', 'state'] : ['state'];
   const status = exactKeys(raw, keys, code, 'intercepted status');
-  if (!['local', 'unconfigured', 'error', 'available'].includes(status.state) ||
+  if (!['local', 'unconfigured', 'error', 'available', 'configured'].includes(status.state) ||
       (Object.prototype.hasOwnProperty.call(status, 'label') && !textWithin(status.label, 1, MAX_STATUS_LABEL))) {
     throw contractError(code, 'Intercepted runtime returned an invalid status.', 502);
   }
@@ -265,11 +265,11 @@ function validateAssistantStatus(raw) {
   const status = exactKeys(raw, keys, code, 'assistant status');
   const decisions = exactArray(status.decisionsRequired, PROVIDER_DECISIONS.length, code, 'assistant status decisions');
   if (status.schemaVersion !== STATUS_SCHEMA || !textWithin(status.requestId, 1, 128) ||
-      !['local', 'unconfigured', 'error', 'available'].includes(status.state) ||
+      !['local', 'unconfigured', 'error', 'available', 'configured'].includes(status.state) ||
       !textWithin(status.label, 1, MAX_STATUS_LABEL) || status.localCustomerIntelligence !== 'available' ||
       typeof status.providerRequestsEnabled !== 'boolean' || status.providerRequestsSent !== 0 ||
       (status.providerRequestsEnabled
-        ? status.state !== 'available' || decisions.length !== 0
+        ? status.state !== 'configured' || decisions.length !== 0
         : decisions.length !== PROVIDER_DECISIONS.length ||
           decisions.some((value, index) => value !== PROVIDER_DECISIONS[index])) ||
       (Object.prototype.hasOwnProperty.call(status, 'intercepted') && status.intercepted !== true)) {

@@ -97,6 +97,29 @@ describe('P6 audit correction: retryable idempotency recovery', () => {
     await expect(registry.execute(exactScope, operation)).rejects.toMatchObject({ statusCode: 422 });
     expect(calls).toBe(1);
   });
+
+  test('never expires a retryable rejection before a Retry-After longer than normal retention', async () => {
+    let now = 0;
+    let calls = 0;
+    const registry = createIdempotencyRegistry({ maximumEntries: 2, retentionMs: 1000, clock: () => now });
+    const exactScope = scope(crypto.randomUUID(), 'long-retry-after');
+    const operation = async function () {
+      calls += 1;
+      if (calls === 1) {
+        const error = contractError('POLARIS_RATE_LIMIT', 'Wait for the authoritative retry time.', 429);
+        error.retryAfterSeconds = 2;
+        throw error;
+      }
+      return 'recovered-after-authoritative-delay';
+    };
+    await expect(registry.execute(exactScope, operation)).rejects.toMatchObject({ statusCode: 429 });
+    now = 1500;
+    await expect(registry.execute(exactScope, operation)).rejects.toMatchObject({ statusCode: 429 });
+    expect(calls).toBe(1);
+    now = 2000;
+    await expect(registry.execute(exactScope, operation)).resolves.toBe('recovered-after-authoritative-delay');
+    expect(calls).toBe(2);
+  });
 });
 
 function mountedAuth(req, _res, next) {
@@ -203,7 +226,7 @@ describe('P6 audit correction: configuration never claims provider availability'
     });
     expect(cardRenderer.validateAssistantStatus(status)).toBe(status);
     expect(JSON.stringify(runtime) + JSON.stringify(status)).not.toContain(secret);
-    expect(JSON.stringify(status)).not.toMatch(/available|healthy|ready/i);
+    expect(status.state + ' ' + status.label).not.toMatch(/available|healthy|ready/i);
   });
 });
 

@@ -996,11 +996,19 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
         EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.polaris_provider_usage_policy_status(uuid,uuid) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint) TO %I',
           runtime_role
         );
         EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text) TO %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.polaris_provider_usage_policy_status(uuid,uuid) TO %I',
           runtime_role
         );
       END IF;
@@ -1238,6 +1246,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            'public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint)', 'EXECUTE')
          AND has_function_privilege($1,
            'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text)', 'EXECUTE')
+         AND has_function_privilege($1,
+           'public.polaris_provider_usage_policy_status(uuid,uuid)', 'EXECUTE')
        )) AS polaris_provider_usage_guarded,
        (SELECT bool_and(
           NOT has_table_privilege($1, relation.oid, 'TRUNCATE')

@@ -8,6 +8,8 @@ const USER_LIMITS = Object.freeze({ minute: 12, hour: 120, day: 600, concurrent:
 const TENANT_LIMITS = Object.freeze({ minute: 60, hour: 600, day: 3000, concurrent: 4 });
 const RETENTION_DAYS = Object.freeze({ operational: 30, security: 90, aggregateMonths: 13 });
 const MODEL = 'gpt-5.6-luna';
+const POLICY_STATES = Object.freeze(['within_target', 'target', 'warning', 'limit']);
+const MAX_BIGINT = 9223372036854775807n;
 
 function usageAuthorityUnavailable() {
   return contractError(
@@ -29,6 +31,29 @@ function exactUuid(value, label) {
     throw contractError('POLARIS_USAGE_CONTRACT_INVALID', `${label} must be one UUID.`, 500);
   }
   return value.toLowerCase();
+}
+
+function exactNonnegativeBigInt(value) {
+  const text = typeof value === 'bigint' ? String(value) : String(value === undefined ? '' : value);
+  if (!/^(0|[1-9][0-9]*)$/.test(text)) throw usageAuthorityUnavailable();
+  const parsed = BigInt(text);
+  if (parsed > MAX_BIGINT) throw usageAuthorityUnavailable();
+  return parsed;
+}
+
+function reservationPolicy(row) {
+  const spend = exactNonnegativeBigInt(row.tenant_spend_nano_usd);
+  const target = exactNonnegativeBigInt(row.tenant_target_nano_usd);
+  const warning = exactNonnegativeBigInt(row.tenant_warning_nano_usd);
+  const hard = exactNonnegativeBigInt(row.tenant_hard_nano_usd);
+  exactNonnegativeBigInt(row.project_hard_nano_usd);
+  if (target <= 0n || warning !== target * 2n || hard !== warning * 2n || spend > hard) {
+    throw usageAuthorityUnavailable();
+  }
+  if (spend >= hard) return 'limit';
+  if (spend >= warning) return 'warning';
+  if (spend >= target) return 'target';
+  return 'within_target';
 }
 
 function denialError(row) {
@@ -129,7 +154,28 @@ function createProviderUsageLedger(options = {}) {
       userId: authority.userId,
       requestId: authority.requestId,
       reservedCostNanoUsd: RESERVED_COST_NANO_USD,
+      usagePolicyState: reservationPolicy(row),
     });
+  }
+
+  async function status(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw contractError('POLARIS_USAGE_CONTRACT_INVALID', 'A bounded usage-policy status is required.', 500);
+    }
+    const organizationId = exactUuid(input.organizationId, 'organizationId');
+    const userId = exactUuid(input.userId, 'userId');
+    let result;
+    try {
+      result = await queryable(poolProvider).query(
+        `SELECT policy_state FROM public.polaris_provider_usage_policy_status($1,$2)`,
+        [organizationId, userId]
+      );
+    } catch (error) {
+      throw mapDatabaseError(error);
+    }
+    const row = result && result.rows && result.rows[0];
+    if (!row || !POLICY_STATES.includes(row.policy_state)) throw usageAuthorityUnavailable();
+    return Object.freeze({ state: row.policy_state });
   }
 
   async function reconcile(reservation, suppliedUsage) {
@@ -155,11 +201,12 @@ function createProviderUsageLedger(options = {}) {
     }
   }
 
-  return Object.freeze({ reconcile, reserve });
+  return Object.freeze({ reconcile, reserve, status });
 }
 
 module.exports = {
   PROJECT_MINIMUM_CAP_NANO_USD,
+  POLICY_STATES,
   RESERVED_COST_NANO_USD,
   RETENTION_DAYS,
   TENANT_LIMITS,

@@ -379,7 +379,7 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
     const configured = module.createProductionOpenAIRuntime({
       POLARIS_OPENAI_ENABLED: 'true', OPENAI_API_KEY: secret,
     }, { clientFactory });
-    expect(await configured.status()).toEqual({ state: 'available', label: 'Configured' });
+    expect(await configured.status()).toEqual({ state: 'configured', label: 'Configured - not verified' });
     expect(JSON.stringify(configured)).not.toContain(secret);
     expect(clientConstructions).toBe(0);
     await expect(configured.respond(envelope(), { signal: new AbortController().signal })).resolves.toBeTruthy();
@@ -567,7 +567,7 @@ function mountedApp(state, overrides = {}) {
   app.use(express.json());
   const runtime = overrides.runtime || {
     kind: 'openai',
-    status: async function () { return { state: 'available', label: 'Configured' }; },
+    status: async function () { return { state: 'configured', label: 'Configured - not verified' }; },
     respond: async function (runtimeEnvelope) {
       state.transports += 1;
       return mountedProviderResponse(runtimeEnvelope);
@@ -576,11 +576,16 @@ function mountedApp(state, overrides = {}) {
   const ledger = overrides.ledger || {
     reserve: async function () { state.reservations += 1; return { id: crypto.randomUUID() }; },
     reconcile: async function (_reservation, usage) { state.reconciliations.push(usage); },
+    status: async function () { state.usageStatuses = (state.usageStatuses || 0) + 1; return { state: 'within_target' }; },
   };
   app.use('/api/v1/canonical', createCanonicalRouter({
     auth: mountedAuth,
     poolProvider: overrides.poolProvider || function () {
       return { query: async function () { state.queries += 1; return { rows: [] }; } };
+    },
+    assistantRateLimit: function (_req, _res, next) {
+      state.rate = (state.rate || 0) + 1;
+      next();
     },
     assistantContextLoader: async function () { state.contextLoads += 1; return canonicalItem(); },
     assistantRuntime: runtime,
@@ -628,16 +633,46 @@ describe('Pre-Mission-23 P6 mounted entitlement before provider work', () => {
     expect(state).toMatchObject({ reservations: 0, contextLoads: 0, transports: 0, queries: 0 });
   });
 
-  test.each(['owner', 'admin', 'member', 'viewer'])('Starter %s retains exact read-only selected context', async role => {
+  test.each(['owner', 'admin', 'member', 'viewer'])('Starter %s context is denied before backing retrieval', async role => {
     const state = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
     const response = await request(mountedApp(state))
       .post('/api/v1/canonical/polaris/assistant/context')
       .set(mountedHeaders('Starter', role))
       .send({ schemaVersion: 'northstar.polaris.context-request.v1', selected: selected() });
-    expect(response.status).toBe(200);
-    expect(response.body.data).toMatchObject({ source: 'canonical_local', selected: selected() });
-    expect(response.body.data.cards).toHaveLength(1);
-    expect(state).toMatchObject({ reservations: 0, contextLoads: 1, transports: 0 });
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe(role === 'owner' || role === 'admin'
+      ? 'POLARIS_PLAN_LOCKED' : 'POLARIS_CONVERSATION_UNAVAILABLE');
+    expect(state).toMatchObject({ reservations: 0, contextLoads: 0, transports: 0, queries: 0 });
+    expect(state.rate || 0).toBe(0);
+  });
+
+  test('shows durable warning state only to an authorized plan manager', async () => {
+    const ownerState = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
+    const owner = await request(mountedApp(ownerState, {
+      ledger: {
+        reserve: async function () { throw new Error('not used'); },
+        reconcile: async function () {},
+        status: async function () { ownerState.usageStatuses = (ownerState.usageStatuses || 0) + 1; return { state: 'warning' }; },
+      },
+    })).get('/api/v1/canonical/polaris/assistant/status')
+      .set(mountedHeaders('Growth', 'owner'));
+    expect(owner.status).toBe(200);
+    expect(owner.body.usagePolicy).toEqual({ state: 'warning' });
+    expect(ownerState).toMatchObject({ usageStatuses: 1, rate: 1, queries: 1 });
+
+    const memberState = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
+    const member = await request(mountedApp(memberState, {
+      ledger: {
+        reserve: async function () { throw new Error('not used'); },
+        reconcile: async function () {},
+        status: async function () { throw new Error('member must not inspect usage policy'); },
+      },
+    })).get('/api/v1/canonical/polaris/assistant/status')
+      .set(mountedHeaders('Growth', 'member'));
+    expect(member.status).toBe(200);
+    expect(member.body).not.toHaveProperty('usagePolicy');
+    expect(JSON.stringify(member.body)).not.toMatch(/warning|target|limit|revenue|nano|dollar|openai/i);
+    expect(memberState).toMatchObject({ rate: 1, queries: 1 });
   });
 
   test.each(['Growth', 'Complete'])('%s sends exactly one admitted request and reconciles actual usage', async plan => {
@@ -673,7 +708,7 @@ describe('Pre-Mission-23 P6 mounted entitlement before provider work', () => {
     const state = { reservations: 0, contextLoads: 0, transports: 0, queries: 0, reconciliations: [] };
     const runtime = {
       kind: 'openai',
-      status: async function () { return { state: 'available', label: 'Configured' }; },
+      status: async function () { return { state: 'configured', label: 'Configured - not verified' }; },
       preflight: function () { throw contractError('POLARIS_INPUT_TOO_LARGE', 'Bounded input exceeded.', 413); },
       respond: async function () { state.transports += 1; throw new Error('must not run'); },
     };

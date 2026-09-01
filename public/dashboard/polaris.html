@@ -548,6 +548,7 @@
                 <p id="polarisSelectedContextSummary"></p>
               </section>
               <section class="polaris-access-notice" id="polarisAccessNotice" role="status" aria-live="polite" aria-atomic="true" hidden></section>
+              <section class="polaris-access-notice" id="polarisUsageNotice" role="status" aria-live="polite" aria-atomic="true" hidden></section>
               <div class="polaris-native-card-host" id="polarisNativeCardHost" aria-live="polite"></div>
               <div class="polaris-welcome">
                 <div class="polaris-welcome-icon">✦</div>
@@ -622,7 +623,7 @@
         <!-- Bottom Prompt Bar -->
         <div class="polaris-prompt-bar">
           <div class="polaris-prompt-input-wrapper">
-            <textarea class="polaris-prompt-input" id="polarisPromptInput" placeholder="Ask about your selected context" rows="1" maxlength="4000" aria-label="Ask Polaris a question" aria-describedby="polarisProviderStatusLabel" enterkeyhint="send"></textarea>
+            <textarea class="polaris-prompt-input" id="polarisPromptInput" placeholder="Ask about your selected context" rows="1" maxlength="4000" aria-label="Ask Polaris a question" aria-describedby="polarisProviderStatusLabel polarisUsageNotice" enterkeyhint="send"></textarea>
             <button class="polaris-prompt-send" id="polarisSendBtn" aria-label="Send message">Send</button>
           </div>
         </div>
@@ -645,6 +646,7 @@
       var isLoading = false;
       var conversationAllowed = false;
       var accountAuthorityLoaded = false;
+      var planManager = false;
       var msgCounter = 0;
       var MAX_MESSAGES = 100; // safety limit
 
@@ -692,32 +694,53 @@
         var providerDot = document.getElementById('polarisProviderStatusDot');
         var requestsDot = document.getElementById('polarisRequestsStatusDot');
         localLabel.textContent = localState === 'available' ? 'Available' : 'Unavailable';
-        providerLabel.textContent = providerState === 'available' ? 'Available' :
+        providerLabel.textContent = providerState === 'configured' ? 'Configured - not verified' :
           providerState === 'local' ? 'Local demo' : providerState === 'error' ? 'Unavailable' : 'Unavailable';
         requestsLabel.textContent = String(Number(sent) || 0) + ' sent';
         localDot.style.background = localState === 'available' ? 'var(--success)' : 'var(--warning)';
-        providerDot.style.background = providerState === 'available' ? 'var(--success)' : 'var(--warning)';
+        providerDot.style.background = providerState === 'local' ? 'var(--success)' : 'var(--warning)';
         requestsDot.style.background = 'var(--neutral-400)';
+      }
+
+      function setUsagePolicy(policy) {
+        var notice = document.getElementById('polarisUsageNotice');
+        var messages = {
+          target: 'Polaris has reached its monthly operating target. Conversation remains available.',
+          warning: 'Polaris has reached its monthly usage warning. Conversation remains available until its separate service limit is reached.',
+          limit: 'Polaris conversation is currently usage-limited. Review usage before trying again.'
+        };
+        notice.replaceChildren();
+        if (!planManager || !policy || typeof policy.state !== 'string' || !messages[policy.state]) {
+          notice.hidden = true;
+          return;
+        }
+        notice.textContent = messages[policy.state];
+        notice.hidden = false;
       }
 
       function loadAssistantStatus() {
         if (window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true) {
+          setUsagePolicy(null);
           setStatus('available', 'local', 0);
           return;
         }
         if (!conversationAllowed) {
+          setUsagePolicy(null);
           setStatus('available', 'unconfigured', 0);
           return;
         }
         requestJson('GET', '/api/v1/canonical/polaris/assistant/status', null, function(error, status, payload) {
           if (error || status < 200 || status >= 300 || !payload || !payload.data) {
+            setUsagePolicy(null);
             setStatus('unavailable', 'error', 0);
             return;
           }
           try {
             var assistantStatus = NorthStarPolarisCard.validateAssistantStatus(payload.data);
+            setUsagePolicy(payload.usagePolicy);
             setStatus(assistantStatus.localCustomerIntelligence, assistantStatus.state, assistantStatus.providerRequestsSent);
           } catch (_contractError) {
+            setUsagePolicy(null);
             setStatus('unavailable', 'error', 0);
           }
         });
@@ -738,6 +761,7 @@
         var role = accountRole(account);
         var plan = accountPlan(account);
         var manager = role === 'owner' || role === 'admin';
+        planManager = manager;
         conversationAllowed = demo || plan === 'Growth' || plan === 'Complete';
         accountAuthorityLoaded = true;
         var notice = document.getElementById('polarisAccessNotice');
@@ -769,14 +793,20 @@
       function loadConversationAccess() {
         if (window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true) {
           applyConversationAccess(null);
+          renderSelectedContext();
           return;
         }
         if (!window.NorthStarAccountSession) {
           applyConversationAccess(null);
+          renderSelectedContext();
           return;
         }
-        NorthStarAccountSession.load().then(applyConversationAccess).catch(function() {
+        NorthStarAccountSession.load().then(function(account) {
+          applyConversationAccess(account);
+          renderSelectedContext();
+        }).catch(function() {
           applyConversationAccess(null);
+          renderSelectedContext();
         });
       }
 
@@ -822,6 +852,20 @@
           return;
         }
         section.hidden = false;
+        if (!(window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true) &&
+            !accountAuthorityLoaded) {
+          document.getElementById('polarisSelectedContextTitle').textContent = 'Checking account access';
+          document.getElementById('polarisSelectedContextSummary').textContent = 'Confirming access before loading selected customer intelligence.';
+          return;
+        }
+        if (!(window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true) &&
+            !conversationAllowed) {
+          document.getElementById('polarisSelectedContextTitle').textContent = 'Saved customer intelligence';
+          document.getElementById('polarisSelectedContextSummary').textContent =
+            'Open this record from Leads, Customer Detail, or Calendar to review its saved canonical intelligence. Conversation remains read-only.';
+          document.getElementById('polarisNativeCardHost').replaceChildren();
+          return;
+        }
         document.getElementById('polarisSelectedContextTitle').textContent = 'Loading selected record';
         document.getElementById('polarisSelectedContextSummary').textContent = 'Checking exact record and organization authority.';
         if (window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true &&
@@ -1118,6 +1162,7 @@
               });
               if (data.cards.length && !renderCards(data.cards)) throw new Error('structured_response_rejected');
               addMessage('assistant', data.answer.text, 'sent', key);
+              loadAssistantStatus();
             } catch (_contractError) {
               showStructuredContractUnavailable();
               addMessage('assistant', 'Polaris returned an unsupported structured response. No data was changed.', 'error', key, null);
@@ -1260,7 +1305,6 @@
                 setupQuickPrompts();
 
                 loadConversationAccess();
-                renderSelectedContext();
 
                 window.addEventListener('northstar:account', function(event) {
                   applyConversationAccess(event && event.detail || null);

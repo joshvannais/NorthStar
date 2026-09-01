@@ -793,7 +793,7 @@ function sendInvalidCustomerId(res, req) {
 function handleEndpointError(res, _error, req) {
   if (_error && _error.code === 'INVALID_CUSTOMER_ID') return sendInvalidCustomerId(res, req);
   if (_error && Number.isInteger(_error.statusCode) && _error.code) {
-    if (_error.statusCode === 429 && Number.isSafeInteger(_error.retryAfterSeconds)) {
+    if ([429, 503, 504].includes(_error.statusCode) && Number.isSafeInteger(_error.retryAfterSeconds)) {
       res.set('Retry-After', String(Math.max(1, Math.min(86400, _error.retryAfterSeconds))));
     }
     return res.status(_error.statusCode).json({
@@ -863,6 +863,18 @@ function createCanonicalRouter(options) {
     return next();
   }
 
+  function requireAssistantEntitlement(req, res, next) {
+    try {
+      requireProviderEntitlement({
+        plan: req.accountAuthority && req.accountAuthority.plan_type,
+        role: req.userRole || (req.tenantContext && req.tenantContext.role),
+      });
+      return next();
+    } catch (_error) {
+      return handleEndpointError(res, _error, req);
+    }
+  }
+
   router.get('/operator-targets', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
@@ -901,22 +913,32 @@ function createCanonicalRouter(options) {
   });
 
   router.get('/polaris/assistant/status', dependencies.auth, requireCanonicalContext,
-    dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
+    dependencies.permission('ai', 'read'), requireAssistantEntitlement,
+    dependencies.assistantRateLimit, async function (req, res) {
       try {
-        requireProviderEntitlement({
-          plan: req.accountAuthority && req.accountAuthority.plan_type,
-          role: req.userRole || req.tenantContext.role,
-        });
         await resolvePool(dependencies.poolProvider).query('SELECT 1 AS polaris_local_authority');
         const data = await statusForRuntime(dependencies.assistantRuntime, req);
-        return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
+        const role = req.userRole || req.tenantContext.role;
+        const usagePolicy = ['owner', 'admin'].includes(role)
+          ? await dependencies.assistantUsageLedger.status({
+            organizationId: req.tenantContext.organizationId,
+            userId: req.tenantContext.userId,
+          })
+          : undefined;
+        return res.json({
+          success: true,
+          data,
+          ...(usagePolicy ? { usagePolicy } : {}),
+          requestId: req.requestId || req.correlationId || 'unavailable',
+        });
       } catch (_error) {
         return handleEndpointError(res, _error, req);
       }
     });
 
   router.post('/polaris/assistant/context', dependencies.auth, requireCanonicalContext,
-    dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
+    dependencies.permission('ai', 'read'), requireAssistantEntitlement,
+    dependencies.assistantRateLimit, async function (req, res) {
       try {
         const request = validateContextRequest(req.body);
         const role = req.userRole || req.tenantContext.role;
@@ -951,7 +973,8 @@ function createCanonicalRouter(options) {
     });
 
   router.post('/polaris/assistant/messages', dependencies.auth, requireCanonicalContext,
-    dependencies.permission('ai', 'read'), dependencies.assistantRateLimit, async function (req, res) {
+    dependencies.permission('ai', 'read'), requireAssistantEntitlement,
+    dependencies.assistantRateLimit, async function (req, res) {
       const requestAbort = new AbortController();
       const abortRequest = function () { if (!requestAbort.signal.aborted) requestAbort.abort(); };
       const abortOnClose = function () { if (!res.writableEnded && !requestAbort.signal.aborted) requestAbort.abort(); };
@@ -968,10 +991,6 @@ function createCanonicalRouter(options) {
       try {
         const request = validateMessageRequest(req.body);
         const role = req.userRole || req.tenantContext.role;
-        requireProviderEntitlement({
-          plan: req.accountAuthority && req.accountAuthority.plan_type,
-          role,
-        });
         if (request.selected) {
           const selectedResource = request.selected.kind === 'work' ? 'calendar' : 'leads';
           if (!hasPermission(role, selectedResource, 'read')) {
@@ -999,7 +1018,7 @@ function createCanonicalRouter(options) {
           if (providerBacked) {
             const providerStatus = await statusForRuntime(dependencies.assistantRuntime,
               { requestId: request.idempotencyKey }, { signal });
-            if (providerStatus.state !== 'available' || providerStatus.providerRequestsEnabled !== true) {
+            if (providerStatus.state !== 'configured' || providerStatus.providerRequestsEnabled !== true) {
               const unavailable = new Error('Polaris conversation is not configured for this account.');
               unavailable.code = 'POLARIS_CREDENTIAL_DISABLED';
               unavailable.statusCode = 503;

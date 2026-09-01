@@ -358,7 +358,7 @@ function createOpenAIRuntime(options = {}) {
 
   async function status() {
     return enabled && configured
-      ? Object.freeze({ state: 'available', label: 'Configured' })
+      ? Object.freeze({ state: 'configured', label: 'Configured - not verified' })
       : Object.freeze({ state: 'unconfigured', label: 'Unconfigured' });
   }
 

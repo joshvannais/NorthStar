@@ -243,16 +243,20 @@ async function installRoutes(page, state) {
     if (url.pathname === '/api/v1/canonical/polaris/assistant/status') {
       const assistantStatus = {
         schemaVersion: 'northstar.polaris.assistant-status.v1', requestId: 'browser-status',
-        state: state.unconfigured ? 'unconfigured' : 'available',
+        state: state.unconfigured ? 'unconfigured' : 'configured',
         label: state.malformed === 'status-length' ? 'x'.repeat(161) :
-          state.unconfigured ? 'Conversation unavailable' : 'Configured',
+          state.unconfigured ? 'Conversation unavailable' : 'Configured - not verified',
         localCustomerIntelligence: 'available', providerRequestsEnabled: !state.unconfigured, providerRequestsSent: 0,
         decisionsRequired: state.unconfigured
           ? ['credential_source', 'current_official_documentation_review', 'model', 'budget_and_rate',
             'timeout_and_retry', 'retention_and_logging', 'user_facing_failure_policy']
           : [],
       };
-      return route.fulfill(json({ success: true, data: assistantStatus }));
+      const role = state.accountRole || 'owner';
+      const usagePolicy = ['owner', 'admin'].includes(role)
+        ? (state.usagePolicy || { state: 'within_target' }) : null;
+      return route.fulfill(json({ success: true, data: assistantStatus,
+        ...(usagePolicy ? { usagePolicy } : {}) }));
     }
     if (url.pathname === '/api/v1/canonical/polaris/assistant/context') {
       const body = JSON.parse(route.request().postData() || '{}');
@@ -329,7 +333,7 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
   assert.ok((await page.locator('.polaris-native-card').first().evaluate(node => getComputedStyle(node).backgroundImage)) !== 'none');
   assert.strictEqual(await page.locator('.polaris-native-card a, .polaris-native-card button, .polaris-native-card [tabindex]').count(), 0);
   assert.strictEqual((await page.locator('#polarisProviderStatusLabel').textContent()).trim(),
-    profile.unconfigured ? 'Unavailable' : 'Available');
+    profile.unconfigured ? 'Unavailable' : 'Configured - not verified');
   const prompt = page.locator('.polaris-quick-prompt').first();
   await prompt.focus();
   assert.strictEqual(await prompt.evaluate(node => node === document.activeElement), true);
@@ -348,7 +352,7 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
   const filename = path.join(outputRoot, `${selected}-${profile.label}.png`);
   await page.screenshot({ path: filename, fullPage: true });
   manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
-    route, viewport: profile.viewport, theme: profile.theme, state: profile.unconfigured ? 'unconfigured' : 'provider_fixture_available' });
+    route, viewport: profile.viewport, theme: profile.theme, state: profile.unconfigured ? 'unconfigured' : 'configured_not_verified' });
   await context.close();
 }
 
@@ -635,7 +639,7 @@ async function runPlanEntitlement(browser, origin, securityRoot, manifest, selec
   await installRoutes(page, state);
   const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
-  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  await page.locator('#polarisSelectedContext').waitFor({ state: 'visible' });
   await page.locator('#polarisAccessNotice').waitFor({ state: 'visible' });
   await assertPageAuthority(page, `${selected}-starter-${profile.role}`);
   assert.strictEqual(await page.locator('#polarisPromptInput').isDisabled(), true);
@@ -646,8 +650,12 @@ async function runPlanEntitlement(browser, origin, securityRoot, manifest, selec
     'locked page must not poll runtime status');
   assert.strictEqual(state.api.some(entry => entry.path.endsWith('/assistant/messages')), false,
     'locked page must not attempt conversation transport');
-  assert.ok(state.api.some(entry => entry.path.endsWith('/assistant/context')),
-    'read-only selected context remains mounted');
+  assert.strictEqual(state.api.some(entry => entry.path.endsWith('/assistant/context')), false,
+    'locked page must not invoke assistant context backing work');
+  assert.strictEqual(await page.locator('.polaris-native-card').count(), 0);
+  assert.strictEqual((await page.locator('#polarisSelectedContextTitle').innerText()).trim(),
+    'Saved customer intelligence');
+  assert.match(await page.locator('#polarisSelectedContextSummary').innerText(), /Conversation remains read-only/);
 
   const bodyText = await page.locator('body').innerText();
   if (profile.role === 'owner' || profile.role === 'admin') {
@@ -666,10 +674,12 @@ async function runPlanEntitlement(browser, origin, securityRoot, manifest, selec
   }
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  await page.locator('#polarisSelectedContext').waitFor({ state: 'visible' });
   await page.locator('#polarisAccessNotice').waitFor({ state: 'visible' });
   assert.strictEqual(await page.locator('#polarisPromptInput').isDisabled(), true, 'reload preserves lock');
   assert.strictEqual(state.messageCalls, 0, 'reload sends no conversation request');
+  assert.strictEqual(state.api.some(entry => entry.path.endsWith('/assistant/context')), false,
+    'reload preserves the zero-backing-work lock');
   assert.deepStrictEqual(errors, [], `${selected}-starter-${profile.role} page errors`);
   assert.deepStrictEqual(state.external, [], `${selected}-starter-${profile.role} external requests`);
   const filename = path.join(securityRoot, `${selected}-${profile.label}.png`);
@@ -678,6 +688,49 @@ async function runPlanEntitlement(browser, origin, securityRoot, manifest, selec
     file: path.basename(filename), sha256: sha256(filename), browser: selected, route,
     viewport: profile.viewport, theme: profile.theme,
     fixture: `starter-${profile.role}-read-only-entitlement`,
+  });
+  await context.close();
+}
+
+async function runUsagePolicy(browser, origin, securityRoot, manifest, selected, profile) {
+  const context = await browser.newContext({ viewport: profile.viewport, colorScheme: profile.theme });
+  await context.addInitScript(() => { globalThis.p6Compromised = false; });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  const state = {
+    external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed: null, unconfigured: false, accountPlan: 'Complete', accountRole: profile.role,
+    usagePolicy: { state: profile.policyState, message: HOSTILE },
+  };
+  await installRoutes(page, state);
+  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  await assertPageAuthority(page, `${selected}-${profile.label}`);
+  const notice = page.locator('#polarisUsageNotice');
+  if (profile.role === 'owner' || profile.role === 'admin') {
+    await notice.waitFor({ state: 'visible' });
+    const expected = {
+      target: 'Polaris has reached its monthly operating target. Conversation remains available.',
+      warning: 'Polaris has reached its monthly usage warning. Conversation remains available until its separate service limit is reached.',
+      limit: 'Polaris conversation is currently usage-limited. Review usage before trying again.',
+    }[profile.policyState];
+    assert.strictEqual((await notice.innerText()).trim(), expected);
+  } else {
+    assert.strictEqual(await notice.isHidden(), true);
+    assert.doesNotMatch(await page.locator('body').innerText(), /monthly usage warning|monthly operating target|service limit/i);
+  }
+  assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
+  assert.strictEqual(await page.locator('img[src="/p6-hostile-image"], #polarisUsageNotice script, #polarisUsageNotice svg').count(), 0);
+  assert.deepStrictEqual(errors, [], `${selected}-${profile.label} page errors`);
+  assert.deepStrictEqual(state.external, [], `${selected}-${profile.label} external requests`);
+  const filename = path.join(securityRoot, `${selected}-${profile.label}.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  manifest.push({
+    file: path.basename(filename), sha256: sha256(filename), browser: selected, route,
+    viewport: profile.viewport, theme: profile.theme,
+    fixture: `usage-policy-${profile.policyState}-${profile.role}-role-private-dom-safe`,
   });
   await context.close();
 }
@@ -741,7 +794,7 @@ async function main() {
     const origin = `http://127.0.0.1:${server.address().port}`;
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
     const profiles = [
-      { label: 'desktop-light-available', viewport: { width: 1440, height: 900 }, theme: 'light', unconfigured: false },
+      { label: 'desktop-light-configured-not-verified', viewport: { width: 1440, height: 900 }, theme: 'light', unconfigured: false },
       { label: 'mobile-dark-unconfigured', viewport: { width: 390, height: 844 }, theme: 'dark', unconfigured: true },
       { label: 'reflow-320-light', viewport: { width: 320, height: 720 }, theme: 'light', unconfigured: false },
     ];
@@ -769,6 +822,14 @@ async function main() {
       { label: 'mobile-dark-starter-viewer-private', role: 'viewer', viewport: { width: 390, height: 844 }, theme: 'dark' },
     ]) {
       await runPlanEntitlement(browser, origin, securityRoot, security, selected, profile);
+    }
+    for (const profile of [
+      { label: 'desktop-light-owner-target', role: 'owner', policyState: 'target', viewport: { width: 1440, height: 900 }, theme: 'light' },
+      { label: 'mobile-dark-admin-warning', role: 'admin', policyState: 'warning', viewport: { width: 390, height: 844 }, theme: 'dark' },
+      { label: 'reflow-320-owner-limit', role: 'owner', policyState: 'limit', viewport: { width: 320, height: 720 }, theme: 'light' },
+      { label: 'mobile-dark-member-policy-private', role: 'member', policyState: 'warning', viewport: { width: 390, height: 844 }, theme: 'dark' },
+    ]) {
+      await runUsagePolicy(browser, origin, securityRoot, security, selected, profile);
     }
     await runDowngradePreservation(browser, origin, securityRoot, security, selected);
     const common = { testedRevision, testedTree, browser: selected, generatedAt: new Date().toISOString() };

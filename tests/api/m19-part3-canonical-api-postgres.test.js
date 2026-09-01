@@ -186,6 +186,11 @@ function createApp(poolProvider, cacheClient, auditRecorder, overrides = {}) {
     auth: fakeAuth,
     cache: cacheClient || cache,
     audit: auditRecorder || { record: async function () {} },
+    assistantUsageLedger: {
+      reserve: async function () { throw new Error('provider reservation is outside this intercepted harness'); },
+      reconcile: async function () { throw new Error('provider reconciliation is outside this intercepted harness'); },
+      status: async function () { return { state: 'within_target' }; },
+    },
     ...overrides,
   };
   const app = express();

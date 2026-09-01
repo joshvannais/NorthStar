@@ -112,14 +112,21 @@ async function statusForRuntime(runtime, req, options = {}) {
         label: 'Polaris conversation unavailable',
       }));
     }
-    const available = supplied.state === 'available';
+    if (supplied.state === 'available') {
+      throw contractError(
+        'POLARIS_RUNTIME_STATUS_INVALID',
+        'Credential presence cannot establish Polaris provider availability.',
+        502
+      );
+    }
+    const configured = supplied.state === 'configured';
     return validateAssistantStatus(Object.freeze({
       ...unconfiguredStatus(requestId(req)),
       state: supplied.state,
-      label: supplied.label || (available ? 'Configured' : 'Unconfigured'),
-      providerRequestsEnabled: available,
+      label: supplied.label || (configured ? 'Configured - not verified' : 'Unconfigured'),
+      providerRequestsEnabled: configured,
       providerRequestsSent: 0,
-      decisionsRequired: available ? Object.freeze([]) : PROVIDER_DECISIONS,
+      decisionsRequired: configured ? Object.freeze([]) : PROVIDER_DECISIONS,
     }));
   }
   let supplied;
@@ -249,6 +256,17 @@ function createIdempotencyRegistry(options = {}) {
     throw contractError('POLARIS_IDEMPOTENCY_CAPACITY', 'The bounded idempotency registry is temporarily full.', 429);
   }
 
+  function retryAtFor(error, settledAt) {
+    const statusCode = error && error.statusCode;
+    const seconds = error && error.retryAfterSeconds;
+    if (![429, 503, 504].includes(statusCode) || !Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86400) {
+      return null;
+    }
+    const retryAt = settledAt + (seconds * 1000);
+    if (!Number.isSafeInteger(retryAt) || retryAt <= settledAt) throw clockError();
+    return retryAt;
+  }
+
   let sequence = 0;
   function execute(scope, operation, options = {}) {
     if (typeof operation !== 'function') throw new TypeError('An idempotent operation function is required.');
@@ -267,8 +285,12 @@ function createIdempotencyRegistry(options = {}) {
       }
       if (options.signal && options.signal.aborted) return Promise.reject(interceptedAbortError());
       if (existing.state === 'fulfilled') return Promise.resolve(existing.value);
-      if (existing.state === 'rejected') return Promise.reject(existing.error);
-      return subscribe(existing, options.signal);
+      if (existing.state === 'rejected') {
+        if (existing.retryAt === null || now < existing.retryAt) return Promise.reject(existing.error);
+        entries.delete(key);
+      } else {
+        return subscribe(existing, options.signal);
+      }
     }
     makeCapacity(now);
     const entry = {
@@ -280,6 +302,7 @@ function createIdempotencyRegistry(options = {}) {
       promise: null,
       value: undefined,
       error: undefined,
+      retryAt: null,
       startedAt: now,
       controller: new AbortController(),
       subscribers: 0,
@@ -299,6 +322,7 @@ function createIdempotencyRegistry(options = {}) {
         entry.value = value;
         entry.settledAt = settledAt;
         entry.expiresAt = expiresAt;
+        entry.retryAt = null;
       } catch (error) {
         entries.delete(key);
         throw error && error.code === 'POLARIS_IDEMPOTENCY_CLOCK_INVALID' ? error : clockError();
@@ -308,12 +332,14 @@ function createIdempotencyRegistry(options = {}) {
       let settledAt;
       try {
         settledAt = readClock(entry.startedAt);
-        const expiresAt = settledAt + retentionMs;
-        if (!Number.isSafeInteger(expiresAt) || expiresAt <= settledAt) throw clockError();
+        const retentionExpiresAt = settledAt + retentionMs;
+        if (!Number.isSafeInteger(retentionExpiresAt) || retentionExpiresAt <= settledAt) throw clockError();
+        const retryAt = retryAtFor(error, settledAt);
         entry.state = 'rejected';
         entry.error = error;
         entry.settledAt = settledAt;
-        entry.expiresAt = expiresAt;
+        entry.expiresAt = retryAt === null ? retentionExpiresAt : Math.max(retentionExpiresAt, retryAt);
+        entry.retryAt = retryAt;
       } catch (clockFailure) {
         entries.delete(key);
         throw clockFailure && clockFailure.code === 'POLARIS_IDEMPOTENCY_CLOCK_INVALID' ? clockFailure : clockError();
@@ -438,7 +464,7 @@ async function executeProvider(runtime, request, authority, localContext, option
     throw contractError('POLARIS_CREDENTIAL_DISABLED', 'Polaris conversation is not configured for this account.', 503);
   }
   const status = await statusForRuntime(provider, { requestId: request.idempotencyKey }, { signal: options.signal });
-  if (status.state !== 'available' || status.providerRequestsEnabled !== true) {
+  if (status.state !== 'configured' || status.providerRequestsEnabled !== true) {
     throw contractError('POLARIS_CREDENTIAL_DISABLED', 'Polaris conversation is not configured for this account.', 503);
   }
   const result = await provider.respond(buildRuntimeEnvelope(request, authority, localContext),

@@ -104,6 +104,11 @@ function appFor(options) {
   app.use('/api/v1/canonical', createCanonicalRouter(Object.assign({
     auth,
     poolProvider: function () { return { query: async function () { return { rows: [] }; } }; },
+    assistantUsageLedger: {
+      reserve: async function () { throw new Error('provider reservation is outside this intercepted harness'); },
+      reconcile: async function () { throw new Error('provider reconciliation is outside this intercepted harness'); },
+      status: async function () { return { state: 'within_target' }; },
+    },
   }, options || {})));
   return app;
 }

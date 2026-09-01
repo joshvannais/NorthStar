@@ -215,7 +215,7 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
     )).rows[0]).toEqual({ plan_type: 'Complete', status: 'active' });
   });
 
-  test('runtime has only the two guarded functions and no direct provider-ledger access', async () => {
+  test('runtime has only the three guarded functions and no direct provider-ledger access', async () => {
     const privileges = (await migrationPool.query(
       `SELECT
          has_table_privilege($1,'public.polaris_provider_requests','SELECT') AS request_select,
@@ -223,7 +223,8 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
          has_table_privilege($1,'public.polaris_provider_monthly_usage','UPDATE') AS monthly_update,
          has_table_privilege($1,'public.polaris_provider_security_events','SELECT') AS security_select,
          has_function_privilege($1,'public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint)','EXECUTE') AS reserve_execute,
-         has_function_privilege($1,'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text)','EXECUTE') AS reconcile_execute`,
+         has_function_privilege($1,'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text)','EXECUTE') AS reconcile_execute,
+         has_function_privilege($1,'public.polaris_provider_usage_policy_status(uuid,uuid)','EXECUTE') AS policy_status_execute`,
       [roles.runtimeRole]
     )).rows[0];
     expect(privileges).toEqual({
@@ -233,8 +234,58 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
       security_select: false,
       reserve_execute: true,
       reconcile_execute: true,
+      policy_status_execute: true,
     });
     await expect(runtimePool.query('SELECT * FROM public.polaris_provider_requests')).rejects.toMatchObject({ code: '42501' });
+  });
+
+  test('reports durable tenant-isolated target, warning, hard-stop, and recovery states only to plan managers', async () => {
+    const ledger = createProviderUsageLedger({ poolProvider: () => runtimePool });
+    const original = (await migrationPool.query(
+      `SELECT collected_subscription_revenue_cents,reserved_cost_nano_usd,reconciled_cost_nano_usd
+         FROM public.polaris_provider_monthly_usage
+        WHERE organization_id=$1 AND month_start=date_trunc('month',clock_timestamp())::date`,
+      [ORG_A]
+    )).rows[0];
+    const setSpend = async function (spend) {
+      await migrationPool.query(
+        `UPDATE public.polaris_provider_monthly_usage
+            SET collected_subscription_revenue_cents=10000,
+                reserved_cost_nano_usd=0,
+                reconciled_cost_nano_usd=$2,
+                updated_at=transaction_timestamp()
+          WHERE organization_id=$1 AND month_start=date_trunc('month',clock_timestamp())::date`,
+        [ORG_A, spend]
+      );
+    };
+    try {
+      for (const [spend, state] of [
+        ['4999999999', 'within_target'],
+        ['5000000000', 'target'],
+        ['10000000000', 'warning'],
+        ['20000000000', 'limit'],
+        ['4999999999', 'within_target'],
+      ]) {
+        await setSpend(spend);
+        await expect(ledger.status({ organizationId: ORG_A, userId: USERS_A[0] }))
+          .resolves.toEqual({ state });
+      }
+      await expect(ledger.status({ organizationId: ORG_A, userId: USERS_A[1] }))
+        .rejects.toMatchObject({ code: 'POLARIS_CONVERSATION_UNAVAILABLE', statusCode: 403 });
+      await expect(ledger.status({ organizationId: ORG_B, userId: USERS_A[0] }))
+        .rejects.toMatchObject({ code: 'POLARIS_CONVERSATION_UNAVAILABLE', statusCode: 403 });
+    } finally {
+      await migrationPool.query(
+        `UPDATE public.polaris_provider_monthly_usage
+            SET collected_subscription_revenue_cents=$2,
+                reserved_cost_nano_usd=$3,
+                reconciled_cost_nano_usd=$4,
+                updated_at=transaction_timestamp()
+          WHERE organization_id=$1 AND month_start=date_trunc('month',clock_timestamp())::date`,
+        [ORG_A, original.collected_subscription_revenue_cents,
+          original.reserved_cost_nano_usd, original.reconciled_cost_nano_usd]
+      );
+    }
   });
 
   test('reserves atomically, reconciles actual usage, and persists content-free bounded metadata', async () => {
@@ -246,6 +297,7 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
       userId: USERS_A[0],
       requestId,
       reservedCostNanoUsd: RESERVED_COST_NANO_USD,
+      usagePolicyState: 'within_target',
     });
     await expect(ledger.reconcile(reservation, completedUsage())).resolves.toBe(true);
     const row = (await migrationPool.query(

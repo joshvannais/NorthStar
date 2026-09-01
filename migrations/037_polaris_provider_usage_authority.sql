@@ -122,6 +122,7 @@ RETURNS TABLE (
   denial_code TEXT,
   retry_after_seconds INTEGER,
   reserved_cost_nano_usd BIGINT,
+  tenant_spend_nano_usd BIGINT,
   tenant_target_nano_usd BIGINT,
   tenant_warning_nano_usd BIGINT,
   tenant_hard_nano_usd BIGINT,
@@ -295,7 +296,7 @@ BEGIN
       gen_random_uuid(), requested_organization_id, requested_user_id, requested_request_id, denial
     );
     RETURN QUERY SELECT NULL::uuid, FALSE, denial, retry_seconds, requested_cost_nano_usd,
-      target_cap, warning_cap, hard_cap, project_cap;
+      tenant_spend, target_cap, warning_cap, hard_cap, project_cap;
     RETURN;
   END IF;
 
@@ -313,7 +314,8 @@ BEGIN
    WHERE organization_id = requested_organization_id AND month_start = current_month;
 
   RETURN QUERY SELECT generated_reservation, TRUE, NULL::text, NULL::integer,
-    requested_cost_nano_usd, target_cap, warning_cap, hard_cap, project_cap;
+    requested_cost_nano_usd, tenant_spend + requested_cost_nano_usd,
+    target_cap, warning_cap, hard_cap, project_cap;
 END
 $polaris_provider_reserve$;
 
@@ -383,8 +385,66 @@ BEGIN
 END
 $polaris_provider_reconcile$;
 
+CREATE FUNCTION public.polaris_provider_usage_policy_status(
+  requested_organization_id UUID,
+  requested_user_id UUID
+)
+RETURNS TABLE (policy_state TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $polaris_provider_usage_policy$
+DECLARE
+  current_month DATE := date_trunc('month', clock_timestamp())::date;
+  revenue_cents BIGINT;
+  tenant_spend BIGINT;
+  target_cap BIGINT;
+  warning_cap BIGINT;
+  hard_cap BIGINT;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.organization_memberships membership
+      JOIN public.subscriptions subscription
+        ON subscription.organization_id = membership.organization_id
+     WHERE membership.organization_id = requested_organization_id
+       AND membership.user_id = requested_user_id
+       AND membership.status = 'active'
+       AND membership.role IN ('owner', 'admin')
+       AND subscription.plan_type IN ('Growth', 'Complete')
+       AND subscription.status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'Polaris usage policy is unavailable for this actor'
+      USING ERRCODE = '42501', CONSTRAINT = 'polaris_provider_actor_not_entitled';
+  END IF;
+
+  SELECT monthly.collected_subscription_revenue_cents,
+         monthly.reserved_cost_nano_usd + monthly.reconciled_cost_nano_usd
+    INTO revenue_cents, tenant_spend
+    FROM public.polaris_provider_monthly_usage monthly
+   WHERE monthly.organization_id = requested_organization_id
+     AND monthly.month_start = current_month;
+
+  IF NOT FOUND OR revenue_cents <= 0 THEN
+    RETURN QUERY SELECT 'limit'::text;
+    RETURN;
+  END IF;
+
+  target_cap := revenue_cents * 500000;
+  warning_cap := revenue_cents * 1000000;
+  hard_cap := revenue_cents * 2000000;
+  RETURN QUERY SELECT CASE
+    WHEN tenant_spend >= hard_cap THEN 'limit'::text
+    WHEN tenant_spend >= warning_cap THEN 'warning'::text
+    WHEN tenant_spend >= target_cap THEN 'target'::text
+    ELSE 'within_target'::text
+  END;
+END
+$polaris_provider_usage_policy$;
+
 REVOKE ALL ON TABLE public.polaris_provider_monthly_usage FROM PUBLIC;
 REVOKE ALL ON TABLE public.polaris_provider_requests FROM PUBLIC;
 REVOKE ALL ON TABLE public.polaris_provider_security_events FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.polaris_provider_usage_policy_status(uuid,uuid) FROM PUBLIC;

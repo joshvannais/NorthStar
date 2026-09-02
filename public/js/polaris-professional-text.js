@@ -94,7 +94,7 @@
   var DIRECT_COMMAND_LINE = new RegExp(
     // Language/runtime names are ordinary technology nouns in professional labels. They are
     // authoritative only when an execution cue or runtime-specific argument grammar is present.
-    '(?:^|[\\n:;])\\s*(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|service|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc)\\b)' +
+    '(?:^|[\\n:;])\\s*(?!net\\s+(?:15|30|45|60|90)\\b)(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|service|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc)\\b)' +
     '(?:&\\s*)?' + EXECUTABLE_REFERENCE +
     '(?=\\s|[;&|<>]|$)(?:\\s+|[;&|<>]|$)',
     'i'
@@ -121,14 +121,38 @@
     'i'
   );
   var PROGRAM_SOURCE = /(?:^|\n)\s*(?:(?:puts|system|require)\s*(?:\(|\s)(?:["'][^\n"']*["']|[A-Za-z_$][\w$./-]*)|[A-Za-z_$][\w$]*(?:::|\.)[A-Za-z_$][\w$]*\s*(?:\(|\s+["'])|public\s+static\s+void\s+main\s*\([^)]*\)\s*\{)/i;
+  // Adjacent query grammar is parsed as complete line/delimiter-bounded statements. Projection
+  // and tail shapes are deliberately constrained so real sentences such as "Select the approved
+  // service from the menu before scheduling" remain professional prose.
+  var SQL_PROJECTION_ITEM = '(?:\\*|-?(?:0|[1-9]\\d*)(?:\\.\\d+)?|true|false|null|current_(?:user|role|schema|catalog|database|date|time|timestamp)|session_user|system_user|user|[A-Za-z_]\\w*(?:\\.[A-Za-z_*][\\w$]*)?|[A-Za-z_]\\w*\\s*\\([^()\\n]{0,240}\\))';
+  var SQL_TABLE_REFERENCE = '(?:[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)?|"[^"]+"|`[^`]+`|\\[[^\\]]+\\])';
+  var SQL_SELECT_SOURCE = new RegExp(
+    '(?:^|[\\n:;])\\s*select\\s+(?:(?:distinct|all)\\s+)?(?:' +
+    SQL_PROJECTION_ITEM + '(?:\\s*,\\s*' + SQL_PROJECTION_ITEM + ')*)\\s+from\\s+' +
+    SQL_TABLE_REFERENCE + '(?:\\s+(?:as\\s+)?[A-Za-z_]\\w*)?' +
+    '(?:\\s+(?:where|join|left\\s+join|right\\s+join|inner\\s+join|outer\\s+join|group\\s+by|order\\s+by|having|limit|offset|union)\\b[^;\\n]{0,500})?\\s*;?\\s*(?:$|\\n)' +
+    '|(?:^|[\\n:;])\\s*select\\s+(?:-?(?:0|[1-9]\\d*)(?:\\.\\d+)?|true|false|null|current_(?:user|role|schema|catalog|database|date|time|timestamp)|session_user|system_user|user|[A-Za-z_]\\w*\\s*\\([^()\\n]{0,240}\\))' +
+    '(?:\\s+(?:as\\s+)?[A-Za-z_]\\w*)?\\s*;?\\s*(?:$|\\n)',
+    'i'
+  );
+  var SQL_CTE_SOURCE = /(?:^|[\n:;])\s*with(?:\s+recursive)?\s+[A-Za-z_]\w*(?:\s*\([^\n)]{1,240}\))?\s+as\s*\([\s\S]{0,1000}\b(?:select|insert|update|delete)\b[\s\S]{0,1000}\)\s*(?:select|insert|update|delete)\b[^;\n]{0,1000};?\s*(?:$|\n)/i;
+  var SQL_DESCRIBE_SOURCE = /(?:^|[\n:;])\s*(?:describe|desc)\s+(?:table\s+)?(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])\s*;?\s*(?:$|\n)/i;
+  var SQL_TRANSACTION_MODE = '(?:isolation\\s+level\\s+(?:serializable|repeatable\\s+read|read\\s+committed|read\\s+uncommitted)|read\\s+(?:only|write)|deferrable|not\\s+deferrable)';
+  var SQL_TRANSACTION_SOURCE = new RegExp(
+    '(?:^|[\\n:;])\\s*set\\s+(?:transaction\\s+|session\\s+characteristics\\s+as\\s+transaction\\s+)' +
+    SQL_TRANSACTION_MODE + '(?:\\s*,\\s*' + SQL_TRANSACTION_MODE + ')*\\s*;?\\s*(?:$|\\n)',
+    'i'
+  );
   // These forms are executable or query grammar even without a semicolon, wrapper, or
   // explanatory cue. Keep them line-bounded so ordinary service instructions that happen to
   // use words such as select, delete, class, import, using, or for remain valid prose.
   var BARE_SQL_STATEMENT = /(?:^|\n)\s*(?:select\s+(?:distinct\s+)?(?:\*|[A-Za-z_]\w*(?:\.[A-Za-z_*][\w$]*)?(?:\s*,\s*[A-Za-z_]\w*(?:\.[A-Za-z_*][\w$]*)?)*)\s+from\s+(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])|delete\s+from\s+(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])|select\s+(?:current_(?:user|role|schema|catalog|database|date|time|timestamp)|session_user|system_user|user))\s*;?\s*(?:$|\n)/im;
-  var PYTHON_CLASS_SOURCE = /(?:^|\n)\s*class\s+[A-Za-z_]\w*(?:\([^\n)]*\))?\s*:\s*(?:\n[ \t]+)?(?:pass|(?:async\s+)?def\b|return\b|raise\b|[A-Za-z_]\w*\s*=)/im;
+  var PYTHON_CLASS_SOURCE = /(?:^|\n)[ \t]*class\s+[A-Za-z_]\w*(?:\([^\n)]*\))?\s*:[ \t]*(?:\n[ \t]+\S[^\n]*(?:\n[ \t]+[^\n]*)*|(?:pass|(?:async\s+)?def\b|return\b|raise\b|["']{3}|[A-Za-z_]\w*\s*:\s*[A-Za-z_]|[A-Za-z_]\w*\s*=|\.\.\.)[^\n]*)/m;
+  var PYTHON_LAMBDA_SOURCE = /(?:^|\n)\s*[A-Za-z_]\w*(?:\s*:\s*[A-Za-z_][\w.\[\], |]*)?\s*=\s*lambda\b[^\n:]{0,300}:\s*[^\n]+/im;
   var MANAGED_IMPORT_SOURCE = /(?:^|\n)\s*(?:(?:global\s+)?using\s+(?:static\s+)?(?:global::)?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\s*=\s*[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)?|import\s+(?:static\s+)?[A-Za-z_]\w*(?:\.[A-Za-z_*][\w$]*)*)\s*;\s*(?:$|\n)/im;
-  var POWERSHELL_QUOTED_CALL = /(?:^|[\n:;])\s*&\s*["'](?:(?:(?:[A-Za-z]:)?[\\/]|\.{1,2}[\\/])[^"'\n]{1,300}|[A-Za-z_$][\w$.-]*\.(?:exe|com|cmd|bat|ps1))["'](?=\s|[;&|<>]|$)/i;
-  var POSIX_CONTROL_SOURCE = /(?:^|[\n:;])\s*(?:(?:(?:for\s+[A-Za-z_]\w*\s+in|while|until)\b[^\n]{0,500};\s*do\b[\s\S]{0,500};\s*done\b)|(?:(?:function\s+)?[A-Za-z_]\w*\s*\(\s*\)\s*\{[\s\S]{0,500}\}))/i;
+  var MANAGED_DECLARATION_SOURCE = /(?:^|\n)\s*(?:(?:package\s+[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+\s*;)|(?:(?:(?:public|protected|private|internal|static|final|sealed|abstract|partial)\s+)*record\s+[A-Za-z_]\w*(?:\s*<[^\n>{}]+>)?\s*\([^\n)]*\)\s*(?:\{|;))|(?:(?:(?:public|protected|private|internal|static|final|sealed|abstract|partial)\s+)*enum\s+[A-Za-z_]\w*(?:\s*:\s*[A-Za-z_]\w*)?(?:\s+implements\s+[^\n{]+)?\s*\{)|(?:namespace\s+[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\s*(?:;|\{))|(?:extern\s+alias\s+[A-Za-z_]\w*\s*;))/im;
+  var POWERSHELL_QUOTED_CALL = /(?:^|[\n:;])\s*&\s*(?:["'][^"'\n]{1,300}["']|\((?:[^()\n]|\([^()\n]*\)){1,300}\)|\$(?:env:)?[A-Za-z_]\w*)(?=\s|[;&|<>]|$)/i;
+  var POSIX_CONTROL_SOURCE = /(?:^|[\n:;])\s*(?:(?:(?:for\s+[A-Za-z_]\w*\s+in|select\s+[A-Za-z_]\w*\s+in|while|until)\b[\s\S]{0,500}(?:;|\n)\s*do\b[\s\S]{0,500}(?:;|\n)\s*done\b)|(?:if\b[\s\S]{0,500}(?:;|\n)\s*then\b[\s\S]{0,700}(?:;|\n)\s*fi\b)|(?:case\b[^\n;]{1,300}\s+in(?:\s|\n)[\s\S]{0,700}\besac\b)|(?:(?:function\s+)?[A-Za-z_]\w*\s*\(\s*\)\s*\{[\s\S]{0,500}\})|(?:\{\s*(?:[A-Za-z_][\w.-]*|:)(?:\s+[^{}\n;]{0,240})?\s*;[\s\S]{0,500}\}))/i;
   var RULES = Object.freeze([
     Object.freeze({
       id: 'internal-error-code',
@@ -168,6 +192,10 @@
       id: 'program-call-or-assignment',
       pattern: /(?:^|[^A-Za-z0-9_$])[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^()\n]{0,300}\)\s*;|(?:^|\n)\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^()\n]{0,300}\)\s*;?\s*(?:$|\n)|\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*=\s*(?:new\s+|[A-Za-z_$][\w$]*\s*\(|["'`]\S[\s\S]{0,300}["'`]|\[[^\]\n]*\]|\{[^}\n]*\}|[A-Za-z_$][\w$]*\s*[+*/-]\s*[A-Za-z_$0-9])[^;\n]*;/m
     }),
+    Object.freeze({ id: 'sql-select-source', pattern: SQL_SELECT_SOURCE }),
+    Object.freeze({ id: 'sql-cte-source', pattern: SQL_CTE_SOURCE }),
+    Object.freeze({ id: 'sql-describe-source', pattern: SQL_DESCRIBE_SOURCE }),
+    Object.freeze({ id: 'sql-transaction-source', pattern: SQL_TRANSACTION_SOURCE }),
     Object.freeze({
       id: 'sql-select',
       pattern: /\bselect\s+(?:distinct\s+)?[A-Za-z0-9_.*"`\[\],\s]+\s+from\s+(?:[A-Za-z_][\w$-]*(?:\.[A-Za-z_][\w$-]*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])(?:\s*;|\s+(?:where|join|left\s+join|right\s+join|inner\s+join|outer\s+join|group\s+by|order\s+by|having|limit|offset|union)\b)/i
@@ -229,7 +257,9 @@
     Object.freeze({ id: 'command-wrapper-line', pattern: COMMAND_WRAPPER_LINE }),
     Object.freeze({ id: 'program-source', pattern: PROGRAM_SOURCE }),
     Object.freeze({ id: 'python-class-source', pattern: PYTHON_CLASS_SOURCE }),
+    Object.freeze({ id: 'python-lambda-source', pattern: PYTHON_LAMBDA_SOURCE }),
     Object.freeze({ id: 'managed-import-source', pattern: MANAGED_IMPORT_SOURCE }),
+    Object.freeze({ id: 'managed-declaration-source', pattern: MANAGED_DECLARATION_SOURCE }),
     Object.freeze({ id: 'powershell-quoted-call', pattern: POWERSHELL_QUOTED_CALL }),
     Object.freeze({ id: 'posix-control-source', pattern: POSIX_CONTROL_SOURCE }),
     Object.freeze({

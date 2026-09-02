@@ -43,8 +43,13 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
   // SQL scalar, query, complete data, schema, transaction, and privilege forms.
   ['SQL identifier scalar', 'Recommended action: SELECT customer_id;'],
   ['SQL function scalar', 'Recommended action: SELECT coalesce(total, 0);'],
+  ['SQL aggregate scalar', 'Recommended action: SELECT count(*) AS total;'],
+  ['SQL labeled plain scalar', 'Recommended action: SELECT total;'],
+  ['SQL wildcard scalar', 'Recommended action: SELECT *;'],
   ['SQL query', 'Before continuing, SELECT customer_id, total FROM invoices WHERE total > 0;'],
   ['SQL insert', "Recommended action: INSERT INTO customers(name) VALUES ('private');"],
+  ['SQL insert from query', 'Recommended action: INSERT INTO archive SELECT * FROM customers;'],
+  ['SQL merge', 'Recommended action: MERGE INTO customers USING updates ON customers.id = updates.id;'],
   ['SQL update', 'Recommended action: UPDATE customers SET active = false WHERE customer_id = 7;'],
   ['SQL delete', 'Recommended action: DELETE FROM customers WHERE customer_id = 7;'],
   ['SQL truncate', 'Recommended action: TRUNCATE TABLE customers;'],
@@ -52,10 +57,17 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
   ['SQL create', 'Recommended action: CREATE TABLE private_jobs(id integer);'],
   ['SQL alter', 'Recommended action: ALTER TABLE customers ADD COLUMN private text;'],
   ['SQL drop', 'Recommended action: DROP VIEW private_jobs;'],
+  ['SQL materialized view', 'Recommended action: CREATE MATERIALIZED VIEW private_jobs AS SELECT 1;'],
+  ['SQL comment', "Recommended action: COMMENT ON TABLE customers IS 'private';"],
+  ['SQL explain', 'Recommended action: EXPLAIN ANALYZE SELECT * FROM customers;'],
   ['SQL grant', 'Recommended action: GRANT SELECT ON customers TO hidden_user;'],
   ['SQL revoke', 'Recommended action: REVOKE UPDATE ON customers FROM hidden_user;'],
   ['SQL transaction', 'Recommended action: BEGIN; DELETE FROM customers; COMMIT;'],
   ['SQL stored call', 'Recommended action: CALL refresh_private_cache();'],
+  ['SQL stored execute', 'Recommended action: EXEC sp_private;'],
+  ['SQL vacuum', 'Recommended action: VACUUM customers;'],
+  ['SQL analyze', 'Recommended action: ANALYZE customers;'],
+  ['SQL copy', "Recommended action: COPY customers TO '/tmp/private';"],
   ['SQL CTE', 'Recommended action: WITH private_rows AS (SELECT 1) SELECT * FROM private_rows;'],
 
   // Interpreter inline/eval/module/version and script forms.
@@ -66,6 +78,7 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
   ['Node short inline', 'Please run node -e "1 + 1" before continuing.'],
   ['Node print', 'Please run node --print "1 + 1" before continuing.'],
   ['Node version', 'Please run node --version before continuing.'],
+  ['Node executable suffix', 'Please run node.exe --version before continuing.'],
   ['Ruby inline', 'Please run ruby -e "puts 1" before continuing.'],
   ['Perl inline', 'Please run perl -e "print 1" before continuing.'],
   ['PHP inline', 'Please run php -r "echo 1;" before continuing.'],
@@ -73,6 +86,7 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
 
   // Package lifecycle and install authorities.
   ['npm clean install', 'Run npm ci before continuing.'],
+  ['npm command suffix', 'Run npm.cmd ci before continuing.'],
   ['npm install', 'Run npm install private-package before continuing.'],
   ['npm uninstall', 'Run npm uninstall private-package before continuing.'],
   ['npm lifecycle', 'Run npm start before continuing.'],
@@ -86,6 +100,7 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
 
   // Git read, write, administrative, and plumbing variants.
   ['Git branch read', 'Run git branch -a for review.'],
+  ['Git executable suffix', 'Run git.exe branch -a for review.'],
   ['Git remote read', 'Run git remote -v for review.'],
   ['Git config read', 'Run git config --list for review.'],
   ['Git worktree admin', 'Run git worktree add /tmp/private hidden-branch.'],
@@ -98,6 +113,7 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
 
   // POSIX shell builtins/utilities with paths, flags, pipes, and redirection.
   ['identity zero arg', 'Please run whoami.'],
+  ['absolute POSIX command path', 'Please run /usr/bin/whoami before continuing.'],
   ['identity flags', 'Please run id -u before continuing.'],
   ['listing long flag', 'Please run ls --color=auto /tmp/private before continuing.'],
   ['printf args', 'The diagnostic requires printf private before dispatch.'],
@@ -110,6 +126,20 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
   ['environment', 'Please run printenv PRIVATE_VALUE before continuing.'],
   ['filesystem create', 'Please run mkdir -p /tmp/private before continuing.'],
   ['archive', 'Please run tar -czf private.tgz /tmp/private before continuing.'],
+  ['POSIX data copy', 'Please run dd if=/tmp/private of=/tmp/copy before continuing.'],
+  ['build utility', 'Please run make install before continuing.'],
+  ['CMake utility', 'Please run cmake --build /tmp/private before continuing.'],
+  ['unlisted utility with flag', 'Please run jq -r .private before continuing.'],
+  ['unlisted utility with path', 'Please run sha256sum /tmp/private before continuing.'],
+  ['unlisted utility with assignment', 'Please run private-tool mode=hidden before continuing.'],
+  ['unlisted utility in a labeled fragment', 'Recommended action: private-tool --inspect /tmp/private.'],
+  ['unlisted utility in a parenthetical fragment', 'The diagnostic (private-tool /inspect) must complete first.'],
+  ['unlisted utility with explicit command label', 'Use the command private-tool safely.'],
+  ['common zero-argument utility', 'Please run uptime before continuing.'],
+  ['common package utility', 'Please run apt-get update before continuing.'],
+  ['common checksum utility', 'Please run sha256sum before continuing.'],
+  ['relative shell script', 'Please run ./private.sh before continuing.'],
+  ['parent Python script', 'Please run ../private.py before continuing.'],
   ['pipe', 'Please run cat /tmp/private | grep hidden before continuing.'],
   ['redirection', 'Please run echo private > /tmp/private before continuing.'],
   ['command substitution', 'Please run echo $(whoami) before continuing.'],
@@ -124,6 +154,13 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
   ['Windows service', 'Please run sc query northstar before continuing.'],
   ['Windows scheduler', 'Please run schtasks /query before continuing.'],
   ['Windows certificate', 'Please run certutil -hashfile C:\\private SHA256 before continuing.'],
+  ['Windows absolute executable', 'Recommended action: C:\\Windows\\System32\\whoami.exe.'],
+  ['Windows start', 'Please run start private.exe before continuing.'],
+  ['Windows net', 'Please run net user before continuing.'],
+  ['Windows event log', 'Please run wevtutil qe System before continuing.'],
+  ['Windows installer', 'Please run msiexec /i private.msi before continuing.'],
+  ['Windows DLL loader', 'Please run rundll32 private.dll,Entry before continuing.'],
+  ['PowerShell call operator', 'Please run & .\\private.ps1 before continuing.'],
 
   // Remote/network commands, including host-only forms.
   ['SSH host only', 'Use ssh example.invalid before the visit.'],
@@ -139,6 +176,11 @@ const SYSTEMATIC_COMMAND_GRAMMAR = Object.freeze([
 
   // General executable source forms embedded in professional-looking prose.
   ['bare call statement', 'Please enter calculateTotal(1); in the console.'],
+  ['cued bare call without semicolon', 'Please enter calculateTotal(1) in the console.'],
+  ['use-cued bare call without semicolon', 'Please use calculateTotal(1) for this response.'],
+  ['embedded camel-case call without semicolon', 'The proposed step is calculateTotal(1) before continuing.'],
+  ['embedded dotted call without semicolon', 'The proposed step is private.cache.clear() before continuing.'],
+  ['embedded snake-case call without semicolon', 'The proposed step is calculate_total(1) before continuing.'],
   ['dotted call statement', 'Recommended action: private.cache.clear();'],
   ['constructor assignment', 'Recommended action: result = new HiddenClient();'],
   ['JavaScript declaration', 'Recommended action: const privateValue = 1;'],
@@ -185,6 +227,19 @@ const ORDINARY_BUSINESS_PROSE = Object.freeze([
   'The HVAC, CRM, SMS, and API services are described in the customer record.',
   'The customer\'s approved total is $1,250.00, with 18% markup and Net 30 terms.',
   'Use the west branch office for the installation team.',
+  'Use the curl pattern requested for the decorative railing.',
+  'Use the Command Center to review the customer record.',
+  'Use more insulation around the repaired duct.',
+  'Use the file name supplied by the customer.',
+  'Run a split test on the approved marketing message.',
+  'Type more details into the customer note.',
+  'Use the patch material listed in the estimate.',
+  'Use the route map approved for the service team.',
+  'Run a detailed diagnostic inspection before dispatch.',
+  'The private tool allowance is listed in the estimate.',
+  'The tool is affordable and approved for the team.',
+  'The program is available to the owner.',
+  'The script is part of the customer call summary.',
   'Call Mike (owner) before arrival.',
 ]);
 
@@ -322,6 +377,18 @@ describe('P6 complete command/code presentation coverage red matrix', () => {
     expect(() => cardRenderer.validateProfessionalText(value))
       .toThrow('Unsupported Polaris structured contract.');
   });
+
+  test.each(SYSTEMATIC_COMMAND_GRAMMAR)(
+    'professional prose, case, NFKC, and whitespace cannot launder systematic %s grammar', (_label, value) => {
+      const variants = [
+        `Professional customer summary: ${value} Please continue with the appointment.`,
+        alternateCase(value),
+        fullwidth(value),
+        value.replace(/ /g, '\t  '),
+      ];
+      expect(variants.filter(candidate => professionalTextPolicy.isProfessionalText(candidate))).toEqual([]);
+    }
+  );
 
   test.each(PROFESSIONAL_PREFIXES.flatMap(prefix =>
     METAMORPHIC_COMMANDS.flatMap(command =>

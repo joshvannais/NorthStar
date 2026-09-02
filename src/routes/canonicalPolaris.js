@@ -12,6 +12,7 @@ const { hasPermission, requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
 const {
   buildContextResponse,
+  messageRequestFingerprint,
   selectedMatchesItem,
   validateContextRequest,
   validateMessageRequest,
@@ -805,6 +806,18 @@ function handleEndpointError(res, _error, req) {
   return sendPersistenceUnavailable(res, req);
 }
 
+function durableRetryAfterSeconds(error, usage) {
+  const seconds = error && error.retryAfterSeconds;
+  if (!error || !usage ||
+      !['POLARIS_PROVIDER_UNAVAILABLE', 'POLARIS_PROVIDER_TIMEOUT'].includes(error.code) ||
+      ![429, 503, 504].includes(error.statusCode) ||
+      !Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86400 ||
+      usage.outcomeClass !== 'failed' || usage.costNanoUsd !== 0 ||
+      usage.inputTokens !== 0 || usage.outputTokens !== 0 ||
+      !(usage.providerRequestId === null || usage.providerRequestId === undefined)) return null;
+  return seconds;
+}
+
 async function authoritativeItems(req, dependencies, endpoint, queryable) {
   const context = requestContext(req);
   const filters = queryFilters(req);
@@ -1048,6 +1061,7 @@ function createCanonicalRouter(options) {
             organizationId: authority.organizationId,
             userId: authority.userId,
             requestId: request.idempotencyKey,
+            fingerprint: messageRequestFingerprint(request, authority),
             model: 'gpt-5.6-luna',
             schemaVersion: 'northstar.polaris.assistant-response.v1',
           });
@@ -1059,9 +1073,13 @@ function createCanonicalRouter(options) {
             return result.response;
           } catch (error) {
             const usage = error && error.polarisUsage;
+            const retryAfterSeconds = durableRetryAfterSeconds(error, usage);
             if (usage && (usage.costNanoUsd > 0 || ['refused', 'incomplete'].includes(usage.outcomeClass) ||
-                ['POLARIS_CREDENTIAL_DISABLED', 'POLARIS_USAGE_LIMIT'].includes(error && error.code))) {
-              try { await dependencies.assistantUsageLedger.reconcile(reservation, usage); } catch (_reconcileError) {
+                ['POLARIS_CREDENTIAL_DISABLED', 'POLARIS_USAGE_LIMIT'].includes(error && error.code) ||
+                retryAfterSeconds !== null)) {
+              const reconciliation = retryAfterSeconds === null
+                ? usage : Object.freeze({ ...usage, retryAfterSeconds });
+              try { await dependencies.assistantUsageLedger.reconcile(reservation, reconciliation); } catch (_reconcileError) {
                 const authorityUnavailable = new Error('Polaris usage authority is temporarily unavailable.');
                 authorityUnavailable.code = 'POLARIS_USAGE_AUTHORITY_UNAVAILABLE';
                 authorityUnavailable.statusCode = 503;

@@ -664,6 +664,14 @@
         return { kind: kind, identifier: identifier.toLowerCase() };
       }
 
+      function syncWelcomePresentation(hasSelectedRecord) {
+        if (!welcomeState) welcomeState = document.querySelector('.polaris-welcome');
+        if (!welcomeState) return;
+        var suppressed = Boolean(hasSelectedRecord) || messages.length > 0;
+        welcomeState.style.display = suppressed ? 'none' : '';
+        welcomeState.setAttribute('aria-hidden', suppressed ? 'true' : 'false');
+      }
+
       function findSelectedGraph(workspace, selection) {
         var graphs = workspace && Array.isArray(workspace.graphs) ? workspace.graphs : [];
         var idKey = selection.kind === 'lead' ? 'opportunity' : selection.kind === 'work' ? 'appointment' : 'customer';
@@ -846,6 +854,7 @@
 
       function renderSelectedContext() {
         activeSelection = selectedQuery();
+        syncWelcomePresentation(Boolean(activeSelection));
         var section = document.getElementById('polarisSelectedContext');
         if (!activeSelection) {
           section.hidden = true;
@@ -931,11 +940,7 @@
         var id = 'msg-' + (++msgCounter);
         var ts = getTimestamp();
 
-        // Hide welcome state on first message
-        if (welcomeState) {
-          welcomeState.style.display = 'none';
-          welcomeState = null;
-        }
+        syncWelcomePresentation(true);
 
         // Remove empty state if present
         var emptyState = document.querySelector('.polaris-empty-state');
@@ -1230,30 +1235,7 @@
         msgCounter = 0;
         setLoading(false);
 
-        // Restore welcome state if it exists in DOM
-        if (welcomeState) {
-          welcomeState.style.display = '';
-        } else {
-          // Re-fetch welcome state (it was hidden, so element is still in DOM)
-          var ws = document.querySelector('.polaris-welcome');
-          if (ws) {
-            ws.style.display = '';
-            welcomeState = ws;
-          } else {
-            // Show empty state as fallback
-            var empty = document.createElement('div');
-            empty.className = 'polaris-empty-state';
-            var emptyIcon = document.createElement('div');
-            emptyIcon.className = 'polaris-empty-state-icon';
-            emptyIcon.textContent = '✦';
-            var emptyText = document.createElement('div');
-            emptyText.className = 'polaris-empty-state-text';
-            emptyText.textContent = 'Conversation cleared. Start a new one by typing below.';
-            empty.appendChild(emptyIcon);
-            empty.appendChild(emptyText);
-            conversationBody.appendChild(empty);
-          }
-        }
+        syncWelcomePresentation(Boolean(activeSelection));
 
         input.focus();
       }
@@ -1305,6 +1287,7 @@
       // ── Quick prompts ──
                 setupQuickPrompts();
 
+                renderSelectedContext();
                 loadConversationAccess();
 
                 window.addEventListener('northstar:account', function(event) {

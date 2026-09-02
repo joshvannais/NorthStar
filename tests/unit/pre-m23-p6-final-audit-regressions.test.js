@@ -94,6 +94,13 @@ const HOSTILE_PRESENTATION_CORPUS = Object.freeze([
   'Recommended action: SET ROLE administrator;',
   'Recommended action: REFRESH MATERIALIZED VIEW private_jobs;',
   'Recommended action: COPY (SELECT 1) TO STDOUT;',
+  'For diagnostics, SHOW ALL;',
+  'Please SHOW ALL;',
+  'The check uses PRAGMA integrity_check;',
+  'For diagnostics, SET ROLE administrator;',
+  'For diagnostics, REFRESH MATERIALIZED VIEW private_jobs;',
+  "The check uses SELECT 'secret';",
+  'powershell whoami',
 ]);
 
 const PROFESSIONAL_SERVICE_PROSE = Object.freeze([
@@ -150,6 +157,9 @@ const PROFESSIONAL_SERVICE_PROSE = Object.freeze([
   'The follow-up visit is optional unless the noise returns.',
   'The customer approved the revised scope but not the add-on.',
   'The service agreement renews on January 1, 2027.',
+  'The technician will show all approved options at the visit.',
+  'Please describe customer preferences in the service note.',
+  'PowerShell Road is outside the current service area.',
 ]);
 
 describe('P6 final-audit correction regressions', () => {

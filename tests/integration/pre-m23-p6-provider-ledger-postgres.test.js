@@ -242,8 +242,8 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
          has_table_privilege($1,'public.polaris_provider_requests','INSERT') AS request_insert,
          has_table_privilege($1,'public.polaris_provider_monthly_usage','UPDATE') AS monthly_update,
          has_table_privilege($1,'public.polaris_provider_security_events','SELECT') AS security_select,
-         has_function_privilege($1,'public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint)','EXECUTE') AS reserve_execute,
-         has_function_privilege($1,'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text)','EXECUTE') AS reconcile_execute,
+         has_function_privilege($1,'public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint)','EXECUTE') AS reserve_execute,
+         has_function_privilege($1,'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer)','EXECUTE') AS reconcile_execute,
          has_function_privilege($1,'public.polaris_provider_usage_policy_status(uuid,uuid)','EXECUTE') AS policy_status_execute`,
       [roles.runtimeRole]
     )).rows[0];
@@ -451,7 +451,7 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
       costNanoUsd: 0,
       outcomeClass: 'failed',
       providerRequestId: null,
-      retryAfterSeconds: 60,
+      retryAfterSeconds: 1,
     }));
 
     const transient = (await migrationPool.query(
@@ -468,12 +468,7 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
     await expect(secondProcess.reserve(exact)).rejects.toMatchObject({
       code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
     });
-    await migrationPool.query(
-      `UPDATE public.polaris_provider_requests
-          SET retry_after_at=clock_timestamp()-INTERVAL '1 millisecond'
-        WHERE id=$1`,
-      [firstReservation.id]
-    );
+    await new Promise(resolve => setTimeout(resolve, 1100));
 
     const attempts = await Promise.allSettled([
       firstProcess.reserve(exact),
@@ -515,23 +510,12 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
       inputTokens: 0, outputTokens: 0, costNanoUsd: 0,
       outcomeClass: 'failed', providerRequestId: null, retryAfterSeconds: 1,
     }));
-    await migrationPool.query(
-      `UPDATE public.polaris_provider_requests
-          SET retry_after_at=clock_timestamp()-INTERVAL '1 millisecond'
-        WHERE id=$1`,
-      [first.id]
-    );
+    await new Promise(resolve => setTimeout(resolve, 1100));
     const retry = await ledger.reserve(retryOnce);
     await ledger.reconcile(retry, completedUsage({
       inputTokens: 0, outputTokens: 0, costNanoUsd: 0,
       outcomeClass: 'failed', providerRequestId: null, retryAfterSeconds: 1,
     }));
-    await migrationPool.query(
-      `UPDATE public.polaris_provider_requests
-          SET retry_after_at=clock_timestamp()-INTERVAL '1 millisecond'
-        WHERE id=$1`,
-      [first.id]
-    );
     await expect(ledger.reserve(retryOnce)).rejects.toMatchObject({
       code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
     });

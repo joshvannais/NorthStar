@@ -31,6 +31,7 @@ CREATE TABLE public.polaris_provider_requests (
   organization_id UUID NOT NULL,
   user_id UUID NOT NULL,
   request_id UUID NOT NULL,
+  request_fingerprint VARCHAR(64) NOT NULL,
   month_start DATE NOT NULL,
   model VARCHAR(64) NOT NULL,
   schema_version VARCHAR(128) NOT NULL,
@@ -44,6 +45,9 @@ CREATE TABLE public.polaris_provider_requests (
   provider_request_id VARCHAR(128),
   created_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
   lease_expires_at TIMESTAMPTZ NOT NULL,
+  retry_after_at TIMESTAMPTZ,
+  re_admission_count SMALLINT NOT NULL DEFAULT 0,
+  re_admitted_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   CONSTRAINT polaris_provider_request_actor_fk
     FOREIGN KEY (organization_id, user_id)
@@ -52,17 +56,25 @@ CREATE TABLE public.polaris_provider_requests (
     FOREIGN KEY (organization_id, month_start)
     REFERENCES public.polaris_provider_monthly_usage(organization_id, month_start) ON DELETE RESTRICT,
   CONSTRAINT polaris_provider_request_idempotency_unique UNIQUE (organization_id, user_id, request_id),
+  CONSTRAINT polaris_provider_request_fingerprint_check CHECK (
+    request_fingerprint ~ '^[0-9a-f]{64}$'
+  ),
   CONSTRAINT polaris_provider_request_model_check CHECK (model = 'gpt-5.6-luna'),
   CONSTRAINT polaris_provider_request_schema_check CHECK (
     schema_version = 'northstar.polaris.assistant-response.v1'
   ),
   CONSTRAINT polaris_provider_request_state_check CHECK (state IN ('reserved', 'completed', 'failed')),
   CONSTRAINT polaris_provider_request_reserve_check CHECK (reserved_cost_nano_usd = 20000000),
+  CONSTRAINT polaris_provider_request_re_admission_check CHECK (
+    (re_admission_count = 0 AND re_admitted_at IS NULL)
+    OR (re_admission_count = 1 AND re_admitted_at IS NOT NULL AND re_admitted_at > created_at)
+  ),
   CONSTRAINT polaris_provider_request_usage_check CHECK (
     (state = 'reserved'
       AND actual_cost_nano_usd IS NULL AND input_tokens IS NULL AND output_tokens IS NULL
       AND attempt_count IS NULL AND outcome_class IS NULL AND provider_request_id IS NULL
-      AND completed_at IS NULL AND lease_expires_at > created_at)
+      AND completed_at IS NULL AND retry_after_at IS NULL
+      AND lease_expires_at > COALESCE(re_admitted_at, created_at))
     OR
     (state IN ('completed', 'failed')
       AND actual_cost_nano_usd BETWEEN 0 AND reserved_cost_nano_usd
@@ -70,7 +82,12 @@ CREATE TABLE public.polaris_provider_requests (
       AND output_tokens BETWEEN 0 AND 8192
       AND attempt_count BETWEEN 1 AND 2
       AND outcome_class IN ('completed', 'refused', 'incomplete', 'failed', 'ambiguous_timeout')
-      AND completed_at IS NOT NULL AND completed_at >= created_at)
+      AND completed_at IS NOT NULL AND completed_at >= COALESCE(re_admitted_at, created_at)
+      AND (retry_after_at IS NULL OR (
+        state = 'failed' AND outcome_class = 'failed'
+        AND actual_cost_nano_usd = 0 AND input_tokens = 0 AND output_tokens = 0
+        AND provider_request_id IS NULL AND retry_after_at > completed_at
+      )))
   )
 );
 
@@ -78,6 +95,12 @@ CREATE INDEX polaris_provider_requests_tenant_rate
   ON public.polaris_provider_requests(organization_id, created_at DESC, id);
 CREATE INDEX polaris_provider_requests_user_rate
   ON public.polaris_provider_requests(organization_id, user_id, created_at DESC, id);
+CREATE INDEX polaris_provider_requests_user_retry_rate
+  ON public.polaris_provider_requests(organization_id, user_id, re_admitted_at DESC, id)
+  WHERE re_admitted_at IS NOT NULL;
+CREATE INDEX polaris_provider_requests_tenant_retry_rate
+  ON public.polaris_provider_requests(organization_id, re_admitted_at DESC, id)
+  WHERE re_admitted_at IS NOT NULL;
 CREATE INDEX polaris_provider_requests_active
   ON public.polaris_provider_requests(organization_id, lease_expires_at, id)
   WHERE state = 'reserved';
@@ -112,6 +135,7 @@ CREATE FUNCTION public.polaris_provider_reserve_usage(
   requested_organization_id UUID,
   requested_user_id UUID,
   requested_request_id UUID,
+  requested_fingerprint TEXT,
   requested_model TEXT,
   requested_schema_version TEXT,
   requested_cost_nano_usd BIGINT
@@ -143,10 +167,13 @@ DECLARE
   hard_cap BIGINT;
   project_cap BIGINT;
   expired_group RECORD;
+  existing_request public.polaris_provider_requests%ROWTYPE;
+  re_admitting BOOLEAN := FALSE;
   denial TEXT := NULL;
   retry_seconds INTEGER := NULL;
 BEGIN
-  IF requested_model <> 'gpt-5.6-luna'
+  IF requested_fingerprint !~ '^[0-9a-f]{64}$'
+     OR requested_model <> 'gpt-5.6-luna'
      OR requested_schema_version <> 'northstar.polaris.assistant-response.v1'
      OR requested_cost_nano_usd <> 20000000 THEN
     RAISE EXCEPTION 'Unsupported Polaris provider reservation contract'
@@ -214,45 +241,89 @@ BEGIN
   VALUES (requested_organization_id, current_month)
   ON CONFLICT (organization_id, month_start) DO NOTHING;
 
-  IF EXISTS (
-    SELECT 1 FROM public.polaris_provider_requests request
-     WHERE request.organization_id = requested_organization_id
-       AND request.user_id = requested_user_id
-       AND request.request_id = requested_request_id
-  ) THEN
-    denial := 'idempotency_conflict'; retry_seconds := 1;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
+  SELECT * INTO existing_request
+    FROM public.polaris_provider_requests request
+   WHERE request.organization_id = requested_organization_id
+     AND request.user_id = requested_user_id
+     AND request.request_id = requested_request_id
+   FOR UPDATE;
+  IF FOUND THEN
+    IF existing_request.request_fingerprint = requested_fingerprint
+       AND existing_request.state = 'failed'
+       AND existing_request.outcome_class = 'failed'
+       AND existing_request.actual_cost_nano_usd = 0
+       AND existing_request.input_tokens = 0
+       AND existing_request.output_tokens = 0
+       AND existing_request.provider_request_id IS NULL
+       AND existing_request.retry_after_at IS NOT NULL
+       AND existing_request.retry_after_at <= clock_timestamp()
+       AND existing_request.re_admission_count = 0 THEN
+      re_admitting := TRUE;
+      generated_reservation := existing_request.id;
+    ELSE
+      denial := 'idempotency_conflict'; retry_seconds := 1;
+    END IF;
+  END IF;
+
+  IF denial IS NULL AND (SELECT count(*) FROM public.polaris_provider_requests request
           WHERE request.organization_id = requested_organization_id
             AND request.user_id = requested_user_id
             AND request.state = 'reserved' AND request.lease_expires_at > clock_timestamp()) >= 1 THEN
     denial := 'user_concurrency'; retry_seconds := 25;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
+  ELSIF denial IS NULL AND (SELECT count(*) FROM public.polaris_provider_requests request
           WHERE request.organization_id = requested_organization_id
             AND request.state = 'reserved' AND request.lease_expires_at > clock_timestamp()) >= 4 THEN
     denial := 'tenant_concurrency'; retry_seconds := 25;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
-          WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
-            AND request.created_at > clock_timestamp() - INTERVAL '1 minute') >= 12 THEN
+  ELSIF denial IS NULL AND (SELECT count(*) FROM (
+          SELECT request.created_at AS admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
+          UNION ALL
+          SELECT request.re_admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
+             AND request.re_admitted_at IS NOT NULL
+        ) attempt WHERE attempt.admitted_at > clock_timestamp() - INTERVAL '1 minute') >= 12 THEN
     denial := 'user_minute_rate'; retry_seconds := 60;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
-          WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
-            AND request.created_at > clock_timestamp() - INTERVAL '1 hour') >= 120 THEN
+  ELSIF denial IS NULL AND (SELECT count(*) FROM (
+          SELECT request.created_at AS admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
+          UNION ALL
+          SELECT request.re_admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
+             AND request.re_admitted_at IS NOT NULL
+        ) attempt WHERE attempt.admitted_at > clock_timestamp() - INTERVAL '1 hour') >= 120 THEN
     denial := 'user_hour_rate'; retry_seconds := 3600;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
-          WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
-            AND request.created_at > clock_timestamp() - INTERVAL '1 day') >= 600 THEN
+  ELSIF denial IS NULL AND (SELECT count(*) FROM (
+          SELECT request.created_at AS admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
+          UNION ALL
+          SELECT request.re_admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.user_id = requested_user_id
+             AND request.re_admitted_at IS NOT NULL
+        ) attempt WHERE attempt.admitted_at > clock_timestamp() - INTERVAL '1 day') >= 600 THEN
     denial := 'user_day_rate'; retry_seconds := 86400;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
-          WHERE request.organization_id = requested_organization_id
-            AND request.created_at > clock_timestamp() - INTERVAL '1 minute') >= 60 THEN
+  ELSIF denial IS NULL AND (SELECT count(*) FROM (
+          SELECT request.created_at AS admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id
+          UNION ALL
+          SELECT request.re_admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.re_admitted_at IS NOT NULL
+        ) attempt WHERE attempt.admitted_at > clock_timestamp() - INTERVAL '1 minute') >= 60 THEN
     denial := 'tenant_minute_rate'; retry_seconds := 60;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
-          WHERE request.organization_id = requested_organization_id
-            AND request.created_at > clock_timestamp() - INTERVAL '1 hour') >= 600 THEN
+  ELSIF denial IS NULL AND (SELECT count(*) FROM (
+          SELECT request.created_at AS admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id
+          UNION ALL
+          SELECT request.re_admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.re_admitted_at IS NOT NULL
+        ) attempt WHERE attempt.admitted_at > clock_timestamp() - INTERVAL '1 hour') >= 600 THEN
     denial := 'tenant_hour_rate'; retry_seconds := 3600;
-  ELSIF (SELECT count(*) FROM public.polaris_provider_requests request
-          WHERE request.organization_id = requested_organization_id
-            AND request.created_at > clock_timestamp() - INTERVAL '1 day') >= 3000 THEN
+  ELSIF denial IS NULL AND (SELECT count(*) FROM (
+          SELECT request.created_at AS admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id
+          UNION ALL
+          SELECT request.re_admitted_at FROM public.polaris_provider_requests request
+           WHERE request.organization_id = requested_organization_id AND request.re_admitted_at IS NOT NULL
+        ) attempt WHERE attempt.admitted_at > clock_timestamp() - INTERVAL '1 day') >= 3000 THEN
     denial := 'tenant_day_rate'; retry_seconds := 86400;
   END IF;
 
@@ -300,14 +371,32 @@ BEGIN
     RETURN;
   END IF;
 
-  INSERT INTO public.polaris_provider_requests(
-    id, organization_id, user_id, request_id, month_start, model, schema_version,
-    state, reserved_cost_nano_usd, lease_expires_at
-  ) VALUES (
-    generated_reservation, requested_organization_id, requested_user_id, requested_request_id,
-    current_month, requested_model, requested_schema_version, 'reserved',
-    requested_cost_nano_usd, clock_timestamp() + INTERVAL '25 seconds'
-  );
+  IF re_admitting THEN
+    UPDATE public.polaris_provider_requests
+       SET month_start = current_month,
+           state = 'reserved',
+           actual_cost_nano_usd = NULL,
+           input_tokens = NULL,
+           output_tokens = NULL,
+           attempt_count = NULL,
+           outcome_class = NULL,
+           provider_request_id = NULL,
+           lease_expires_at = clock_timestamp() + INTERVAL '25 seconds',
+           retry_after_at = NULL,
+           re_admission_count = 1,
+           re_admitted_at = clock_timestamp(),
+           completed_at = NULL
+     WHERE id = generated_reservation;
+  ELSE
+    INSERT INTO public.polaris_provider_requests(
+      id, organization_id, user_id, request_id, request_fingerprint, month_start, model, schema_version,
+      state, reserved_cost_nano_usd, lease_expires_at
+    ) VALUES (
+      generated_reservation, requested_organization_id, requested_user_id, requested_request_id,
+      requested_fingerprint, current_month, requested_model, requested_schema_version, 'reserved',
+      requested_cost_nano_usd, clock_timestamp() + INTERVAL '25 seconds'
+    );
+  END IF;
   UPDATE public.polaris_provider_monthly_usage AS admitted_month
      SET reserved_cost_nano_usd = admitted_month.reserved_cost_nano_usd + requested_cost_nano_usd,
          updated_at = transaction_timestamp()
@@ -328,7 +417,8 @@ CREATE FUNCTION public.polaris_provider_reconcile_usage(
   requested_output_tokens INTEGER,
   requested_attempt_count SMALLINT,
   requested_outcome_class TEXT,
-  requested_provider_request_id TEXT
+  requested_provider_request_id TEXT,
+  requested_retry_after_seconds INTEGER
 )
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -337,6 +427,7 @@ SET search_path = pg_catalog, public
 AS $polaris_provider_reconcile$
 DECLARE
   reserved_request public.polaris_provider_requests%ROWTYPE;
+  reconciled_at TIMESTAMPTZ;
 BEGIN
   PERFORM pg_advisory_xact_lock(19000037::bigint);
   PERFORM pg_advisory_xact_lock(hashtextextended(requested_organization_id::text, 19000037));
@@ -356,11 +447,20 @@ BEGIN
      OR requested_attempt_count NOT BETWEEN 1 AND 2
      OR requested_outcome_class NOT IN ('completed', 'refused', 'incomplete', 'failed')
      OR requested_provider_request_id IS NOT NULL
-       AND octet_length(requested_provider_request_id) NOT BETWEEN 1 AND 128 THEN
+       AND octet_length(requested_provider_request_id) NOT BETWEEN 1 AND 128
+     OR requested_retry_after_seconds IS NOT NULL AND (
+       requested_retry_after_seconds NOT BETWEEN 1 AND 86400
+       OR requested_outcome_class <> 'failed'
+       OR requested_cost_nano_usd <> 0
+       OR requested_input_tokens <> 0
+       OR requested_output_tokens <> 0
+       OR requested_provider_request_id IS NOT NULL
+     ) THEN
     RAISE EXCEPTION 'Unsupported Polaris reconciliation contract'
       USING ERRCODE = '22023', CONSTRAINT = 'polaris_provider_reconciliation_contract';
   END IF;
 
+  reconciled_at := clock_timestamp();
   UPDATE public.polaris_provider_requests
      SET state = CASE WHEN requested_outcome_class = 'completed' THEN 'completed' ELSE 'failed' END,
          actual_cost_nano_usd = requested_cost_nano_usd,
@@ -369,7 +469,12 @@ BEGIN
          attempt_count = requested_attempt_count,
          outcome_class = requested_outcome_class,
          provider_request_id = requested_provider_request_id,
-         completed_at = clock_timestamp()
+         retry_after_at = CASE
+           WHEN requested_retry_after_seconds IS NOT NULL AND reserved_request.re_admission_count = 0
+             THEN reconciled_at + make_interval(secs => requested_retry_after_seconds)
+           ELSE NULL
+         END,
+         completed_at = reconciled_at
    WHERE id = requested_reservation_id;
   UPDATE public.polaris_provider_monthly_usage
      SET reserved_cost_nano_usd = reserved_cost_nano_usd - reserved_request.reserved_cost_nano_usd,
@@ -445,6 +550,6 @@ $polaris_provider_usage_policy$;
 REVOKE ALL ON TABLE public.polaris_provider_monthly_usage FROM PUBLIC;
 REVOKE ALL ON TABLE public.polaris_provider_requests FROM PUBLIC;
 REVOKE ALL ON TABLE public.polaris_provider_security_events FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.polaris_provider_usage_policy_status(uuid,uuid) FROM PUBLIC;

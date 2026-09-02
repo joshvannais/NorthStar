@@ -18,32 +18,33 @@
   // Ambiguous business nouns such as branch, package, select, and run are intentionally absent;
   // runtime names such as node are considered only in explicit command contexts below.
   var EXECUTABLE_NAME = '(?:bash|sh|zsh|fish|powershell(?:\\.exe)?|pwsh|cmd(?:\\.exe)?|wsl(?:\\.exe)?' +
-    '|python(?:\\d+(?:\\.\\d+)?)?|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go' +
+    '|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go' +
     '|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc' +
     '|npm|npx|pnpm|yarn|bun|pip(?:\\d+(?:\\.\\d+)?)?|gem|cargo|composer|mvn|gradle' +
-    '|poetry|uv|conda|mamba|git|hg|svn' +
+    '|poetry|uv|conda|mamba|git|gh|hg|svn|pipx|nuget|msbuild' +
     '|ls|cat|head|tail|grep|sed|awk|find|printf|echo|cp|mv|rm|chmod|chown|whoami|id|pwd' +
     '|cd|pushd|popd|which|whereis|locate|history|alias|unalias|jobs|fg|bg|wait|set|unset' +
     '|declare|typeset|readonly|shift|trap|ulimit|umask' +
     '|ps|pgrep|pidof|pstree|kill|pkill|printenv|env|export|source|touch|mkdir|rmdir|ln|stat|du|df|mount|umount' +
     '|uname|hostname|groups|who|users|last|lastlog|uptime|top|free|vmstat|iostat|sar|watch|nohup|renice|timeout|sleep' +
+    '|time|nice|strace|ltrace|setsid|socat|busybox|eval|exec|doas|command|builtin' +
     '|tee|xargs|uniq|wc|tr|sort|cut|fold|fmt|nl|pr|split|csplit|join|expand|unexpand' +
     '|readlink|realpath|basename|dirname|mktemp|mkfifo|paste|comm|diff|cmp|od|hexdump|xxd|strings|jq|base64' +
     '|md5sum|sha1sum|sha224sum|sha256sum|sha384sum|sha512sum|tar|gzip|gunzip|zip|unzip|openssl' +
     '|getfacl|setfacl|chattr|lsattr|lsblk|blkid|fdisk|parted|mkfs|fsck' +
     '|dd|make|cmake|dmesg|sysctl|getent|passwd|useradd|usermod|userdel|groupadd|groupmod|groupdel' +
-    '|sudo|su|apt|apt-get|dpkg|rpm|yum|dnf|apk|brew' +
-    '|snap|flatpak' +
+    '|sudo|su|apt|apt-get|dpkg|rpm|yum|dnf|apk|brew|winget|choco|scoop' +
+    '|snap|flatpak|certbot' +
     '|ssh|scp|sftp|rsync|ftp|telnet|curl|wget|ping|traceroute|nslookup|dig|host|nc|netcat' +
     '|ifconfig|netstat|ss|ip|arp|route|iptables|nft|ethtool|nmcli|lsof|systemctl|service|journalctl|crontab' +
-    '|docker|podman|kubectl|helm|terraform|tofu|ansible|ansible-playbook|packer|vagrant' +
+    '|docker|podman|podman-compose|kubectl|helm|terraform|tofu|ansible|ansible-playbook|ansible-vault|packer|vagrant' +
     '|aws|az|gcloud|psql|mysql|mariadb|sqlite3|redis-cli|mongosh' +
     '|dir|copy|move|del|erase|type|where|tasklist|taskkill|ipconfig|sc|reg|schtasks|wmic' +
     '|robocopy|xcopy|certutil|bitsadmin|start|net|netsh|wevtutil|msiexec|rundll32|setx|systeminfo' +
     '|ver|vol|cls|findstr|fc|comp|compact|doskey|driverquery|mode|path|pause|recover|replace|subst|tree' +
     '|choice|clip|forfiles|openfiles|quser|qwinsta' +
     '|assoc|ftype|mklink|attrib|icacls|takeown|diskpart|bcdedit|dism|sfc|shutdown|logoff|runas' +
-    '|cscript|wscript)';
+    '|cscript|wscript|launchctl|defaults|system_profiler|iex|iwr)';
   var EXECUTABLE_TOKEN = EXECUTABLE_NAME + '(?:\\.exe|\\.cmd|\\.bat)?';
   var EXECUTABLE_REFERENCE = '(?:(?:(?:[A-Za-z]:)?[\\\\/](?:[A-Za-z0-9_.-]+[\\\\/])*|\\.{1,2}[\\\\/])?' +
     EXECUTABLE_TOKEN + ')';
@@ -90,6 +91,33 @@
   var GENERIC_COMMAND_SYNTAX = /\b(?:run|execute|invoke|launch|issue|enter|type|use)\s+(?:(?:the|this|a|an|following)\s+(?:command|tool|utility|program|script)\s+)?(?:sudo\s+)?[A-Za-z_$][\w$.-]*(?:\.exe|\.cmd|\.bat)?\s+(?:--?[A-Za-z][\w-]*(?:[=\s]\S+)?|\/[A-Za-z?][\w?]*|(?:(?:[A-Za-z]:)?[\\/]|\.{1,2}[\\/])\S+|\$\(?[A-Za-z_{]|%[A-Za-z_]\w*%|[A-Za-z_][\w.-]*=\S+|[+][%A-Za-z0-9_-]+|["'`][^\n"'`]{0,200}["'`])/i;
   var EXPLICIT_GENERIC_COMMAND = /\b(?:(?:run|execute|invoke|launch|issue|enter|type)\s+(?:(?:the|this|a|an|following)\s+)?(?:command|tool|utility|program|script)\s+(?:sudo\s+)?[A-Za-z_$][\w$.-]*|use\s+(?:(?:the|this|a|an|following)\s+)?(?:command|tool|utility|program|script)\s+(?:sudo\s+)?[A-Za-z_$][\w$]*[._-][\w$.-]*|(?:command|tool|utility|program|script)\s*:\s*(?:sudo\s+)?[A-Za-z_$][\w$.-]*)(?:\s+(?:[^\n]{0,240}))?(?:[.;]|$)/i;
   var COMMAND_SHAPED_FRAGMENT = /(?:^|[\n:;(])\s*(?:sudo\s+)?[A-Za-z_$][\w$.-]*(?:\.exe|\.cmd|\.bat)?\s+(?:--?[A-Za-z][\w-]*(?:[=\s]\S+)?|\/[A-Za-z?][\w?]*|(?:(?:[A-Za-z]:)?[\\/]|\.{1,2}[\\/])\S+|\$\(?[A-Za-z_{]|%[A-Za-z_]\w*%|[A-Za-z_][\w.-]*=\S+|[+][%A-Za-z0-9_-]+|["'`][^\n"'`]{0,200}["'`])/i;
+  var DIRECT_COMMAND_LINE = new RegExp(
+    '(?:^|[\\n:;])\\s*(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?)\\b)' +
+    '(?:&\\s*)?' + EXECUTABLE_REFERENCE +
+    '(?=\\s|[;&|<>]|$)(?:\\s+|[;&|<>]|$)',
+    'i'
+  );
+  var POWERSHELL_DIRECT_COMMAND = new RegExp(
+    '(?:^|[\\n:;])\\s*(?:powershell(?:\\.exe)?|pwsh)\\s+(?:&\\s*)?' + EXECUTABLE_REFERENCE + '\\b',
+    'i'
+  );
+  var QUOTED_EXECUTABLE_LINE = new RegExp(
+    '(?:^|[\\n:;])\\s*["\']' + EXECUTABLE_REFERENCE + '["\'](?=\\s|[;&|<>]|$)',
+    'i'
+  );
+  var EXECUTABLE_PATH_LINE = /(?:^|[\n:;])\s*(?:(?:[A-Za-z]:\\|\\\\|\.{1,2}[\\/]|\/[A-Za-z0-9_.-]+\/|\$(?:env:)?[A-Za-z_]\w*[\\/]|%[A-Za-z_]\w*%[\\/])(?:[^\s"'`|;&<>]+[\\/])*[^\s"'`|;&<>]+(?:\.(?:exe|com|cmd|bat|ps1|sh|bash|zsh|fish|py|pyw|js|mjs|cjs|rb|pl|php))?)(?=\s|[;&|<>]|$)/i;
+  var SQL_STATEMENT = /(?:^|[\n:])\s*(?:with\b[^;\n]{0,500}\bselect\b|select\b|show\b|describe\b|desc\b|pragma\b|use\b|attach\b|detach\b|set\s+(?:role|session|transaction)\b|reset\b|alter\s+system\b|reindex\b|cluster\b|refresh\s+materialized\s+view\b|lock\s+table\b|discard\b|values\s*\(|vacuum\b|analyze\b|checkpoint\b|copy\b|insert\b|update\b|delete\b|merge\b|replace\b|upsert\b|create\b|alter\b|drop\b|truncate\b|grant\b|revoke\b|call\b|exec(?:ute)?\b|comment\b|explain\b|begin\b|commit\b|rollback\b)[^;\n]{0,1000};(?:\s|$)/i;
+  // Administrative SQL has an executable grammar regardless of the prose that precedes it.
+  // Keep ambiguous service verbs such as "describe" and "use" in the clause-boundary rule above.
+  var EMBEDDED_SQL_ADMIN = /\b(?:show\s+(?:all|[A-Za-z_]\w*)|pragma\s+[A-Za-z_]\w*(?:\s*(?:\([^;\n]*\)|=\s*[^;\n]+))?|attach\s+database\s+[^;\n]+\s+as\s+[A-Za-z_]\w*|detach\s+database\s+[A-Za-z_]\w*|set\s+(?:role|session\s+authorization)\s+[^;\n]+|reset\s+(?:all|[A-Za-z_]\w*)|alter\s+system\s+[^;\n]+|reindex(?:\s+(?:database|system|schema|table|index))?\s+[A-Za-z_]\w*|cluster\s+[A-Za-z_]\w*|refresh\s+materialized\s+view\s+[A-Za-z_]\w*|lock\s+table\s+[A-Za-z_]\w*|discard\s+(?:all|plans|sequences|temporary|temp)|values\s*\([^;\n]*\)|vacuum(?:\s+(?:full|freeze|analyze|verbose))*|analyze|checkpoint|copy\s+(?:\([^;\n]*\)|[A-Za-z_]\w*)\s+(?:to|from)\s+[^;\n]+|select\s+(?:'(?:[^']|'')*'|"(?:[^"]|"")*"))\s*;(?:\s|$)/i;
+  var SHELL_AUTHORITY = /\$\{[^}\n]{1,240}\}|\$(?:env:)?[A-Za-z_]\w*(?:[\\/][^\s]+)?|%[A-Za-z_]\w*%(?:[\\/][^\s]+)?|(?:^|[\n:;])\s*(?:\.\s+[^\s.;]+|&\s*\{[^}\n]{1,500}\}|\.\s*\{[^}\n]{1,500}\}|[A-Za-z_$][\w$.-]*\s*<<<[^\n]{1,500})/i;
+  var GENERIC_PIPELINE = /(?:^|[\n:;])\s*[A-Za-z_$][\w$.-]*(?:\s+[^\n|]{0,240})?\|(?:\||&)?\s*(?:bash|sh|zsh|fish|powershell|pwsh|cmd(?:\.exe)?|wsl(?:\.exe)?|[A-Za-z_$][\w$.-]*\s+(?:-[A-Za-z]|\/[A-Za-z]))/i;
+  var COMMAND_WRAPPER_LINE = new RegExp(
+    '(?:^|[\\n:;])\\s*(?:env|nohup|time|nice|strace|ltrace|setsid|doas|command|builtin|exec)\\s+' +
+    '(?:sudo\\s+)?' + EXECUTABLE_REFERENCE + '\\b',
+    'i'
+  );
+  var PROGRAM_SOURCE = /(?:^|\n)\s*(?:(?:puts|system|require)\s*(?:\(|\s)(?:["'][^\n"']*["']|[A-Za-z_$][\w$./-]*)|[A-Za-z_$][\w$]*(?:::|\.)[A-Za-z_$][\w$]*\s*(?:\(|\s+["'])|public\s+static\s+void\s+main\s*\([^)]*\)\s*\{)/i;
   var RULES = Object.freeze([
     Object.freeze({
       id: 'internal-error-code',
@@ -134,6 +162,8 @@
       pattern: /\bselect\s+(?:distinct\s+)?[A-Za-z0-9_.*"`\[\],\s]+\s+from\s+(?:[A-Za-z_][\w$-]*(?:\.[A-Za-z_][\w$-]*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])(?:\s*;|\s+(?:where|join|left\s+join|right\s+join|inner\s+join|outer\s+join|group\s+by|order\s+by|having|limit|offset|union)\b)/i
     }),
     Object.freeze({ id: 'labeled-sql-statement', pattern: LABELED_SQL_STATEMENT }),
+    Object.freeze({ id: 'sql-statement', pattern: SQL_STATEMENT }),
+    Object.freeze({ id: 'embedded-sql-admin', pattern: EMBEDDED_SQL_ADMIN }),
     Object.freeze({
       id: 'sql-scalar-query',
       pattern: /\bselect\s+(?:(?:\*|-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|current_(?:date|time|timestamp))|[A-Za-z_]\w*_[A-Za-z_]\w*|[A-Za-z_]\w*\s*\([^;\n]*\))(?:\s+(?:as\s+)?[A-Za-z_]\w*)?\s*;/i
@@ -163,6 +193,10 @@
       pattern: /\b(?:ssh|sftp|ftp|telnet)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*(?:[A-Za-z0-9_.-]+@)?[A-Za-z0-9_.-]+(?::\d+)?\b|\b(?:scp|rsync)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*\S+\s+\S+|\b(?:curl|wget)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*(?:https?:\/\/|[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:[\/:]|\b))|\b(?:ping|traceroute|nslookup|dig|nc|netcat)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*(?:[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?\b/i
     }),
     Object.freeze({ id: 'execution-cue-command', pattern: EXECUTION_CUE }),
+    Object.freeze({ id: 'direct-command-line', pattern: DIRECT_COMMAND_LINE }),
+    Object.freeze({ id: 'powershell-direct-command', pattern: POWERSHELL_DIRECT_COMMAND }),
+    Object.freeze({ id: 'quoted-executable-line', pattern: QUOTED_EXECUTABLE_LINE }),
+    Object.freeze({ id: 'executable-path-line', pattern: EXECUTABLE_PATH_LINE }),
     Object.freeze({ id: 'polite-direct-execution', pattern: POLITE_DIRECT_EXECUTION }),
     Object.freeze({ id: 'requirement-execution', pattern: REQUIREMENT_EXECUTION }),
     Object.freeze({ id: 'use-cue-command', pattern: USE_COMMAND_CUE }),
@@ -177,6 +211,10 @@
     Object.freeze({ id: 'labeled-shell-authority', pattern: LABELED_SHELL_AUTHORITY }),
     Object.freeze({ id: 'labeled-direct-execution', pattern: LABELED_DIRECT_EXECUTION }),
     Object.freeze({ id: 'shell-substitution', pattern: SHELL_SUBSTITUTION }),
+    Object.freeze({ id: 'shell-authority', pattern: SHELL_AUTHORITY }),
+    Object.freeze({ id: 'generic-pipeline', pattern: GENERIC_PIPELINE }),
+    Object.freeze({ id: 'command-wrapper-line', pattern: COMMAND_WRAPPER_LINE }),
+    Object.freeze({ id: 'program-source', pattern: PROGRAM_SOURCE }),
     Object.freeze({
       id: 'code-shaped-call',
       pattern: /(?:^|[^A-Za-z0-9_$])(?:[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*_[A-Za-z_$][\w$]*|[a-z][A-Za-z0-9_$]*[A-Z][A-Za-z0-9_$]*)\([^()\n]{0,300}\)/
@@ -190,8 +228,12 @@
       pattern: /\b(?:powershell(?:\.exe)?|pwsh)\s+-[A-Za-z]+\b|\bcmd(?:\.exe)?\s+\/(?:c|k)\b|(?:^|[\n:;])\s*(?:bash|sh|zsh)\s+(?:-[A-Za-z]+\s+)?(?:["']|[^\s"']+\.sh\b)/i
     }),
     Object.freeze({
+      id: 'powershell-cmdlet',
+      pattern: /\b(?:Get|Set|New|Remove|Invoke|Start|Stop|Restart|Test|Select|Where|ForEach|Import|Export|Write|Read|Add|Clear|Copy|Move|Rename|Out|Format)-[A-Z][A-Za-z]+\b/
+    }),
+    Object.freeze({
       id: 'shell-command',
-      pattern: /\b(?:Get|Set|New|Remove|Invoke|Start|Stop|Restart|Test|Select|Where|ForEach|Import|Export|Write|Read|Add|Clear|Copy|Move|Rename|Out|Format)-[A-Z][A-Za-z]+\b|\b(?:npm|npx|yarn|pnpm)\s+(?:install|run|test|exec|audit)\b|\bgit\s+(?:clone|checkout|switch|reset|clean|push|pull|fetch|commit|status|diff|log|show|rev-parse)\b|(?:^|[\n:;])\s*(?:rm|del|erase|rmdir)\s+(?:-[A-Za-z]+|\/[A-Za-z]+|[.~\\/])|\$(?:env:)?[A-Za-z_]\w*\s*=/i
+      pattern: /\b(?:npm|npx|yarn|pnpm)\s+(?:install|run|test|exec|audit)\b|\bgit\s+(?:clone|checkout|switch|reset|clean|push|pull|fetch|commit|status|diff|log|show|rev-parse)\b|(?:^|[\n:;])\s*(?:rm|del|erase|rmdir)\s+(?:-[A-Za-z]+|\/[A-Za-z]+|[.~\\/])|\$(?:env:)?[A-Za-z_]\w*\s*=/i
     }),
     Object.freeze({
       id: 'shell-command-line',
@@ -223,13 +265,22 @@
 
   function normalizedForInspection(value) {
     var normalized = typeof value.normalize === 'function' ? value.normalize('NFKC') : value;
-    return normalized.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ')
+    normalized = normalized.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ')
       .replace(INVISIBLE_FORMATTING_BMP, '').replace(INVISIBLE_FORMATTING_ASTRAL, '')
       .replace(TOKEN_SEPARATING_MARKS, '')
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/\\[ \t]*\n[ \t]*/g, '')
+      .replace(/[`^][ \t]*\n[ \t]*/g, '')
       .replace(/([A-Za-z0-9_$])(?:`|\^)(?=[A-Za-z0-9_$])/g, '$1')
       .replace(/(["'])([A-Za-z0-9_$.-]+)\1(?=[A-Za-z0-9_$])/g, '$2');
+    // Shells concatenate adjacent quoted/unquoted token fragments. Canonicalize only
+    // bounded token-shaped quotes for inspection; displayed prose is never rewritten.
+    for (var pass = 0; pass < 3; pass += 1) {
+      normalized = normalized
+        .replace(/(["'])([A-Za-z0-9_$.-]*)\1(?=[A-Za-z0-9_$])/g, '$2')
+        .replace(/([A-Za-z0-9_$])(["'])([A-Za-z0-9_$.-]+)\2/g, '$1$3');
+    }
+    return normalized;
   }
 
   function violation(value) {
@@ -243,7 +294,7 @@
   }
 
   return Object.freeze({
-    POLICY_VERSION: 'northstar.polaris.professional-text.v4',
+    POLICY_VERSION: 'northstar.polaris.professional-text.v5',
     isProfessionalText: function (value) { return violation(value) === null; }
   });
 });

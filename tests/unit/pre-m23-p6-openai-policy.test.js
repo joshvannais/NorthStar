@@ -888,6 +888,7 @@ describe('Pre-Mission-23 P6 durable spend and rate authority contract', () => {
     const usage = ledger.createProviderUsageLedger({ poolProvider: function () { return null; } });
     await expect(usage.reserve({
       organizationId: ORG, userId: USER, requestId: crypto.randomUUID(),
+      fingerprint: 'a'.repeat(64),
       model: 'gpt-5.6-luna', schemaVersion: RESPONSE_SCHEMA,
     })).rejects.toMatchObject({ code: 'POLARIS_USAGE_AUTHORITY_UNAVAILABLE', statusCode: 503 });
   });

@@ -257,6 +257,7 @@ describe('P6 audit correction: durable target and warning policy', () => {
       organizationId: ORG,
       userId: USER,
       requestId: crypto.randomUUID(),
+      fingerprint: 'a'.repeat(64),
       model: 'gpt-5.6-luna',
       schemaVersion: RESPONSE_SCHEMA,
     });

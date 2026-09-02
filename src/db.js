@@ -988,11 +988,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
         EXECUTE pg_catalog.format(
-          'REVOKE ALL ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint) FROM %I',
+          'REVOKE ALL ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint) FROM %I',
           runtime_role
         );
         EXECUTE pg_catalog.format(
-          'REVOKE ALL ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text) FROM %I',
+          'REVOKE ALL ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer) FROM %I',
           runtime_role
         );
         EXECUTE pg_catalog.format(
@@ -1000,11 +1000,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
         EXECUTE pg_catalog.format(
-          'GRANT EXECUTE ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint) TO %I',
+          'GRANT EXECUTE ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint) TO %I',
           runtime_role
         );
         EXECUTE pg_catalog.format(
-          'GRANT EXECUTE ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text) TO %I',
+          'GRANT EXECUTE ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer) TO %I',
           runtime_role
         );
         EXECUTE pg_catalog.format(
@@ -1243,9 +1243,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1, 'public.polaris_provider_security_events', 'UPDATE')
          AND NOT has_table_privilege($1, 'public.polaris_provider_security_events', 'DELETE')
          AND has_function_privilege($1,
-           'public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,bigint)', 'EXECUTE')
+           'public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint)', 'EXECUTE')
          AND has_function_privilege($1,
-           'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text)', 'EXECUTE')
+           'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer)', 'EXECUTE')
          AND has_function_privilege($1,
            'public.polaris_provider_usage_policy_status(uuid,uuid)', 'EXECUTE')
        )) AS polaris_provider_usage_guarded,

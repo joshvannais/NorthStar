@@ -10,6 +10,7 @@ const RETENTION_DAYS = Object.freeze({ operational: 30, security: 90, aggregateM
 const MODEL = 'gpt-5.6-luna';
 const POLICY_STATES = Object.freeze(['within_target', 'target', 'warning', 'limit']);
 const MAX_BIGINT = 9223372036854775807n;
+const FINGERPRINT = /^[0-9a-f]{64}$/;
 
 function usageAuthorityUnavailable() {
   return contractError(
@@ -103,13 +104,16 @@ function validateReservationInput(input) {
   const organizationId = exactUuid(input.organizationId, 'organizationId');
   const userId = exactUuid(input.userId, 'userId');
   const requestId = exactUuid(input.requestId, 'requestId');
-  if (input.model !== MODEL || input.schemaVersion !== RESPONSE_SCHEMA) {
+  if (typeof input.fingerprint !== 'string' || !FINGERPRINT.test(input.fingerprint) ||
+      input.model !== MODEL || input.schemaVersion !== RESPONSE_SCHEMA) {
     throw contractError('POLARIS_USAGE_CONTRACT_INVALID', 'The model or schema reservation is unsupported.', 500);
   }
-  return Object.freeze({ organizationId, userId, requestId });
+  return Object.freeze({ organizationId, userId, requestId, fingerprint: input.fingerprint });
 }
 
 function validateUsage(usage) {
+  const retryAfterSeconds = usage && usage.retryAfterSeconds === undefined
+    ? null : usage && usage.retryAfterSeconds;
   if (!usage || typeof usage !== 'object' || Array.isArray(usage) ||
       !Number.isSafeInteger(usage.inputTokens) || usage.inputTokens < 0 || usage.inputTokens > 16000 ||
       !Number.isSafeInteger(usage.outputTokens) || usage.outputTokens < 0 || usage.outputTokens > 8192 ||
@@ -118,10 +122,22 @@ function validateUsage(usage) {
       !['completed', 'refused', 'incomplete', 'failed'].includes(usage.outcomeClass) ||
       !(usage.providerRequestId === null || usage.providerRequestId === undefined ||
         (typeof usage.providerRequestId === 'string' && usage.providerRequestId.length >= 1 &&
-          usage.providerRequestId.length <= 128))) {
+          usage.providerRequestId.length <= 128)) ||
+      !(retryAfterSeconds === null || (Number.isSafeInteger(retryAfterSeconds) &&
+        retryAfterSeconds >= 1 && retryAfterSeconds <= 86400 && usage.outcomeClass === 'failed' &&
+        usage.inputTokens === 0 && usage.outputTokens === 0 && usage.costNanoUsd === 0 &&
+        (usage.providerRequestId === null || usage.providerRequestId === undefined)))) {
     throw contractError('POLARIS_USAGE_CONTRACT_INVALID', 'The reconciled usage contract is invalid.', 500);
   }
-  return usage;
+  return Object.freeze({
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    costNanoUsd: usage.costNanoUsd,
+    attemptCount: usage.attemptCount,
+    outcomeClass: usage.outcomeClass,
+    providerRequestId: usage.providerRequestId || null,
+    retryAfterSeconds,
+  });
 }
 
 function createProviderUsageLedger(options = {}) {
@@ -132,8 +148,8 @@ function createProviderUsageLedger(options = {}) {
     let result;
     try {
       result = await queryable(poolProvider).query(
-        `SELECT * FROM public.polaris_provider_reserve_usage($1,$2,$3,$4,$5,$6)`,
-        [authority.organizationId, authority.userId, authority.requestId, MODEL, RESPONSE_SCHEMA,
+        `SELECT * FROM public.polaris_provider_reserve_usage($1,$2,$3,$4,$5,$6,$7)`,
+        [authority.organizationId, authority.userId, authority.requestId, authority.fingerprint, MODEL, RESPONSE_SCHEMA,
           RESERVED_COST_NANO_USD]
       );
     } catch (error) {
@@ -187,10 +203,10 @@ function createProviderUsageLedger(options = {}) {
     const usage = validateUsage(suppliedUsage);
     try {
       const result = await queryable(poolProvider).query(
-        `SELECT public.polaris_provider_reconcile_usage($1,$2,$3,$4,$5,$6,$7,$8,$9) AS reconciled`,
+        `SELECT public.polaris_provider_reconcile_usage($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) AS reconciled`,
         [reservation.organizationId, reservation.userId, reservation.id, usage.costNanoUsd,
           usage.inputTokens, usage.outputTokens, usage.attemptCount, usage.outcomeClass,
-          usage.providerRequestId || null]
+          usage.providerRequestId, usage.retryAfterSeconds]
       );
       if (!result || !result.rows || !result.rows[0] || result.rows[0].reconciled !== true) {
         throw usageAuthorityUnavailable();

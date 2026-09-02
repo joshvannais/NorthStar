@@ -95,7 +95,7 @@ function maximumBoundaryCard(index) {
   const result = card(false, index);
   result.title = terminalUnbrokenValue(`BoundaryCustomerC${cardNumber}-`, `[END-TITLE-C${cardNumber}]`, 200);
   result.subtitle = terminalUnbrokenValue(`BoundaryServiceC${cardNumber}-`, `[END-SUBTITLE-C${cardNumber}]`, 200);
-  result.answer = terminalUnbrokenValue(`StoredHostileAnswerDataOnlyC${cardNumber}-<img/src=x/onerror=globalThis.p6Compromised=true>-`,
+  result.answer = terminalUnbrokenValue(`MaximumBoundaryProfessionalAnswerC${cardNumber}-`,
     `[END-ANSWER-C${cardNumber}]`, 2000);
   result.evidence = Array.from({ length: 12 }, (_value, evidenceIndex) => {
     const evidenceNumber = evidenceIndex + 1;
@@ -104,7 +104,7 @@ function maximumBoundaryCard(index) {
       id,
       label: terminalUnbrokenValue(`EvidenceC${cardNumber}E${evidenceNumber}-`,
         `[END-LABEL-C${cardNumber}-E${evidenceNumber}]`, 100),
-      value: terminalUnbrokenValue(`StoredHostileEvidenceDataOnlyC${cardNumber}E${evidenceNumber}-<script>globalThis.p6Compromised=true</script>-`,
+      value: terminalUnbrokenValue(`MaximumBoundaryProfessionalEvidenceC${cardNumber}E${evidenceNumber}-`,
         `[END-EVIDENCE-C${cardNumber}-E${evidenceNumber}]`, 2000),
       confidence: 0.8,
       source: { kind: 'canonical_fact', id },
@@ -281,7 +281,7 @@ async function installRoutes(page, state) {
       assert.deepStrictEqual(body, {
         schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: LEAD },
       });
-      const response = contextResponse(state.hostile, state.boundaryCardCount);
+      const response = contextResponse(Boolean(state.hostileContext), state.boundaryCardCount);
       if (state.malformed && state.malformed !== 'status-length' && state.malformed !== 'message-extra') {
         malformedResponse(state.malformed, response);
       }
@@ -313,7 +313,7 @@ async function installRoutes(page, state) {
       }, 503));
       assert.strictEqual(body.schemaVersion, 'northstar.polaris.message-request.v1');
       assert.match(body.idempotencyKey, /^[0-9a-f-]{36}$/);
-      const response = messageResponse(body, state.hostile);
+      const response = messageResponse(body, Boolean(state.hostileMessage));
       if (state.malformed === 'message-extra') response.cards[0].authority.extra = true;
       return route.fulfill(json({ success: true, data: response }));
     }
@@ -408,38 +408,50 @@ async function runDemo(browser, origin, outputRoot, manifest, selected) {
 }
 
 async function runHostile(browser, origin, securityRoot, manifest, selected) {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
-  await context.addInitScript(() => { globalThis.p6Compromised = false; });
-  const page = await context.newPage();
-  const errors = [];
-  page.on('pageerror', error => errors.push(String(error)));
-  const state = { external: [], api: [], messageCalls: 0, messageKeys: [], hostile: true,
-    malformed: null, unconfigured: false };
-  await installRoutes(page, state);
-  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
-  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
-  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
-  assert.strictEqual(await page.locator('.polaris-native-card').count(), 4);
-  assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
-  assert.strictEqual(await page.locator('img[src="/p6-hostile-image"]').count(), 0);
-  assert.strictEqual(await page.locator('.polaris-native-card script, .polaris-native-card svg').count(), 0);
-  const hostileCardText = await page.locator('.polaris-native-card').allTextContents();
-  assert.strictEqual(hostileCardText.length, 4);
-  assert.ok(hostileCardText.every(value => value.includes(HOSTILE)));
-  assert.strictEqual(state.messageCalls, 0, 'stored prompt-like content must not trigger a message call');
-  await page.locator('.polaris-quick-prompt').first().click();
-  await page.getByText(/Dynamic Polaris text is inert/).waitFor({ state: 'visible' });
-  await assertProfessionalPresentation(page, `${selected}-hostile`);
-  assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
-  assert.strictEqual(await page.locator('img[src="/p6-hostile-image"]').count(), 0);
-  assert.strictEqual(state.messageCalls, 1, 'one intercepted browser fixture response is expected');
-  assert.deepStrictEqual(state.external, []);
-  assert.deepStrictEqual(errors, []);
-  const filename = path.join(securityRoot, `${selected}-mobile-dark-hostile-card.png`);
-  await page.screenshot({ path: filename, fullPage: true });
-  manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
-    route, viewport: { width: 390, height: 844 }, theme: 'dark', fixture: 'hostile-xss-and-prompt-injection' });
-  await context.close();
+  for (const source of ['context', 'message']) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+    await context.addInitScript(() => { globalThis.p6Compromised = false; });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(String(error)));
+    const state = {
+      external: [], api: [], messageCalls: 0, messageKeys: [],
+      hostileContext: source === 'context', hostileMessage: source === 'message',
+      malformed: null, unconfigured: false,
+    };
+    await installRoutes(page, state);
+    const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+    await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+    if (source === 'context') {
+      await page.getByRole('alert').waitFor({ state: 'visible' });
+      assert.match(await page.getByRole('alert').textContent(), /structured response was rejected/i);
+      assert.strictEqual(await page.locator('.polaris-native-card').count(), 0);
+      assert.strictEqual(state.messageCalls, 0, 'rejected context must not trigger a message call');
+    } else {
+      await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+      assert.strictEqual(await page.locator('.polaris-native-card').count(), 4);
+      await page.locator('.polaris-quick-prompt').first().click();
+      await page.locator('.polaris-chat-error').waitFor({ state: 'visible' });
+      assert.match(await page.locator('.polaris-chat-error').textContent(), /unsupported structured response/i);
+      assert.strictEqual(state.messageCalls, 1, 'one intercepted hostile response is expected');
+      assert.strictEqual(await page.locator('.polaris-native-card').count(), 4,
+        'rejected message must not partially replace the existing cards');
+    }
+    await assertProfessionalPresentation(page, `${selected}-hostile-${source}`);
+    const bodyText = await page.locator('body').innerText();
+    assert.strictEqual(bodyText.includes(HOSTILE), false);
+    assert.doesNotMatch(bodyText, /globalThis\.p6Compromised|p6-hostile-image/);
+    assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
+    assert.strictEqual(await page.locator('img[src="/p6-hostile-image"], script[src="/p6-hostile-image"]').count(), 0);
+    assert.deepStrictEqual(state.external, []);
+    assert.deepStrictEqual(errors, []);
+    const filename = path.join(securityRoot, `${selected}-mobile-dark-hostile-${source}-rejected.png`);
+    await page.screenshot({ path: filename, fullPage: true });
+    manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
+      route, viewport: { width: 390, height: 844 }, theme: 'dark',
+      fixture: `hostile-${source}-professional-text-fail-closed-no-partial-render` });
+    await context.close();
+  }
 }
 
 async function runMaximumBoundary(browser, origin, securityRoot, manifest, selected, profile) {

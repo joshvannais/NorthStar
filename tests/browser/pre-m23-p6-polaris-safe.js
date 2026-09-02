@@ -434,8 +434,8 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
       await page.locator('.polaris-chat-error').waitFor({ state: 'visible' });
       assert.match(await page.locator('.polaris-chat-error').textContent(), /unsupported structured response/i);
       assert.strictEqual(state.messageCalls, 1, 'one intercepted hostile response is expected');
-      assert.strictEqual(await page.locator('.polaris-native-card').count(), 4,
-        'rejected message must not partially replace the existing cards');
+      assert.strictEqual(await page.locator('.polaris-native-card').count(), 0,
+        'rejected message clears the card host instead of preserving a partial provider presentation');
     }
     await assertProfessionalPresentation(page, `${selected}-hostile-${source}`);
     const bodyText = await page.locator('body').innerText();

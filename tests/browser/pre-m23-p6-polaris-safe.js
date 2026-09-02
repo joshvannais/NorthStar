@@ -243,10 +243,42 @@ const HOSTILE_PRESENTATION_CASES = Object.freeze([
     id: 'final-invisible-nested-aggregate', text: 'SE\u200bLECT coalesce(sum(total), 0) FR\u2060OM invoices',
     placement: 'cardAnswer', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
   },
+  {
+    id: 'positive-contract-sql-table', text: 'TABLE ONLY invoice_archive',
+    placement: 'responseAnswer', viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'positive-contract-typescript-interface', text: 'interface Invoice { total: number }',
+    placement: 'cardTitle', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'positive-contract-python-try', text: 'try:\n    send_invoice()\nexcept Error:\n    rollback()',
+    placement: 'cardSubtitle', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'positive-contract-powershell-splat', text: 'Send-Invoice @invoiceParameters',
+    placement: 'cardAnswer', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'positive-contract-batch-label', text: 'call :calculate_total invoice.csv',
+    placement: 'evidenceLabel', cardIndex: 0, viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'positive-contract-template', text: '{% for invoice in invoices %}{{ invoice.total }}{% endfor %}',
+    placement: 'evidenceValue', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'positive-contract-config-map', text: 'billing:\n  retry_count: 3\n  enabled: true',
+    placement: 'unknownLabel', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'positive-contract-token-split', text: 'SE\tLE\tCT * FR\tOM invoices',
+    placement: 'confidenceBasis', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
 ]);
 
 const PROFESSIONAL_PRESENTATION = Object.freeze({
-  responseAnswer: 'Net 30 payment terms apply to this estimate.',
+  responseAnswer: 'Export documentation may affect the delivery date.',
   cardTitle: 'Class A electrical service',
   cardSubtitle: 'HVAC, CRM, SMS, and API service review',
   cardAnswer: 'The approved estimate uses Net 30 payment terms.',

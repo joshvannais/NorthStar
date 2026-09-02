@@ -133,7 +133,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $polaris_provider_reserve$
 DECLARE
-  current_month DATE := date_trunc('month', clock_timestamp())::date;
+  current_month DATE := date_trunc('month', clock_timestamp() AT TIME ZONE 'UTC')::date;
   generated_reservation UUID := gen_random_uuid();
   revenue_cents BIGINT;
   tenant_spend BIGINT;
@@ -395,7 +395,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $polaris_provider_usage_policy$
 DECLARE
-  current_month DATE := date_trunc('month', clock_timestamp())::date;
+  current_month DATE := date_trunc('month', clock_timestamp() AT TIME ZONE 'UTC')::date;
   revenue_cents BIGINT;
   tenant_spend BIGINT;
   target_cap BIGINT;

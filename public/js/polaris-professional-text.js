@@ -13,6 +13,7 @@
   // displayed prose; it only prevents format and variation selectors from splitting a token.
   var INVISIBLE_FORMATTING_BMP = /[\u00ad\u034f\u061c\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufe00-\ufe0f\ufeff]/g;
   var INVISIBLE_FORMATTING_ASTRAL = /[\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\u{e0100}-\u{e01ef}]/gu;
+  var TOKEN_SEPARATING_MARKS = /[\u115f\u1160\u3164\p{Cf}\p{Mn}\p{Me}]/gu;
   // Executable names are evaluated only with command syntax or an explicit execution cue.
   // Ambiguous business nouns such as branch, package, select, and run are intentionally absent;
   // runtime names such as node are considered only in explicit command contexts below.
@@ -47,9 +48,19 @@
   var EXECUTABLE_REFERENCE = '(?:(?:(?:[A-Za-z]:)?[\\\\/](?:[A-Za-z0-9_.-]+[\\\\/])*|\\.{1,2}[\\\\/])?' +
     EXECUTABLE_TOKEN + ')';
   var EXECUTION_CUE = new RegExp(
-    '\\b(?:run|execute|invoke|launch|issue|enter|type|requires?|required)\\s+' +
+    '\\b(?:run|execute|invoke|launch|issue|enter|type)\\s+' +
     '(?:(?:(?:the|this|a|an|following)\\s+)?(?:command|tool|utility|program|script)\\s+)?' +
     '(?:sudo\\s+)?' + EXECUTABLE_REFERENCE + '\\b',
+    'i'
+  );
+  // A direct execution clause is command authority even when the program is new to the reviewed
+  // executable inventory. Natural business requests begin with a determiner or a bounded
+  // service-work noun (for example, "run a diagnostic inspection"). Requiring a sentence or
+  // delimiter boundary avoids treating descriptive prose about a future operational run as code.
+  var POLITE_DIRECT_EXECUTION = /(?:^|[.!?:,]\s+)(?:please\s+)?(?:run|execute|invoke|launch|issue|enter|type)\s+(?!(?:a|an|the|this|that|another|some|any|each|all|more|fewer|one|two|three|approved|authorized|scheduled|routine|detailed|daily|weekly|monthly|quarterly|annual|diagnostic|diagnostics|inspection|inspections|assessment|assessments|check|checks|test|tests|report|reports|review|reviews|analysis|analyses|calibration|calibrations|maintenance|service|services|job|jobs|visit|visits|payroll|inventory|availability|appointment|appointments|estimate|estimates|campaign|campaigns|process|processes|workflow|workflows)\b)(?:&\s*)?(?:\$\([^\n)]{1,240}\)|%[A-Za-z_]\w*%[\\/][^\s]+|\$env:[A-Za-z_]\w*[\\/][^\s]+|'[A-Za-z0-9_$.-]+'[A-Za-z0-9_$.-]+|[A-Za-z_$](?:[\w$.-]|\\(?=[A-Za-z0-9_$]))*)(?=\s|[.;!?]|$)/i;
+  var REQUIREMENT_EXECUTION = new RegExp(
+    '\\brequires?\\s+(?:sudo\\s+)?' + EXECUTABLE_REFERENCE +
+    '(?:\\s+(?!(?:compatibility|finish|replacement|material|support|integration|configuration|version|training|certification|experience)\\b)\\S+|(?=\\s*(?:[.;!?]|$)))',
     'i'
   );
   var USE_COMMAND_CUE = /\buse\s+(?:sudo\s+)?(?:whoami|printf|cp|mv|rm|chmod|chown|printenv|mkdir|rmdir|mktemp|sha(?:1|224|256|384|512)sum)\b/i;
@@ -69,6 +80,10 @@
   );
   var SCRIPT_EXECUTION_CUE = /\b(?:run|execute|invoke|launch|enter|use)\s+(?:&\s+)?(?:(?:[A-Za-z]:)?[\\/]|\.{1,2}[\\/])(?:[^\s"'`|;()]+[\\/])*[^\s"'`|;()]+\.(?:sh|bash|zsh|fish|ps1|bat|cmd|com|exe|py|pyw|js|mjs|cjs|rb|pl|php)\b/i;
   var CUED_PROGRAM_CALL = /\b(?:run|execute|invoke|enter|type|use)\s+[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^()\n]{0,300}\)/i;
+  var LABELED_SQL_STATEMENT = /\b(?:recommended\s+action|next\s+(?:step|action)|action|query|command)\s*(?::|\bis\b)\s*(?:with|select|insert|update|delete|merge|replace|upsert|create|alter|drop|truncate|grant|revoke|call|exec(?:ute)?|vacuum|analyze|copy|comment|explain|begin|commit|rollback|show|describe|desc|pragma|use|attach|detach)\b[^\n;]{0,500};/i;
+  var LABELED_SHELL_AUTHORITY = /\b(?:recommended\s+action|next\s+(?:step|action)|action|command|suggested\s+shell\s+step)\s*(?::|\bis\b)\s*(?:\$\([^\n)]{1,240}\)|%[A-Za-z_]\w*%[\\/][^\s]+|\$env:[A-Za-z_]\w*[\\/][^\s]+|&\s*[A-Za-z_$][\w$.-]*|source\s+[^\s.;]+)/i;
+  var LABELED_DIRECT_EXECUTION = /\b(?:recommended\s+action|next\s+(?:step|action)|action|command|suggested\s+shell\s+step)\s*(?::|\bis\b)\s*(?!(?:a|an|the|schedule|reschedule|call|contact|review|inspect|replace|repair|send|confirm|update|select|choose|arrange|prepare|notify|ask|explain|check|test|dispatch|install|remove|move|grant|revoke|record|document|customer|technician|team|service|appointment|estimate|diagnostic|HVAC|CRM|SMS|API)\b)(?:&\s*)?[A-Za-z_$][\w$.-]*\s+(?:[A-Za-z0-9_$%][\w$%.-]*|--?\w+|\/[A-Za-z?]\w*|[.\\/]|\$\(|%[A-Za-z_]\w*%|\$env:)/i;
+  var SHELL_SUBSTITUTION = /\$\([^\n)]{1,500}\)|(?<![A-Za-z0-9_])`[^`\n]{1,500}`/;
   // A named program can be novel and therefore absent from the reviewed executable inventory.
   // Require command-shaped arguments (switches, paths, assignments, substitutions, or explicit
   // command labels) so ordinary phrases such as "run a diagnostic inspection" remain prose.
@@ -116,8 +131,9 @@
     }),
     Object.freeze({
       id: 'sql-select',
-      pattern: /\bselect\s+(?:distinct\s+)?[A-Za-z0-9_.*"`\[\],\s]+\s+from\s+[A-Za-z0-9_."`\[\]-]+(?:\s*(?:;|$)|\s+(?:where|join|left\s+join|right\s+join|inner\s+join|outer\s+join|group\s+by|order\s+by|having|limit|offset|union)\b)/i
+      pattern: /\bselect\s+(?:distinct\s+)?[A-Za-z0-9_.*"`\[\],\s]+\s+from\s+(?:[A-Za-z_][\w$-]*(?:\.[A-Za-z_][\w$-]*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])(?:\s*;|\s+(?:where|join|left\s+join|right\s+join|inner\s+join|outer\s+join|group\s+by|order\s+by|having|limit|offset|union)\b)/i
     }),
+    Object.freeze({ id: 'labeled-sql-statement', pattern: LABELED_SQL_STATEMENT }),
     Object.freeze({
       id: 'sql-scalar-query',
       pattern: /\bselect\s+(?:(?:\*|-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|current_(?:date|time|timestamp))|[A-Za-z_]\w*_[A-Za-z_]\w*|[A-Za-z_]\w*\s*\([^;\n]*\))(?:\s+(?:as\s+)?[A-Za-z_]\w*)?\s*;/i
@@ -128,7 +144,7 @@
     }),
     Object.freeze({
       id: 'sql-write-or-schema',
-      pattern: /\binsert\s+into\s+[A-Za-z_][\w.$"`\[\]-]*\s*(?:\([^)]*\))?\s+(?:values\s*\(|select\b)|\b(?:merge|replace|upsert)\s+into\s+[A-Za-z_][\w.$"`\[\]-]*\b|\bupdate\s+[A-Za-z_][\w.$"`\[\]-]*\s+set\s+[A-Za-z_][\w.$"`\[\]-]*\s*=|\bdelete\s+from\s+[A-Za-z_][\w.$"`\[\]-]*(?:\s+where\b|\s*;)|\b(?:drop|alter)\s+(?:table|database|schema|index|materialized\s+view|view|function|procedure|trigger|sequence|extension|type|policy|role|user)\b|\bcreate\s+(?:(?:or\s+replace|temporary|temp|unique)\s+)*(?:table|database|schema|index|materialized\s+view|view|function|procedure|trigger|sequence|extension|type|policy|role|user)\b|\btruncate(?:\s+table)?\s+[A-Za-z_][\w.$"`\[\]-]*(?:\s*(?:,|;)|\s*$)|\bgrant\s+[A-Za-z_,\s]+\s+on\s+[A-Za-z_."`\[\]-]+\s+to\s+[A-Za-z_."`\[\]-]+|\brevoke\s+[A-Za-z_,\s]+\s+on\s+[A-Za-z_."`\[\]-]+\s+from\s+[A-Za-z_."`\[\]-]+|\bcall\s+[A-Za-z_][\w.$]*\s*\([^;\n]*\)\s*;|\bexec(?:ute)?\s+[A-Za-z_][\w.$]*(?:\s+[^;\n]*)?\s*;|\b(?:vacuum|analyze)\s+[A-Za-z_][\w.$"`\[\]-]*\s*;|\bcopy\s+[A-Za-z_][\w.$"`\[\]-]*(?:\s*\([^)]*\))?\s+(?:to|from)\s+[^;\n]+;|\bcomment\s+on\s+(?:table|column|view|function|schema)\b|\bexplain(?:\s+analyze)?\s+(?:select|insert|update|delete)\b|\b(?:begin|commit|rollback)\s*;/i
+      pattern: /\binsert\s+into\s+[A-Za-z_][\w.$"`\[\]-]*\s*(?:\([^)]*\))?\s+(?:values\s*\(|select\b)|\b(?:merge|replace|upsert)\s+into\s+[A-Za-z_][\w.$"`\[\]-]*\b|\bupdate\s+[A-Za-z_][\w.$"`\[\]-]*\s+set\s+[A-Za-z_][\w.$"`\[\]-]*\s*=|\bdelete\s+from\s+[A-Za-z_][\w.$"`\[\]-]*(?:\s+where\b|\s*;)|\b(?:drop|alter)\s+(?:table|database|schema|index|materialized\s+view|view|function|procedure|trigger|sequence|extension|type|policy|role|user)\b|\bcreate\s+(?:(?:or\s+replace|temporary|temp|unique)\s+)*(?:table|database|schema|index|materialized\s+view|view|function|procedure|trigger|sequence|extension|type|policy|role|user)\b|\btruncate(?:\s+table)?\s+[A-Za-z_][\w.$"`\[\]-]*(?:\s*(?:,|;)|\s*$)|\bgrant\s+(?:(?:all(?:\s+privileges)?|select|insert|update|delete|truncate|references|trigger|usage|execute|connect|create|temporary)(?:\s*,\s*|\s+))*\s+on\s+[A-Za-z_."`\[\]-]+\s+to\s+[A-Za-z_."`\[\]-]+|\brevoke\s+(?:(?:all(?:\s+privileges)?|select|insert|update|delete|truncate|references|trigger|usage|execute|connect|create|temporary)(?:\s*,\s*|\s+))*\s+on\s+[A-Za-z_."`\[\]-]+\s+from\s+[A-Za-z_."`\[\]-]+|\bcall\s+[A-Za-z_][\w.$]*\s*\([^;\n]*\)\s*;|\bexec(?:ute)?\s+[A-Za-z_][\w.$]*(?:\s+[^;\n]*)?\s*;|\b(?:vacuum|analyze)\s+[A-Za-z_][\w.$"`\[\]-]*\s*;|\bcopy\s+[A-Za-z_][\w.$"`\[\]-]*(?:\s*\([^)]*\))?\s+(?:to|from)\s+[^;\n]+;|\bcomment\s+on\s+(?:table|column|view|function|schema)\b|\bexplain(?:\s+analyze)?\s+(?:select|insert|update|delete)\b|\b(?:begin|commit|rollback)\s*;/i
     }),
     Object.freeze({
       id: 'interpreter-command',
@@ -147,6 +163,8 @@
       pattern: /\b(?:ssh|sftp|ftp|telnet)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*(?:[A-Za-z0-9_.-]+@)?[A-Za-z0-9_.-]+(?::\d+)?\b|\b(?:scp|rsync)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*\S+\s+\S+|\b(?:curl|wget)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*(?:https?:\/\/|[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:[\/:]|\b))|\b(?:ping|traceroute|nslookup|dig|nc|netcat)\s+(?:-[A-Za-z][\w-]*(?:[=\s]\S+)?\s+)*(?:[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?\b/i
     }),
     Object.freeze({ id: 'execution-cue-command', pattern: EXECUTION_CUE }),
+    Object.freeze({ id: 'polite-direct-execution', pattern: POLITE_DIRECT_EXECUTION }),
+    Object.freeze({ id: 'requirement-execution', pattern: REQUIREMENT_EXECUTION }),
     Object.freeze({ id: 'use-cue-command', pattern: USE_COMMAND_CUE }),
     Object.freeze({ id: 'generic-command-syntax', pattern: GENERIC_COMMAND_SYNTAX }),
     Object.freeze({ id: 'explicit-generic-command', pattern: EXPLICIT_GENERIC_COMMAND }),
@@ -156,6 +174,9 @@
     Object.freeze({ id: 'labeled-command', pattern: LABELED_EXECUTABLE }),
     Object.freeze({ id: 'parenthetical-command', pattern: PARENTHETICAL_EXECUTABLE }),
     Object.freeze({ id: 'shell-operator-command', pattern: EXECUTABLE_WITH_SHELL_OPERATOR }),
+    Object.freeze({ id: 'labeled-shell-authority', pattern: LABELED_SHELL_AUTHORITY }),
+    Object.freeze({ id: 'labeled-direct-execution', pattern: LABELED_DIRECT_EXECUTION }),
+    Object.freeze({ id: 'shell-substitution', pattern: SHELL_SUBSTITUTION }),
     Object.freeze({
       id: 'code-shaped-call',
       pattern: /(?:^|[^A-Za-z0-9_$])(?:[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*_[A-Za-z_$][\w$]*|[a-z][A-Za-z0-9_$]*[A-Z][A-Za-z0-9_$]*)\([^()\n]{0,300}\)/
@@ -203,7 +224,12 @@
   function normalizedForInspection(value) {
     var normalized = typeof value.normalize === 'function' ? value.normalize('NFKC') : value;
     return normalized.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ')
-      .replace(INVISIBLE_FORMATTING_BMP, '').replace(INVISIBLE_FORMATTING_ASTRAL, '');
+      .replace(INVISIBLE_FORMATTING_BMP, '').replace(INVISIBLE_FORMATTING_ASTRAL, '')
+      .replace(TOKEN_SEPARATING_MARKS, '')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/\\[ \t]*\n[ \t]*/g, '')
+      .replace(/([A-Za-z0-9_$])(?:`|\^)(?=[A-Za-z0-9_$])/g, '$1')
+      .replace(/(["'])([A-Za-z0-9_$.-]+)\1(?=[A-Za-z0-9_$])/g, '$2');
   }
 
   function violation(value) {
@@ -217,7 +243,7 @@
   }
 
   return Object.freeze({
-    POLICY_VERSION: 'northstar.polaris.professional-text.v3',
+    POLICY_VERSION: 'northstar.polaris.professional-text.v4',
     isProfessionalText: function (value) { return violation(value) === null; }
   });
 });

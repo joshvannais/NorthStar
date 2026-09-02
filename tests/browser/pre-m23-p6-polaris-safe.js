@@ -69,7 +69,38 @@ const HOSTILE_PRESENTATION_CASES = Object.freeze([
     id: 'embedded-program-call-evidence-value', text: 'Recommended action: calculateTotal(1);',
     placement: 'evidenceValue', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'dark',
   },
+  {
+    id: 'sql-comment-delimiter-response-answer', text: 'Recommended action: SELECT/**/1;',
+    placement: 'responseAnswer', viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'github-cli-later-card-title', text: 'Please run gh pr view 157 before continuing.',
+    placement: 'cardTitle', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'windows-environment-path-later-evidence', text: 'Recommended action: %TEMP%\\private.cmd /silent',
+    placement: 'laterEvidenceValue', cardIndex: 3, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'shell-continuation-unknown-label', text: 'Please run w\\\nhoami before continuing.',
+    placement: 'unknownLabel', cardIndex: 2, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'nfkc-invisible-interpreter-confidence', text: 'Please run py\u3164thon3 -c "print(1)" before continuing.',
+    placement: 'confidenceBasis', cardIndex: 1, viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
 ]);
+
+const PROFESSIONAL_PRESENTATION = Object.freeze({
+  responseAnswer: "The customer's approved total is $1,250.00, with 18% markup and Net 30 terms.",
+  cardTitle: 'Select HVAC from inventory.',
+  cardSubtitle: 'Grant access on Monday to Alex.',
+  cardAnswer: 'Revoke access on Friday from Jordan.',
+  evidenceLabel: 'Java compatibility requirement',
+  evidenceValue: 'The diagnostic requires Java compatibility with the control panel.',
+  unknownLabel: 'The customer requires Ruby finish on the cabinet.',
+  confidenceBasis: 'Required node replacement is scheduled for Friday.',
+});
 
 function json(body, status = 200) {
   return { status, contentType: 'application/json; charset=utf-8', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) };
@@ -188,6 +219,18 @@ function applyPresentationHazard(response, hazard) {
     });
     response.answer.evidenceCount += 1;
   } else throw new Error(`unknown hazard placement: ${hazard.placement}`);
+  return response;
+}
+
+function applyProfessionalPresentation(response) {
+  response.answer.text = PROFESSIONAL_PRESENTATION.responseAnswer;
+  response.cards[0].title = PROFESSIONAL_PRESENTATION.cardTitle;
+  response.cards[0].subtitle = PROFESSIONAL_PRESENTATION.cardSubtitle;
+  response.cards[0].answer = PROFESSIONAL_PRESENTATION.cardAnswer;
+  response.cards[0].evidence[0].label = PROFESSIONAL_PRESENTATION.evidenceLabel;
+  response.cards[0].evidence[0].value = PROFESSIONAL_PRESENTATION.evidenceValue;
+  response.cards[1].unknowns[0].label = PROFESSIONAL_PRESENTATION.unknownLabel;
+  response.cards[1].confidence.basis = PROFESSIONAL_PRESENTATION.confidenceBasis;
   return response;
 }
 
@@ -348,7 +391,8 @@ async function installRoutes(page, state) {
       assert.deepStrictEqual(body, {
         schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: LEAD },
       });
-      const response = contextResponse(state.hostileContext || false, state.boundaryCardCount);
+      let response = contextResponse(state.hostileContext || false, state.boundaryCardCount);
+      if (state.professionalPresentation) response = applyProfessionalPresentation(response);
       if (state.malformed && state.malformed !== 'status-length' && state.malformed !== 'message-extra') {
         malformedResponse(state.malformed, response);
       }
@@ -522,6 +566,51 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
       await context.close();
     }
   }
+}
+
+async function runProfessionalControls(browser, origin, outputRoot, manifest, selected) {
+  const viewport = { width: 390, height: 844 };
+  const theme = 'light';
+  const context = await browser.newContext({ viewport, colorScheme: theme });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  const state = {
+    external: [], api: [], messageCalls: 0, messageKeys: [], malformed: null,
+    unconfigured: false, professionalPresentation: true,
+  };
+  await installRoutes(page, state);
+  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  await assertPageAuthority(page, `${selected}-professional-controls`);
+  assert.strictEqual(await page.locator('#polarisSelectedContextSummary').textContent(),
+    PROFESSIONAL_PRESENTATION.responseAnswer);
+  const first = page.locator('.polaris-native-card').nth(0);
+  assert.strictEqual(await first.locator('.polaris-native-card-title').textContent(),
+    PROFESSIONAL_PRESENTATION.cardTitle);
+  assert.strictEqual(await first.locator('.polaris-native-card-subtitle').textContent(),
+    PROFESSIONAL_PRESENTATION.cardSubtitle);
+  assert.strictEqual(await first.locator('.polaris-native-card-answer').textContent(),
+    PROFESSIONAL_PRESENTATION.cardAnswer);
+  assert.strictEqual(await first.locator('.polaris-native-card-label').first().textContent(),
+    PROFESSIONAL_PRESENTATION.evidenceLabel);
+  assert.strictEqual(await first.locator('.polaris-native-card-value').first().textContent(),
+    PROFESSIONAL_PRESENTATION.evidenceValue);
+  const second = page.locator('.polaris-native-card').nth(1);
+  assert.strictEqual(await second.locator('.polaris-native-card-unknown').first().textContent(),
+    PROFESSIONAL_PRESENTATION.unknownLabel);
+  assert.strictEqual(await second.locator('.polaris-native-card-basis').textContent(),
+    PROFESSIONAL_PRESENTATION.confidenceBasis);
+  await assertProfessionalPresentation(page, `${selected}-professional-controls`);
+  assert.strictEqual(state.messageCalls, 0, 'professional controls render without a provider request');
+  assert.deepStrictEqual(state.external, [], `${selected}-professional-controls external requests`);
+  assert.deepStrictEqual(errors, [], `${selected}-professional-controls page errors`);
+  const filename = path.join(outputRoot, `${selected}-professional-controls-mobile-light.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
+    route, viewport, theme, state: 'affirmative-professional-text-native-card-complete' });
+  await context.close();
 }
 
 async function runMaximumBoundary(browser, origin, securityRoot, manifest, selected, profile) {
@@ -903,6 +992,7 @@ async function main() {
       { label: 'reflow-320-light', viewport: { width: 320, height: 720 }, theme: 'light', unconfigured: false },
     ];
     for (const profile of profiles) await runOrdinary(browser, origin, outputRoot, ordinary, selected, profile);
+    await runProfessionalControls(browser, origin, outputRoot, ordinary, selected);
     await runDemo(browser, origin, outputRoot, ordinary, selected);
     const maximumBoundaryProfiles = [
       { label: 'boundary-1-card-desktop-light', cardCount: 1, viewport: { width: 1440, height: 900 }, theme: 'light' },

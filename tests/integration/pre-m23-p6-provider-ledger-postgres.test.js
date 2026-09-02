@@ -39,6 +39,23 @@ function copyMigrations(maximum) {
   return directory;
 }
 
+function copyMigrationsWithProviderMonthInstant(maximum, instant) {
+  const directory = copyMigrations(maximum);
+  const migrationPath = path.join(directory, P6_MIGRATION);
+  const original = fs.readFileSync(migrationPath, 'utf8');
+  let replacements = 0;
+  const frozen = original.replace(
+    /current_month DATE := date_trunc\('month', clock_timestamp\(\)( AT TIME ZONE 'UTC')?\)::date;/g,
+    (_match, utcProjection = '') => {
+      replacements += 1;
+      return `current_month DATE := date_trunc('month', TIMESTAMPTZ '${instant}'${utcProjection})::date;`;
+    }
+  );
+  if (replacements !== 2) throw new Error('Expected exactly two provider month authorities to freeze.');
+  fs.writeFileSync(migrationPath, frozen, 'utf8');
+  return directory;
+}
+
 async function provisionSeparatedRoles(database) {
   const suffix = `${process.pid}_${crypto.randomBytes(5).toString('hex')}`;
   const migrationRole = `northstar-p6-migration-${suffix}`.slice(0, 63);
@@ -238,6 +255,69 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
     });
     await expect(runtimePool.query('SELECT * FROM public.polaris_provider_requests')).rejects.toMatchObject({ code: '42501' });
   });
+
+  test('reservation and status ignore pooled session timezone on both sides of a UTC month boundary', async () => {
+    const cases = [
+      {
+        label: 'east',
+        instant: '2026-08-31 12:30:00+00',
+        timezone: 'Pacific/Kiritimati',
+        monthStart: '2026-08-01',
+      },
+      {
+        label: 'west',
+        instant: '2026-09-01 05:30:00+00',
+        timezone: 'America/Adak',
+        monthStart: '2026-09-01',
+      },
+    ];
+    for (const item of cases) {
+      const directory = copyMigrationsWithProviderMonthInstant(P6_MIGRATION, item.instant);
+      const database = await createSuiteDatabase(`p6-ledger-utc-${item.label}`);
+      const migration = new Pool({ connectionString: database.connectionString, max: 2 });
+      const contaminated = new Pool({ connectionString: database.connectionString, max: 1 });
+      const organizationId = item.label === 'east'
+        ? 'c1000000-0000-4000-8000-000000000021'
+        : 'c1000000-0000-4000-8000-000000000022';
+      const userId = item.label === 'east'
+        ? 'c2000000-0000-4000-8000-000000000021'
+        : 'c2000000-0000-4000-8000-000000000022';
+      try {
+        expect(await db.runMigrations({ pool: migration, migrationsDirectory: directory })).toBe(true);
+        await seedTenant(migration, organizationId, [userId], `utc-${item.label}`);
+        await migration.query(
+          `INSERT INTO public.polaris_provider_monthly_usage(
+             organization_id,month_start,collected_subscription_revenue_cents
+           ) VALUES($1,$2::date,10000)`,
+          [organizationId, item.monthStart]
+        );
+        await contaminated.query(`SELECT set_config('TimeZone',$1,false)`, [item.timezone]);
+        expect((await contaminated.query('SHOW TimeZone')).rows[0].TimeZone).toBe(item.timezone);
+
+        const ledger = createProviderUsageLedger({ poolProvider: () => contaminated });
+        await expect(ledger.status({ organizationId, userId }))
+          .resolves.toEqual({ state: 'within_target' });
+        const reservation = await ledger.reserve(requestInput(organizationId, userId));
+        expect(reservation.usagePolicyState).toBe('within_target');
+        expect((await migration.query(
+          `SELECT month_start::text FROM public.polaris_provider_requests WHERE id=$1`,
+          [reservation.id]
+        )).rows).toEqual([{ month_start: item.monthStart }]);
+        expect((await migration.query(
+          `SELECT month_start::text FROM public.polaris_provider_monthly_usage
+            WHERE organization_id=$1 ORDER BY month_start`,
+          [organizationId]
+        )).rows).toEqual([{ month_start: item.monthStart }]);
+      } finally {
+        await contaminated.end();
+        await migration.end();
+        await database.cleanup();
+        if (path.resolve(directory).startsWith(path.resolve(os.tmpdir()))) {
+          fs.rmSync(directory, { recursive: true, force: true });
+        }
+      }
+    }
+  }, 120000);
 
   test('reports durable tenant-isolated target, warning, hard-stop, and recovery states only to plan managers', async () => {
     const ledger = createProviderUsageLedger({ poolProvider: () => runtimePool });

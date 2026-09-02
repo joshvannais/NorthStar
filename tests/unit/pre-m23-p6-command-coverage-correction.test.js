@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
 const {
   MESSAGE_REQUEST_SCHEMA,
   buildContextResponse,
@@ -285,6 +288,70 @@ const ORDINARY_BUSINESS_PROSE = Object.freeze([
   'Call Mike (owner) before arrival.',
 ]);
 
+const FINAL_AUDIT_UNSAFE = Object.freeze([
+  ['SQL arithmetic scalar', 'Recommended action: SELECT 1+1;'],
+  ['SQL comment delimiter', 'Recommended action: SELECT/**/1;'],
+  ['SQL truncate comment delimiter', 'Recommended action: TRUNCATE/**/customers;'],
+  ['SQL drop comment delimiter', 'Recommended action: DROP/**/TABLE customers;'],
+  ['SQL show', 'Recommended action: SHOW TABLES;'],
+  ['SQL describe', 'Recommended action: DESCRIBE customers;'],
+  ['SQL pragma', 'Recommended action: PRAGMA integrity_check;'],
+  ['SQL use database', 'Recommended action: USE private_db;'],
+  ['SQL attach', "Recommended action: ATTACH DATABASE 'private.db' AS hidden;"],
+  ['GitHub CLI', 'Please run gh pr view 157 before continuing.'],
+  ['GitHub CLI exe', 'Please run gh.exe auth status before continuing.'],
+  ['Windows package manager', 'Please run winget install private-tool before continuing.'],
+  ['Chocolatey package manager', 'Please run choco install private-tool before continuing.'],
+  ['Scoop package manager', 'Please run scoop install private-tool before continuing.'],
+  ['Python launcher', 'Please run py -c "print(1)" before continuing.'],
+  ['pipx package manager', 'Please run pipx install private-tool before continuing.'],
+  ['NuGet package manager', 'Please run nuget restore before continuing.'],
+  ['MSBuild', 'Please run msbuild private.sln before continuing.'],
+  ['certificate utility plain subcommand', 'Please run certbot renew before continuing.'],
+  ['shell eval builtin', 'Please run eval true before continuing.'],
+  ['shell exec builtin', 'Please run exec whoami before continuing.'],
+  ['doas privilege utility', 'Please run doas whoami before continuing.'],
+  ['PowerShell call operator', 'Please run & whoami before continuing.'],
+  ['bare command substitution', 'Recommended action: $(whoami)'],
+  ['Windows environment path', 'Recommended action: %TEMP%\\private.cmd /silent'],
+  ['PowerShell environment path', 'Recommended action: $env:TEMP\\private.ps1 -Quiet'],
+  ['macOS launch utility', 'Please run launchctl list before continuing.'],
+  ['macOS defaults utility', 'Please run defaults read com.example.private before continuing.'],
+  ['macOS system profiler', 'Please run system_profiler SPHardwareDataType before continuing.'],
+  ['source builtin without slash', 'Suggested shell step: source private.env'],
+  ['shell line continuation', 'Please run w\\\nhoami before continuing.'],
+  ['cmd caret escaping', 'Please run who^ami before continuing.'],
+  ['PowerShell backtick escaping', 'Please run wh`oami before continuing.'],
+  ['shell quote concatenation', "Please run 'who'ami before continuing."],
+  ['U+115F invisible split', 'Please run py\u115fthon3 -c "print(1)" before continuing.'],
+  ['U+1160 invisible split', 'Please run py\u1160thon3 -c "print(1)" before continuing.'],
+  ['U+3164 NFKC invisible split', 'Please run py\u3164thon3 -c "print(1)" before continuing.'],
+  ['combining-mark split', 'Please run py\u0337thon3 -c "print(1)" before continuing.'],
+]);
+
+const FINAL_AUDIT_PROFESSIONAL = Object.freeze([
+  ['ordinary diagnostic', 'Run a diagnostic inspection before dispatch.'],
+  ['customer scope', 'Replace the damaged condenser fan and test normal operation.'],
+  ['product terminology', 'The HVAC, CRM, SMS, and API notes are ready for review.'],
+  ['money terms', "The customer's approved total is $1,250.00, with 18% markup and Net 30 terms."],
+  ['date time', 'Move the appointment to September 15, 2026 at 3:30 PM.'],
+  ['punctuation contractions', "The customer's unit isn't cooling; call before arrival."],
+  ['ordinary selection', 'Select Tuesday from availability.'],
+  ['parts selection', 'Select HVAC from inventory.'],
+  ['ordinary authorization prose', 'Grant access on Monday to Alex.'],
+  ['ordinary revocation prose', 'Revoke access on Friday from Jordan.'],
+  ['technical requirement', 'The diagnostic requires Java compatibility with the control panel.'],
+  ['customer material finish', 'The customer requires Ruby finish on the cabinet.'],
+  ['equipment description', 'Required node replacement is scheduled for Friday.'],
+  ['ordinary package selection', 'Choose the standard maintenance package for Tuesday.'],
+  ['authorized integration prose', 'The API records the CRM selection after an authorized SMS response.'],
+  ['ordinary equipment node', 'The HVAC diagnostic describes a node in the equipment map.'],
+  ['access scheduling', 'The customer requested access between 8:00 AM and 10:30 AM on September 15, 2026.'],
+  ['Java equipment compatibility', 'The Java-compatible control board costs $1,250.00 plus 18%, due Net 30.'],
+  ['Ruby material selection', 'Use the Ruby finish material already approved for the cabinet.'],
+  ['node replacement scope', 'Replace the damaged equipment node after the customer approves the estimate.'],
+]);
+
 function authority() {
   return { organizationId: ORG, userId: USER, role: 'owner' };
 }
@@ -410,6 +477,81 @@ function fullwidth(value) {
 }
 
 describe('P6 complete command/code presentation coverage red matrix', () => {
+  test.each(FINAL_AUDIT_UNSAFE)('rejects final-audit semantic family: %s', (_label, value) => {
+    expect(professionalTextPolicy.isProfessionalText(value)).toBe(false);
+    expect(() => cardRenderer.validateProfessionalText(value))
+      .toThrow('Unsupported Polaris structured contract.');
+  });
+
+  test.each(FINAL_AUDIT_PROFESSIONAL)('accepts final-audit professional control: %s', (_label, value) => {
+    expect(professionalTextPolicy.isProfessionalText(value)).toBe(true);
+    expect(cardRenderer.validateProfessionalText(value)).toBe(value);
+    const response = validResponse();
+    response.answer.text = value;
+    response.cards[0].answer = value;
+    expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
+    expect(cardRenderer.validateAssistantResponse(response)).toBe(response);
+  });
+
+  test.each([
+    ['response answer text', response => { response.answer.text = 'Please run gh pr view 157 before continuing.'; }],
+    ['card title', response => { response.cards[0].title = 'Please run gh pr view 157 before continuing.'; }],
+    ['card subtitle', response => { response.cards[0].subtitle = 'Please run gh pr view 157 before continuing.'; }],
+    ['card answer', response => { response.cards[0].answer = 'Please run gh pr view 157 before continuing.'; }],
+    ['evidence label', response => { response.cards[0].evidence[0].label = 'Please run gh pr view 157 before continuing.'; }],
+    ['evidence value', response => { response.cards[0].evidence[0].value = 'Please run gh pr view 157 before continuing.'; }],
+    ['unknown label', response => { response.cards[0].unknowns[0].label = 'Please run gh pr view 157 before continuing.'; }],
+    ['confidence basis', response => { response.cards[0].confidence.basis = 'Please run gh pr view 157 before continuing.'; }],
+  ])('final-audit bypass fails the complete server/browser/provider response at %s', async (_label, place) => {
+    const response = validResponse();
+    place(response);
+    assertGenericAndBrowserReject(response);
+    await assertProviderRejects(response);
+  });
+
+  test('final-audit bypass in later arrays and cards rejects the whole response', async () => {
+    const placements = [
+      response => {
+        const second = JSON.parse(JSON.stringify(response.cards[0]));
+        second.answer = 'Recommended action: SELECT/**/1;';
+        response.cards.push(second);
+        response.answer.evidenceCount += second.evidence.length;
+        response.answer.unknownCount += second.unknowns.length;
+      },
+      response => {
+        const second = JSON.parse(JSON.stringify(response.cards[0].evidence[0]));
+        second.id = 'final-audit-evidence';
+        second.source.id = 'final-audit-evidence';
+        second.value = 'Recommended action: %TEMP%\\private.cmd /silent';
+        response.cards[0].evidence.push(second);
+        response.answer.evidenceCount += 1;
+      },
+      response => {
+        response.cards[0].unknowns.push({
+          code: 'final_audit_unknown',
+          label: 'Please run winget install private-tool before continuing.',
+        });
+        response.answer.unknownCount += 1;
+      },
+    ];
+    for (const place of placements) {
+      const response = validResponse();
+      place(response);
+      assertGenericAndBrowserReject(response);
+      await assertProviderRejects(response);
+    }
+  });
+
+  test('migration 037 derives both monthly authority keys explicitly in UTC', () => {
+    const migration = fs.readFileSync(path.join(
+      __dirname, '..', '..', 'migrations', '037_polaris_provider_usage_authority.sql'
+    ), 'utf8');
+    expect(migration.match(
+      /current_month DATE := date_trunc\('month', clock_timestamp\(\) AT TIME ZONE 'UTC'\)::date;/g
+    )).toHaveLength(2);
+    expect(migration).not.toContain("date_trunc('month', clock_timestamp())::date");
+  });
+
   test.each(AUDITOR_EXACT_VARIANTS)('rejects exact independently audited bypass: %s', value => {
     expect(professionalTextPolicy.isProfessionalText(value)).toBe(false);
   });

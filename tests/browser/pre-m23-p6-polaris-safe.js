@@ -322,6 +322,10 @@ async function assertPageAuthority(page, label) {
   assert.strictEqual(await page.locator('.polaris-sidebar-section').count(), 1);
   assert.strictEqual(await page.locator('.polaris-quick-prompt').count(), 8);
   assert.strictEqual(await page.locator('.polaris-quick-prompt:not(button)').count(), 0);
+  assert.strictEqual(await page.locator('.polaris-welcome').isHidden(), true,
+    `${label} selected-record presentation must suppress the generic welcome`);
+  assert.strictEqual(await page.locator('.polaris-quick-prompt:visible').count(), 0,
+    `${label} selected-record presentation must suppress generic quick prompts`);
   const duplicateIds = await page.evaluate(() => {
     const counts = {};
     document.querySelectorAll('[id]').forEach(node => { counts[node.id] = (counts[node.id] || 0) + 1; });
@@ -335,6 +339,14 @@ async function assertPageAuthority(page, label) {
   }));
   assert.ok(Math.max(dimensions.body, dimensions.root) <= dimensions.width + 1,
     `${label} horizontal overflow: ${JSON.stringify(dimensions)}`);
+}
+
+async function submitSelectedQuestion(page, value = 'Summarize the exact selected record.') {
+  const prompt = page.locator('#polarisPromptInput');
+  await prompt.fill(value);
+  await prompt.focus();
+  assert.strictEqual(await prompt.evaluate(node => node === document.activeElement), true);
+  await page.locator('#polarisSendBtn').click();
 }
 
 async function assertProfessionalPresentation(page, label) {
@@ -463,10 +475,7 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
   assert.strictEqual(await page.locator('.polaris-native-card a, .polaris-native-card button, .polaris-native-card [tabindex]').count(), 0);
   assert.strictEqual((await page.locator('#polarisProviderStatusLabel').textContent()).trim(),
     profile.unconfigured ? 'Unavailable' : 'Configured - not verified');
-  const prompt = page.locator('.polaris-quick-prompt').first();
-  await prompt.focus();
-  assert.strictEqual(await prompt.evaluate(node => node === document.activeElement), true);
-  await prompt.click();
+  await submitSelectedQuestion(page);
   if (profile.unconfigured) {
     await page.locator('.polaris-chat-error').waitFor({ state: 'visible' });
     assert.match(await page.locator('.polaris-chat-error .polaris-chat-text').textContent(), /not configured/);
@@ -503,7 +512,7 @@ async function runDemo(browser, origin, outputRoot, manifest, selected) {
   }
   await assertPageAuthority(page, `${selected}-demo-local`);
   assert.strictEqual((await page.locator('#polarisProviderStatusLabel').textContent()).trim(), 'Local demo');
-  await page.locator('.polaris-quick-prompt').first().click();
+  await submitSelectedQuestion(page);
   await page.getByText(/calculated locally from the isolated demo session/).waitFor({ state: 'visible' });
   await assertProfessionalPresentation(page, `${selected}-demo-local`);
   assert.strictEqual(state.messageCalls, 0, 'demo must not call assistant message endpoint');
@@ -543,7 +552,7 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
       } else {
         await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
         assert.strictEqual(await page.locator('.polaris-native-card').count(), 4);
-        await page.locator('.polaris-quick-prompt').first().click();
+        await submitSelectedQuestion(page);
         await page.locator('.polaris-chat-error').waitFor({ state: 'visible' });
         assert.match(await page.locator('.polaris-chat-error').textContent(), /unsupported structured response/i);
         assert.strictEqual(state.messageCalls, 1, 'one intercepted hostile response is expected');
@@ -731,8 +740,8 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
   assert.strictEqual(new Set(headingIds).size, headingIds.length, 'section heading IDs must remain unique');
   assert.strictEqual(await page.locator('.polaris-native-card img, .polaris-native-card script, .polaris-native-card svg').count(), 0);
   assert.strictEqual(await page.locator('.polaris-native-card a, .polaris-native-card button, .polaris-native-card [tabindex]').count(), 0);
-  await page.locator('.polaris-quick-prompt').first().focus();
-  assert.strictEqual(await page.locator('.polaris-quick-prompt').first().evaluate(node => document.activeElement === node), true);
+  await page.locator('#polarisPromptInput').focus();
+  assert.strictEqual(await page.locator('#polarisPromptInput').evaluate(node => document.activeElement === node), true);
   assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
   const dimensions = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
@@ -771,7 +780,7 @@ async function runMalformed(browser, origin, securityRoot, manifest, selected, m
     assert.strictEqual((await page.locator('#polarisProviderStatusLabel').textContent()).trim(), 'Unavailable');
   } else if (malformed === 'message-extra') {
     await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
-    await page.locator('.polaris-quick-prompt').first().click();
+    await submitSelectedQuestion(page);
     await page.getByRole('alert').waitFor({ state: 'visible' });
     assert.match(await page.locator('.polaris-chat-error .polaris-chat-text').textContent(), /unsupported structured response/);
     assert.strictEqual(await page.getByRole('button', { name: 'Retry this message' }).count(), 0);
@@ -801,7 +810,7 @@ async function runRateLimited(browser, origin, securityRoot, manifest, selected)
   const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
   await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
-  await page.locator('.polaris-quick-prompt').first().click();
+  await submitSelectedQuestion(page);
   await page.getByRole('button', { name: 'Retry this message' }).waitFor({ state: 'visible' });
   assert.match(await page.locator('.polaris-chat-error .polaris-chat-text').textContent(),
     /Rate limit exceeded\. Try again in 60 seconds\./);
@@ -941,7 +950,7 @@ async function runDowngradePreservation(browser, origin, securityRoot, manifest,
   const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
   await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
-  await page.locator('.polaris-quick-prompt').first().click();
+  await submitSelectedQuestion(page);
   await page.getByText('Bounded Polaris browser answer.').waitFor({ state: 'visible' });
   const beforeMessages = await page.locator('.polaris-chat-message').count();
   assert.ok(beforeMessages >= 2);

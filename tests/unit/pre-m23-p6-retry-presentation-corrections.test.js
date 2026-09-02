@@ -10,6 +10,7 @@ const {
   MESSAGE_REQUEST_SCHEMA,
   RESPONSE_SCHEMA,
   buildContextResponse,
+  messageRequestFingerprint,
 } = require('../../src/polaris/assistantContract');
 const { createIdempotencyRegistry } = require('../../src/polaris/assistantRuntime');
 const { createOpenAIRuntime } = require('../../src/polaris/openaiRuntime');
@@ -336,7 +337,11 @@ function mountedApp(runtime, idempotency, state) {
     assistantIdempotency: idempotency,
     assistantContextLoader: async function () { state.contextLoads += 1; return canonicalItem(); },
     assistantUsageLedger: {
-      reserve: async function () { state.reservations += 1; return Object.freeze({ requestId: KEY }); },
+      reserve: async function (input) {
+        state.reservations += 1;
+        if (state.reservationInputs) state.reservationInputs.push(input);
+        return Object.freeze({ requestId: KEY });
+      },
       reconcile: async function (_reservation, usage) { state.reconciliations.push(usage); },
       status: async function () { return Object.freeze({ state: 'within_target' }); },
     },
@@ -365,7 +370,7 @@ describe('P6 P1 retry boundary correction', () => {
       let release;
       const held = new Promise(resolve => { release = resolve; });
       const sleepDelays = [];
-      const state = { contextLoads: 0, reservations: 0, reconciliations: [] };
+      const state = { contextLoads: 0, reservations: 0, reservationInputs: [], reconciliations: [] };
       const runtime = createOpenAIRuntime({
         enabled: true,
         configured: true,
@@ -390,6 +395,18 @@ describe('P6 P1 retry boundary correction', () => {
       expect(first.headers['retry-after']).toBe('60');
       expect(providerCalls).toBe(1);
       expect(sleepDelays).toEqual([]);
+      expect(state.reservationInputs).toEqual([expect.objectContaining({
+        requestId: KEY,
+        fingerprint: messageRequestFingerprint(messageBody(), authority()),
+      })]);
+      expect(state.reconciliations).toEqual([expect.objectContaining({
+        inputTokens: 0,
+        outputTokens: 0,
+        costNanoUsd: 0,
+        outcomeClass: 'failed',
+        providerRequestId: null,
+        retryAfterSeconds: 60,
+      })]);
 
       now = 60999;
       const early = await request(app).post('/api/v1/canonical/polaris/assistant/messages').send(messageBody());
@@ -415,13 +432,13 @@ describe('P6 P1 retry boundary correction', () => {
       const recovered = await concurrent;
       expect(recovered.map(response => response.status)).toEqual([200, 200]);
       expect(recovered[0].body.data).toEqual(recovered[1].body.data);
-      expect(state.reconciliations).toHaveLength(1);
+      expect(state.reconciliations).toHaveLength(2);
 
       const fulfilled = await request(app).post('/api/v1/canonical/polaris/assistant/messages').send(messageBody());
       expect(fulfilled.status).toBe(200);
       expect(fulfilled.body.data).toEqual(recovered[0].body.data);
       expect(providerCalls).toBe(2);
-      expect(state.reconciliations).toHaveLength(1);
+      expect(state.reconciliations).toHaveLength(2);
     }
   );
 

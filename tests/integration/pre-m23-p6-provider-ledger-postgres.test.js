@@ -119,6 +119,9 @@ function requestInput(organizationId, userId, requestId = crypto.randomUUID()) {
     organizationId,
     userId,
     requestId,
+    fingerprint: crypto.createHash('sha256')
+      .update(`polaris-provider-request:${organizationId}:${userId}:${requestId}`)
+      .digest('hex'),
     model: 'gpt-5.6-luna',
     schemaVersion: 'northstar.polaris.assistant-response.v1',
   };
@@ -435,6 +438,103 @@ realPostgres('Pre-Mission-23 P6 durable Polaris provider authority', () => {
       code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
     });
     await ledger.reconcile(reservation, completedUsage({ inputTokens: 0, outputTokens: 0, costNanoUsd: 0 }));
+  });
+
+  test('re-admits exactly one eligible exact-key transient retry at Retry-After across processes', async () => {
+    const firstProcess = createProviderUsageLedger({ poolProvider: () => runtimePool });
+    const secondProcess = createProviderUsageLedger({ poolProvider: () => runtimePool });
+    const exact = requestInput(ORG_A, USERS_A[2]);
+    const firstReservation = await firstProcess.reserve(exact);
+    await firstProcess.reconcile(firstReservation, completedUsage({
+      inputTokens: 0,
+      outputTokens: 0,
+      costNanoUsd: 0,
+      outcomeClass: 'failed',
+      providerRequestId: null,
+      retryAfterSeconds: 60,
+    }));
+
+    const transient = (await migrationPool.query(
+      `SELECT state,request_fingerprint,retry_after_at IS NOT NULL AS retryable,re_admission_count
+         FROM public.polaris_provider_requests WHERE id=$1`,
+      [firstReservation.id]
+    )).rows[0];
+    expect(transient).toEqual({
+      state: 'failed',
+      request_fingerprint: exact.fingerprint,
+      retryable: true,
+      re_admission_count: 0,
+    });
+    await expect(secondProcess.reserve(exact)).rejects.toMatchObject({
+      code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
+    });
+    await migrationPool.query(
+      `UPDATE public.polaris_provider_requests
+          SET retry_after_at=clock_timestamp()-INTERVAL '1 millisecond'
+        WHERE id=$1`,
+      [firstReservation.id]
+    );
+
+    const attempts = await Promise.allSettled([
+      firstProcess.reserve(exact),
+      secondProcess.reserve(exact),
+    ]);
+    const admitted = attempts.filter(value => value.status === 'fulfilled');
+    const rejected = attempts.filter(value => value.status === 'rejected');
+    expect(admitted).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toMatchObject({
+      code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
+    });
+    expect(admitted[0].value.id).toBe(firstReservation.id);
+    await firstProcess.reconcile(admitted[0].value, completedUsage());
+    await expect(secondProcess.reserve(exact)).rejects.toMatchObject({
+      code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
+    });
+  });
+
+  test('rejects divergent, non-retryable, and already re-admitted durable key reuse', async () => {
+    const ledger = createProviderUsageLedger({ poolProvider: () => runtimePool });
+    const divergentProcess = createProviderUsageLedger({ poolProvider: () => runtimePool });
+
+    const exact = requestInput(ORG_A, USERS_A[3]);
+    const reserved = await ledger.reserve(exact);
+    await expect(divergentProcess.reserve({ ...exact, fingerprint: 'f'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409 });
+    await ledger.reconcile(reserved, completedUsage({
+      inputTokens: 0, outputTokens: 0, costNanoUsd: 0,
+      outcomeClass: 'failed', providerRequestId: null,
+    }));
+    await expect(ledger.reserve(exact)).rejects.toMatchObject({
+      code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
+    });
+
+    const retryOnce = requestInput(ORG_A, USERS_A[3]);
+    const first = await ledger.reserve(retryOnce);
+    await ledger.reconcile(first, completedUsage({
+      inputTokens: 0, outputTokens: 0, costNanoUsd: 0,
+      outcomeClass: 'failed', providerRequestId: null, retryAfterSeconds: 1,
+    }));
+    await migrationPool.query(
+      `UPDATE public.polaris_provider_requests
+          SET retry_after_at=clock_timestamp()-INTERVAL '1 millisecond'
+        WHERE id=$1`,
+      [first.id]
+    );
+    const retry = await ledger.reserve(retryOnce);
+    await ledger.reconcile(retry, completedUsage({
+      inputTokens: 0, outputTokens: 0, costNanoUsd: 0,
+      outcomeClass: 'failed', providerRequestId: null, retryAfterSeconds: 1,
+    }));
+    await migrationPool.query(
+      `UPDATE public.polaris_provider_requests
+          SET retry_after_at=clock_timestamp()-INTERVAL '1 millisecond'
+        WHERE id=$1`,
+      [first.id]
+    );
+    await expect(ledger.reserve(retryOnce)).rejects.toMatchObject({
+      code: 'POLARIS_IDEMPOTENCY_KEY_REUSED', statusCode: 409,
+    });
   });
 
   test('enforces the exact per-user rolling minute threshold with Retry-After before provider work', async () => {

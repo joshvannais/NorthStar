@@ -90,6 +90,51 @@ const HOSTILE_GRAMMARS = Object.freeze([
   ['PowerShell NFKC call operator', "Recommended action: ＆ 'deploy' --force"],
 ]);
 
+// Exact immutable corpus from the independent 7d23da7 final audit. Keep this separate
+// from the earlier writer corpus so future reviews can prove every discovered adjacent
+// executable grammar remains closed rather than relying on representative examples.
+const FINAL_AUDIT_EXECUTABLE_GRAMMARS = Object.freeze([
+  ['nested SQL aggregate', 'SELECT coalesce(sum(total), 0) FROM invoices'],
+  ['SQL FILTER aggregate', 'SELECT count(*) FILTER (WHERE active) FROM customers'],
+  ['SQL window aggregate', 'SELECT count(*) OVER () FROM customers'],
+  ['parenthesized SQL scalar', 'SELECT (1)'],
+  ['VALUES CTE', 'WITH recent AS (VALUES (1)) SELECT * FROM recent'],
+  ['extended DESCRIBE', 'DESCRIBE FORMATTED customers'],
+  ['SET LOCAL transaction', 'SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE'],
+  ['transaction snapshot', "SET TRANSACTION SNAPSHOT '0001'"],
+  ['single-segment Java package', 'package example;'],
+  ['spaced Java package', 'package com . example;'],
+  ['C# global alias import', 'using Alias = global::Example.Tools;'],
+  ['inline Python class body', 'class Example: "Service model"'],
+  ['multiline Python base list', 'class Example(\n    Base\n):\n    pass'],
+  ['parenthesized Python lambda', 'handler = (lambda value: value)'],
+  ['bare Python lambda', 'lambda value: value'],
+  ['POSIX arithmetic for', 'for ((i=0; i<3; i++)); do echo ok; done'],
+  ['POSIX newline compound', '{ echo ok\n}'],
+  ['novel command redirection', 'deploy production > output.txt'],
+  ['NFKC nested aggregate', 'ＳＥＬＥＣＴ coalesce(sum(total), 0) ＦＲＯＭ invoices'],
+  ['invisible nested aggregate', 'SE\u200bLECT coalesce(sum(total), 0) FR\u2060OM invoices'],
+]);
+
+const STRUCTURAL_MUTATION_GRAMMARS = Object.freeze([
+  ['SQL mixed case and tabs', 'sElEcT\tCOALESCE(SUM(total), 0)\tFrOm\tinvoices'],
+  ['SQL comments and delimiter', 'Query:\nSELECT/* bounded */coalesce(sum(total), 0)/* source */FROM invoices'],
+  ['SQL nested scalar alias', 'SELECT (coalesce(sum(total), 0)) AS invoice_total FROM invoices'],
+  ['SQL VALUES CTE whitespace', 'with recent(value) as (\n values (1), (2)\n)\nselect * from recent'],
+  ['SQL transaction comma modes', 'SET LOCAL TRANSACTION READ ONLY, DEFERRABLE'],
+  ['SQL transaction snapshot semicolon', "SET TRANSACTION SNAPSHOT 'snapshot-1';"],
+  ['Java package tabs', 'package\tcom .\texample ;'],
+  ['C# alias whitespace', 'using\tAlias\t=\tglobal :: Example.Tools ;'],
+  ['Python class string body', "class SurveyJob:\n    'Executable source body'"],
+  ['Python multiline bases and ellipsis', 'class SurveyJob(\n    Base,\n    MixIn\n):\n    ...'],
+  ['Python parenthesized annotated lambda', 'handler: Callable = ( lambda value : value )'],
+  ['Python bare lambda NFKC', 'ｌａｍｂｄａ value: value'],
+  ['POSIX arithmetic loop multiline', 'for (( i = 0; i < 3; i++ ))\ndo\n  echo ok\ndone'],
+  ['POSIX brace compound semicolonless', '{\n echo ok\n}'],
+  ['generic stderr redirection', 'deploy production 2> errors.txt'],
+  ['generic append redirection', 'deploy production >> output.txt'],
+]);
+
 const LEGITIMATE_PROSE = Object.freeze([
   'Node compatibility is verified for this service.',
   'Java compatibility is not yet verified.',
@@ -131,6 +176,12 @@ const LEGITIMATE_PROSE = Object.freeze([
   'Describe the repair options in plain language for the customer.',
   'Set transaction expectations before collecting the deposit.',
   'The record count is included in the monthly operating report.',
+  'The SQL report presents the coalesced invoice total as a business metric.',
+  'The billing package includes one monthly invoice review.',
+  'The customer class is listed as commercial service.',
+  'The formatted customer description is ready for the estimate.',
+  'The transaction snapshot is described in the approved engineering review.',
+  'The implementation uses a global alias described in the integration notes.',
 ]);
 
 const DISPLAY_FIELDS = Object.freeze([
@@ -203,6 +254,14 @@ const CROSS_BOUNDARY_CASES = Object.freeze(DISPLAY_FIELDS.flatMap(field =>
 
 const LEGITIMATE_FIELD_CASES = Object.freeze(DISPLAY_FIELDS.flatMap(field =>
   LEGITIMATE_PROSE.map(value => [field.label, value, field])
+));
+
+const FINAL_AUDIT_FIELD_CASES = Object.freeze(FINAL_AUDIT_EXECUTABLE_GRAMMARS.flatMap(([family, value]) =>
+  DISPLAY_FIELDS.map(field => [family, field.label, field, value])
+));
+
+const STRUCTURAL_MUTATION_FIELD_CASES = Object.freeze(STRUCTURAL_MUTATION_GRAMMARS.flatMap(([family, value]) =>
+  DISPLAY_FIELDS.map(field => [family, field.label, field, value])
 ));
 
 function authority() {
@@ -344,6 +403,67 @@ describe('P6 professional-text executable grammar correction', () => {
     });
     expect(calls).toBe(1);
   });
+
+  test.each(FINAL_AUDIT_EXECUTABLE_GRAMMARS)(
+    'rejects exact independent-audit %s through the shared policy',
+    (_label, value) => {
+      expect(professionalTextPolicy.isProfessionalText(value)).toBe(false);
+    }
+  );
+
+  test.each(FINAL_AUDIT_FIELD_CASES)(
+    'rejects exact independent-audit %s in the server/browser %s',
+    (_family, _fieldLabel, field, value) => {
+      const response = interceptedResponseWith('The selected record is ready for review.');
+      field.response(response, value);
+      assertServerAndBrowserReject(response);
+    }
+  );
+
+  test.each(FINAL_AUDIT_FIELD_CASES)(
+    'rejects exact independent-audit %s in the fake-provider %s',
+    async (_family, _fieldLabel, field, value) => {
+      const envelope = mutableEnvelope();
+      const payload = providerPayload(envelope);
+      field.provider(envelope, payload, value);
+      let calls = 0;
+      const runtime = createOpenAIRuntime({
+        configured: true,
+        enabled: true,
+        client: {
+          responses: {
+            create: async () => {
+              calls += 1;
+              return fakeProviderResponse(payload);
+            },
+          },
+        },
+        logger: () => {},
+      });
+
+      await expect(runtime.respond(envelope)).rejects.toMatchObject({
+        code: 'POLARIS_PROVIDER_RESPONSE_INVALID',
+        statusCode: 502,
+      });
+      expect(calls).toBe(1);
+    }
+  );
+
+  test.each(STRUCTURAL_MUTATION_GRAMMARS)(
+    'rejects structurally mutated %s through the shared policy',
+    (_label, value) => {
+      expect(professionalTextPolicy.isProfessionalText(value)).toBe(false);
+    }
+  );
+
+  test.each(STRUCTURAL_MUTATION_FIELD_CASES)(
+    'rejects structurally mutated %s in the server/browser %s',
+    (_family, _fieldLabel, field, value) => {
+      const response = interceptedResponseWith('The selected record is ready for review.');
+      field.response(response, value);
+      assertServerAndBrowserReject(response);
+    }
+  );
 
   test.each(CROSS_BOUNDARY_CASES)(
     'rejects adjacent %s grammar in the server/browser %s before any partial response',

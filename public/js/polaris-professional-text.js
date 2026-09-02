@@ -331,10 +331,212 @@
     return normalized;
   }
 
+  // Display fields accept professional prose, not source-language statements. The older
+  // inventory below remains defense in depth for embedded fragments, but a source statement
+  // should not depend on enumerating every function, modifier, command name, or whitespace
+  // spelling. These helpers classify the bounded structure of complete line/delimiter-bounded
+  // statements after NFKC and invisible-character normalization.
+  function statementCandidates(value) {
+    var candidates = [];
+    var seen = Object.create(null);
+    function add(candidate) {
+      var trimmed = candidate.trim();
+      if (!trimmed || seen[trimmed]) return;
+      seen[trimmed] = true;
+      candidates.push(trimmed);
+    }
+
+    add(value);
+    for (var index = 0; index < value.length; index += 1) {
+      if (value.charAt(index) === '\n') add(value.slice(index + 1));
+      if (value.charAt(index) === ':' && /(?:^|\s)(?:query|command|script|source|code)\s*$/i.test(value.slice(0, index))) {
+        add(value.slice(index + 1));
+      }
+    }
+    return candidates;
+  }
+
+  function stripStatementTerminator(value) {
+    return value.replace(/\s*;\s*$/, '').trim();
+  }
+
+  function isIdentifierBoundary(character) {
+    return !character || !/[A-Za-z0-9_$]/.test(character);
+  }
+
+  function findTopLevelWord(value, word) {
+    var lower = value.toLowerCase();
+    var depth = 0;
+    var quote = '';
+    for (var index = 0; index <= value.length - word.length; index += 1) {
+      var character = value.charAt(index);
+      if (quote) {
+        if (character === quote) {
+          if (value.charAt(index + 1) === quote) index += 1;
+          else quote = '';
+        } else if (character === '\\') index += 1;
+        continue;
+      }
+      if (character === '"' || character === "'" || character === '`') {
+        quote = character;
+        continue;
+      }
+      if (character === '(') {
+        depth += 1;
+        continue;
+      }
+      if (character === ')') {
+        if (depth > 0) depth -= 1;
+        continue;
+      }
+      if (depth === 0 && lower.slice(index, index + word.length) === word &&
+        isIdentifierBoundary(value.charAt(index - 1)) &&
+        isIdentifierBoundary(value.charAt(index + word.length))) return index;
+    }
+    return -1;
+  }
+
+  function matchingParenthesis(value, openIndex) {
+    var depth = 0;
+    var quote = '';
+    for (var index = openIndex; index < value.length; index += 1) {
+      var character = value.charAt(index);
+      if (quote) {
+        if (character === quote) {
+          if (value.charAt(index + 1) === quote) index += 1;
+          else quote = '';
+        } else if (character === '\\') index += 1;
+        continue;
+      }
+      if (character === '"' || character === "'" || character === '`') {
+        quote = character;
+        continue;
+      }
+      if (character === '(') depth += 1;
+      else if (character === ')') {
+        depth -= 1;
+        if (depth === 0) return index;
+        if (depth < 0) return -1;
+      }
+    }
+    return -1;
+  }
+
+  var SQL_IDENTIFIER = '(?:[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)?|"[^"]+"|`[^`]+`|\\[[^\\]]+\\])';
+  var SQL_SOURCE_TAIL = new RegExp(
+    '^' + SQL_IDENTIFIER + '(?:\\s+(?:as\\s+)?[A-Za-z_]\\w*)?' +
+    '(?:\\s+(?:where|join|left\\s+join|right\\s+join|full\\s+join|inner\\s+join|outer\\s+join|cross\\s+join|group\\s+by|order\\s+by|having|limit|offset|union|intersect|except|fetch|for)\\b[\\s\\S]*)?$',
+    'i'
+  );
+
+  function isStructuredSqlSelect(value) {
+    var statement = stripStatementTerminator(value).replace(/\s+/g, ' ');
+    var selectMatch = /^select\s+([\s\S]+)$/i.exec(statement);
+    if (!selectMatch) return false;
+    var body = selectMatch[1].trim();
+    var fromIndex = findTopLevelWord(body, 'from');
+    if (fromIndex >= 0) {
+      var projection = body.slice(0, fromIndex).trim();
+      var source = body.slice(fromIndex + 4).trim();
+      if (!projection || !SQL_SOURCE_TAIL.test(source)) return false;
+      // Once FROM resolves to a SQL source/tail, even a single identifier projection is a
+      // complete query. Ordinary instructions such as "Select service from the menu" do not
+      // satisfy the SQL source tail because their remaining words are prose, not SQL clauses.
+      return true;
+    }
+
+    var scalar = body.replace(/\s+(?:as\s+)?[A-Za-z_]\w*$/i, '').trim();
+    if (/^\([\s\S]+\)$/.test(scalar) && matchingParenthesis(scalar, 0) === scalar.length - 1) return true;
+    if (/^[A-Za-z_]\w*\s*\(/.test(scalar)) {
+      var openIndex = scalar.indexOf('(');
+      return matchingParenthesis(scalar, openIndex) === scalar.length - 1;
+    }
+    return /^(?:\*|-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|current_[A-Za-z_]\w*|session_user|system_user|user)$/i.test(scalar);
+  }
+
+  function isStructuredSqlCte(value) {
+    var statement = stripStatementTerminator(value);
+    var header = /^with(?:\s+recursive)?\s+[A-Za-z_]\w*(?:\s*\([^)]*\))?\s+as\s*\(/i.exec(statement);
+    if (!header) return false;
+    var openIndex = header[0].lastIndexOf('(');
+    var closeIndex = matchingParenthesis(statement, openIndex);
+    if (closeIndex < 0) return false;
+    var body = statement.slice(openIndex + 1, closeIndex).trim();
+    var tail = statement.slice(closeIndex + 1).trim();
+    return /^(?:select|values|insert|update|delete|merge)\b/i.test(body) &&
+      /^(?:select|insert|update|delete|merge)\b/i.test(tail);
+  }
+
+  function classifyStructuredSql(value) {
+    var compact = value.replace(/\s+/g, ' ').trim();
+    if (isStructuredSqlSelect(value)) return 'structured-sql-select';
+    if (isStructuredSqlCte(value)) return 'structured-sql-cte';
+    if (/^(?:describe|desc)\s+(?:(?:formatted|extended|table)\s+)*[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?\s*;?$/i.test(compact)) {
+      return 'structured-sql-describe';
+    }
+    if (/^set\s+(?:local\s+)?transaction\s+(?:snapshot\s+(?:'[^']+'|"[^"]+")|(?:isolation\s+level\s+(?:serializable|repeatable\s+read|read\s+committed|read\s+uncommitted)|read\s+(?:only|write)|deferrable|not\s+deferrable)(?:\s*,\s*(?:isolation\s+level\s+(?:serializable|repeatable\s+read|read\s+committed|read\s+uncommitted)|read\s+(?:only|write)|deferrable|not\s+deferrable))*)\s*;?$/i.test(compact)) {
+      return 'structured-sql-transaction';
+    }
+    return null;
+  }
+
+  function classifyManagedSource(value) {
+    var compact = value.replace(/\s+/g, ' ').trim();
+    if (/^package\s+[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*\s*;$/i.test(compact)) {
+      return 'structured-managed-package';
+    }
+    if (/^(?:global\s+)?using\s+[A-Za-z_]\w*\s*=\s*(?:global\s*::\s*)?[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*\s*;$/i.test(compact)) {
+      return 'structured-managed-alias';
+    }
+    return null;
+  }
+
+  function classifyPythonSource(value) {
+    // Python keywords are case-sensitive. Keeping that property preserves legitimate business
+    // prose such as "Class Example: review the service plan" while rejecting actual source.
+    var classMatch = /^class\s+[A-Za-z_]\w*(?:\s*\([\s\S]{0,500}\))?\s*:\s*([\s\S]+)$/.exec(value);
+    if (classMatch) {
+      var classBody = classMatch[1];
+      if (/^(?:["'][\s\S]*["']|pass\b|\.\.\.|(?:async\s+)?def\b|return\b|raise\b|[A-Za-z_]\w*\s*(?::|=))/.test(classBody.trim()) ||
+        /^\n?[ \t]+\S/m.test(classBody)) return 'structured-python-class';
+    }
+    if (/^(?:(?:[A-Za-z_]\w*(?:\s*:\s*[^=\n]+)?\s*=\s*)?\(\s*)?lambda\b[^:\n]{0,300}:\s*\S[\s\S]*(?:\))?$/.test(value.trim())) {
+      return 'structured-python-lambda';
+    }
+    return null;
+  }
+
+  function classifyShellSource(value) {
+    var trimmed = value.trim();
+    if (/^for\s*\(\([\s\S]{1,500}\)\)\s*;?\s*do\b[\s\S]{1,700}\bdone\s*$/i.test(trimmed)) {
+      return 'structured-posix-arithmetic-loop';
+    }
+    if (/^\{[\s\S]*\}$/.test(trimmed) && /(?:\n|;)/.test(trimmed) && /[A-Za-z_$][\w$.-]*(?:\s+[^{}\n;]+)?/.test(trimmed.slice(1, -1))) {
+      return 'structured-posix-compound';
+    }
+    if (/^[a-z_$][\w$.-]*(?:\s+[^\s<>|;&]+)+\s+\d*(?:>>?|<<?|<>|>&|<&)\s*(?:[.&$%\\/]|[^\s]+\.[A-Za-z0-9]{1,12}\b)\S*\s*$/i.test(trimmed)) {
+      return 'structured-command-redirection';
+    }
+    return null;
+  }
+
+  function structuralSourceViolation(value) {
+    var candidates = statementCandidates(value);
+    for (var index = 0; index < candidates.length; index += 1) {
+      var candidate = candidates[index];
+      var violationId = classifyStructuredSql(candidate) || classifyManagedSource(candidate) ||
+        classifyPythonSource(candidate) || classifyShellSource(candidate);
+      if (violationId) return violationId;
+    }
+    return null;
+  }
+
   function violation(value) {
     if (typeof value !== 'string') return 'not-string';
     if (UNSAFE_CONTROLS.test(value)) return 'unsafe-control';
     var inspected = normalizedForInspection(value);
+    var sourceViolation = structuralSourceViolation(inspected);
+    if (sourceViolation) return sourceViolation;
     for (var index = 0; index < RULES.length; index += 1) {
       if (RULES[index].pattern.test(inspected)) return RULES[index].id;
     }
@@ -342,7 +544,7 @@
   }
 
   return Object.freeze({
-    POLICY_VERSION: 'northstar.polaris.professional-text.v6',
+    POLICY_VERSION: 'northstar.polaris.professional-text.v7',
     isProfessionalText: function (value) { return violation(value) === null; }
   });
 });

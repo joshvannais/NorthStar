@@ -163,6 +163,86 @@ const HOSTILE_PRESENTATION_CASES = Object.freeze([
     text: "Recommended action: & ('deploy' + '.exe') --force",
     placement: 'confidenceBasis', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
   },
+  {
+    id: 'final-nested-sql-aggregate', text: 'SELECT coalesce(sum(total), 0) FROM invoices',
+    placement: 'responseAnswer', viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'final-sql-filter-aggregate', text: 'SELECT count(*) FILTER (WHERE active) FROM customers',
+    placement: 'cardTitle', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'final-sql-window-aggregate', text: 'SELECT count(*) OVER () FROM customers',
+    placement: 'cardSubtitle', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'final-parenthesized-sql-scalar', text: 'SELECT (1)',
+    placement: 'cardAnswer', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'final-values-cte', text: 'WITH recent AS (VALUES (1)) SELECT * FROM recent',
+    placement: 'evidenceLabel', cardIndex: 0, viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'final-extended-describe', text: 'DESCRIBE FORMATTED customers',
+    placement: 'evidenceValue', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'final-set-local-transaction', text: 'SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE',
+    placement: 'unknownLabel', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'final-transaction-snapshot', text: "SET TRANSACTION SNAPSHOT '0001'",
+    placement: 'confidenceBasis', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'final-java-package-single', text: 'package example;',
+    placement: 'responseAnswer', viewport: { width: 1440, height: 900 }, theme: 'dark',
+  },
+  {
+    id: 'final-java-package-spaced', text: 'package com . example;',
+    placement: 'cardTitle', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'light',
+  },
+  {
+    id: 'final-csharp-global-alias', text: 'using Alias = global::Example.Tools;',
+    placement: 'cardSubtitle', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'dark',
+  },
+  {
+    id: 'final-python-inline-class', text: 'class Example: "Service model"',
+    placement: 'cardAnswer', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'light',
+  },
+  {
+    id: 'final-python-multiline-bases', text: 'class Example(\n    Base\n):\n    pass',
+    placement: 'evidenceLabel', cardIndex: 0, viewport: { width: 1440, height: 900 }, theme: 'dark',
+  },
+  {
+    id: 'final-python-parenthesized-lambda', text: 'handler = (lambda value: value)',
+    placement: 'evidenceValue', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'light',
+  },
+  {
+    id: 'final-python-bare-lambda', text: 'lambda value: value',
+    placement: 'unknownLabel', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'dark',
+  },
+  {
+    id: 'final-posix-arithmetic-for', text: 'for ((i=0; i<3; i++)); do echo ok; done',
+    placement: 'confidenceBasis', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'light',
+  },
+  {
+    id: 'final-posix-newline-compound', text: '{ echo ok\n}',
+    placement: 'responseAnswer', viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'final-generic-command-redirection', text: 'deploy production > output.txt',
+    placement: 'cardTitle', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'final-nfkc-nested-aggregate', text: 'ＳＥＬＥＣＴ coalesce(sum(total), 0) ＦＲＯＭ invoices',
+    placement: 'cardSubtitle', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'final-invisible-nested-aggregate', text: 'SE\u200bLECT coalesce(sum(total), 0) FR\u2060OM invoices',
+    placement: 'cardAnswer', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
 ]);
 
 const PROFESSIONAL_PRESENTATION = Object.freeze({

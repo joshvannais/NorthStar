@@ -94,7 +94,7 @@
   var DIRECT_COMMAND_LINE = new RegExp(
     // Language/runtime names are ordinary technology nouns in professional labels. They are
     // authoritative only when an execution cue or runtime-specific argument grammar is present.
-    '(?:^|[\\n:;])\\s*(?!net\\s+(?:15|30|45|60|90)\\b)(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|service|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc)\\b)' +
+    '(?:^|[\\n:;])\\s*(?!net\\s+(?:15|30|45|60|90)\\b)(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|service|command|builtin|env|export|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc)\\b)' +
     '(?:&\\s*)?' + EXECUTABLE_REFERENCE +
     '(?=\\s|[;&|<>]|$)(?:\\s+|[;&|<>]|$)',
     'i'
@@ -315,6 +315,10 @@
     normalized = normalized.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ')
       .replace(INVISIBLE_FORMATTING_BMP, '').replace(INVISIBLE_FORMATTING_ASTRAL, '')
       .replace(TOKEN_SEPARATING_MARKS, '')
+      // Block comments embedded inside an identifier/keyword are token separators to a
+      // reader but are discarded by language parsers. Join only that source-shaped form;
+      // ordinary explanatory comments continue to become whitespace below.
+      .replace(/([A-Za-z0-9_$])\/\*[\s\S]*?\*\/(?=[A-Za-z0-9_$])/g, '$1')
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/\\[ \t]*\n[ \t]*/g, '')
       .replace(/[`^][ \t]*\n[ \t]*/g, '')
@@ -328,7 +332,121 @@
         .replace(/(["'])([A-Za-z0-9_$.-]*)\1(?=[A-Za-z0-9_$])/g, '$2')
         .replace(/([A-Za-z0-9_$])(["'])([A-Za-z0-9_$.-]+)\2/g, '$1$3');
     }
+    // Source keywords can be split with horizontal whitespace to evade lexical checks. Join
+    // only all-uppercase fragment runs whose concatenation is a reviewed source word. This
+    // deliberately leaves ordinary prose such as "for each customer" unchanged.
+    normalized = normalized.replace(/\b(?:[A-Z]{1,4}[ \t]+){1,7}[A-Z]{1,4}\b/g, function (candidate) {
+      var joined = candidate.replace(/[ \t]+/g, '');
+      return inventoryHas(SOURCE_WORDS, joined) ? joined : candidate;
+    });
     return normalized;
+  }
+
+  // Positive presentation contract
+  // ------------------------------
+  // Polaris display values are human-facing prose or compact business labels. They are not
+  // an arbitrary source-code transport. Instead of making acceptance depend on recognizing
+  // every language or executable name, this classifier requires a bounded display-text shape
+  // and weighs natural-language evidence against language-independent source structure.
+  // The older explicit rules remain defense in depth after this contract.
+  var SOURCE_WORDS = '|abstract|alias|alter|analyze|assert|async|await|begin|break|case|catch|checkpoint|' +
+    'class|commit|const|continue|copy|create|deallocate|declare|def|defer|delete|del|describe|detach|' +
+    'discard|do|drop|elif|else|enum|esac|except|exec|execute|explain|export|extends|extern|fi|finally|' +
+    'fn|for|foreach|from|func|function|goto|grant|if|implements|impl|import|in|insert|interface|lambda|' +
+    'let|lock|match|merge|module|namespace|package|param|pragma|prepare|public|raise|record|refresh|' +
+    'reindex|reset|resource|return|revoke|rollback|select|set|show|static|struct|switch|table|then|' +
+    'throw|trait|truncate|try|type|union|until|update|use|using|values|var|vacuum|when|where|while|' +
+    'with|yield|';
+  var PROSE_FUNCTION_WORDS = '|a|an|and|are|as|at|because|before|by|can|could|does|during|for|from|' +
+    'has|have|if|in|includes|into|is|may|must|not|of|on|or|our|should|than|that|the|their|this|to|' +
+    'until|was|were|when|where|which|while|will|with|without|would|you|your|';
+  var SENTENCE_ENDING = /[.!?…][\s\])}"'’”]*$/u;
+  var DISPLAY_CHARACTER = /^[\p{L}\p{N}\p{Zs}\t\n\r.,!?…:;()\[\]{}'"“”‘’/@#$%&*+=_\\|<>`~^–—-]*$/u;
+  var OPAQUE_DISPLAY_TOKEN = /^[\p{L}\p{N}][\p{L}\p{N}._\[\],:@+%'’–—-]{31,}$/u;
+
+  function inventoryHas(inventory, word) {
+    return inventory.indexOf('|' + word.toLowerCase() + '|') >= 0;
+  }
+
+  function lexicalWords(value) {
+    return value.match(/[\p{L}\p{N}]+(?:['’.-][\p{L}\p{N}]+)*/gu) || [];
+  }
+
+  function sourceStructureScore(value) {
+    var score = 0;
+    // These shapes carry execution/configuration structure across language families; none is
+    // needed to render a professional Polaris sentence or ordinary business label.
+    if (/\{\s*\{|\}\s*\}|\{%|%\}|<%|%>|\$\s*\{\s*\{/u.test(value)) score += 6;
+    if (/(?:^|\n)\s*(?:#!|#\s*(?:define|include|pragma)\b|@echo\s+off\b|--\s*[^\n]*$)/im.test(value)) score += 5;
+    if (/=>|->|::|\?\.|&&|\|\||===?|!==?|>=|<=|\+\+|--|<<|>>/u.test(value)) score += 4;
+    if (/\$\{[^}\n]+\}|\$[A-Za-z_][\w]*|%[A-Za-z_~][\w~]*%|%%[A-Za-z]|!\w+!/u.test(value)) score += 5;
+    if (/(?:^|[\s({,])@[A-Za-z_]\w*(?=\s|$)/u.test(value)) score += 4;
+    if (/(?:^|\n)\s*(?:[A-Za-z_][\w.-]*\s*=|[A-Z_][A-Z0-9_]*=|\[[^\]\n]+\]\s*$)/m.test(value)) score += 4;
+    if (/(?:^|\n)[ \t]+\S/u.test(value) && /(?:^|\n)\s*[^\n.!?]{0,120}(?:[:{]|\b(?:do|then|else|case|except|catch)\b)\s*$/im.test(value)) score += 4;
+    if (/(?:^|\n)\s*[\w.-]+:\s*(?:$|\n)/m.test(value) ||
+      /(?:^|\n)\s*[\w.-]+:\s*(?:\d+|true|false|null|[\w./:-]+)\s*$/im.test(value)) score += 4;
+    if (/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\([^()\n]{0,300}\)/u.test(value)) score += 4;
+    if (/[A-Za-z_$][\w$]*\s*\[[^\]\n]{0,200}\]/u.test(value)) score += 3;
+    if (/\{[\s\S]{0,500}\}|\[[\s\S]{0,500}\]\s*(?:;|$)/u.test(value)) score += 3;
+    if (/(?:^|\s)(?:--?[A-Za-z][\w-]*|\/[A-Za-z?][\w?]*)(?:\s|=|$)/u.test(value)) score += 3;
+    if (/(?:^|\s)(?:\.{0,2}[\\/]|[A-Za-z]:\\)[^\s]+/u.test(value)) score += 3;
+    if (/(?:^|\s)(?:\d*>|\d*<|\||&\s*(?:['"(]|\$)|<<<|\$\(|<\()/u.test(value)) score += 4;
+    if (/^\s*\/(?:\\.|[^/\n]){1,300}\/[dgimsuvy]*\s*$/u.test(value)) score += 5;
+    if (/(?:^|\n)\s*(?:FROM|RUN|CMD|ENTRYPOINT|ENV|ARG|COPY|WORKDIR|EXPOSE|VOLUME|USER|LABEL)\b/im.test(value) &&
+      !SENTENCE_ENDING.test(value)) score += 3;
+    if (/(?:^|\n)\s*(?:call|goto)\s+:[A-Za-z_]\w*(?:\s|$)/im.test(value)) score += 4;
+    if (/(?:^|\n)[^\n]{1,120}:\n\t\S/u.test(value)) score += 5;
+    return score;
+  }
+
+  function positivePresentationViolation(value) {
+    var trimmed = value.trim();
+    if (!trimmed) return 'presentation-empty';
+    if (!DISPLAY_CHARACTER.test(trimmed)) return 'presentation-character';
+    if (OPAQUE_DISPLAY_TOKEN.test(trimmed)) return null;
+
+    var words = lexicalWords(trimmed);
+    if (!words.length) return 'presentation-no-words';
+    var sourceWordCount = 0;
+    var functionWordCount = 0;
+    for (var index = 0; index < words.length; index += 1) {
+      if (inventoryHas(SOURCE_WORDS, words[index])) sourceWordCount += 1;
+      if (inventoryHas(PROSE_FUNCTION_WORDS, words[index])) functionWordCount += 1;
+    }
+
+    var firstMatch = /^\s*([A-Za-z_][\w-]*)/.exec(trimmed);
+    var firstWord = firstMatch ? firstMatch[1] : '';
+    var sourceLead = Boolean(firstWord && inventoryHas(SOURCE_WORDS, firstWord));
+    var sourceStyledLead = sourceLead &&
+      (firstWord === firstWord.toLowerCase() || firstWord === firstWord.toUpperCase());
+    var sentenceLike = words.length >= 4 && SENTENCE_ENDING.test(trimmed) && functionWordCount >= 1;
+    var explicitProseOpening = /^(?:the|this|that|these|those|a|an|our|your|their|its|please|would|could|should|unknown|evidence|advisory)\b/i.test(trimmed);
+    var structureScore = sourceStructureScore(trimmed);
+
+    // Complete natural-language sentences may legitimately discuss SQL, exports, classes, or
+    // formulas. They remain valid when no source structure is being transported.
+    if (sentenceLike && structureScore === 0 && (explicitProseOpening || sourceWordCount <= 1)) return null;
+
+    // A source-styled leading keyword is not a business label unless natural-language sentence
+    // evidence outweighs it. This closes bare word-only forms such as TABLE invoices, yield
+    // invoice, and GRANT SELECT ON invoices TO analyst without rejecting title-cased labels such
+    // as Export documentation or Class A materials.
+    if (sourceStyledLead && !sentenceLike) return 'presentation-source-lead';
+    if (structureScore >= 4) return 'presentation-source-structure';
+    if (sourceWordCount >= 2 && !sentenceLike) return 'presentation-source-vocabulary';
+
+    // Multiline display prose uses complete sentences or explicit business labels on each line.
+    // Indented blocks, bare key/value maps, and token-split source do not meet that contract.
+    if (trimmed.indexOf('\n') >= 0) {
+      var lines = trimmed.split('\n').filter(function (line) { return line.trim(); });
+      var proseLines = lines.every(function (line) {
+        var lineWords = lexicalWords(line);
+        return SENTENCE_ENDING.test(line.trim()) && lineWords.length >= 3;
+      });
+      if (!proseLines) return 'presentation-multiline-structure';
+    }
+
+    return null;
   }
 
   // Display fields accept professional prose, not source-language statements. The older
@@ -535,6 +653,8 @@
     if (typeof value !== 'string') return 'not-string';
     if (UNSAFE_CONTROLS.test(value)) return 'unsafe-control';
     var inspected = normalizedForInspection(value);
+    var presentationViolation = positivePresentationViolation(inspected);
+    if (presentationViolation) return presentationViolation;
     var sourceViolation = structuralSourceViolation(inspected);
     if (sourceViolation) return sourceViolation;
     for (var index = 0; index < RULES.length; index += 1) {
@@ -544,7 +664,7 @@
   }
 
   return Object.freeze({
-    POLICY_VERSION: 'northstar.polaris.professional-text.v7',
+    POLICY_VERSION: 'northstar.polaris.professional-text.v8',
     isProfessionalText: function (value) { return violation(value) === null; }
   });
 });

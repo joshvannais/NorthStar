@@ -54,6 +54,10 @@
       pattern: /\bselect\s+(?:distinct\s+)?[A-Za-z0-9_.*"`\[\],\s]+\s+from\s+[A-Za-z0-9_."`\[\]-]+(?:\s*(?:;|$)|\s+(?:where|join|left\s+join|right\s+join|inner\s+join|outer\s+join|group\s+by|order\s+by|having|limit|offset|union)\b)/i
     }),
     Object.freeze({
+      id: 'sql-scalar-query',
+      pattern: /(?:^|\n)\s*select\s+(?:-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|current_(?:date|time|timestamp)|version\s*\(\s*\)|count\s*\([^\n)]*\))\s*;?\s*(?:$|\n)/im
+    }),
+    Object.freeze({
       id: 'sql-write-or-schema',
       pattern: /\binsert\s+into\s+[A-Za-z_][\w.$"`\[\]-]*\s*(?:\([^)]*\))?\s+values\s*\(|\bupdate\s+[A-Za-z_][\w.$"`\[\]-]*\s+set\s+[A-Za-z_][\w.$"`\[\]-]*\s*=|\bdelete\s+from\s+[A-Za-z_][\w.$"`\[\]-]*(?:\s+where\b|\s*;)|\b(?:drop|alter|create|truncate)\s+(?:table|database|schema|index|view)\b/i
     }),
@@ -67,7 +71,11 @@
     }),
     Object.freeze({
       id: 'shell-command',
-      pattern: /\b(?:Get|Set|New|Remove|Invoke|Start|Stop|Restart|Test|Select|Where|ForEach|Import|Export)-[A-Z][A-Za-z]+\b|\b(?:npm|npx|yarn|pnpm)\s+(?:install|run|test|exec|audit)\b|\bgit\s+(?:clone|checkout|switch|reset|clean|push|pull|fetch|commit|status|diff|log|show|rev-parse)\b|(?:^|[\n:;])\s*(?:rm|del|erase|rmdir)\s+(?:-[A-Za-z]+|\/[A-Za-z]+|[.~\\/])|\$(?:env:)?[A-Za-z_]\w*\s*=/i
+      pattern: /\b(?:Get|Set|New|Remove|Invoke|Start|Stop|Restart|Test|Select|Where|ForEach|Import|Export|Write|Read|Add|Clear|Copy|Move|Rename|Out|Format)-[A-Z][A-Za-z]+\b|\b(?:npm|npx|yarn|pnpm)\s+(?:install|run|test|exec|audit)\b|\bgit\s+(?:clone|checkout|switch|reset|clean|push|pull|fetch|commit|status|diff|log|show|rev-parse)\b|(?:^|[\n:;])\s*(?:rm|del|erase|rmdir)\s+(?:-[A-Za-z]+|\/[A-Za-z]+|[.~\\/])|\$(?:env:)?[A-Za-z_]\w*\s*=/i
+    }),
+    Object.freeze({
+      id: 'shell-command-line',
+      pattern: /(?:^|[\n:;])\s*(?:ls\s+(?:-[A-Za-z]+|[.~\\/])|(?:cat|head|tail)\s+(?:-[A-Za-z]+\s+)?[.~\\/]|(?:grep|sed|awk|find)\s+(?:-[A-Za-z]+\s+|[.~\\/]|["'])|(?:echo|printf)\s+[^\n]*(?:>|\|)|sudo\s+[A-Za-z][\w-]*(?:\s+|$)|(?:systemctl|service)\s+(?:start|stop|restart|enable|disable|status)\b|(?:docker|podman)\s+(?:run|exec|build|pull|push|compose|rm|stop|start)\b|(?:kubectl|helm)\s+(?:get|apply|delete|create|install|upgrade|exec|logs|describe)\b|(?:ssh|scp|rsync)\s+(?:-[A-Za-z]+\s+)*(?:[\w.-]+@|[.~\\/])|(?:python(?:3)?|node|ruby|perl)\s+(?:-[A-Za-z]+\s+)*[^\s]+\.(?:py|js|mjs|cjs|rb|pl)\b|chmod\s+(?:-[A-Za-z]+\s+)*(?:[0-7]{3,4}|[ugoa]*[+=-][rwxXst]+)\s+|chown\s+(?:-[A-Za-z]+\s+)*(?:[\w.-]+(?::[\w.-]+)?)\s+)/i
     }),
     Object.freeze({
       id: 'python-source',

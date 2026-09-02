@@ -2,7 +2,10 @@
 
 const crypto = require('crypto');
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const request = require('supertest');
+const vm = require('vm');
 const {
   MESSAGE_REQUEST_SCHEMA,
   RESPONSE_SCHEMA,
@@ -641,5 +644,28 @@ describe('P6 P1 professional presentation correction', () => {
     for (const value of ORDINARY_PRESENTATION) {
       expect(cardRenderer.validateProfessionalText(value)).toBe(value);
     }
+  });
+
+  test('browser uses the shared policy before card code and fails closed if that dependency is absent', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../../public/dashboard/polaris.html'), 'utf8');
+    const policySource = fs.readFileSync(path.join(__dirname, '../../public/js/polaris-professional-text.js'), 'utf8');
+    const rendererSource = fs.readFileSync(path.join(__dirname, '../../public/js/polaris-native-card.js'), 'utf8');
+    const policyIndex = html.indexOf('<script src="/js/polaris-professional-text.js"></script>');
+    const rendererIndex = html.indexOf('<script src="/js/polaris-native-card.js"></script>');
+    expect(policyIndex).toBeGreaterThan(0);
+    expect(rendererIndex).toBeGreaterThan(policyIndex);
+
+    const missingPolicy = { self: {} };
+    vm.runInNewContext(rendererSource, missingPolicy);
+    expect(() => missingPolicy.self.NorthStarPolarisCard.validateProfessionalText('Ordinary customer prose.'))
+      .toThrow('Unsupported Polaris structured contract.');
+
+    const wired = { self: {} };
+    vm.runInNewContext(policySource, wired);
+    vm.runInNewContext(rendererSource, wired);
+    expect(wired.self.NorthStarPolarisCard.validateProfessionalText('Ordinary customer prose.'))
+      .toBe('Ordinary customer prose.');
+    expect(() => wired.self.NorthStarPolarisCard.validateProfessionalText('document.body.remove();'))
+      .toThrow('Unsupported Polaris structured contract.');
   });
 });

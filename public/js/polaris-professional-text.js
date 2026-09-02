@@ -17,20 +17,30 @@
   // Ambiguous business nouns such as branch, package, select, and run are intentionally absent;
   // runtime names such as node are considered only in explicit command contexts below.
   var EXECUTABLE_NAME = '(?:bash|sh|zsh|fish|powershell(?:\\.exe)?|pwsh|cmd(?:\\.exe)?|wsl(?:\\.exe)?' +
-    '|python(?:\\d+(?:\\.\\d+)?)?|node|ruby|perl|php|deno|java|dotnet' +
-    '|npm|npx|pnpm|yarn|bun|pip(?:\\d+(?:\\.\\d+)?)?|gem|cargo|composer|git|hg|svn' +
+    '|python(?:\\d+(?:\\.\\d+)?)?|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go' +
+    '|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc' +
+    '|npm|npx|pnpm|yarn|bun|pip(?:\\d+(?:\\.\\d+)?)?|gem|cargo|composer|mvn|gradle' +
+    '|poetry|uv|conda|mamba|git|hg|svn' +
     '|ls|cat|head|tail|grep|sed|awk|find|printf|echo|cp|mv|rm|chmod|chown|whoami|id|pwd' +
-    '|ps|kill|pkill|printenv|env|export|source|touch|mkdir|rmdir|ln|stat|du|df|mount|umount' +
-    '|uname|hostname|groups|uptime|top|nohup|renice|timeout|sleep' +
-    '|tee|xargs|uniq|wc|tr|readlink|realpath|basename|dirname|mktemp|mkfifo' +
-    '|paste|comm|diff|cmp|od|hexdump|xxd|strings|jq' +
+    '|cd|pushd|popd|which|whereis|locate|history|alias|unalias|jobs|fg|bg|wait|set|unset' +
+    '|declare|typeset|readonly|shift|trap|ulimit|umask' +
+    '|ps|pgrep|pidof|pstree|kill|pkill|printenv|env|export|source|touch|mkdir|rmdir|ln|stat|du|df|mount|umount' +
+    '|uname|hostname|groups|who|users|last|lastlog|uptime|top|free|vmstat|iostat|sar|watch|nohup|renice|timeout|sleep' +
+    '|tee|xargs|uniq|wc|tr|sort|cut|fold|fmt|nl|pr|split|csplit|join|expand|unexpand' +
+    '|readlink|realpath|basename|dirname|mktemp|mkfifo|paste|comm|diff|cmp|od|hexdump|xxd|strings|jq|base64' +
     '|md5sum|sha1sum|sha224sum|sha256sum|sha384sum|sha512sum|tar|gzip|gunzip|zip|unzip|openssl' +
-    '|dd|make|cmake|dmesg|sysctl|getent|passwd|sudo|su|apt|apt-get|dpkg|rpm|yum|dnf|apk|brew' +
+    '|getfacl|setfacl|chattr|lsattr|lsblk|blkid|fdisk|parted|mkfs|fsck' +
+    '|dd|make|cmake|dmesg|sysctl|getent|passwd|useradd|usermod|userdel|groupadd|groupmod|groupdel' +
+    '|sudo|su|apt|apt-get|dpkg|rpm|yum|dnf|apk|brew' +
     '|snap|flatpak' +
     '|ssh|scp|sftp|rsync|ftp|telnet|curl|wget|ping|traceroute|nslookup|dig|host|nc|netcat' +
-    '|ifconfig|netstat|ss|ip|arp|lsof|systemctl|service|journalctl|crontab|docker|podman|kubectl|helm' +
+    '|ifconfig|netstat|ss|ip|arp|route|iptables|nft|ethtool|nmcli|lsof|systemctl|service|journalctl|crontab' +
+    '|docker|podman|kubectl|helm|terraform|tofu|ansible|ansible-playbook|packer|vagrant' +
+    '|aws|az|gcloud|psql|mysql|mariadb|sqlite3|redis-cli|mongosh' +
     '|dir|copy|move|del|erase|type|where|tasklist|taskkill|ipconfig|sc|reg|schtasks|wmic' +
-    '|robocopy|xcopy|certutil|bitsadmin|start|net|wevtutil|msiexec|rundll32|setx|systeminfo' +
+    '|robocopy|xcopy|certutil|bitsadmin|start|net|netsh|wevtutil|msiexec|rundll32|setx|systeminfo' +
+    '|ver|vol|cls|findstr|fc|comp|compact|doskey|driverquery|mode|path|pause|recover|replace|subst|tree' +
+    '|choice|clip|forfiles|openfiles|quser|qwinsta' +
     '|assoc|ftype|mklink|attrib|icacls|takeown|diskpart|bcdedit|dism|sfc|shutdown|logoff|runas' +
     '|cscript|wscript)';
   var EXECUTABLE_TOKEN = EXECUTABLE_NAME + '(?:\\.exe|\\.cmd|\\.bat)?';

@@ -27,7 +27,49 @@ const SNAPSHOT = '00000000-0000-4000-8000-000000000607';
 const CARD_SCHEMA = 'northstar.polaris.customer-intelligence-card.v1';
 const RESPONSE_SCHEMA = 'northstar.polaris.assistant-response.v1';
 const HOSTILE = '<img src="/p6-hostile-image" onerror="globalThis.p6Compromised=true"><script>globalThis.p6Compromised=true</script><svg onload="globalThis.p6Compromised=true">';
-const MIXED_COMMAND = 'Please run ls -la /tmp/private before the visit.';
+const HOSTILE_PRESENTATION_CASES = Object.freeze([
+  {
+    id: 'markup-card-answer', text: HOSTILE, placement: 'cardAnswer', cardIndex: 0,
+    viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'posix-path-pipe-response-answer',
+    text: 'Please run ls --color /tmp/private | head -n 2 before the visit.', placement: 'responseAnswer',
+    viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'sql-scalar-later-card-title', text: 'Recommended action: SELECT now();',
+    placement: 'cardTitle', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'interpreter-invisible-card-subtitle', text: 'Please run python3\u200b -c "print(1)".',
+    placement: 'cardSubtitle', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'nfkc-package-card-answer', text: 'Ｒｕｎ ｎｐｍ ｃｉ ｂｅｆｏｒｅ ｃｏｎｔｉｎｕｉｎｇ．',
+    placement: 'cardAnswer', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'git-admin-later-evidence-value', text: 'Run git branch -a for review.',
+    placement: 'laterEvidenceValue', cardIndex: 3, viewport: { width: 1440, height: 900 }, theme: 'dark',
+  },
+  {
+    id: 'unknown-labelled-utility-evidence-label', text: 'Command: deployctl --target=prod',
+    placement: 'evidenceLabel', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'windows-powershell-unknown-label', text: 'Please run powershell -Command Get-Process.',
+    placement: 'unknownLabel', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'remote-host-command-confidence-basis', text: 'Use ssh admin@example.internal before dispatch.',
+    placement: 'confidenceBasis', cardIndex: 1, viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'embedded-program-call-evidence-value', text: 'Recommended action: calculateTotal(1);',
+    placement: 'evidenceValue', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'dark',
+  },
+]);
 
 function json(body, status = 200) {
   return { status, contentType: 'application/json; charset=utf-8', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) };
@@ -125,16 +167,38 @@ function maximumBoundaryCard(index) {
   return result;
 }
 
-function messageResponse(body, hostile) {
+function applyPresentationHazard(response, hazard) {
+  if (!hazard) return response;
+  const cardIndex = Number.isInteger(hazard.cardIndex) ? hazard.cardIndex : 0;
+  const targetCard = response.cards[cardIndex];
+  assert.ok(targetCard, `hazard ${hazard.id} card index`);
+  if (hazard.placement === 'responseAnswer') response.answer.text = hazard.text;
+  else if (hazard.placement === 'cardTitle') targetCard.title = hazard.text;
+  else if (hazard.placement === 'cardSubtitle') targetCard.subtitle = hazard.text;
+  else if (hazard.placement === 'cardAnswer') targetCard.answer = hazard.text;
+  else if (hazard.placement === 'evidenceLabel') targetCard.evidence[0].label = hazard.text;
+  else if (hazard.placement === 'evidenceValue') targetCard.evidence[0].value = hazard.text;
+  else if (hazard.placement === 'unknownLabel') targetCard.unknowns[0].label = hazard.text;
+  else if (hazard.placement === 'confidenceBasis') targetCard.confidence.basis = hazard.text;
+  else if (hazard.placement === 'laterEvidenceValue') {
+    const id = '00000000-0000-4000-8000-000000000699';
+    targetCard.evidence.push({
+      id, label: 'Later evidence', value: hazard.text, confidence: 0.8,
+      source: { kind: 'canonical_fact', id }, untrustedText: true,
+    });
+    response.answer.evidenceCount += 1;
+  } else throw new Error(`unknown hazard placement: ${hazard.placement}`);
+  return response;
+}
+
+function messageResponse(body, hazard) {
   const response = contextResponse(false);
   response.requestId = body.idempotencyKey;
   response.responseId = crypto.createHash('sha256').update(`browser:${body.idempotencyKey}`).digest('hex');
   response.source = 'openai';
   response.provider = { state: 'configured', requestsSent: 1 };
-  const injected = typeof hostile === 'string' ? hostile : hostile ? HOSTILE : '';
-  response.answer.text = hostile ? `Dynamic Polaris text is inert: ${injected}` : 'Bounded Polaris browser answer.';
-  if (hostile) response.cards[0].answer = `Dynamic Polaris card text is inert: ${injected}`;
-  return response;
+  response.answer.text = 'Bounded Polaris browser answer.';
+  return applyPresentationHazard(response, hazard);
 }
 
 function malformedResponse(name, response) {
@@ -149,10 +213,10 @@ function malformedResponse(name, response) {
   return response;
 }
 
-function contextResponse(hostile, boundaryCardCount) {
+function contextResponse(hazard, boundaryCardCount) {
   const cards = Array.from({ length: boundaryCardCount || 4 }, (_value, index) =>
-    boundaryCardCount ? maximumBoundaryCard(index) : card(hostile, index));
-  return {
+    boundaryCardCount ? maximumBoundaryCard(index) : card(false, index));
+  const response = {
     schemaVersion: RESPONSE_SCHEMA, responseId: 'browser-context', requestId: 'browser-request',
     state: 'available', source: 'canonical_local', authority: { organizationId: ORG, userId: USER, role: 'owner' },
     selected: { kind: 'lead', id: LEAD },
@@ -165,6 +229,7 @@ function contextResponse(hostile, boundaryCardCount) {
     cards,
     provider: { state: 'unconfigured', requestsSent: 0 }, advisoryOnly: true, canonicalMutationAllowed: false,
   };
+  return applyPresentationHazard(response, hazard);
 }
 
 function demoWorkspace() {
@@ -410,17 +475,17 @@ async function runDemo(browser, origin, outputRoot, manifest, selected) {
 }
 
 async function runHostile(browser, origin, securityRoot, manifest, selected) {
-  for (const [hazard, hostileText] of [['markup', HOSTILE], ['mixed-command', MIXED_COMMAND]]) {
+  for (const hazard of HOSTILE_PRESENTATION_CASES) {
     for (const source of ['context', 'message']) {
-      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+      const context = await browser.newContext({ viewport: hazard.viewport, colorScheme: hazard.theme });
       await context.addInitScript(() => { globalThis.p6Compromised = false; });
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror', error => errors.push(String(error)));
       const state = {
         external: [], api: [], messageCalls: 0, messageKeys: [],
-        hostileContext: source === 'context' ? hostileText : false,
-        hostileMessage: source === 'message' ? hostileText : false,
+        hostileContext: source === 'context' ? hazard : false,
+        hostileMessage: source === 'message' ? hazard : false,
         malformed: null, unconfigured: false,
       };
       await installRoutes(page, state);
@@ -441,19 +506,19 @@ async function runHostile(browser, origin, securityRoot, manifest, selected) {
         assert.strictEqual(await page.locator('.polaris-native-card').count(), 0,
           'rejected message clears the card host instead of preserving a partial provider presentation');
       }
-      await assertProfessionalPresentation(page, `${selected}-hostile-${hazard}-${source}`);
+      await assertProfessionalPresentation(page, `${selected}-hostile-${hazard.id}-${source}`);
       const bodyText = await page.locator('body').innerText();
-      assert.strictEqual(bodyText.includes(hostileText), false);
+      assert.strictEqual(bodyText.includes(hazard.text), false);
       assert.doesNotMatch(bodyText, /globalThis\.p6Compromised|p6-hostile-image/);
       assert.strictEqual(await page.evaluate(() => globalThis.p6Compromised), false);
       assert.strictEqual(await page.locator('img[src="/p6-hostile-image"], script[src="/p6-hostile-image"]').count(), 0);
       assert.deepStrictEqual(state.external, []);
       assert.deepStrictEqual(errors, []);
-      const filename = path.join(securityRoot, `${selected}-mobile-dark-hostile-${hazard}-${source}-rejected.png`);
+      const filename = path.join(securityRoot, `${selected}-${hazard.id}-${source}-rejected.png`);
       await page.screenshot({ path: filename, fullPage: true });
       manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
-        route, viewport: { width: 390, height: 844 }, theme: 'dark',
-        fixture: `hostile-${hazard}-${source}-professional-text-fail-closed-no-partial-render` });
+        route, viewport: hazard.viewport, theme: hazard.theme,
+        fixture: `hostile-${hazard.id}-${source}-professional-text-fail-closed-no-partial-render` });
       await context.close();
     }
   }

@@ -89,13 +89,53 @@ const HOSTILE_PRESENTATION_CASES = Object.freeze([
     id: 'nfkc-invisible-interpreter-confidence', text: 'Please run py\u3164thon3 -c "print(1)" before continuing.',
     placement: 'confidenceBasis', cardIndex: 1, viewport: { width: 1440, height: 900 }, theme: 'light',
   },
+  {
+    id: 'posix-escaped-executable-response-answer', text: 'Recommended action: g\\it status',
+    placement: 'responseAnswer', viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'bare-select-from-card-title', text: 'SELECT * FROM customers',
+    placement: 'cardTitle', cardIndex: 3, viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'bare-delete-card-answer', text: 'DELETE FROM customers',
+    placement: 'cardAnswer', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'dark',
+  },
+  {
+    id: 'bare-session-scalar-evidence-label', text: 'SELECT current_user',
+    placement: 'evidenceLabel', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'light',
+  },
+  {
+    id: 'python-class-evidence-value', text: 'class Example:\n    pass',
+    placement: 'evidenceValue', cardIndex: 0, viewport: { width: 1440, height: 900 }, theme: 'dark',
+  },
+  {
+    id: 'csharp-using-unknown-label', text: 'using System;',
+    placement: 'unknownLabel', cardIndex: 3, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'java-import-confidence-basis', text: 'import java.util.*;',
+    placement: 'confidenceBasis', cardIndex: 2, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'powershell-quoted-call-later-evidence', text: "Recommended action: & 'C:\\tools\\deploy.exe' --force",
+    placement: 'laterEvidenceValue', cardIndex: 3, viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'posix-loop-card-subtitle', text: 'for f in a b; do printf ok; done',
+    placement: 'cardSubtitle', cardIndex: 1, viewport: { width: 320, height: 720 }, theme: 'dark',
+  },
+  {
+    id: 'posix-function-card-answer', text: 'deploy() { echo ok; }',
+    placement: 'cardAnswer', cardIndex: 2, viewport: { width: 390, height: 844 }, theme: 'light',
+  },
 ]);
 
 const PROFESSIONAL_PRESENTATION = Object.freeze({
-  responseAnswer: "The customer's approved total is $1,250.00, with 18% markup and Net 30 terms.",
-  cardTitle: 'Select HVAC from inventory.',
-  cardSubtitle: 'Grant access on Monday to Alex.',
-  cardAnswer: 'Revoke access on Friday from Jordan.',
+  responseAnswer: 'Using System; schedule the approved service after confirming availability.',
+  cardTitle: 'Class A electrical service',
+  cardSubtitle: 'Java compatibility review',
+  cardAnswer: 'Import Java; compatibility can be reviewed next quarter.',
   evidenceLabel: 'Java compatibility requirement',
   evidenceValue: 'The diagnostic requires Java compatibility with the control panel.',
   unknownLabel: 'The customer requires Ruby finish on the cabinet.',

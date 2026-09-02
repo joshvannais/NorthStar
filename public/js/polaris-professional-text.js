@@ -121,6 +121,14 @@
     'i'
   );
   var PROGRAM_SOURCE = /(?:^|\n)\s*(?:(?:puts|system|require)\s*(?:\(|\s)(?:["'][^\n"']*["']|[A-Za-z_$][\w$./-]*)|[A-Za-z_$][\w$]*(?:::|\.)[A-Za-z_$][\w$]*\s*(?:\(|\s+["'])|public\s+static\s+void\s+main\s*\([^)]*\)\s*\{)/i;
+  // These forms are executable or query grammar even without a semicolon, wrapper, or
+  // explanatory cue. Keep them line-bounded so ordinary service instructions that happen to
+  // use words such as select, delete, class, import, using, or for remain valid prose.
+  var BARE_SQL_STATEMENT = /(?:^|\n)\s*(?:select\s+(?:distinct\s+)?(?:\*|[A-Za-z_]\w*(?:\.[A-Za-z_*][\w$]*)?(?:\s*,\s*[A-Za-z_]\w*(?:\.[A-Za-z_*][\w$]*)?)*)\s+from\s+(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])|delete\s+from\s+(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?|"[^"]+"|`[^`]+`|\[[^\]]+\])|select\s+(?:current_(?:user|role|schema|catalog|database|date|time|timestamp)|session_user|system_user|user))\s*;?\s*(?:$|\n)/im;
+  var PYTHON_CLASS_SOURCE = /(?:^|\n)\s*class\s+[A-Za-z_]\w*(?:\([^\n)]*\))?\s*:\s*(?:\n[ \t]+)?(?:pass|(?:async\s+)?def\b|return\b|raise\b|[A-Za-z_]\w*\s*=)/im;
+  var MANAGED_IMPORT_SOURCE = /(?:^|\n)\s*(?:(?:global\s+)?using\s+(?:static\s+)?(?:global::)?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\s*=\s*[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)?|import\s+(?:static\s+)?[A-Za-z_]\w*(?:\.[A-Za-z_*][\w$]*)*)\s*;\s*(?:$|\n)/im;
+  var POWERSHELL_QUOTED_CALL = /(?:^|[\n:;])\s*&\s*["'](?:(?:(?:[A-Za-z]:)?[\\/]|\.{1,2}[\\/])[^"'\n]{1,300}|[A-Za-z_$][\w$.-]*\.(?:exe|com|cmd|bat|ps1))["'](?=\s|[;&|<>]|$)/i;
+  var POSIX_CONTROL_SOURCE = /(?:^|[\n:;])\s*(?:(?:(?:for\s+[A-Za-z_]\w*\s+in|while|until)\b[^\n]{0,500};\s*do\b[\s\S]{0,500};\s*done\b)|(?:(?:function\s+)?[A-Za-z_]\w*\s*\(\s*\)\s*\{[\s\S]{0,500}\}))/i;
   var RULES = Object.freeze([
     Object.freeze({
       id: 'internal-error-code',
@@ -166,6 +174,7 @@
     }),
     Object.freeze({ id: 'labeled-sql-statement', pattern: LABELED_SQL_STATEMENT }),
     Object.freeze({ id: 'sql-statement', pattern: SQL_STATEMENT }),
+    Object.freeze({ id: 'bare-sql-statement', pattern: BARE_SQL_STATEMENT }),
     Object.freeze({ id: 'embedded-sql-admin', pattern: EMBEDDED_SQL_ADMIN }),
     Object.freeze({
       id: 'sql-scalar-query',
@@ -219,6 +228,10 @@
     Object.freeze({ id: 'generic-pipeline', pattern: GENERIC_PIPELINE }),
     Object.freeze({ id: 'command-wrapper-line', pattern: COMMAND_WRAPPER_LINE }),
     Object.freeze({ id: 'program-source', pattern: PROGRAM_SOURCE }),
+    Object.freeze({ id: 'python-class-source', pattern: PYTHON_CLASS_SOURCE }),
+    Object.freeze({ id: 'managed-import-source', pattern: MANAGED_IMPORT_SOURCE }),
+    Object.freeze({ id: 'powershell-quoted-call', pattern: POWERSHELL_QUOTED_CALL }),
+    Object.freeze({ id: 'posix-control-source', pattern: POSIX_CONTROL_SOURCE }),
     Object.freeze({
       id: 'code-shaped-call',
       pattern: /(?:^|[^A-Za-z0-9_$])(?:[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*_[A-Za-z_$][\w$]*|[a-z][A-Za-z0-9_$]*[A-Z][A-Za-z0-9_$]*)\([^()\n]{0,300}\)/
@@ -281,6 +294,7 @@
     // bounded token-shaped quotes for inspection; displayed prose is never rewritten.
     for (var pass = 0; pass < 3; pass += 1) {
       normalized = normalized
+        .replace(/([A-Za-z0-9_$])\\(?=[A-Za-z0-9_$])/g, '$1')
         .replace(/(["'])([A-Za-z0-9_$.-]*)\1(?=[A-Za-z0-9_$])/g, '$2')
         .replace(/([A-Za-z0-9_$])(["'])([A-Za-z0-9_$.-]+)\2/g, '$1$3');
     }
@@ -298,7 +312,7 @@
   }
 
   return Object.freeze({
-    POLICY_VERSION: 'northstar.polaris.professional-text.v5',
+    POLICY_VERSION: 'northstar.polaris.professional-text.v6',
     isProfessionalText: function (value) { return violation(value) === null; }
   });
 });

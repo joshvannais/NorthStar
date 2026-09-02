@@ -106,6 +106,7 @@ const HOSTILE_PRESENTATION_CORPUS = Object.freeze([
   'java PrivateMain',
   'javac /tmp/PrivateMain.java',
   'jshell /tmp/private.jsh',
+  'service restart northstar',
 ]);
 
 const PROFESSIONAL_SERVICE_PROSE = Object.freeze([
@@ -166,6 +167,7 @@ const PROFESSIONAL_SERVICE_PROSE = Object.freeze([
   'Please describe customer preferences in the service note.',
   'PowerShell Road is outside the current service area.',
   'Java compatibility requirement',
+  'Service',
 ]);
 
 describe('P6 final-audit correction regressions', () => {

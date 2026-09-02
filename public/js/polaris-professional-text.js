@@ -94,7 +94,7 @@
   var DIRECT_COMMAND_LINE = new RegExp(
     // Language/runtime names are ordinary technology nouns in professional labels. They are
     // authoritative only when an execution cue or runtime-specific argument grammar is present.
-    '(?:^|[\\n:;])\\s*(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc)\\b)' +
+    '(?:^|[\\n:;])\\s*(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|service|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc)\\b)' +
     '(?:&\\s*)?' + EXECUTABLE_REFERENCE +
     '(?=\\s|[;&|<>]|$)(?:\\s+|[;&|<>]|$)',
     'i'

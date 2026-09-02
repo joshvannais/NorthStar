@@ -252,13 +252,12 @@ describe('P6 mixed prose professional-output red matrix', () => {
       .toThrow('Unsupported Polaris structured contract.');
   });
 
-  test.each(ORDINARY_PROFESSIONAL_TEXT)('ordinary professional prose remains accepted: %s', value => {
+  test.each(ORDINARY_PROFESSIONAL_TEXT)('ordinary professional prose stays classified but cannot become provider-authored display: %s', value => {
     expect(professionalTextPolicy.isProfessionalText(value)).toBe(true);
     expect(cardRenderer.validateProfessionalText(value)).toBe(value);
     const response = validInterceptorResponse();
     response.answer.text = value;
     response.cards[0].answer = value;
-    expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
-    expect(cardRenderer.validateAssistantResponse(response)).toBe(response);
+    assertServerAndBrowserReject(response);
   });
 });

@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 
 const CONTEXT_REQUEST_SCHEMA = 'northstar.polaris.context-request.v1';
 const MESSAGE_REQUEST_SCHEMA = 'northstar.polaris.message-request.v1';
@@ -241,6 +242,11 @@ function validateAssistantResponse(raw, expected = {}) {
   if (answer.evidenceCount !== evidenceCount || answer.unknownCount !== unknownCount) {
     throw contractError(code, 'Assistant response counts do not match the bounded cards.', 502);
   }
+  try {
+    trustedPresentation.validateTrustedResponseDisplay(response);
+  } catch (_error) {
+    throw contractError(code, 'Assistant response presentation is invalid.', 502);
+  }
   return response;
 }
 
@@ -399,7 +405,9 @@ function responseId(requestId, card) {
 }
 
 function buildContextResponse(item, selected, authority, requestId) {
-  const card = buildCustomerIntelligenceCard(item, selected);
+  const localCard = buildCustomerIntelligenceCard(item, selected);
+  const projected = trustedPresentation.projectTrustedDisplay([localCard], selected, 'canonical_overview');
+  const card = projected.cards[0];
   const response = Object.freeze({
     schemaVersion: RESPONSE_SCHEMA,
     responseId: responseId(requestId, card),
@@ -412,12 +420,8 @@ function buildContextResponse(item, selected, authority, requestId) {
       role: authority.role,
     }),
     selected: Object.freeze({ ...selected }),
-    answer: Object.freeze({
-      text: card.answer,
-      evidenceCount: card.evidence.length,
-      unknownCount: card.unknowns.length,
-    }),
-    cards: Object.freeze([card]),
+    answer: projected.answer,
+    cards: projected.cards,
     provider: Object.freeze({ state: 'unconfigured', requestsSent: 0 }),
     advisoryOnly: true,
     canonicalMutationAllowed: false,

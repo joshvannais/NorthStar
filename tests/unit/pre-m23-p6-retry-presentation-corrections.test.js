@@ -16,6 +16,7 @@ const { createIdempotencyRegistry } = require('../../src/polaris/assistantRuntim
 const { createOpenAIRuntime } = require('../../src/polaris/openaiRuntime');
 const { createCanonicalRouter } = require('../../src/routes/canonicalPolaris');
 const cardRenderer = require('../../public/js/polaris-native-card');
+const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 
 const ORG = 'e1000000-0000-4000-8000-000000000001';
 const USER = 'e2000000-0000-4000-8000-000000000001';
@@ -212,7 +213,11 @@ function providerPayload(inputEnvelope) {
   };
 }
 
-function completedResponse(inputEnvelope, payload = providerPayload(inputEnvelope)) {
+function semanticPayload(inputEnvelope, answerIntent = 'canonical_overview') {
+  return trustedPresentation.semanticChoice(inputEnvelope.untrustedContext, answerIntent);
+}
+
+function completedResponse(inputEnvelope, payload = semanticPayload(inputEnvelope)) {
   return {
     id: 'resp_intercepted_only',
     status: 'completed',
@@ -536,7 +541,7 @@ describe('P6 P1 professional presentation correction', () => {
   );
 
   test.each(DISPLAY_FIELDS)(
-    'ordinary business prose and boundary variants remain unchanged in %s',
+    'ordinary business prose stays classifiable but cannot become provider-authored display in %s',
     async (_fieldLabel, setter) => {
       for (const value of ORDINARY_PRESENTATION) {
         const { inputEnvelope, payload } = mutateDisplayField(setter, value);
@@ -545,9 +550,12 @@ describe('P6 P1 professional presentation correction', () => {
           configured: true,
           client: { responses: { create: async function () { return completedResponse(inputEnvelope, payload); } } },
         });
-        const result = await runtime.respond(inputEnvelope);
-        expect(containsExactString(result.response, value)).toBe(true);
-        expect(cardRenderer.validateAssistantResponse(browserResponse(inputEnvelope, payload))).toBeTruthy();
+        await expect(runtime.respond(inputEnvelope)).rejects.toMatchObject({
+          code: 'POLARIS_PROVIDER_RESPONSE_INVALID',
+          statusCode: 502,
+        });
+        expect(() => cardRenderer.validateAssistantResponse(browserResponse(inputEnvelope, payload)))
+          .toThrow('Unsupported Polaris structured contract.');
       }
     }
   );
@@ -661,9 +669,14 @@ describe('P6 P1 professional presentation correction', () => {
     ]);
 
     const ordinary = runtimeEnvelope();
-    const ordinaryPayload = providerPayload(ordinary);
-    expect(ordinaryPayload.cards[0].authority).toEqual(ordinary.untrustedContext.cards[0].authority);
-    expect(cardRenderer.validateAssistantResponse(browserResponse(ordinary, ordinaryPayload))).toBeTruthy();
+    const ordinaryRuntime = createOpenAIRuntime({
+      enabled: true,
+      configured: true,
+      client: { responses: { create: async function () { return completedResponse(ordinary); } } },
+    });
+    const ordinaryResult = await ordinaryRuntime.respond(ordinary);
+    expect(ordinaryResult.response.cards[0].authority).toEqual(ordinary.untrustedContext.cards[0].authority);
+    expect(cardRenderer.validateAssistantResponse(ordinaryResult.response)).toBe(ordinaryResult.response);
   });
 
   test('browser text defense rejects unsafe demo or error prose without altering ordinary prose', () => {

@@ -648,17 +648,11 @@ describe('P6 professional-text executable grammar correction', () => {
   );
 
   test.each(POSITIVE_CONTRACT_PROSE_FIELD_CASES)(
-    'preserves independently reasoned positive-contract prose in the %s: %s',
+    'classifies independently reasoned positive-contract prose but rejects it as provider-authored display in the %s: %s',
     (_fieldLabel, value, field) => {
       const response = interceptedResponseWith('The selected record is ready for review.');
       field.response(response, value);
-      expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
-      expect(cardRenderer.validateAssistantResponse(response, {
-        requestId: KEY,
-        authority: authority(),
-        selected: selected(),
-        source: 'interceptor',
-      })).toBe(response);
+      assertServerAndBrowserReject(response);
     }
   );
 
@@ -800,31 +794,19 @@ describe('P6 professional-text executable grammar correction', () => {
     }
   );
 
-  test.each(LEGITIMATE_PROSE)('preserves legitimate professional prose: %s', value => {
+  test.each(LEGITIMATE_PROSE)('classifies legitimate professional prose but rejects it as provider-authored display: %s', value => {
     expect(professionalTextPolicy.isProfessionalText(value)).toBe(true);
 
     const response = interceptedResponseWith(value);
-    expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
-    expect(cardRenderer.validateAssistantResponse(response, {
-      requestId: KEY,
-      authority: authority(),
-      selected: selected(),
-      source: 'interceptor',
-    })).toBe(response);
+    assertServerAndBrowserReject(response);
   });
 
   test.each(LEGITIMATE_FIELD_CASES)(
-    'preserves ordinary professional prose in the %s: %s',
+    'classifies ordinary professional prose but rejects it as provider-authored display in the %s: %s',
     (_fieldLabel, value, field) => {
       const response = interceptedResponseWith('The selected record is ready for review.');
       field.response(response, value);
-      expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
-      expect(cardRenderer.validateAssistantResponse(response, {
-        requestId: KEY,
-        authority: authority(),
-        selected: selected(),
-        source: 'interceptor',
-      })).toBe(response);
+      assertServerAndBrowserReject(response);
     }
   );
 });

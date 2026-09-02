@@ -483,14 +483,13 @@ describe('P6 complete command/code presentation coverage red matrix', () => {
       .toThrow('Unsupported Polaris structured contract.');
   });
 
-  test.each(FINAL_AUDIT_PROFESSIONAL)('accepts final-audit professional control: %s', (_label, value) => {
+  test.each(FINAL_AUDIT_PROFESSIONAL)('classifies final-audit professional control but rejects provider-authored display: %s', (_label, value) => {
     expect(professionalTextPolicy.isProfessionalText(value)).toBe(true);
     expect(cardRenderer.validateProfessionalText(value)).toBe(value);
     const response = validResponse();
     response.answer.text = value;
     response.cards[0].answer = value;
-    expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
-    expect(cardRenderer.validateAssistantResponse(response)).toBe(response);
+    assertGenericAndBrowserReject(response);
   });
 
   test.each([
@@ -666,13 +665,12 @@ describe('P6 complete command/code presentation coverage red matrix', () => {
     expect(runtime.respond).toHaveBeenCalledTimes(1);
   });
 
-  test.each(ORDINARY_BUSINESS_PROSE)('preserves ordinary professional business prose: %s', value => {
+  test.each(ORDINARY_BUSINESS_PROSE)('classifies ordinary professional business prose but rejects provider-authored display: %s', value => {
     expect(professionalTextPolicy.isProfessionalText(value)).toBe(true);
     expect(cardRenderer.validateProfessionalText(value)).toBe(value);
     const response = validResponse();
     response.answer.text = value;
     response.cards[0].answer = value;
-    expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
-    expect(cardRenderer.validateAssistantResponse(response)).toBe(response);
+    assertGenericAndBrowserReject(response);
   });
 });

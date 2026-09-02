@@ -1,10 +1,12 @@
 'use strict';
 
-const professionalTextPolicy = require('../../public/js/polaris-professional-text');
+const crypto = require('crypto');
+const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 
 const {
   MESSAGE_OPERATION,
   PROVIDER_DECISIONS,
+  RESPONSE_SCHEMA,
   UUID,
   contractError,
   messageRequestFingerprint,
@@ -171,9 +173,58 @@ async function statusForRuntime(runtime, req, options = {}) {
   }));
 }
 
-function boundedInterceptedResponse(value, request, authority) {
+function boundedInterceptedResponse(value, request, authority, localContext) {
+  let serialized;
   try {
-    validateAssistantResponse(value, {
+    serialized = JSON.stringify(value);
+  } catch (_error) {
+    throw contractError('POLARIS_INTERCEPTED_RESPONSE_INVALID', 'Intercepted runtime returned an invalid assistant response.', 502);
+  }
+  if (!serialized || Buffer.byteLength(serialized, 'utf8') > MAX_INTERCEPTED_RESPONSE_BYTES) {
+    throw contractError('POLARIS_INTERCEPTED_RESPONSE_TOO_LARGE', 'Intercepted runtime response exceeded the bounded response contract.', 502);
+  }
+  let choice;
+  let projected;
+  try {
+    if (localContext) {
+      validateAssistantResponse(localContext, {
+        requestId: request.idempotencyKey,
+        authority,
+        selected: request.selected,
+        source: 'canonical_local',
+      });
+    } else if (request.selected !== null) {
+      throw new Error('Selected records require canonical local context.');
+    }
+    choice = trustedPresentation.validateSemanticChoice(value, localContext);
+    projected = trustedPresentation.projectTrustedDisplay(
+      localContext ? localContext.cards : [],
+      request.selected,
+      choice.answerIntent
+    );
+  } catch (_error) {
+    throw contractError('POLARIS_INTERCEPTED_RESPONSE_INVALID', 'Intercepted runtime returned an invalid assistant response.', 502);
+  }
+  const response = Object.freeze({
+    schemaVersion: RESPONSE_SCHEMA,
+    responseId: crypto.createHash('sha256').update(JSON.stringify({
+      requestId: request.idempotencyKey,
+      authority: localContext ? localContext.cards.map(card => card.authority) : [],
+      choice,
+    })).digest('hex'),
+    requestId: request.idempotencyKey,
+    state: 'available',
+    source: 'interceptor',
+    authority: Object.freeze({ ...authority }),
+    selected: request.selected ? Object.freeze({ ...request.selected }) : null,
+    answer: projected.answer,
+    cards: projected.cards,
+    provider: Object.freeze({ state: 'unconfigured', requestsSent: 0 }),
+    advisoryOnly: true,
+    canonicalMutationAllowed: false,
+  });
+  try {
+    validateAssistantResponse(response, {
       requestId: request.idempotencyKey,
       authority,
       selected: request.selected,
@@ -182,24 +233,7 @@ function boundedInterceptedResponse(value, request, authority) {
   } catch (_error) {
     throw contractError('POLARIS_INTERCEPTED_RESPONSE_INVALID', 'Intercepted runtime returned an invalid assistant response.', 502);
   }
-  const displayText = [value.answer.text];
-  value.cards.forEach(card => {
-    displayText.push(card.title, card.subtitle, card.answer, card.confidence.basis);
-    card.evidence.forEach(entry => displayText.push(entry.label, entry.value));
-    card.unknowns.forEach(entry => displayText.push(entry.label));
-  });
-  if (!professionalTextPolicy || displayText.some(text => !professionalTextPolicy.isProfessionalText(text))) {
-    throw contractError('POLARIS_INTERCEPTED_RESPONSE_INVALID', 'Intercepted runtime returned an invalid assistant response.', 502);
-  }
-  let serialized;
-  try { serialized = JSON.stringify(value); } catch (_error) {
-    throw contractError('POLARIS_INTERCEPTED_RESPONSE_INVALID', 'Intercepted runtime returned an invalid assistant response.', 502);
-  }
-  const bytes = Buffer.byteLength(serialized, 'utf8');
-  if (bytes > MAX_INTERCEPTED_RESPONSE_BYTES) {
-    throw contractError('POLARIS_INTERCEPTED_RESPONSE_TOO_LARGE', 'Intercepted runtime response exceeded the bounded response contract.', 502);
-  }
-  return value;
+  return response;
 }
 
 function createIdempotencyRegistry(options = {}) {
@@ -423,7 +457,7 @@ async function executeIntercepted(runtime, request, authority, localContext, opt
       () => intercepted.respond(envelope, Object.freeze({ signal: boundary.signal })),
       { deadlineAt: boundary.deadlineAt, signal: boundary.signal }
     );
-    return boundedInterceptedResponse(result, request, authority);
+    return boundedInterceptedResponse(result, request, authority, localContext);
   } finally {
     boundary.dispose();
   }

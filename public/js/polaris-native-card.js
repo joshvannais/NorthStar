@@ -1,12 +1,15 @@
 (function (root, factory) {
   'use strict';
-  var policy = typeof module === 'object' && module.exports
+  var trustedPresentation = typeof module === 'object' && module.exports
+    ? require('./polaris-trusted-presentation')
+    : root.NorthStarPolarisTrustedPresentation;
+  var professionalText = typeof module === 'object' && module.exports
     ? require('./polaris-professional-text')
     : root.NorthStarPolarisProfessionalText;
-  var api = factory(policy);
+  var api = factory(trustedPresentation, professionalText);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NorthStarPolarisCard = api;
-})(typeof self !== 'undefined' ? self : this, function (professionalTextPolicy) {
+})(typeof self !== 'undefined' ? self : this, function (trustedPresentation, professionalText) {
   'use strict';
 
   var CARD_SCHEMA = 'northstar.polaris.customer-intelligence-card.v1';
@@ -63,9 +66,8 @@
   }
 
   function validateProfessionalText(value) {
-    if (!professionalTextPolicy || !professionalTextPolicy.isProfessionalText(value)) {
-      return invalidContract();
-    }
+    if (!professionalText || typeof professionalText.isProfessionalText !== 'function' ||
+        !professionalText.isProfessionalText(value)) return invalidContract();
     return value;
   }
 
@@ -156,6 +158,10 @@
     exactArray(card.unknowns, 12).forEach(validateUnknown);
     validateConfidence(card.confidence);
     validateCardAuthority(card.authority, expectedSelected || null);
+    if (!trustedPresentation || typeof trustedPresentation.validateTrustedCardDisplay !== 'function') {
+      return invalidContract();
+    }
+    try { trustedPresentation.validateTrustedCardDisplay(card); } catch (_error) { return invalidContract(); }
     return card;
   }
 
@@ -192,6 +198,10 @@
         answer.unknownCount !== cards.reduce(function (sum, card) { return sum + card.unknowns.length; }, 0)) {
       return invalidContract();
     }
+    if (!trustedPresentation || typeof trustedPresentation.validateTrustedResponseDisplay !== 'function') {
+      return invalidContract();
+    }
+    try { trustedPresentation.validateTrustedResponseDisplay(response); } catch (_error) { return invalidContract(); }
     return response;
   }
 
@@ -350,7 +360,7 @@
       unknowns.push({ code: 'customer_price_missing', label: 'Customer-facing estimate is not recorded.' });
     }
     if (!graph.work || !graph.work.scheduledStart) unknowns.push({ code: 'schedule_missing', label: 'A scheduled start is not recorded.' });
-    return {
+    var localCard = {
       schemaVersion: CARD_SCHEMA,
       kind: 'customer_intelligence',
       tone: 'purple',
@@ -366,6 +376,12 @@
       advisoryOnly: true,
       canonicalMutationAllowed: false
     };
+    if (!trustedPresentation || typeof trustedPresentation.projectTrustedDisplay !== 'function') return invalidContract();
+    return trustedPresentation.projectTrustedDisplay(
+      [localCard],
+      { kind: selection.kind, id: selection.identifier },
+      'canonical_overview'
+    ).cards[0];
   }
 
   return {

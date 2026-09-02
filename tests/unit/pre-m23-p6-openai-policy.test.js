@@ -14,6 +14,7 @@ const {
   contractError,
 } = require('../../src/polaris/assistantContract');
 const { createCanonicalRouter } = require('../../src/routes/canonicalPolaris');
+const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 
 const ORG = 'a1000000-0000-4000-8000-000000000001';
 const USER = 'a2000000-0000-4000-8000-000000000001';
@@ -192,10 +193,14 @@ function providerOutput(inputEnvelope, overrides = {}) {
   });
 }
 
+function semanticProviderOutput(inputEnvelope, answerIntent = 'canonical_overview') {
+  return trustedPresentation.semanticChoice(inputEnvelope.untrustedContext, answerIntent);
+}
+
 function completedResponse(inputEnvelope, overrides = {}) {
   const payload = Object.prototype.hasOwnProperty.call(overrides, 'payload')
     ? overrides.payload
-    : providerOutput(inputEnvelope, overrides);
+    : semanticProviderOutput(inputEnvelope, overrides.answerIntent);
   return {
     id: overrides.id || 'resp_test_opaque',
     status: overrides.status || 'completed',
@@ -306,10 +311,10 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
   test.each([
     ['the exact strict-schema property order', value => value],
     ['recursive object-key permutations', reverseObjectKeys],
-  ])('accepts semantically exact provider cards in %s while preserving array order', async (_label, reorder) => {
+  ])('accepts the exact bounded semantic choice in %s while preserving canonical arrays', async (_label, reorder) => {
     const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
     const inputEnvelope = envelope();
-    const payload = reorder(providerOutput(inputEnvelope));
+    const payload = reorder(semanticProviderOutput(inputEnvelope));
     const client = clientReturning(() => completedResponse(inputEnvelope, { payload }));
     const runtime = module.createOpenAIRuntime({ client, configured: true, enabled: true });
     const result = await runtime.respond(inputEnvelope, { signal: new AbortController().signal });
@@ -411,8 +416,11 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
     ]) expect(Object.prototype.hasOwnProperty.call(body, forbidden)).toBe(false);
     expect(options.signal).toBeInstanceOf(AbortSignal);
     expect(allObjectSchemasAreStrict(body.text.format.schema)).toBe(true);
-    expect(body.text.format.schema.properties.cards.minItems).toBe(1);
-    expect(body.text.format.schema.properties.cards.maxItems).toBe(4);
+    expect(Object.keys(body.text.format.schema.properties).sort()).toEqual([
+      'answerIntent', 'cardCount', 'evidenceCount', 'schemaVersion', 'selectedKind', 'unknownCount',
+    ]);
+    expect(body.text.format.schema.properties.cardCount.minimum).toBe(1);
+    expect(body.text.format.schema.properties.cardCount.maximum).toBe(4);
     expect(result.response).toMatchObject({
       schemaVersion: RESPONSE_SCHEMA,
       requestId: inputEnvelope.requestId,
@@ -671,8 +679,11 @@ function mountedAuth(req, _res, next) {
 }
 
 function mountedProviderResponse(runtimeEnvelope) {
-  const card = JSON.parse(JSON.stringify(runtimeEnvelope.untrustedContext.cards[0]));
-  card.answer = 'Provider-backed, advisory, and read-only.';
+  const projected = trustedPresentation.projectTrustedDisplay(
+    runtimeEnvelope.untrustedContext.cards,
+    runtimeEnvelope.untrustedInput.selected,
+    'canonical_overview'
+  );
   return {
     response: {
       schemaVersion: RESPONSE_SCHEMA,
@@ -682,8 +693,8 @@ function mountedProviderResponse(runtimeEnvelope) {
       source: 'openai',
       authority: runtimeEnvelope.authority,
       selected: runtimeEnvelope.untrustedInput.selected,
-      answer: { text: card.answer, evidenceCount: card.evidence.length, unknownCount: card.unknowns.length },
-      cards: [card],
+      answer: projected.answer,
+      cards: projected.cards,
       provider: { state: 'configured', requestsSent: 1 },
       advisoryOnly: true,
       canonicalMutationAllowed: false,

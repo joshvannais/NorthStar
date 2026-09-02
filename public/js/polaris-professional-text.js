@@ -315,10 +315,10 @@
     normalized = normalized.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ')
       .replace(INVISIBLE_FORMATTING_BMP, '').replace(INVISIBLE_FORMATTING_ASTRAL, '')
       .replace(TOKEN_SEPARATING_MARKS, '')
-      // Block comments embedded inside an identifier/keyword are token separators to a
-      // reader but are discarded by language parsers. Join only that source-shaped form;
-      // ordinary explanatory comments continue to become whitespace below.
-      .replace(/([A-Za-z0-9_$])\/\*[\s\S]*?\*\/(?=[A-Za-z0-9_$])/g, '$1')
+      .replace(/([A-Za-z_$][A-Za-z0-9_$]*)\/\*[\s\S]*?\*\/([A-Za-z_$][A-Za-z0-9_$]*)/g,
+        function (_whole, left, right) {
+          return inventoryHas(SOURCE_WORDS, left + right) ? left + right : left + ' ' + right;
+        })
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/\\[ \t]*\n[ \t]*/g, '')
       .replace(/[`^][ \t]*\n[ \t]*/g, '')
@@ -377,6 +377,7 @@
     // These shapes carry execution/configuration structure across language families; none is
     // needed to render a professional Polaris sentence or ordinary business label.
     if (/\{\s*\{|\}\s*\}|\{%|%\}|<%|%>|\$\s*\{\s*\{/u.test(value)) score += 6;
+    if (/[A-Za-z0-9_$]\/\*[\s\S]{0,300}?\*\/[A-Za-z0-9_$]/u.test(value)) score += 4;
     if (/(?:^|\n)\s*(?:#!|#\s*(?:define|include|pragma)\b|@echo\s+off\b|--\s*[^\n]*$)/im.test(value)) score += 5;
     if (/=>|->|::|\?\.|&&|\|\||===?|!==?|>=|<=|\+\+|--|<<|>>/u.test(value)) score += 4;
     if (/\$\{[^}\n]+\}|\$[A-Za-z_][\w]*|%[A-Za-z_~][\w~]*%|%%[A-Za-z]|!\w+!/u.test(value)) score += 5;
@@ -385,12 +386,12 @@
     if (/(?:^|\n)[ \t]+\S/u.test(value) && /(?:^|\n)\s*[^\n.!?]{0,120}(?:[:{]|\b(?:do|then|else|case|except|catch)\b)\s*$/im.test(value)) score += 4;
     if (/(?:^|\n)\s*[\w.-]+:\s*(?:$|\n)/m.test(value) ||
       /(?:^|\n)\s*[\w.-]+:\s*(?:\d+|true|false|null|[\w./:-]+)\s*$/im.test(value)) score += 4;
-    if (/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\([^()\n]{0,300}\)/u.test(value)) score += 4;
+    if (/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^()\n]{0,300}\)/u.test(value)) score += 4;
     if (/[A-Za-z_$][\w$]*\s*\[[^\]\n]{0,200}\]/u.test(value)) score += 3;
     if (/\{[\s\S]{0,500}\}|\[[\s\S]{0,500}\]\s*(?:;|$)/u.test(value)) score += 3;
     if (/(?:^|\s)(?:--?[A-Za-z][\w-]*|\/[A-Za-z?][\w?]*)(?:\s|=|$)/u.test(value)) score += 3;
     if (/(?:^|\s)(?:\.{0,2}[\\/]|[A-Za-z]:\\)[^\s]+/u.test(value)) score += 3;
-    if (/(?:^|\s)(?:\d*>|\d*<|\||&\s*(?:['"(]|\$)|<<<|\$\(|<\()/u.test(value)) score += 4;
+    if (/(?:^|\s)(?:\d*>>?|\d*<<?)\s*(?:[./~\\$%]|[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\S*|(?:^|\s)(?:\||&\s*(?:['"(]|\$)|<<<|\$\(|<\()/u.test(value)) score += 4;
     if (/^\s*\/(?:\\.|[^/\n]){1,300}\/[dgimsuvy]*\s*$/u.test(value)) score += 5;
     if (/(?:^|\n)\s*(?:FROM|RUN|CMD|ENTRYPOINT|ENV|ARG|COPY|WORKDIR|EXPOSE|VOLUME|USER|LABEL)\b/im.test(value) &&
       !SENTENCE_ENDING.test(value)) score += 3;

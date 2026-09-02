@@ -30,6 +30,43 @@ const PROHIBITED_PRESENTATION = Object.freeze([
   ['raw JSON', '{"schemaVersion":"northstar.polaris.assistant-response.v1","cards":[]}'],
   ['JSON Schema text', 'json_schema additionalProperties "required": ["answer"]'],
   ['code fence', '```js throw new Error("private"); ```'],
+  ['unfenced HTML script', '<script>doWork()</script>'],
+  ['unfenced event-handler markup', '<img src="x" onerror="doWork()">'],
+  ['unfenced XML', '<?xml version="1.0"?><quote total="500" />'],
+  ['unfenced doctype markup', '<!DOCTYPE html><html><body>Private</body></html>'],
+  ['unfenced markup mixed with prose', 'Recommended next step: <section class="internal">doWork()</section>'],
+  ['unfenced JavaScript DOM call', 'document.body.remove();'],
+  ['unfenced JavaScript global call', 'console.log("customer");'],
+  ['unfenced JavaScript request', 'fetch("/api/customers").then(render);'],
+  ['unfenced JavaScript control flow', 'if (ready) { approve(); }'],
+  ['unfenced JavaScript class', 'class Estimate { total() { return 500; } }'],
+  ['unfenced SQL select', 'SELECT customer_id FROM customers WHERE active = true;'],
+  ['unfenced SQL select with case and whitespace', 'sElEcT\nemail\nFrOm users\nWhErE active = 1;'],
+  ['unfenced SQL insert', 'INSERT INTO customers (email) VALUES ("private@example.invalid");'],
+  ['unfenced SQL update', 'UPDATE customers SET active = false WHERE customer_id = 7;'],
+  ['unfenced SQL delete', 'DELETE FROM customers WHERE active = false;'],
+  ['unfenced SQL schema command', 'DROP TABLE customers;'],
+  ['unfenced SQL common-table expression', 'WITH active AS (SELECT id FROM customers) SELECT id FROM active;'],
+  ['unfenced curl command', 'curl https://example.invalid/api'],
+  ['unfenced wget command', 'wget -q https://example.invalid/private'],
+  ['unfenced PowerShell command', 'PowerShell -Command "Get-ChildItem Env:"'],
+  ['unfenced PowerShell cmdlet', 'Invoke-WebRequest -Uri https://example.invalid/private'],
+  ['unfenced cmd command', 'cmd.exe /c dir C:\\private'],
+  ['unfenced shell command', "bash -c 'rm -rf /tmp/private'"],
+  ['unfenced package command', 'npm install hidden-package'],
+  ['unfenced git command', 'git reset --hard HEAD~1'],
+  ['unfenced Python function', 'def calculate_total(price, quantity):\n    return price * quantity'],
+  ['unfenced Python import and call', 'import os\nprint(os.environ)'],
+  ['unfenced CSS rule', '.estimate-card { display: none; }'],
+  ['unfenced CSS at-rule', '@media (max-width: 600px) { body { display: none; } }'],
+  ['unfenced C source', '#include <stdio.h>\nint main(void) { return 0; }'],
+  ['provider HTTP body and header', 'HTTP/1.1 429 Too Many Requests\nx-request-id: req_hidden_123'],
+  ['Python stack trace', 'Traceback (most recent call last):\n  File "private.py", line 1, in <module>'],
+  ['fullwidth markup obfuscation', '＜script＞doWork()＜／script＞'],
+  ['zero-width JavaScript obfuscation', 'docu\u200bment.body.remove();'],
+  ['zero-width shell obfuscation', 'cu\u200brl https://example.invalid/private'],
+  ['mixed prose and SQL', 'The estimate is ready. SELECT total FROM invoices WHERE paid = false;'],
+  ['mixed prose and shell', 'Recommended action: curl -H "Authorization: private" https://example.invalid/api'],
   ['stack trace', 'TypeError: private failure\n    at internal.js:1:2'],
   ['UUID', '123e4567-e89b-42d3-a456-426614174000'],
   ['digest', DIGEST],
@@ -44,6 +81,24 @@ const ORDINARY_PRESENTATION = Object.freeze([
   'Request ID details remain in the private office record.',
   'Use the additional properties listed in the signed estimate.',
   'The error-free installation includes a written workmanship review.',
+  'Select the preferred service from the menu before scheduling.',
+  'Update the customer after the technician confirms the arrival window.',
+  'The customer asked us to remove the old table from the dining room.',
+  'Import duties are included in the equipment allowance.',
+  'Class A roofing material is required for this property.',
+  'The customer requested a script-style font for the storefront sign.',
+  'The exterior color is blue; the finish is matte.',
+  'Call Mike (owner) before arrival.',
+  'The line pressure should remain < 80 PSI during the inspection.',
+  'Option A > Option B when the travel time exceeds 45 minutes.',
+  'Markup is estimated at 18%, subject to the approved final scope.',
+  'The shell-style awning requires two installers.',
+  'The property on SQL Road needs a 12 ft by 18 ft service area.',
+  'Photos are available at https://example.com/visit/123 after authorization.',
+  'Invoice #1234 is due September 15, 2026.',
+  'Starter, Growth, and Complete are plan names used in this comparison.',
+  'PowerShell Road is outside the current service area.',
+  'The customer said, "Please remove the old table after 3:00 PM."',
 ]);
 
 function canonicalItem() {
@@ -189,6 +244,40 @@ function mutateDisplayField(field, value) {
   const payload = providerPayload(inputEnvelope);
   field(inputEnvelope, payload, value);
   return { inputEnvelope, payload };
+}
+
+function containsExactString(value, expected) {
+  if (value === expected) return true;
+  if (!value || typeof value !== 'object') return false;
+  return Reflect.ownKeys(value).some(key => containsExactString(value[key], expected));
+}
+
+function addSecondaryArrayEntries(inputEnvelope, payload) {
+  const evidence = {
+    ...JSON.parse(JSON.stringify(inputEnvelope.untrustedContext.cards[0].evidence[0])),
+    id: 'secondary-evidence',
+    label: 'Secondary evidence',
+    value: 'The second recorded fact remains professional prose.',
+    source: { kind: 'canonical_fact', id: 'secondary-evidence' },
+  };
+  const unknown = { code: 'secondary_unknown', label: 'A second detail remains unknown.' };
+  inputEnvelope.untrustedContext.cards[0].evidence.push(JSON.parse(JSON.stringify(evidence)));
+  inputEnvelope.untrustedContext.cards[0].unknowns.push(JSON.parse(JSON.stringify(unknown)));
+  payload.cards[0].evidence.push(JSON.parse(JSON.stringify(evidence)));
+  payload.cards[0].unknowns.push(JSON.parse(JSON.stringify(unknown)));
+  payload.answer.evidenceCount += 1;
+  payload.answer.unknownCount += 1;
+}
+
+function addSecondaryCard(inputEnvelope, payload) {
+  const localCard = JSON.parse(JSON.stringify(inputEnvelope.untrustedContext.cards[0]));
+  localCard.title = 'Secondary customer intelligence';
+  localCard.subtitle = 'Second bounded card';
+  localCard.answer = 'The second card contains ordinary professional prose.';
+  inputEnvelope.untrustedContext.cards.push(localCard);
+  payload.cards.push(JSON.parse(JSON.stringify(localCard)));
+  payload.answer.evidenceCount += localCard.evidence.length;
+  payload.answer.unknownCount += localCard.unknowns.length;
 }
 
 function interceptedFailure(status) {
@@ -412,11 +501,81 @@ describe('P6 P1 professional presentation correction', () => {
           client: { responses: { create: async function () { return completedResponse(inputEnvelope, payload); } } },
         });
         const result = await runtime.respond(inputEnvelope);
-        expect(JSON.stringify(result.response)).toContain(value);
+        expect(containsExactString(result.response, value)).toBe(true);
         expect(cardRenderer.validateAssistantResponse(browserResponse(inputEnvelope, payload))).toBeTruthy();
       }
     }
   );
+
+  test.each([
+    ['second evidence value', (inputEnvelope, payload, value) => {
+      addSecondaryArrayEntries(inputEnvelope, payload);
+      inputEnvelope.untrustedContext.cards[0].evidence[1].value = value;
+      payload.cards[0].evidence[1].value = value;
+    }],
+    ['second unknown label', (inputEnvelope, payload, value) => {
+      addSecondaryArrayEntries(inputEnvelope, payload);
+      inputEnvelope.untrustedContext.cards[0].unknowns[1].label = value;
+      payload.cards[0].unknowns[1].label = value;
+    }],
+    ['second card answer', (inputEnvelope, payload, value) => {
+      addSecondaryCard(inputEnvelope, payload);
+      payload.cards[1].answer = value;
+    }],
+  ])('server and browser reject code in the %s while preserving exact array counts', async (_label, place) => {
+    const inputEnvelope = runtimeEnvelope();
+    const payload = providerPayload(inputEnvelope);
+    place(inputEnvelope, payload, 'document.body.remove();');
+    const beforeBrowserValidation = JSON.stringify(browserResponse(inputEnvelope, payload));
+    const runtime = createOpenAIRuntime({
+      enabled: true,
+      configured: true,
+      client: { responses: { create: async function () { return completedResponse(inputEnvelope, payload); } } },
+    });
+
+    await expect(runtime.respond(inputEnvelope)).rejects.toMatchObject({
+      code: 'POLARIS_PROVIDER_RESPONSE_INVALID',
+      statusCode: 502,
+    });
+    const browserPayload = browserResponse(inputEnvelope, payload);
+    expect(() => cardRenderer.validateAssistantResponse(browserPayload)).toThrow('Unsupported Polaris structured contract.');
+    expect(JSON.stringify(browserPayload)).toBe(beforeBrowserValidation);
+  });
+
+  test('mounted unsafe provider text fails closed without echo, log content, or partial data', async () => {
+    const inputEnvelope = runtimeEnvelope();
+    const payload = providerPayload(inputEnvelope);
+    const prohibited = 'The estimate is ready. SELECT total FROM invoices WHERE paid = false;';
+    payload.answer.text = prohibited;
+    payload.cards[0].answer = prohibited;
+    const logs = [];
+    const state = { contextLoads: 0, reservations: 0, reconciliations: [] };
+    const runtime = createOpenAIRuntime({
+      enabled: true,
+      configured: true,
+      logger: entry => { logs.push(entry); },
+      client: { responses: { create: async function () { return completedResponse(inputEnvelope, payload); } } },
+    });
+    const app = mountedApp(runtime, createIdempotencyRegistry(), state);
+    const response = await request(app).post('/api/v1/canonical/polaris/assistant/messages').send(messageBody());
+
+    expect(response.status).toBe(502);
+    expect(response.body).toEqual({
+      success: false,
+      requestId: 'mounted-p6-correction',
+      error: {
+        code: 'POLARIS_PROVIDER_RESPONSE_INVALID',
+        message: 'Polaris received an unsupported structured response. No data was changed.',
+      },
+    });
+    expect(response.body).not.toHaveProperty('data');
+    expect(JSON.stringify(response.body)).not.toContain(prohibited);
+    expect(JSON.stringify(logs)).not.toContain(prohibited);
+    expect(logs).toHaveLength(1);
+    expect(state.reconciliations).toEqual([
+      expect.objectContaining({ attemptCount: 1, outcomeClass: 'failed' }),
+    ]);
+  });
 
   test('typed non-display authority identifiers remain exact while combined unsafe display text fails closed', async () => {
     const inputEnvelope = runtimeEnvelope();

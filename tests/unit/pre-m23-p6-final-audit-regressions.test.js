@@ -101,6 +101,11 @@ const HOSTILE_PRESENTATION_CORPUS = Object.freeze([
   'For diagnostics, REFRESH MATERIALIZED VIEW private_jobs;',
   "The check uses SELECT 'secret';",
   'powershell whoami',
+  'java -jar /tmp/private.jar',
+  'java com.example.PrivateMain',
+  'java PrivateMain',
+  'javac /tmp/PrivateMain.java',
+  'jshell /tmp/private.jsh',
 ]);
 
 const PROFESSIONAL_SERVICE_PROSE = Object.freeze([
@@ -160,6 +165,7 @@ const PROFESSIONAL_SERVICE_PROSE = Object.freeze([
   'The technician will show all approved options at the visit.',
   'Please describe customer preferences in the service note.',
   'PowerShell Road is outside the current service area.',
+  'Java compatibility requirement',
 ]);
 
 describe('P6 final-audit correction regressions', () => {

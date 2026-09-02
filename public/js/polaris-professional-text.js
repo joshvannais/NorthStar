@@ -92,11 +92,14 @@
   var EXPLICIT_GENERIC_COMMAND = /\b(?:(?:run|execute|invoke|launch|issue|enter|type)\s+(?:(?:the|this|a|an|following)\s+)?(?:command|tool|utility|program|script)\s+(?:sudo\s+)?[A-Za-z_$][\w$.-]*|use\s+(?:(?:the|this|a|an|following)\s+)?(?:command|tool|utility|program|script)\s+(?:sudo\s+)?[A-Za-z_$][\w$]*[._-][\w$.-]*|(?:command|tool|utility|program|script)\s*:\s*(?:sudo\s+)?[A-Za-z_$][\w$.-]*)(?:\s+(?:[^\n]{0,240}))?(?:[.;]|$)/i;
   var COMMAND_SHAPED_FRAGMENT = /(?:^|[\n:;(])\s*(?:sudo\s+)?[A-Za-z_$][\w$.-]*(?:\.exe|\.cmd|\.bat)?\s+(?:--?[A-Za-z][\w-]*(?:[=\s]\S+)?|\/[A-Za-z?][\w?]*|(?:(?:[A-Za-z]:)?[\\/]|\.{1,2}[\\/])\S+|\$\(?[A-Za-z_{]|%[A-Za-z_]\w*%|[A-Za-z_][\w.-]*=\S+|[+][%A-Za-z0-9_-]+|["'`][^\n"'`]{0,200}["'`])/i;
   var DIRECT_COMMAND_LINE = new RegExp(
-    '(?:^|[\\n:;])\\s*(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?)\\b)' +
+    // Language/runtime names are ordinary technology nouns in professional labels. They are
+    // authoritative only when an execution cue or runtime-specific argument grammar is present.
+    '(?:^|[\\n:;])\\s*(?!(?:copy|move|type|start|stop|set|wait|watch|sort|cut|fold|join|split|path|tree|choice|pause|recover|replace|mode|command|builtin|env|nohup|time|nice|strace|ltrace|setsid|doas|exec|powershell(?:\\.exe)?|python(?:\\d+(?:\\.\\d+)?)?|py|node|ruby|perl|php|deno|java|javac|jshell|dotnet|go|rscript|lua|luajit|julia|groovy|scala|swift|gcc|g\\+\\+|clang|rustc)\\b)' +
     '(?:&\\s*)?' + EXECUTABLE_REFERENCE +
     '(?=\\s|[;&|<>]|$)(?:\\s+|[;&|<>]|$)',
     'i'
   );
+  var JVM_RUNTIME_COMMAND = /(?:^|[\n:;])\s*(?:java(?:\.exe)?\s+(?:-[A-Za-z][\w-]*(?:=\S+)?|[^\s"'`]+\.(?:jar|class)\b|(?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$][\w$]*\b|[A-Z_$][\w$]*(?=\s*(?:$|[;&|])))|javac(?:\.exe)?\s+(?:-[A-Za-z][\w-]*(?:=\S+)?|[^\s"'`]+\.java\b)|jshell(?:\.exe)?\s+(?:-[A-Za-z][\w-]*(?:=\S+)?|[^\s"'`]+\.(?:jsh|java)\b))/m;
   var POWERSHELL_DIRECT_COMMAND = new RegExp(
     '(?:^|[\\n:;])\\s*(?:powershell(?:\\.exe)?|pwsh)\\s+(?:&\\s*)?' + EXECUTABLE_REFERENCE + '\\b',
     'i'
@@ -194,6 +197,7 @@
     }),
     Object.freeze({ id: 'execution-cue-command', pattern: EXECUTION_CUE }),
     Object.freeze({ id: 'direct-command-line', pattern: DIRECT_COMMAND_LINE }),
+    Object.freeze({ id: 'jvm-runtime-command', pattern: JVM_RUNTIME_COMMAND }),
     Object.freeze({ id: 'powershell-direct-command', pattern: POWERSHELL_DIRECT_COMMAND }),
     Object.freeze({ id: 'quoted-executable-line', pattern: QUOTED_EXECUTABLE_LINE }),
     Object.freeze({ id: 'executable-path-line', pattern: EXECUTABLE_PATH_LINE }),

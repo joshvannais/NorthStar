@@ -9,7 +9,10 @@
   // This is the single reviewed policy inventory for both the server authority and browser defense.
   // Rules target structured implementation text, not ordinary words that happen to name a technology.
   var UNSAFE_CONTROLS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
-  var INVISIBLE_FORMATTING = /[\u00ad\u034f\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g;
+  // Inspect through the complete reviewed default-invisible inventory. This does not rewrite
+  // displayed prose; it only prevents format and variation selectors from splitting a token.
+  var INVISIBLE_FORMATTING_BMP = /[\u00ad\u034f\u061c\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufe00-\ufe0f\ufeff]/g;
+  var INVISIBLE_FORMATTING_ASTRAL = /[\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0001}\u{e0020}-\u{e007f}\u{e0100}-\u{e01ef}]/gu;
   var RULES = Object.freeze([
     Object.freeze({
       id: 'internal-error-code',
@@ -39,7 +42,7 @@
     }),
     Object.freeze({
       id: 'javascript-runtime',
-      pattern: /\b(?:document|window|globalThis|console|process|module|exports|require)\s*(?:\.\s*[A-Za-z_$]|\[|\()|\b(?:fetch|eval|importScripts|setTimeout|setInterval)\s*\(/i
+      pattern: /\b(?:document|window|globalThis|console|process|module|exports|require|os|subprocess|child_process|Deno)\s*(?:\.\s*[A-Za-z_$]|\[|\()|\b(?:alert|confirm|prompt|fetch|eval|importScripts|setTimeout|setInterval)\s*\(/i
     }),
     Object.freeze({
       id: 'program-control-flow',
@@ -47,7 +50,7 @@
     }),
     Object.freeze({
       id: 'program-call-or-assignment',
-      pattern: /(?:^|\n|[;{}])\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\([^()\n]{0,300}\)\s*;|(?:^|\n)\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^()\n]{0,300}\)\s*;?\s*(?:$|\n)|\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*=\s*(?:new\s+|[A-Za-z_$][\w$]*\s*\(|["'`]\S[\s\S]{0,300}["'`]|\[[^\]\n]*\]|\{[^}\n]*\}|[A-Za-z_$][\w$]*\s*[+*/-]\s*[A-Za-z_$0-9])[^;\n]*;/m
+      pattern: /(?:^|\n|[;:{}])\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\([^()\n]{0,300}\)\s*;|(?:^|\n)\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^()\n]{0,300}\)\s*;?\s*(?:$|\n)|\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*=\s*(?:new\s+|[A-Za-z_$][\w$]*\s*\(|["'`]\S[\s\S]{0,300}["'`]|\[[^\]\n]*\]|\{[^}\n]*\}|[A-Za-z_$][\w$]*\s*[+*/-]\s*[A-Za-z_$0-9])[^;\n]*;/m
     }),
     Object.freeze({
       id: 'sql-select',
@@ -55,7 +58,7 @@
     }),
     Object.freeze({
       id: 'sql-scalar-query',
-      pattern: /(?:^|\n)\s*select\s+(?:-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|current_(?:date|time|timestamp)|version\s*\(\s*\)|count\s*\([^\n)]*\))\s*;?\s*(?:$|\n)/im
+      pattern: /\bselect\s+(?:-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|current_(?:date|time|timestamp)|version\s*\(\s*\)|count\s*\([^\n)]*\))\s*;/i
     }),
     Object.freeze({
       id: 'sql-write-or-schema',
@@ -75,7 +78,7 @@
     }),
     Object.freeze({
       id: 'shell-command-line',
-      pattern: /(?:^|[\n:;])\s*(?:ls\s+(?:-[A-Za-z]+|[.~\\/])|(?:cat|head|tail)\s+(?:-[A-Za-z]+\s+)?[.~\\/]|(?:grep|sed|awk|find)\s+(?:-[A-Za-z]+\s+|[.~\\/]|["'])|(?:echo|printf)\s+[^\n]*(?:>|\|)|sudo\s+[A-Za-z][\w-]*(?:\s+|$)|(?:systemctl|service)\s+(?:start|stop|restart|enable|disable|status)\b|(?:docker|podman)\s+(?:run|exec|build|pull|push|compose|rm|stop|start)\b|(?:kubectl|helm)\s+(?:get|apply|delete|create|install|upgrade|exec|logs|describe)\b|(?:ssh|scp|rsync)\s+(?:-[A-Za-z]+\s+)*(?:[\w.-]+@|[.~\\/])|(?:python(?:3)?|node|ruby|perl)\s+(?:-[A-Za-z]+\s+)*[^\s]+\.(?:py|js|mjs|cjs|rb|pl)\b|chmod\s+(?:-[A-Za-z]+\s+)*(?:[0-7]{3,4}|[ugoa]*[+=-][rwxXst]+)\s+|chown\s+(?:-[A-Za-z]+\s+)*(?:[\w.-]+(?::[\w.-]+)?)\s+)/i
+      pattern: /\b(?:ls\s+(?:-[A-Za-z]+|[.~\\/])|(?:cat|head|tail)\s+(?:-[A-Za-z]+\s+)?[.~\\/]|(?:grep|sed|awk|find)\s+(?:-[A-Za-z]+\s+|[.~\\/]|["'])|(?:echo|printf)\s+[^\n]*(?:>|\|)|sudo\s+[A-Za-z][\w-]*(?:\s+|$)|(?:systemctl|service)\s+(?:start|stop|restart|enable|disable|status)\b|(?:docker|podman)\s+(?:run|exec|build|pull|push|compose|rm|stop|start)\b|(?:kubectl|helm)\s+(?:get|apply|delete|create|install|upgrade|exec|logs|describe)\b|(?:ssh|scp|rsync)\s+(?:-[A-Za-z]+\s+)*(?:[\w.-]+@|[.~\\/])|(?:python(?:3)?|node|ruby|perl)\s+(?:-[A-Za-z]+\s+)*[^\s]+\.(?:py|js|mjs|cjs|rb|pl)\b|chmod\s+(?:-[A-Za-z]+\s+)*(?:[0-7]{3,4}|[ugoa]*[+=-][rwxXst]+)\s+|chown\s+(?:-[A-Za-z]+\s+)*(?:[\w.-]+(?::[\w.-]+)?)\s+)/i
     }),
     Object.freeze({
       id: 'python-source',
@@ -103,7 +106,8 @@
 
   function normalizedForInspection(value) {
     var normalized = typeof value.normalize === 'function' ? value.normalize('NFKC') : value;
-    return normalized.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').replace(INVISIBLE_FORMATTING, '');
+    return normalized.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ')
+      .replace(INVISIBLE_FORMATTING_BMP, '').replace(INVISIBLE_FORMATTING_ASTRAL, '');
   }
 
   function violation(value) {
@@ -117,7 +121,7 @@
   }
 
   return Object.freeze({
-    POLICY_VERSION: 'northstar.polaris.professional-text.v1',
+    POLICY_VERSION: 'northstar.polaris.professional-text.v2',
     isProfessionalText: function (value) { return violation(value) === null; }
   });
 });

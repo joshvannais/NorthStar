@@ -1,5 +1,7 @@
 'use strict';
 
+const professionalTextPolicy = require('../../public/js/polaris-professional-text');
+
 const {
   MESSAGE_OPERATION,
   PROVIDER_DECISIONS,
@@ -178,6 +180,15 @@ function boundedInterceptedResponse(value, request, authority) {
       source: 'interceptor',
     });
   } catch (_error) {
+    throw contractError('POLARIS_INTERCEPTED_RESPONSE_INVALID', 'Intercepted runtime returned an invalid assistant response.', 502);
+  }
+  const displayText = [value.answer.text];
+  value.cards.forEach(card => {
+    displayText.push(card.title, card.subtitle, card.answer, card.confidence.basis);
+    card.evidence.forEach(entry => displayText.push(entry.label, entry.value));
+    card.unknowns.forEach(entry => displayText.push(entry.label));
+  });
+  if (!professionalTextPolicy || displayText.some(text => !professionalTextPolicy.isProfessionalText(text))) {
     throw contractError('POLARIS_INTERCEPTED_RESPONSE_INVALID', 'Intercepted runtime returned an invalid assistant response.', 502);
   }
   let serialized;

@@ -1,9 +1,12 @@
 (function (root, factory) {
   'use strict';
-  var api = factory();
+  var policy = typeof module === 'object' && module.exports
+    ? require('./polaris-professional-text')
+    : root.NorthStarPolarisProfessionalText;
+  var api = factory(policy);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NorthStarPolarisCard = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (professionalTextPolicy) {
   'use strict';
 
   var CARD_SCHEMA = 'northstar.polaris.customer-intelligence-card.v1';
@@ -16,19 +19,6 @@
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   var DIGEST = /^[0-9a-f]{64}$/i;
   var UNKNOWN_CODE = /^[a-z0-9_]{1,100}$/;
-  var PROFESSIONAL_TEXT_PATTERNS = [
-    /\b(?:POLARIS|CANONICAL|NORTHSTAR|BROWSER_FIXTURE)_[A-Z0-9_]+\b/,
-    /\b(?:req|resp)_[a-z0-9][a-z0-9_-]{2,}\b/i,
-    /\bnorthstar\.polaris\.[a-z0-9_.-]+\b/i,
-    /\{\s*"(?:[^"\\]|\\.)+"\s*:/,
-    /\[\s*(?:"(?:[^"\\]|\\.)*"|-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|\{|\[)\s*(?:,|\])/i,
-    /\bjson_schema\b|\bJSON\s+Schema\b|\badditionalProperties\b|"(?:required|\$schema|properties|items)"\s*:/i,
-    /```|~~~/,
-    /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=|\bfunction\s+[A-Za-z_$][\w$]*\s*\(|\bthrow\s+new\s+[A-Za-z_$][\w$]*\s*\(|=>/,
-    /(?:^|\n)\s*at\s+\S+(?:\s+\(|:)|\b(?:TypeError|ReferenceError|SyntaxError):/,
-    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
-    /\b[0-9a-f]{64}\b/i
-  ];
   var renderSequence = 0;
 
   function invalidContract() {
@@ -73,7 +63,7 @@
   }
 
   function validateProfessionalText(value) {
-    if (typeof value !== 'string' || PROFESSIONAL_TEXT_PATTERNS.some(function (pattern) { return pattern.test(value); })) {
+    if (!professionalTextPolicy || !professionalTextPolicy.isProfessionalText(value)) {
       return invalidContract();
     }
     return value;

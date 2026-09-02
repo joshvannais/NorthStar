@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const professionalTextPolicy = require('../../public/js/polaris-professional-text');
 const {
   CARD_SCHEMA,
   RESPONSE_SCHEMA,
@@ -20,20 +21,6 @@ const OUTPUT_TOKEN_NANO_USD = 1200;
 const SAFE_ERROR_CODES = new Set([
   'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETDOWN', 'ENETUNREACH', 'EPIPE',
 ]);
-const PROFESSIONAL_TEXT_PATTERNS = Object.freeze([
-  /\b(?:POLARIS|CANONICAL|NORTHSTAR|BROWSER_FIXTURE)_[A-Z0-9_]+\b/,
-  /\b(?:req|resp)_[a-z0-9][a-z0-9_-]{2,}\b/i,
-  /\bnorthstar\.polaris\.[a-z0-9_.-]+\b/i,
-  /\{\s*"(?:[^"\\]|\\.)+"\s*:/,
-  /\[\s*(?:"(?:[^"\\]|\\.)*"|-?(?:0|[1-9]\d*)(?:\.\d+)?|true|false|null|\{|\[)\s*(?:,|\])/i,
-  /\bjson_schema\b|\bJSON\s+Schema\b|\badditionalProperties\b|"(?:required|\$schema|properties|items)"\s*:/i,
-  /```|~~~/,
-  /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=|\bfunction\s+[A-Za-z_$][\w$]*\s*\(|\bthrow\s+new\s+[A-Za-z_$][\w$]*\s*\(|=>/,
-  /(?:^|\n)\s*at\s+\S+(?:\s+\(|:)|\b(?:TypeError|ReferenceError|SyntaxError):/,
-  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
-  /\b[0-9a-f]{64}\b/i,
-]);
-
 const STRING = (minimum, maximum) => Object.freeze({ type: 'string', minLength: minimum, maxLength: maximum });
 const UUID_STRING = Object.freeze({ type: 'string', pattern: '^[0-9a-fA-F-]{36}$' });
 const DIGEST_STRING = Object.freeze({ type: 'string', pattern: '^[0-9a-fA-F]{64}$' });
@@ -187,7 +174,7 @@ function providerResponseError() {
 }
 
 function validateProfessionalText(value) {
-  if (typeof value !== 'string' || PROFESSIONAL_TEXT_PATTERNS.some(pattern => pattern.test(value))) {
+  if (!professionalTextPolicy.isProfessionalText(value)) {
     throw providerResponseError();
   }
   return value;

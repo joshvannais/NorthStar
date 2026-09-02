@@ -471,7 +471,14 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
       respond: async envelope => {
         executions += 1;
         await new Promise(resolve => setTimeout(resolve, 20));
-        return interceptedAssistantResponse(envelope);
+        const response = interceptedAssistantResponse(envelope);
+        response.answer = {
+          text: 'The selected lead summary is ready for review.',
+          evidenceCount: 0,
+          unknownCount: 0,
+        };
+        response.cards = [];
+        return response;
       },
     };
     const interceptedApp = createApp(() => pool, null, null, { assistantRuntime });

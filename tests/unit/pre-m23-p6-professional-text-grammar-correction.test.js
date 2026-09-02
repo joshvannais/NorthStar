@@ -135,6 +135,202 @@ const STRUCTURAL_MUTATION_GRAMMARS = Object.freeze([
   ['generic append redirection', 'deploy production >> output.txt'],
 ]);
 
+// Exact terminal-audit corpus. This remains immutable evidence of the language
+// families that bypassed policy v7; the correction below must not special-case
+// only the representative strings from the audit report.
+const TERMINAL_AUDIT_EXECUTABLE_GRAMMARS = Object.freeze([
+  ['SQL derived table', 'SELECT * FROM (SELECT 1) AS x'],
+  ['SQL derived table newline', 'SELECT id\nFROM (SELECT id FROM jobs) AS recent'],
+  ['SQL TABLE command', 'TABLE invoices'],
+  ['SQL VALUES command', "VALUES (1, 'open'), (2, 'closed')"],
+  ['SQL SET LOCAL', "SET LOCAL work_mem TO '64MB'"],
+  ['SQL SET timeout', 'SET statement_timeout = 5000'],
+  ['SQL SHOW', 'SHOW search_path'],
+  ['SQL RESET', 'RESET ALL'],
+  ['SQL EXPLAIN', 'EXPLAIN SELECT * FROM invoices'],
+  ['SQL VACUUM options', 'VACUUM (ANALYZE) jobs'],
+  ['SQL TRUNCATE', 'TRUNCATE TABLE invoice_items'],
+  ['SQL GRANT', 'GRANT SELECT ON invoices TO analyst'],
+  ['SQL REVOKE', 'REVOKE UPDATE ON jobs FROM contractor'],
+  ['SQL DO block', "DO $$ BEGIN RAISE NOTICE 'x'; END $$"],
+  ['SQL PREPARE', 'PREPARE q(int) AS SELECT * FROM jobs WHERE id = $1'],
+  ['SQL EXECUTE', 'EXECUTE q(42)'],
+  ['SQL DEALLOCATE', 'DEALLOCATE q'],
+  ['SQL MERGE', 'MERGE INTO jobs j USING staging s ON j.id=s.id WHEN MATCHED THEN UPDATE SET status=s.status'],
+  ['SQL window', 'SELECT sum(amount) OVER (PARTITION BY customer_id) FROM invoices'],
+  ['SQL subquery', 'SELECT id FROM jobs WHERE id IN (SELECT job_id FROM invoices)'],
+  ['JavaScript return', 'return total + tax'],
+  ['JavaScript yield', 'yield invoice'],
+  ['JavaScript await', 'await sendInvoice(customer)'],
+  ['JavaScript arrow', 'items.map(item => item.total)'],
+  ['JavaScript class', 'class Invoice extends Record { total() { return 1; } }'],
+  ['JavaScript side-effect import', "import './billing.js'"],
+  ['JavaScript export', 'export default function quote() { return 42 }'],
+  ['CommonJS module', 'module.exports = { quote: () => 42 }'],
+  ['Java module', 'module com.northstar.billing { requires java.sql; }'],
+  ['Java record', 'record Invoice(int id, double total) {}'],
+  ['Java annotation', '@Override public String toString() { return "invoice"; }'],
+  ['C# record struct', 'record struct Job(int Id, decimal Total);'],
+  ['C# using alias', 'using Money = System.Decimal;'],
+  ['C# property', 'public decimal Total { get; init; }'],
+  ['Go function', 'func quote(total float64) float64 { return total * 1.2 }'],
+  ['Go switch', 'switch status { case "open": closeJob() }'],
+  ['Rust function', 'fn quote(total: f64) -> f64 { total * 1.2 }'],
+  ['Rust use', 'use std::collections::HashMap;'],
+  ['Python comprehension', '[item.total for item in invoices if item.open]'],
+  ['Python dict comprehension', '{job.id: job.total for job in jobs}'],
+  ['Python generator', '(item for item in invoices if item.paid)'],
+  ['Python match', 'match status:\n    case "open":\n        close_job()'],
+  ['Python decorator', '@dataclass\nclass Invoice:\n    total: float'],
+  ['Python with', "with open('invoice.txt') as handle:\n    data = handle.read()"],
+  ['Python raise', "raise ValueError('invalid quote')"],
+  ['Python yield from', 'yield from invoices'],
+  ['Python assert', 'assert total >= 0'],
+  ['Python del', 'del invoices[0]'],
+  ['Python async for', 'async for job in jobs:\n    await process(job)'],
+  ['shell assignment command', 'RATE=125 calculate_quote job-42'],
+  ['shell assignment', 'RATE=125'],
+  ['shell substitution', 'total=$(calculate_quote job-42)'],
+  ['shell pipeline', 'cat invoices.csv | awk -F, \'{sum += $4} END {print sum}\''],
+  ['shell and-or', 'test -f invoice.pdf && sendmail customer@example.com'],
+  ['shell case', 'case "$status" in open) close_job ;; esac'],
+  ['shell until', 'until test -f ready; do sleep 1; done'],
+  ['shell function', 'quote() { printf "%s\\n" "$1"; }'],
+  ['shell here-document', "cat <<'EOF' > invoice.txt\namount=42\nEOF"],
+  ['shell process substitution', 'diff <(sort expected) <(sort actual)'],
+  ['shell arithmetic', 'total=$(( labor + materials ))'],
+  ['PowerShell static call', "[System.IO.File]::ReadAllText('invoice.txt')"],
+  ['PowerShell pipeline', 'Get-Content invoice.txt | Set-Content copy.txt'],
+  ['PowerShell variable', '$total = $labor + $materials'],
+  ['PowerShell foreach', 'foreach ($job in $jobs) { Invoke-Quote $job }'],
+  ['PowerShell if', 'if ($paid) { Send-Invoice } else { Write-Warning "unpaid" }'],
+  ['PowerShell function', 'function Get-Quote { param($Job) return $Job.Total }'],
+  ['batch set', 'set TOTAL=125'],
+  ['batch if', 'if exist invoice.txt del invoice.txt'],
+  ['batch for', 'for %%f in (*.csv) do type %%f'],
+  ['POSIX path redirection', './quote --job 42 > ./invoice.txt'],
+  ['Windows path redirection', 'quote.exe --job 42 > C:\\Temp\\invoice.txt'],
+  ['fullwidth SQL', 'ＳＥＬＥＣＴ * ＦＲＯＭ invoices'],
+  ['fullwidth shell', 'ｃａｔ invoice.txt | ｓｏｒｔ'],
+  ['zero-width SQL', 'SEL\u200bECT * FROM invoices'],
+  ['zero-width shell', 'c\u200bat invoice.txt | sort'],
+  ['split SQL token', 'SEL\nECT * FROM invoices'],
+  ['comment-split import', 'im/**/port java.util.List;'],
+  ['nested command', '(cd /tmp && ./quote) > invoice.txt'],
+  ['quoted eval', 'eval("SELECT * FROM invoices")'],
+  ['SQL comment prefix', '-- execute below\nSELECT * FROM invoices'],
+  ['Python comment prefix', '# execute below\nprint(calculate_quote(job))'],
+]);
+
+// Independently reasoned families beyond either audit corpus. These exercise a
+// general positive presentation contract across declarative source, build and
+// configuration formats, additional control-flow grammars, and evasive layout.
+const POSITIVE_CONTRACT_HOSTILE_GRAMMARS = Object.freeze([
+  ['SQL TABLE ONLY', 'TABLE ONLY invoice_archive'],
+  ['SQL SET ROLE', 'SET ROLE reporting_user'],
+  ['SQL COPY', "COPY invoices TO '/tmp/invoices.csv' CSV HEADER"],
+  ['SQL CREATE VIEW', 'CREATE VIEW open_jobs AS SELECT id FROM jobs'],
+  ['SQL function block', 'DO $body$ BEGIN PERFORM refresh_jobs(); END $body$'],
+  ['SQL cursor', 'DECLARE invoice_cursor CURSOR FOR SELECT id FROM invoices'],
+  ['TypeScript interface', 'interface Invoice { total: number; }'],
+  ['TypeScript type alias', 'type InvoiceId = string | number;'],
+  ['JavaScript try catch', 'try { sendInvoice() } catch (error) { retry(error) }'],
+  ['JavaScript object literal', 'const invoice = { total: 42, paid: false }'],
+  ['JavaScript optional chain call', 'invoice?.customer?.notify()'],
+  ['JavaScript delete expression', 'delete invoice.internalNotes'],
+  ['Python async function', 'async def send_invoice(job):\n    await client.send(job)'],
+  ['Python try except', 'try:\n    send_invoice()\nexcept RuntimeError:\n    retry()'],
+  ['Python walrus', 'while job := queue.next():\n    process(job)'],
+  ['Python import from', 'from billing.invoice import calculate_total'],
+  ['Python f-string assignment', 'message = f"Total: {invoice.total}"'],
+  ['PowerShell binding', '[CmdletBinding()]\nparam([string]$InvoiceId)'],
+  ['PowerShell script block', '$jobs | Where-Object { $_.Status -eq "open" }'],
+  ['PowerShell try catch', 'try { Send-Invoice } catch { Write-Error $_ }'],
+  ['PowerShell splat', 'Send-Invoice @invoiceParameters'],
+  ['batch echo off', '@echo off\nsetlocal enabledelayedexpansion'],
+  ['batch call', 'call :calculate_total invoice.csv'],
+  ['batch goto', 'if errorlevel 1 goto failed'],
+  ['batch delayed variable', 'echo !INVOICE_TOTAL!'],
+  ['POSIX shebang', '#!/usr/bin/env sh\nprintf "%s\\n" "$TOTAL"'],
+  ['POSIX command group', '( calculate_quote "$job" )'],
+  ['POSIX parameter expansion', 'total=${subtotal:-0}'],
+  ['POSIX conditional', '[[ -f invoice.pdf ]] && send_invoice'],
+  ['POSIX select loop', 'select invoice in *.csv; do process "$invoice"; done'],
+  ['Kotlin function', 'fun quote(total: Double): Double = total * 1.2'],
+  ['Swift declaration', 'let total = invoices.reduce(0) { $0 + $1.total }'],
+  ['Rust implementation', 'impl Invoice { fn total(&self) -> f64 { self.total } }'],
+  ['Go defer', 'defer invoice.Close()'],
+  ['C preprocessor', '#define TAX_RATE 0.08'],
+  ['C function prototype', 'double quote_total(double subtotal);'],
+  ['Java method', 'public BigDecimal total() { return subtotal.add(tax); }'],
+  ['C# expression property', 'public decimal Total => Subtotal + Tax;'],
+  ['Jinja expression', '{{ customer.invoice.total }}'],
+  ['Jinja control', '{% if invoice.open %}Send{% endif %}'],
+  ['ERB expression', '<%= invoice.total %>'],
+  ['GitHub expression', '${{ secrets.DEPLOY_TOKEN }}'],
+  ['Handlebars block', '{{#each invoices}}{{total}}{{/each}}'],
+  ['YAML source', 'services:\n  app:\n    image: northstar:latest'],
+  ['TOML source', '[server]\nport = 8080'],
+  ['INI source', '[billing]\nretry_count=3'],
+  ['dotenv source', 'BILLING_MODE=live\nRETRY_COUNT=3'],
+  ['Terraform source', 'resource "aws_s3_bucket" "invoices" { bucket = "records" }'],
+  ['Dockerfile source', 'FROM node:24\nRUN npm ci\nCMD ["node", "server.js"]'],
+  ['Make source', 'invoice.pdf: invoice.csv\n\trender-invoice invoice.csv'],
+  ['GraphQL source', 'query Invoice($id: ID!) { invoice(id: $id) { total } }'],
+  ['JSONata expression', '$sum(invoices.total)'],
+  ['regex source', '/^(paid|open)$/i'],
+  ['SQL token split with tabs', 'SE\tLE\tCT * FR\tOM invoices'],
+  ['JavaScript comment split', 'ret/**/urn invoice.total'],
+  ['PowerShell backtick split', 'Get-`\nContent invoice.txt'],
+  ['batch caret split', 'fo^r %%f in (*.csv) do ty^pe %%f'],
+  ['templating whitespace evasion', '{ { invoice.total } }'],
+  ['source after label', 'Result source:\nreturn invoice.total'],
+  ['configuration after label', 'Configuration:\nretries: 3\ntimeout: 10'],
+]);
+
+const POSITIVE_CONTRACT_PROSE = Object.freeze([
+  'Export documentation may affect the delivery date.',
+  'The export documentation may affect the delivery date.',
+  'The SQL SELECT statement is described in the approved engineering review.',
+  'The billing team may return the invoice to draft status after review.',
+  'The grant covers equipment, installation labor, and safety training.',
+  'The table shows invoice totals for the selected reporting period.',
+  'The values in this estimate remain planning assumptions.',
+  'The set includes three replacement filters and one thermostat.',
+  'The customer asked us to show the labor and material totals separately.',
+  'The reset procedure is documented for the licensed technician.',
+  'The batch of invoices is scheduled for review on Friday.',
+  'The shell of the damaged unit requires replacement.',
+  'The interface design is ready for customer review.',
+  'The function of the relay is explained in the technician notes.',
+  'The module price includes installation and a two-year warranty.',
+  'The class of service is commercial, not residential.',
+  'The record remains pending because customer approval is unknown.',
+  'The invoice total equals labor + materials for planning purposes.',
+  'Revenue / active customers is presented as a monthly planning ratio.',
+  'The 8% allowance covers ordinary material waste.',
+  'The approved range is $1,200–$1,500 before optional work.',
+  'The address is 42 Main Street, Suite 3.',
+  'Contact billing@example.test if the remittance address changes.',
+  'The private 10.0.0.0/24 network is used only during commissioning.',
+  'Version 2.1 of the controller firmware is listed in the equipment record.',
+  'Café façade repair — weather permitting — should take three working days.',
+  'Materials: exterior primer and two finish coats.\nLabor: preparation, application, and cleanup.',
+  'Would you like labor, materials, and taxes grouped separately?',
+  'Unknown: permit timing may affect the projected start date.',
+  'Evidence: the signed estimate lists the approved replacement unit.',
+  'Advisory only: confirm structural requirements with a licensed engineer.',
+  'Net 30 terms remain available after credit approval.',
+  'Class A materials',
+  'Export documentation',
+  'PostgreSQL compatibility review',
+  'HVAC, CRM, SMS, and API service review',
+  'Tree service',
+  'Customer statement',
+  'Invoice total',
+  'Monday appointment',
+]);
+
 const LEGITIMATE_PROSE = Object.freeze([
   'Node compatibility is verified for this service.',
   'Java compatibility is not yet verified.',
@@ -264,6 +460,33 @@ const STRUCTURAL_MUTATION_FIELD_CASES = Object.freeze(STRUCTURAL_MUTATION_GRAMMA
   DISPLAY_FIELDS.map(field => [family, field.label, field, value])
 ));
 
+const POSITIVE_CONTRACT_FIELD_REPRESENTATIVES = Object.freeze([
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[0],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[4],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[6],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[12],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[17],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[21],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[25],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[30],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[34],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[38],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[43],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[47],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[50],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[53],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[57],
+  POSITIVE_CONTRACT_HOSTILE_GRAMMARS[59],
+]);
+
+const POSITIVE_CONTRACT_FIELD_CASES = Object.freeze(POSITIVE_CONTRACT_FIELD_REPRESENTATIVES.flatMap(
+  ([family, value]) => DISPLAY_FIELDS.map(field => [family, field.label, field, value])
+));
+
+const POSITIVE_CONTRACT_PROSE_FIELD_CASES = Object.freeze(POSITIVE_CONTRACT_PROSE.flatMap(value =>
+  DISPLAY_FIELDS.map(field => [field.label, value, field])
+));
+
 function authority() {
   return { organizationId: ORG, userId: USER, role: 'owner' };
 }
@@ -365,6 +588,80 @@ function assertServerAndBrowserReject(response) {
 }
 
 describe('P6 professional-text executable grammar correction', () => {
+  test.each(TERMINAL_AUDIT_EXECUTABLE_GRAMMARS)(
+    'rejects terminal-audit executable source %s under the shared policy',
+    (_label, value) => {
+      expect(professionalTextPolicy.isProfessionalText(value)).toBe(false);
+    }
+  );
+
+  test.each(POSITIVE_CONTRACT_HOSTILE_GRAMMARS)(
+    'rejects independently reasoned positive-contract source %s under the shared policy',
+    (_label, value) => {
+      expect(professionalTextPolicy.isProfessionalText(value)).toBe(false);
+    }
+  );
+
+  test.each(POSITIVE_CONTRACT_FIELD_CASES)(
+    'rejects positive-contract %s in the server/browser %s before any partial response',
+    (_family, _fieldLabel, field, value) => {
+      const response = interceptedResponseWith('The selected record is ready for review.');
+      field.response(response, value);
+      assertServerAndBrowserReject(response);
+    }
+  );
+
+  test.each(POSITIVE_CONTRACT_FIELD_CASES)(
+    'rejects positive-contract %s in the fake-provider %s',
+    async (_family, _fieldLabel, field, value) => {
+      const envelope = mutableEnvelope();
+      const payload = providerPayload(envelope);
+      field.provider(envelope, payload, value);
+      let calls = 0;
+      const runtime = createOpenAIRuntime({
+        configured: true,
+        enabled: true,
+        client: {
+          responses: {
+            create: async () => {
+              calls += 1;
+              return fakeProviderResponse(payload);
+            },
+          },
+        },
+        logger: () => {},
+      });
+
+      await expect(runtime.respond(envelope)).rejects.toMatchObject({
+        code: 'POLARIS_PROVIDER_RESPONSE_INVALID',
+        statusCode: 502,
+      });
+      expect(calls).toBe(1);
+    }
+  );
+
+  test.each(POSITIVE_CONTRACT_PROSE)(
+    'preserves independently reasoned positive-contract prose: %s',
+    value => {
+      expect(professionalTextPolicy.isProfessionalText(value)).toBe(true);
+    }
+  );
+
+  test.each(POSITIVE_CONTRACT_PROSE_FIELD_CASES)(
+    'preserves independently reasoned positive-contract prose in the %s: %s',
+    (_fieldLabel, value, field) => {
+      const response = interceptedResponseWith('The selected record is ready for review.');
+      field.response(response, value);
+      expect(boundedInterceptedResponse(response, requestContract(), authority())).toBe(response);
+      expect(cardRenderer.validateAssistantResponse(response, {
+        requestId: KEY,
+        authority: authority(),
+        selected: selected(),
+        source: 'interceptor',
+      })).toBe(response);
+    }
+  );
+
   test.each(HOSTILE_GRAMMARS)('rejects %s at the shared, server, and browser boundaries', (_label, value) => {
     expect(professionalTextPolicy.isProfessionalText(value)).toBe(false);
 

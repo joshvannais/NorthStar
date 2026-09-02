@@ -186,6 +186,8 @@ describe('Pre-M23 P6 Polaris safe contracts', () => {
     expect(card.confidence).toMatchObject({ value: 0.7, level: 'medium' });
     expect(card.advisoryOnly).toBe(true);
     expect(card.canonicalMutationAllowed).toBe(false);
+    expect(() => cardRenderer.validateCustomerIntelligenceCard(card))
+      .toThrow('Unsupported Polaris structured contract.');
     expect(() => buildCustomerIntelligenceCard(item(), selected('customer', LEAD))).toThrow(/not found/);
   });
 
@@ -241,7 +243,17 @@ describe('Pre-M23 P6 Polaris safe contracts', () => {
       message: 'Summarize the selected record.',
       selected: selected('lead', LEAD),
     });
-    const validCard = buildCustomerIntelligenceCard(item(), requestContract.selected);
+    const validCard = buildCustomerIntelligenceCard(item({
+      customer: { name: 'Contract validation customer' },
+      facts: [{
+        id: FACT,
+        variable: 'job_scope',
+        status: 'accepted',
+        normalizedValue: 'Remove one marked tree beside the driveway.',
+        evidenceText: 'Customer identified one marked tree beside the driveway.',
+        confidence: 0.7,
+      }],
+    }), requestContract.selected);
     const evidenceWithExtraKey = validCard.evidence.slice();
     evidenceWithExtraKey.extra = true;
     const base = interceptedResponse({

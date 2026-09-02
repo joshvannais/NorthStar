@@ -129,17 +129,51 @@ const HOSTILE_PRESENTATION_CASES = Object.freeze([
     id: 'posix-function-card-answer', text: 'deploy() { echo ok; }',
     placement: 'cardAnswer', cardIndex: 2, viewport: { width: 390, height: 844 }, theme: 'light',
   },
+  {
+    id: 'adjacent-sql-aggregate-response-answer', text: 'SELECT count(*) FROM customers',
+    placement: 'responseAnswer', viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'adjacent-sql-scalar-card-title', text: 'SELECT 1',
+    placement: 'cardTitle', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'adjacent-sql-cte-card-subtitle',
+    text: 'WITH recent AS (SELECT * FROM customers) SELECT * FROM recent',
+    placement: 'cardSubtitle', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'adjacent-python-annotated-card-answer', text: 'class Example:\n    value: int',
+    placement: 'cardAnswer', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'adjacent-java-record-evidence-label', text: 'record Example(int value) {}',
+    placement: 'evidenceLabel', cardIndex: 0, viewport: { width: 1440, height: 900 }, theme: 'light',
+  },
+  {
+    id: 'adjacent-csharp-namespace-evidence-value', text: 'namespace Example;',
+    placement: 'evidenceValue', cardIndex: 3, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
+  {
+    id: 'adjacent-posix-if-unknown-label', text: 'if true; then :; fi',
+    placement: 'unknownLabel', cardIndex: 2, viewport: { width: 320, height: 720 }, theme: 'light',
+  },
+  {
+    id: 'adjacent-powershell-dynamic-confidence-basis',
+    text: "Recommended action: & ('deploy' + '.exe') --force",
+    placement: 'confidenceBasis', cardIndex: 1, viewport: { width: 390, height: 844 }, theme: 'dark',
+  },
 ]);
 
 const PROFESSIONAL_PRESENTATION = Object.freeze({
-  responseAnswer: 'Using System; schedule the approved service after confirming availability.',
+  responseAnswer: 'Net 30 payment terms apply to this estimate.',
   cardTitle: 'Class A electrical service',
-  cardSubtitle: 'Java compatibility review',
-  cardAnswer: 'Import Java; compatibility can be reviewed next quarter.',
-  evidenceLabel: 'Java compatibility requirement',
-  evidenceValue: 'The diagnostic requires Java compatibility with the control panel.',
-  unknownLabel: 'The customer requires Ruby finish on the cabinet.',
-  confidenceBasis: 'Required node replacement is scheduled for Friday.',
+  cardSubtitle: 'HVAC, CRM, SMS, and API service review',
+  cardAnswer: 'The approved estimate uses Net 30 payment terms.',
+  evidenceLabel: 'PostgreSQL compatibility review',
+  evidenceValue: 'Select the approved service before scheduling the diagnostic visit.',
+  unknownLabel: 'The equipment package record is awaiting customer confirmation.',
+  confidenceBasis: 'Checkpoint the project with the customer before ordering equipment.',
 });
 
 function json(body, status = 200) {

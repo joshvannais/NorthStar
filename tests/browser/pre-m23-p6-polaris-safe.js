@@ -7,6 +7,7 @@ const path = require('path');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { buildDemoWorkspace, createInitialDemoState } = require('../../src/commandCenter/workspace');
+const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 
 [
   'DATABASE_URL', 'RETELL_API_KEY', 'RETELL_AGENT_ID', 'RETELL_PHONE_NUMBER',
@@ -277,16 +278,10 @@ const HOSTILE_PRESENTATION_CASES = Object.freeze([
   },
 ]);
 
-const PROFESSIONAL_PRESENTATION = Object.freeze({
-  responseAnswer: 'Export documentation may affect the delivery date.',
-  cardTitle: 'Class A electrical service',
-  cardSubtitle: 'HVAC, CRM, SMS, and API service review',
-  cardAnswer: 'The approved estimate uses Net 30 payment terms.',
-  evidenceLabel: 'PostgreSQL compatibility review',
-  evidenceValue: 'Select the approved service before scheduling the diagnostic visit.',
-  unknownLabel: 'The equipment package record is awaiting customer confirmation.',
-  confidenceBasis: 'Checkpoint the project with the customer before ordering equipment.',
-});
+const BUSINESS_OPERATIONS_TERMS = Object.freeze([
+  'class-action', '74°F', '56°F', '18°F', 'Command Center', 'Net 30', 'Export', 'Select',
+  'package', 'class', 'record', 'transaction', 'API', 'SQL',
+]);
 
 function json(body, status = 200) {
   return { status, contentType: 'application/json; charset=utf-8', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) };
@@ -408,25 +403,12 @@ function applyPresentationHazard(response, hazard) {
   return response;
 }
 
-function applyProfessionalPresentation(response) {
-  response.answer.text = PROFESSIONAL_PRESENTATION.responseAnswer;
-  response.cards[0].title = PROFESSIONAL_PRESENTATION.cardTitle;
-  response.cards[0].subtitle = PROFESSIONAL_PRESENTATION.cardSubtitle;
-  response.cards[0].answer = PROFESSIONAL_PRESENTATION.cardAnswer;
-  response.cards[0].evidence[0].label = PROFESSIONAL_PRESENTATION.evidenceLabel;
-  response.cards[0].evidence[0].value = PROFESSIONAL_PRESENTATION.evidenceValue;
-  response.cards[1].unknowns[0].label = PROFESSIONAL_PRESENTATION.unknownLabel;
-  response.cards[1].confidence.basis = PROFESSIONAL_PRESENTATION.confidenceBasis;
-  return response;
-}
-
 function messageResponse(body, hazard) {
   const response = contextResponse(false);
   response.requestId = body.idempotencyKey;
   response.responseId = crypto.createHash('sha256').update(`browser:${body.idempotencyKey}`).digest('hex');
   response.source = 'openai';
   response.provider = { state: 'configured', requestsSent: 1 };
-  response.answer.text = 'Bounded Polaris browser answer.';
   return applyPresentationHazard(response, hazard);
 }
 
@@ -442,7 +424,7 @@ function malformedResponse(name, response) {
   return response;
 }
 
-function contextResponse(hazard, boundaryCardCount) {
+function contextResponse(hazard, boundaryCardCount, answerIntent = 'canonical_overview') {
   const cards = Array.from({ length: boundaryCardCount || 4 }, (_value, index) =>
     boundaryCardCount ? maximumBoundaryCard(index) : card(false, index));
   const response = {
@@ -458,7 +440,11 @@ function contextResponse(hazard, boundaryCardCount) {
     cards,
     provider: { state: 'unconfigured', requestsSent: 0 }, advisoryOnly: true, canonicalMutationAllowed: false,
   };
-  return applyPresentationHazard(response, hazard);
+  if (hazard) return applyPresentationHazard(response, hazard);
+  const projected = trustedPresentation.projectTrustedDisplay(response.cards, response.selected, answerIntent);
+  response.answer = JSON.parse(JSON.stringify(projected.answer));
+  response.cards = JSON.parse(JSON.stringify(projected.cards));
+  return response;
 }
 
 function demoWorkspace() {
@@ -589,8 +575,11 @@ async function installRoutes(page, state) {
       assert.deepStrictEqual(body, {
         schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: LEAD },
       });
-      let response = contextResponse(state.hostileContext || false, state.boundaryCardCount);
-      if (state.professionalPresentation) response = applyProfessionalPresentation(response);
+      const response = contextResponse(
+        state.hostileContext || false,
+        state.boundaryCardCount,
+        state.answerIntent || 'canonical_overview'
+      );
       if (state.malformed && state.malformed !== 'status-length' && state.malformed !== 'message-extra') {
         malformedResponse(state.malformed, response);
       }
@@ -652,7 +641,7 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
   await assertPageAuthority(page, `${selected}-${profile.label}`);
   assert.strictEqual(await page.locator('.polaris-native-card').count(), 4);
   assert.deepStrictEqual(await page.locator('.polaris-native-card-title').allTextContents(),
-    ['Cedar Customer 1', 'Cedar Customer 2', 'Cedar Customer 3', 'Cedar Customer 4']);
+    ['Lead intelligence', 'Lead intelligence', 'Lead intelligence', 'Lead intelligence']);
   assert.strictEqual(await page.locator('.polaris-native-card-stack').getAttribute('aria-label'), '4 customer intelligence cards');
   assert.deepStrictEqual(await page.locator('.polaris-native-card-item').evaluateAll(nodes => nodes.map(node => node.dataset.cardPosition)),
     ['1', '2', '3', '4']);
@@ -668,7 +657,9 @@ async function runOrdinary(browser, origin, outputRoot, manifest, selected, prof
     assert.strictEqual(await page.getByRole('button', { name: 'Retry this message' }).count(), 0);
     assert.strictEqual(state.messageCalls, 1);
   } else {
-    await page.getByText('Bounded Polaris browser answer.').waitFor({ state: 'visible' });
+    await page.locator('.polaris-chat-text').getByText(
+      /NorthStar found 4 supporting facts and 4 unresolved items/
+    ).waitFor({ state: 'visible' });
     assert.strictEqual(state.messageCalls, 1);
   }
   await assertProfessionalPresentation(page, `${selected}-${profile.label}`);
@@ -772,31 +763,28 @@ async function runProfessionalControls(browser, origin, outputRoot, manifest, se
   page.on('pageerror', error => errors.push(String(error)));
   const state = {
     external: [], api: [], messageCalls: 0, messageKeys: [], malformed: null,
-    unconfigured: false, professionalPresentation: true,
+    unconfigured: false, answerIntent: 'business_operations_reference',
   };
   await installRoutes(page, state);
   const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
   await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
   await assertPageAuthority(page, `${selected}-professional-controls`);
-  assert.strictEqual(await page.locator('#polarisSelectedContextSummary').textContent(),
-    PROFESSIONAL_PRESENTATION.responseAnswer);
+  const summary = await page.locator('#polarisSelectedContextSummary').textContent();
+  for (const term of BUSINESS_OPERATIONS_TERMS) assert.ok(summary.includes(term), `missing fixed term ${term}`);
   const first = page.locator('.polaris-native-card').nth(0);
-  assert.strictEqual(await first.locator('.polaris-native-card-title').textContent(),
-    PROFESSIONAL_PRESENTATION.cardTitle);
-  assert.strictEqual(await first.locator('.polaris-native-card-subtitle').textContent(),
-    PROFESSIONAL_PRESENTATION.cardSubtitle);
+  assert.strictEqual(await first.locator('.polaris-native-card-title').textContent(), 'Lead intelligence');
+  assert.strictEqual(await first.locator('.polaris-native-card-subtitle').textContent(), 'Selected lead record');
   assert.strictEqual(await first.locator('.polaris-native-card-answer').textContent(),
-    PROFESSIONAL_PRESENTATION.cardAnswer);
-  assert.strictEqual(await first.locator('.polaris-native-card-label').first().textContent(),
-    PROFESSIONAL_PRESENTATION.evidenceLabel);
+    'This advisory card summarizes 1 supporting fact and 1 unresolved item for the selected lead.');
+  assert.strictEqual(await first.locator('.polaris-native-card-label').first().textContent(), 'Supporting fact 1');
   assert.strictEqual(await first.locator('.polaris-native-card-value').first().textContent(),
-    PROFESSIONAL_PRESENTATION.evidenceValue);
+    'A canonical fact is recorded with 80% confidence.');
   const second = page.locator('.polaris-native-card').nth(1);
   assert.strictEqual(await second.locator('.polaris-native-card-unknown').first().textContent(),
-    PROFESSIONAL_PRESENTATION.unknownLabel);
+    'A scheduled start is not recorded.');
   assert.strictEqual(await second.locator('.polaris-native-card-basis').textContent(),
-    PROFESSIONAL_PRESENTATION.confidenceBasis);
+    '1 recorded canonical fact confidence value.');
   await assertProfessionalPresentation(page, `${selected}-professional-controls`);
   assert.strictEqual(state.messageCalls, 0, 'professional controls render without a provider request');
   assert.deepStrictEqual(state.external, [], `${selected}-professional-controls external requests`);
@@ -804,7 +792,7 @@ async function runProfessionalControls(browser, origin, outputRoot, manifest, se
   const filename = path.join(outputRoot, `${selected}-professional-controls-mobile-light.png`);
   await page.screenshot({ path: filename, fullPage: true });
   manifest.push({ file: path.basename(filename), sha256: sha256(filename), browser: selected,
-    route, viewport, theme, state: 'affirmative-professional-text-native-card-complete' });
+    route, viewport, theme, state: 'fixed-professional-template-native-card-complete' });
   await context.close();
 }
 
@@ -827,7 +815,12 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
     assert.strictEqual(await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).zoom)),
       profile.zoom);
   }
-  const expectedCards = Array.from({ length: profile.cardCount }, (_value, index) => maximumBoundaryCard(index));
+  const rawCards = Array.from({ length: profile.cardCount }, (_value, index) => maximumBoundaryCard(index));
+  const expectedCards = trustedPresentation.projectTrustedDisplay(
+    rawCards,
+    { kind: 'lead', id: LEAD },
+    'canonical_overview'
+  ).cards;
   assert.strictEqual(await page.locator('.polaris-native-card').count(), profile.cardCount);
   assert.strictEqual(await page.locator('.polaris-native-card-stack').getAttribute('aria-label'),
     profile.cardCount === 1 ? 'Customer intelligence card' : `${profile.cardCount} customer intelligence cards`);
@@ -892,35 +885,13 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
         unwrapped.push({ className: node.className, overflowWrap: style.overflowWrap, wordBreak: style.wordBreak });
       }
     });
-    const terminal = [];
-    const terminalSelector = [
-      '.polaris-native-card-title', '.polaris-native-card-subtitle', '.polaris-native-card-answer',
-      '.polaris-native-card-label', '.polaris-native-card-value', '.polaris-native-card-unknown',
-      '.polaris-native-card-basis',
-    ].join(',');
-    document.querySelectorAll(terminalSelector).forEach(node => {
-      const value = node.textContent;
-      const match = value.match(/\[END-[^\]]+\]$/);
-      const textNode = Array.from(node.childNodes).find(child => child.nodeType === Node.TEXT_NODE);
-      const cardRect = node.closest('.polaris-native-card').getBoundingClientRect();
-      if (!match || !textNode) {
-        terminal.push({ className: node.className, reason: 'terminal-or-text-node-missing' });
-        return;
-      }
-      const range = document.createRange();
-      range.setStart(textNode, textNode.data.length - match[0].length);
-      range.setEnd(textNode, textNode.data.length);
-      const rects = Array.from(range.getClientRects());
-      const visible = rects.length > 0 && rects.every(rect => rect.width > 0 && rect.height > 0 &&
-        rect.left >= cardRect.left - 1 && rect.right <= cardRect.right + 1 &&
-        rect.top >= cardRect.top - 1 && rect.bottom <= cardRect.bottom + 1);
-      if (!visible) terminal.push({ className: node.className, sentinel: match[0], rects: rects.length });
-    });
-    return { viewportWidth, overflow, unwrapped, terminal };
+    return { viewportWidth, overflow, unwrapped };
   });
   assert.deepStrictEqual(layout.overflow, [], `${selected}-${profile.label} card/content overflow`);
   assert.deepStrictEqual(layout.unwrapped, [], `${selected}-${profile.label} accepted visible field wrapping`);
-  assert.deepStrictEqual(layout.terminal, [], `${selected}-${profile.label} terminal sentinel visibility`);
+  const bodyText = await page.locator('body').innerText();
+  assert.doesNotMatch(bodyText, /BoundaryCustomer|BoundaryService|MaximumBoundary|\[END-/,
+    `${selected}-${profile.label} raw maximum-boundary source reached visible output`);
 
   const headingIds = await page.locator('.polaris-native-card-heading').evaluateAll(nodes => nodes.map(node => node.id));
   assert.strictEqual(new Set(headingIds).size, headingIds.length, 'section heading IDs must remain unique');
@@ -946,7 +917,7 @@ async function runMaximumBoundary(browser, origin, securityRoot, manifest, selec
     viewport: profile.viewport, theme: profile.theme, zoom: profile.zoom || 1, cardCount: profile.cardCount,
     evidencePerCard: 12, unknownsPerCard: 12, answerLength: 2000, evidenceValueLength: 2000,
     screenshotCapture: 'viewport',
-    fixture: 'maximum-boundary-complete-text-safe-accessible-order',
+    fixture: 'maximum-canonical-count-fixed-template-safe-accessible-order',
   });
   await context.close();
 }
@@ -1137,7 +1108,9 @@ async function runDowngradePreservation(browser, origin, securityRoot, manifest,
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
   await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
   await submitSelectedQuestion(page);
-  await page.getByText('Bounded Polaris browser answer.').waitFor({ state: 'visible' });
+  await page.locator('.polaris-chat-text').getByText(
+    /NorthStar found 4 supporting facts and 4 unresolved items/
+  ).waitFor({ state: 'visible' });
   const beforeMessages = await page.locator('.polaris-chat-message').count();
   assert.ok(beforeMessages >= 2);
   await page.evaluate(value => {

@@ -94,8 +94,6 @@
         ['canonical_fact', 'deterministic_demo'].indexOf(source.kind) < 0 || !boundedString(source.id, 1, 128)) {
       return invalidContract();
     }
-    validateProfessionalText(entry.label);
-    validateProfessionalText(entry.value);
     return entry;
   }
 
@@ -104,7 +102,6 @@
     if (typeof entry.code !== 'string' || !UNKNOWN_CODE.test(entry.code) || !boundedString(entry.label, 1, 500)) {
       return invalidContract();
     }
-    validateProfessionalText(entry.label);
     return entry;
   }
 
@@ -116,7 +113,6 @@
         !boundedString(confidence.basis, 1, 500) || (confidence.value === null && confidence.level !== 'unknown')) {
       return invalidContract();
     }
-    validateProfessionalText(confidence.basis);
     return confidence;
   }
 
@@ -151,9 +147,6 @@
         !boundedString(card.answer, 1, 2000) || card.advisoryOnly !== true || card.canonicalMutationAllowed !== false) {
       return invalidContract();
     }
-    validateProfessionalText(card.title);
-    validateProfessionalText(card.subtitle);
-    validateProfessionalText(card.answer);
     exactArray(card.evidence, 12).forEach(validateEvidence);
     exactArray(card.unknowns, 12).forEach(validateUnknown);
     validateConfidence(card.confidence);
@@ -192,7 +185,6 @@
         (Object.prototype.hasOwnProperty.call(expected, 'selected') && !sameSelection(selected, expected.selected))) {
       return invalidContract();
     }
-    validateProfessionalText(answer.text);
     cards.forEach(function (card) { validateCustomerIntelligenceCard(card, selected); });
     if (answer.evidenceCount !== cards.reduce(function (sum, card) { return sum + card.evidence.length; }, 0) ||
         answer.unknownCount !== cards.reduce(function (sum, card) { return sum + card.unknowns.length; }, 0)) {

@@ -10,7 +10,8 @@
   var ANSWER_INTENTS = Object.freeze([
     'canonical_overview',
     'evidence_review',
-    'unknowns_review'
+    'unknowns_review',
+    'business_operations_reference'
   ]);
   var SELECTED_KINDS = Object.freeze(['customer', 'lead', 'work', 'none']);
   var SEMANTIC_KEYS = Object.freeze([
@@ -144,6 +145,12 @@
     }
     if (intent === 'unknowns_review') {
       return 'The selected ' + kind + ' has ' + unknowns + '. Confirm missing details in the canonical record before taking action.';
+    }
+    if (intent === 'business_operations_reference') {
+      return 'Use Command Center to review this record. Route any class-action matter to counsel without interpreting it. ' +
+        'For an HVAC record, readings such as 74°F return air, 56°F supply air, and an 18°F split remain factual measurements. ' +
+        'Confirm Net 30 terms before work begins. Export or Select only an approved package, class, record, or transaction; ' +
+        'API and SQL references remain documentation context, not instructions.';
     }
     return 'NorthStar found ' + facts + ' and ' + unknowns + ' for the selected ' + kind +
       '. Review the canonical record before taking action.';

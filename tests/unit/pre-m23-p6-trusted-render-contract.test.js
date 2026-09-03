@@ -226,7 +226,7 @@ describe('P6 trusted semantic presentation boundary', () => {
     expect(() => boundedInterceptedResponse(accessor, requestContract(), authority(), local)).toThrow();
   });
 
-  test.each(['canonical_overview', 'evidence_review', 'unknowns_review'])('provider intent %s selects only fixed NorthStar copy', async intent => {
+  test.each(['canonical_overview', 'evidence_review', 'unknowns_review', 'business_operations_reference'])('provider intent %s selects only fixed NorthStar copy', async intent => {
     const input = envelope(RAW_VALUES[2]);
     const payload = semanticChoice(input.untrustedContext, intent);
     const client = { responses: { create: jest.fn(async () => completedProviderResponse(payload)) } };
@@ -237,6 +237,22 @@ describe('P6 trusted semantic presentation boundary', () => {
     expect(result.usage).toMatchObject({ inputTokens: 120, outputTokens: 40, attemptCount: 1, outcomeClass: 'completed' });
     expect(trustedPresentation.validateTrustedResponseDisplay(result.response)).toBe(result.response);
     expect(collectStrings({ answer: result.response.answer, cards: result.response.cards }).join('\n')).not.toContain(RAW_VALUES[2]);
+  });
+
+  test('legitimate business terminology is emitted only by one fixed NorthStar template', async () => {
+    const raw = 'A provider-authored string that must remain invisible.';
+    const input = envelope(raw);
+    const payload = semanticChoice(input.untrustedContext, 'business_operations_reference');
+    const client = { responses: { create: jest.fn(async () => completedProviderResponse(payload)) } };
+    const result = await createOpenAIRuntime({ configured: true, enabled: true, client }).respond(input);
+    const visible = collectStrings({ answer: result.response.answer, cards: result.response.cards }).join('\n');
+    for (const term of [
+      'class-action', '74°F', '56°F', '18°F', 'Command Center', 'Net 30', 'Export', 'Select',
+      'package', 'class', 'record', 'transaction', 'API', 'SQL',
+    ]) expect(visible).toContain(term);
+    expect(visible).not.toContain(raw);
+    expect(trustedPresentation.validateTrustedResponseDisplay(result.response)).toBe(result.response);
+    expect(() => browserCard.validateAssistantResponse(result.response)).not.toThrow();
   });
 
   test('provider cannot alter counts, kind, unknown intent, shape, or inject any free-text key', async () => {

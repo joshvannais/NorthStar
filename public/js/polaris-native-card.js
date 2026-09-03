@@ -23,6 +23,7 @@
   var DIGEST = /^[0-9a-f]{64}$/i;
   var UNKNOWN_CODE = /^[a-z0-9_]{1,100}$/;
   var renderSequence = 0;
+  var canonicalBackings = new WeakSet();
 
   function invalidContract() {
     throw new Error('Unsupported Polaris structured contract.');
@@ -82,6 +83,63 @@
   function sameSelection(left, right) {
     if (!left || !right) return left === right;
     return left.kind === right.kind && left.id === right.id;
+  }
+
+  function sameAuthority(left, right) {
+    return Boolean(left && right && left.organizationId === right.organizationId &&
+      left.userId === right.userId && left.role === right.role);
+  }
+
+  function immutableCopy(value) {
+    if (value === null || typeof value !== 'object') return value;
+    var output;
+    if (Array.isArray(value)) {
+      output = value.map(immutableCopy);
+    } else {
+      output = {};
+      Object.keys(value).forEach(function (key) { output[key] = immutableCopy(value[key]); });
+    }
+    return Object.freeze(output);
+  }
+
+  function sameExactValue(left, right) {
+    if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') {
+      return Object.is(left, right);
+    }
+    if (Array.isArray(left) !== Array.isArray(right) || Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) {
+      return false;
+    }
+    var leftKeys = Reflect.ownKeys(left).slice().sort();
+    var rightKeys = Reflect.ownKeys(right).slice().sort();
+    if (leftKeys.length !== rightKeys.length || leftKeys.some(function (key, index) {
+      return key !== rightKeys[index];
+    })) return false;
+    return leftKeys.every(function (key) {
+      if (key === 'length' && Array.isArray(left)) return left.length === right.length;
+      var leftDescriptor = Object.getOwnPropertyDescriptor(left, key);
+      var rightDescriptor = Object.getOwnPropertyDescriptor(right, key);
+      return Boolean(leftDescriptor && rightDescriptor &&
+        Object.prototype.hasOwnProperty.call(leftDescriptor, 'value') &&
+        Object.prototype.hasOwnProperty.call(rightDescriptor, 'value') &&
+        leftDescriptor.enumerable === rightDescriptor.enumerable &&
+        sameExactValue(leftDescriptor.value, rightDescriptor.value));
+    });
+  }
+
+  function canonicalBindingProjection(response) {
+    return {
+      schemaVersion: response.schemaVersion,
+      state: response.state,
+      authority: response.authority,
+      selected: response.selected,
+      answer: {
+        evidenceCount: response.answer.evidenceCount,
+        unknownCount: response.answer.unknownCount
+      },
+      cards: response.cards,
+      advisoryOnly: response.advisoryOnly,
+      canonicalMutationAllowed: response.canonicalMutationAllowed
+    };
   }
 
   function validateEvidence(value) {
@@ -182,7 +240,10 @@
         response.advisoryOnly !== true || response.canonicalMutationAllowed !== false ||
         (!selected && cards.length) || (expected.requestId && response.requestId !== expected.requestId) ||
         (expected.source && response.source !== expected.source) ||
-        (Object.prototype.hasOwnProperty.call(expected, 'selected') && !sameSelection(selected, expected.selected))) {
+        (Object.prototype.hasOwnProperty.call(expected, 'selected') && !sameSelection(selected, expected.selected)) ||
+        (expected.authority && !sameAuthority(authority, expected.authority)) ||
+        (expected.messageResponse === true &&
+          (['interceptor', 'openai'].indexOf(response.source) < 0 || !DIGEST.test(response.responseId)))) {
       return invalidContract();
     }
     cards.forEach(function (card) { validateCustomerIntelligenceCard(card, selected); });
@@ -194,7 +255,30 @@
       return invalidContract();
     }
     try { trustedPresentation.validateTrustedResponseDisplay(response); } catch (_error) { return invalidContract(); }
+    if (Object.prototype.hasOwnProperty.call(expected, 'canonicalBacking')) {
+      if (!canonicalBackings.has(expected.canonicalBacking) ||
+          !sameExactValue(canonicalBindingProjection(response), expected.canonicalBacking)) {
+        return invalidContract();
+      }
+    } else if (expected.messageResponse === true && selected !== null) {
+      return invalidContract();
+    }
     return response;
+  }
+
+  function captureCanonicalBacking(value, expected) {
+    expected = expected || {};
+    var validation = {
+      source: 'canonical_local'
+    };
+    if (Object.prototype.hasOwnProperty.call(expected, 'requestId')) validation.requestId = expected.requestId;
+    if (Object.prototype.hasOwnProperty.call(expected, 'selected')) validation.selected = expected.selected;
+    if (expected.authority) validation.authority = expected.authority;
+    var response = validateAssistantResponse(value, validation);
+    if (response.source !== 'canonical_local') return invalidContract();
+    var backing = immutableCopy(canonicalBindingProjection(response));
+    canonicalBackings.add(backing);
+    return backing;
   }
 
   function validateAssistantStatus(value) {
@@ -381,6 +465,7 @@
     RESPONSE_SCHEMA: RESPONSE_SCHEMA,
     STATUS_SCHEMA: STATUS_SCHEMA,
     buildDemoCard: buildDemoCard,
+    captureCanonicalBacking: captureCanonicalBacking,
     renderCustomerIntelligenceCard: renderCustomerIntelligenceCard,
     renderCustomerIntelligenceCards: renderCustomerIntelligenceCards,
     validateAssistantResponse: validateAssistantResponse,

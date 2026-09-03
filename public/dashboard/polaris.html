@@ -656,6 +656,9 @@
       var CONTEXT_SCHEMA = 'northstar.polaris.context-request.v1';
       var MESSAGE_SCHEMA = 'northstar.polaris.message-request.v1';
       var activeSelection = null;
+      var activeCanonicalBacking = null;
+      var activeAccountAuthority = null;
+      var contextGeneration = 0;
 
       function selectedQuery() {
         var query = new URLSearchParams(window.location.search);
@@ -663,6 +666,28 @@
         var identifier = query.get('id') || query.get('leadId') || '';
         if (['customer', 'lead', 'work'].indexOf(kind) < 0 || !UUID.test(identifier)) return null;
         return { kind: kind, identifier: identifier.toLowerCase() };
+      }
+
+      function selectedContract(selection) {
+        return selection ? { kind: selection.kind, id: selection.identifier } : null;
+      }
+
+      function sameActiveSelection(left, right) {
+        if (!left || !right) return left === right;
+        return left.kind === right.kind && left.identifier === right.identifier;
+      }
+
+      function invalidateCanonicalBacking() {
+        contextGeneration += 1;
+        activeCanonicalBacking = null;
+      }
+
+      function accountAuthority(account) {
+        var role = accountRole(account);
+        var organizationId = account && account.organization && account.organization.id;
+        var userId = account && account.user && account.user.id;
+        if (!UUID.test(organizationId || '') || !UUID.test(userId || '') || !role) return null;
+        return Object.freeze({ organizationId: organizationId.toLowerCase(), userId: userId.toLowerCase(), role: role });
       }
 
       function syncWelcomePresentation(hasSelectedRecord) {
@@ -767,6 +792,8 @@
       }
 
       function applyConversationAccess(account) {
+        invalidateCanonicalBacking();
+        activeAccountAuthority = accountAuthority(account);
         var demo = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true;
         var role = accountRole(account);
         var plan = accountPlan(account);
@@ -821,6 +848,7 @@
       }
 
       function showSelectedUnavailable(message) {
+        activeCanonicalBacking = null;
         var section = document.getElementById('polarisSelectedContext');
         document.getElementById('polarisSelectedContextTitle').textContent = 'Selected record unavailable';
         document.getElementById('polarisSelectedContextSummary').textContent = message;
@@ -854,7 +882,13 @@
       }
 
       function renderSelectedContext() {
+        var generation = ++contextGeneration;
+        activeCanonicalBacking = null;
         activeSelection = selectedQuery();
+        var selectedAtRequest = activeSelection ? Object.freeze({
+          kind: activeSelection.kind,
+          identifier: activeSelection.identifier
+        }) : null;
         syncWelcomePresentation(Boolean(activeSelection));
         var section = document.getElementById('polarisSelectedContext');
         if (!activeSelection) {
@@ -900,22 +934,34 @@
         }
         requestJson('POST', '/api/v1/canonical/polaris/assistant/context', {
           schemaVersion: CONTEXT_SCHEMA,
-          selected: { kind: activeSelection.kind, id: activeSelection.identifier }
+          selected: selectedContract(selectedAtRequest)
         }, function(error, status, payload) {
+          if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) return;
           if (error || status < 200 || status >= 300 || !payload || !payload.data) {
             var message = payload && payload.error && payload.error.message;
             showSelectedUnavailable(message || 'The exact selected record could not be loaded for this organization and role.');
             return;
           }
           try {
+            if (!activeAccountAuthority) throw new Error('account_authority_unavailable');
             var data = NorthStarPolarisCard.validateAssistantResponse(payload.data, {
               source: 'canonical_local',
-              selected: { kind: activeSelection.kind, id: activeSelection.identifier }
+              selected: selectedContract(selectedAtRequest),
+              authority: activeAccountAuthority
+            });
+            var backing = NorthStarPolarisCard.captureCanonicalBacking(data, {
+              source: 'canonical_local',
+              selected: selectedContract(selectedAtRequest),
+              authority: activeAccountAuthority
             });
             var card = data.cards && data.cards[0];
             document.getElementById('polarisSelectedContextTitle').textContent = card && card.title || 'Selected record';
             document.getElementById('polarisSelectedContextSummary').textContent = data.answer.text;
             if (!renderCards(data.cards)) throw new Error('structured_response_rejected');
+            if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) {
+              throw new Error('stale_context_response');
+            }
+            activeCanonicalBacking = backing;
           } catch (_contractError) {
             showSelectedUnavailable('The structured response was rejected. No fallback record is shown.');
             showStructuredContractUnavailable();
@@ -1148,24 +1194,44 @@
       }
 
       function sendPaidMessage(message, requestKey) {
+        var key = requestKey || idempotencyKey();
+        var messageSelection = activeSelection ? Object.freeze({
+          kind: activeSelection.kind,
+          identifier: activeSelection.identifier
+        }) : null;
+        var messageBacking = activeCanonicalBacking;
+        var messageAuthority = activeAccountAuthority;
+        var messageGeneration = contextGeneration;
+        if (!messageAuthority || (messageSelection && !messageBacking)) {
+          showStructuredContractUnavailable();
+          addMessage('assistant', 'Polaris needs the current selected record before it can answer safely. No data was changed.',
+            'error', key, null);
+          return;
+        }
         showTyping();
         setLoading(true);
-        var key = requestKey || idempotencyKey();
         var request = {
           schemaVersion: MESSAGE_SCHEMA,
           idempotencyKey: key,
           message: message
         };
-        if (activeSelection) request.selected = { kind: activeSelection.kind, id: activeSelection.identifier };
+        if (messageSelection) request.selected = selectedContract(messageSelection);
         requestJson('POST', '/api/v1/canonical/polaris/assistant/messages', request, function(error, status, payload) {
           hideTyping();
           setLoading(false);
           input.focus();
           if (!error && status >= 200 && status < 300 && payload && payload.data) {
             try {
+              if (messageGeneration !== contextGeneration || !sameActiveSelection(messageSelection, activeSelection) ||
+                  (messageBacking && activeCanonicalBacking !== messageBacking)) {
+                throw new Error('stale_message_response');
+              }
               var data = NorthStarPolarisCard.validateAssistantResponse(payload.data, {
                 requestId: key,
-              selected: activeSelection ? { kind: activeSelection.kind, id: activeSelection.identifier } : null
+                selected: selectedContract(messageSelection),
+                authority: messageAuthority,
+                messageResponse: true,
+                canonicalBacking: messageBacking
               });
               if (data.cards.length && !renderCards(data.cards)) throw new Error('structured_response_rejected');
               addMessage('assistant', data.answer.text, 'sent', key);
@@ -1293,6 +1359,15 @@
 
                 window.addEventListener('northstar:account', function(event) {
                   applyConversationAccess(event && event.detail || null);
+                  renderSelectedContext();
+                });
+
+                window.addEventListener('popstate', renderSelectedContext);
+                window.addEventListener('pageshow', function(event) {
+                  if (event.persisted) {
+                    loadConversationAccess();
+                    renderSelectedContext();
+                  }
                 });
 
                 // ── Refresh context when a simulation completes elsewhere ──

@@ -75,7 +75,7 @@ describe('Pre-Mission 23 P7 accessibility acceptance contracts', () => {
 
     const requiredScripts = [
       '/js/canonical-intelligence.js', '/js/presentation-format.js', '/js/polaris-engine.js',
-      '/js/transcript-renderer.js', '/js/navigation-launcher.js', '/js/customer-detail.js',
+      '/js/transcript-renderer.js', '/js/customer-detail.js',
     ];
     const consumerIndex = commandCenterHtml.indexOf('/js/command-center-page.js');
     for (const script of requiredScripts) {

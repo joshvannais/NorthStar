@@ -438,7 +438,11 @@ function applyCanonicalBindingMutation(response, name) {
   } else if (name === 'response-organization') response.authority.organizationId = '10000000-0000-4000-8000-000000000601';
   else if (name === 'response-user') response.authority.userId = '10000000-0000-4000-8000-000000000602';
   else if (name === 'response-role') response.authority.role = 'admin';
-  else if (name === 'evidence-order-reprojected') response.cards[0].evidence.reverse();
+  else if (name === 'evidence-order-reprojected') {
+    const first = response.cards[0].evidence[0];
+    response.cards[0].evidence[0] = response.cards[1].evidence[0];
+    response.cards[1].evidence[0] = first;
+  }
   else if (name === 'card-order-reprojected') response.cards.reverse();
   else if (name === 'canonical-local-message-source') {
     response.source = 'canonical_local';
@@ -1205,7 +1209,12 @@ async function runCanonicalBindingMutation(browser, origin, securityRoot, manife
   await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
   await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
   await submitSelectedQuestion(page);
-  await page.locator('.polaris-chat-error').waitFor({ state: 'visible' });
+  try {
+    await page.locator('.polaris-chat-error').waitFor({ state: 'visible' });
+  } catch (error) {
+    throw new Error(`${mutation}: ${error.message}\napi=${JSON.stringify(state.api)}\nbody=${
+      (await page.locator('body').innerText()).slice(0, 3000)}`);
+  }
   assert.match(await page.locator('.polaris-chat-error').innerText(), /unsupported structured response/i);
   assert.strictEqual(await page.locator('.polaris-native-card').count(), 0,
     `${mutation} must reject the complete candidate without partial card display`);
@@ -1262,6 +1271,7 @@ async function runStaleSelectionBinding(browser, origin, securityRoot, manifest,
 
 async function main() {
   const selected = (process.argv.find(value => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
+  const bindingCase = (process.argv.find(value => value.startsWith('--binding-case=')) || '').split('=')[1];
   const outputRoot = path.resolve(process.env.PRE_M23_P6_VISUAL_DIR || 'outputs/pre-m23-p6-visual');
   const securityRoot = path.resolve(process.env.PRE_M23_P6_SECURITY_DIR || 'outputs/pre-m23-p6-security');
   const testedRevision = process.env.PRE_M23_P6_TESTED_REVISION;
@@ -1278,6 +1288,15 @@ async function main() {
     server = await listen();
     const origin = `http://127.0.0.1:${server.address().port}`;
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+    if (bindingCase) {
+      const cases = bindingCase === 'all' ? CANONICAL_BINDING_CASES : [bindingCase];
+      assert.ok(cases.every(value => CANONICAL_BINDING_CASES.includes(value)));
+      for (const mutation of cases) {
+        await runCanonicalBindingMutation(browser, origin, securityRoot, security, selected, mutation);
+      }
+      console.log(JSON.stringify({ browser: selected, bindingCase, externalRequests: 0 }, null, 2));
+      return;
+    }
     const profiles = [
       { label: 'desktop-light-configured-not-verified', viewport: { width: 1440, height: 900 }, theme: 'light', unconfigured: false },
       { label: 'mobile-dark-unconfigured', viewport: { width: 390, height: 844 }, theme: 'dark', unconfigured: true },

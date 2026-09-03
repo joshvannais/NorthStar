@@ -14,6 +14,7 @@ const { EXTREME_FENCE_SUBTOTAL, canonicalFenceProfile } = require('../helpers/m1
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { loadSchedulingOperatorDirectory } = require('../../src/scheduling/operatorDirectory');
+const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 const {
   READ_MODEL_VERSION,
   createCanonicalRouter,
@@ -471,14 +472,7 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
       respond: async envelope => {
         executions += 1;
         await new Promise(resolve => setTimeout(resolve, 20));
-        const response = interceptedAssistantResponse(envelope);
-        response.answer = {
-          text: 'The selected lead summary is ready for review.',
-          evidenceCount: 0,
-          unknownCount: 0,
-        };
-        response.cards = [];
-        return response;
+        return trustedPresentation.semanticChoice(envelope.untrustedContext, 'canonical_overview');
       },
     };
     const interceptedApp = createApp(() => pool, null, null, { assistantRuntime });

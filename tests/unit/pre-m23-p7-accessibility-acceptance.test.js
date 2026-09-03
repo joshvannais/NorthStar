@@ -56,9 +56,9 @@ describe('Pre-Mission 23 P7 accessibility acceptance contracts', () => {
     for (let index = 1; index <= 7; index += 1) {
       expect(ledger).toContain(`ACC-0${index}`);
     }
-    expect(ledger).toMatch(/Physical iPhone, iPad, and Android[^\n]*unavailable/i);
-    expect(ledger).toMatch(/WebKit[^\n]*not physical Safari/i);
-    expect(ledger).toMatch(/professional prose[^\n]*native cards/i);
-    expect(ledger).toMatch(/raw JSON[^\n]*code fences[^\n]*internal error codes/i);
+    expect(ledger).toMatch(/Physical iPhone, iPad, and Android[\s\S]{0,120}unavailable/i);
+    expect(ledger).toMatch(/WebKit[\s\S]{0,80}not physical Safari/i);
+    expect(ledger).toMatch(/professional prose[\s\S]{0,80}native cards/i);
+    expect(ledger).toMatch(/raw JSON[\s\S]{0,160}code fences[\s\S]{0,160}internal error codes/i);
   });
 });

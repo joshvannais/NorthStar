@@ -671,6 +671,16 @@ async function assertMountedTheme(page, route, expectedTheme, options = {}) {
     await settleFiniteDocumentAnimations(page);
     accessibility = await auditMountedAccessibility(page);
   }
+  const automaticQuickStart = page.locator('#northstarQuickStartDialog[open]');
+  if (await automaticQuickStart.count()) {
+    assert.strictEqual(
+      await automaticQuickStart.evaluate(dialog => dialog.contains(document.activeElement)),
+      true,
+      `${route} automatic Quick Start contains focus`
+    );
+    await page.keyboard.press('Escape');
+    assert.strictEqual(await page.locator('#northstarQuickStartDialog[open]').count(), 0, `${route} Quick Start closes with Escape`);
+  }
   const interactiveStates = await auditInteractiveStates(page);
   assert.strictEqual(
     new URL(page.url()).pathname,
@@ -1399,9 +1409,11 @@ async function runRecoveryMatrix(engine, viewport, theme, origin) {
 }
 
 async function main() {
-  const selection = process.env.NORTHSTAR_BROWSER || 'both';
-  assert.ok(['chrome', 'webkit', 'both'].includes(selection), 'NORTHSTAR_BROWSER must be chrome, webkit, or both');
-  const engines = selection === 'both' ? ['chrome', 'webkit'] : [selection];
+  const selection = process.env.NORTHSTAR_BROWSER || 'all';
+  assert.ok(['chrome', 'firefox', 'webkit', 'both', 'all'].includes(selection), 'NORTHSTAR_BROWSER must be chrome, firefox, webkit, both, or all');
+  const engines = selection === 'all'
+    ? ['chrome', 'firefox', 'webkit']
+    : selection === 'both' ? ['chrome', 'webkit'] : [selection];
   const selectedViewports = process.env.NORTHSTAR_THEME_VIEWPORT
     ? VIEWPORTS.filter(viewport => viewport.label === process.env.NORTHSTAR_THEME_VIEWPORT)
     : VIEWPORTS;
@@ -1462,7 +1474,9 @@ async function main() {
     }
     process.stdout.write(`${JSON.stringify({
       success: true,
-      engines: engines.map(engine => engine === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit'),
+      engines: engines.map(engine => engine === 'chrome'
+        ? 'installed Chrome'
+        : engine === 'firefox' ? 'actual Playwright Firefox' : 'actual Playwright WebKit'),
       physicalSafari: false,
       mountedPages: MOUNTED_THEME_PAGES.length,
       themes: THEMES,

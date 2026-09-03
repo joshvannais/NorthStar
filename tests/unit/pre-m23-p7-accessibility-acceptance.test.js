@@ -57,10 +57,14 @@ describe('Pre-Mission 23 P7 accessibility acceptance contracts', () => {
   });
 
   test('customer identity opens surface-specific detail while Polaris remains an explicit action', () => {
+    const commandCenterPage = read('public/js/command-center-page.js');
+    const commandCenterHtml = read('public/demo-dashboard.html');
     const leads = read('public/dashboard/leads.html');
     const communications = read('public/dashboard/communications.html');
     const detail = read('public/js/customer-detail.js');
 
+    expect(commandCenterPage).toMatch(/CustomerDetail\.open\([^,]+,\s*\{\s*source:\s*['"]leads['"]/);
+    expect(commandCenterPage).not.toMatch(/(?:link|customerLink)\.href\s*=\s*detailHref\(/);
     expect(leads).toMatch(/CustomerDetail\.open\(lead\.customerId,\s*\{\s*source:\s*['"]leads['"]/);
     expect(communications).toMatch(/CustomerDetail\.open\(lead\.customerId,\s*\{\s*source:\s*['"]communications['"]/);
     expect(leads).not.toMatch(/openLeadDrawer[\s\S]{0,500}location\.(?:assign|href)[\s\S]{0,100}polaris/i);
@@ -68,6 +72,16 @@ describe('Pre-Mission 23 P7 accessibility acceptance contracts', () => {
     expect(detail).toContain('id="cdConversationHistory"');
     expect(detail).toMatch(/function renderCommunicationHistory\(/);
     expect(detail).toMatch(/id="cdBtnAskPolaris"[\s\S]{0,120}>Ask Polaris</);
+
+    const requiredScripts = [
+      '/js/canonical-intelligence.js', '/js/presentation-format.js', '/js/polaris-engine.js',
+      '/js/transcript-renderer.js', '/js/navigation-launcher.js', '/js/customer-detail.js',
+    ];
+    const consumerIndex = commandCenterHtml.indexOf('/js/command-center-page.js');
+    for (const script of requiredScripts) {
+      expect(commandCenterHtml.indexOf(script)).toBeGreaterThanOrEqual(0);
+      expect(commandCenterHtml.indexOf(script)).toBeLessThan(consumerIndex);
+    }
   });
 
   test('Leads and Communications distinguish intentional empty, denied, and unavailable states', () => {

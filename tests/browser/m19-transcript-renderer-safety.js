@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const { navigationFixture } = require('../helpers/navigation-fixture');
+const { buildDemoWorkspace, createInitialDemoState } = require('../../src/commandCenter/workspace');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 [
@@ -16,6 +17,7 @@ const { app } = require('../../src/server');
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
+  Object.freeze({ label: 'mobile320', width: 320, height: 720 }),
 ]);
 const THEMES = Object.freeze(['light', 'dark']);
 const ACCOUNT_USER_ID = '00000000-0000-4000-8000-000000000501';
@@ -49,6 +51,7 @@ const PUBLIC_TURNS = Object.freeze([
 const LEGACY_TRANSCRIPT = 'Agent: Legacy ' + LEGACY_IMAGE_PAYLOAD + '\nCustomer: ' + CLOSING_PAYLOAD + '\nObserver: unchanged';
 const LEAD_TRANSCRIPT = 'Agent: Mounted ' + LEAD_IMAGE_PAYLOAD + '\nCustomer: ' + CLOSING_PAYLOAD;
 const CUSTOMER_SURFACES = Object.freeze([
+  Object.freeze({ label: 'Command Center CustomerDetail', route: '/demo' }),
   Object.freeze({ label: 'Leads CustomerDetail', route: '/dashboard/leads' }),
   Object.freeze({ label: 'Communications CustomerDetail', route: '/dashboard/communications' }),
 ]);
@@ -74,6 +77,20 @@ function account() {
     onboarding: { status: 'complete' },
     subscription: { safe: true, state: 'active', readOnly: false, showTrialBanner: false },
   };
+}
+
+function commandCenterWorkspace() {
+  return buildDemoWorkspace({
+    tenantId: ORGANIZATION_ID,
+    sessionId: SESSION_ID,
+    state: createInitialDemoState(ORGANIZATION_ID, new Date(TIMESTAMP), {
+      seed: 'p7-command-center-customer-detail',
+    }),
+    revision: 1,
+    simulationCount: 0,
+    persisted: false,
+    expiresAt: new Date('2099-08-06T12:00:00.000Z'),
+  });
 }
 
 function canonicalItem() {
@@ -226,8 +243,23 @@ async function installBoundaries(context, origin, evidence) {
     if (url.pathname === '/api/auth/me') return route.fulfill(json({ account: account() }));
     if (url.pathname === '/api/account/subscription') return route.fulfill(json({ subscription: account().subscription }));
     if (url.pathname === '/api/account/preferences') return route.fulfill(json({ preferences: {} }));
-    if (url.pathname.indexOf('/api/v1/canonical/compat/') === 0) {
-      const surface = decodeURIComponent(url.pathname.split('/').pop());
+    if (url.pathname === '/api/v1/command-center/workspace' || url.pathname === '/api/demo/command-center') {
+      if (CONTEXT_STATE === 'error') {
+        return route.fulfill(json({ error: { message: 'The Command Center workspace could not be loaded.' } }, 503));
+      }
+      if (CONTEXT_STATE === 'denied') {
+        return route.fulfill(json({ error: { message: 'Command Center access unavailable for this account.' } }, 403));
+      }
+      const response = commandCenterWorkspace();
+      if (CONTEXT_STATE === 'empty') {
+        response.graphs = [];
+        response.integrity.graphCount = 0;
+      }
+      return route.fulfill(json({ success: true, data: response }));
+    }
+    const compatibility = url.pathname.match(/^\/api\/(?:v1\/canonical|demo\/command-center\/canonical)\/compat\/([^/]+)$/);
+    if (compatibility) {
+      const surface = decodeURIComponent(compatibility[1]);
       if (['leads', 'communications'].includes(surface) && CONTEXT_STATE === 'error') {
         return route.fulfill(json({ error: 'temporarily_unavailable' }, 503));
       }
@@ -286,23 +318,55 @@ function checkNoOverflow(evidence, observed, label) {
 }
 
 async function exerciseCustomerDetail(page, evidence, label) {
-  try {
-    await page.waitForFunction(() => typeof window.CustomerDetail !== 'undefined', null, { timeout: 5000 });
-  } catch (_error) {
-    const diagnostic = await page.evaluate(() => ({
-      url: location.href,
-      title: document.title,
-      scripts: Array.from(document.scripts).map(script => ({ src: script.getAttribute('src') || '<inline>', ready: script.readyState || null })),
-      body: document.body && document.body.textContent.slice(0, 160),
-    }));
-    throw new Error(label + ': CustomerDetail unavailable: ' + JSON.stringify(diagnostic));
+  const isCommandCenter = label.indexOf('Command Center CustomerDetail') === 0;
+  if (isCommandCenter && await page.locator('#northstarQuickStartDialog[open]').count()) {
+    await page.keyboard.press('Escape');
+  }
+  if (!isCommandCenter) {
+    try {
+      await page.waitForFunction(() => typeof window.CustomerDetail !== 'undefined', null, { timeout: 5000 });
+    } catch (_error) {
+      const diagnostic = await page.evaluate(() => ({
+        url: location.href,
+        title: document.title,
+        scripts: Array.from(document.scripts).map(script => ({ src: script.getAttribute('src') || '<inline>', ready: script.readyState || null })),
+        body: document.body && document.body.textContent.slice(0, 160),
+      }));
+      throw new Error(label + ': CustomerDetail unavailable: ' + JSON.stringify(diagnostic));
+    }
   }
   const isLeads = label.indexOf('Leads CustomerDetail') === 0;
   const isCommunications = label.indexOf('Communications CustomerDetail') === 0;
   const isKeyboard = label.indexOf('/reload') >= 0;
-  const opener = isLeads ? page.locator('.leads-table tbody tr').first()
+  const opener = isCommandCenter ? page.locator('.command-center-record-link:visible').first()
+    : isLeads ? page.locator('.leads-table tbody tr').first()
     : isCommunications ? page.locator('.call-card-header').first() : null;
   const locationBefore = new URL(page.url()).pathname + new URL(page.url()).search;
+  if (isCommandCenter) {
+    try {
+      await opener.waitFor({ timeout: 5000 });
+    } catch (_error) {
+      const diagnostic = await page.evaluate(() => ({
+        url: location.href,
+        status: document.getElementById('commandCenterStatus') && document.getElementById('commandCenterStatus').textContent,
+        leadCount: document.querySelectorAll('.command-center-record-link').length,
+        body: document.body && document.body.textContent.replace(/\s+/g, ' ').slice(0, 500),
+      }));
+      throw new Error(label + ': Command Center customer identity unavailable: ' + JSON.stringify({
+        diagnostic: diagnostic,
+        api: evidence.api,
+        pageErrors: evidence.pageErrors,
+        consoleErrors: evidence.consoleErrors,
+      }));
+    }
+    const identity = await opener.evaluate(element => ({
+      tagName: element.tagName,
+      type: element.getAttribute('type'),
+      href: element.getAttribute('href'),
+    }));
+    recordCheck(evidence, identity.tagName === 'BUTTON' && identity.type === 'button' && identity.href === null,
+      label + ': customer identity is an in-place button, not a Polaris link', identity);
+  }
   await page.evaluate(() => {
     window.__m19TranscriptXss = 0;
     window.__m19TranscriptLegacyXss = 0;
@@ -316,13 +380,19 @@ async function exerciseCustomerDetail(page, evidence, label) {
     if (isKeyboard) {
       await opener.focus();
       await opener.press('Enter');
+    } else if (isCommandCenter) {
+      await opener.click();
     } else {
       const nestedIdentity = isLeads ? opener.locator('td strong').first() : opener.locator('.call-name').first();
       await nestedIdentity.click();
     }
+    if (isCommandCenter && new URL(page.url()).pathname.indexOf('/polaris') >= 0) {
+      throw new Error(label + ': Command Center customer identity navigated implicitly to Polaris: ' + page.url());
+    }
   } else {
     await page.evaluate(() => window.CustomerDetail.open('00000000-0000-4000-8000-000000000503'));
   }
+  await page.waitForFunction(() => typeof window.CustomerDetail !== 'undefined', null, { timeout: 5000 });
   await page.waitForFunction(() => {
     const title = document.getElementById('cdDrawerTitle');
     return title && title.textContent.indexOf('Cedar') >= 0;
@@ -338,6 +408,8 @@ async function exerciseCustomerDetail(page, evidence, label) {
       rendererIndex: scripts.indexOf('/js/transcript-renderer.js'),
       consumerIndex: scripts.indexOf('/js/customer-detail.js'),
       title: document.getElementById('cdDrawerTitle').textContent,
+      closeName: document.getElementById('cdDrawerClose').getAttribute('aria-label'),
+      focusInside: document.getElementById('cdCustomerDrawer').contains(document.activeElement),
       contextual: {
         summary: document.getElementById('cdContextSummary').textContent,
         jobHeading: document.getElementById('cdJobSectionHeading').textContent,
@@ -364,11 +436,14 @@ async function exerciseCustomerDetail(page, evidence, label) {
   recordCheck(evidence, primary.transcript.role === 'log' && primary.transcript.live === 'polite',
     label + ': CustomerDetail live-region contract', primary.transcript);
   recordCheck(evidence, primary.title === DRAWER_CUSTOMER_NAME, label + ': customer title remains literal text', primary.title);
+  recordCheck(evidence, primary.closeName === 'Close customer details',
+    label + ': close control has an action-specific name', primary.closeName);
+  recordCheck(evidence, primary.focusInside, label + ': opening the customer drawer moves focus inside it');
   recordCheck(evidence, new URL(page.url()).pathname + new URL(page.url()).search === locationBefore,
     label + ': customer identity retains the current surface instead of navigating to Polaris', page.url());
-  if (isLeads) {
+  if (isLeads || isCommandCenter) {
     recordCheck(evidence, primary.contextual.jobHeading === 'Lead Inquiry' && primary.contextual.historyHidden === true,
-      label + ': Leads opens lead-focused detail', primary.contextual);
+      label + ': lead-origin customer identity opens inquiry-focused detail', primary.contextual);
   }
   if (isCommunications) {
     recordCheck(evidence, primary.contextual.historyHidden === false && primary.contextual.historyCount === 2 &&
@@ -399,9 +474,26 @@ async function exerciseCustomerDetail(page, evidence, label) {
   recordCheck(evidence, rerender.bubbles.length === 3, label + ': rerender has no duplicate or stale nodes', rerender);
   recordCheck(evidence, rerender.text.indexOf('Legacy ') === -1, label + ': rerender removed prior transcript', rerender.text);
   if (opener) {
+    await page.locator('#cdDrawerClose').focus();
+    await page.keyboard.press('Shift+Tab');
+    recordCheck(evidence, await page.locator('#cdCustomerDrawer').evaluate(element => element.contains(document.activeElement)),
+      label + ': focus remains contained in the open customer drawer');
     await page.keyboard.press('Escape');
     recordCheck(evidence, await opener.evaluate(element => document.activeElement === element),
       label + ': closing customer detail restores focus to the originating row or card');
+    if (isCommandCenter) {
+      await opener.press('Space');
+      await page.waitForFunction(() => {
+        const drawer = document.getElementById('cdCustomerDrawer');
+        const title = document.getElementById('cdDrawerTitle');
+        return drawer && !drawer.hidden && title && title.textContent.indexOf('Cedar') >= 0;
+      });
+      recordCheck(evidence, new URL(page.url()).pathname + new URL(page.url()).search === locationBefore,
+        label + ': Space activation retains Command Center instead of navigating to Polaris', page.url());
+      await page.locator('#cdDrawerClose').click();
+      recordCheck(evidence, await opener.evaluate(element => document.activeElement === element),
+        label + ': named close control restores focus after Space activation');
+    }
   } else {
     await page.evaluate(() => window.CustomerDetail.close());
   }
@@ -551,8 +643,13 @@ async function exerciseFreshAndReload(page, origin, route, exercise, evidence, l
 }
 
 async function exerciseCustomerState(page, evidence, label) {
+  const isCommandCenter = label.indexOf('Command Center CustomerDetail') === 0;
   const isLeads = label.indexOf('Leads CustomerDetail') === 0;
-  const expected = isLeads ? {
+  const expected = isCommandCenter ? {
+    empty: /No role-authorized lead records are available/i,
+    error: /Command Center workspace could not be loaded/i,
+    denied: /Command Center access unavailable/i,
+  } : isLeads ? {
     empty: /No leads yet/i,
     error: /Leads unavailable[\s\S]*could not be loaded/i,
     denied: /Lead access unavailable[\s\S]*owner or administrator/i,
@@ -561,16 +658,21 @@ async function exerciseCustomerState(page, evidence, label) {
     error: /Communications unavailable[\s\S]*could not be loaded/i,
     denied: /Communication access unavailable[\s\S]*owner or administrator/i,
   };
-  const container = isLeads ? page.locator('#leadsContent') : page.locator('#callHistoryList');
+  const selector = isCommandCenter
+    ? (CONTEXT_STATE === 'empty' ? '#commandCenterLeadCards' : '#commandCenterStatus')
+    : isLeads ? '#leadsContent' : '#callHistoryList';
+  const container = page.locator(selector);
   await container.waitFor();
   await page.waitForFunction(({ selector, source }) => {
     const element = document.querySelector(selector);
     return element && new RegExp(source, 'i').test(element.textContent || '');
-  }, { selector: isLeads ? '#leadsContent' : '#callHistoryList', source: expected[CONTEXT_STATE].source });
+  }, { selector, source: expected[CONTEXT_STATE].source });
   const observed = await container.evaluate(element => ({
     text: element.textContent.replace(/\s+/g, ' ').trim(),
-    live: element.querySelector('[role="status"][aria-live="polite"]') !== null,
-    interactiveCustomers: element.querySelectorAll('[data-lead-index],.call-card-header').length,
+    live: element.matches('[role="status"][aria-live="polite"]') ||
+      document.querySelector('#commandCenterStatus[role="status"][aria-live="polite"]') !== null ||
+      element.querySelector('[role="status"][aria-live="polite"]') !== null,
+    interactiveCustomers: document.querySelectorAll('[data-lead-index],.call-card-header,.command-center-record-link').length,
   }));
   recordCheck(evidence, expected[CONTEXT_STATE].test(observed.text), label + ': intentional ' + CONTEXT_STATE + ' copy', observed);
   recordCheck(evidence, observed.live, label + ': intentional state is announced politely', observed);
@@ -698,8 +800,8 @@ async function main() {
       mountedCases: evidence.pages.length,
       passesPerCase: 2,
       surfaces: customerInteractionsOnly
-        ? ['Leads CustomerDetail', 'Communications CustomerDetail']
-        : ['Leads CustomerDetail', 'Communications CustomerDetail', 'Public live/post', 'Mounted lead'],
+        ? ['Command Center CustomerDetail', 'Leads CustomerDetail', 'Communications CustomerDetail']
+        : ['Command Center CustomerDetail', 'Leads CustomerDetail', 'Communications CustomerDetail', 'Public live/post', 'Mounted lead'],
       viewports: VIEWPORTS.map(viewport => viewport.label),
       themes: THEMES,
       loopbackRequests: evidence.requests.length,

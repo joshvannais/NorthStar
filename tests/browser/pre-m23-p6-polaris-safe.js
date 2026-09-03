@@ -631,6 +631,7 @@ async function installRoutes(page, state) {
         state.boundaryCardCount,
         state.answerIntent || 'canonical_overview'
       ), body.selected.id);
+      response.authority.role = state.accountRole || 'owner';
       if (state.malformed && state.malformed !== 'status-length' && state.malformed !== 'message-extra') {
         malformedResponse(state.malformed, response);
       }
@@ -663,6 +664,7 @@ async function installRoutes(page, state) {
       assert.strictEqual(body.schemaVersion, 'northstar.polaris.message-request.v1');
       assert.match(body.idempotencyKey, /^[0-9a-f-]{36}$/);
       const response = messageResponse(body, state.hostileMessage || false);
+      response.authority.role = state.accountRole || 'owner';
       if (state.malformed === 'message-extra') response.cards[0].authority.extra = true;
       if (state.bindingMutation) applyCanonicalBindingMutation(response, state.bindingMutation);
       if (state.messageDelay) await new Promise(resolve => setTimeout(resolve, state.messageDelay));

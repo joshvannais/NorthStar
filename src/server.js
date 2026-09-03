@@ -19,6 +19,8 @@ const voiceRoutes = require('./routes/voice');
 const voiceWebhook = require('./voice/webhook');
 const { createRetellWebhookBoundaryRouter } = require('./routes/retellWebhookBoundary');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
+const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
+const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
 const { approvalBodyBoundary } = require('./scheduling/approvalHttpBoundary');
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
@@ -195,6 +197,10 @@ const productionSupportCaseOutboxWorker = new SupportCaseOutboxWorker({
 });
 const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
 const productionHomepageDemoAdmissionHousekeepingWorker = new HomepageDemoAdmissionHousekeepingWorker();
+const productionPolarisRuntime = createProductionOpenAIRuntime(process.env);
+const productionPolarisUsageLedger = createProviderUsageLedger({
+  poolProvider: function () { return db.getPool(); },
+});
 app.locals.workforceService = productionWorkforceService;
 app.locals.assetCatalogueService = new AssetCatalogueService();
 app.use('/api/auth', createAuthRouter({
@@ -226,7 +232,10 @@ const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1/command-center', createCommandCenterRouter());
 app.use('/api/v1/today', createTodayRouter());
 app.use('/api/v1', simulationsRoutes);
-app.use('/api/v1/canonical', createCanonicalRouter());
+app.use('/api/v1/canonical', createCanonicalRouter({
+  assistantRuntime: productionPolarisRuntime,
+  assistantUsageLedger: productionPolarisUsageLedger,
+}));
 // Canonical compatibility routes precede legacy dashboard/public routers so
 // supported reads cannot be shadowed by unscoped file-era handlers.
 app.use('/api/v1', createCompatibilityRouter());

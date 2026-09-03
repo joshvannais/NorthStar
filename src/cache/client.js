@@ -136,16 +136,49 @@ async function wrapCanonical(identity, fetchFn, ttlSeconds) {
   return fetchFn();
 }
 
-async function incr(key, ttlSeconds = 60) {
+function rateLimitClockError(message) {
+  const error = new RangeError(message);
+  error.code = 'RATE_LIMIT_CLOCK_INVALID';
+  return error;
+}
+
+function rateLimitWindow(now, ttlSeconds) {
+  const ttl = Number(ttlSeconds);
+  const windowMs = ttl * 1000;
+  if (!Number.isSafeInteger(now) || now < 0
+      || !Number.isSafeInteger(windowMs) || windowMs <= 0
+      || now > Number.MAX_SAFE_INTEGER - windowMs) {
+    throw rateLimitClockError('Rate-limit clock or window is outside the safe range');
+  }
+  return windowMs;
+}
+
+async function incrWithExpiry(key, ttlSeconds = 60) {
   const now = Date.now();
-  const entry = memoryCache.get(key) || { count: 0, expiresAt: now + ttlSeconds * 1000 };
+  const windowMs = rateLimitWindow(now, ttlSeconds);
+  const existing = memoryCache.get(key);
+  if (existing && (!Number.isSafeInteger(existing.count) || existing.count < 0
+      || !Number.isSafeInteger(existing.expiresAt) || existing.expiresAt < 0
+      || !Number.isSafeInteger(existing.lastObservedAt) || existing.lastObservedAt < 0)) {
+    memoryCache.delete(key);
+    throw rateLimitClockError('Rate-limit counter contains unsafe clock state');
+  }
+  if (existing && now < existing.lastObservedAt) {
+    throw rateLimitClockError('Rate-limit clock regressed');
+  }
+  const entry = existing || { count: 0, expiresAt: now + windowMs, lastObservedAt: now };
   if (now >= entry.expiresAt) {
     entry.count = 0;
-    entry.expiresAt = now + ttlSeconds * 1000;
+    entry.expiresAt = now + windowMs;
   }
-  entry.count += 1;
+  entry.lastObservedAt = now;
+  entry.count = Math.min(Number.MAX_SAFE_INTEGER, entry.count + 1);
   memoryCache.set(key, entry);
-  return entry.count;
+  return Object.freeze({ count: entry.count, observedAt: now, expiresAt: entry.expiresAt });
+}
+
+async function incr(key, ttlSeconds = 60) {
+  return (await incrWithExpiry(key, ttlSeconds)).count;
 }
 
 async function wrap(key, fetchFn, ttlSeconds) {
@@ -174,6 +207,7 @@ module.exports = {
   del,
   get,
   incr,
+  incrWithExpiry,
   init,
   invalidateOrg,
   isAvailable,

@@ -982,6 +982,36 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
       END IF;
+      IF pg_catalog.to_regclass('public.polaris_provider_requests') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.polaris_provider_monthly_usage, public.polaris_provider_requests, public.polaris_provider_security_events FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.polaris_provider_usage_policy_status(uuid,uuid) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint) TO %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer) TO %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.polaris_provider_usage_policy_status(uuid,uuid) TO %I',
+          runtime_role
+        );
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_schedule_mutation_previews') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE INSERT, UPDATE, DELETE ON TABLE public.canonical_schedule_mutation_previews, public.canonical_schedule_human_approvals, public.canonical_schedule_human_audit_events, public.canonical_schedule_human_idempotency FROM %I',
@@ -1142,7 +1172,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_schedule_mutation_previews',
              'canonical_schedule_human_approvals',
              'canonical_schedule_human_audit_events',
-             'canonical_schedule_human_idempotency'
+             'canonical_schedule_human_idempotency',
+             'polaris_provider_monthly_usage',
+             'polaris_provider_requests',
+             'polaris_provider_security_events'
            )) AS table_dml,
        (to_regclass('public.canonical_schedule_mutation_previews') IS NULL OR COALESCE((SELECT bool_and(
           has_table_privilege($1, relation.oid, 'SELECT')
@@ -1196,6 +1229,26 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           (NOT has_function_privilege($1,'public.canonical_schedule_guard_assignment()','EXECUTE')
            AND NOT has_function_privilege($1,'public.canonical_schedule_create_for_appointment()','EXECUTE')))
          AS schedule_helpers_withheld,
+       (to_regclass('public.polaris_provider_requests') IS NULL OR (
+         NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'UPDATE')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'DELETE')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_requests', 'SELECT')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_requests', 'INSERT')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_requests', 'UPDATE')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_requests', 'DELETE')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_security_events', 'SELECT')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_security_events', 'INSERT')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_security_events', 'UPDATE')
+         AND NOT has_table_privilege($1, 'public.polaris_provider_security_events', 'DELETE')
+         AND has_function_privilege($1,
+           'public.polaris_provider_reserve_usage(uuid,uuid,uuid,text,text,text,bigint)', 'EXECUTE')
+         AND has_function_privilege($1,
+           'public.polaris_provider_reconcile_usage(uuid,uuid,uuid,bigint,integer,integer,smallint,text,text,integer)', 'EXECUTE')
+         AND has_function_privilege($1,
+           'public.polaris_provider_usage_policy_status(uuid,uuid)', 'EXECUTE')
+       )) AS polaris_provider_usage_guarded,
        (SELECT bool_and(
           NOT has_table_privilege($1, relation.oid, 'TRUNCATE')
           AND NOT has_table_privilege($1, relation.oid, 'REFERENCES')
@@ -1222,6 +1275,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.schedule_assignment_guarded_dml ||
       !runtimePrivileges.preview_entry_execute || !runtimePrivileges.approval_entry_execute ||
       !runtimePrivileges.schedule_helpers_withheld ||
+      !runtimePrivileges.polaris_provider_usage_guarded ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {
     throw new Error(`Runtime database role privilege verification failed: ${JSON.stringify(runtimePrivileges)}`);

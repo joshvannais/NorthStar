@@ -14,6 +14,7 @@ const { EXTREME_FENCE_SUBTOTAL, canonicalFenceProfile } = require('../helpers/m1
 const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { loadSchedulingOperatorDirectory } = require('../../src/scheduling/operatorDirectory');
+const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 const {
   READ_MODEL_VERSION,
   createCanonicalRouter,
@@ -165,6 +166,7 @@ function fakeAuth(req, _res, next) {
     req.orgId = organizationId;
     req.userRole = 'owner';
     req.user = Object.freeze({ id: userId, organizationId, role: 'owner' });
+    req.accountAuthority = Object.freeze({ plan_type: 'Complete', subscription_status: 'active' });
     req.authSession = Object.freeze({ id: req.get('X-Test-Auth-Session'), transport: 'test' });
   }
   next();
@@ -179,12 +181,18 @@ function headers(organizationId, userId, sessionId) {
   };
 }
 
-function createApp(poolProvider, cacheClient, auditRecorder) {
+function createApp(poolProvider, cacheClient, auditRecorder, overrides = {}) {
   const dependencies = {
     poolProvider,
     auth: fakeAuth,
     cache: cacheClient || cache,
     audit: auditRecorder || { record: async function () {} },
+    assistantUsageLedger: {
+      reserve: async function () { throw new Error('provider reservation is outside this intercepted harness'); },
+      reconcile: async function () { throw new Error('provider reconciliation is outside this intercepted harness'); },
+      status: async function () { return { state: 'within_target' }; },
+    },
+    ...overrides,
   };
   const app = express();
   app.use(function (req, _res, next) {
@@ -195,6 +203,24 @@ function createApp(poolProvider, cacheClient, auditRecorder) {
   app.use('/api/v1/canonical', createCanonicalRouter(dependencies));
   app.use('/api/v1', createCompatibilityRouter(dependencies));
   return app;
+}
+
+function interceptedAssistantResponse(envelope) {
+  const context = envelope.untrustedContext;
+  return {
+    schemaVersion: 'northstar.polaris.assistant-response.v1',
+    requestId: envelope.requestId,
+    responseId: crypto.createHash('sha256').update(`intercepted:${envelope.requestId}`).digest('hex'),
+    state: 'available',
+    source: 'interceptor',
+    authority: { ...envelope.authority },
+    selected: context.selected ? { ...context.selected } : null,
+    answer: { ...context.answer },
+    cards: JSON.parse(JSON.stringify(context.cards)),
+    provider: { state: 'unconfigured', requestsSent: 0 },
+    advisoryOnly: true,
+    canonicalMutationAllowed: false,
+  };
 }
 
 realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
@@ -289,6 +315,273 @@ realPostgres('Mission 19 Part 3 organization-scoped canonical APIs', () => {
     expect(new Set(operations.rows.map(row => row.organization_id))).toEqual(new Set([ORG_A, ORG_B]));
     expect(new Set(operations.rows.map(row => row.graph_id)).size).toBe(2);
     expect(operations.rows.every(row => !row.serialized.includes(RATIFICATION_KEY))).toBe(true);
+  });
+
+  test('mounted Polaris assistant context uses exact PostgreSQL tenant records and remains provider-unconfigured', async () => {
+    const status = await request(app)
+      .get('/api/v1/canonical/polaris/assistant/status')
+      .set(headers(ORG_A, USER_A, 'session-a'));
+    expect(status.status).toBe(200);
+    expect(status.body.data).toMatchObject({
+      state: 'unconfigured',
+      localCustomerIntelligence: 'available',
+      providerRequestsEnabled: false,
+      providerRequestsSent: 0,
+    });
+
+    for (const [kind, id] of [
+      ['customer', graphA.body.ids.customer],
+      ['lead', graphA.body.ids.opportunity],
+      ['work', graphA.body.ids.appointment],
+    ]) {
+      const response = await request(app)
+        .post('/api/v1/canonical/polaris/assistant/context')
+        .set(headers(ORG_A, USER_A, 'session-a'))
+        .send({
+          schemaVersion: 'northstar.polaris.context-request.v1',
+          selected: { kind, id },
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.data).toMatchObject({
+        schemaVersion: 'northstar.polaris.assistant-response.v1',
+        source: 'canonical_local',
+        authority: { organizationId: ORG_A, userId: USER_A, role: 'owner' },
+        selected: { kind, id },
+        provider: { state: 'unconfigured', requestsSent: 0 },
+        advisoryOnly: true,
+        canonicalMutationAllowed: false,
+      });
+      expect(response.body.data.cards[0]).toMatchObject({
+        schemaVersion: 'northstar.polaris.customer-intelligence-card.v1',
+        tone: 'purple',
+        authority: { selected: { kind, id }, graphId: graphA.body.graphId },
+        advisoryOnly: true,
+        canonicalMutationAllowed: false,
+      });
+    }
+
+    const crossTenant = await request(app)
+      .post('/api/v1/canonical/polaris/assistant/context')
+      .set(headers(ORG_B, USER_B, 'session-b'))
+      .send({
+        schemaVersion: 'northstar.polaris.context-request.v1',
+        selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+      });
+    expect(crossTenant.status).toBe(404);
+    expect(crossTenant.body.error.code).toBe('POLARIS_SELECTED_RECORD_NOT_FOUND');
+
+    const unavailable = await request(app)
+      .post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a'))
+      .send({
+        schemaVersion: 'northstar.polaris.message-request.v1',
+        idempotencyKey: crypto.randomUUID(),
+        message: 'Summarize the exact selected lead.',
+        selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+      });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.body.error.code).toBe('POLARIS_PROVIDER_DECISIONS_REQUIRED');
+  });
+
+  test('mounted PostgreSQL assistant routes enforce one organization-user budget before query or interceptor work', async () => {
+    const now = 1788188400000;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    const organizationId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    let backingQueries = 0;
+    let contextLoads = 0;
+    let interceptorExecutions = 0;
+    const limitedApp = createApp(function () {
+      return {
+        query: async function () {
+          backingQueries += 1;
+          return pool.query('SELECT 1 AS polaris_local_authority');
+        },
+      };
+    }, null, null, {
+      assistantContextLoader: async function () { contextLoads += 1; return graphA; },
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async function () { return { state: 'available' }; },
+        respond: async function (envelope) {
+          interceptorExecutions += 1;
+          return interceptedAssistantResponse(envelope);
+        },
+      },
+    });
+    const scopedHeaders = headers(organizationId, userId, 'rate-tab-a');
+
+    try {
+      for (let index = 0; index < 1000; index += 1) {
+        const response = await request(limitedApp)
+          .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+        expect(response.status).toBe(200);
+      }
+      const limitedStatus = await request(limitedApp)
+        .get('/api/v1/canonical/polaris/assistant/status')
+        .set(Object.assign({}, scopedHeaders, { 'X-NorthStar-Session-ID': 'rate-tab-b' }));
+      const limitedContext = await request(limitedApp)
+        .post('/api/v1/canonical/polaris/assistant/context').set(scopedHeaders)
+        .send({ schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: graphA.body.ids.opportunity } });
+      const limitedMessage = await request(limitedApp)
+        .post('/api/v1/canonical/polaris/assistant/messages').set(scopedHeaders)
+        .send({
+          schemaVersion: 'northstar.polaris.message-request.v1',
+          idempotencyKey: crypto.randomUUID(),
+          message: 'Do not reach the mounted interceptor after exhaustion.',
+          selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+        });
+      expect([limitedStatus.status, limitedContext.status, limitedMessage.status]).toEqual([429, 429, 429]);
+      expect([limitedStatus, limitedContext, limitedMessage].every(function (response) {
+        return response.headers['x-ratelimit-limit'] === '1000'
+          && response.headers['x-ratelimit-remaining'] === '0'
+          && response.headers['retry-after'] === '60';
+      })).toBe(true);
+      expect(backingQueries).toBe(1000);
+      expect(contextLoads).toBe(0);
+      expect(interceptorExecutions).toBe(0);
+
+      clock.mockReturnValue(now + 59999);
+      const boundaryRejection = await request(limitedApp)
+        .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+      expect(boundaryRejection.status).toBe(429);
+      expect(boundaryRejection.headers).toMatchObject({
+        'x-ratelimit-reset': String((now + 60000) / 1000),
+        'retry-after': '1',
+      });
+      expect(boundaryRejection.body.error.details.retryAfterSeconds).toBe(1);
+      expect(backingQueries).toBe(1000);
+
+      clock.mockReturnValue(now + 60000);
+      const recovered = await request(limitedApp)
+        .get('/api/v1/canonical/polaris/assistant/status').set(scopedHeaders);
+      expect(recovered.status).toBe(200);
+      expect(recovered.headers['x-ratelimit-remaining']).toBe('999');
+      expect(recovered.headers['x-ratelimit-reset']).toBe(String((now + 120000) / 1000));
+      expect(backingQueries).toBe(1001);
+    } finally {
+      clock.mockRestore();
+    }
+  }, 30000);
+
+  test('mounted PostgreSQL assistant route joins and replays exact idempotent requests while isolating authority and context', async () => {
+    let executions = 0;
+    const assistantRuntime = {
+      kind: 'interceptor',
+      status: async () => ({ state: 'available', label: 'Mounted intercepted runtime available' }),
+      respond: async envelope => {
+        executions += 1;
+        await new Promise(resolve => setTimeout(resolve, 20));
+        return trustedPresentation.semanticChoice(envelope.untrustedContext, 'canonical_overview');
+      },
+    };
+    const interceptedApp = createApp(() => pool, null, null, { assistantRuntime });
+    const key = crypto.randomUUID();
+    const body = {
+      schemaVersion: 'northstar.polaris.message-request.v1',
+      idempotencyKey: key,
+      message: 'Summarize the exact selected lead.',
+      selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+    };
+    const [first, joined] = await Promise.all([
+      request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+        .set(headers(ORG_A, USER_A, 'session-a')).send(body),
+      request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+        .set(headers(ORG_A, USER_A, 'session-a')).send(body),
+    ]);
+    const replay = await request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a')).send(body);
+    expect([first.status, joined.status, replay.status]).toEqual([200, 200, 200]);
+    expect(first.body.data).toEqual(joined.body.data);
+    expect(first.body.data).toEqual(replay.body.data);
+    expect([first.body.requestId, joined.body.requestId, replay.body.requestId]
+      .every(value => typeof value === 'string' && value.startsWith('request-'))).toBe(true);
+    expect(executions).toBe(1);
+
+    const conflict = await request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a')).send({ ...body, message: 'Different request.' });
+    const contextConflict = await request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a')).send({
+        ...body,
+        selected: { kind: 'work', id: graphA.body.ids.appointment },
+      });
+    expect(conflict.status).toBe(409);
+    expect(contextConflict.status).toBe(409);
+    expect(conflict.body.error.code).toBe('POLARIS_IDEMPOTENCY_KEY_REUSED');
+    expect(executions).toBe(1);
+
+    const tenantIsolated = await request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_B, USER_B, 'session-b')).send({
+        ...body,
+        selected: { kind: 'lead', id: graphB.body.ids.opportunity },
+      });
+    const userIsolated = await request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, '8b000000-0000-4000-8000-000000000002', 'session-a')).send(body);
+    const tabIsolated = await request(interceptedApp).post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a')).send({ ...body, idempotencyKey: crypto.randomUUID() });
+    expect([tenantIsolated.status, userIsolated.status, tabIsolated.status]).toEqual([200, 200, 200]);
+    expect(executions).toBe(4);
+  });
+
+  test.each([
+    ['missing nested key', response => { delete response.cards[0].confidence.basis; }],
+    ['extra nested key', response => { response.cards[0].evidence[0].source.extra = true; }],
+    ['wrong nested type', response => { response.cards[0].unknowns[0].label = 42; }],
+    ['unbounded nested label', response => { response.cards[0].title = 'x'.repeat(201); }],
+    ['unsupported nested version', response => { response.cards[0].schemaVersion = 'northstar.polaris.customer-intelligence-card.v2'; }],
+    ['nested prototype smuggling', response => { Object.setPrototypeOf(response.cards[0].confidence, { polluted: true }); }],
+  ])('mounted PostgreSQL route rejects %s from the intercepted seam without canonical mutation', async (_label, mutate) => {
+    const before = await pool.query('SELECT COUNT(*)::integer AS count FROM canonical_operations');
+    const malformedApp = createApp(() => pool, null, null, {
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async () => ({ state: 'available', label: 'Mounted intercepted runtime available' }),
+        respond: async envelope => {
+          const response = interceptedAssistantResponse(envelope);
+          mutate(response);
+          return response;
+        },
+      },
+    });
+    const result = await request(malformedApp)
+      .post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a'))
+      .send({
+        schemaVersion: 'northstar.polaris.message-request.v1',
+        idempotencyKey: crypto.randomUUID(),
+        message: 'Summarize the exact selected lead.',
+        selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+      });
+    const after = await pool.query('SELECT COUNT(*)::integer AS count FROM canonical_operations');
+    expect(result.status).toBe(502);
+    expect(result.body.error.code).toBe('POLARIS_INTERCEPTED_RESPONSE_INVALID');
+    expect(after.rows[0].count).toBe(before.rows[0].count);
+  });
+
+  test('mounted route rejects an unbounded intercepted status before executing the seam', async () => {
+    let executions = 0;
+    const malformedStatusApp = createApp(() => pool, null, null, {
+      assistantRuntime: {
+        kind: 'interceptor',
+        status: async () => ({ state: 'available', label: 'x'.repeat(161) }),
+        respond: async envelope => {
+          executions += 1;
+          return interceptedAssistantResponse(envelope);
+        },
+      },
+    });
+    const result = await request(malformedStatusApp)
+      .post('/api/v1/canonical/polaris/assistant/messages')
+      .set(headers(ORG_A, USER_A, 'session-a'))
+      .send({
+        schemaVersion: 'northstar.polaris.message-request.v1',
+        idempotencyKey: crypto.randomUUID(),
+        message: 'Summarize the exact selected lead.',
+        selected: { kind: 'lead', id: graphA.body.ids.opportunity },
+      });
+    expect(result.status).toBe(502);
+    expect(result.body.error.code).toBe('POLARIS_RUNTIME_STATUS_INVALID');
+    expect(executions).toBe(0);
   });
 
   test('static routes precede parameter routes and status reports no Redis requirement', async () => {

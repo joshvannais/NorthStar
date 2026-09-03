@@ -56,14 +56,19 @@ async function provisionDurableSession(pool, input) {
   await pool.query(
     `INSERT INTO subscriptions (
        id, organization_id, plan_type, status, trial_started_at, trial_ends_at
-     ) VALUES ($1,$2,'Test fixture',$3,NULL,NULL)
+     ) VALUES ($1,$2,$3,$4,NULL,NULL)
      ON CONFLICT (organization_id) DO UPDATE SET
        plan_type = EXCLUDED.plan_type,
        status = EXCLUDED.status,
        trial_started_at = NULL,
        trial_ends_at = NULL,
        updated_at = NOW()`,
-    [crypto.randomUUID(), input.organizationId, input.subscriptionStatus || 'active']
+    [
+      crypto.randomUUID(),
+      input.organizationId,
+      input.planType || 'Complete',
+      input.subscriptionStatus || 'active',
+    ]
   );
   await pool.query(
     `INSERT INTO auth_sessions (

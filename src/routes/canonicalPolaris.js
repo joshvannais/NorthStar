@@ -8,7 +8,25 @@ const {
   requireTenantAccess,
   requireVerifiedExternalAction,
 } = require('../auth/middleware');
-const { requirePermission } = require('../auth/permissions');
+const { hasPermission, requirePermission } = require('../auth/permissions');
+const { rateLimit } = require('../middleware/rateLimit');
+const {
+  buildContextResponse,
+  messageRequestFingerprint,
+  selectedMatchesItem,
+  validateContextRequest,
+  validateMessageRequest,
+} = require('../polaris/assistantContract');
+const {
+  createIdempotencyRegistry,
+  buildRuntimeEnvelope,
+  executeIntercepted,
+  executeIdempotentMessage,
+  executeProvider,
+  statusForRuntime,
+} = require('../polaris/assistantRuntime');
+const { createProviderUsageLedger } = require('../polaris/providerLedger');
+const { requireProviderEntitlement } = require('../polaris/providerPolicy');
 const { sha256, stableStringify, stableValue } = require('../services/businessProfileAdapter');
 const { bindIntegrationOwner } = require('../services/organizationAuthority');
 const { scheduleAuthority } = require('../scheduling/repository');
@@ -730,8 +748,9 @@ function compatibilityProjection(surface, items, context, calendarTimeZoneAuthor
 
 function createDependencies(options) {
   const supplied = options || {};
+  const poolProvider = supplied.poolProvider || function () { return db.getPool(); };
   return {
-    poolProvider: supplied.poolProvider || function () { return db.getPool(); },
+    poolProvider,
     auth: supplied.auth || requireTenantAccess,
     onboardedAuth: supplied.onboardedAuth || supplied.auth || requireOnboardedInternal,
     externalAuth: supplied.externalAuth || supplied.auth || requireVerifiedExternalAction,
@@ -739,7 +758,21 @@ function createDependencies(options) {
     audit: supplied.audit || audit,
     operatorDirectory: supplied.operatorDirectory || loadSchedulingOperatorDirectory,
     operatorTargetDirectory: supplied.operatorTargetDirectory || loadSchedulingOperatorTargetPage,
+    assistantContextLoader: supplied.assistantContextLoader || getCanonicalGraph,
+    assistantRuntime: supplied.assistantRuntime || null,
+    assistantUsageLedger: supplied.assistantUsageLedger || createProviderUsageLedger({ poolProvider }),
+    assistantIdempotency: supplied.assistantIdempotency || createIdempotencyRegistry(),
+    assistantRateLimit: supplied.assistantRateLimit || rateLimit('internal-api', assistantRateLimitKey),
   };
+}
+
+function assistantRateLimitKey(req) {
+  const context = requestContext(req);
+  if (!context) return 'polaris-assistant:unauthenticated';
+  return 'polaris-assistant:' + sha256({
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 }
 
 function sendPersistenceUnavailable(res, req) {
@@ -761,6 +794,9 @@ function sendInvalidCustomerId(res, req) {
 function handleEndpointError(res, _error, req) {
   if (_error && _error.code === 'INVALID_CUSTOMER_ID') return sendInvalidCustomerId(res, req);
   if (_error && Number.isInteger(_error.statusCode) && _error.code) {
+    if ([429, 503, 504].includes(_error.statusCode) && Number.isSafeInteger(_error.retryAfterSeconds)) {
+      res.set('Retry-After', String(Math.max(1, Math.min(86400, _error.retryAfterSeconds))));
+    }
     return res.status(_error.statusCode).json({
       success: false,
       requestId: req && req.requestId || undefined,
@@ -768,6 +804,18 @@ function handleEndpointError(res, _error, req) {
     });
   }
   return sendPersistenceUnavailable(res, req);
+}
+
+function durableRetryAfterSeconds(error, usage) {
+  const seconds = error && error.retryAfterSeconds;
+  if (!error || !usage ||
+      !['POLARIS_PROVIDER_UNAVAILABLE', 'POLARIS_PROVIDER_TIMEOUT'].includes(error.code) ||
+      ![429, 503, 504].includes(error.statusCode) ||
+      !Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86400 ||
+      usage.outcomeClass !== 'failed' || usage.costNanoUsd !== 0 ||
+      usage.inputTokens !== 0 || usage.outputTokens !== 0 ||
+      !(usage.providerRequestId === null || usage.providerRequestId === undefined)) return null;
+  return seconds;
 }
 
 async function authoritativeItems(req, dependencies, endpoint, queryable) {
@@ -828,6 +876,18 @@ function createCanonicalRouter(options) {
     return next();
   }
 
+  function requireAssistantEntitlement(req, res, next) {
+    try {
+      requireProviderEntitlement({
+        plan: req.accountAuthority && req.accountAuthority.plan_type,
+        role: req.userRole || (req.tenantContext && req.tenantContext.role),
+      });
+      return next();
+    } catch (_error) {
+      return handleEndpointError(res, _error, req);
+    }
+  }
+
   router.get('/operator-targets', dependencies.auth, requireCanonicalContext, async function (req, res) {
     const context = requestContext(req);
     try {
@@ -864,6 +924,180 @@ function createCanonicalRouter(options) {
       return handleEndpointError(res, _error, req);
     }
   });
+
+  router.get('/polaris/assistant/status', dependencies.auth, requireCanonicalContext,
+    dependencies.permission('ai', 'read'), requireAssistantEntitlement,
+    dependencies.assistantRateLimit, async function (req, res) {
+      try {
+        await resolvePool(dependencies.poolProvider).query('SELECT 1 AS polaris_local_authority');
+        const data = await statusForRuntime(dependencies.assistantRuntime, req);
+        const role = req.userRole || req.tenantContext.role;
+        const usagePolicy = ['owner', 'admin'].includes(role)
+          ? await dependencies.assistantUsageLedger.status({
+            organizationId: req.tenantContext.organizationId,
+            userId: req.tenantContext.userId,
+          })
+          : undefined;
+        return res.json({
+          success: true,
+          data,
+          ...(usagePolicy ? { usagePolicy } : {}),
+          requestId: req.requestId || req.correlationId || 'unavailable',
+        });
+      } catch (_error) {
+        return handleEndpointError(res, _error, req);
+      }
+    });
+
+  router.post('/polaris/assistant/context', dependencies.auth, requireCanonicalContext,
+    dependencies.permission('ai', 'read'), requireAssistantEntitlement,
+    dependencies.assistantRateLimit, async function (req, res) {
+      try {
+        const request = validateContextRequest(req.body);
+        const role = req.userRole || req.tenantContext.role;
+        const selectedResource = request.selected.kind === 'work' ? 'calendar' : 'leads';
+        if (!hasPermission(role, selectedResource, 'read')) {
+          return res.status(403).json({
+            success: false,
+            requestId: req.requestId || req.correlationId || 'unavailable',
+            error: { code: 'POLARIS_SELECTED_RECORD_FORBIDDEN', message: 'The current role cannot read the selected record type.' },
+          });
+        }
+        const context = requestContext(req);
+        const item = await dependencies.assistantContextLoader(
+          resolvePool(dependencies.poolProvider), context, request.selected.id
+        );
+        if (!item || !selectedMatchesItem(item, request.selected)) {
+          const notFound = new Error('The selected record was not found in the current organization.');
+          notFound.code = 'POLARIS_SELECTED_RECORD_NOT_FOUND';
+          notFound.statusCode = 404;
+          throw notFound;
+        }
+        const requestId = req.requestId || req.correlationId || 'unavailable';
+        const data = buildContextResponse(item, request.selected, {
+          organizationId: context.organizationId,
+          userId: context.userId,
+          role,
+        }, requestId);
+        return res.json({ success: true, data, requestId });
+      } catch (_error) {
+        return handleEndpointError(res, _error, req);
+      }
+    });
+
+  router.post('/polaris/assistant/messages', dependencies.auth, requireCanonicalContext,
+    dependencies.permission('ai', 'read'), requireAssistantEntitlement,
+    dependencies.assistantRateLimit, async function (req, res) {
+      const requestAbort = new AbortController();
+      const abortRequest = function () { if (!requestAbort.signal.aborted) requestAbort.abort(); };
+      const abortOnClose = function () { if (!res.writableEnded && !requestAbort.signal.aborted) requestAbort.abort(); };
+      const totalDeadline = setTimeout(function () {
+        if (requestAbort.signal.aborted) return;
+        const timeout = new Error('Polaris conversation did not complete before the safe deadline.');
+        timeout.code = 'POLARIS_REQUEST_TIMEOUT';
+        timeout.statusCode = 504;
+        requestAbort.abort(timeout);
+      }, 25000);
+      if (typeof totalDeadline.unref === 'function') totalDeadline.unref();
+      req.once('aborted', abortRequest);
+      res.once('close', abortOnClose);
+      try {
+        const request = validateMessageRequest(req.body);
+        const role = req.userRole || req.tenantContext.role;
+        if (request.selected) {
+          const selectedResource = request.selected.kind === 'work' ? 'calendar' : 'leads';
+          if (!hasPermission(role, selectedResource, 'read')) {
+            return res.status(403).json({
+              success: false,
+              requestId: req.requestId || req.correlationId || 'unavailable',
+              error: { code: 'POLARIS_SELECTED_RECORD_FORBIDDEN', message: 'The current role cannot read the selected record type.' },
+            });
+          }
+        }
+        const context = requestContext(req);
+        const authority = {
+          organizationId: context.organizationId,
+          userId: context.userId,
+          role,
+        };
+        const data = await executeIdempotentMessage(dependencies.assistantIdempotency, request, authority, async function (signal) {
+          const providerBacked = dependencies.assistantRuntime && dependencies.assistantRuntime.kind === 'openai';
+          if (providerBacked && !request.selected) {
+            const selectionRequired = new Error('Select one customer, lead, or work record before starting a conversation.');
+            selectionRequired.code = 'POLARIS_SELECTED_RECORD_REQUIRED';
+            selectionRequired.statusCode = 400;
+            throw selectionRequired;
+          }
+          if (providerBacked) {
+            const providerStatus = await statusForRuntime(dependencies.assistantRuntime,
+              { requestId: request.idempotencyKey }, { signal });
+            if (providerStatus.state !== 'configured' || providerStatus.providerRequestsEnabled !== true) {
+              const unavailable = new Error('Polaris conversation is not configured for this account.');
+              unavailable.code = 'POLARIS_CREDENTIAL_DISABLED';
+              unavailable.statusCode = 503;
+              throw unavailable;
+            }
+          }
+          let localContext = null;
+          if (request.selected) {
+            const item = await dependencies.assistantContextLoader(
+              resolvePool(dependencies.poolProvider), context, request.selected.id
+            );
+            if (!item || !selectedMatchesItem(item, request.selected)) {
+              const notFound = new Error('The selected record was not found in the current organization.');
+              notFound.code = 'POLARIS_SELECTED_RECORD_NOT_FOUND';
+              notFound.statusCode = 404;
+              throw notFound;
+            }
+            localContext = buildContextResponse(item, request.selected, authority, request.idempotencyKey);
+          }
+          if (!providerBacked) {
+            return executeIntercepted(dependencies.assistantRuntime, request, authority, localContext, { signal });
+          }
+          if (typeof dependencies.assistantRuntime.preflight === 'function') {
+            dependencies.assistantRuntime.preflight(buildRuntimeEnvelope(request, authority, localContext));
+          }
+          const reservation = await dependencies.assistantUsageLedger.reserve({
+            organizationId: authority.organizationId,
+            userId: authority.userId,
+            requestId: request.idempotencyKey,
+            fingerprint: messageRequestFingerprint(request, authority),
+            model: 'gpt-5.6-luna',
+            schemaVersion: 'northstar.polaris.assistant-response.v1',
+          });
+          try {
+            const result = await executeProvider(
+              dependencies.assistantRuntime, request, authority, localContext, { signal }
+            );
+            await dependencies.assistantUsageLedger.reconcile(reservation, result.usage);
+            return result.response;
+          } catch (error) {
+            const usage = error && error.polarisUsage;
+            const retryAfterSeconds = durableRetryAfterSeconds(error, usage);
+            if (usage && (usage.costNanoUsd > 0 || ['refused', 'incomplete'].includes(usage.outcomeClass) ||
+                ['POLARIS_CREDENTIAL_DISABLED', 'POLARIS_USAGE_LIMIT'].includes(error && error.code) ||
+                retryAfterSeconds !== null)) {
+              const reconciliation = retryAfterSeconds === null
+                ? usage : Object.freeze({ ...usage, retryAfterSeconds });
+              try { await dependencies.assistantUsageLedger.reconcile(reservation, reconciliation); } catch (_reconcileError) {
+                const authorityUnavailable = new Error('Polaris usage authority is temporarily unavailable.');
+                authorityUnavailable.code = 'POLARIS_USAGE_AUTHORITY_UNAVAILABLE';
+                authorityUnavailable.statusCode = 503;
+                throw authorityUnavailable;
+              }
+            }
+            throw error;
+          }
+        }, { signal: requestAbort.signal });
+        return res.json({ success: true, data, requestId: req.requestId || req.correlationId || 'unavailable' });
+      } catch (_error) {
+        return handleEndpointError(res, _error, req);
+      } finally {
+        clearTimeout(totalDeadline);
+        req.removeListener('aborted', abortRequest);
+        res.removeListener('close', abortOnClose);
+      }
+    });
 
   router.get('/graphs', dependencies.auth, requireCanonicalContext, async function (req, res) {
     if (!requestContext(req)) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.' } });

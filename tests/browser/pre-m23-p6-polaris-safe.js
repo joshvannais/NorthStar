@@ -22,6 +22,7 @@ const ORG = '00000000-0000-4000-8000-000000000601';
 const USER = '00000000-0000-4000-8000-000000000602';
 const CUSTOMER = '00000000-0000-4000-8000-000000000603';
 const LEAD = '00000000-0000-4000-8000-000000000604';
+const LEAD_TWO = '00000000-0000-4000-8000-000000000608';
 const WORK = '00000000-0000-4000-8000-000000000605';
 const GRAPH = '00000000-0000-4000-8000-000000000606';
 const SNAPSHOT = '00000000-0000-4000-8000-000000000607';
@@ -283,6 +284,21 @@ const BUSINESS_OPERATIONS_TERMS = Object.freeze([
   'package', 'class', 'record', 'transaction', 'API', 'SQL',
 ]);
 
+const CANONICAL_BINDING_CASES = Object.freeze([
+  'confidence-value',
+  'snapshot-digest',
+  'evidence-id',
+  'evidence-source-id',
+  'unknown-code-reprojected',
+  'response-organization',
+  'response-user',
+  'response-role',
+  'evidence-order-reprojected',
+  'card-order-reprojected',
+  'canonical-local-message-source',
+  'response-id-shape',
+]);
+
 function json(body, status = 200) {
   return { status, contentType: 'application/json; charset=utf-8', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(body) };
 }
@@ -410,6 +426,41 @@ function messageResponse(body, hazard) {
   response.source = 'openai';
   response.provider = { state: 'configured', requestsSent: 1 };
   return applyPresentationHazard(response, hazard);
+}
+
+function applyCanonicalBindingMutation(response, name) {
+  if (name === 'confidence-value') response.cards[0].confidence.value = 0.01;
+  else if (name === 'snapshot-digest') response.cards[0].authority.snapshotDigest = 'f'.repeat(64);
+  else if (name === 'evidence-id') response.cards[0].evidence[0].id = 'unauthorized-reference';
+  else if (name === 'evidence-source-id') response.cards[0].evidence[0].source.id = 'unauthorized-reference';
+  else if (name === 'unknown-code-reprojected') {
+    response.cards[0].unknowns[0].code = 'not_calculated_99';
+  } else if (name === 'response-organization') response.authority.organizationId = '10000000-0000-4000-8000-000000000601';
+  else if (name === 'response-user') response.authority.userId = '10000000-0000-4000-8000-000000000602';
+  else if (name === 'response-role') response.authority.role = 'admin';
+  else if (name === 'evidence-order-reprojected') response.cards[0].evidence.reverse();
+  else if (name === 'card-order-reprojected') response.cards.reverse();
+  else if (name === 'canonical-local-message-source') {
+    response.source = 'canonical_local';
+    response.provider = { state: 'unconfigured', requestsSent: 0 };
+  } else if (name === 'response-id-shape') response.responseId = 'forged-response-id';
+  else throw new Error(`unknown canonical binding mutation: ${name}`);
+  if (/reprojected/.test(name)) {
+    const projected = trustedPresentation.projectTrustedDisplay(response.cards, response.selected, 'canonical_overview');
+    response.answer = JSON.parse(JSON.stringify(projected.answer));
+    response.cards = JSON.parse(JSON.stringify(projected.cards));
+  }
+  return response;
+}
+
+function responseForSelected(response, selectedId) {
+  if (selectedId === LEAD) return response;
+  response.selected.id = selectedId;
+  response.cards.forEach(value => { value.authority.selected.id = selectedId; });
+  const projected = trustedPresentation.projectTrustedDisplay(response.cards, response.selected, 'canonical_overview');
+  response.answer = JSON.parse(JSON.stringify(projected.answer));
+  response.cards = JSON.parse(JSON.stringify(projected.cards));
+  return response;
 }
 
 function malformedResponse(name, response) {
@@ -572,14 +623,14 @@ async function installRoutes(page, state) {
     }
     if (url.pathname === '/api/v1/canonical/polaris/assistant/context') {
       const body = JSON.parse(route.request().postData() || '{}');
-      assert.deepStrictEqual(body, {
-        schemaVersion: 'northstar.polaris.context-request.v1', selected: { kind: 'lead', id: LEAD },
-      });
-      const response = contextResponse(
+      assert.strictEqual(body.schemaVersion, 'northstar.polaris.context-request.v1');
+      assert.strictEqual(body.selected.kind, 'lead');
+      assert.ok([LEAD, LEAD_TWO].includes(body.selected.id));
+      const response = responseForSelected(contextResponse(
         state.hostileContext || false,
         state.boundaryCardCount,
         state.answerIntent || 'canonical_overview'
-      );
+      ), body.selected.id);
       if (state.malformed && state.malformed !== 'status-length' && state.malformed !== 'message-extra') {
         malformedResponse(state.malformed, response);
       }
@@ -613,6 +664,8 @@ async function installRoutes(page, state) {
       assert.match(body.idempotencyKey, /^[0-9a-f-]{36}$/);
       const response = messageResponse(body, state.hostileMessage || false);
       if (state.malformed === 'message-extra') response.cards[0].authority.extra = true;
+      if (state.bindingMutation) applyCanonicalBindingMutation(response, state.bindingMutation);
+      if (state.messageDelay) await new Promise(resolve => setTimeout(resolve, state.messageDelay));
       return route.fulfill(json({ success: true, data: response }));
     }
     return route.fulfill(json({ success: false, error: { code: 'BROWSER_FIXTURE_UNAVAILABLE' } }, 404));
@@ -1136,6 +1189,75 @@ async function runDowngradePreservation(browser, origin, securityRoot, manifest,
   await context.close();
 }
 
+async function runCanonicalBindingMutation(browser, origin, securityRoot, manifest, selected, mutation) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  const state = {
+    external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed: null, unconfigured: false, bindingMutation: mutation,
+  };
+  await installRoutes(page, state);
+  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  await submitSelectedQuestion(page);
+  await page.locator('.polaris-chat-error').waitFor({ state: 'visible' });
+  assert.match(await page.locator('.polaris-chat-error').innerText(), /unsupported structured response/i);
+  assert.strictEqual(await page.locator('.polaris-native-card').count(), 0,
+    `${mutation} must reject the complete candidate without partial card display`);
+  assert.doesNotMatch(await page.locator('body').innerText(), /1% — high|unauthorized-reference|forged-response-id/);
+  assert.strictEqual(state.messageCalls, 1);
+  assert.deepStrictEqual(state.external, []);
+  assert.deepStrictEqual(errors, []);
+  const filename = path.join(securityRoot, `${selected}-canonical-binding-${mutation}-rejected.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  manifest.push({
+    file: path.basename(filename), sha256: sha256(filename), browser: selected, route,
+    viewport: { width: 390, height: 844 }, theme: 'dark',
+    fixture: `canonical-backing-${mutation}-fail-closed-zero-partial-display`,
+  });
+  await context.close();
+}
+
+async function runStaleSelectionBinding(browser, origin, securityRoot, manifest, selected) {
+  const context = await browser.newContext({ viewport: { width: 320, height: 720 }, colorScheme: 'light' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  const state = {
+    external: [], api: [], messageCalls: 0, messageKeys: [], hostile: false,
+    malformed: null, unconfigured: false, messageDelay: 300,
+  };
+  await installRoutes(page, state);
+  const route = `/dashboard/polaris?kind=lead&id=${LEAD}`;
+  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  await page.locator('.polaris-native-card').first().waitFor({ state: 'visible' });
+  await submitSelectedQuestion(page);
+  for (let index = 0; index < 20 && state.messageCalls !== 1; index += 1) await page.waitForTimeout(10);
+  assert.strictEqual(state.messageCalls, 1);
+  await page.evaluate(nextLead => {
+    history.pushState({}, '', `/dashboard/polaris?kind=lead&id=${nextLead}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, LEAD_TWO);
+  await page.waitForTimeout(500);
+  assert.strictEqual(await page.locator('.polaris-chat-text').filter({ hasText: /NorthStar found/ }).count(), 0,
+    'a response for the old selected record must never render after selection changes');
+  assert.strictEqual(await page.locator('.polaris-chat-error').count(), 1,
+    'the stale response must end in the fixed fail-closed presentation');
+  assert.deepStrictEqual(state.external, []);
+  assert.deepStrictEqual(errors, []);
+  const filename = path.join(securityRoot, `${selected}-stale-selection-response-rejected.png`);
+  await page.screenshot({ path: filename, fullPage: true });
+  manifest.push({
+    file: path.basename(filename), sha256: sha256(filename), browser: selected, route,
+    viewport: { width: 320, height: 720 }, theme: 'light',
+    fixture: 'stale-out-of-order-selected-record-response-fail-closed',
+  });
+  await context.close();
+}
+
 async function main() {
   const selected = (process.argv.find(value => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
   const outputRoot = path.resolve(process.env.PRE_M23_P6_VISUAL_DIR || 'outputs/pre-m23-p6-visual');
@@ -1194,6 +1316,10 @@ async function main() {
       await runUsagePolicy(browser, origin, securityRoot, security, selected, profile);
     }
     await runDowngradePreservation(browser, origin, securityRoot, security, selected);
+    for (const mutation of CANONICAL_BINDING_CASES) {
+      await runCanonicalBindingMutation(browser, origin, securityRoot, security, selected, mutation);
+    }
+    await runStaleSelectionBinding(browser, origin, securityRoot, security, selected);
     const common = { testedRevision, testedTree, browser: selected, generatedAt: new Date().toISOString() };
     fs.writeFileSync(path.join(outputRoot, `${selected}-manifest.json`), JSON.stringify({ ...common, kind: 'ordinary-final-green', screenshots: ordinary }, null, 2) + '\n');
     fs.writeFileSync(path.join(securityRoot, `${selected}-manifest.json`), JSON.stringify({ ...common, kind: 'hostile-security', screenshots: security }, null, 2) + '\n');

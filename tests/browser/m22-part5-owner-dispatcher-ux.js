@@ -537,7 +537,20 @@ async function main() {
     await page.locator('#northstarQuickStartDialog').waitFor({ state: 'visible' });
     await page.getByRole('button', { name: 'Close quick start' }).click();
     await page.locator('#northstarQuickStartDialog').waitFor({ state: 'hidden' });
-    if (mobile) await page.locator('#navCloseBtn').click();
+    if (mobile) {
+      const mobileMenuState = await page.locator('#mobileMenu').evaluate(menu => ({
+        open: menu.classList.contains('open'),
+        hidden: menu.getAttribute('aria-hidden'),
+        inert: menu.hasAttribute('inert'),
+        activeId: document.activeElement && document.activeElement.id,
+      }));
+      assert.deepStrictEqual(mobileMenuState, {
+        open: false,
+        hidden: 'true',
+        inert: true,
+        activeId: 'navHamburgerBtn',
+      }, 'opening Quick Start from mobile navigation closes the menu and restores focus safely');
+    }
     await page.getByRole('heading', { name: 'Owner and dispatcher overview' }).waitFor();
     await page.getByRole('button', { name: /Unassigned 1/ }).click();
     const commandRecord = page.locator('#commandCenterSchedulingRecords [data-appointment-id="' + appointmentId + '"]');

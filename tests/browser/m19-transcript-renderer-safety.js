@@ -2,6 +2,8 @@
 
 const assert = require('assert');
 const { navigationFixture } = require('../helpers/navigation-fixture');
+const { buildDemoWorkspace, createInitialDemoState } = require('../../src/commandCenter/workspace');
+const commandCenterContract = require('../../public/js/command-center-contract');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 [
@@ -16,6 +18,7 @@ const { app } = require('../../src/server');
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: 'desktop', width: 1440, height: 900 }),
   Object.freeze({ label: 'mobile', width: 390, height: 844 }),
+  Object.freeze({ label: 'mobile320', width: 320, height: 720 }),
 ]);
 const THEMES = Object.freeze(['light', 'dark']);
 const ACCOUNT_USER_ID = '00000000-0000-4000-8000-000000000501';
@@ -49,10 +52,13 @@ const PUBLIC_TURNS = Object.freeze([
 const LEGACY_TRANSCRIPT = 'Agent: Legacy ' + LEGACY_IMAGE_PAYLOAD + '\nCustomer: ' + CLOSING_PAYLOAD + '\nObserver: unchanged';
 const LEAD_TRANSCRIPT = 'Agent: Mounted ' + LEAD_IMAGE_PAYLOAD + '\nCustomer: ' + CLOSING_PAYLOAD;
 const CUSTOMER_SURFACES = Object.freeze([
+  Object.freeze({ label: 'Command Center CustomerDetail', route: '/demo' }),
   Object.freeze({ label: 'Leads CustomerDetail', route: '/dashboard/leads' }),
   Object.freeze({ label: 'Communications CustomerDetail', route: '/dashboard/communications' }),
-  Object.freeze({ label: 'Command Center CustomerDetail', route: '/dashboard' }),
 ]);
+const CONTEXT_STATE = process.env.NORTHSTAR_P7_CONTEXT_STATE || 'ordinary';
+assert.ok(['ordinary', 'empty', 'error', 'denied'].includes(CONTEXT_STATE),
+  'NORTHSTAR_P7_CONTEXT_STATE must be ordinary, empty, error, or denied');
 
 function json(body, status = 200) {
   return {
@@ -72,6 +78,62 @@ function account() {
     onboarding: { status: 'complete' },
     subscription: { safe: true, state: 'active', readOnly: false, showTrialBanner: false },
   };
+}
+
+function commandCenterWorkspace() {
+  return buildDemoWorkspace({
+    tenantId: ORGANIZATION_ID,
+    sessionId: SESSION_ID,
+    state: createInitialDemoState(ORGANIZATION_ID, new Date(TIMESTAMP), {
+      seed: 'p7-command-center-customer-detail',
+    }),
+    revision: 1,
+    simulationCount: 0,
+    persisted: false,
+    expiresAt: new Date('2099-08-06T12:00:00.000Z'),
+  });
+}
+
+function paidCommandCenterWorkspace() {
+  const response = commandCenterWorkspace();
+  response.mode = 'paid';
+  response.navigation = commandCenterContract.PAID_ROUTES.map(route => ({
+    id: route.id,
+    label: route.label,
+    resource: route.resource,
+    href: route.paidPath,
+  }));
+  response.schedulingOperator = {
+    canRead: true,
+    canMutate: false,
+    reason: 'subscription_read_only',
+    targets: [],
+    digest: 'd'.repeat(64),
+    truncated: false,
+    discovery: {
+      version: 'm22-part5-target-directory-v1',
+      endpoint: '/api/v1/canonical/operator-targets',
+      pageSize: 100,
+      shown: 0,
+      total: 0,
+      truncated: false,
+    },
+  };
+  response.schedulingOverview = {
+    version: 'm22-part5-overview-v1',
+    timeZone: 'America/New_York',
+    definitions: {
+      unassigned: 'Unassigned', due: 'Due', overdue: 'Overdue', atRisk: 'At risk', conflicting: 'Conflicting',
+    },
+    categories: { unassigned: [], due: [], overdue: [], atRisk: [], conflicting: [] },
+    counts: { unassigned: 0, due: 0, overdue: 0, atRisk: 0, conflicting: 0 },
+    records: [],
+    page: { shown: 0, total: 0, size: 100, cursor: null, nextCursor: null },
+    shown: 0,
+    total: 0,
+    digest: 'e'.repeat(64),
+  };
+  return response;
 }
 
 function canonicalItem() {
@@ -224,9 +286,43 @@ async function installBoundaries(context, origin, evidence) {
     if (url.pathname === '/api/auth/me') return route.fulfill(json({ account: account() }));
     if (url.pathname === '/api/account/subscription') return route.fulfill(json({ subscription: account().subscription }));
     if (url.pathname === '/api/account/preferences') return route.fulfill(json({ preferences: {} }));
-    if (url.pathname.indexOf('/api/v1/canonical/compat/') === 0) {
-      const surface = decodeURIComponent(url.pathname.split('/').pop());
+    if (url.pathname === '/api/v1/command-center/workspace') {
+      if (CONTEXT_STATE === 'error') {
+        return route.fulfill(json({ error: { message: 'The Command Center workspace could not be loaded.' } }, 503));
+      }
+      if (CONTEXT_STATE === 'denied') {
+        return route.fulfill(json({ error: { message: 'Command Center access unavailable for this account.' } }, 403));
+      }
+      const response = paidCommandCenterWorkspace();
+      if (CONTEXT_STATE === 'empty') {
+        response.graphs = [];
+        response.integrity.graphCount = 0;
+      }
+      return route.fulfill(json({ success: true, data: response }));
+    }
+    if (url.pathname === '/api/demo/command-center') {
+      const response = commandCenterWorkspace();
+      if (CONTEXT_STATE === 'empty') {
+        response.graphs = [];
+        response.integrity.graphCount = 0;
+      }
+      return route.fulfill(json({ success: true, data: response }));
+    }
+    const compatibility = url.pathname.match(/^\/api\/(?:v1\/canonical|demo\/command-center\/canonical)\/compat\/([^/]+)$/);
+    if (compatibility) {
+      const surface = decodeURIComponent(compatibility[1]);
+      if (['leads', 'communications'].includes(surface) && CONTEXT_STATE === 'error') {
+        return route.fulfill(json({ error: 'temporarily_unavailable' }, 503));
+      }
+      if (['leads', 'communications'].includes(surface) && CONTEXT_STATE === 'denied') {
+        return route.fulfill(json({ error: 'access_denied' }, 403));
+      }
       const response = projection(surface);
+      if (['leads', 'communications'].includes(surface) && CONTEXT_STATE === 'empty') {
+        response.data.items = [];
+        response.data.records = [];
+        response.data.metrics = { graphCount: 0, appointmentCount: 0, estimatedRevenue: null };
+      }
       if (surface === 'customer-detail' && url.searchParams.has('customerId')) {
         response.data.records[0].name = DRAWER_CUSTOMER_NAME;
         response.data.items[0].customer.name = DRAWER_CUSTOMER_NAME;
@@ -234,6 +330,14 @@ async function installBoundaries(context, origin, evidence) {
       if (surface === 'leads' && new URL(request.frame().url()).pathname === '/dashboard/lead') {
         response.data.records[0].customer.name = DRAWER_CUSTOMER_NAME;
         response.data.items[0].customer.name = DRAWER_CUSTOMER_NAME;
+      }
+      if (url.pathname.indexOf('/api/demo/command-center/canonical/') === 0) {
+        const demo = commandCenterWorkspace();
+        response.data.authority = {
+          userId: demo.viewer.id,
+          organizationId: demo.tenant.id,
+          sessionId: demo.session.id,
+        };
       }
       return route.fulfill(json(response));
     }
@@ -273,16 +377,56 @@ function checkNoOverflow(evidence, observed, label) {
 }
 
 async function exerciseCustomerDetail(page, evidence, label) {
-  try {
-    await page.waitForFunction(() => typeof window.CustomerDetail !== 'undefined', null, { timeout: 5000 });
-  } catch (_error) {
-    const diagnostic = await page.evaluate(() => ({
-      url: location.href,
-      title: document.title,
-      scripts: Array.from(document.scripts).map(script => ({ src: script.getAttribute('src') || '<inline>', ready: script.readyState || null })),
-      body: document.body && document.body.textContent.slice(0, 160),
+  const isCommandCenter = label.indexOf('Command Center CustomerDetail') === 0;
+  if (isCommandCenter && await page.locator('#northstarQuickStartDialog[open]').count()) {
+    await page.keyboard.press('Escape');
+  }
+  if (!isCommandCenter) {
+    try {
+      await page.waitForFunction(() => typeof window.CustomerDetail !== 'undefined', null, { timeout: 5000 });
+    } catch (_error) {
+      const diagnostic = await page.evaluate(() => ({
+        url: location.href,
+        title: document.title,
+        scripts: Array.from(document.scripts).map(script => ({ src: script.getAttribute('src') || '<inline>', ready: script.readyState || null })),
+        body: document.body && document.body.textContent.slice(0, 160),
+      }));
+      throw new Error(label + ': CustomerDetail unavailable: ' + JSON.stringify(diagnostic));
+    }
+  }
+  const isLeads = label.indexOf('Leads CustomerDetail') === 0;
+  const isCommunications = label.indexOf('Communications CustomerDetail') === 0;
+  const isKeyboard = label.indexOf('/reload') >= 0;
+  const opener = isCommandCenter ? page.locator(label.indexOf('/desktop/') >= 0
+    ? '#commandCenterLeadRows .command-center-customer-group .command-center-record-link'
+    : '#commandCenterLeadCards .command-center-mobile-customer-header .command-center-record-link').first()
+    : isLeads ? page.locator('.leads-table tbody tr').first()
+    : isCommunications ? page.locator('.call-card-header').first() : null;
+  const locationBefore = new URL(page.url()).pathname + new URL(page.url()).search;
+  if (isCommandCenter) {
+    try {
+      await opener.waitFor({ timeout: 5000 });
+    } catch (_error) {
+      const diagnostic = await page.evaluate(() => ({
+        url: location.href,
+        status: document.getElementById('commandCenterStatus') && document.getElementById('commandCenterStatus').textContent,
+        leadCount: document.querySelectorAll('.command-center-record-link').length,
+        body: document.body && document.body.textContent.replace(/\s+/g, ' ').slice(0, 500),
+      }));
+      throw new Error(label + ': Command Center customer identity unavailable: ' + JSON.stringify({
+        diagnostic: diagnostic,
+        api: evidence.api,
+        pageErrors: evidence.pageErrors,
+        consoleErrors: evidence.consoleErrors,
+      }));
+    }
+    const identity = await opener.evaluate(element => ({
+      tagName: element.tagName,
+      type: element.getAttribute('type'),
+      href: element.getAttribute('href'),
     }));
-    throw new Error(label + ': CustomerDetail unavailable: ' + JSON.stringify(diagnostic));
+    recordCheck(evidence, identity.tagName === 'BUTTON' && identity.type === 'button' && identity.href === null,
+      label + ': customer identity is an in-place button, not a Polaris link', identity);
   }
   await page.evaluate(() => {
     window.__m19TranscriptXss = 0;
@@ -291,12 +435,43 @@ async function exerciseCustomerDetail(page, evidence, label) {
     window.__m19TranscriptLabelXss = 0;
     window.__m19TranscriptScript = 0;
     window.__m19TranscriptSvg = 0;
-    window.CustomerDetail.open('00000000-0000-4000-8000-000000000503');
   });
-  await page.waitForFunction(() => {
-    const title = document.getElementById('cdDrawerTitle');
-    return title && title.textContent.indexOf('Cedar') >= 0;
-  });
+  if (opener) {
+    await opener.waitFor();
+    if (isKeyboard) {
+      await opener.focus();
+      await opener.press('Enter');
+    } else if (isCommandCenter) {
+      await opener.click();
+    } else {
+      const nestedIdentity = isLeads ? opener.locator('td strong').first() : opener.locator('.call-name').first();
+      await nestedIdentity.click();
+    }
+    if (isCommandCenter && new URL(page.url()).pathname.indexOf('/polaris') >= 0) {
+      throw new Error(label + ': Command Center customer identity navigated implicitly to Polaris: ' + page.url());
+    }
+  } else {
+    await page.evaluate(() => window.CustomerDetail.open('00000000-0000-4000-8000-000000000503'));
+  }
+  await page.waitForFunction(() => typeof window.CustomerDetail !== 'undefined', null, { timeout: 5000 });
+  try {
+    await page.waitForFunction(() => {
+      const title = document.getElementById('cdDrawerTitle');
+      return title && title.textContent.indexOf('Cedar') >= 0;
+    }, null, { timeout: 5000 });
+  } catch (_error) {
+    const diagnostic = await page.evaluate(() => ({
+      title: document.getElementById('cdDrawerTitle') && document.getElementById('cdDrawerTitle').textContent,
+      loading: document.getElementById('cdDrawerLoading') && document.getElementById('cdDrawerLoading').textContent,
+      drawerHidden: document.getElementById('cdCustomerDrawer') && document.getElementById('cdCustomerDrawer').hidden,
+    }));
+    throw new Error(label + ': customer detail did not finish loading: ' + JSON.stringify({
+      diagnostic: diagnostic,
+      api: evidence.api,
+      pageErrors: evidence.pageErrors,
+      consoleErrors: evidence.consoleErrors,
+    }));
+  }
   await page.waitForTimeout(100);
   const primary = await page.evaluate(() => {
     const scripts = Array.from(document.scripts).map(script => script.getAttribute('src') || '<inline>');
@@ -308,6 +483,15 @@ async function exerciseCustomerDetail(page, evidence, label) {
       rendererIndex: scripts.indexOf('/js/transcript-renderer.js'),
       consumerIndex: scripts.indexOf('/js/customer-detail.js'),
       title: document.getElementById('cdDrawerTitle').textContent,
+      closeName: document.getElementById('cdDrawerClose').getAttribute('aria-label'),
+      focusInside: document.getElementById('cdCustomerDrawer').contains(document.activeElement),
+      contextual: {
+        summary: document.getElementById('cdContextSummary').textContent,
+        jobHeading: document.getElementById('cdJobSectionHeading').textContent,
+        historyHidden: document.getElementById('cdConversationHistorySection').hidden,
+        historyCount: document.querySelectorAll('#cdConversationHistory > li').length,
+        explicitPolarisAction: document.getElementById('cdBtnAskPolaris').textContent,
+      },
       layout: {
         bodyX: document.body.getBoundingClientRect().x,
         scrollWidth: document.documentElement.scrollWidth,
@@ -327,6 +511,22 @@ async function exerciseCustomerDetail(page, evidence, label) {
   recordCheck(evidence, primary.transcript.role === 'log' && primary.transcript.live === 'polite',
     label + ': CustomerDetail live-region contract', primary.transcript);
   recordCheck(evidence, primary.title === DRAWER_CUSTOMER_NAME, label + ': customer title remains literal text', primary.title);
+  recordCheck(evidence, primary.closeName === 'Close customer details',
+    label + ': close control has an action-specific name', primary.closeName);
+  recordCheck(evidence, primary.focusInside, label + ': opening the customer drawer moves focus inside it');
+  recordCheck(evidence, new URL(page.url()).pathname + new URL(page.url()).search === locationBefore,
+    label + ': customer identity retains the current surface instead of navigating to Polaris', page.url());
+  if (isLeads || isCommandCenter) {
+    recordCheck(evidence, primary.contextual.jobHeading === 'Lead Inquiry' && primary.contextual.historyHidden === true,
+      label + ': lead-origin customer identity opens inquiry-focused detail', primary.contextual);
+  }
+  if (isCommunications) {
+    recordCheck(evidence, primary.contextual.historyHidden === false && primary.contextual.historyCount === 2 &&
+      /complete prior communication history/i.test(primary.contextual.summary),
+    label + ': Communications opens complete customer conversation history', primary.contextual);
+  }
+  recordCheck(evidence, primary.contextual.explicitPolarisAction === 'Ask Polaris',
+    label + ': Polaris remains a separate explicitly labelled action', primary.contextual);
   checkNoOverflow(evidence, primary.layout, label);
 
   await page.evaluate(id => window.CustomerDetail.selectTranscript(id), LEGACY_COMMUNICATION_ID);
@@ -348,7 +548,30 @@ async function exerciseCustomerDetail(page, evidence, label) {
   const rerender = await page.evaluate(() => window.__m19TranscriptSnapshot(document.getElementById('cdTranscript')));
   recordCheck(evidence, rerender.bubbles.length === 3, label + ': rerender has no duplicate or stale nodes', rerender);
   recordCheck(evidence, rerender.text.indexOf('Legacy ') === -1, label + ': rerender removed prior transcript', rerender.text);
-  await page.evaluate(() => window.CustomerDetail.close());
+  if (opener) {
+    await page.locator('#cdDrawerClose').focus();
+    await page.keyboard.press('Shift+Tab');
+    recordCheck(evidence, await page.locator('#cdCustomerDrawer').evaluate(element => element.contains(document.activeElement)),
+      label + ': focus remains contained in the open customer drawer');
+    await page.keyboard.press('Escape');
+    recordCheck(evidence, await opener.evaluate(element => document.activeElement === element),
+      label + ': closing customer detail restores focus to the originating row or card');
+    if (isCommandCenter) {
+      await opener.press('Space');
+      await page.waitForFunction(() => {
+        const drawer = document.getElementById('cdCustomerDrawer');
+        const title = document.getElementById('cdDrawerTitle');
+        return drawer && !drawer.hidden && title && title.textContent.indexOf('Cedar') >= 0;
+      });
+      recordCheck(evidence, new URL(page.url()).pathname + new URL(page.url()).search === locationBefore,
+        label + ': Space activation retains Command Center instead of navigating to Polaris', page.url());
+      await page.locator('#cdDrawerClose').click();
+      recordCheck(evidence, await opener.evaluate(element => document.activeElement === element),
+        label + ': named close control restores focus after Space activation');
+    }
+  } else {
+    await page.evaluate(() => window.CustomerDetail.close());
+  }
 }
 
 async function exercisePublicDemo(page, evidence, label) {
@@ -485,18 +708,79 @@ async function exerciseLead(page, evidence, label) {
 }
 
 async function exerciseFreshAndReload(page, origin, route, exercise, evidence, label) {
-  let response = await page.goto(origin + route, { waitUntil: 'networkidle', timeout: 25000 });
+  const waitUntil = CONTEXT_STATE === 'ordinary' ? 'networkidle' : 'domcontentloaded';
+  let response = await page.goto(origin + route, { waitUntil, timeout: 25000 });
   recordCheck(evidence, response && response.status() === 200, label + '/fresh: mounted route status', response && response.status());
   await exercise(page, evidence, label + '/fresh');
-  response = await page.reload({ waitUntil: 'networkidle', timeout: 25000 });
+  response = await page.reload({ waitUntil, timeout: 25000 });
   recordCheck(evidence, response && response.status() === 200, label + '/reload: mounted route status', response && response.status());
   await exercise(page, evidence, label + '/reload');
 }
 
+async function exerciseCustomerState(page, evidence, label) {
+  const isCommandCenter = label.indexOf('Command Center CustomerDetail') === 0;
+  const isLeads = label.indexOf('Leads CustomerDetail') === 0;
+  const expected = isCommandCenter ? {
+    empty: /No role-authorized lead records are available/i,
+    error: /Command Center workspace could not be loaded/i,
+    denied: /Command Center access unavailable/i,
+  } : isLeads ? {
+    empty: /No leads yet/i,
+    error: /Leads unavailable[\s\S]*could not be loaded/i,
+    denied: /Lead access unavailable[\s\S]*owner or administrator/i,
+  } : {
+    empty: /No communications yet/i,
+    error: /Communications unavailable[\s\S]*could not be loaded/i,
+    denied: /Communication access unavailable[\s\S]*owner or administrator/i,
+  };
+  const selector = isCommandCenter
+    ? (CONTEXT_STATE === 'empty'
+      ? (label.indexOf('/desktop/') >= 0 ? '#commandCenterLeadRows' : '#commandCenterLeadCards')
+      : '#commandCenterStatus')
+    : isLeads ? '#leadsContent' : '#callHistoryList';
+  const container = page.locator(selector);
+  try {
+    await container.waitFor({ state: 'attached', timeout: 5000 });
+    await page.waitForFunction(({ selector, source }) => {
+      const element = document.querySelector(selector);
+      return element && new RegExp(source, 'i').test(element.textContent || '');
+    }, { selector, source: expected[CONTEXT_STATE].source }, { timeout: 5000 });
+  } catch (_error) {
+    const diagnostic = await page.evaluate(selector => {
+      const element = document.querySelector(selector);
+      return {
+        url: location.href,
+        text: element && element.textContent,
+        hidden: element && element.hidden,
+        workspaceState: document.documentElement.dataset.demoWorkspace,
+      };
+    }, selector);
+    throw new Error(label + ': intentional state did not settle: ' + JSON.stringify({
+      diagnostic: diagnostic,
+      api: evidence.api,
+      pageErrors: evidence.pageErrors,
+      consoleErrors: evidence.consoleErrors,
+    }));
+  }
+  const observed = await container.evaluate(element => ({
+    text: element.textContent.replace(/\s+/g, ' ').trim(),
+    live: element.matches('[role="status"][aria-live="polite"]') ||
+      document.querySelector('#commandCenterStatus[role="status"][aria-live="polite"]') !== null ||
+      element.querySelector('[role="status"][aria-live="polite"]') !== null,
+    interactiveCustomers: document.querySelectorAll('[data-lead-index],.call-card-header,.command-center-record-link').length,
+  }));
+  recordCheck(evidence, expected[CONTEXT_STATE].test(observed.text), label + ': intentional ' + CONTEXT_STATE + ' copy', observed);
+  recordCheck(evidence, observed.live, label + ': intentional state is announced politely', observed);
+  recordCheck(evidence, observed.interactiveCustomers === 0, label + ': no unavailable customer identity target remains interactive', observed);
+  recordCheck(evidence, !/polaris/i.test(new URL(page.url()).pathname), label + ': state remains on its source route', page.url());
+}
+
 async function main() {
   const selected = process.argv[2];
-  assert.ok(selected === 'chrome' || selected === 'webkit', 'usage: node m19-transcript-renderer-safety.js <chrome|webkit>');
+  assert.ok(selected === 'chrome' || selected === 'firefox' || selected === 'webkit',
+    'usage: node m19-transcript-renderer-safety.js <chrome|firefox|webkit>');
   const runtime = resolveBrowserRuntime(selected);
+  const customerInteractionsOnly = process.env.NORTHSTAR_P7_CUSTOMER_INTERACTIONS_ONLY === '1';
   const evidence = {
     requests: [], api: [], attackerRequests: [], external: [], mutations: [], failures: [],
     pages: [], pageErrors: [], consoleErrors: [],
@@ -568,27 +852,32 @@ async function main() {
           const page = await context.newPage();
           page.on('pageerror', error => evidence.pageErrors.push({ page: surface.label, message: error.stack || error.message }));
           page.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: surface.label, message: message.text() }); });
-          await exerciseFreshAndReload(page, origin, surface.route, exerciseCustomerDetail, evidence,
+          const interactionExercise = CONTEXT_STATE === 'ordinary' ? exerciseCustomerDetail : exerciseCustomerState;
+          const route = surface.label.indexOf('Command Center CustomerDetail') === 0 &&
+            (CONTEXT_STATE === 'error' || CONTEXT_STATE === 'denied') ? '/dashboard' : surface.route;
+          await exerciseFreshAndReload(page, origin, route, interactionExercise, evidence,
             surface.label + '/' + viewport.label + '/' + theme);
           evidence.pages.push({ surface: surface.label, viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
           await page.close();
         }
 
-        const publicPage = await context.newPage();
-        publicPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Public demo', message: error.stack || error.message }));
-        publicPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Public demo', message: message.text() }); });
-        await exerciseFreshAndReload(publicPage, origin, '/', exercisePublicDemo, evidence,
-          'Public live/post/' + viewport.label + '/' + theme);
-        evidence.pages.push({ surface: 'Public live/post', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
-        await publicPage.close();
+        if (!customerInteractionsOnly) {
+          const publicPage = await context.newPage();
+          publicPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Public demo', message: error.stack || error.message }));
+          publicPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Public demo', message: message.text() }); });
+          await exerciseFreshAndReload(publicPage, origin, '/', exercisePublicDemo, evidence,
+            'Public live/post/' + viewport.label + '/' + theme);
+          evidence.pages.push({ surface: 'Public live/post', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
+          await publicPage.close();
 
-        const leadPage = await context.newPage();
-        leadPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Lead detail', message: error.stack || error.message }));
-        leadPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Lead detail', message: message.text() }); });
-        await exerciseFreshAndReload(leadPage, origin, '/dashboard/lead?id=' + OPPORTUNITY_ID, exerciseLead, evidence,
-          'Mounted lead/' + viewport.label + '/' + theme);
-        evidence.pages.push({ surface: 'Mounted lead', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
-        await leadPage.close();
+          const leadPage = await context.newPage();
+          leadPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Lead detail', message: error.stack || error.message }));
+          leadPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Lead detail', message: message.text() }); });
+          await exerciseFreshAndReload(leadPage, origin, '/dashboard/lead?id=' + OPPORTUNITY_ID, exerciseLead, evidence,
+            'Mounted lead/' + viewport.label + '/' + theme);
+          evidence.pages.push({ surface: 'Mounted lead', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
+          await leadPage.close();
+        }
         await context.close();
       }
     }
@@ -597,13 +886,19 @@ async function main() {
     recordCheck(evidence, evidence.external.length === 0, 'no external traffic', evidence.external);
     recordCheck(evidence, evidence.mutations.length === 0, 'no provider/business/API mutation', evidence.mutations);
     recordCheck(evidence, evidence.pageErrors.length === 0, 'no page errors', evidence.pageErrors);
-    recordCheck(evidence, evidence.consoleErrors.length === 0, 'no console errors', evidence.consoleErrors);
+    const expectedNetworkStatus = CONTEXT_STATE === 'error' ? '503' : CONTEXT_STATE === 'denied' ? '403' : null;
+    const expectedNetworkConsoleErrors = expectedNetworkStatus ? evidence.consoleErrors.filter(entry =>
+      entry.message.includes('Failed to load resource') && entry.message.includes(expectedNetworkStatus)) : [];
+    const unexpectedConsoleErrors = evidence.consoleErrors.filter(entry => !expectedNetworkConsoleErrors.includes(entry));
+    recordCheck(evidence, unexpectedConsoleErrors.length === 0, 'no unexpected console errors', unexpectedConsoleErrors);
     const summary = {
-      browser: selected === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit',
+      browser: selected === 'chrome' ? 'installed Chrome' : selected === 'firefox' ? 'actual Playwright Firefox' : 'actual Playwright WebKit',
       browserVersion: browser.version(),
       mountedCases: evidence.pages.length,
       passesPerCase: 2,
-      surfaces: ['Leads CustomerDetail', 'Communications CustomerDetail', 'Command Center CustomerDetail', 'Public live/post', 'Mounted lead'],
+      surfaces: customerInteractionsOnly
+        ? ['Command Center CustomerDetail', 'Leads CustomerDetail', 'Communications CustomerDetail']
+        : ['Command Center CustomerDetail', 'Leads CustomerDetail', 'Communications CustomerDetail', 'Public live/post', 'Mounted lead'],
       viewports: VIEWPORTS.map(viewport => viewport.label),
       themes: THEMES,
       loopbackRequests: evidence.requests.length,
@@ -616,6 +911,8 @@ async function main() {
       instrumentation: 'none; mounted pages use unmodified production scripts',
       failures: evidence.failures,
       physicalSafari: false,
+      contextState: CONTEXT_STATE,
+      expectedNetworkConsoleErrors: expectedNetworkConsoleErrors.length,
     };
     console.log(JSON.stringify(summary));
     assert.deepStrictEqual(evidence.failures, []);

@@ -28,6 +28,13 @@
     return SEEN_KEY + ':' + mode + ':' + String(accountKey || mode);
   }
 
+  function isCommandCenterPath(mode) {
+    var pathname = String(global.location && global.location.pathname || '').replace(/\/$/, '') || '/';
+    return mode === 'demo'
+      ? pathname === '/demo' || pathname === '/demo/command-center'
+      : pathname === '/dashboard' || pathname === '/dashboard/command-center';
+  }
+
   function hasSeenGuide(mode, accountKey) {
     try { return global.localStorage.getItem(seenStorageKey(mode, accountKey)) === 'true'; }
     catch (_error) { return false; }
@@ -108,7 +115,13 @@
     }
 
     function openGuide(trigger) {
-      returnFocus = trigger && typeof trigger.focus === 'function' ? trigger : document.activeElement;
+      var mobileTrigger = trigger && trigger.closest && trigger.closest('#mobileMenu');
+      if (mobileTrigger && global.NavComponent && typeof global.toggleMobileMenu === 'function') {
+        global.toggleMobileMenu();
+        returnFocus = document.getElementById('navHamburgerBtn');
+      } else {
+        returnFocus = trigger && typeof trigger.focus === 'function' ? trigger : document.activeElement;
+      }
       if (!dialog.open) dialog.showModal();
       global.requestAnimationFrame(function() { if (close.isConnected) close.focus({ preventScroll:true }); });
     }
@@ -116,13 +129,27 @@
     close.addEventListener('click', dismiss);
     dialog.addEventListener('cancel', function (event) { event.preventDefault(); dismiss(); });
     dialog.addEventListener('click', function (event) { if (event.target === dialog) dismiss(); });
+    dialog.addEventListener('keydown', function (event) {
+      if (event.key !== 'Tab') return;
+      var focusable = Array.prototype.slice.call(dialog.querySelectorAll('a[href],button:not([disabled])'));
+      if (!focusable.length) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus({ preventScroll:true });
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus({ preventScroll:true });
+      }
+    });
     list.addEventListener('click', function (event) {
       if (event.target.closest('a[data-quick-start-step]')) markGuideSeen(mode, accountKey);
     });
     document.querySelectorAll('[data-quick-start-reopen]').forEach(function(trigger) {
       trigger.addEventListener('click', function() { openGuide(trigger); });
     });
-    if (activePage === 'command-center' && !hasSeenGuide(mode, accountKey)) {
+    if (activePage === 'command-center' && isCommandCenterPath(mode) && !hasSeenGuide(mode, accountKey)) {
       global.requestAnimationFrame(function () { if (dialog.isConnected) openGuide(null); });
     }
   }

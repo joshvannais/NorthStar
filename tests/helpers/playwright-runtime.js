@@ -8,14 +8,19 @@ const DEFAULT_PLAYWRIGHT_CORE =
 const DEFAULT_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 function resolveBrowserRuntime(selected) {
-  assert.ok(selected === 'chrome' || selected === 'webkit', 'browser must be chrome or webkit');
+  assert.ok(
+    selected === 'chrome' || selected === 'firefox' || selected === 'webkit',
+    'browser must be chrome, firefox, or webkit'
+  );
   const playwrightCore = process.env.NORTHSTAR_PLAYWRIGHT_CORE_PATH || DEFAULT_PLAYWRIGHT_CORE;
   assert.ok(fs.existsSync(playwrightCore), `Playwright Core is unavailable: ${playwrightCore}`);
-  const { chromium, webkit } = require(playwrightCore);
-  const browserType = selected === 'chrome' ? chromium : webkit;
+  const { chromium, firefox, webkit } = require(playwrightCore);
+  const browserType = selected === 'chrome' ? chromium : selected === 'firefox' ? firefox : webkit;
   const executablePath = selected === 'chrome'
     ? (process.env.NORTHSTAR_CHROME_EXECUTABLE || DEFAULT_CHROME)
-    : (process.env.NORTHSTAR_WEBKIT_EXECUTABLE || webkit.executablePath());
+    : selected === 'firefox'
+      ? (process.env.NORTHSTAR_FIREFOX_EXECUTABLE || firefox.executablePath())
+      : (process.env.NORTHSTAR_WEBKIT_EXECUTABLE || webkit.executablePath());
   assert.ok(
     executablePath && fs.existsSync(executablePath),
     `${selected} executable is unavailable: ${executablePath || 'not configured'}`

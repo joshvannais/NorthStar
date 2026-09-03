@@ -10,6 +10,7 @@
 .northstar-quick-start-list a { color: var(--neutral-900); font-weight: 700; text-decoration: none; }
 .northstar-quick-start-status { color: var(--neutral-500); font-size: 12px; }
 .northstar-quick-start-list li.complete .northstar-quick-start-status { color: #15803d; }
+[data-theme="dark"] .northstar-quick-start-list li.complete .northstar-quick-start-status { color: #86efac; }
 .northstar-quick-start-progress { color: var(--neutral-600); font-size: 13px; margin: 0; text-align: right; }
 .northstar-quick-start-reopen { width: 100%; }
 .sidebar-quick-start { flex: 0 0 auto; margin: 0 0 8px; }

@@ -74,12 +74,23 @@ describe('mounted site-wide theme inventory', () => {
     expect(new Set(MOUNTED_THEME_PAGES.map(page => page.route)).size).toBe(MOUNTED_THEME_PAGES.length);
     const demoPages = MOUNTED_THEME_PAGES.filter(page => page.surface === 'public-demo');
     expect(demoPages).toHaveLength(9);
-    expect(new Set(demoPages.map(page => page.file))).toEqual(new Set(['public/demo-dashboard.html']));
+    expect(new Set(demoPages.map(page => page.file))).toEqual(new Set([
+      'public/demo-dashboard.html',
+      'public/dashboard/polaris.html',
+      'public/dashboard/leads.html',
+      'public/dashboard/communications.html',
+      'public/dashboard/calendar.html',
+      'public/dashboard/team.html',
+      'public/dashboard/business-profile.html',
+      'public/dashboard/settings.html',
+      'public/dashboard/integrations.html',
+    ]));
 
     const expectedHtml = [
       ...new Set(MOUNTED_THEME_PAGES.map(page => page.file)),
       'public/dashboard/ai-settings.html', // Preserved unmounted redirect-target provenance.
       'public/dashboard.html', // Preserved unmounted legacy simulation-harness provenance.
+      'public/dashboard/command-center.html', // Preserved unmounted Command Center source provenance.
       'public/dashboard/my-number.html', // Preserved unmounted redirect-target provenance.
       'public/design-system.html', // Deliberately unmounted internal design reference.
     ].sort();

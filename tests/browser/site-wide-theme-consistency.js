@@ -425,17 +425,41 @@ async function executiveBriefFocusGeometry(page, label) {
     assert.ok(value.visualBottom <= value.viewportHeight + 0.5, `${label} ${mode} bottom clearance: ${JSON.stringify(value)}`);
   };
 
-  await page.evaluate(() => {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    scrollTo(0, 0);
-  });
-  const focusableCount = await page.locator('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])').count();
+  const focusableSelector = 'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])';
+  const focusableCount = await page.evaluate(selector => {
+    const candidates = Array.from(document.querySelectorAll(selector)).filter(element => {
+      if (!(element instanceof HTMLElement) || element.closest('[inert]') || element.hasAttribute('disabled')) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    });
+    assertFocusStart(candidates[0]);
+    return candidates.length;
+
+    function assertFocusStart(first) {
+      if (!first) throw new Error('Executive Brief has no rendered keyboard focus target');
+      first.focus({ preventScroll: true });
+    }
+  }, focusableSelector);
+  await page.evaluate(() => scrollTo(0, 0));
   let tabStops = 0;
+  const visitedFocus = [];
   while (tabStops <= (focusableCount * 3) + 3 && !(await target.evaluate(element => document.activeElement === element))) {
     await page.keyboard.press('Tab');
     tabStops += 1;
+    if (visitedFocus.length < focusableCount + 4) {
+      visitedFocus.push(await page.evaluate(() => {
+        const active = document.activeElement;
+        return active && active !== document.body
+          ? `${active.tagName.toLowerCase()}#${active.id || ''}.${String(active.className || '').trim().replace(/\s+/g, '.')}:${active.getAttribute('aria-label') || active.textContent.trim().slice(0, 32)}`
+          : 'body';
+      }));
+    }
   }
-  assert.ok(tabStops <= (focusableCount * 3) + 3, `${label} natural traversal reaches Sign Out`);
+  assert.ok(
+    tabStops <= (focusableCount * 3) + 3,
+    `${label} natural traversal reaches Sign Out: ${JSON.stringify(visitedFocus)}`
+  );
   const natural = await geometry();
   assertInside(natural, 'natural');
 
@@ -447,7 +471,7 @@ async function executiveBriefFocusGeometry(page, label) {
   const direct = await geometry();
   assertInside(direct, 'direct');
   await target.evaluate(element => element.blur());
-  return { tabStops, focusableCount, natural, direct };
+  return { tabStops, focusableCount, visitedFocus, natural, direct };
 }
 
 async function installThemeInstrumentation(context, savedTheme) {
@@ -670,6 +694,16 @@ async function assertMountedTheme(page, route, expectedTheme, options = {}) {
     // Seek finite source-owned entrance transitions to their deterministic end state.
     await settleFiniteDocumentAnimations(page);
     accessibility = await auditMountedAccessibility(page);
+  }
+  const automaticQuickStart = page.locator('#northstarQuickStartDialog[open]');
+  if (await automaticQuickStart.count()) {
+    assert.strictEqual(
+      await automaticQuickStart.evaluate(dialog => dialog.contains(document.activeElement)),
+      true,
+      `${route} automatic Quick Start contains focus`
+    );
+    await page.keyboard.press('Escape');
+    assert.strictEqual(await page.locator('#northstarQuickStartDialog[open]').count(), 0, `${route} Quick Start closes with Escape`);
   }
   const interactiveStates = await auditInteractiveStates(page);
   assert.strictEqual(
@@ -1399,9 +1433,11 @@ async function runRecoveryMatrix(engine, viewport, theme, origin) {
 }
 
 async function main() {
-  const selection = process.env.NORTHSTAR_BROWSER || 'both';
-  assert.ok(['chrome', 'webkit', 'both'].includes(selection), 'NORTHSTAR_BROWSER must be chrome, webkit, or both');
-  const engines = selection === 'both' ? ['chrome', 'webkit'] : [selection];
+  const selection = process.env.NORTHSTAR_BROWSER || 'all';
+  assert.ok(['chrome', 'firefox', 'webkit', 'both', 'all'].includes(selection), 'NORTHSTAR_BROWSER must be chrome, firefox, webkit, both, or all');
+  const engines = selection === 'all'
+    ? ['chrome', 'firefox', 'webkit']
+    : selection === 'both' ? ['chrome', 'webkit'] : [selection];
   const selectedViewports = process.env.NORTHSTAR_THEME_VIEWPORT
     ? VIEWPORTS.filter(viewport => viewport.label === process.env.NORTHSTAR_THEME_VIEWPORT)
     : VIEWPORTS;
@@ -1462,7 +1498,9 @@ async function main() {
     }
     process.stdout.write(`${JSON.stringify({
       success: true,
-      engines: engines.map(engine => engine === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit'),
+      engines: engines.map(engine => engine === 'chrome'
+        ? 'installed Chrome'
+        : engine === 'firefox' ? 'actual Playwright Firefox' : 'actual Playwright WebKit'),
       physicalSafari: false,
       mountedPages: MOUNTED_THEME_PAGES.length,
       themes: THEMES,

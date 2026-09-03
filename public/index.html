@@ -747,7 +747,7 @@
 
   <!-- One natural-height sticky public header. -->
   <header class="homepage-header-stack">
-    <nav class="nav">
+    <nav class="nav" aria-label="Public navigation">
       <div class="nav-inner">
         <a href="/" class="nav-logo northstar-lockup" aria-label="NorthStar homepage">
           <img src="/assets/logo.png" alt="" class="logo-img">
@@ -771,6 +771,7 @@
     <img src="/assets/logo.png" alt="" aria-hidden="true" class="hero-star">
   </div>
 
+  <main id="mainContent">
   <!-- ══════════════════════════════════════════════════
        VIEW 1: Pre-Call — Hero + Form
        ══════════════════════════════════════════════════ -->
@@ -1205,7 +1206,7 @@
     </section>
     <div class="pricing-readiness" aria-labelledby="pricingComparisonHeading">
       <h3 id="pricingComparisonHeading">Compare what is published today</h3>
-      <div class="pricing-table-scroll" tabindex="0" aria-label="Scrollable pricing readiness comparison">
+      <div class="pricing-table-scroll" tabindex="0" role="region" aria-label="Scrollable pricing readiness comparison">
         <table class="pricing-comparison">
           <thead><tr><th scope="col">Published detail</th><th scope="col">Starter</th><th scope="col">Growth</th><th scope="col">Complete</th><th scope="col">Enterprise</th></tr></thead>
           <tbody>
@@ -1262,6 +1263,8 @@
       <a href="/signup" class="btn btn-primary">Start Free Trial</a>
     </div>
   </section>
+
+  </main>
 
   <!-- Footer -->
   <footer class="footer">

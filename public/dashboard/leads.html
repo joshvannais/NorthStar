@@ -267,7 +267,6 @@
           <p>Every lead captured by your AI Office Manager.</p>
         </div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importCsvInput').click()" id="leadsImportBtn">📥 Import CSV</button>
           <button class="btn btn-secondary btn-sm" onclick="exportLeadsCSV()" id="leadsExportBtn">📤 Export CSV</button>
         </div>
         </div>
@@ -322,8 +321,8 @@
           <h2>Leads</h2>
           <span style="font-size:13px;color:var(--neutral-500);" id="leadCount">0 leads</span>
         </div>
-        <div id="leadsContent">
-          <div class="empty-state">
+        <div id="leadsContent" aria-busy="true">
+          <div class="empty-state" role="status" aria-live="polite" aria-atomic="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <h3>No leads yet</h3>
             <p>Connect your phone number to start receiving calls.</p>
@@ -333,23 +332,6 @@
       </div>
     </main>
   </div>
-
-  <!-- Drawer overlay -->
-  
-    <input type="file" id="importCsvInput" accept=".csv" style="display:none;" onchange="handleImportCSV(event)">
-    <div id="importModal" class="drawer-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;" onclick="if(event.target===this)closeImportModal()">
-      <div style="background:var(--neutral-50);border-radius:var(--radius);padding:24px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);" onclick="event.stopPropagation()">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h3 style="font-size:16px;font-weight:600;margin:0;">Import Leads</h3>
-          <button class="btn btn-secondary btn-sm" onclick="closeImportModal()" style="padding:2px 8px;">x</button>
-        </div>
-        <div id="importResult" style="margin-bottom:12px;font-size:14px;"></div>
-        <div id="importProgress" style="display:none;font-size:14px;color:var(--neutral-500);">⏳ Importing...</div>
-        <button class="btn btn-primary btn-sm" onclick="document.getElementById('importCsvInput').click()" style="width:100%;justify-content:center;">Choose File</button>
-      </div>
-    </div>
-    
-
 
 <!-- CustomerDrawer removed — CustomerDetail injects its own drawer HTML -->
 
@@ -391,6 +373,7 @@
     // Page-local leads array — fetched from canonical Polaris API (server source of truth).
     var pageLeads = [];
     var pageCustomers = {};
+    var leadsLoadState = 'loading';
 
     function fmtTime(t) { if (!t) return '-'; try { var d = new Date(t); if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) {} return t; }
 
@@ -444,9 +427,11 @@
             return lead;
           }).filter(Boolean);
         } else { pageLeads = []; }
+        leadsLoadState = pageLeads.length ? 'ready' : 'empty';
         return pageLeads;
       }).catch(function(err) {
         console.warn('[Leads] API fetch failed:', err.message);
+        leadsLoadState = /denied|forbidden|not[_ -]?authorized|HTTP 403/i.test(String(err && err.message || '')) ? 'denied' : 'error';
         pageLeads = []; return pageLeads;
       });
     }
@@ -456,7 +441,8 @@
       var lead = pageLeads[idx];
       if (!lead) return;
       if (lead.customerId && typeof CustomerDetail !== 'undefined') {
-        CustomerDetail.open(lead.customerId);
+        if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+        CustomerDetail.open(lead.customerId, { source: 'leads' });
       }
     }
 
@@ -470,6 +456,7 @@
         document.getElementById('leadCount').textContent = pageLeads.length + ' leads';
         renderLeads(pageLeads);
         renderKpiCards(pageLeads);
+        document.getElementById('leadsContent').setAttribute('aria-busy', 'false');
       });
     }
 
@@ -524,7 +511,11 @@
     // === Leads Table ===
     function renderLeads(leads) {
       if (leads.length === 0) {
-        document.getElementById('leadsContent').innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>No leads yet</h3><p>Connect your phone number to start receiving calls.</p></div>';
+        var emptyMessage = leadsLoadState === 'denied' ?
+          '<div class="empty-state" role="status" aria-live="polite" aria-atomic="true"><div aria-hidden="true">!</div><h3>Lead access unavailable</h3><p>Your current access does not include these lead details. Ask an owner or administrator to review your access.</p></div>' : leadsLoadState === 'error' ?
+          '<div class="empty-state" role="status" aria-live="polite" aria-atomic="true"><div aria-hidden="true">!</div><h3>Leads unavailable</h3><p>Lead details could not be loaded. Try again shortly.</p></div>' :
+          '<div class="empty-state" role="status" aria-live="polite" aria-atomic="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>No leads yet</h3><p>Connect your phone number to start receiving calls.</p></div>';
+        document.getElementById('leadsContent').innerHTML = emptyMessage;
         return;
       }
       var html = '<table class="leads-table"><thead><tr><th>Customer</th><th>Phone</th><th>Service</th><th>Est. Value</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>';

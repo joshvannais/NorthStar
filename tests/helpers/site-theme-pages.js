@@ -2,11 +2,26 @@
 
 const commandCenterContract = require('../../public/js/command-center-contract');
 
+// Keep this test inventory byte-for-byte aligned with src/server.js. Demo mode
+// changes authority and transport; it does not replace each destination with
+// the generic Command Center document.
+const DEMO_PAGE_FILES = Object.freeze({
+  'command-center': 'public/demo-dashboard.html',
+  polaris: 'public/dashboard/polaris.html',
+  leads: 'public/dashboard/leads.html',
+  communications: 'public/dashboard/communications.html',
+  calendar: 'public/dashboard/calendar.html',
+  team: 'public/dashboard/team.html',
+  'business-profile': 'public/dashboard/business-profile.html',
+  settings: 'public/dashboard/settings.html',
+  integrations: 'public/dashboard/integrations.html',
+});
+
 const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/', file: 'public/index.html', surface: 'public' },
   ...commandCenterContract.ROUTES.map(destination => ({
     route: destination.demoPath,
-    file: 'public/demo-dashboard.html',
+    file: DEMO_PAGE_FILES[destination.id],
     surface: 'public-demo',
   })),
   { route: '/login', file: 'public/login.html', surface: 'auth' },
@@ -16,7 +31,7 @@ const MOUNTED_THEME_PAGES = Object.freeze([
   { route: '/reset-password', file: 'public/reset-password.html', surface: 'auth' },
   { route: '/accept-invitation', file: 'public/accept-invitation.html', surface: 'auth' },
   { route: '/account/pending', file: 'public/account/pending.html', surface: 'account' },
-  { route: '/dashboard', file: 'public/dashboard/command-center.html', surface: 'dashboard' },
+  { route: '/dashboard', file: 'public/demo-dashboard.html', surface: 'dashboard' },
   { route: '/dashboard/today', file: 'public/dashboard/today.html', surface: 'dashboard' },
   { route: '/dashboard/executive-brief', file: 'public/dashboard/executive-brief.html', surface: 'dashboard' },
   { route: '/dashboard/leads', file: 'public/dashboard/leads.html', surface: 'dashboard' },
@@ -51,4 +66,4 @@ const MOUNTED_REDIRECTS = Object.freeze([
   '/demo-login',
 ]);
 
-module.exports = { MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS };
+module.exports = { DEMO_PAGE_FILES, MOUNTED_THEME_PAGES, MOUNTED_REDIRECTS };

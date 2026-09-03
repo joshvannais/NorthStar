@@ -532,8 +532,8 @@ html body .polaris-intelligence-card[data-polaris-card] {
   box-shadow: 0 18px 44px rgba(76, 29, 149, .25);
 }
 
-html body .polaris-surface-card-shell :is(.polaris-card-summary, .polaris-card-kicker, .polaris-card-heading h2, .polaris-card-section h4, .polaris-card-link),
-html body .polaris-intelligence-card[data-polaris-card] :is(.polaris-card-summary, .polaris-card-kicker, .polaris-card-heading h2, .polaris-card-section h4, .polaris-card-link) {
+html body .polaris-surface-card-shell :is(.polaris-card-summary, .polaris-card-kicker, .polaris-card-heading h2, .polaris-card-section h3, .polaris-card-link),
+html body .polaris-intelligence-card[data-polaris-card] :is(.polaris-card-summary, .polaris-card-kicker, .polaris-card-heading h2, .polaris-card-section h3, .polaris-card-link) {
   color: #fff;
 }
 

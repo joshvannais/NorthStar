@@ -50,7 +50,7 @@ describe('Mission 20 Part 2I notification preference presentation contract', () 
       ['smsEnabled', 'smsEnabledLabel', 'SMS for new leads'],
       ['smsUrgent', 'smsUrgentLabel', 'Urgent SMS alerts'],
     ]) {
-      expect(settings).toContain(`<h4 id="${labelId}">${label}</h4>`);
+      expect(settings).toContain(`<h3 id="${labelId}">${label}</h3>`);
       expect(settings).toMatch(new RegExp(`id=["']${inputId}["'][^>]*aria-labelledby=["']${labelId}["']`));
     }
   });

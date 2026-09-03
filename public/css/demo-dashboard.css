@@ -101,7 +101,7 @@
   text-transform: uppercase;
 }
 
-.demo-dashboard-intro h1 {
+.demo-dashboard-intro h2 {
   max-width: 880px;
   margin: 0;
   color: var(--theme-text);
@@ -375,7 +375,7 @@
   .demo-data-pill, .demo-header-link { display: none; }
   .demo-dashboard-main { padding-top: 34px; }
   .demo-dashboard-intro { gap: 22px; }
-  .demo-dashboard-intro h1 { font-size: clamp(32px, 10vw, 48px); }
+  .demo-dashboard-intro h2 { font-size: clamp(32px, 10vw, 48px); }
   .demo-intro-actions .btn { flex: 1 1 180px; }
   .demo-kpi-grid, .demo-bottom-grid { grid-template-columns: 1fr; }
   .demo-priority-list li { grid-template-columns: auto minmax(0, 1fr); }
@@ -551,7 +551,7 @@
 .command-center-blueprint-page .polaris-card-kicker,
 .command-center-blueprint-page .polaris-card-heading h2,
 .command-center-blueprint-page .polaris-card-summary,
-.command-center-blueprint-page .polaris-card-section h4 { color: #fff; }
+.command-center-blueprint-page .polaris-card-section h3 { color: #fff; }
 .command-center-blueprint-page .polaris-card-summary { color: #ede9fe; }
 .command-center-blueprint-page .polaris-card-link { color: #fde68a; }
 

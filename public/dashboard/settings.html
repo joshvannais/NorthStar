@@ -66,7 +66,7 @@
         <div class="integration-card">
           <div class="icon">📧</div>
           <div class="info">
-            <h4 id="emailEnabledLabel">Email for new leads</h4>
+            <h3 id="emailEnabledLabel">Email for new leads</h3>
             <p>Send an operational email when a new lead is created.</p>
           </div>
           <label class="toggle">
@@ -77,7 +77,7 @@
         <div class="integration-card">
           <div class="icon">📨</div>
           <div class="info">
-            <h4 id="emailCallSummaryLabel">Email call summaries</h4>
+            <h3 id="emailCallSummaryLabel">Email call summaries</h3>
             <p>Send an operational email after a call summary is ready.</p>
           </div>
           <label class="toggle">
@@ -88,7 +88,7 @@
         <div class="integration-card">
           <div class="icon">📅</div>
           <div class="info">
-            <h4 id="emailAppointmentLabel">Email appointments</h4>
+            <h3 id="emailAppointmentLabel">Email appointments</h3>
             <p>Send an operational email when an appointment is created.</p>
           </div>
           <label class="toggle">
@@ -103,7 +103,7 @@
         <div class="integration-card">
           <div class="icon">📱</div>
           <div class="info">
-            <h4 id="smsEnabledLabel">SMS for new leads</h4>
+            <h3 id="smsEnabledLabel">SMS for new leads</h3>
             <p>Send an operational text message when a new lead is created.</p>
           </div>
           <label class="toggle">
@@ -114,7 +114,7 @@
         <div class="integration-card">
           <div class="icon">🚨</div>
           <div class="info">
-            <h4 id="smsUrgentLabel">Urgent SMS alerts</h4>
+            <h3 id="smsUrgentLabel">Urgent SMS alerts</h3>
             <p>Send an operational text message for urgent events.</p>
           </div>
           <label class="toggle">
@@ -129,7 +129,7 @@
         <div class="integration-card notification-security" aria-live="polite">
           <div class="icon">🔒</div>
           <div class="info">
-            <h4>Account-security email</h4>
+            <h3>Account-security email</h3>
             <p>Mandatory and not controlled by operational notification preferences. <span id="securityEmailAddress"></span></p>
           </div>
           <label class="toggle" aria-label="Account-security email is mandatory">
@@ -147,7 +147,7 @@
         <div class="integration-card">
           <div class="icon" aria-hidden="true">⚙️</div>
           <div class="info">
-            <h4>AI Configuration: Voice &amp; Knowledge</h4>
+            <h3>AI Configuration: Voice &amp; Knowledge</h3>
             <p>Manage the name, literal greeting, personality, conversation style, and escalation policies in the versioned Business Profile.</p>
           </div>
           <a class="btn btn-primary btn-sm" id="canonicalAiConfigurationLink" href="/dashboard/business-profile?section=retell#voice-assistant-configuration">Open Business Profile Editor</a>
@@ -195,7 +195,7 @@
         <div class="integration-card">
           <div class="icon">🔄</div>
           <div class="info">
-            <h4 id="smartRoutingLabel">AI answers unknown callers only</h4>
+            <h3 id="smartRoutingLabel">AI answers unknown callers only</h3>
             <p>Known contacts ring your phone normally. New numbers get the AI Office Manager.</p>
           </div>
           <label class="toggle">
@@ -240,7 +240,7 @@
   border-color:var(--neutral-300);
 }
 .integration-card .icon { font-size:24px; }
-.integration-card .info h4 { font-size:14px;font-weight:600;color:var(--neutral-900);margin:0; }
+.integration-card .info h3 { font-size:14px;font-weight:600;color:var(--neutral-900);margin:0; }
 .integration-card .info p { font-size:12px;color:var(--neutral-500);margin:2px 0 0; }
 .integration-catalogue-note { font-size:12px;color:var(--neutral-500);line-height:1.45; }
 .settings-header-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap; }
@@ -512,7 +512,7 @@
 
         const info = document.createElement('div');
         info.className = 'info';
-        const name = document.createElement('h4');
+        const name = document.createElement('h3');
         name.style.fontSize = '14px';
         name.textContent = contact.name;
         const phone = document.createElement('p');

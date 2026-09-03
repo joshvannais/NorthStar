@@ -32,7 +32,7 @@
 
   function listSection(title, values, fallback) {
     var section = element('section', 'polaris-card-section');
-    section.appendChild(element('h4', '', title));
+    section.appendChild(element('h3', '', title));
     var list = element('ul', 'polaris-card-list');
     safeItems(values, fallback).forEach(function (text) { list.appendChild(element('li', '', text)); });
     section.appendChild(list);
@@ -41,7 +41,7 @@
 
   function recommendationList(values) {
     var section = element('section', 'polaris-card-section polaris-card-recommendations');
-    section.appendChild(element('h4', '', 'Prioritized recommendations'));
+    section.appendChild(element('h3', '', 'Prioritized recommendations'));
     var list = element('ol', 'polaris-card-list');
     var entries = Array.isArray(values) ? values : [];
     if (!entries.length) entries = [{ label: 'No recommendation is available until more role-authorized inputs are recorded.' }];

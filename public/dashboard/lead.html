@@ -57,6 +57,7 @@
     <aside class="sidebar" aria-label="Primary navigation"></aside>
     <main class="main-content" id="mainContent">
       <div class="lead-detail-container" id="leadDetailContainer">
+        <h1 class="lead-detail-title">Lead details</h1>
         <div style="text-align:center;padding:60px 20px;color:var(--neutral-400);" id="loadingState">
           <div style="font-size:32px;margin-bottom:12px;">⏳</div>
           <div>Loading lead details...</div>
@@ -102,7 +103,7 @@
       function loadLead() {
         var leadId = getQueryParam('id');
         if (!leadId) {
-          document.getElementById('loadingState').innerHTML = '<div style="font-size:32px;margin-bottom:12px;">🔍</div><div>No lead ID specified. <a href="/dashboard/leads" style="color:var(--brand-600);">Back to leads</a></div>';
+          document.getElementById('loadingState').innerHTML = '<div style="font-size:32px;margin-bottom:12px;" aria-hidden="true">🔍</div><div>No lead was selected. <a href="/dashboard/leads" style="color:var(--brand-600);">Back to leads</a></div>';
           return;
         }
 
@@ -144,7 +145,6 @@
         var jobDetailMarkup = escapeLeadMarkup(lead.jobDetail || '');
         var outcomeMarkup = escapeLeadMarkup(outcome);
         var durationMarkup = escapeLeadMarkup(duration);
-        var leadIdMarkup = escapeLeadMarkup(lead.id || '—');
         var receivedAtMarkup = escapeLeadMarkup(receivedAt);
         var updatedAtMarkup = escapeLeadMarkup(updatedAt);
         var summaryMarkup = escapeLeadMarkup(summary);
@@ -155,7 +155,7 @@
         container.innerHTML = '' +
           '<div class="lead-detail-header">' +
             '<div>' +
-              '<div class="lead-detail-title"><span id="leadCustomerName"></span> ' + statusBadge + '</div>' +
+              '<h1 class="lead-detail-title"><span id="leadCustomerName"></span> ' + statusBadge + '</h1>' +
               '<div class="lead-detail-subtitle">' + serviceMarkup + ' · ' + priceMarkup + ' · ' + phoneMarkup + '</div>' +
             '</div>' +
             '<div class="lead-actions">' +
@@ -172,7 +172,6 @@
             '<div class="lead-detail-card"><h3>Phone</h3><div class="value">' + phoneMarkup + '</div></div>' +
             '<div class="lead-detail-card"><h3>Address</h3><div class="value" id="leadCanonicalAddress">Address unavailable</div><div id="leadNavigationLauncher"></div></div>' +
             '<div class="lead-detail-card"><h3>Duration</h3><div class="value">' + durationMarkup + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Lead ID</h3><div class="value" style="font-size:13px;font-family:monospace;">' + leadIdMarkup + '</div></div>' +
             '<div class="lead-detail-card"><h3>Received</h3><div class="value">' + receivedAtMarkup + '</div></div>' +
             '<div class="lead-detail-card"><h3>Last Updated</h3><div class="value">' + updatedAtMarkup + '</div></div>' +
           '</div>' +

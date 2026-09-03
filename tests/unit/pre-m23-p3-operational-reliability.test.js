@@ -88,7 +88,7 @@ describe('Pre-Mission-23 P3 operational interaction and layout contract', () => 
     expect(guidance).toContain("document.querySelectorAll('[data-quick-start-reopen]')");
     expect(nav).toContain('data-quick-start-reopen');
     expect(css).not.toContain('position: fixed; bottom:');
-    expect(guidance).toContain("activePage === 'command-center' && !hasSeenGuide(mode, accountKey)");
+    expect(guidance).toContain("activePage === 'command-center' && isCommandCenterPath(mode) && !hasSeenGuide(mode, accountKey)");
   });
 
   test('keeps OBS-01 inactive pending the narrow privacy decision', () => {

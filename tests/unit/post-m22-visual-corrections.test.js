@@ -242,7 +242,7 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
   test('Quick Start is a one-time centered Command Center guide, not a floating page overlay', () => {
     const guidance = source('public/js/workspace-guidance.js');
     const guidanceCss = source('public/css/workspace-guidance.css');
-    expect(guidance).toContain("activePage === 'command-center' && !hasSeenGuide(mode, accountKey)");
+    expect(guidance).toContain("activePage === 'command-center' && isCommandCenterPath(mode) && !hasSeenGuide(mode, accountKey)");
     expect(guidance).toContain("global.localStorage.setItem(seenStorageKey(mode, accountKey), 'true')");
     expect(guidance).toContain("document.querySelectorAll('[data-quick-start-reopen]')");
     expect(guidanceCss).not.toContain('.northstar-quick-start-button');

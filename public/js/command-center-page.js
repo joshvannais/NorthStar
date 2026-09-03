@@ -139,6 +139,23 @@
     return base + '?kind=' + encodeURIComponent(selectedKind) + '&id=' + encodeURIComponent(id);
   }
 
+  function customerDetailControl(graph) {
+    var name = presentationString(graph && graph.customer && graph.customer.name, 'Customer name unavailable');
+    var customerId = safeString(graph && graph.ids && graph.ids.customer);
+    if (!customerId) return element('span', 'command-center-record-name', name);
+
+    var control = element('button', 'command-center-record-link', name);
+    control.type = 'button';
+    control.addEventListener('click', function () {
+      if (!global.CustomerDetail || typeof global.CustomerDetail.open !== 'function') {
+        setStatus('Customer details are unavailable. Try again shortly.', 'error');
+        return;
+      }
+      global.CustomerDetail.open(customerId, { source: 'leads' });
+    });
+    return control;
+  }
+
   function latestGraphs() {
     return (workspace && Array.isArray(workspace.graphs) ? workspace.graphs.slice() : []).sort(function (left, right) {
       var leftTime = new Date(left && left.timestamps && left.timestamps.updatedAt || 0).getTime();
@@ -580,9 +597,7 @@
         var customerCell = document.createElement('td');
         customerCell.className = 'command-center-customer-group';
         customerCell.rowSpan = group.records.length;
-        var link = element('a', 'command-center-record-link', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable'));
-        link.href = detailHref(graph);
-        customerCell.appendChild(link);
+        customerCell.appendChild(customerDetailControl(graph));
         customerCell.appendChild(element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records')));
         var recordedAt = formatDate(graph.timestamps && graph.timestamps.createdAt);
         if (recordedAt) customerCell.appendChild(element('span', 'command-center-customer-recorded-at', recordedAt));
@@ -602,10 +617,8 @@
       var firstGraph = group.records[0];
       var customerCard = element('article', 'command-center-mobile-customer');
       var customerHeader = element('header', 'command-center-mobile-customer-header');
-      var customerLink = element('a', 'command-center-record-link', presentationString(firstGraph.customer && firstGraph.customer.name, 'Customer name unavailable'));
-      customerLink.href = detailHref(firstGraph);
       customerHeader.append(
-        customerLink,
+        customerDetailControl(firstGraph),
         element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records'))
       );
       var groupRecordedAt = formatDate(firstGraph.timestamps && firstGraph.timestamps.createdAt);

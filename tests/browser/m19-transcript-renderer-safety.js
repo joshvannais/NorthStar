@@ -3,6 +3,7 @@
 const assert = require('assert');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const { buildDemoWorkspace, createInitialDemoState } = require('../../src/commandCenter/workspace');
+const commandCenterContract = require('../../public/js/command-center-contract');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
 [
@@ -91,6 +92,48 @@ function commandCenterWorkspace() {
     persisted: false,
     expiresAt: new Date('2099-08-06T12:00:00.000Z'),
   });
+}
+
+function paidCommandCenterWorkspace() {
+  const response = commandCenterWorkspace();
+  response.mode = 'paid';
+  response.navigation = commandCenterContract.PAID_ROUTES.map(route => ({
+    id: route.id,
+    label: route.label,
+    resource: route.resource,
+    href: route.paidPath,
+  }));
+  response.schedulingOperator = {
+    canRead: true,
+    canMutate: false,
+    reason: 'subscription_read_only',
+    targets: [],
+    digest: 'd'.repeat(64),
+    truncated: false,
+    discovery: {
+      version: 'm22-part5-target-directory-v1',
+      endpoint: '/api/v1/canonical/operator-targets',
+      pageSize: 100,
+      shown: 0,
+      total: 0,
+      truncated: false,
+    },
+  };
+  response.schedulingOverview = {
+    version: 'm22-part5-overview-v1',
+    timeZone: 'America/New_York',
+    definitions: {
+      unassigned: 'Unassigned', due: 'Due', overdue: 'Overdue', atRisk: 'At risk', conflicting: 'Conflicting',
+    },
+    categories: { unassigned: [], due: [], overdue: [], atRisk: [], conflicting: [] },
+    counts: { unassigned: 0, due: 0, overdue: 0, atRisk: 0, conflicting: 0 },
+    records: [],
+    page: { shown: 0, total: 0, size: 100, cursor: null, nextCursor: null },
+    shown: 0,
+    total: 0,
+    digest: 'e'.repeat(64),
+  };
+  return response;
 }
 
 function canonicalItem() {
@@ -243,13 +286,21 @@ async function installBoundaries(context, origin, evidence) {
     if (url.pathname === '/api/auth/me') return route.fulfill(json({ account: account() }));
     if (url.pathname === '/api/account/subscription') return route.fulfill(json({ subscription: account().subscription }));
     if (url.pathname === '/api/account/preferences') return route.fulfill(json({ preferences: {} }));
-    if (url.pathname === '/api/v1/command-center/workspace' || url.pathname === '/api/demo/command-center') {
+    if (url.pathname === '/api/v1/command-center/workspace') {
       if (CONTEXT_STATE === 'error') {
         return route.fulfill(json({ error: { message: 'The Command Center workspace could not be loaded.' } }, 503));
       }
       if (CONTEXT_STATE === 'denied') {
         return route.fulfill(json({ error: { message: 'Command Center access unavailable for this account.' } }, 403));
       }
+      const response = paidCommandCenterWorkspace();
+      if (CONTEXT_STATE === 'empty') {
+        response.graphs = [];
+        response.integrity.graphCount = 0;
+      }
+      return route.fulfill(json({ success: true, data: response }));
+    }
+    if (url.pathname === '/api/demo/command-center') {
       const response = commandCenterWorkspace();
       if (CONTEXT_STATE === 'empty') {
         response.graphs = [];
@@ -279,6 +330,14 @@ async function installBoundaries(context, origin, evidence) {
       if (surface === 'leads' && new URL(request.frame().url()).pathname === '/dashboard/lead') {
         response.data.records[0].customer.name = DRAWER_CUSTOMER_NAME;
         response.data.items[0].customer.name = DRAWER_CUSTOMER_NAME;
+      }
+      if (url.pathname.indexOf('/api/demo/command-center/canonical/') === 0) {
+        const demo = commandCenterWorkspace();
+        response.data.authority = {
+          userId: demo.viewer.id,
+          organizationId: demo.tenant.id,
+          sessionId: demo.session.id,
+        };
       }
       return route.fulfill(json(response));
     }
@@ -338,7 +397,9 @@ async function exerciseCustomerDetail(page, evidence, label) {
   const isLeads = label.indexOf('Leads CustomerDetail') === 0;
   const isCommunications = label.indexOf('Communications CustomerDetail') === 0;
   const isKeyboard = label.indexOf('/reload') >= 0;
-  const opener = isCommandCenter ? page.locator('.command-center-record-link:visible').first()
+  const opener = isCommandCenter ? page.locator(label.indexOf('/desktop/') >= 0
+    ? '#commandCenterLeadRows .command-center-customer-group .command-center-record-link'
+    : '#commandCenterLeadCards .command-center-mobile-customer-header .command-center-record-link').first()
     : isLeads ? page.locator('.leads-table tbody tr').first()
     : isCommunications ? page.locator('.call-card-header').first() : null;
   const locationBefore = new URL(page.url()).pathname + new URL(page.url()).search;
@@ -393,10 +454,24 @@ async function exerciseCustomerDetail(page, evidence, label) {
     await page.evaluate(() => window.CustomerDetail.open('00000000-0000-4000-8000-000000000503'));
   }
   await page.waitForFunction(() => typeof window.CustomerDetail !== 'undefined', null, { timeout: 5000 });
-  await page.waitForFunction(() => {
-    const title = document.getElementById('cdDrawerTitle');
-    return title && title.textContent.indexOf('Cedar') >= 0;
-  });
+  try {
+    await page.waitForFunction(() => {
+      const title = document.getElementById('cdDrawerTitle');
+      return title && title.textContent.indexOf('Cedar') >= 0;
+    }, null, { timeout: 5000 });
+  } catch (_error) {
+    const diagnostic = await page.evaluate(() => ({
+      title: document.getElementById('cdDrawerTitle') && document.getElementById('cdDrawerTitle').textContent,
+      loading: document.getElementById('cdDrawerLoading') && document.getElementById('cdDrawerLoading').textContent,
+      drawerHidden: document.getElementById('cdCustomerDrawer') && document.getElementById('cdCustomerDrawer').hidden,
+    }));
+    throw new Error(label + ': customer detail did not finish loading: ' + JSON.stringify({
+      diagnostic: diagnostic,
+      api: evidence.api,
+      pageErrors: evidence.pageErrors,
+      consoleErrors: evidence.consoleErrors,
+    }));
+  }
   await page.waitForTimeout(100);
   const primary = await page.evaluate(() => {
     const scripts = Array.from(document.scripts).map(script => script.getAttribute('src') || '<inline>');
@@ -659,14 +734,34 @@ async function exerciseCustomerState(page, evidence, label) {
     denied: /Communication access unavailable[\s\S]*owner or administrator/i,
   };
   const selector = isCommandCenter
-    ? (CONTEXT_STATE === 'empty' ? '#commandCenterLeadCards' : '#commandCenterStatus')
+    ? (CONTEXT_STATE === 'empty'
+      ? (label.indexOf('/desktop/') >= 0 ? '#commandCenterLeadRows' : '#commandCenterLeadCards')
+      : '#commandCenterStatus')
     : isLeads ? '#leadsContent' : '#callHistoryList';
   const container = page.locator(selector);
-  await container.waitFor();
-  await page.waitForFunction(({ selector, source }) => {
-    const element = document.querySelector(selector);
-    return element && new RegExp(source, 'i').test(element.textContent || '');
-  }, { selector, source: expected[CONTEXT_STATE].source });
+  try {
+    await container.waitFor({ state: 'attached', timeout: 5000 });
+    await page.waitForFunction(({ selector, source }) => {
+      const element = document.querySelector(selector);
+      return element && new RegExp(source, 'i').test(element.textContent || '');
+    }, { selector, source: expected[CONTEXT_STATE].source }, { timeout: 5000 });
+  } catch (_error) {
+    const diagnostic = await page.evaluate(selector => {
+      const element = document.querySelector(selector);
+      return {
+        url: location.href,
+        text: element && element.textContent,
+        hidden: element && element.hidden,
+        workspaceState: document.documentElement.dataset.demoWorkspace,
+      };
+    }, selector);
+    throw new Error(label + ': intentional state did not settle: ' + JSON.stringify({
+      diagnostic: diagnostic,
+      api: evidence.api,
+      pageErrors: evidence.pageErrors,
+      consoleErrors: evidence.consoleErrors,
+    }));
+  }
   const observed = await container.evaluate(element => ({
     text: element.textContent.replace(/\s+/g, ' ').trim(),
     live: element.matches('[role="status"][aria-live="polite"]') ||
@@ -758,7 +853,9 @@ async function main() {
           page.on('pageerror', error => evidence.pageErrors.push({ page: surface.label, message: error.stack || error.message }));
           page.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: surface.label, message: message.text() }); });
           const interactionExercise = CONTEXT_STATE === 'ordinary' ? exerciseCustomerDetail : exerciseCustomerState;
-          await exerciseFreshAndReload(page, origin, surface.route, interactionExercise, evidence,
+          const route = surface.label.indexOf('Command Center CustomerDetail') === 0 &&
+            (CONTEXT_STATE === 'error' || CONTEXT_STATE === 'denied') ? '/dashboard' : surface.route;
+          await exerciseFreshAndReload(page, origin, route, interactionExercise, evidence,
             surface.label + '/' + viewport.label + '/' + theme);
           evidence.pages.push({ surface: surface.label, viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
           await page.close();

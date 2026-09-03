@@ -1333,6 +1333,11 @@ html body :is(.btn, .today-sign-out, .northstar-nav-action)[aria-disabled="true"
   transform: none !important;
 }
 
+html body .btn-primary:disabled,
+html body .btn-primary[aria-disabled="true"] {
+  opacity: .8;
+}
+
 html body .northstar-nav-action {
   appearance: none;
   display: inline-flex;

@@ -408,6 +408,53 @@ html body .customer-drawer .drawer-section > h3 {
   font-weight: 700;
 }
 
+html body .customer-drawer .drawer-context-summary {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--brand-500);
+  border-radius: 0 10px 10px 0;
+  background: var(--theme-surface-soft);
+  color: var(--theme-muted);
+  line-height: 1.55;
+}
+
+html body .customer-drawer .drawer-conversation-history > ol {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+html body .customer-drawer .drawer-conversation-history-item {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface-soft);
+}
+
+html body .customer-drawer .drawer-conversation-history-item h4,
+html body .customer-drawer .drawer-conversation-history-item p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+html body .customer-drawer .drawer-conversation-history-item h4 {
+  color: var(--theme-text);
+  font-size: 14px;
+}
+
+html body .customer-drawer .drawer-conversation-history-item p {
+  color: var(--theme-muted);
+  line-height: 1.5;
+}
+
+html body .customer-drawer .drawer-conversation-review {
+  min-height: 40px;
+  padding: 9px 14px;
+}
+
 html body .customer-drawer .drawer-detail-row {
   gap: 20px;
   align-items: flex-start;

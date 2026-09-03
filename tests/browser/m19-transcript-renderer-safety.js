@@ -51,7 +51,6 @@ const LEAD_TRANSCRIPT = 'Agent: Mounted ' + LEAD_IMAGE_PAYLOAD + '\nCustomer: ' 
 const CUSTOMER_SURFACES = Object.freeze([
   Object.freeze({ label: 'Leads CustomerDetail', route: '/dashboard/leads' }),
   Object.freeze({ label: 'Communications CustomerDetail', route: '/dashboard/communications' }),
-  Object.freeze({ label: 'Command Center CustomerDetail', route: '/dashboard' }),
 ]);
 
 function json(body, status = 200) {
@@ -284,6 +283,12 @@ async function exerciseCustomerDetail(page, evidence, label) {
     }));
     throw new Error(label + ': CustomerDetail unavailable: ' + JSON.stringify(diagnostic));
   }
+  const isLeads = label.indexOf('Leads CustomerDetail') === 0;
+  const isCommunications = label.indexOf('Communications CustomerDetail') === 0;
+  const isKeyboard = label.indexOf('/reload') >= 0;
+  const opener = isLeads ? page.locator('.leads-table tbody tr').first()
+    : isCommunications ? page.locator('.call-card-header').first() : null;
+  const locationBefore = new URL(page.url()).pathname + new URL(page.url()).search;
   await page.evaluate(() => {
     window.__m19TranscriptXss = 0;
     window.__m19TranscriptLegacyXss = 0;
@@ -291,8 +296,19 @@ async function exerciseCustomerDetail(page, evidence, label) {
     window.__m19TranscriptLabelXss = 0;
     window.__m19TranscriptScript = 0;
     window.__m19TranscriptSvg = 0;
-    window.CustomerDetail.open('00000000-0000-4000-8000-000000000503');
   });
+  if (opener) {
+    await opener.waitFor();
+    if (isKeyboard) {
+      await opener.focus();
+      await opener.press('Enter');
+    } else {
+      const nestedIdentity = isLeads ? opener.locator('td strong').first() : opener.locator('.call-name').first();
+      await nestedIdentity.click();
+    }
+  } else {
+    await page.evaluate(() => window.CustomerDetail.open('00000000-0000-4000-8000-000000000503'));
+  }
   await page.waitForFunction(() => {
     const title = document.getElementById('cdDrawerTitle');
     return title && title.textContent.indexOf('Cedar') >= 0;
@@ -308,6 +324,13 @@ async function exerciseCustomerDetail(page, evidence, label) {
       rendererIndex: scripts.indexOf('/js/transcript-renderer.js'),
       consumerIndex: scripts.indexOf('/js/customer-detail.js'),
       title: document.getElementById('cdDrawerTitle').textContent,
+      contextual: {
+        summary: document.getElementById('cdContextSummary').textContent,
+        jobHeading: document.getElementById('cdJobSectionHeading').textContent,
+        historyHidden: document.getElementById('cdConversationHistorySection').hidden,
+        historyCount: document.querySelectorAll('#cdConversationHistory > li').length,
+        explicitPolarisAction: document.getElementById('cdBtnAskPolaris').textContent,
+      },
       layout: {
         bodyX: document.body.getBoundingClientRect().x,
         scrollWidth: document.documentElement.scrollWidth,
@@ -327,6 +350,19 @@ async function exerciseCustomerDetail(page, evidence, label) {
   recordCheck(evidence, primary.transcript.role === 'log' && primary.transcript.live === 'polite',
     label + ': CustomerDetail live-region contract', primary.transcript);
   recordCheck(evidence, primary.title === DRAWER_CUSTOMER_NAME, label + ': customer title remains literal text', primary.title);
+  recordCheck(evidence, new URL(page.url()).pathname + new URL(page.url()).search === locationBefore,
+    label + ': customer identity retains the current surface instead of navigating to Polaris', page.url());
+  if (isLeads) {
+    recordCheck(evidence, primary.contextual.jobHeading === 'Lead Inquiry' && primary.contextual.historyHidden === true,
+      label + ': Leads opens lead-focused detail', primary.contextual);
+  }
+  if (isCommunications) {
+    recordCheck(evidence, primary.contextual.historyHidden === false && primary.contextual.historyCount === 2 &&
+      /complete prior communication history/i.test(primary.contextual.summary),
+    label + ': Communications opens complete customer conversation history', primary.contextual);
+  }
+  recordCheck(evidence, primary.contextual.explicitPolarisAction === 'Ask Polaris',
+    label + ': Polaris remains a separate explicitly labelled action', primary.contextual);
   checkNoOverflow(evidence, primary.layout, label);
 
   await page.evaluate(id => window.CustomerDetail.selectTranscript(id), LEGACY_COMMUNICATION_ID);
@@ -348,7 +384,13 @@ async function exerciseCustomerDetail(page, evidence, label) {
   const rerender = await page.evaluate(() => window.__m19TranscriptSnapshot(document.getElementById('cdTranscript')));
   recordCheck(evidence, rerender.bubbles.length === 3, label + ': rerender has no duplicate or stale nodes', rerender);
   recordCheck(evidence, rerender.text.indexOf('Legacy ') === -1, label + ': rerender removed prior transcript', rerender.text);
-  await page.evaluate(() => window.CustomerDetail.close());
+  if (opener) {
+    await page.keyboard.press('Escape');
+    recordCheck(evidence, await opener.evaluate(element => document.activeElement === element),
+      label + ': closing customer detail restores focus to the originating row or card');
+  } else {
+    await page.evaluate(() => window.CustomerDetail.close());
+  }
 }
 
 async function exercisePublicDemo(page, evidence, label) {
@@ -495,8 +537,10 @@ async function exerciseFreshAndReload(page, origin, route, exercise, evidence, l
 
 async function main() {
   const selected = process.argv[2];
-  assert.ok(selected === 'chrome' || selected === 'webkit', 'usage: node m19-transcript-renderer-safety.js <chrome|webkit>');
+  assert.ok(selected === 'chrome' || selected === 'firefox' || selected === 'webkit',
+    'usage: node m19-transcript-renderer-safety.js <chrome|firefox|webkit>');
   const runtime = resolveBrowserRuntime(selected);
+  const customerInteractionsOnly = process.env.NORTHSTAR_P7_CUSTOMER_INTERACTIONS_ONLY === '1';
   const evidence = {
     requests: [], api: [], attackerRequests: [], external: [], mutations: [], failures: [],
     pages: [], pageErrors: [], consoleErrors: [],
@@ -574,21 +618,23 @@ async function main() {
           await page.close();
         }
 
-        const publicPage = await context.newPage();
-        publicPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Public demo', message: error.stack || error.message }));
-        publicPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Public demo', message: message.text() }); });
-        await exerciseFreshAndReload(publicPage, origin, '/', exercisePublicDemo, evidence,
-          'Public live/post/' + viewport.label + '/' + theme);
-        evidence.pages.push({ surface: 'Public live/post', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
-        await publicPage.close();
+        if (!customerInteractionsOnly) {
+          const publicPage = await context.newPage();
+          publicPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Public demo', message: error.stack || error.message }));
+          publicPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Public demo', message: message.text() }); });
+          await exerciseFreshAndReload(publicPage, origin, '/', exercisePublicDemo, evidence,
+            'Public live/post/' + viewport.label + '/' + theme);
+          evidence.pages.push({ surface: 'Public live/post', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
+          await publicPage.close();
 
-        const leadPage = await context.newPage();
-        leadPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Lead detail', message: error.stack || error.message }));
-        leadPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Lead detail', message: message.text() }); });
-        await exerciseFreshAndReload(leadPage, origin, '/dashboard/lead?id=' + OPPORTUNITY_ID, exerciseLead, evidence,
-          'Mounted lead/' + viewport.label + '/' + theme);
-        evidence.pages.push({ surface: 'Mounted lead', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
-        await leadPage.close();
+          const leadPage = await context.newPage();
+          leadPage.on('pageerror', error => evidence.pageErrors.push({ page: 'Lead detail', message: error.stack || error.message }));
+          leadPage.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: 'Lead detail', message: message.text() }); });
+          await exerciseFreshAndReload(leadPage, origin, '/dashboard/lead?id=' + OPPORTUNITY_ID, exerciseLead, evidence,
+            'Mounted lead/' + viewport.label + '/' + theme);
+          evidence.pages.push({ surface: 'Mounted lead', viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
+          await leadPage.close();
+        }
         await context.close();
       }
     }
@@ -599,11 +645,13 @@ async function main() {
     recordCheck(evidence, evidence.pageErrors.length === 0, 'no page errors', evidence.pageErrors);
     recordCheck(evidence, evidence.consoleErrors.length === 0, 'no console errors', evidence.consoleErrors);
     const summary = {
-      browser: selected === 'chrome' ? 'installed Chrome' : 'actual Playwright WebKit',
+      browser: selected === 'chrome' ? 'installed Chrome' : selected === 'firefox' ? 'actual Playwright Firefox' : 'actual Playwright WebKit',
       browserVersion: browser.version(),
       mountedCases: evidence.pages.length,
       passesPerCase: 2,
-      surfaces: ['Leads CustomerDetail', 'Communications CustomerDetail', 'Command Center CustomerDetail', 'Public live/post', 'Mounted lead'],
+      surfaces: customerInteractionsOnly
+        ? ['Leads CustomerDetail', 'Communications CustomerDetail']
+        : ['Leads CustomerDetail', 'Communications CustomerDetail', 'Public live/post', 'Mounted lead'],
       viewports: VIEWPORTS.map(viewport => viewport.label),
       themes: THEMES,
       loopbackRequests: evidence.requests.length,

@@ -20,6 +20,7 @@ window.CustomerDetail = (function() {
   var _commIdToTranscript = {};
   var _returnFocus = null;
   var _backgroundState = [];
+  var _sourceContext = { source: 'customer', communicationId: null };
 
   // ── Helpers ──
 
@@ -158,12 +159,13 @@ window.CustomerDetail = (function() {
     if (_injected) return;
     var html = '';
     html += '<div class="drawer-overlay" id="cdDrawerOverlay" hidden></div>';
-    html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" aria-describedby="cdMissingSummary cdPolarisActionReason" aria-hidden="true" tabindex="-1" hidden>';
+    html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" aria-describedby="cdContextSummary cdMissingSummary cdPolarisActionReason" aria-hidden="true" tabindex="-1" hidden>';
     html += '  <div class="drawer-header">';
     html += '    <h2 id="cdDrawerTitle">Customer Details</h2>';
     html += '    <button class="drawer-close drawer-close-btn" id="cdDrawerClose" type="button" aria-label="Close customer details">&times;</button>';
     html += '  </div>';
     html += '  <div class="drawer-body" id="cdDrawerBody">';
+    html += '    <p class="drawer-context-summary" id="cdContextSummary">Loading the selected customer context.</p>';
     // Loading state
     html += '    <div id="cdDrawerLoading" style="text-align:center;padding:40px 20px;">';
     html += '      <div style="width:32px;height:32px;border:3px solid var(--neutral-200);border-top-color:var(--brand-600);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div>';
@@ -194,7 +196,7 @@ window.CustomerDetail = (function() {
 
     // Job Details
     html += '      <div class="drawer-section">';
-    html += '        <h3>Job Details</h3>';
+    html += '        <h3 id="cdJobSectionHeading">Job Details</h3>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="cdService">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Estimated Value</span><span class="drawer-detail-value" id="cdEstValue">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Opportunity Stage</span><span class="drawer-detail-value" id="cdStage">\u2014</span></div>';
@@ -228,9 +230,17 @@ window.CustomerDetail = (function() {
     html += '        </div>';
     html += '      </div>';
 
+    // Complete customer communication history. The source page decides whether
+    // this section is primary; every entry is rendered as text, never markup.
+    html += '      <div class="drawer-section drawer-conversation-history" id="cdConversationHistorySection" hidden>';
+    html += '        <h3>Conversation History</h3>';
+    html += '        <p id="cdConversationHistoryStatus" role="status" aria-live="polite">Loading this customer\'s prior communications.</p>';
+    html += '        <ol id="cdConversationHistory"></ol>';
+    html += '      </div>';
+
     // Call Transcript
     html += '      <div class="drawer-section">';
-    html += '        <h3>Call Transcript</h3>';
+    html += '        <h3 id="cdTranscriptHeading" tabindex="-1">Call Transcript</h3>';
     html += '        <div class="drawer-transcript" id="cdTranscript" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:300px;">';
     html += '          <p style="font-size:13px;color:var(--neutral-500);">No transcript available.</p>';
     html += '        </div>';
@@ -300,6 +310,69 @@ window.CustomerDetail = (function() {
       scroll: 'top',
       live: 'polite'
     });
+  }
+
+  function communicationDate(communication) {
+    var canonical = communication && communication.canonical;
+    var timestamps = canonical && canonical.timestamps;
+    return communication && (communication.occurredAt || communication.createdAt) ||
+      timestamps && (timestamps.communicationOccurredAt || timestamps.communicationCreatedAt) || null;
+  }
+
+  function renderCommunicationHistory(data) {
+    var section = $('cdConversationHistorySection');
+    var list = $('cdConversationHistory');
+    var status = $('cdConversationHistoryStatus');
+    var communications = Array.isArray(data.communications) ? data.communications : [];
+    section.hidden = _sourceContext.source !== 'communications';
+    list.replaceChildren();
+    if (section.hidden) {
+      status.textContent = '';
+      return;
+    }
+    if (!communications.length) {
+      status.textContent = 'No prior communications are recorded for this customer.';
+      return;
+    }
+    communications.forEach(function(communication, index) {
+      var item = document.createElement('li');
+      item.className = 'drawer-conversation-history-item';
+      var channel = describe(communication.channel || communication.type, 'Communication', 'channel');
+      var direction = describe(communication.direction, '', 'direction');
+      var occurredAt = communicationDate(communication);
+      var title = document.createElement('h4');
+      title.textContent = capitalizeFirst(channel) + (direction ? ' · ' + capitalizeFirst(direction) : '') +
+        ' · ' + fmtDate(occurredAt);
+      var summary = document.createElement('p');
+      summary.textContent = describe(communication.subject || communication.summary,
+        'No conversation summary has been recorded.', 'subject');
+      item.append(title, summary);
+      var transcript = communication.transcript && communication.transcript.text;
+      if (transcript) {
+        var review = document.createElement('button');
+        review.type = 'button';
+        review.className = 'btn btn-secondary btn-sm drawer-conversation-review';
+        review.textContent = 'Review conversation ' + (index + 1);
+        review.setAttribute('aria-pressed', communication.id === data.primaryCommId ? 'true' : 'false');
+        review.addEventListener('click', function() {
+          selectTranscript(communication.id);
+          Array.prototype.forEach.call(list.querySelectorAll('.drawer-conversation-review'), function(button) {
+            button.setAttribute('aria-pressed', button === review ? 'true' : 'false');
+          });
+          status.textContent = 'Showing conversation ' + (index + 1) + ' of ' + communications.length + '.';
+          $('cdTranscriptHeading').focus({ preventScroll:true });
+        });
+        item.appendChild(review);
+      } else {
+        var unavailable = document.createElement('p');
+        unavailable.className = 'drawer-conversation-unavailable';
+        unavailable.textContent = 'No transcript was recorded for this communication.';
+        item.appendChild(unavailable);
+      }
+      list.appendChild(item);
+    });
+    status.textContent = communications.length + (communications.length === 1
+      ? ' prior communication is available.' : ' prior communications are available.');
   }
 
   // ── Data Fetching ──
@@ -414,6 +487,11 @@ window.CustomerDetail = (function() {
           break;
         }
       }
+    }
+    if (_sourceContext.source === 'communications' && _sourceContext.communicationId &&
+        _commIdToTranscript[_sourceContext.communicationId]) {
+      data.primaryTranscript = _commIdToTranscript[_sourceContext.communicationId];
+      data.primaryCommId = _sourceContext.communicationId;
     }
 
     return data;
@@ -537,8 +615,13 @@ window.CustomerDetail = (function() {
 
   // ── Public API ──
 
-  function open(customerId) {
+  function open(customerId, options) {
     if (!customerId) return;
+    options = options || {};
+    _sourceContext = {
+      source: options.source === 'leads' || options.source === 'communications' ? options.source : 'customer',
+      communicationId: typeof options.communicationId === 'string' ? options.communicationId : null
+    };
 
     // Ensure drawer HTML is injected
     injectDrawerHTML();
@@ -582,6 +665,19 @@ window.CustomerDetail = (function() {
     $('cdDrawerContent').style.display = '';
     $('cdDrawerTitle').textContent = data.name || 'Customer Details';
     _drawerEl.setAttribute('aria-busy', 'false');
+    if (_sourceContext.source === 'leads') {
+      $('cdContextSummary').textContent = 'Lead inquiry details, recorded work facts, and the actions available for this customer.';
+      $('cdJobSectionHeading').textContent = 'Lead Inquiry';
+      $('cdTranscriptHeading').textContent = 'Recorded Conversation';
+    } else if (_sourceContext.source === 'communications') {
+      $('cdContextSummary').textContent = 'Customer information and the complete prior communication history recorded for this customer.';
+      $('cdJobSectionHeading').textContent = 'Related Work';
+      $('cdTranscriptHeading').textContent = 'Selected Conversation';
+    } else {
+      $('cdContextSummary').textContent = 'Customer details, recorded work facts, and available actions.';
+      $('cdJobSectionHeading').textContent = 'Job Details';
+      $('cdTranscriptHeading').textContent = 'Call Transcript';
+    }
 
     // Contact Information
     var missing = [];
@@ -661,6 +757,7 @@ window.CustomerDetail = (function() {
 
     // Transcript
     renderTranscript(data.primaryTranscript, data.name);
+    renderCommunicationHistory(data);
 
     var identifier = data.leadId || data.customerId;
     var askPolaris = $('cdBtnAskPolaris');
@@ -689,6 +786,7 @@ window.CustomerDetail = (function() {
     document.body.style.overflow = '';
     setBackgroundInert(false);
     _currentData = null;
+    _sourceContext = { source: 'customer', communicationId: null };
     if (_returnFocus && typeof document.contains === 'function' && document.contains(_returnFocus)) _returnFocus.focus();
     _returnFocus = null;
   }

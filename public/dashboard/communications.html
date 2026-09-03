@@ -970,7 +970,8 @@ function openCallCard(el) {
   var lead = currentFilteredCalls[idx];
   if (!lead) return;
   if (lead.customerId && typeof CustomerDetail !== 'undefined') {
-    CustomerDetail.open(lead.customerId);
+    if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+    CustomerDetail.open(lead.customerId, { source: 'communications', communicationId: lead.id });
   }
 }
 

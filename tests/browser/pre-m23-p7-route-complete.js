@@ -11,7 +11,7 @@ const VIEWPORTS = Object.freeze({
   desktop: { width: 1440, height: 900 },
   mobile390: { width: 390, height: 844 },
   mobile320: { width: 320, height: 720 },
-  reflow200: { width: 640, height: 720, deviceScaleFactor: 2 },
+  zoom200: { width: 640, height: 720, zoom: 2 },
 });
 const THEMES = Object.freeze(['light', 'dark']);
 const FORBIDDEN_PRESENTATION = /```|\bJSON Schema\b|\b(?:stack trace|provider body|response body)\b|\b(?:POLARIS|INTERNAL|PROVIDER)_[A-Z0-9_]{3,}\b|\b(?:Lead|Customer|Request|Conversation) ID\b|\b[0-9a-f]{64}\b/i;
@@ -328,7 +328,10 @@ async function run(engine, origin) {
 
     for (const [viewportName, viewport] of selectedViewports) {
       for (const theme of selectedThemes) {
-        const context = await browser.newContext({ viewport, colorScheme: theme });
+        const context = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+          colorScheme: theme,
+        });
         const boundary = { requests: [] };
         await context.addInitScript(selectedTheme => {
           try { localStorage.setItem('northstar-theme', selectedTheme); } catch (_error) {}
@@ -346,6 +349,11 @@ async function run(engine, origin) {
               await page.waitForFunction(() => ['ready', 'denied'].includes(document.documentElement.getAttribute('data-northstar-navigation')), null, { timeout: 5000 });
             }
             await closeAutomaticQuickStart(page);
+            if (viewport.zoom) {
+              await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, viewport.zoom);
+              assert.strictEqual(await page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).zoom)), viewport.zoom,
+                `${engine} ${viewportName} applies the requested zoom`);
+            }
             const audit = await semanticAudit(page);
             const label = `${engine} ${viewportName} ${theme} ${entry.route}`;
             if (audit.h1.length !== 1) failures.push({ label, kind: 'h1', value: audit.h1 });

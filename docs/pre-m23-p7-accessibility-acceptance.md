@@ -34,6 +34,19 @@ traces, internal identifiers or digests, provider bodies, or internal error code
 Polaris loading, empty, denied, error, and success states must remain intentional
 and understandable rather than presenting a blank or contextless chat.
 
+## Customer identity interaction contract
+
+Customer identity is contextual rather than a shortcut to Polaris. A customer
+name, row, or card opened from Leads must retain the Leads route and present the
+job inquiry, relevant customer facts, and lead actions in the customer-detail
+drawer. The same interaction from Communications must retain the Communications
+route and present the customer's information plus the complete available
+conversation history. Polaris is available only through a separately labelled
+action. Both contexts must support pointer and keyboard opening, Escape close,
+focus containment, and focus restoration to the exact row or card that opened
+the drawer. Tenant-scoped content is rendered as text rather than executable
+markup.
+
 ## Required matrix
 
 The frozen writer handoff must include the signed requirement-to-evidence matrix,

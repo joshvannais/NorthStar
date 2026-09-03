@@ -75,4 +75,15 @@ describe('Pre-Mission 23 P7 accessibility acceptance contracts', () => {
     expect(ledger).toMatch(/professional prose[\s\S]{0,80}native cards/i);
     expect(ledger).toMatch(/raw JSON[\s\S]{0,160}code fences[\s\S]{0,160}internal error codes/i);
   });
+
+  test('the signed requirement-to-evidence matrix contains every pre-Mission-23 record exactly once', () => {
+    const matrix = read('docs/pre-m23-p7-requirement-to-evidence-matrix.md');
+    const ids = [...matrix.matchAll(/^\| ([A-Z]+-\d{2}) \|/gm)].map(match => match[1]);
+    expect(ids).toHaveLength(119);
+    expect(new Set(ids).size).toBe(119);
+    expect(ids).not.toContain('M23-01');
+    for (let index = 1; index <= 7; index += 1) expect(ids).toContain(`ACC-0${index}`);
+    expect(matrix).toMatch(/ACC-07[\s\S]{0,400}UNAVAILABLE/);
+    expect(matrix).toMatch(/writer evidence, not an independent audit verdict/i);
+  });
 });

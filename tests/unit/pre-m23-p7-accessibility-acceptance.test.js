@@ -48,7 +48,12 @@ describe('Pre-Mission 23 P7 accessibility acceptance contracts', () => {
 
   test('the shared paid and demo sidebar is a named navigation landmark', () => {
     const navigation = read('public/js/nav-component.js');
+    const guidance = read('public/css/workspace-guidance.css');
+    const guidanceRuntime = read('public/js/workspace-guidance.js');
     expect(navigation).toMatch(/<nav class="sidebar-nav" aria-label="Workspace navigation">/);
+    expect(navigation.match(/data-account-logout aria-label="Sign Out" tabindex="0"/g)).toHaveLength(2);
+    expect(guidance).toMatch(/\[data-theme="dark"\][^{}]*\.northstar-quick-start-status\s*\{[^}]*color:\s*#86efac/i);
+    expect(guidanceRuntime).toMatch(/activePage === 'command-center' && isCommandCenterPath\(mode\)/);
   });
 
   test('customer identity opens surface-specific detail while Polaris remains an explicit action', () => {

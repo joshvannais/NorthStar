@@ -28,6 +28,13 @@
     return SEEN_KEY + ':' + mode + ':' + String(accountKey || mode);
   }
 
+  function isCommandCenterPath(mode) {
+    var pathname = String(global.location && global.location.pathname || '').replace(/\/$/, '') || '/';
+    return mode === 'demo'
+      ? pathname === '/demo' || pathname === '/demo/command-center'
+      : pathname === '/dashboard' || pathname === '/dashboard/command-center';
+  }
+
   function hasSeenGuide(mode, accountKey) {
     try { return global.localStorage.getItem(seenStorageKey(mode, accountKey)) === 'true'; }
     catch (_error) { return false; }
@@ -142,7 +149,7 @@
     document.querySelectorAll('[data-quick-start-reopen]').forEach(function(trigger) {
       trigger.addEventListener('click', function() { openGuide(trigger); });
     });
-    if (activePage === 'command-center' && !hasSeenGuide(mode, accountKey)) {
+    if (activePage === 'command-center' && isCommandCenterPath(mode) && !hasSeenGuide(mode, accountKey)) {
       global.requestAnimationFrame(function () { if (dialog.isConnected) openGuide(null); });
     }
   }

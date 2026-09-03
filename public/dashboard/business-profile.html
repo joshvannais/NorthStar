@@ -161,8 +161,8 @@
             <span class="bp-role-badge" id="businessProfileRole">Loading access…</span>
             <button class="bp-add-btn" id="reloadProfileBtn" type="button" hidden>Reload Business Profile</button>
             <button class="bp-add-btn" id="reloadOperationalConfigurationBtn" type="button" hidden disabled>Reload operational policies</button>
-            <button class="bp-save-btn" id="saveOperationalConfigurationBtn" type="button" disabled>Save operational policies</button>
-            <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" disabled>Save Profile</button>
+            <button class="bp-save-btn" id="saveOperationalConfigurationBtn" type="button" aria-describedby="businessProfileStatus operationalConfigurationError" disabled>Save operational policies</button>
+            <button class="bp-save-btn" id="saveBtn" onclick="saveProfile()" aria-describedby="businessProfileStatus" disabled>Save Profile</button>
           </div>
         </div>
         <div id="operationalConfigurationError" class="bp-validation-error" role="alert" tabindex="-1"></div>

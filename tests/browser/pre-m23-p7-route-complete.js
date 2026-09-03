@@ -24,6 +24,9 @@ function response(body, status = 200) {
 
 function accountFixture(role, pathname) {
   const pending = pathname === '/account/pending';
+  const accessRole = role === 'dispatcher' || role === 'employee'
+    ? 'member'
+    : role === 'read-only' ? 'viewer' : role;
   return {
     account: {
       user: { id: '00000000-0000-4000-8000-000000000703', email: '', status: pending ? 'pending' : 'active' },
@@ -31,12 +34,30 @@ function accountFixture(role, pathname) {
       navigation: role === 'employee'
         ? [{ id: 'today', href: '/dashboard/today' }]
         : navigationFixture(),
-      memberships: [{ role }],
+      membership: { role: accessRole, status: 'active' },
+      memberships: [{ role: accessRole, status: 'active' }],
       onboarding: { status: 'complete' },
       subscription: pending
-        ? { safe: true, state: 'pending_verification', readOnly: true, showTrialBanner: true }
-        : { safe: true, state: role === 'read-only' ? 'subscription_read_only' : 'active', readOnly: role === 'read-only', showTrialBanner: false },
+        ? { plan: 'Complete', safe: true, state: 'pending_verification', readOnly: true, showTrialBanner: true }
+        : { plan: 'Complete', safe: true, state: role === 'read-only' ? 'subscription_read_only' : 'active', readOnly: role === 'read-only', showTrialBanner: false },
     },
+  };
+}
+
+function todayFixture(role) {
+  return {
+    version: 'm22-part6-today-v1', readOnly: true, mutationCapabilities: [],
+    evaluatedAt: '2026-09-03T12:00:00.000Z',
+    identity: {
+      displayName: role === 'employee' ? 'Field Employee' : 'Owner Operator',
+      operationalRole: role === 'employee' ? 'technician' : 'owner_operator',
+    },
+    day: {
+      date: '2026-09-03', start: '2026-09-03T04:00:00.000Z',
+      end: '2026-09-04T04:00:00.000Z', timeZone: 'America/New_York',
+    },
+    count: 0, shown: 0, total: 0, truncated: false,
+    digest: 'e'.repeat(64), records: [],
   };
 }
 
@@ -52,8 +73,8 @@ function demoWorkspace() {
   });
 }
 
-function canonicalFixture(request, surface) {
-  return {
+function canonicalFixture(request, surface, role) {
+  const fixture = {
     success: true,
     data: {
       surface,
@@ -69,6 +90,28 @@ function canonicalFixture(request, surface) {
       },
     },
   };
+  if (surface === 'calendar') {
+    const canMutate = ['owner', 'admin', 'dispatcher'].includes(role);
+    fixture.data.timeZoneAuthority = {
+      profileId: '00000000-0000-4000-8000-000000000704',
+      profileVersion: 1,
+      profileHash: 'd'.repeat(64),
+      timeZone: 'America/New_York',
+    };
+    fixture.data.schedulingOperator = {
+      canRead: true,
+      canMutate,
+      reason: canMutate ? null : role === 'read-only' ? 'subscription_read_only' : 'role_not_authorized',
+      targets: [],
+      discovery: { shown: 0, total: 0, truncated: false },
+    };
+    fixture.data.schedulingOverview = {
+      timeZone: 'America/New_York',
+      records: [],
+      page: { shown: 0, total: 0, size: 100, cursor: null, nextCursor: null },
+    };
+  }
+  return fixture;
 }
 
 async function installBoundary(context, origin, role, evidence) {
@@ -90,10 +133,11 @@ async function installBoundary(context, origin, role, evidence) {
     if (url.pathname === '/api/account/subscription') return route.fulfill(response({ subscription: accountFixture(role, framePath).account.subscription }));
     if (url.pathname === '/api/demo/command-center') return route.fulfill(response({ success: true, data: demoWorkspace() }));
     const demoCompat = url.pathname.match(/^\/api\/demo\/command-center\/canonical\/compat\/([^/]+)$/);
-    if (demoCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(demoCompat[1]))));
+    if (demoCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(demoCompat[1]), role)));
     const paidCompat = url.pathname.match(/^\/api\/v1\/canonical\/compat\/([^/]+)$/);
-    if (paidCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(paidCompat[1]))));
+    if (paidCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(paidCompat[1]), role)));
     if (url.pathname === '/api/v1/business-profile') return route.fulfill(response({ success: true, profile: null }));
+    if (url.pathname === '/api/v1/today') return route.fulfill(response({ success: true, data: todayFixture(role) }));
     if (url.pathname === '/api/health') return route.fulfill(response({ status: 'ok', database: 'healthy', persistence: 'healthy' }));
     return route.fulfill(response({ success: true, data: {}, records: [], items: [] }));
   });
@@ -157,6 +201,15 @@ async function semanticAudit(page) {
       const style = getComputedStyle(element);
       return { selector: selector(element), left: parseFloat(style.paddingLeft) || 0, right: parseFloat(style.paddingRight) || 0, text: element.textContent.trim().slice(0, 50) };
     });
+    const disabledActions = Array.from(document.querySelectorAll('button:disabled,input[type="button"]:disabled,input[type="submit"]:disabled')).filter(visible);
+    const unexplainedDisabledActions = disabledActions.filter(element => {
+      const references = (element.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+      const described = references.map(id => document.getElementById(id)?.textContent || '').join(' ').trim();
+      const titled = (element.getAttribute('title') || '').trim();
+      const localStatus = element.closest('form,section,article,[role="region"],.card,.panel')
+        ?.querySelector('[role="status"],[role="alert"],.description,.cal-context-note')?.textContent?.trim() || '';
+      return !(described || titled || localStatus);
+    }).map(element => ({ selector: selector(element), text: labelText(element) }));
     return {
       h1: headings.filter(heading => heading.tagName === 'H1').map(heading => heading.textContent.trim()),
       headingSkips,
@@ -165,6 +218,7 @@ async function semanticAudit(page) {
       unnamedControls,
       inertInteractive,
       crampedBadges: badges.filter(badge => badge.left < 6 || badge.right < 6),
+      unexplainedDisabledActions,
       overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
       forbiddenPresentation: document.body.innerText.match(new RegExp(forbiddenSource, 'i'))?.[0] || null,
       bodyText: document.body.innerText.replace(/\s+/g, ' ').trim(),
@@ -173,8 +227,18 @@ async function semanticAudit(page) {
 }
 
 async function exerciseQuickStartReopen(page) {
-  const trigger = page.locator('[data-quick-start-reopen]:visible').first();
-  if (await trigger.count() === 0) return null;
+  let trigger = page.locator('[data-quick-start-reopen]:visible').first();
+  let openedMobileNavigation = false;
+  if (await trigger.count() === 0) {
+    const hamburger = page.locator('#navHamburgerBtn:visible');
+    assert.strictEqual(await hamburger.count(), 1, 'mobile navigation trigger is available');
+    await hamburger.focus();
+    await hamburger.press('Enter');
+    await page.locator('#mobileMenu.open').waitFor();
+    openedMobileNavigation = true;
+    trigger = page.locator('[data-quick-start-reopen]:visible').first();
+  }
+  assert.strictEqual(await trigger.count(), 1, 'Quick Start has a reachable keyboard trigger');
   await trigger.focus();
   await trigger.press('Enter');
   const dialog = page.locator('#northstarQuickStartDialog[open]');
@@ -187,8 +251,62 @@ async function exerciseQuickStartReopen(page) {
   await page.keyboard.press('Shift+Tab');
   assert.strictEqual(await dialog.evaluate(element => element.contains(document.activeElement)), true, 'reverse Tab remains in dialog');
   await page.keyboard.press('Escape');
-  assert.strictEqual(await trigger.evaluate(element => document.activeElement === element), true, 'Quick Start restores opener focus');
-  return { focusables: count };
+  const returnTarget = openedMobileNavigation ? page.locator('#navHamburgerBtn') : trigger;
+  assert.strictEqual(await returnTarget.evaluate(element => document.activeElement === element), true,
+    'Quick Start restores focus to its reachable opener');
+  if (openedMobileNavigation) {
+    assert.strictEqual(await page.locator('#mobileMenu.open').count(), 0, 'Escape closes mobile navigation');
+  }
+  return { focusables: count, openedMobileNavigation };
+}
+
+async function roleAcceptance(browser, origin) {
+  const cases = [
+    { role: 'owner', route: '/dashboard/settings', expectedBadge: /Editable · Owner/i, editable: true },
+    { role: 'admin', route: '/dashboard/settings', expectedBadge: /Editable · Admin/i, editable: true },
+    { role: 'read-only', route: '/dashboard/settings', expectedBadge: /Read only · Viewer/i, editable: false },
+    { role: 'dispatcher', route: '/dashboard/calendar', calendarMutation: true },
+    { role: 'employee', route: '/dashboard/today', employeeOnly: true },
+  ];
+  const evidence = [];
+  for (const roleCase of cases) {
+    const context = await browser.newContext({ viewport: VIEWPORTS.desktop, colorScheme: 'light' });
+    const boundary = { requests: [] };
+    await installBoundary(context, origin, roleCase.role, boundary);
+    const page = await context.newPage();
+    try {
+      await page.goto(`${origin}${roleCase.route}`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => document.documentElement.getAttribute('data-northstar-navigation') === 'ready');
+      await closeAutomaticQuickStart(page);
+      if (roleCase.expectedBadge) {
+        await page.locator('#settingsRoleBadge').waitFor();
+        assert.match(await page.locator('#settingsRoleBadge').innerText(), roleCase.expectedBadge);
+        assert.strictEqual(await page.locator('#companyName').isEnabled(), roleCase.editable,
+          `${roleCase.role} setting authority matches visible state`);
+        if (!roleCase.editable) {
+          assert.match(await page.locator('#settingsAccessStatus').innerText(), /owner or admin can make changes/i);
+        }
+      }
+      if (roleCase.calendarMutation) {
+        await page.waitForFunction(() => document.documentElement.dataset.canonicalAuthority === 'server');
+        assert.strictEqual(await page.evaluate(() => {
+          const projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+          return Boolean(projection && projection.schedulingOperator && projection.schedulingOperator.canMutate);
+        }), true, 'dispatcher receives current scheduling authority');
+        assert.match(await page.locator('#calendarNewEventArea').innerText(), /No unscheduled role-authorized work/i);
+      }
+      if (roleCase.employeeOnly) {
+        await page.waitForFunction(() => document.body.getAttribute('data-today-state') === 'empty');
+        assert.deepStrictEqual(await page.locator('.sidebar-nav a').evaluateAll(links => links.map(link => link.getAttribute('href'))),
+          ['/dashboard/today'], 'employee Today navigation remains intentionally minimal');
+        assert.match(await page.locator('#todayStatePanel').innerText(), /No work assigned for today/i);
+      }
+      evidence.push({ role: roleCase.role, route: roleCase.route, requests: boundary.requests.length });
+    } finally {
+      await context.close();
+    }
+  }
+  return evidence;
 }
 
 async function run(engine, origin) {
@@ -237,6 +355,7 @@ async function run(engine, origin) {
             if (audit.unnamedControls.length) failures.push({ label, kind: 'unnamed-controls', value: audit.unnamedControls });
             if (audit.inertInteractive.length) failures.push({ label, kind: 'inert-interactive', value: audit.inertInteractive });
             if (audit.crampedBadges.length) failures.push({ label, kind: 'cramped-badges', value: audit.crampedBadges.slice(0, 20) });
+            if (audit.unexplainedDisabledActions.length) failures.push({ label, kind: 'disabled-action-without-reason', value: audit.unexplainedDisabledActions.slice(0, 20) });
             if (audit.overflow > 1) failures.push({ label, kind: 'horizontal-overhang', value: audit.overflow });
             if (audit.forbiddenPresentation) failures.push({ label, kind: 'developer-presentation', value: audit.forbiddenPresentation });
             if (entry.route.endsWith('/polaris')) {
@@ -272,7 +391,13 @@ async function main() {
   const origin = `http://127.0.0.1:${server.address().port}`;
   try {
     const runs = [];
-    for (const engine of engines) runs.push({ engine, evidence: await run(engine, origin) });
+    for (const engine of engines) {
+      const runtime = resolveBrowserRuntime(engine);
+      const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
+      let roles;
+      try { roles = await roleAcceptance(browser, origin); } finally { await browser.close(); }
+      runs.push({ engine, roles, evidence: await run(engine, origin) });
+    }
     process.stdout.write(`${JSON.stringify({ success: true, runs })}\n`);
   } finally {
     await new Promise(resolve => server.close(resolve));

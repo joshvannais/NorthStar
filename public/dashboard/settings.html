@@ -217,7 +217,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input type="text" id="contactName" data-contact-draft aria-label="Known contact name" placeholder="Name (e.g. Mom, John, Office)" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
           <input type="tel" id="contactPhone" data-contact-draft aria-label="Known contact phone number" placeholder="Phone number" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--neutral-300);border-radius:var(--radius-sm);font-size:14px;" disabled>
-          <button class="btn btn-primary btn-sm" id="addContactBtn" data-contact-action onclick="addContact()" disabled>+ Add</button>
+          <button class="btn btn-primary btn-sm" id="addContactBtn" data-contact-action onclick="addContact()" aria-describedby="settingsAccessStatus contactDraftStatus" disabled>+ Add</button>
         </div>
         <p id="contactDraftStatus" class="description" role="status" aria-live="polite">No unsaved contact draft.</p>
 

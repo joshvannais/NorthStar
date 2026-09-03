@@ -151,6 +151,7 @@
         setStatus('Customer details are unavailable. Try again shortly.', 'error');
         return;
       }
+      control.focus();
       global.CustomerDetail.open(customerId, { source: 'leads' });
     });
     return control;

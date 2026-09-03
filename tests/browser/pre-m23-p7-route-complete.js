@@ -191,6 +191,20 @@ async function semanticAudit(page) {
       if (element.matches('[role="region"][aria-label],[role="region"][aria-labelledby]')) return false;
       return !element.hasAttribute('onclick') && !element.getAttribute('data-action') && !element.getAttribute('data-navigation-primary');
     }).map(selector);
+    const ignoredHandlerNames = new Set(['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'typeof', 'setTimeout', 'setInterval']);
+    const missingInlineHandlers = interactive.flatMap(element => {
+      return ['onclick', 'onchange', 'oninput', 'onsubmit', 'onkeydown'].flatMap(attribute => {
+        const source = element.getAttribute(attribute) || '';
+        const names = [...source.matchAll(/(?:^|[^\w.$])([A-Za-z_$][\w$]*)\s*\(/g)].map(match => match[1]);
+        return names.filter(name => !ignoredHandlerNames.has(name) && typeof window[name] !== 'function')
+          .map(name => ({ selector: selector(element), attribute, name }));
+      });
+    });
+    const deadLinks = interactive.filter(element => element.tagName === 'A').filter(element => {
+      const href = (element.getAttribute('href') || '').trim();
+      return (!href || href === '#' || /^javascript:/i.test(href))
+        && !element.hasAttribute('onclick') && !element.getAttribute('data-action');
+    }).map(element => ({ selector: selector(element), text: labelText(element) }));
     const badges = Array.from(document.querySelectorAll('[class*="pill"],[class*="badge"],[class*="chip"],[class*="tag"]')).filter(element => {
       if (!visible(element) || !element.textContent.trim() || element.children.length) return false;
       const style = getComputedStyle(element);
@@ -217,6 +231,8 @@ async function semanticAudit(page) {
       unnamedNavigation,
       unnamedControls,
       inertInteractive,
+      missingInlineHandlers,
+      deadLinks,
       crampedBadges: badges.filter(badge => badge.left < 6 || badge.right < 6),
       unexplainedDisabledActions,
       overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
@@ -362,6 +378,8 @@ async function run(engine, origin) {
             if (audit.unnamedNavigation.length) failures.push({ label, kind: 'unnamed-navigation', value: audit.unnamedNavigation });
             if (audit.unnamedControls.length) failures.push({ label, kind: 'unnamed-controls', value: audit.unnamedControls });
             if (audit.inertInteractive.length) failures.push({ label, kind: 'inert-interactive', value: audit.inertInteractive });
+            if (audit.missingInlineHandlers.length) failures.push({ label, kind: 'missing-inline-handler', value: audit.missingInlineHandlers.slice(0, 20) });
+            if (audit.deadLinks.length) failures.push({ label, kind: 'dead-link', value: audit.deadLinks.slice(0, 20) });
             if (audit.crampedBadges.length) failures.push({ label, kind: 'cramped-badges', value: audit.crampedBadges.slice(0, 20) });
             if (audit.unexplainedDisabledActions.length) failures.push({ label, kind: 'disabled-action-without-reason', value: audit.unexplainedDisabledActions.slice(0, 20) });
             if (audit.overflow > 1) failures.push({ label, kind: 'horizontal-overhang', value: audit.overflow });

@@ -65,6 +65,25 @@ describe('Pre-Mission 23 P7 accessibility acceptance contracts', () => {
     expect(detail).toMatch(/id="cdBtnAskPolaris"[\s\S]{0,120}>Ask Polaris</);
   });
 
+  test('Leads and Communications distinguish intentional empty, denied, and unavailable states', () => {
+    const leads = read('public/dashboard/leads.html');
+    const communications = read('public/dashboard/communications.html');
+
+    for (const source of [leads, communications]) {
+      expect(source).toMatch(/aria-live=["']polite["']/);
+      expect(source).toMatch(/access unavailable/i);
+      expect(source).toMatch(/could not be loaded/i);
+    }
+    expect(leads).toMatch(/No leads yet/);
+    expect(communications).toMatch(/No communications yet/);
+  });
+
+  test('Leads exposes the supported export action without an undefined import workflow', () => {
+    const leads = read('public/dashboard/leads.html');
+    expect(leads).toMatch(/id="leadsExportBtn"/);
+    expect(leads).not.toMatch(/handleImportCSV|closeImportModal|id="importModal"|id="leadsImportBtn"/);
+  });
+
   test('the accessibility ledger keeps all seven acceptance records explicit', () => {
     const ledger = read('docs/pre-m23-p7-accessibility-acceptance.md');
     for (let index = 1; index <= 7; index += 1) {

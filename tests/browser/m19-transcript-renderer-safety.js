@@ -52,6 +52,9 @@ const CUSTOMER_SURFACES = Object.freeze([
   Object.freeze({ label: 'Leads CustomerDetail', route: '/dashboard/leads' }),
   Object.freeze({ label: 'Communications CustomerDetail', route: '/dashboard/communications' }),
 ]);
+const CONTEXT_STATE = process.env.NORTHSTAR_P7_CONTEXT_STATE || 'ordinary';
+assert.ok(['ordinary', 'empty', 'error', 'denied'].includes(CONTEXT_STATE),
+  'NORTHSTAR_P7_CONTEXT_STATE must be ordinary, empty, error, or denied');
 
 function json(body, status = 200) {
   return {
@@ -225,7 +228,18 @@ async function installBoundaries(context, origin, evidence) {
     if (url.pathname === '/api/account/preferences') return route.fulfill(json({ preferences: {} }));
     if (url.pathname.indexOf('/api/v1/canonical/compat/') === 0) {
       const surface = decodeURIComponent(url.pathname.split('/').pop());
+      if (['leads', 'communications'].includes(surface) && CONTEXT_STATE === 'error') {
+        return route.fulfill(json({ error: 'temporarily_unavailable' }, 503));
+      }
+      if (['leads', 'communications'].includes(surface) && CONTEXT_STATE === 'denied') {
+        return route.fulfill(json({ error: 'access_denied' }, 403));
+      }
       const response = projection(surface);
+      if (['leads', 'communications'].includes(surface) && CONTEXT_STATE === 'empty') {
+        response.data.items = [];
+        response.data.records = [];
+        response.data.metrics = { graphCount: 0, appointmentCount: 0, estimatedRevenue: null };
+      }
       if (surface === 'customer-detail' && url.searchParams.has('customerId')) {
         response.data.records[0].name = DRAWER_CUSTOMER_NAME;
         response.data.items[0].customer.name = DRAWER_CUSTOMER_NAME;
@@ -527,12 +541,41 @@ async function exerciseLead(page, evidence, label) {
 }
 
 async function exerciseFreshAndReload(page, origin, route, exercise, evidence, label) {
-  let response = await page.goto(origin + route, { waitUntil: 'networkidle', timeout: 25000 });
+  const waitUntil = CONTEXT_STATE === 'ordinary' ? 'networkidle' : 'domcontentloaded';
+  let response = await page.goto(origin + route, { waitUntil, timeout: 25000 });
   recordCheck(evidence, response && response.status() === 200, label + '/fresh: mounted route status', response && response.status());
   await exercise(page, evidence, label + '/fresh');
-  response = await page.reload({ waitUntil: 'networkidle', timeout: 25000 });
+  response = await page.reload({ waitUntil, timeout: 25000 });
   recordCheck(evidence, response && response.status() === 200, label + '/reload: mounted route status', response && response.status());
   await exercise(page, evidence, label + '/reload');
+}
+
+async function exerciseCustomerState(page, evidence, label) {
+  const isLeads = label.indexOf('Leads CustomerDetail') === 0;
+  const expected = isLeads ? {
+    empty: /No leads yet/i,
+    error: /Leads unavailable[\s\S]*could not be loaded/i,
+    denied: /Lead access unavailable[\s\S]*owner or administrator/i,
+  } : {
+    empty: /No communications yet/i,
+    error: /Communications unavailable[\s\S]*could not be loaded/i,
+    denied: /Communication access unavailable[\s\S]*owner or administrator/i,
+  };
+  const container = isLeads ? page.locator('#leadsContent') : page.locator('#callHistoryList');
+  await container.waitFor();
+  await page.waitForFunction(({ selector, source }) => {
+    const element = document.querySelector(selector);
+    return element && new RegExp(source, 'i').test(element.textContent || '');
+  }, { selector: isLeads ? '#leadsContent' : '#callHistoryList', source: expected[CONTEXT_STATE].source });
+  const observed = await container.evaluate(element => ({
+    text: element.textContent.replace(/\s+/g, ' ').trim(),
+    live: element.querySelector('[role="status"][aria-live="polite"]') !== null,
+    interactiveCustomers: element.querySelectorAll('[data-lead-index],.call-card-header').length,
+  }));
+  recordCheck(evidence, expected[CONTEXT_STATE].test(observed.text), label + ': intentional ' + CONTEXT_STATE + ' copy', observed);
+  recordCheck(evidence, observed.live, label + ': intentional state is announced politely', observed);
+  recordCheck(evidence, observed.interactiveCustomers === 0, label + ': no unavailable customer identity target remains interactive', observed);
+  recordCheck(evidence, !/polaris/i.test(new URL(page.url()).pathname), label + ': state remains on its source route', page.url());
 }
 
 async function main() {
@@ -612,7 +655,8 @@ async function main() {
           const page = await context.newPage();
           page.on('pageerror', error => evidence.pageErrors.push({ page: surface.label, message: error.stack || error.message }));
           page.on('console', message => { if (message.type() === 'error') evidence.consoleErrors.push({ page: surface.label, message: message.text() }); });
-          await exerciseFreshAndReload(page, origin, surface.route, exerciseCustomerDetail, evidence,
+          const interactionExercise = CONTEXT_STATE === 'ordinary' ? exerciseCustomerDetail : exerciseCustomerState;
+          await exerciseFreshAndReload(page, origin, surface.route, interactionExercise, evidence,
             surface.label + '/' + viewport.label + '/' + theme);
           evidence.pages.push({ surface: surface.label, viewport: viewport.label, theme: theme, passes: ['fresh', 'reload'] });
           await page.close();
@@ -643,7 +687,11 @@ async function main() {
     recordCheck(evidence, evidence.external.length === 0, 'no external traffic', evidence.external);
     recordCheck(evidence, evidence.mutations.length === 0, 'no provider/business/API mutation', evidence.mutations);
     recordCheck(evidence, evidence.pageErrors.length === 0, 'no page errors', evidence.pageErrors);
-    recordCheck(evidence, evidence.consoleErrors.length === 0, 'no console errors', evidence.consoleErrors);
+    const expectedNetworkStatus = CONTEXT_STATE === 'error' ? '503' : CONTEXT_STATE === 'denied' ? '403' : null;
+    const expectedNetworkConsoleErrors = expectedNetworkStatus ? evidence.consoleErrors.filter(entry =>
+      entry.message.includes('Failed to load resource') && entry.message.includes(expectedNetworkStatus)) : [];
+    const unexpectedConsoleErrors = evidence.consoleErrors.filter(entry => !expectedNetworkConsoleErrors.includes(entry));
+    recordCheck(evidence, unexpectedConsoleErrors.length === 0, 'no unexpected console errors', unexpectedConsoleErrors);
     const summary = {
       browser: selected === 'chrome' ? 'installed Chrome' : selected === 'firefox' ? 'actual Playwright Firefox' : 'actual Playwright WebKit',
       browserVersion: browser.version(),
@@ -664,6 +712,8 @@ async function main() {
       instrumentation: 'none; mounted pages use unmodified production scripts',
       failures: evidence.failures,
       physicalSafari: false,
+      contextState: CONTEXT_STATE,
+      expectedNetworkConsoleErrors: expectedNetworkConsoleErrors.length,
     };
     console.log(JSON.stringify(summary));
     assert.deepStrictEqual(evidence.failures, []);

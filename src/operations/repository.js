@@ -39,6 +39,11 @@ function mapDatabaseError(error) {
     return new FieldExecutionRepositoryError(409, 'M23_LABOR_SOURCE_STALE',
       'Labor category or time-zone authority changed; refresh before trying again.', error);
   }
+  if (constraint.includes('canonical_material_stale') ||
+      constraint === 'canonical_material_unit_stale') {
+    return new FieldExecutionRepositoryError(409, 'M23_MATERIAL_STALE',
+      'Material evidence authority changed; refresh before trying again.', error);
+  }
   if (constraint.includes('stale') || error && ['40001', '40P01'].includes(error.code)) {
     return new FieldExecutionRepositoryError(409, 'M23_EXECUTION_STALE',
       'Field execution authority changed; refresh before trying again.', error);
@@ -73,6 +78,44 @@ function mapDatabaseError(error) {
   if (constraint === 'canonical_labor_dispatch_required') {
     return new FieldExecutionRepositoryError(403, 'M23_EXECUTION_FORBIDDEN',
       'Current labor evidence authority is unavailable.', error);
+  }
+  if (constraint === 'canonical_material_movement_not_found') {
+    return new FieldExecutionRepositoryError(404, 'NOT_FOUND', 'Material movement not found.', error);
+  }
+  if (constraint === 'canonical_material_idempotency_conflict') {
+    return new FieldExecutionRepositoryError(409, 'M23_MATERIAL_IDEMPOTENCY_CONFLICT',
+      'The Idempotency-Key was already used for another material evidence mutation.', error);
+  }
+  if (constraint === 'canonical_material_balance_overflow') {
+    return new FieldExecutionRepositoryError(409, 'M23_MATERIAL_BALANCE_LIMIT',
+      'The bounded recorded-movement balance limit would be exceeded.', error);
+  }
+  if (constraint === 'canonical_material_balance_review_required') {
+    return new FieldExecutionRepositoryError(409, 'M23_MATERIAL_BALANCE_REVIEW_REQUIRED',
+      'The recorded-movement balance remains unresolved and cannot be accepted.', error);
+  }
+  if (constraint === 'canonical_material_action_invalid') {
+    return new FieldExecutionRepositoryError(409, 'M23_MATERIAL_ACTION_INVALID',
+      'The requested material evidence action is not valid from the current state.', error);
+  }
+  if (constraint === 'canonical_material_already_reversed' ||
+      constraint === 'canonical_material_reverse_invalid' ||
+      constraint === 'canonical_material_reversal_invalid') {
+    return new FieldExecutionRepositoryError(409,
+      constraint === 'canonical_material_already_reversed'
+        ? 'M23_MATERIAL_ALREADY_REVERSED' : 'M23_MATERIAL_ACTION_INVALID',
+      constraint === 'canonical_material_already_reversed'
+        ? 'This material movement already has a reversal.'
+        : 'The requested material reversal is not valid.', error);
+  }
+  if (constraint === 'canonical_material_dispatch_required') {
+    return new FieldExecutionRepositoryError(403, 'M23_EXECUTION_FORBIDDEN',
+      'Current material evidence authority is unavailable.', error);
+  }
+  if (constraint === 'canonical_material_input_invalid' ||
+      constraint === 'canonical_material_quantity_invalid') {
+    return new FieldExecutionRepositoryError(400, 'INVALID_MATERIAL_REQUEST',
+      'Material evidence request is invalid.', error);
   }
   if (constraint === 'canonical_labor_input_invalid' || constraint === 'canonical_labor_instant_invalid') {
     return new FieldExecutionRepositoryError(400, 'INVALID_LABOR_REQUEST',
@@ -253,12 +296,68 @@ async function readLaborTime(pool, input) {
   }
 }
 
+async function mutateMaterialInventory(pool, input) {
+  return serializable(pool, async client => {
+    const result = await client.query(
+      `SELECT public.canonical_material_inventory_mutate(
+         $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,$8::uuid,
+         $9::text,$10::text,$11::text,$12::text,$13::text,$14::text,$15::text,
+         $16::text,$17::text,$18::text,$19::text,$20::uuid,$21::bigint,$22::text,
+         $23::text,$24::bigint,$25::text,$26::bigint,$27::text,$28::text,$29::text,$30::text
+       ) AS result`,
+      [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId,
+        input.csrfToken, input.executionId, input.action, input.performerProfileId,
+        input.movementKind, input.itemKey, input.description, input.quantity, input.unitCode,
+        input.unitContractVersion, input.unitContractDigest, input.locationKey,
+        input.destinationLocationKey, input.lotCode, input.adjustmentDirection, input.movementId,
+        input.expectedMovementRevision, input.expectedMovementDigest, input.reviewOutcome,
+        input.expectedExecutionRevision, input.expectedExecutionDigest,
+        input.expectedAssignmentRevision, input.expectedAssignmentDigest,
+        input.idempotencyKey, input.reason, input.requestCorrelationId]
+    );
+    return databaseResult(result.rows[0]);
+  });
+}
+
+async function readMaterialInventory(pool, input) {
+  requirePool(pool);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    await client.query("SET LOCAL statement_timeout='5000ms'");
+    await client.query("SET LOCAL lock_timeout='2000ms'");
+    await client.query("SET LOCAL idle_in_transaction_session_timeout='5000ms'");
+    await client.query('SET LOCAL search_path=pg_catalog,public');
+    const result = await client.query(
+      `SELECT public.canonical_material_inventory_read(
+         $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid
+       ) AS result`,
+      [input.organizationId, input.actorUserId, input.actorAccessRole,
+        input.authSessionId, input.executionId]
+    );
+    await client.query('COMMIT');
+    const body = result.rows[0] && result.rows[0].result;
+    if (!body || typeof body !== 'object') {
+      fail(503, 'M23_EXECUTION_PERSISTENCE_UNAVAILABLE',
+        'Canonical material evidence persistence returned an invalid result.');
+    }
+    return { status: 200, body, replayed: false };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw mapDatabaseError(error);
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   FieldExecutionRepositoryError,
   initializeFieldExecution,
   mapDatabaseError,
+  mutateMaterialInventory,
   mutateLaborTime,
   readFieldExecution,
   readLaborTime,
+  readMaterialInventory,
   transitionFieldExecution,
 };

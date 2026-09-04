@@ -6,10 +6,11 @@
   first deployment, exact first application, read-only production ledger, and
   credential-free health are recorded in `PRODUCTION_APPLICATION_RECEIPT.md`;
   they are no longer unavailable.
-- Fresh independent exact-head audit, ready state, normal merge, automatic
-  deployment, later-start readback, and final release seal for this
-  documentation-only receipt follow-up have not occurred. Writer tests do not
-  substitute for them.
+- The documentation-only receipt follow-up was independently accepted, merged
+  normally through PR #164, and automatically deployed. Its later-start
+  readback and final release evidence are recorded in
+  `LATER_START_ZERO_OP_RECEIPT.md`; they are no longer unavailable. Those facts
+  do not substitute for an independent audit or release decision for Part 4.
 - Authoritative read-only production migration-history/checksum reconciliation,
   PostgreSQL UTC/locale compatibility, and exact frozen 039+040 pending state
   against corrected head `b920362...` are recorded in
@@ -21,11 +22,10 @@
   identities, the automatic-runner log, and three healthy credential-free
   health observations are recorded in `PRODUCTION_APPLICATION_RECEIPT.md`; they
   are no longer unavailable.
-- A later ordinary automatic application start with zero migration-application
-  entries and unchanged single rows, checksums, and original
-  `2026-09-04T14:30:01.345Z` timestamps has not yet occurred. It must be supplied
-  by the audited, normally merged, automatically deployed receipt follow-up;
-  Part 4 remains blocked until that separate zero-op evidence is recorded.
+- The later ordinary automatic application start, zero migration-application
+  log, and unchanged single rows, checksums, and original
+  `2026-09-04T14:30:01.345Z` timestamps are recorded in
+  `LATER_START_ZERO_OP_RECEIPT.md`; they are no longer unavailable.
 - Production interruption/retry is not induced. Disposable PostgreSQL 18.4
   interruption/retry evidence remains bounded to its isolated database.
 - No production private/customer row, credential, provider configuration,

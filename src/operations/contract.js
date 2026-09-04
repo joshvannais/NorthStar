@@ -7,6 +7,10 @@ const LABOR_ACTIONS = new Set(['start_timer', 'stop_timer', 'record_manual', 'co
 const LABOR_CATEGORIES = new Set(['break', 'cleanup', 'other', 'production', 'setup', 'travel']);
 const LABOR_CATEGORY_CONTRACT_VERSION = 'm23-labor-category-v1';
 const LABOR_CATEGORY_CONTRACT_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
+const MATERIAL_ACTIONS = new Set(['record', 'correct', 'review', 'reverse']);
+const MATERIAL_MOVEMENT_KINDS = new Set(['adjustment', 'consumed', 'returned', 'transferred', 'waste']);
+const MATERIAL_UNIT_CONTRACT_VERSION = 'm23-material-unit-v1';
+const MATERIAL_UNIT_CONTRACT_DIGEST = '8fcbf0c5a646dbd199e6fa8a93f863d851fab24d83c7a819ed65573c22761eba';
 const MAXIMUM_BODY_BYTES = 32 * 1024;
 
 class FieldExecutionContractError extends Error {
@@ -121,6 +125,148 @@ function reviewOutcome(value) {
     fail(400, 'INVALID_LABOR_REVIEW', 'Labor review outcome is invalid.');
   }
   return value;
+}
+
+function materialKey(value) {
+  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9._:-]{0,63}$/.test(value)) {
+    fail(400, 'INVALID_MATERIAL_KEY', 'Material identity evidence is invalid.');
+  }
+  return value;
+}
+
+function materialText(value) {
+  if (typeof value !== 'string' || value !== value.trim() || value !== value.normalize('NFC') ||
+      Array.from(value).length < 1 || Array.from(value).length > 500 ||
+      Buffer.byteLength(value, 'utf8') > 2000 ||
+      /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u.test(value)) {
+    fail(400, 'INVALID_MATERIAL_TEXT', 'Material description evidence is invalid.');
+  }
+  return value;
+}
+
+function materialQuantity(value) {
+  if (typeof value !== 'string' ||
+      !/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$/.test(value)) {
+    fail(400, 'INVALID_MATERIAL_QUANTITY', 'Material quantity evidence is invalid.');
+  }
+  const [whole, fraction = ''] = value.split('.');
+  if (BigInt(whole + fraction.padEnd(6, '0')) === 0n) {
+    fail(400, 'INVALID_MATERIAL_QUANTITY', 'Material quantity evidence is invalid.');
+  }
+  return value;
+}
+
+function normalizeMaterialAction(input) {
+  const body = exactObject(input && input.body, new Set([
+    'action', 'performerProfileId', 'movementKind', 'itemKey', 'description', 'quantity',
+    'unitCode', 'unitContractVersion', 'unitContractDigest', 'locationKey',
+    'destinationLocationKey', 'lotCode', 'adjustmentDirection', 'movementId',
+    'expectedMovementRevision', 'expectedMovementDigest', 'reviewOutcome',
+    'expectedExecutionRevision', 'expectedExecutionDigest', 'expectedAssignmentRevision',
+    'expectedAssignmentDigest', 'reason',
+  ]), 'INVALID_MATERIAL_ACTION');
+  const common = [
+    'action', 'performerProfileId', 'unitContractVersion', 'unitContractDigest',
+    'expectedExecutionRevision', 'expectedExecutionDigest', 'expectedAssignmentRevision',
+    'expectedAssignmentDigest', 'reason',
+  ];
+  if (common.some(key => !has(body, key))) {
+    fail(428, 'M23_MATERIAL_PRECONDITION_REQUIRED',
+      'Exact execution, assignment, unit, reason, and idempotency evidence are required.');
+  }
+  if (typeof body.action !== 'string' || !MATERIAL_ACTIONS.has(body.action)) {
+    fail(400, 'INVALID_MATERIAL_ACTION', 'Material evidence action is invalid.');
+  }
+  if (body.unitContractVersion !== MATERIAL_UNIT_CONTRACT_VERSION ||
+      body.unitContractDigest !== MATERIAL_UNIT_CONTRACT_DIGEST) {
+    fail(409, 'M23_MATERIAL_UNIT_CONTRACT_STALE',
+      'Material unit authority changed; refresh before trying again.');
+  }
+  const writesMaterial = ['record', 'correct'].includes(body.action);
+  const needsExisting = ['correct', 'review', 'reverse'].includes(body.action);
+  const materialFields = ['movementKind', 'itemKey', 'description', 'quantity', 'unitCode'];
+  const optionalMaterialFields = ['locationKey', 'destinationLocationKey', 'lotCode', 'adjustmentDirection'];
+  if ((writesMaterial && materialFields.some(key => !has(body, key))) ||
+      (needsExisting && ['movementId', 'expectedMovementRevision', 'expectedMovementDigest']
+        .some(key => !has(body, key))) ||
+      (body.action === 'review' && !has(body, 'reviewOutcome'))) {
+    fail(428, 'M23_MATERIAL_PRECONDITION_REQUIRED',
+      'The material action is missing required exact evidence.');
+  }
+  if ((!writesMaterial && [...materialFields, ...optionalMaterialFields].some(key => has(body, key))) ||
+      (!needsExisting && ['movementId', 'expectedMovementRevision', 'expectedMovementDigest']
+        .some(key => has(body, key))) ||
+      (body.action !== 'review' && has(body, 'reviewOutcome'))) {
+    fail(400, 'INVALID_MATERIAL_ACTION', 'Material action contains fields that do not apply.');
+  }
+  let movementKind = null;
+  let adjustmentDirection = null;
+  let locationKey = null;
+  let destinationLocationKey = null;
+  if (writesMaterial) {
+    if (typeof body.movementKind !== 'string' || !MATERIAL_MOVEMENT_KINDS.has(body.movementKind)) {
+      fail(400, 'INVALID_MATERIAL_ACTION', 'Material movement kind is invalid.');
+    }
+    movementKind = body.movementKind;
+    locationKey = has(body, 'locationKey') ? materialKey(body.locationKey) : null;
+    destinationLocationKey = has(body, 'destinationLocationKey')
+      ? materialKey(body.destinationLocationKey) : null;
+    if (movementKind === 'transferred') {
+      if ((locationKey === null) !== (destinationLocationKey === null) ||
+          (locationKey !== null && locationKey === destinationLocationKey)) {
+        fail(400, 'INVALID_MATERIAL_ACTION', 'Material transfer location evidence is invalid.');
+      }
+    } else if (destinationLocationKey !== null) {
+      fail(400, 'INVALID_MATERIAL_ACTION', 'Destination location applies only to a transfer.');
+    }
+    if (movementKind === 'adjustment') {
+      if (!has(body, 'adjustmentDirection')) {
+        fail(428, 'M23_MATERIAL_PRECONDITION_REQUIRED',
+          'An explicit material adjustment direction is required.');
+      }
+      if (!['increase', 'decrease'].includes(body.adjustmentDirection)) {
+        fail(400, 'INVALID_MATERIAL_ACTION', 'Material adjustment direction is invalid.');
+      }
+      adjustmentDirection = body.adjustmentDirection;
+    } else if (has(body, 'adjustmentDirection')) {
+      fail(400, 'INVALID_MATERIAL_ACTION', 'Adjustment direction applies only to an adjustment.');
+    }
+  }
+  return Object.freeze({
+    ...trustedActor(input),
+    executionId: uuid(input && input.executionId, 'INVALID_EXECUTION_ID', 'Field execution'),
+    action: body.action,
+    performerProfileId: uuid(body.performerProfileId, 'INVALID_MATERIAL_PERFORMER', 'Material performer'),
+    movementKind,
+    itemKey: writesMaterial ? materialKey(body.itemKey) : null,
+    description: writesMaterial ? materialText(body.description) : null,
+    quantity: writesMaterial ? materialQuantity(body.quantity) : null,
+    unitCode: writesMaterial ? materialKey(body.unitCode) : null,
+    unitContractVersion: body.unitContractVersion,
+    unitContractDigest: digest(body.unitContractDigest,
+      'INVALID_MATERIAL_UNIT_CONTRACT', 'Material unit contract digest'),
+    locationKey,
+    destinationLocationKey,
+    lotCode: writesMaterial && has(body, 'lotCode') ? materialKey(body.lotCode) : null,
+    adjustmentDirection,
+    movementId: needsExisting
+      ? uuid(body.movementId, 'INVALID_MATERIAL_MOVEMENT', 'Material movement') : null,
+    expectedMovementRevision: needsExisting
+      ? revision(body.expectedMovementRevision, 'INVALID_MATERIAL_PRECONDITION', 'Expected movement revision') : null,
+    expectedMovementDigest: needsExisting
+      ? digest(body.expectedMovementDigest, 'INVALID_MATERIAL_PRECONDITION', 'Expected movement digest') : null,
+    reviewOutcome: body.action === 'review' ? reviewOutcome(body.reviewOutcome) : null,
+    expectedExecutionRevision: revision(body.expectedExecutionRevision,
+      'INVALID_MATERIAL_SOURCE_PIN', 'Expected execution revision'),
+    expectedExecutionDigest: digest(body.expectedExecutionDigest,
+      'INVALID_MATERIAL_SOURCE_PIN', 'Expected execution digest'),
+    expectedAssignmentRevision: revision(body.expectedAssignmentRevision,
+      'INVALID_MATERIAL_SOURCE_PIN', 'Expected assignment revision'),
+    expectedAssignmentDigest: digest(body.expectedAssignmentDigest,
+      'INVALID_MATERIAL_SOURCE_PIN', 'Expected assignment digest'),
+    reason: reason(body.reason),
+    idempotencyKey: idempotencyKey(input && input.idempotencyKey),
+  });
 }
 
 function normalizeLaborAction(input) {
@@ -271,11 +417,16 @@ module.exports = {
   LABOR_CATEGORIES,
   LABOR_CATEGORY_CONTRACT_DIGEST,
   LABOR_CATEGORY_CONTRACT_VERSION,
+  MATERIAL_ACTIONS,
+  MATERIAL_MOVEMENT_KINDS,
+  MATERIAL_UNIT_CONTRACT_DIGEST,
+  MATERIAL_UNIT_CONTRACT_VERSION,
   MAXIMUM_BODY_BYTES,
   TRANSITIONS,
   UUID,
   normalizeExecutionId,
   normalizeInitialization,
   normalizeLaborAction,
+  normalizeMaterialAction,
   normalizeTransition,
 };

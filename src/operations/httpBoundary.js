@@ -14,6 +14,7 @@ const { securityHeaders } = require('../middleware/security');
 const INITIALIZE_PATH = /^\/api\/v1\/field-executions\/appointments\/([^/]+)\/?$/i;
 const TRANSITION_PATH = /^\/api\/v1\/field-executions\/([^/]+)\/transitions\/?$/i;
 const LABOR_ACTION_PATH = /^\/api\/v1\/field-executions\/([^/]+)\/labor-actions\/?$/i;
+const MATERIAL_ACTION_PATH = /^\/api\/v1\/field-executions\/([^/]+)\/material-actions\/?$/i;
 const RAW_TARGET_CANDIDATE = Symbol('m23ExecutionRawTargetCandidate');
 const BODY_VALIDATED = Symbol('m23ExecutionBodyValidated');
 const rawExecutionBody = express.raw({
@@ -34,7 +35,7 @@ function isExecutionMutationRequest(req) {
   if (String(req && req.method || '').toUpperCase() !== 'POST') return false;
   const target = rawRequestPath(req);
   const match = INITIALIZE_PATH.exec(target) || TRANSITION_PATH.exec(target) ||
-    LABOR_ACTION_PATH.exec(target);
+    LABOR_ACTION_PATH.exec(target) || MATERIAL_ACTION_PATH.exec(target);
   if (!match) return false;
   try {
     decodeURIComponent(match[1]);
@@ -98,6 +99,7 @@ module.exports = {
   BODY_VALIDATED,
   INITIALIZE_PATH,
   LABOR_ACTION_PATH,
+  MATERIAL_ACTION_PATH,
   TRANSITION_PATH,
   executionBodyBoundary,
   isExecutionMutationRequest,

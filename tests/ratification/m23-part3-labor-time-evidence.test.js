@@ -24,6 +24,9 @@ const productionReadiness = read(
 const productionApplication = read(
   'outputs', 'm23-part3-writer', 'PRODUCTION_APPLICATION_RECEIPT.md'
 );
+const laterStartReceipt = read(
+  'outputs', 'm23-part3-writer', 'LATER_START_ZERO_OP_RECEIPT.md'
+);
 
 const CATEGORY_VERSION = 'm23-labor-category-v1';
 const CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
@@ -32,9 +35,11 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
   test('pins the exact deployed base and truthful candidate/release boundary', () => {
     expect(requirements).toContain('`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`');
     expect(roadmap).toContain('**Part 3: independently accepted, normally merged, automatically deployed,');
-    expect(roadmap).toContain('later-start zero-op is\n  pending');
-    expect(roadmap).toContain('**Parts 4–12: not implemented.**');
-    expect(unavailable).toContain('Writer tests do not\n  substitute for them.');
+    expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
+    expect(roadmap).toContain('**Part 4: writer implementation candidate in progress; not independently');
+    expect(roadmap).toContain('**Parts 5–12: not implemented.**');
+    expect(laterStartReceipt).toContain('This closes Part 3\'s separate later-start zero-op gate.');
+    expect(unavailable).toContain('do not substitute for an independent audit or release decision for Part 4.');
     expect(productionApplication).toContain('Part 4 must not begin');
   });
 

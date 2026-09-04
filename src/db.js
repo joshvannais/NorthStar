@@ -1179,6 +1179,35 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'GRANT EXECUTE ON FUNCTION public.canonical_labor_time_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
         );
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_material_movements') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_material_movements, public.canonical_material_events, public.canonical_material_revisions, public.canonical_material_audit_events, public.canonical_material_idempotency FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_text_valid(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_key_valid(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_quantity_text_valid(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_signed_quantity(text,text,numeric,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_material_movement_digest(uuid,uuid,uuid,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,timestamp with time zone,text,bigint,text,bigint,text,bigint) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_projection(public.canonical_material_movements) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_immutable_evidence() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_guard_current() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_validate_complete() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_material_balance_issue(uuid,uuid,text,text,text,numeric,text,text,text,text,text,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_material_request_digest(uuid,uuid,uuid,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_material_inventory_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
+        );
+      END IF;
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role
@@ -1266,6 +1295,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_labor_revisions',
              'canonical_labor_audit_events',
              'canonical_labor_idempotency',
+             'canonical_material_movements',
+             'canonical_material_events',
+             'canonical_material_revisions',
+             'canonical_material_audit_events',
+             'canonical_material_idempotency',
              'polaris_provider_monthly_usage',
              'polaris_provider_requests',
              'polaris_provider_security_events'
@@ -1400,6 +1434,45 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND (to_regprocedure('public.canonical_labor_transcript_source_normalized(text)') IS NULL
            OR NOT has_function_privilege($1,'public.canonical_labor_transcript_source_normalized(text)','EXECUTE'))
        )) AS labor_helpers_withheld,
+       (to_regclass('public.canonical_material_movements') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_material_movements','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_material_movements','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_material_movements','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_material_movements','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_material_events','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_material_events','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_material_events','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_material_events','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_material_revisions','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_material_revisions','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_material_revisions','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_material_revisions','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_material_audit_events','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_material_audit_events','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_material_audit_events','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_material_audit_events','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_material_idempotency','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_material_idempotency','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_material_idempotency','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_material_idempotency','DELETE')
+       )) AS material_tables_withheld,
+       (to_regclass('public.canonical_material_movements') IS NULL OR (
+         has_function_privilege($1,'public.canonical_material_inventory_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS material_entry_execute,
+       (to_regclass('public.canonical_material_movements') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_material_text_valid(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_key_valid(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_quantity_text_valid(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_signed_quantity(text,text,numeric,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_movement_digest(uuid,uuid,uuid,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,timestamp with time zone,text,bigint,text,bigint,text,bigint)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_projection(public.canonical_material_movements)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_immutable_evidence()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_guard_current()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_validate_complete()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_balance_issue(uuid,uuid,text,text,text,numeric,text,text,text,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_material_request_digest(uuid,uuid,uuid,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text)','EXECUTE')
+       )) AS material_helpers_withheld,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
          AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
@@ -1452,6 +1525,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.labor_tables_withheld ||
       !runtimePrivileges.labor_entry_execute ||
       !runtimePrivileges.labor_helpers_withheld ||
+      !runtimePrivileges.material_tables_withheld ||
+      !runtimePrivileges.material_entry_execute ||
+      !runtimePrivileges.material_helpers_withheld ||
       !runtimePrivileges.polaris_provider_usage_guarded ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {

@@ -17,8 +17,8 @@ knowledge authorities without replacing any of them.
   healthy first start, later automatic container start with no migration
   application, and unchanged one-row checksum/timestamp are recorded.
 - **Part 3: independently accepted, normally merged, automatically deployed,
-  first-start production-applied, and health verified; later-start zero-op is
-  pending.** The independent audit of first candidate head
+  production-applied, health verified, and later-start zero-op verified.** The
+  independent audit of first candidate head
   `a08421e601a0125a89298c3dca68dea2e1d888b1` required one P1 and two P2
   corrections. A second independent audit of corrected head
   `b92036215618ef2b26804fc7fce300ea3d34f331` found no P0/P1 finding and one
@@ -27,10 +27,15 @@ knowledge authorities without replacing any of them.
   `8de66512d1baa335e4e7151b6a7232c94de9dc0a` merged as
   `ee6cac8b729f73a5af22c7d5747fd52c1d1d4035`; automatic Railway deployment
   `e1d88caa-339e-49b6-a08a-60cd20eddcf9` applied migrations 039–041 once and
-  returned healthy canonical PostgreSQL persistence. A later ordinary
-  application start with unchanged one-row checksums and timestamps remains a
-  required separate zero-op receipt before Part 4.
-- **Parts 4–12: not implemented.**
+  returned healthy canonical PostgreSQL persistence. Receipt head
+  `2abef4be3e31c2c468762598edc0e79859f67c2f` merged normally through PR #164
+  as `15c61f89e4dd52ae768f1d30d1d6a3808c2d7ec5`; automatic Railway deployment
+  `2b498fe1-d025-4be7-bd90-cef6154f9bb8` supplied the separate later ordinary
+  application start with no migration application and unchanged exact one-row
+  checksums and original timestamps for migrations 039–041.
+- **Part 4: writer implementation candidate in progress; not independently
+  audited, merged, deployed, or production-applied.**
+- **Parts 5–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and
@@ -205,9 +210,16 @@ The exact accepted Part 3 candidate
 applied migrations 039, 040, and 041 once. The read-only production ledger
 contains 39 rows and exactly one matching checksum row for each migration, all
 with `applied_at = 2026-09-04T14:30:01.345Z`; three credential-free health GETs
-returned HTTP 200 with PostgreSQL and canonical persistence healthy. The
-separate later-start zero-op and unchanged-ledger receipt remains pending and is
-required before Part 4.
+returned HTTP 200 with PostgreSQL and canonical persistence healthy.
+
+The separate later-start zero-op is recorded in
+`outputs/m23-part3-writer/LATER_START_ZERO_OP_RECEIPT.md`. PR #164 merged
+normally as `15c61f89e4dd52ae768f1d30d1d6a3808c2d7ec5`; automatic Railway
+deployment `2b498fe1-d025-4be7-bd90-cef6154f9bb8` produced the later ordinary
+application start with no migration application. The read-only ledger remained
+at 39 rows with exactly one unchanged checksum row for each of 039, 040, and
+041 and the original common `applied_at = 2026-09-04T14:30:01.345Z`.
+Part 3's later-start gate is therefore achieved rather than pending.
 
 Part 3 changes no rendered surface. That no-UI boundary prevents a premature
 visual implementation; it is not browser or founder visual approval. The Part
@@ -215,6 +227,56 @@ visual implementation; it is not browser or founder visual approval. The Part
 minimum bar across typography, spacing, radii, borders, cards/drawers,
 responsive widths, controls, dark/light themes, mobile/desktop behavior,
 accessibility, mounted Chrome, Playwright WebKit, and visual inspection.
+
+## Part 4 writer-candidate implementation boundary
+
+Part 4 adds tenant-scoped material movement evidence to the exact current Part
+2 field execution and Mission 22 assignment pins. The candidate recognizes
+only explicit `adjustment`, `consumed`, `returned`, `transferred`, and `waste`
+facts. Each fact records a positive bounded decimal quantity, an opaque
+tenant-authored material key and unit code under the pinned
+`m23-material-unit-v1` contract (digest
+`8fcbf0c5a646dbd199e6fa8a93f863d851fab24d83c7a819ed65573c22761eba`),
+optional source/destination location keys and
+lot code, performer, recorder, observed server instant, review state, and exact
+execution/assignment revision and digest. The unit contract applies no
+conversion and never treats two unit codes as interchangeable.
+
+The candidate uses immutable events, revision snapshots, audit evidence, and
+idempotency receipts around one versioned current projection. Corrections
+advance the original record while preserving every earlier revision. Reversal
+creates a separate exactly linked compensating record; it never deletes or
+rewrites the original. Tenant-wide serializable ledger locking makes concurrent
+retries and balance decisions deterministic. Owner/administrator review may
+accept or reject evidence only when the resulting recorded-movement balance is
+bounded; unresolved underflow or absent location evidence remains explicitly
+`needs_review`. Adjustments always require owner/administrator authority and
+review. A recorded balance is only a bounded projection of non-rejected
+movement evidence; it is never a claim that physical stock exists.
+
+The server derives actor, tenant, role, session, and CSRF evidence. PostgreSQL
+reloads active membership/account/workforce, subscription/onboarding, current
+appointment, assignment, dispatch, execution, performer, crew, and fail-closed
+production transcript authority before any new effect or cached replay. Reads
+use bounded repeatable-read snapshots and the same current scope. Runtime SQL
+may execute only the material mutation/read entry points and has no direct
+table or helper privilege.
+
+The writer candidate mounts only:
+
+- `POST /api/v1/field-executions/:executionId/material-actions`; and
+- `GET /api/v1/field-executions/:executionId/materials`.
+
+It does not assert or infer stock existence, warehouse truth, unit conversion,
+stock cost or value, procurement, purchasing, supplier facts, customer price,
+quotes, invoices, payments, profitability, scheduling changes, customer
+contact, provider state, or Polaris conclusions. It adds no equipment/assets,
+files/photos/notes, checklists/inspections, progress/blockers/changes,
+completion/reopening, UI, or later-part behavior. Part 4 changes no rendered
+file; Part 9 retains the complete design-system and visual-acceptance gate.
+This is writer evidence only until a fresh independent exact-head audit, normal
+merge, sole automatic deployment, migration verification, and health evidence
+are complete.
 
 ## Non-negotiable ownership boundaries
 

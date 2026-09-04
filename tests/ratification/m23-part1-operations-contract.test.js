@@ -66,25 +66,28 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     );
   });
 
-  test('preserves historical Part 1 truth and states truthful Part 2/Part 3 boundaries', () => {
+  test('preserves historical Part 1 truth and states truthful Part 2 through Part 4 boundaries', () => {
     expect(roadmap).toContain('**Part 1: independently accepted, merged, deployed, and production-accepted at');
     expect(roadmap).toContain('**Part 2: independently accepted, normally merged, automatically deployed,');
     expect(roadmap).toContain('`403576639ea0223a2a18340d87882a6cdfa47ca4`; the');
     expect(roadmap).toContain('`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`');
     expect(roadmap).toContain('later-start zero-op verified');
     expect(roadmap).toContain('**Part 3: independently accepted, normally merged, automatically deployed,');
-    expect(roadmap).toContain('later-start zero-op is\n  pending');
-    expect(roadmap).toContain('**Parts 4–12: not implemented.**');
+    expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
+    expect(roadmap).toContain('**Part 4: writer implementation candidate in progress; not independently');
+    expect(roadmap).toContain('**Parts 5–12: not implemented.**');
     expect(roadmap).toContain(
       'There is no accepted Mission 23 migration, table, route, repository, or browser'
     );
 
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations'));
-    expect(migrations.filter((name) => /mission[_-]?23|field[_-]?execution|^0(?:3[89]|40)_/i.test(name)).sort())
+    expect(migrations.filter((name) => /mission[_-]?23|field[_-]?execution|^0(?:3[89]|4[0-2])_/i.test(name)).sort())
       .toEqual([
         '038_canonical_field_execution_authority.sql',
         '039_canonical_labor_time_evidence.sql',
         '040_canonical_labor_time_audit_corrections.sql',
+        '041_canonical_labor_transcript_source_authority.sql',
+        '042_canonical_material_inventory_evidence.sql',
       ]);
     expect(fs.readdirSync(path.join(ROOT, 'src', 'operations')).sort()).toEqual([
       'contract.js', 'httpBoundary.js', 'repository.js',

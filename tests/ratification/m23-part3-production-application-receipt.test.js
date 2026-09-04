@@ -15,6 +15,9 @@ const requirements = read(
 const unavailable = read(
   'outputs', 'm23-part3-writer', 'UNAVAILABLE_EVIDENCE.md'
 );
+const laterStartReceipt = read(
+  'outputs', 'm23-part3-writer', 'LATER_START_ZERO_OP_RECEIPT.md'
+);
 
 describe('Mission 23 Part 3 production application receipt', () => {
   test('pins the accepted candidate, normal merge, and automatic deployment', () => {
@@ -71,8 +74,8 @@ describe('Mission 23 Part 3 production application receipt', () => {
     expect(receipt).toContain('Observation timestamps were not supplied, so none are invented.');
   });
 
-  test('keeps later-start zero-op and historical recovery gaps explicit', () => {
-    expect(roadmap).toContain('later-start zero-op is\n  pending');
+  test('records later-start zero-op while keeping historical recovery gaps explicit', () => {
+    expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
     expect(receipt).toContain('## Required later-start zero-op follow-up');
     expect(receipt).toContain('contains no `[DB] Migration applied` entry');
     expect(receipt).toContain('every `applied_at` remains exactly `2026-09-04T14:30:01.345Z`');
@@ -81,17 +84,22 @@ describe('Mission 23 Part 3 production application receipt', () => {
     expect(receipt).toContain('No terminal pre-application 039+040+041 production-history receipt');
     expect(receipt).toContain('No dated production backup receipt or isolated restore rehearsal');
     expect(receipt).toContain('no destructive database rollback or data deletion');
-    expect(unavailable).toContain('Part 4 remains blocked');
+    expect(laterStartReceipt).toContain('`2abef4be3e31c2c468762598edc0e79859f67c2f`');
+    expect(laterStartReceipt).toContain('`15c61f89e4dd52ae768f1d30d1d6a3808c2d7ec5`');
+    expect(laterStartReceipt).toContain('`2b498fe1-d025-4be7-bd90-cef6154f9bb8`');
+    expect(laterStartReceipt).toContain('contained no `[DB] Migration applied` entry');
+    expect(laterStartReceipt).toContain('This closes Part 3\'s separate later-start zero-op gate.');
     expect(unavailable).toContain('Backup/restore remains unavailable');
   });
 
-  test('keeps this follow-up documentation-only and awaits an independent audit', () => {
+  test('keeps the released follow-up documentation-only and Part 4 independently gated', () => {
     expect(requirements).toContain('## Production application receipt follow-up boundary');
     expect(requirements).toContain('Scope: documentation, evidence, and ratification assertions only.');
     expect(requirements).toContain('| Receipt-follow-up scope |');
-    expect(requirements).toContain('| Pending; Part 4 remains blocked |');
-    expect(unavailable).toContain('Fresh independent exact-head audit, ready state, normal merge');
+    expect(requirements).toContain('| Achieved; Part 4 progression gate passed |');
+    expect(unavailable).toContain('independent audit or release decision for Part 4');
     expect(roadmap).toContain('Part 3 changes no rendered surface.');
-    expect(roadmap).toContain('**Parts 4–12: not implemented.**');
+    expect(roadmap).toContain('**Part 4: writer implementation candidate in progress; not independently');
+    expect(roadmap).toContain('**Parts 5–12: not implemented.**');
   });
 });

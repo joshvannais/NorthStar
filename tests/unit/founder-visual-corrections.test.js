@@ -58,6 +58,9 @@ describe('founder desktop and mobile visual corrections', () => {
     expect(communications).toContain('call-search-bar northstar-search');
     expect(team).toContain('id="teamSearchInput"');
     expect(team).toContain('function applyWorkforceSearch');
+    expect(team).toContain('function indexWorkforceCard');
+    expect(team).toContain("String(card.dataset.searchText || '').indexOf(query)");
+    expect(team).not.toContain("card.textContent.toLowerCase().indexOf(query)");
   });
 
   test('integration sections and Command Center customer cards render collapsed', () => {

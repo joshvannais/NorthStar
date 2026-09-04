@@ -110,11 +110,19 @@ and 040 interruption/retry/exact-once/rerun zero-op, and PostgreSQL 18 UTC ident
 
 ### PostgreSQL predecessor, account, and security regression
 
-- Test suites: 6 passed / 6 total
-- Tests: 78 passed / 78 total
+- Five-suite combined segment: 5 passed / 5 total; 67 passed / 67 tests
+- Isolated account-authority segment: 1 passed / 1 total; 11 passed / 11 tests
+- Aggregate exact-head result: 6 passed suites; 78 passed tests; 0 assertion failures
 - Snapshots: 0
 - Failures: 0
 - Included Part 2/Part 3 field execution, Mission 22 assignment/human approval,
   account authority, and Mission 20 security/role authority on PostgreSQL 18.4.
+
+The first all-six invocation passed 77/78 before one long-standing account-
+capability case exceeded its 300-second per-test timeout under accumulated
+suite load. That exact account suite then passed 11/11 in isolation against the
+same disposable PostgreSQL identity. No product or test source changed between
+the two invocations; the timeout is retained here rather than represented as a
+green combined attempt.
 
 All counts are writer evidence, not an independent audit or release verdict.

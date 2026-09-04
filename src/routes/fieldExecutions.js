@@ -4,6 +4,7 @@ const express = require('express');
 const db = require('../db');
 const { requireOnboardedInternal, requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
+const { rateLimit } = require('../middleware/rateLimit');
 const {
   normalizeExecutionId,
   normalizeInitialization,
@@ -50,12 +51,16 @@ function createFieldExecutionsRouter(options = {}) {
   const tenantAuth = typeof options.tenantAuth === 'function' ? options.tenantAuth : requireTenantAccess;
   const mutationAuth = typeof options.mutationAuth === 'function' ? options.mutationAuth : requireOnboardedInternal;
   const permission = typeof options.permission === 'function' ? options.permission : requirePermission;
+  const throttle = typeof options.throttle === 'function' ? options.throttle : rateLimit(
+    'internal-api',
+    req => `field-execution:${req.tenantContext.organizationId}:${req.tenantContext.userId}`
+  );
   const initialize = typeof options.initialize === 'function' ? options.initialize : initializeFieldExecution;
   const transition = typeof options.transition === 'function' ? options.transition : transitionFieldExecution;
   const read = typeof options.read === 'function' ? options.read : readFieldExecution;
 
   router.post('/appointments/:appointmentId', requireExecutionBodyBoundary,
-    mutationAuth, permission('operations', 'update'), async (req, res) => {
+    mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
       try {
         const normalized = normalizeInitialization({
           ...actor(req),
@@ -85,7 +90,7 @@ function createFieldExecutionsRouter(options = {}) {
     });
 
   router.post('/:executionId/transitions', requireExecutionBodyBoundary,
-    mutationAuth, permission('operations', 'update'), async (req, res) => {
+    mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
       try {
         const normalized = normalizeTransition({
           ...actor(req),
@@ -114,7 +119,7 @@ function createFieldExecutionsRouter(options = {}) {
       }
     });
 
-  router.get('/:executionId', tenantAuth, permission('operations', 'read'), async (req, res) => {
+  router.get('/:executionId', tenantAuth, throttle, permission('operations', 'read'), async (req, res) => {
     if (!req.query || Object.keys(req.query).length !== 0) {
       return res.status(400).json({
         success: false,

@@ -183,6 +183,7 @@ describe('Mission 23 Part 2 field-execution contract', () => {
       .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'c'.repeat(64))
       .type('application/json').send(initialization().body);
     expect(response.status).toBe(201);
+    expect(response.headers['x-ratelimit-limit']).toBe('1000');
     expect(response.headers['idempotency-replayed']).toBe('true');
     expect(response.body.requestId).toBe('original-request');
     expect(observed[0]).toMatchObject({
@@ -219,5 +220,20 @@ describe('Mission 23 Part 2 field-execution contract', () => {
     for (const laterPart of ['time-entries', 'materials', 'equipment', 'completion', 'photos']) {
       expect(source).not.toContain(`/api/v1/${laterPart}`);
     }
+  });
+
+  test('uses tenant-composite session attribution and no global-only session relationship', () => {
+    const source = fs.readFileSync(path.join(
+      __dirname, '..', '..', 'migrations', '038_canonical_field_execution_authority.sql'
+    ), 'utf8');
+    expect(source).toContain(
+      'FOREIGN KEY (organization_id,recorded_by_user_id,auth_session_id)'
+    );
+    expect(source).toContain(
+      'REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT'
+    );
+    expect(source).not.toContain(
+      'auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id)'
+    );
   });
 });

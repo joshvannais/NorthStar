@@ -307,6 +307,10 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     )).rows;
     expect(before).toHaveLength(1);
     expect(before[0].checksum).toBe(source.digest);
+    await db.close();
+    db.resetForTests();
+    expect(await db.initDatabase()).toBe(true);
+    runtimePool = db.getPool();
     expect(await db.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
     const after = (await migrationPool.query(
       `SELECT checksum,applied_at,

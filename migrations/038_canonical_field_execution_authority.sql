@@ -136,7 +136,7 @@ CREATE TABLE public.canonical_field_execution_events (
   assignment_id UUID NOT NULL,
   recorded_by_user_id UUID NOT NULL,
   performed_by_profile_id UUID NOT NULL,
-  auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id) ON DELETE RESTRICT,
+  auth_session_id UUID NOT NULL,
   action_code VARCHAR(24) NOT NULL,
   reason TEXT NOT NULL,
   before_revision BIGINT NOT NULL,
@@ -162,6 +162,9 @@ CREATE TABLE public.canonical_field_execution_events (
     REFERENCES public.canonical_schedule_assignments(organization_id,id) ON DELETE RESTRICT,
   CONSTRAINT canonical_field_execution_events_recorder_fk FOREIGN KEY (organization_id,recorded_by_user_id)
     REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_execution_events_session_fk
+    FOREIGN KEY (organization_id,recorded_by_user_id,auth_session_id)
+    REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT,
   CONSTRAINT canonical_field_execution_events_performer_fk FOREIGN KEY (organization_id,performed_by_profile_id)
     REFERENCES public.workforce_profiles(organization_id,id) ON DELETE RESTRICT,
   CONSTRAINT canonical_field_execution_events_action_check CHECK (

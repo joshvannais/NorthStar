@@ -30,7 +30,7 @@ const IDS = Object.freeze({
   viewer: 'c2000000-0000-4000-8000-000000000005',
   otherOwner: 'c2000000-0000-4000-8000-000000000006',
   crew: 'c3000000-0000-4000-8000-000000000001',
-  appointments: Array.from({ length: 49 }, (_unused, index) => {
+  appointments: Array.from({ length: 52 }, (_unused, index) => {
     const sequence = index < 8 ? index + 1 : index + 2;
     return `c4000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
   }),
@@ -1320,6 +1320,9 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     ['line separator', '\u2028simulation\u2028', 46],
     ['narrow NBSP', '\u202fdemo\u202f', 47],
     ['ideographic space', '\u3000simulation\u3000', 48],
+    ['unrecognized value', 'manual', 49],
+    ['embedded TAB', 'le\tad', 50],
+    ['zero-width ambiguity', '\u200bvoice\u200b', 51],
   ])(
     'Part 3 denies normalized non-production source with %s edges before fresh mutation, replay, and read',
     async (label, source, contextIndex) => {

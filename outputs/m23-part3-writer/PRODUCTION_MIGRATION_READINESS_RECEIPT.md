@@ -29,11 +29,10 @@ health after application, or later-start zero-op.
 
 ## Forward-correction boundary
 
-This receipt predates the independently required forward-only migration 040.
-It proves the stated production history and exact 039 readiness at the 039
-freeze; it does not prove a complete-candidate preflight for 040, the combined
-039/040 pending set, or the corrected PR head. Those facts remain unavailable
-until a new bounded read-only inspection is performed and recorded.
+The initial receipt predates the independently required forward-only migration
+040. By itself, it proves only the stated production history and exact 039
+readiness at the 039 freeze. The subsequent section records the later bounded
+combined 039+040 preflight; neither receipt covers migration 041.
 
 ## Corrected 039+040 combined preflight
 

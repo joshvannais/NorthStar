@@ -15,8 +15,8 @@
 - Second independently audited corrected head:
   `b92036215618ef2b26804fc7fce300ea3d34f331` (changes required:
   P0=0, P1=0, P2=1, P3=0)
-- Forward-only migration 041 freeze commit: pending the immutable source commit;
-  exact blob/bytes/SHA are recorded in `MIGRATION_041_IDENTITY.md` after freeze.
+- Forward-only migration 041 freeze commit: `04e1891195d5ebbbb760210cc080de753163aa19`;
+  exact blob/bytes/SHA are recorded in `MIGRATION_041_IDENTITY.md`.
 - Scope: additive canonical actual labor/time evidence tied to Part 2 field
   execution and current Mission 22 assignment authority.
 - Excluded: materials, inventory, equipment/assets, files/media, notes,
@@ -73,7 +73,7 @@ data mutation was involved.
 ### Disposable PostgreSQL 18.4 Part 2/Part 3 authority
 
 - Test suites: 1 passed / 1 total
-- Tests: 41 passed / 41 total
+- Tests: 44 passed / 44 total
 - Snapshots: 0
 - Failures: 0
 - Server: PostgreSQL 18.4, loopback port 55433, UTF8, UTC, locale C,
@@ -95,7 +95,7 @@ and PostgreSQL 18 UTC identity.
 ### Complete ratification regression
 
 - Test suites: 19 passed / 19 total
-- Tests: 329 passed / 329 total
+- Tests: 330 passed / 330 total
 - Snapshots: 0
 - Failures: 0
 
@@ -117,19 +117,20 @@ and PostgreSQL 18 UTC identity.
 
 ### PostgreSQL predecessor, account, and security regression
 
-- Five-suite combined segment: 5 passed / 5 total; 67 passed / 67 tests
+- Focused Part 2/3 suite: 1 passed / 1 total; 44 passed / 44 tests
+- Predecessor/security segment: 4 passed / 4 total; 40 passed / 40 tests
 - Isolated account-authority segment: 1 passed / 1 total; 11 passed / 11 tests
-- Aggregate exact-head result: 6 passed suites; 78 passed tests; 0 assertion failures
+- Aggregate exact-head result: 6 passed suites; 95 passed tests; 0 assertion failures
 - Snapshots: 0
 - Failures: 0
 - Included Part 2/Part 3 field execution, Mission 22 assignment/human approval,
   account authority, and Mission 20 security/role authority on PostgreSQL 18.4.
 
-The first all-six invocation passed 77/78 before one long-standing account-
-capability case exceeded its 300-second per-test timeout under accumulated
-suite load. That exact account suite then passed 11/11 in isolation against the
-same disposable PostgreSQL identity. No product or test source changed between
-the two invocations; the timeout is retained here rather than represented as a
-green combined attempt.
+At predecessor corrected head `b920362...`, the first all-six invocation passed
+77/78 before one long-standing account-capability case exceeded its 300-second
+per-test timeout under accumulated suite load; that exact account suite then
+passed 11/11 in isolation. The terminal 041 candidate was run in the same
+conservative segmented form from the outset: focused Part 2/3, four predecessor/
+security suites, and the long account-authority suite each completed green.
 
 All counts are writer evidence, not an independent audit or release verdict.

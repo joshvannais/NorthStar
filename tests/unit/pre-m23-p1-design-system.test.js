@@ -60,8 +60,8 @@ describe('Pre-Mission-23 P1 design system and employee foundation', () => {
     expect(theme).toContain("global.localStorage.setItem(STORAGE_KEY, theme)");
     expect(theme).toContain('northstar-theme-sun');
     expect(theme).toContain('northstar-theme-moon');
-    expect(css).toMatch(/\.northstar-theme-switch::before[\s\S]*width:\s*30px;[\s\S]*height:\s*30px;/);
-    expect(css).toMatch(/data-current-theme="dark"\]::before[\s\S]*translateX\(38px\)/);
+    expect(css).toMatch(/\.northstar-theme-switch::before[\s\S]*top:\s*50%;[\s\S]*left:\s*25%;[\s\S]*width:\s*34px;[\s\S]*height:\s*34px;[\s\S]*transform:\s*translate\(-50%,\s*-50%\)/);
+    expect(css).toMatch(/data-current-theme="dark"\]::before\s*\{[^}]*left:\s*75%;/s);
   });
 
   test('keeps Today responsive, compact, centered in non-ready states, and free of layout emoji', () => {

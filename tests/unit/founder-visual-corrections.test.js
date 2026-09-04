@@ -90,4 +90,11 @@ describe('founder desktop and mobile visual corrections', () => {
     expect(profile).toMatch(/\.bp-container\s*\{[^}]*max-width:\s*none[^}]*margin:\s*0/s);
     expect(shared).toMatch(/\.demo-count-pill[^}]*[\s\S]*?white-space:\s*normal\s*!important/);
   });
+
+  test('theme selector centers its circular fill over both halves of the track', () => {
+    const shared = read('public/css/site-professionalism.css');
+    expect(shared).toMatch(/\.northstar-theme-switch\s*\{[^}]*border:\s*0\s*!important;/s);
+    expect(shared).toMatch(/\.northstar-theme-switch::before\s*\{[^}]*top:\s*50%;[^}]*left:\s*25%;[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*transform:\s*translate\(-50%,\s*-50%\);/s);
+    expect(shared).toMatch(/\.northstar-theme-switch\[data-current-theme="dark"\]::before\s*\{[^}]*left:\s*75%;/s);
+  });
 });

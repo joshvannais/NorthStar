@@ -1066,6 +1066,8 @@ html body .northstar-theme-switch {
   width: 76px !important;
   min-width: 76px !important;
   height: 38px !important;
+  box-sizing: border-box;
+  border: 0 !important;
   border-radius: 999px !important;
   overflow: hidden;
   background: var(--theme-surface-soft) !important;
@@ -1076,19 +1078,19 @@ html body .northstar-theme-switch::before {
   content: '';
   position: absolute;
   z-index: 0;
-  top: 4px;
-  left: 4px;
-  width: 30px;
-  height: 30px;
+  top: 50%;
+  left: 25%;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: var(--theme-surface);
   box-shadow: 0 2px 7px rgba(15, 23, 42, .18);
-  transform: translateX(0);
-  transition: transform .2s ease;
+  transform: translate(-50%, -50%);
+  transition: left .2s ease;
 }
 
 html body .northstar-theme-switch[data-current-theme="dark"]::before {
-  transform: translateX(38px);
+  left: 75%;
 }
 
 html body .northstar-theme-switch [data-theme-icon] {

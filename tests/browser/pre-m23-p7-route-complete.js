@@ -244,6 +244,30 @@ async function semanticAudit(page) {
 
 async function founderVisualCorrectionAudit(page, entry, viewportName) {
   const route = entry.route;
+  const themeSelectorGeometry = await page.locator('[data-northstar-theme-toggle]:visible').first().evaluate(node => {
+    const track = getComputedStyle(node);
+    const selection = getComputedStyle(node, '::before');
+    return {
+      theme: node.getAttribute('data-current-theme'),
+      trackWidth: Number.parseFloat(track.width),
+      trackHeight: Number.parseFloat(track.height),
+      selectionCenterX: Number.parseFloat(selection.left),
+      selectionCenterY: Number.parseFloat(selection.top),
+      selectionWidth: Number.parseFloat(selection.width),
+      selectionHeight: Number.parseFloat(selection.height),
+    };
+  });
+  const expectedSelectionCenterX = themeSelectorGeometry.trackWidth *
+    (themeSelectorGeometry.theme === 'dark' ? .75 : .25);
+  assert.ok(Math.abs(themeSelectorGeometry.selectionCenterX - expectedSelectionCenterX) <= .5,
+    `${viewportName} ${route} centers the selected theme circle over its horizontal half`);
+  assert.ok(Math.abs(themeSelectorGeometry.selectionCenterY - themeSelectorGeometry.trackHeight / 2) <= .5,
+    `${viewportName} ${route} centers the selected theme circle vertically`);
+  assert.ok(Math.abs(themeSelectorGeometry.selectionWidth - themeSelectorGeometry.selectionHeight) <= .5,
+    `${viewportName} ${route} keeps the selected theme fill circular`);
+  assert.ok(themeSelectorGeometry.selectionWidth >= themeSelectorGeometry.trackHeight - 4,
+    `${viewportName} ${route} fills the selected half without an excessive inner gap`);
+
   if (route === '/') {
     assert.strictEqual(await page.locator('.pricing-feature-list').count(), 3,
       `${viewportName} pricing publishes an included-items list for each public plan`);

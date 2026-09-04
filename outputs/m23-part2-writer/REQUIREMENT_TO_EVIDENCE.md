@@ -5,7 +5,7 @@
 - Released base: `935a27e94f5df2869308a1b1ac691d212f35ae94`
 - Branch: `mission23/part2-field-execution`
 - Exact candidate migration-freeze commit:
-  `94cee07e5400ec815a7818707a3613ea505cc86f`
+  `71cd80bd17bd28870ce71316543036fe0934d8f2`
 - Scope: Part 2 canonical field-execution identity/current state/immutable
   evidence/server authority only.
 - Excluded: Parts 3–12, all UI, provider/configuration/production mutations, and
@@ -22,11 +22,11 @@
 | Immutable, gap-free, atomic evidence | Current state, event, revision, audit, and idempotency response share transaction/effect identity; deferred completeness guard rejects partial writes; immutable triggers reject update/delete/truncate. Forced audit failure test leaves all five authorities unchanged. | Pass |
 | Server-derived authorization and individual attribution | Route accepts no tenant/role/actor/performer authority fields. PostgreSQL reloads exact tenant user, membership, workforce profile, session, CSRF, subscription, onboarding, assignment, crew, appointment, and non-demo transcript evidence. Actor and performer are persisted separately and database-derived. | Pass |
 | Scope matrix | Owner/admin tenant-wide; member direct/current-crew assignment only; dispatcher operational role grants nothing; viewer mutation denied; inactive/stale/forged/cross-tenant authority fails closed. Read entry point is tenant-private and member assignment-bounded. | Pass for covered adversarial cases |
-| Revision/digest/idempotency/concurrency | DB-computed SHA-256 current/request digests, exact current/source pins, hashed bounded idempotency key, advisory replay lock, serializable writes, repeatable-read read-only reads, bounded retries. Exact replay returns stored response; mismatched key reuse rejects; concurrent different keys yield one winner; same key yields one effect. | Pass |
+| Revision/digest/idempotency/concurrency | DB-computed SHA-256 current/request digests, exact current/source pins, hashed bounded idempotency key, advisory replay lock, serializable writes, repeatable-read read-only reads, bounded retries. Exact replay returns the stored response only after current authority revalidation; a benign assignment revision preserves replay while reassignment, crew removal, dispatch/assignment loss, appointment ineligibility, demo-source invalidation, subscription/session/account/membership/permission loss fail closed. Rejected replays leave current state, every immutable evidence count, and both stored responses byte-for-byte unchanged. Mismatched key reuse rejects; concurrent different keys yield one winner; same key yields one effect. | Pass in disposable PostgreSQL; independent re-audit pending |
 | Minimum mounted HTTP contract | Raw boundary precedes the general parser. Two POST routes and one GET route are mounted before legacy retirement. Authenticated routes use the existing internal-API availability rate limiter keyed by server-derived tenant/account; database timeouts and locks bound concurrent work. Tests cover exact JSON, duplicate keys, compression, 32 KiB, injected authority, stored replay response, and fail-closed missing boundary. | Pass |
 | Runtime least privilege | `src/db.js` revokes direct privileges to five tables and all helper functions; runtime receives only the initialize/transition/read entry points. Runtime direct select/insert/helper execution fails with `42501`. | Pass |
 | Legacy/demo isolation and predecessor preservation | Demo/simulation transcript sources cannot create/read Part 2 authority; `/api/v1/jobs`, workflows, and legacy assets remain retired; protected migrations 001–037 are unchanged and checksum regression is green. | Pass for source/DB boundary; no browser UI exists |
-| Exact migration identity | `MIGRATION_IDENTITY.md`: blob `4e9697acd5290c4c01b89d8c0bacb20039784ba6`, 62,286 bytes, SHA-256 and runner checksum `9ccc85101d72d7535269ab2ceb8b28627b22801ee5992d226512941d9cb59657`. | Pass |
+| Exact migration identity | `MIGRATION_IDENTITY.md`: blob `9601ae8219f29da02440282dd9a5a3b13076ed34`, 65,393 bytes, SHA-256 and runner checksum `84a0b65ec8cd01ff97043b66a543e30540e9a0bbb68a48c4b49415db3b766724`. | Pass |
 | Fresh automatic application | Production-path `initDatabase()` against separated migration/runtime roles on disposable PostgreSQL 18.4 applies 001–038, records one exact 038 checksum row, and verifies runtime grants. | Pass in disposable PostgreSQL only |
 | Interrupted upgrade transaction, retry, exact-once ledger, and zero-op | A database first receives 001–037, an explicit 038 transaction is forced to fail and rolls back with no table/ledger row, then the normal runner applies 038 once. A second runner invocation leaves the same one row and timestamp. The primary suite closes/resets/reinitializes the application database path, then rechecks the unchanged row/timestamp. | Pass in disposable PostgreSQL only |
 | PostgreSQL/time compatibility | Disposable PostgreSQL 18.4 reports UTF8, `TimeZone=UTC`, `lc_collate=C`, and data checksums on. The dated production receipt reports PostgreSQL 18.6, `Etc/UTC`, UTF8, and `en_US.utf8` collation/ctype with exact history compatibility. | Pass for pre-application compatibility; post-application evidence pending |
@@ -41,7 +41,7 @@
 `tests/unit/m23-part2-field-execution.test.js`
 
 - Test suites: 1 passed / 1 total
-- Tests: 14 passed / 14 total
+- Tests: 15 passed / 15 total
 - Snapshots: 0
 - Failures: 0
 
@@ -50,10 +50,10 @@
 `tests/integration/m23-part2-field-execution-postgres.test.js`
 
 - Test suites: 1 passed / 1 total
-- Tests: 10 passed / 10 total
+- Tests: 12 passed / 12 total
 - Snapshots: 0
 - Failures: 0
-- Server: PostgreSQL 18.4, `127.0.0.1:55482`, UTF8, UTC, locale C,
+- Server: PostgreSQL 18.4, `127.0.0.1:55483`, UTF8, UTC, locale C,
   data checksums on
 - Disposable data directory:
   `C:/Users/joshv/Documents/Codex/2026-09-04/m23-p2-pg18-data`
@@ -69,7 +69,7 @@
 Result:
 
 - Test suites: 5 passed / 5 total
-- Tests: 90 passed / 90 total
+- Tests: 91 passed / 91 total
 - Snapshots: 0
 - Failures: 0
 
@@ -87,7 +87,7 @@ Result:
 `tests/unit`
 
 - Test suites: 89 passed / 89 total
-- Tests: 5,281 passed / 5,281 total
+- Tests: 5,282 passed / 5,282 total
 - Snapshots: 0
 - Failures: 0
 
@@ -100,7 +100,20 @@ Result:
 Result:
 
 - Test suites: 3 passed / 3 total
-- Tests: 41 passed / 41 total
+- Tests: 43 passed / 43 total
+- Snapshots: 0
+- Failures: 0
+
+### PostgreSQL account, security, and role-authority regression
+
+- `tests/api/account-authority-gates-postgres.test.js`
+- `tests/api/m20-phase7-lane1-security-postgres.test.js`
+- `tests/api/m20-phase7-lane3-role-authority-postgres.test.js`
+
+Result:
+
+- Test suites: 3 passed / 3 total
+- Tests: 20 passed / 20 total
 - Snapshots: 0
 - Failures: 0
 

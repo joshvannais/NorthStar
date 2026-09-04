@@ -4,7 +4,8 @@
 
 - Pre-application authoritative history and PostgreSQL compatibility were
   obtained read-only and are recorded separately in
-  `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`. They are no longer unavailable.
+  `PRODUCTION_MIGRATION_READINESS_RECEIPT.md` against the corrected frozen 038
+  bytes. They are no longer unavailable.
 - Production automatic-runner invocation, exact-once application of migration
   038, its one production ledger row, process interruption behavior, second-run
   zero-op, and application-restart zero-op were not observed.

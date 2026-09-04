@@ -2,7 +2,7 @@
 
 ## Read-only reconciliation
 
-- Verification completed: `2026-09-04T05:14:41.190Z`.
+- Verification completed: `2026-09-04T06:02:10.065Z`.
 - Tool: authenticated Railway CLI `v5.30.3` with explicit project,
   production-environment, and Postgres-service selectors. Provider identifiers
   are intentionally omitted from this repository artifact.
@@ -21,14 +21,15 @@ Production reported:
   `037_polaris_provider_usage_authority.sql`.
 
 Every production ledger checksum was recalculated against the exact candidate
-source commit `94cee07e5400ec815a7818707a3613ea505cc86f`. The candidate
+source freeze commit `71cd80bd17bd28870ce71316543036fe0934d8f2` and Git blob
+`9601ae8219f29da02440282dd9a5a3b13076ed34`. The candidate
 contains 36 migration files. Result: zero missing applied sources, zero checksum
 mismatches, and exactly one source migration not yet applied:
 
 - `038_canonical_field_execution_authority.sql`;
-- 62,286 bytes; and
+- 65,393 bytes; and
 - SHA-256
-  `9ccc85101d72d7535269ab2ceb8b28627b22801ee5992d226512941d9cb59657`.
+  `84a0b65ec8cd01ff97043b66a543e30540e9a0bbb68a48c4b49415db3b766724`.
 
 This receipt proves pre-application history and version/time/encoding/locale
 compatibility evidence. It does not claim that production applied migration

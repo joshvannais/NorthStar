@@ -107,6 +107,16 @@ transactions; reads use repeatable-read, read-only snapshots. PostgreSQL compute
 the canonical request and current-state digests, hashes idempotency keys, locks
 replay identity, rejects stale pins, and requires current state plus matching
 immutable event/revision/audit/idempotency evidence to commit atomically.
+Before either mutation entry point returns an exact cached response, PostgreSQL
+revalidates the active actor/session/subscription authority and reloads the
+stored execution's exact current assignment, appointment, and transcript links.
+The replay remains available across a benign assignment revision only while the
+actor still has direct or current active-crew scope, dispatch remains current,
+the appointment remains eligible, and the source remains non-demo. Reassignment,
+crew removal or actor inactivation, dispatch or assignment revocation,
+appointment completion/cancellation, demo-source invalidation, subscription or
+session loss, and permission loss fail closed before cached response disclosure
+without inserting or changing any current, history, audit, or replay evidence.
 
 No Part 2 route writes schedule/dispatch state, time, labor, materials,
 inventory, equipment, vehicles, machinery, files, notes, progress, blockers,

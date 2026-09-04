@@ -86,6 +86,12 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     expect(server).toContain("app.use('/api/v1/field-executions'");
     expect(server).not.toMatch(/time-entries|material-usage|equipment-usage|execution-completion/);
     expect(roadmap).toContain('No Part 2 route writes schedule/dispatch state, time, labor, materials,');
+    expect(roadmap).toContain(
+      'Before either mutation entry point returns an exact cached response, PostgreSQL'
+    );
+    expect(roadmap).toContain(
+      'without inserting or changing any current, history, audit, or replay evidence.'
+    );
   });
 
   test('preserves accepted authorities instead of reviving or relabeling legacy state', () => {
@@ -254,15 +260,22 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     expect(unavailableLedger).toContain('No destructive database rollback is assumed.');
 
     expect(part2MigrationIdentity).toContain('`migrations/038_canonical_field_execution_authority.sql`');
-    expect(part2MigrationIdentity).toContain('`4e9697acd5290c4c01b89d8c0bacb20039784ba6`');
-    expect(part2MigrationIdentity).toContain('`62286` bytes');
-    expect(part2MigrationIdentity).toContain('`9ccc85101d72d7535269ab2ceb8b28627b22801ee5992d226512941d9cb59657`');
+    expect(part2MigrationIdentity).toContain('`9601ae8219f29da02440282dd9a5a3b13076ed34`');
+    expect(part2MigrationIdentity).toContain('`65393` bytes');
+    expect(part2MigrationIdentity).toContain('`84a0b65ec8cd01ff97043b66a543e30540e9a0bbb68a48c4b49415db3b766724`');
     expect(part2RequirementLedger).toContain('Fresh automatic application');
     expect(part2RequirementLedger).toContain('Interrupted upgrade transaction, retry, exact-once ledger, and zero-op');
-    expect(part2ProductionReceipt).toContain('`2026-09-04T05:14:41.190Z`');
-    expect(part2ProductionReceipt).toContain('`94cee07e5400ec815a7818707a3613ea505cc86f`');
-    expect(part2ProductionReceipt).toContain('62,286 bytes');
-    expect(part2ProductionReceipt).toContain('`9ccc85101d72d7535269ab2ceb8b28627b22801ee5992d226512941d9cb59657`');
+    expect(part2RequirementLedger).toContain(
+      'Exact replay returns the stored response only after current authority revalidation'
+    );
+    expect(part2RequirementLedger).toContain(
+      'PostgreSQL account, security, and role-authority regression'
+    );
+    expect(part2ProductionReceipt).toContain('`2026-09-04T06:02:10.065Z`');
+    expect(part2ProductionReceipt).toContain('`71cd80bd17bd28870ce71316543036fe0934d8f2`');
+    expect(part2ProductionReceipt).toContain('`9601ae8219f29da02440282dd9a5a3b13076ed34`');
+    expect(part2ProductionReceipt).toContain('65,393 bytes');
+    expect(part2ProductionReceipt).toContain('`84a0b65ec8cd01ff97043b66a543e30540e9a0bbb68a48c4b49415db3b766724`');
     expect(part2ProductionReceipt).toContain('PostgreSQL `18.6`');
     expect(part2ProductionReceipt).toContain('35 authoritative `_migrations` ledger rows');
     expect(part2ProductionReceipt).toMatch(/zero checksum\s+mismatches/);

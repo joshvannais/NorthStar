@@ -16,11 +16,14 @@ knowledge authorities without replacing any of them.
   `e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`. The exact migration 038 row,
   healthy first start, later automatic container start with no migration
   application, and unchanged one-row checksum/timestamp are recorded.
-- **Part 3: audit-correction writer candidate in progress; not independently
-  re-audited, merged, deployed, or production-accepted.** The independent audit
-  of first candidate head `a08421e601a0125a89298c3dca68dea2e1d888b1`
-  required one P1 and two P2 corrections. The forward-only migration 040
-  candidate addresses those findings; no writer result is a release claim.
+- **Part 3: terminal audit-correction writer candidate in progress; not
+  independently re-audited, merged, deployed, or production-accepted.** The
+  independent audit of first candidate head
+  `a08421e601a0125a89298c3dca68dea2e1d888b1` required one P1 and two P2
+  corrections. A second independent audit of corrected head
+  `b92036215618ef2b26804fc7fce300ea3d34f331` found no P0/P1 finding and one
+  remaining P2 transcript-source normalization gap. Forward-only migration 041
+  is the writer correction candidate; no writer result is a release claim.
 - **Parts 4–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
@@ -170,7 +173,18 @@ migration 040 redefines only the two labor entry functions: any review that
 would restore authoritative evidence now passes the same serialized worker-wide
 overlap gate before an evidence write; both manual/correction endpoints must be
 no more than five minutes in the future; and every Part 3 mutation/read source
-gate, including the pre-replay path, uses `lower(btrim(source))`.
+gate, including the pre-replay path, uses case-folded space trimming.
+
+The second independent audit proved that PostgreSQL's default `btrim(source)`
+does not remove TAB, newline, or other non-space edge characters, so a source
+such as TAB + `demo` + TAB could bypass the 040 denylist on mutation, exact
+replay, and read. Migrations 039 and 040 remain byte-for-byte frozen.
+Forward-only migration 041 installs one fail-closed classifier used by both
+Part 3 entry functions before replay or disclosure. It explicitly trims the
+ASCII whitespace characters TAB, LF, VT, FF, CR, and space plus the Unicode
+White_Space edge set; accepts only the canonical production sources `lead`,
+`retell`, and `voice`; and rejects demo, simulation, unknown, embedded-control,
+and otherwise ambiguous values.
 Observed or manually entered intervals are evidence of recorded operational
 time. They are not payroll timecards, wages, billable hours, customer pricing,
 profitability, overtime/break compliance, tax, employment classification,

@@ -158,10 +158,13 @@ describe('Mission 23 Part 3 labor/time contract', () => {
       '039_canonical_labor_time_evidence.sql'), 'utf8');
     const migration040 = fs.readFileSync(path.join(root, 'migrations',
       '040_canonical_labor_time_audit_corrections.sql'), 'utf8');
+    const migration041 = fs.readFileSync(path.join(root, 'migrations',
+      '041_canonical_labor_transcript_source_authority.sql'), 'utf8');
     expect(migration039).toContain('Observed or entered operational time evidence only');
-    expect(migration040).toContain(
-      "lower(btrim(transcript.source)) NOT IN ('simulation','demo')"
+    expect(migration041).toContain(
+      "canonical_labor_transcript_source_normalized(transcript.source) IN ('lead','retell','voice')"
     );
+    expect(migration041).toContain("NOT IN ('demo','lead','retell','simulation','voice')");
     expect(migration040).toContain(
       "OR observed_end_value>transaction_timestamp()+INTERVAL '5 minutes'"
     );
@@ -169,13 +172,14 @@ describe('Mission 23 Part 3 labor/time contract', () => {
       "review_state_value<>'rejected' AND action_value IN " +
       "('start_timer','record_manual','correct','review')"
     );
-    expect((migration040.match(/lower\(btrim\(transcript\.source\)\)/g) || []))
+    expect((migration041.match(/canonical_labor_transcript_source_normalized\(transcript\.source\)/g) || []))
       .toHaveLength(2);
-    expect(migration040).not.toContain("transcript.source NOT IN ('simulation','demo')");
+    expect(migration041).not.toContain("lower(btrim(transcript.source))");
     expect(migration039).not.toContain('CREATE TABLE public.canonical_material');
     expect(migration040).not.toContain('CREATE TABLE');
     expect(migration039).not.toContain('latitude');
     expect(migration040).not.toContain('latitude');
+    expect(migration041).not.toContain('latitude');
     const changedRuntime = ['src/db.js', 'src/operations/contract.js',
       'src/operations/httpBoundary.js', 'src/operations/repository.js', 'src/routes/fieldExecutions.js'];
     for (const file of changedRuntime) expect(file).not.toMatch(/public[\\/]|views?[\\/]|browser[\\/]/);

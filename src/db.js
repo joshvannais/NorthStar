@@ -1167,6 +1167,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_labor_request_digest(uuid,uuid,uuid,uuid,text,uuid,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text) FROM %I', runtime_role
         );
+        IF pg_catalog.to_regprocedure('public.canonical_labor_transcript_source_normalized(text)') IS NOT NULL THEN
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL ON FUNCTION public.canonical_labor_transcript_source_normalized(text) FROM %I', runtime_role
+          );
+        END IF;
         EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text) TO %I', runtime_role
         );
@@ -1392,6 +1397,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_labor_guard_current()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_labor_validate_complete()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_labor_request_digest(uuid,uuid,uuid,uuid,text,uuid,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text)','EXECUTE')
+         AND (to_regprocedure('public.canonical_labor_transcript_source_normalized(text)') IS NULL
+           OR NOT has_function_privilege($1,'public.canonical_labor_transcript_source_normalized(text)','EXECUTE'))
        )) AS labor_helpers_withheld,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')

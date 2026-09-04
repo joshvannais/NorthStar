@@ -9,12 +9,13 @@
   evidence seal, and cleanup have not occurred. Writer tests do not substitute
   for them.
 - Authoritative read-only production migration-history/checksum reconciliation,
-  PostgreSQL UTC/locale compatibility, and exact frozen 039 pending state are
-  recorded in `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`; that receipt
-  predates migration 040 and is not complete-candidate preflight evidence.
-  A new read-only production history/compatibility preflight covering exact
-  frozen 039 plus 040 is unavailable and not claimed.
-- Production first application, exact one-row 039 and 040 ledger identities,
+  PostgreSQL UTC/locale compatibility, and exact frozen 039+040 pending state
+  against corrected head `b920362...` are recorded in
+  `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`. That combined receipt predates
+  migration 041 and is not terminal-candidate preflight evidence. A new
+  read-only production history/compatibility preflight covering exact frozen
+  039+040+041 is unavailable and not claimed.
+- Production first application, exact one-row 039, 040, and 041 ledger identities,
   automatic-runner log, later-start zero-op, and unchanged checksums/timestamps
   have not occurred and are not claimed.
 - Production interruption/retry is not induced. Disposable PostgreSQL 18.4

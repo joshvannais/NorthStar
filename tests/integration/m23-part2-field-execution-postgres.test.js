@@ -14,6 +14,7 @@ const MIGRATIONS = path.join(ROOT, 'migrations');
 const MIGRATION = '038_canonical_field_execution_authority.sql';
 const LABOR_MIGRATION = '039_canonical_labor_time_evidence.sql';
 const LABOR_CORRECTION_MIGRATION = '040_canonical_labor_time_audit_corrections.sql';
+const LABOR_SOURCE_MIGRATION = '041_canonical_labor_transcript_source_authority.sql';
 const LABOR_CATEGORY_VERSION = 'm23-labor-category-v1';
 const LABOR_CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -29,7 +30,7 @@ const IDS = Object.freeze({
   viewer: 'c2000000-0000-4000-8000-000000000005',
   otherOwner: 'c2000000-0000-4000-8000-000000000006',
   crew: 'c3000000-0000-4000-8000-000000000001',
-  appointments: Array.from({ length: 37 }, (_unused, index) => {
+  appointments: Array.from({ length: 49 }, (_unused, index) => {
     const sequence = index < 8 ? index + 1 : index + 2;
     return `c4000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
   }),
@@ -120,7 +121,7 @@ function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
-async function seedAppointment(pool, organizationId, appointmentId, source = 'manual') {
+async function seedAppointment(pool, organizationId, appointmentId, source = 'lead') {
   const sequence = appointmentId.slice(-2);
   const operationId = `c5000000-0000-4000-8000-0000000000${sequence}`;
   const graphId = `c6000000-0000-4000-8000-0000000000${sequence}`;
@@ -299,6 +300,31 @@ async function laborEvidence(pool, intervalId) {
        FROM public.canonical_labor_intervals current_interval
       WHERE current_interval.id=$1`,
     [intervalId]
+  )).rows[0];
+}
+
+async function laborExecutionEvidence(pool, executionId) {
+  return (await pool.query(
+    `SELECT
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_intervals row_value
+         WHERE row_value.execution_id=$1) AS current_rows,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_events row_value
+         WHERE row_value.execution_id=$1) AS events,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_revisions row_value
+          JOIN public.canonical_labor_intervals current_interval
+            ON current_interval.organization_id=row_value.organization_id
+           AND current_interval.id=row_value.interval_id
+         WHERE current_interval.execution_id=$1) AS revisions,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_audit_events row_value
+         WHERE row_value.execution_id=$1) AS audits,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.idempotency_key_hash),'[]'::jsonb)
+          FROM public.canonical_labor_idempotency row_value
+         WHERE row_value.execution_id=$1) AS idempotency`,
+    [executionId]
   )).rows[0];
 }
 
@@ -1264,16 +1290,46 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     expect(await laborEvidence(migrationPool, recorded.id)).toEqual(beforeCorrection);
   });
 
-  test.each([[' Demo ', 35], [' SIMULATION ', 36]])(
-    'Part 3 normalizes %p transcript source for mutation, read, and replay denial',
-    async (source, contextIndex) => {
+  test('Part 3 transcript-source classifier accepts only the canonical vocabulary after explicit edge normalization', async () => {
+    const cases = [
+      [' Lead ', 'lead'], ['\tRETELL\u00a0', 'retell'], ['\u2003VoIcE\u3000', 'voice'],
+      ['\ndEmO\r', 'demo'], ['\u202fSIMULATION\u205f', 'simulation'],
+      ['manual', null], ['lead\t', 'lead'], ['le\tad', null], ['\u200bvoice\u200b', null],
+      ['retell-webhook', null], ['customer', null],
+    ];
+    const normalized = (await migrationPool.query(
+      `SELECT public.canonical_labor_transcript_source_normalized(source_value) AS normalized
+         FROM unnest($1::text[]) WITH ORDINALITY AS source_values(source_value,position)
+        ORDER BY position`, [cases.map(item => item[0])]
+    )).rows.map(row => row.normalized);
+    expect(normalized).toEqual(cases.map(item => item[1]));
+  });
+
+  test.each([
+    ['ASCII space', ' Demo ', 35],
+    ['TAB', '\tdemo\t', 36],
+    ['LF', '\ndemo\n', 37],
+    ['CR', '\rdemo\r', 38],
+    ['form feed', '\fdemo\f', 39],
+    ['vertical tab', '\vdemo\v', 40],
+    ['case variant', 'DeMo', 41],
+    ['NBSP', '\u00a0demo\u00a0', 42],
+    ['Ogham space', '\u1680simulation\u1680', 43],
+    ['en quad', '\u2000simulation\u2000', 44],
+    ['em space', '\u2003demo\u2003', 45],
+    ['line separator', '\u2028simulation\u2028', 46],
+    ['narrow NBSP', '\u202fdemo\u202f', 47],
+    ['ideographic space', '\u3000simulation\u3000', 48],
+  ])(
+    'Part 3 denies normalized non-production source with %s edges before fresh mutation, replay, and read',
+    async (label, source, contextIndex) => {
       const context = await createStartedExecution(contextIndex);
-      const recordedHour = contextIndex === 35 ? '09' : '11';
+      const recordedHour = String(contextIndex - 35).padStart(2, '0');
       const replayInput = labor({
         ...context, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
-        observedStart: `2026-08-15T${recordedHour}:00:00-04:00`,
-        observedEnd: `2026-08-15T${recordedHour}:30:00-04:00`,
-        key: `m23-p3-normalized-source-${source.trim().toLowerCase()}-01`,
+        observedStart: `2026-08-16T${recordedHour}:00:00-04:00`,
+        observedEnd: `2026-08-16T${recordedHour}:30:00-04:00`,
+        key: `m23-p3-source-replay-${contextIndex}-01`,
       }, sessions.member, 'member', timeAuthority);
       const recorded = (await repository.mutateLaborTime(runtimePool, replayInput)).body.data;
       await migrationPool.query(
@@ -1285,33 +1341,21 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
             AND transcript.graph_id=execution.graph_id`,
         [IDS.organization, source, context.execution.id]
       );
-      try {
-        const before = await laborEvidence(migrationPool, recorded.id);
-        await expect(repository.mutateLaborTime(runtimePool, replayInput))
-          .rejects.toMatchObject({ status: 404 });
-        await expect(repository.mutateLaborTime(runtimePool, labor({
-          ...context, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
-          observedStart: '2026-08-15T10:00:00-04:00',
-          observedEnd: '2026-08-15T10:30:00-04:00',
-          key: `m23-p3-normalized-source-new-${source.trim().toLowerCase()}-01`,
-        }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({ status: 404 });
-        await expect(repository.readLaborTime(runtimePool, {
-          organizationId: IDS.organization, actorUserId: IDS.member,
-          actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
-          executionId: context.execution.id,
-        })).rejects.toMatchObject({ status: 404 });
-        expect(await laborEvidence(migrationPool, recorded.id)).toEqual(before);
-      } finally {
-        await migrationPool.query(
-          `UPDATE public.canonical_transcripts transcript SET source='manual'
-             FROM public.canonical_field_executions execution
-            WHERE execution.organization_id=$1 AND execution.id=$2
-              AND transcript.organization_id=execution.organization_id
-              AND transcript.operation_id=execution.operation_id
-              AND transcript.graph_id=execution.graph_id`,
-          [IDS.organization, context.execution.id]
-        );
-      }
+      const before = await laborExecutionEvidence(migrationPool, context.execution.id);
+      await expect(repository.mutateLaborTime(runtimePool, replayInput))
+        .rejects.toMatchObject({ status: 404 });
+      await expect(repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
+        observedStart: `2026-08-17T${recordedHour}:00:00-04:00`,
+        observedEnd: `2026-08-17T${recordedHour}:30:00-04:00`,
+        key: `m23-p3-source-fresh-${contextIndex}-01`,
+      }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({ status: 404 });
+      await expect(repository.readLaborTime(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      })).rejects.toMatchObject({ status: 404 });
+      expect(await laborExecutionEvidence(migrationPool, context.execution.id)).toEqual(before);
     }
   );
 
@@ -1319,6 +1363,7 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     for (const sql of [
       'SELECT * FROM public.canonical_labor_intervals LIMIT 1',
       "SELECT public.canonical_labor_reason_valid('bypass')",
+      "SELECT public.canonical_labor_transcript_source_normalized('lead')",
       `SELECT public.canonical_labor_projection(NULL::public.canonical_labor_intervals)`,
     ]) await expect(runtimePool.query(sql)).rejects.toMatchObject({ code: '42501' });
     const event = (await migrationPool.query(
@@ -1377,6 +1422,89 @@ realPostgres('Mission 23 Part 2 migration interruption and retry', () => {
       expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
       const final = (await migrationPool.query(
         'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1', [MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+    } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 3 transcript-source migration interruption and retry', () => {
+  test('rolls back interrupted 041, then applies once and restarts as zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p3-source-retry');
+    const roles = await createRoles(database, 'p3-source-retry');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p3-source-'));
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < LABOR_SOURCE_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({
+        pool: migrationPool, runtimePool, migrationsDirectory: temporary,
+      })).toBe(true);
+      const before = (await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition;
+      expect(before).toContain('lower(btrim(transcript.source))');
+      expect((await migrationPool.query(
+        "SELECT to_regprocedure('public.canonical_labor_transcript_source_normalized(text)') AS helper"
+      )).rows[0].helper).toBeNull();
+      const client = await migrationPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fs.readFileSync(
+          path.join(MIGRATIONS, LABOR_SOURCE_MIGRATION), 'utf8'
+        ));
+        await expect(client.query('SELECT public.m23_part3_041_forced_interruption()'))
+          .rejects.toBeDefined();
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      expect((await migrationPool.query(
+        "SELECT to_regprocedure('public.canonical_labor_transcript_source_normalized(text)') AS helper"
+      )).rows[0].helper).toBeNull();
+      expect((await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition).toBe(before);
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [LABOR_SOURCE_MIGRATION]
+      )).rows[0].count).toBe(0);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const source = localDb.loadMigrations(MIGRATIONS)
+        .find(item => item.file === LABOR_SOURCE_MIGRATION);
+      const applied = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1',
+        [LABOR_SOURCE_MIGRATION]
+      )).rows;
+      expect(applied).toHaveLength(1);
+      expect(applied[0].checksum).toBe(source.digest);
+      const installed = (await migrationPool.query(
+        `SELECT to_regprocedure('public.canonical_labor_transcript_source_normalized(text)')::text AS helper,
+                pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+                ) AS definition`
+      )).rows[0];
+      expect(installed.helper).toBe('canonical_labor_transcript_source_normalized(text)');
+      expect(installed.definition).toContain('canonical_labor_transcript_source_normalized(transcript.source)');
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const final = (await migrationPool.query(
+        'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1',
+        [LABOR_SOURCE_MIGRATION]
       )).rows[0];
       expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
       expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());

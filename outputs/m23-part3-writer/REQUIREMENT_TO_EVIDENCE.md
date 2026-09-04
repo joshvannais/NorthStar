@@ -12,6 +12,11 @@
   `a08421e601a0125a89298c3dca68dea2e1d888b1` (changes required:
   P0=0, P1=1, P2=2, P3=0)
 - Forward-only migration 040 freeze commit: `d66974d32f6c61849b0a432e02fc82093d4d0628`
+- Second independently audited corrected head:
+  `b92036215618ef2b26804fc7fce300ea3d34f331` (changes required:
+  P0=0, P1=0, P2=1, P3=0)
+- Forward-only migration 041 freeze commit: pending the immutable source commit;
+  exact blob/bytes/SHA are recorded in `MIGRATION_041_IDENTITY.md` after freeze.
 - Scope: additive canonical actual labor/time evidence tied to Part 2 field
   execution and current Mission 22 assignment authority.
 - Excluded: materials, inventory, equipment/assets, files/media, notes,
@@ -47,13 +52,13 @@ data mutation was involved.
 | Safe operational summaries | Read authority returns bounded interval projections and category totals/counts. It explicitly labels observations as operational evidence, not payroll, wage, billable, price, profitability, overtime/break, tax, or legal conclusions. | Pass |
 | Strict HTTP boundary | Raw boundary owns only `POST /api/v1/field-executions/:executionId/labor-actions`; it rejects compressed, duplicate-key, malformed UTF-8/JSON, oversized, or pre-parsed bodies. Contract uses exact keys, NFC/control checks, fixed limits, required idempotency, revision/digest/source pins, and rejects injected/inapplicable authority fields. `GET /:executionId/labor` rejects query strings. | Passed focused unit |
 | Safe response/oracle behavior and bounded resources | Existing tenant authentication, permission and server-derived rate limiting apply; route responses are `no-store`; unavailable errors are generic; PostgreSQL statement/lock/transaction timeouts and capped reads bound work. | Passed focused unit and PostgreSQL |
-| Runtime least privilege | `src/db.js` revokes direct privileges on all five labor tables and every helper, grants only labor mutate/read entry points, and verifies the privilege boundary on startup. Runtime direct SQL/helper calls fail with `42501`. | Pass |
-| Demo/simulation exclusion | Mutation and read entry points join the exact execution graph to its transcript and exclude `demo`/`simulation` after `lower(btrim(source))` normalization. This check occurs before idempotency replay disclosure. Mixed-case and whitespace variants fail closed for new mutation, exact replay, and read with zero effects. | Corrected after P2 audit finding; focused PostgreSQL pass |
+| Runtime least privilege | `src/db.js` revokes direct privileges on all five labor tables and every helper, including the 041 source classifier, grants only labor mutate/read entry points, and verifies the privilege boundary on startup. Runtime direct SQL/helper calls fail with `42501`. | Pass |
+| Demo/simulation and ambiguous-source exclusion | Mutation and read entry points join the exact execution graph to its transcript and invoke the single 041 classifier before idempotency replay or disclosure. The classifier explicitly removes ASCII TAB/LF/VT/FF/CR/space and Unicode White_Space edges, recognizes only `demo`, `lead`, `retell`, `simulation`, and `voice`, and permits labor only for `lead`/`retell`/`voice`. Demo, simulation, unknown, embedded-control, and ambiguous values fail closed for fresh mutation, exact replay, and read with zero current/history/audit/idempotency effects. | Corrected after terminal P2 audit finding; table-driven focused PostgreSQL pass |
 | No payroll/legal inference | Roadmap, read response, schema comments, and unavailable ledger distinguish observed/entered operational time from payroll, wages, overtime/break compliance, billable/customer price, employment, tax, union, monitoring/consent, geolocation, and profitability conclusions. No wage/rate fields exist. | Pass |
-| Part 2/M20–M32 preservation | Frozen migration 039 and migrations 001–038 are unchanged. Migration 040 only replaces the two Part 3 entry functions. Part 2 lifecycle remains `not_started`/`in_progress`/`paused`, and Part 3 adds no later-domain authority. | Pass in focused and protected-migration regression |
+| Part 2/M20–M32 preservation | Migrations 001–040 are unchanged. Migration 041 adds one Part 3 classifier and replaces only the two Part 3 entry functions. Part 2 lifecycle remains `not_started`/`in_progress`/`paused`, and Part 3 adds no later-domain authority. | Pass in focused and protected-migration regression |
 | Rendered-surface boundary | The candidate changes no `public`, `views`, browser, CSS, or UI files. This proves no Part 3 rendered-surface diff, not browser/founder visual approval. The Part 9 contract now requires the current deployed NorthStar design system as the minimum bar. | Pass for source scope; visual acceptance not applicable |
-| Migration runner, exact-once, retry, and local restart zero-op | Normal application runner applies 001–040 using separated migration/runtime roles. Forced 039 and 040 transaction interruptions leave no target effect/ledger row; retry applies each exactly once; rerun preserves one row/checksum/timestamp. Primary runtime restart verifies the normal runner and privileges. | Pass in disposable PostgreSQL 18.4 |
-| Production history/recovery truth | Exact 039 and 040 Git identities are recorded separately. The dated read-only receipt proves production history compatibility and exact 039 pending only at the earlier 039 freeze; it predates 040 and does not yet prove the complete correction candidate preflight. No backup receipt or restore rehearsal is available; conservative forward-fix/no destructive rollback disposition remains. | 039 preflight passed; 040 production preflight unavailable and not claimed |
+| Migration runner, exact-once, retry, and local restart zero-op | Normal application runner applies 001–041 using separated migration/runtime roles. Forced 039, 040, and 041 transaction interruptions leave no target effect/ledger row; retry applies each exactly once; rerun preserves one row/checksum/timestamp. Primary runtime restart verifies the normal runner and privileges. | Pass in disposable PostgreSQL 18.4 |
+| Production history/recovery truth | Exact 039, 040, and 041 Git identities are recorded separately after freeze. A bounded combined read-only receipt proved production history compatibility for exact 039+040 against corrected head `b920362...`: 36 applied rows, no source/history mismatches, and only 039/040 pending. That receipt predates 041 and does not prove the terminal candidate. No backup receipt or restore rehearsal is available; conservative forward-fix/no destructive rollback disposition remains. | 039+040 preflight passed; complete 039+040+041 production preflight unavailable and not claimed |
 | No premature release claim | This ledger reports writer evidence only. The first independent audit required changes. Fresh independent audit of the corrected exact head, ready, merge, deployment, production ledger, health, and passive acceptance are not claimed. | Truthful writer boundary |
 
 ## Current writer test results
@@ -68,7 +73,7 @@ data mutation was involved.
 ### Disposable PostgreSQL 18.4 Part 2/Part 3 authority
 
 - Test suites: 1 passed / 1 total
-- Tests: 27 passed / 27 total
+- Tests: 41 passed / 41 total
 - Snapshots: 0
 - Failures: 0
 - Server: PostgreSQL 18.4, loopback port 55433, UTF8, UTC, locale C,
@@ -82,8 +87,10 @@ concurrent replay, forced audit rollback, stale/cross-tenant/forged/revoked/
 crew-revoked replay, direct privilege denial, immutable history, category/time
 source staleness, control-byte rejection, rejected-review overlap reproduction,
 concurrent review one-winner and retry zero-effects, future end rejection for
-manual/correction, normalized demo/simulation mutation/read/replay denial, 039
-and 040 interruption/retry/exact-once/rerun zero-op, and PostgreSQL 18 UTC identity.
+manual/correction, explicit ASCII/Unicode edge normalization and fail-closed
+demo/simulation/unknown-source mutation/read/replay denial with complete
+zero-effect snapshots, 039/040/041 interruption/retry/exact-once/rerun zero-op,
+and PostgreSQL 18 UTC identity.
 
 ### Complete ratification regression
 

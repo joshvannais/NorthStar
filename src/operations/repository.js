@@ -21,6 +21,24 @@ function mapDatabaseError(error) {
   if (constraint === 'canonical_field_execution_not_found' || error && error.code === 'P0002') {
     return new FieldExecutionRepositoryError(404, 'NOT_FOUND', 'Field execution not found.', error);
   }
+  if (constraint.includes('canonical_labor_stale') ||
+      constraint === 'canonical_labor_overlap' || constraint === 'canonical_labor_timer_open' ||
+      constraint === 'canonical_labor_one_open_timer') {
+    return new FieldExecutionRepositoryError(409,
+      constraint === 'canonical_labor_overlap' ? 'M23_LABOR_OVERLAP' :
+        ['canonical_labor_timer_open', 'canonical_labor_one_open_timer'].includes(constraint)
+          ? 'M23_LABOR_TIMER_ALREADY_OPEN' : 'M23_LABOR_STALE',
+      constraint === 'canonical_labor_overlap'
+        ? 'Labor evidence overlaps another current interval for this performer.'
+        : ['canonical_labor_timer_open', 'canonical_labor_one_open_timer'].includes(constraint)
+          ? 'This performer already has an active labor timer.'
+          : 'Labor evidence authority changed; refresh before trying again.', error);
+  }
+  if (constraint === 'canonical_labor_time_authority_stale' ||
+      constraint === 'canonical_labor_category_stale') {
+    return new FieldExecutionRepositoryError(409, 'M23_LABOR_SOURCE_STALE',
+      'Labor category or time-zone authority changed; refresh before trying again.', error);
+  }
   if (constraint.includes('stale') || error && ['40001', '40P01'].includes(error.code)) {
     return new FieldExecutionRepositoryError(409, 'M23_EXECUTION_STALE',
       'Field execution authority changed; refresh before trying again.', error);
@@ -40,6 +58,25 @@ function mapDatabaseError(error) {
   if (constraint === 'canonical_field_execution_dispatch_required') {
     return new FieldExecutionRepositoryError(409, 'M23_EXECUTION_DISPATCH_REQUIRED',
       'A current dispatched assignment is required for field execution.', error);
+  }
+  if (constraint === 'canonical_labor_interval_not_found') {
+    return new FieldExecutionRepositoryError(404, 'NOT_FOUND', 'Labor interval not found.', error);
+  }
+  if (constraint === 'canonical_labor_idempotency_conflict') {
+    return new FieldExecutionRepositoryError(409, 'M23_LABOR_IDEMPOTENCY_CONFLICT',
+      'The Idempotency-Key was already used for another labor evidence mutation.', error);
+  }
+  if (constraint === 'canonical_labor_timer_not_open' || constraint === 'canonical_labor_action_invalid') {
+    return new FieldExecutionRepositoryError(409, 'M23_LABOR_ACTION_INVALID',
+      'The requested labor evidence action is not valid from the current state.', error);
+  }
+  if (constraint === 'canonical_labor_dispatch_required') {
+    return new FieldExecutionRepositoryError(403, 'M23_EXECUTION_FORBIDDEN',
+      'Current labor evidence authority is unavailable.', error);
+  }
+  if (constraint === 'canonical_labor_input_invalid' || constraint === 'canonical_labor_instant_invalid') {
+    return new FieldExecutionRepositoryError(400, 'INVALID_LABOR_REQUEST',
+      'Labor evidence request is invalid.', error);
   }
   if (error && error.code === '42501') {
     return new FieldExecutionRepositoryError(403, 'M23_EXECUTION_FORBIDDEN',
@@ -164,10 +201,64 @@ async function readFieldExecution(pool, input) {
   }
 }
 
+async function mutateLaborTime(pool, input) {
+  return serializable(pool, async client => {
+    const result = await client.query(
+      `SELECT public.canonical_labor_time_mutate(
+         $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,$8::uuid,
+         $9::text,$10::text,$11::text,$12::bigint,$13::text,$14::bigint,$15::text,
+         $16::uuid,$17::bigint,$18::text,$19::text,$20::text,$21::text,$22::uuid,
+         $23::bigint,$24::text,$25::text,$26::text,$27::text,$28::text
+       ) AS result`,
+      [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId,
+        input.csrfToken, input.executionId, input.action, input.performerProfileId,
+        input.category, input.categoryContractVersion, input.categoryContractDigest,
+        input.expectedExecutionRevision, input.expectedExecutionDigest,
+        input.expectedAssignmentRevision, input.expectedAssignmentDigest,
+        input.businessProfileId, input.businessProfileVersion, input.businessProfileHash,
+        input.timeZone, input.observedStart, input.observedEnd, input.intervalId,
+        input.expectedIntervalRevision, input.expectedIntervalDigest, input.reviewOutcome,
+        input.idempotencyKey, input.reason, input.requestCorrelationId]
+    );
+    return databaseResult(result.rows[0]);
+  });
+}
+
+async function readLaborTime(pool, input) {
+  requirePool(pool);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    await client.query("SET LOCAL statement_timeout='5000ms'");
+    await client.query("SET LOCAL lock_timeout='2000ms'");
+    await client.query("SET LOCAL idle_in_transaction_session_timeout='5000ms'");
+    await client.query('SET LOCAL search_path=pg_catalog,public');
+    const result = await client.query(
+      `SELECT public.canonical_labor_time_read($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid) AS result`,
+      [input.organizationId, input.actorUserId, input.actorAccessRole,
+        input.authSessionId, input.executionId]
+    );
+    await client.query('COMMIT');
+    const body = result.rows[0] && result.rows[0].result;
+    if (!body || typeof body !== 'object') {
+      fail(503, 'M23_EXECUTION_PERSISTENCE_UNAVAILABLE',
+        'Canonical labor evidence persistence returned an invalid result.');
+    }
+    return { status: 200, body, replayed: false };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw mapDatabaseError(error);
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   FieldExecutionRepositoryError,
   initializeFieldExecution,
   mapDatabaseError,
+  mutateLaborTime,
   readFieldExecution,
+  readLaborTime,
   transitionFieldExecution,
 };

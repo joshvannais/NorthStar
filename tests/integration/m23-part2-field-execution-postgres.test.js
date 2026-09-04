@@ -12,6 +12,11 @@ const { provisionDurableSession } = require('../helpers/account-session-fixture'
 const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
 const MIGRATION = '038_canonical_field_execution_authority.sql';
+const LABOR_MIGRATION = '039_canonical_labor_time_evidence.sql';
+const LABOR_CORRECTION_MIGRATION = '040_canonical_labor_time_audit_corrections.sql';
+const LABOR_SOURCE_MIGRATION = '041_canonical_labor_transcript_source_authority.sql';
+const LABOR_CATEGORY_VERSION = 'm23-labor-category-v1';
+const LABOR_CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -25,7 +30,7 @@ const IDS = Object.freeze({
   viewer: 'c2000000-0000-4000-8000-000000000005',
   otherOwner: 'c2000000-0000-4000-8000-000000000006',
   crew: 'c3000000-0000-4000-8000-000000000001',
-  appointments: Array.from({ length: 20 }, (_unused, index) => {
+  appointments: Array.from({ length: 52 }, (_unused, index) => {
     const sequence = index < 8 ? index + 1 : index + 2;
     return `c4000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
   }),
@@ -116,7 +121,7 @@ function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
-async function seedAppointment(pool, organizationId, appointmentId, source = 'manual') {
+async function seedAppointment(pool, organizationId, appointmentId, source = 'lead') {
   const sequence = appointmentId.slice(-2);
   const operationId = `c5000000-0000-4000-8000-0000000000${sequence}`;
   const graphId = `c6000000-0000-4000-8000-0000000000${sequence}`;
@@ -281,6 +286,59 @@ async function executionEvidence(pool, executionId) {
   )).rows[0];
 }
 
+async function laborEvidence(pool, intervalId) {
+  return (await pool.query(
+    `SELECT to_jsonb(current_interval) AS current,
+            (SELECT count(*)::int FROM public.canonical_labor_events
+              WHERE interval_id=current_interval.id) AS events,
+            (SELECT count(*)::int FROM public.canonical_labor_revisions
+              WHERE interval_id=current_interval.id) AS revisions,
+            (SELECT count(*)::int FROM public.canonical_labor_audit_events
+              WHERE interval_id=current_interval.id) AS audits,
+            (SELECT count(*)::int FROM public.canonical_labor_idempotency
+              WHERE interval_id=current_interval.id) AS replays
+       FROM public.canonical_labor_intervals current_interval
+      WHERE current_interval.id=$1`,
+    [intervalId]
+  )).rows[0];
+}
+
+async function laborExecutionEvidence(pool, executionId) {
+  return (await pool.query(
+    `SELECT
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_intervals row_value
+         WHERE row_value.execution_id=$1) AS current_rows,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_events row_value
+         WHERE row_value.execution_id=$1) AS events,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_revisions row_value
+          JOIN public.canonical_labor_intervals current_interval
+            ON current_interval.organization_id=row_value.organization_id
+           AND current_interval.id=row_value.interval_id
+         WHERE current_interval.execution_id=$1) AS revisions,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id),'[]'::jsonb)
+          FROM public.canonical_labor_audit_events row_value
+         WHERE row_value.execution_id=$1) AS audits,
+       (SELECT COALESCE(jsonb_agg(to_jsonb(row_value) ORDER BY row_value.idempotency_key_hash),'[]'::jsonb)
+          FROM public.canonical_labor_idempotency row_value
+         WHERE row_value.execution_id=$1) AS idempotency`,
+    [executionId]
+  )).rows[0];
+}
+
+function tenantRfc3339(date) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', hourCycle: 'h23', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    timeZoneName: 'longOffset',
+  }).formatToParts(date).filter(part => part.type !== 'literal')
+    .map(part => [part.type, part.value]));
+  const offset = parts.timeZoneName === 'GMT' ? 'Z' : parts.timeZoneName.replace('GMT', '');
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${offset}`;
+}
+
 function entry(input, session, role, overrides = {}) {
   return {
     organizationId: input.organizationId || IDS.organization,
@@ -318,6 +376,40 @@ function transition(input, session, role, overrides = {}) {
   };
 }
 
+function labor(input, session, role, timeAuthority, overrides = {}) {
+  return {
+    organizationId: input.organizationId || IDS.organization,
+    actorUserId: input.actorUserId,
+    actorAccessRole: role,
+    authSessionId: session.sessionId,
+    csrfToken: session.csrfToken,
+    executionId: input.execution.id,
+    action: input.action,
+    performerProfileId: input.performerProfileId || input.actorUserId,
+    category: input.category === undefined ? null : input.category,
+    categoryContractVersion: LABOR_CATEGORY_VERSION,
+    categoryContractDigest: LABOR_CATEGORY_DIGEST,
+    expectedExecutionRevision: input.execution.revision,
+    expectedExecutionDigest: input.execution.digest,
+    expectedAssignmentRevision: input.assignment.revision,
+    expectedAssignmentDigest: input.assignment.digest,
+    businessProfileId: timeAuthority.id,
+    businessProfileVersion: Number(timeAuthority.version_number),
+    businessProfileHash: timeAuthority.hash,
+    timeZone: timeAuthority.time_zone,
+    observedStart: input.observedStart || null,
+    observedEnd: input.observedEnd || null,
+    intervalId: input.interval ? input.interval.id : null,
+    expectedIntervalRevision: input.interval ? input.interval.revision : null,
+    expectedIntervalDigest: input.interval ? input.interval.digest : null,
+    reviewOutcome: input.reviewOutcome || null,
+    idempotencyKey: input.key || `m23-p3-${crypto.randomUUID()}`,
+    reason: input.reason || `Record ${input.action} as operational labor evidence.`,
+    requestCorrelationId: input.requestCorrelationId || `m23-p3-request-${crypto.randomUUID()}`,
+    ...overrides,
+  };
+}
+
 realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority', () => {
   let database;
   let roles;
@@ -326,6 +418,7 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
   let db;
   let repository;
   let sessions;
+  let timeAuthority;
   const assignments = new Map();
   const original = {};
 
@@ -371,6 +464,12 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
       viewer: await provisionDurableSession(migrationPool, { userId: IDS.viewer, organizationId: IDS.organization, membershipId: IDS.viewer, role: 'viewer' }),
       other: await provisionDurableSession(migrationPool, { userId: IDS.otherOwner, organizationId: IDS.otherOrganization, membershipId: IDS.otherOwner, role: 'owner' }),
     };
+    timeAuthority = (await migrationPool.query(
+      `SELECT id,version_number,rtrim(normalized_profile_hash) AS hash,
+              raw_profile#>>'{company,timeZone}' AS time_zone
+         FROM public.canonical_business_profiles
+        WHERE organization_id=$1 AND is_active`, [IDS.organization]
+    )).rows[0];
     for (const appointmentId of IDS.appointments) {
       await seedAppointment(migrationPool, IDS.organization, appointmentId);
       assignments.set(appointmentId,
@@ -393,6 +492,19 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
       }
     }
   }, 180000);
+
+  async function createStartedExecution(index, actorUserId = IDS.member,
+    session = sessions.member, role = 'member') {
+    const appointmentId = IDS.appointments[index];
+    const assignment = assignments.get(appointmentId);
+    const created = (await repository.initializeFieldExecution(runtimePool, entry({
+      appointmentId, assignment, actorUserId,
+    }, session, role))).body.data;
+    const started = (await repository.transitionFieldExecution(runtimePool, transition({
+      execution: created, assignment, actorUserId, action: 'start',
+    }, session, role))).body.data;
+    return { appointmentId, assignment, execution: started };
+  }
 
   test('uses the automatic runner exactly once and preserves PostgreSQL 18 UTC identity on restart', async () => {
     const source = db.loadMigrations(MIGRATIONS).find(item => item.file === MIGRATION);
@@ -820,6 +932,457 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
       authSessionId: sessions.other.sessionId, executionId: created.id,
     })).rejects.toMatchObject({ status: 404 });
   });
+
+  test('Part 3 records timer, manual, correction, and review as complete immutable labor evidence', async () => {
+    const context = await createStartedExecution(20);
+    const timerStarted = (await repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'start_timer', category: 'production',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    expect(timerStarted).toMatchObject({ entryMode: 'timer', category: 'production',
+      performedByProfileId: IDS.member, reviewState: 'unreviewed', revision: 1 });
+    expect(timerStarted.observedEnd).toBeNull();
+    const timerStopped = (await repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'stop_timer', interval: timerStarted,
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    expect(timerStopped).toMatchObject({ entryMode: 'timer', revision: 2, lastAction: 'stop_timer' });
+    expect(timerStopped.durationSeconds).toBeGreaterThanOrEqual(0);
+
+    const manual = (await repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.owner, action: 'record_manual', performerProfileId: IDS.member,
+      category: 'travel', observedStart: '2026-08-10T08:00:00-04:00',
+      observedEnd: '2026-08-10T08:30:00-04:00',
+    }, sessions.owner, 'owner', timeAuthority))).body.data;
+    expect(manual).toMatchObject({ entryMode: 'manual', durationSeconds: 1800,
+      reviewState: 'needs_review', recordedByUserId: IDS.owner });
+    const corrected = (await repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'correct', interval: manual,
+      category: 'setup', observedStart: '2026-08-10T08:05:00-04:00',
+      observedEnd: '2026-08-10T08:35:00-04:00',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    expect(corrected).toMatchObject({ entryMode: 'manual', category: 'setup', revision: 2,
+      reviewState: 'unreviewed' });
+    const reviewed = (await repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'review', interval: corrected,
+      reviewOutcome: 'accepted',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    expect(reviewed).toMatchObject({ reviewState: 'accepted', revision: 3, lastAction: 'review' });
+
+    const evidence = (await migrationPool.query(
+      `SELECT (SELECT count(*)::int FROM public.canonical_labor_intervals WHERE execution_id=$1) AS intervals,
+              (SELECT count(*)::int FROM public.canonical_labor_events WHERE execution_id=$1) AS events,
+              (SELECT count(*)::int FROM public.canonical_labor_revisions revision
+                JOIN public.canonical_labor_intervals current_interval
+                  ON current_interval.organization_id=revision.organization_id AND current_interval.id=revision.interval_id
+               WHERE current_interval.execution_id=$1) AS revisions,
+              (SELECT count(*)::int FROM public.canonical_labor_audit_events WHERE execution_id=$1) AS audits,
+              (SELECT count(*)::int FROM public.canonical_labor_idempotency WHERE execution_id=$1) AS replays`,
+      [context.execution.id]
+    )).rows[0];
+    expect(evidence).toEqual({ intervals: 2, events: 5, revisions: 5, audits: 5, replays: 5 });
+  });
+
+  test('Part 3 rejects DST gaps, preserves distinct fold instants, and returns safe summaries', async () => {
+    const context = await createStartedExecution(21);
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'production',
+      observedStart: '2026-03-08T02:15:00-05:00', observedEnd: '2026-03-08T02:45:00-05:00',
+    }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({
+      status: 400, code: 'INVALID_LABOR_REQUEST',
+    });
+    const first = (await repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'production',
+      observedStart: '2025-11-02T01:15:00-04:00', observedEnd: '2025-11-02T01:45:00-04:00',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    const second = (await repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'production',
+      observedStart: '2025-11-02T01:15:00-05:00', observedEnd: '2025-11-02T01:45:00-05:00',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    expect(first.displayStart).toBe(second.displayStart);
+    expect(first.observedStart).not.toBe(second.observedStart);
+    const read = await repository.readLaborTime(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.member, actorAccessRole: 'member',
+      authSessionId: sessions.member.sessionId, executionId: context.execution.id,
+    });
+    expect(read.body.data).toMatchObject({ totalIntervalCount: 2, truncated: false });
+    expect(read.body.data.summaries[0]).toMatchObject({ category: 'production',
+      closedIntervalCount: 2, observedSeconds: 3600 });
+    expect(read.body.data.interpretation).toContain('not payroll');
+  });
+
+  test('Part 3 makes overlap and open-timer races one-winner operations across a worker', async () => {
+    const contextA = await createStartedExecution(22);
+    const contextB = await createStartedExecution(23);
+    const overlapping = [contextA, contextB].map((context, index) =>
+      repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'cleanup',
+        observedStart: index ? '2026-08-11T10:15:00-04:00' : '2026-08-11T10:00:00-04:00',
+        observedEnd: index ? '2026-08-11T10:45:00-04:00' : '2026-08-11T10:30:00-04:00',
+      }, sessions.member, 'member', timeAuthority)));
+    const overlapResults = await Promise.allSettled(overlapping);
+    expect(overlapResults.filter(item => item.status === 'fulfilled')).toHaveLength(1);
+    expect(overlapResults.find(item => item.status === 'rejected').reason)
+      .toMatchObject({ status: 409, code: 'M23_LABOR_OVERLAP' });
+
+    const timerAttempts = [contextA, contextB].map(context => repository.mutateLaborTime(runtimePool,
+      labor({ ...context, actorUserId: IDS.member, action: 'start_timer', category: 'production' },
+        sessions.member, 'member', timeAuthority)));
+    const timerResults = await Promise.allSettled(timerAttempts);
+    expect(timerResults.filter(item => item.status === 'fulfilled')).toHaveLength(1);
+    expect(timerResults.find(item => item.status === 'rejected').reason)
+      .toMatchObject({ status: 409, code: 'M23_LABOR_TIMER_ALREADY_OPEN' });
+  }, 30000);
+
+  test('Part 3 rejects stale, cross-tenant, forged-performer, and revoked replay without effects', async () => {
+    const context = await createStartedExecution(24);
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'setup',
+      observedStart: '2026-08-12T09:00:00-04:00', observedEnd: '2026-08-12T09:30:00-04:00',
+    }, sessions.member, 'member', timeAuthority, { expectedExecutionDigest: 'f'.repeat(64) })))
+      .rejects.toMatchObject({ status: 409, code: 'M23_LABOR_STALE' });
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.owner, performerProfileId: IDS.unassignedMember,
+      action: 'record_manual', category: 'setup', observedStart: '2026-08-12T09:00:00-04:00',
+      observedEnd: '2026-08-12T09:30:00-04:00',
+    }, sessions.owner, 'owner', timeAuthority))).rejects.toMatchObject({ status: 403 });
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, organizationId: IDS.otherOrganization, actorUserId: IDS.otherOwner,
+      action: 'record_manual', category: 'setup', observedStart: '2026-08-12T09:00:00-04:00',
+      observedEnd: '2026-08-12T09:30:00-04:00',
+    }, sessions.other, 'owner', timeAuthority))).rejects.toMatchObject({ status: 404 });
+
+    const replayInput = labor({ ...context, actorUserId: IDS.member, action: 'record_manual',
+      category: 'setup', observedStart: '2026-08-12T09:00:00-04:00',
+      observedEnd: '2026-08-12T09:30:00-04:00', key: 'm23-p3-revoked-replay-0001',
+    }, sessions.member, 'member', timeAuthority);
+    await repository.mutateLaborTime(runtimePool, replayInput);
+    const before = (await migrationPool.query(
+      `SELECT count(*)::int AS events FROM public.canonical_labor_events WHERE execution_id=$1`,
+      [context.execution.id]
+    )).rows[0];
+    await forceAssignmentAuthority(migrationPool, IDS.organization, context.appointmentId,
+      { targetState: 'unassigned', profileId: null, crewId: null, dispatchState: 'revoked' });
+    await expect(repository.mutateLaborTime(runtimePool, replayInput)).rejects.toMatchObject({ status: 403 });
+    expect((await migrationPool.query(
+      `SELECT count(*)::int AS events FROM public.canonical_labor_events WHERE execution_id=$1`,
+      [context.execution.id]
+    )).rows[0]).toEqual(before);
+  });
+
+  test('Part 3 replays an exact request once, conflicts on changed content, and makes concurrent retries one effect', async () => {
+    const exactContext = await createStartedExecution(25);
+    const exactInput = labor({
+      ...exactContext, actorUserId: IDS.member, action: 'record_manual', category: 'production',
+      observedStart: '2026-08-13T08:00:00-04:00', observedEnd: '2026-08-13T08:30:00-04:00',
+      key: 'm23-p3-exact-replay-000001',
+    }, sessions.member, 'member', timeAuthority);
+    const first = await repository.mutateLaborTime(runtimePool, exactInput);
+    const replay = await repository.mutateLaborTime(runtimePool, exactInput);
+    expect(first.replayed).toBe(false);
+    expect(replay.replayed).toBe(true);
+    expect(replay.body).toEqual(first.body);
+    await expect(repository.mutateLaborTime(runtimePool, {
+      ...exactInput, reason: 'Changed content must not reuse the same labor key.',
+    })).rejects.toMatchObject({ status: 409, code: 'M23_LABOR_IDEMPOTENCY_CONFLICT' });
+
+    const concurrentContext = await createStartedExecution(26);
+    const concurrentInput = labor({
+      ...concurrentContext, actorUserId: IDS.member, action: 'record_manual', category: 'setup',
+      observedStart: '2026-08-13T09:00:00-04:00', observedEnd: '2026-08-13T09:30:00-04:00',
+      key: 'm23-p3-concurrent-retry-001',
+    }, sessions.member, 'member', timeAuthority);
+    const concurrent = await Promise.all([
+      repository.mutateLaborTime(runtimePool, concurrentInput),
+      repository.mutateLaborTime(runtimePool, concurrentInput),
+    ]);
+    expect(concurrent.map(item => item.replayed).sort()).toEqual([false, true]);
+    expect(concurrent[0].body).toEqual(concurrent[1].body);
+    const counts = (await migrationPool.query(
+      `SELECT (SELECT count(*)::int FROM public.canonical_labor_intervals WHERE execution_id=$1) AS intervals,
+              (SELECT count(*)::int FROM public.canonical_labor_events WHERE execution_id=$1) AS events,
+              (SELECT count(*)::int FROM public.canonical_labor_audit_events WHERE execution_id=$1) AS audits,
+              (SELECT count(*)::int FROM public.canonical_labor_idempotency WHERE execution_id=$1) AS replays`,
+      [concurrentContext.execution.id]
+    )).rows[0];
+    expect(counts).toEqual({ intervals: 1, events: 1, audits: 1, replays: 1 });
+  }, 30000);
+
+  test('Part 3 rolls back the full evidence set when an audit insertion fails', async () => {
+    const context = await createStartedExecution(27);
+    await migrationPool.query(
+      `CREATE FUNCTION public.m23_part3_fail_labor_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN RAISE EXCEPTION 'forced labor audit failure'
+         USING ERRCODE='P0001',CONSTRAINT='m23_part3_forced_audit_failure'; END $$`
+    );
+    await migrationPool.query(
+      `CREATE TRIGGER m23_part3_forced_audit_failure BEFORE INSERT ON public.canonical_labor_audit_events
+       FOR EACH ROW EXECUTE FUNCTION public.m23_part3_fail_labor_audit()`
+    );
+    try {
+      await expect(repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'cleanup',
+        observedStart: '2026-08-13T10:00:00-04:00', observedEnd: '2026-08-13T10:30:00-04:00',
+      }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({ status: 503 });
+    } finally {
+      await migrationPool.query(
+        'DROP TRIGGER m23_part3_forced_audit_failure ON public.canonical_labor_audit_events'
+      );
+      await migrationPool.query('DROP FUNCTION public.m23_part3_fail_labor_audit()');
+    }
+    const counts = (await migrationPool.query(
+      `SELECT (SELECT count(*)::int FROM public.canonical_labor_intervals WHERE execution_id=$1) AS intervals,
+              (SELECT count(*)::int FROM public.canonical_labor_events WHERE execution_id=$1) AS events,
+              (SELECT count(*)::int FROM public.canonical_labor_revisions revision
+                JOIN public.canonical_labor_intervals current_interval
+                  ON current_interval.organization_id=revision.organization_id AND current_interval.id=revision.interval_id
+               WHERE current_interval.execution_id=$1) AS revisions,
+              (SELECT count(*)::int FROM public.canonical_labor_audit_events WHERE execution_id=$1) AS audits,
+              (SELECT count(*)::int FROM public.canonical_labor_idempotency WHERE execution_id=$1) AS replays`,
+      [context.execution.id]
+    )).rows[0];
+    expect(counts).toEqual({ intervals: 0, events: 0, revisions: 0, audits: 0, replays: 0 });
+  });
+
+  test('Part 3 reauthorizes crew membership on replay and rejects stale category, time, and text authority without effects', async () => {
+    const crewContextIndex = 28;
+    const crewAppointmentId = IDS.appointments[crewContextIndex];
+    const crewId = 'c3000000-0000-4000-8000-000000000002';
+    assignments.set(crewAppointmentId, await assignCrew(migrationPool, crewAppointmentId, crewId));
+    const crewContext = await createStartedExecution(crewContextIndex);
+    const crewReplayInput = labor({
+      ...crewContext, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
+      observedStart: '2026-08-13T11:00:00-04:00', observedEnd: '2026-08-13T11:30:00-04:00',
+      key: 'm23-p3-crew-replay-revoke-1',
+    }, sessions.member, 'member', timeAuthority);
+    await repository.mutateLaborTime(runtimePool, crewReplayInput);
+    await migrationPool.query(
+      'DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2 AND profile_id=$3',
+      [IDS.organization, crewId, IDS.member]
+    );
+    await expect(repository.mutateLaborTime(runtimePool, crewReplayInput))
+      .rejects.toMatchObject({ status: 403 });
+
+    const boundaryContext = await createStartedExecution(29);
+    const base = labor({
+      ...boundaryContext, actorUserId: IDS.member, action: 'record_manual', category: 'other',
+      observedStart: '2026-08-13T12:00:00-04:00', observedEnd: '2026-08-13T12:30:00-04:00',
+    }, sessions.member, 'member', timeAuthority);
+    await expect(repository.mutateLaborTime(runtimePool, {
+      ...base, categoryContractDigest: 'f'.repeat(64),
+    })).rejects.toMatchObject({ status: 409, code: 'M23_LABOR_SOURCE_STALE' });
+    await expect(repository.mutateLaborTime(runtimePool, {
+      ...base, idempotencyKey: 'm23-p3-stale-time-source-01', businessProfileHash: 'f'.repeat(64),
+    })).rejects.toMatchObject({ status: 409, code: 'M23_LABOR_SOURCE_STALE' });
+    await expect(repository.mutateLaborTime(runtimePool, {
+      ...base, idempotencyKey: 'm23-p3-control-text-boundary-1', reason: 'invalid\u0001reason',
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_LABOR_REQUEST' });
+    const noEffects = (await migrationPool.query(
+      `SELECT (SELECT count(*)::int FROM public.canonical_labor_intervals WHERE execution_id=$1) AS intervals,
+              (SELECT count(*)::int FROM public.canonical_labor_events WHERE execution_id=$1) AS events,
+              (SELECT count(*)::int FROM public.canonical_labor_idempotency WHERE execution_id=$1) AS replays`,
+      [boundaryContext.execution.id]
+    )).rows[0];
+    expect(noEffects).toEqual({ intervals: 0, events: 0, replays: 0 });
+  });
+
+  test('Part 3 review cannot restore rejected evidence into an authoritative overlap', async () => {
+    const contextA = await createStartedExecution(30);
+    const contextB = await createStartedExecution(31);
+    const intervalA = (await repository.mutateLaborTime(runtimePool, labor({
+      ...contextA, actorUserId: IDS.member, action: 'record_manual', category: 'production',
+      observedStart: '2026-08-14T08:00:00-04:00', observedEnd: '2026-08-14T09:00:00-04:00',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    const rejectedA = (await repository.mutateLaborTime(runtimePool, labor({
+      ...contextA, actorUserId: IDS.member, action: 'review', interval: intervalA,
+      reviewOutcome: 'rejected',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    await repository.mutateLaborTime(runtimePool, labor({
+      ...contextB, actorUserId: IDS.member, action: 'record_manual', category: 'setup',
+      observedStart: '2026-08-14T08:30:00-04:00', observedEnd: '2026-08-14T09:30:00-04:00',
+    }, sessions.member, 'member', timeAuthority));
+    const before = await laborEvidence(migrationPool, rejectedA.id);
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...contextA, actorUserId: IDS.member, action: 'review', interval: rejectedA,
+      reviewOutcome: 'accepted', key: 'm23-p3-review-overlap-denied-01',
+    }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({
+      status: 409, code: 'M23_LABOR_OVERLAP',
+    });
+    expect(await laborEvidence(migrationPool, rejectedA.id)).toEqual(before);
+  });
+
+  test('Part 3 serializes concurrent reviews that would create a worker overlap', async () => {
+    const contextA = await createStartedExecution(32);
+    const contextB = await createStartedExecution(33);
+    const createRejected = async (context, start, end) => {
+      const recorded = (await repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'cleanup',
+        observedStart: start, observedEnd: end,
+      }, sessions.member, 'member', timeAuthority))).body.data;
+      return (await repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'review', interval: recorded,
+        reviewOutcome: 'rejected',
+      }, sessions.member, 'member', timeAuthority))).body.data;
+    };
+    const rejectedA = await createRejected(
+      contextA, '2026-08-14T10:00:00-04:00', '2026-08-14T11:00:00-04:00'
+    );
+    const rejectedB = await createRejected(
+      contextB, '2026-08-14T10:30:00-04:00', '2026-08-14T11:30:00-04:00'
+    );
+    const inputs = [
+      labor({
+        ...contextA, actorUserId: IDS.member, action: 'review', interval: rejectedA,
+        reviewOutcome: 'accepted', key: 'm23-p3-review-race-a-0001',
+      }, sessions.member, 'member', timeAuthority),
+      labor({
+        ...contextB, actorUserId: IDS.member, action: 'review', interval: rejectedB,
+        reviewOutcome: 'accepted', key: 'm23-p3-review-race-b-0001',
+      }, sessions.member, 'member', timeAuthority),
+    ];
+    const results = await Promise.allSettled(inputs.map(input =>
+      repository.mutateLaborTime(runtimePool, input)));
+    expect(results.filter(item => item.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(item => item.status === 'rejected').reason).toMatchObject({
+      status: 409, code: 'M23_LABOR_OVERLAP',
+    });
+    const rejectedIndex = results.findIndex(item => item.status === 'rejected');
+    const rejectedInterval = rejectedIndex === 0 ? rejectedA : rejectedB;
+    const beforeRetry = await laborEvidence(migrationPool, rejectedInterval.id);
+    await expect(repository.mutateLaborTime(runtimePool, inputs[rejectedIndex]))
+      .rejects.toMatchObject({ status: 409, code: 'M23_LABOR_OVERLAP' });
+    expect(await laborEvidence(migrationPool, rejectedInterval.id)).toEqual(beforeRetry);
+  }, 30000);
+
+  test('Part 3 rejects future manual and correction end instants with zero effects', async () => {
+    const context = await createStartedExecution(34);
+    const now = Date.now();
+    const nearNow = tenantRfc3339(new Date(now - 60 * 1000));
+    const farFuture = tenantRfc3339(new Date(now + 24 * 60 * 60 * 1000));
+    const beforeManual = (await migrationPool.query(
+      `SELECT count(*)::int AS intervals FROM public.canonical_labor_intervals
+        WHERE execution_id=$1`, [context.execution.id]
+    )).rows[0];
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'other',
+      observedStart: nearNow, observedEnd: farFuture,
+      key: 'm23-p3-manual-future-end-01',
+    }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({
+      status: 400, code: 'INVALID_LABOR_REQUEST',
+    });
+    expect((await migrationPool.query(
+      `SELECT count(*)::int AS intervals FROM public.canonical_labor_intervals
+        WHERE execution_id=$1`, [context.execution.id]
+    )).rows[0]).toEqual(beforeManual);
+
+    const recordedInput = labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'other',
+      observedStart: '2026-08-15T08:00:00-04:00', observedEnd: '2026-08-15T08:30:00-04:00',
+      key: 'm23-p3-future-correction-source-01',
+    }, sessions.member, 'member', timeAuthority);
+    const recorded = (await repository.mutateLaborTime(runtimePool, recordedInput)).body.data;
+    const beforeCorrection = await laborEvidence(migrationPool, recorded.id);
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'correct', interval: recorded,
+      category: 'other', observedStart: nearNow, observedEnd: farFuture,
+      key: 'm23-p3-correction-future-end-01',
+    }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({
+      status: 400, code: 'INVALID_LABOR_REQUEST',
+    });
+    expect(await laborEvidence(migrationPool, recorded.id)).toEqual(beforeCorrection);
+  });
+
+  test('Part 3 transcript-source classifier accepts only the canonical vocabulary after explicit edge normalization', async () => {
+    const cases = [
+      [' Lead ', 'lead'], ['\tRETELL\u00a0', 'retell'], ['\u2003VoIcE\u3000', 'voice'],
+      ['\ndEmO\r', 'demo'], ['\u202fSIMULATION\u205f', 'simulation'],
+      ['manual', null], ['lead\t', 'lead'], ['le\tad', null], ['\u200bvoice\u200b', null],
+      ['retell-webhook', null], ['customer', null],
+    ];
+    const normalized = (await migrationPool.query(
+      `SELECT public.canonical_labor_transcript_source_normalized(source_value) AS normalized
+         FROM unnest($1::text[]) WITH ORDINALITY AS source_values(source_value,position)
+        ORDER BY position`, [cases.map(item => item[0])]
+    )).rows.map(row => row.normalized);
+    expect(normalized).toEqual(cases.map(item => item[1]));
+  });
+
+  test.each([
+    ['ASCII space', ' Demo ', 35],
+    ['TAB', '\tdemo\t', 36],
+    ['LF', '\ndemo\n', 37],
+    ['CR', '\rdemo\r', 38],
+    ['form feed', '\fdemo\f', 39],
+    ['vertical tab', '\vdemo\v', 40],
+    ['case variant', 'DeMo', 41],
+    ['NBSP', '\u00a0demo\u00a0', 42],
+    ['Ogham space', '\u1680simulation\u1680', 43],
+    ['en quad', '\u2000simulation\u2000', 44],
+    ['em space', '\u2003demo\u2003', 45],
+    ['line separator', '\u2028simulation\u2028', 46],
+    ['narrow NBSP', '\u202fdemo\u202f', 47],
+    ['ideographic space', '\u3000simulation\u3000', 48],
+    ['unrecognized value', 'manual', 49],
+    ['embedded TAB', 'le\tad', 50],
+    ['zero-width ambiguity', '\u200bvoice\u200b', 51],
+  ])(
+    'Part 3 denies normalized non-production source with %s edges before fresh mutation, replay, and read',
+    async (label, source, contextIndex) => {
+      const context = await createStartedExecution(contextIndex);
+      const recordedHour = String(contextIndex - 35).padStart(2, '0');
+      const replayInput = labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
+        observedStart: `2026-08-16T${recordedHour}:00:00-04:00`,
+        observedEnd: `2026-08-16T${recordedHour}:30:00-04:00`,
+        key: `m23-p3-source-replay-${contextIndex}-01`,
+      }, sessions.member, 'member', timeAuthority);
+      const recorded = (await repository.mutateLaborTime(runtimePool, replayInput)).body.data;
+      await migrationPool.query(
+        `UPDATE public.canonical_transcripts transcript SET source=$2
+           FROM public.canonical_field_executions execution
+          WHERE execution.organization_id=$1 AND execution.id=$3
+            AND transcript.organization_id=execution.organization_id
+            AND transcript.operation_id=execution.operation_id
+            AND transcript.graph_id=execution.graph_id`,
+        [IDS.organization, source, context.execution.id]
+      );
+      const before = await laborExecutionEvidence(migrationPool, context.execution.id);
+      await expect(repository.mutateLaborTime(runtimePool, replayInput))
+        .rejects.toMatchObject({ status: 404 });
+      await expect(repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
+        observedStart: `2026-08-17T${recordedHour}:00:00-04:00`,
+        observedEnd: `2026-08-17T${recordedHour}:30:00-04:00`,
+        key: `m23-p3-source-fresh-${contextIndex}-01`,
+      }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({ status: 404 });
+      await expect(repository.readLaborTime(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      })).rejects.toMatchObject({ status: 404 });
+      expect(await laborExecutionEvidence(migrationPool, context.execution.id)).toEqual(before);
+    }
+  );
+
+  test('Part 3 withholds direct SQL/helpers and makes history immutable', async () => {
+    for (const sql of [
+      'SELECT * FROM public.canonical_labor_intervals LIMIT 1',
+      "SELECT public.canonical_labor_reason_valid('bypass')",
+      "SELECT public.canonical_labor_transcript_source_normalized('lead')",
+      `SELECT public.canonical_labor_projection(NULL::public.canonical_labor_intervals)`,
+    ]) await expect(runtimePool.query(sql)).rejects.toMatchObject({ code: '42501' });
+    const event = (await migrationPool.query(
+      'SELECT id FROM public.canonical_labor_events ORDER BY decided_at LIMIT 1'
+    )).rows[0];
+    await expect(migrationPool.query(
+      "UPDATE public.canonical_labor_events SET reason='tampered' WHERE id=$1", [event.id]
+    )).rejects.toMatchObject({ code: '23514', constraint: 'canonical_labor_evidence_immutable' });
+    for (const table of ['canonical_labor_revisions', 'canonical_labor_audit_events',
+      'canonical_labor_idempotency']) {
+      await expect(migrationPool.query(`DELETE FROM public.${table}`))
+        .rejects.toMatchObject({ code: '23514', constraint: 'canonical_labor_evidence_immutable' });
+      await expect(migrationPool.query(`TRUNCATE TABLE public.${table}`))
+        .rejects.toMatchObject({ code: '23514', constraint: 'canonical_labor_evidence_immutable' });
+    }
+  });
 });
 
 realPostgres('Mission 23 Part 2 migration interruption and retry', () => {
@@ -831,7 +1394,9 @@ realPostgres('Mission 23 Part 2 migration interruption and retry', () => {
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p2-migrations-'));
     try {
       for (const name of fs.readdirSync(MIGRATIONS)) {
-        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name !== MIGRATION) {
+        // This fixture constructs the exact pre-038 history. Later migrations
+        // depend on 038 and must not be ledgered ahead of the interrupted unit.
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < MIGRATION) {
           fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
         }
       }
@@ -860,6 +1425,212 @@ realPostgres('Mission 23 Part 2 migration interruption and retry', () => {
       expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
       const final = (await migrationPool.query(
         'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1', [MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+    } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 3 transcript-source migration interruption and retry', () => {
+  test('rolls back interrupted 041, then applies once and restarts as zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p3-source-retry');
+    const roles = await createRoles(database, 'p3-source-retry');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p3-source-'));
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < LABOR_SOURCE_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({
+        pool: migrationPool, runtimePool, migrationsDirectory: temporary,
+      })).toBe(true);
+      const before = (await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition;
+      expect(before).toContain('lower(btrim(transcript.source))');
+      expect((await migrationPool.query(
+        "SELECT to_regprocedure('public.canonical_labor_transcript_source_normalized(text)') AS helper"
+      )).rows[0].helper).toBeNull();
+      const client = await migrationPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fs.readFileSync(
+          path.join(MIGRATIONS, LABOR_SOURCE_MIGRATION), 'utf8'
+        ));
+        await expect(client.query('SELECT public.m23_part3_041_forced_interruption()'))
+          .rejects.toBeDefined();
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      expect((await migrationPool.query(
+        "SELECT to_regprocedure('public.canonical_labor_transcript_source_normalized(text)') AS helper"
+      )).rows[0].helper).toBeNull();
+      expect((await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition).toBe(before);
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [LABOR_SOURCE_MIGRATION]
+      )).rows[0].count).toBe(0);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const source = localDb.loadMigrations(MIGRATIONS)
+        .find(item => item.file === LABOR_SOURCE_MIGRATION);
+      const applied = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1',
+        [LABOR_SOURCE_MIGRATION]
+      )).rows;
+      expect(applied).toHaveLength(1);
+      expect(applied[0].checksum).toBe(source.digest);
+      const installed = (await migrationPool.query(
+        `SELECT to_regprocedure('public.canonical_labor_transcript_source_normalized(text)')::text AS helper,
+                pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+                ) AS definition`
+      )).rows[0];
+      expect(installed.helper).toBe('canonical_labor_transcript_source_normalized(text)');
+      expect(installed.definition).toContain('canonical_labor_transcript_source_normalized(transcript.source)');
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const final = (await migrationPool.query(
+        'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1',
+        [LABOR_SOURCE_MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+    } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 3 correction migration interruption and retry', () => {
+  test('rolls back interrupted 040, then applies once and restarts as zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p3-correction-retry');
+    const roles = await createRoles(database, 'p3-correction-retry');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p3-correction-'));
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < LABOR_CORRECTION_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({
+        pool: migrationPool, runtimePool, migrationsDirectory: temporary,
+      })).toBe(true);
+      const before = (await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition;
+      expect(before).not.toContain('lower(btrim(transcript.source))');
+      const client = await migrationPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fs.readFileSync(
+          path.join(MIGRATIONS, LABOR_CORRECTION_MIGRATION), 'utf8'
+        ));
+        await expect(client.query('SELECT public.m23_part3_040_forced_interruption()'))
+          .rejects.toBeDefined();
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      expect((await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition).toBe(before);
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [LABOR_CORRECTION_MIGRATION]
+      )).rows[0].count).toBe(0);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const source = localDb.loadMigrations(MIGRATIONS)
+        .find(item => item.file === LABOR_CORRECTION_MIGRATION);
+      const applied = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1',
+        [LABOR_CORRECTION_MIGRATION]
+      )).rows;
+      expect(applied).toHaveLength(1);
+      expect(applied[0].checksum).toBe(source.digest);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const final = (await migrationPool.query(
+        'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1',
+        [LABOR_CORRECTION_MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+    } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 3 migration interruption and retry', () => {
+  test('rolls back an interrupted 039 application, then applies once and restarts as zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p3-retry');
+    const roles = await createRoles(database, 'p3-retry');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p3-migrations-'));
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < LABOR_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      const client = await migrationPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fs.readFileSync(path.join(MIGRATIONS, LABOR_MIGRATION), 'utf8'));
+        await expect(client.query('SELECT public.m23_part3_forced_interruption()')).rejects.toBeDefined();
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      expect((await migrationPool.query(
+        "SELECT to_regclass('public.canonical_labor_intervals') AS relation"
+      )).rows[0].relation).toBeNull();
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1', [LABOR_MIGRATION]
+      )).rows[0].count).toBe(0);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const source = localDb.loadMigrations(MIGRATIONS).find(item => item.file === LABOR_MIGRATION);
+      const applied = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1', [LABOR_MIGRATION]
+      )).rows;
+      expect(applied).toHaveLength(1);
+      expect(applied[0].checksum).toBe(source.digest);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const final = (await migrationPool.query(
+        'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1',
+        [LABOR_MIGRATION]
       )).rows[0];
       expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
       expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());

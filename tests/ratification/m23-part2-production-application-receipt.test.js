@@ -49,23 +49,31 @@ describe('Mission 23 Part 2 production application receipt', () => {
     expect(receipt).toContain('verification made no production mutation');
   });
 
-  test('keeps later-start zero-op and recovery evidence unavailable', () => {
-    expect(roadmap).toContain('A later\n  production start has not yet proved the required restart zero-op');
-    expect(roadmap).toMatch(/and\s+blocks Part 3\s+until the later-start zero-op receipt passes/);
-    expect(receipt).toContain('does **not** claim second-start zero-op');
-    expect(receipt).toContain('Part 3 remains\nblocked');
+  test('records later-start zero-op while keeping recovery evidence unavailable', () => {
+    expect(roadmap).toContain('first-start production-applied, and later-start zero-op verified');
+    expect(receipt).toContain('PR #162, the independently accepted documentation-only receipt follow-up');
+    expect(receipt).toContain('`2026-09-04T09:47:56Z`');
+    expect(receipt).toContain('`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`');
+    expect(receipt).toContain('GitHub deployment `6261881255`');
+    expect(receipt).toContain('`8ea1badb-3a7f-49bd-a0f8-0fa0a94865df`');
+    expect(receipt).toContain('`2026-09-04T09:48:41.774970382Z`');
+    expect(receipt).toContain('`2026-09-04T09:49:39.687Z`');
+    expect(receipt).toContain('contained no `[DB] Migration applied` entry');
+    expect(receipt).toContain('original `applied_at = 2026-09-04 06:42:56.965851+00`');
+    expect(receipt).toContain('no provider, configuration, or production-data mutation');
     expect(receipt).toContain('No dated production backup receipt or isolated restore rehearsal is available.');
     expect(receipt).toContain('perform no destructive database rollback');
     expect(requirementLedger).toContain('| Later-start migration zero-op |');
-    expect(requirementLedger).toContain('| Pending; Part 3 blocked |');
-    expect(unavailableLedger).toContain('second-start runner zero-op');
+    expect(requirementLedger).toContain('| Achieved; Part 3 progression gate passed |');
+    expect(unavailableLedger).toContain('they are no longer unavailable');
     expect(unavailableLedger).toContain('Backup/restore rehearsal remains unavailable');
   });
 
-  test('keeps the follow-up documentation-only and later missions unimplemented', () => {
-    expect(roadmap).toContain('**Parts 3–12: not implemented.**');
+  test('keeps the follow-up documentation-only and later release claims bounded', () => {
+    expect(roadmap).toContain('**Part 3: terminal audit-correction writer candidate in progress; not');
+    expect(roadmap).toContain('**Parts 4–12: not implemented.**');
     expect(requirementLedger).toContain('| Receipt-follow-up scope |');
-    expect(requirementLedger).toContain('No runtime, migration, route, provider, credential, configuration, or production mutation');
+    expect(requirementLedger).toContain('without adding runtime, migration, route, provider, credential, configuration, or production mutation');
     expect(unavailableLedger).toContain('Time, material, inventory, equipment, file, note, checklist, progress, blocker,');
   });
 });

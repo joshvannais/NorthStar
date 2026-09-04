@@ -59,17 +59,32 @@ record credentials.
 
 These observations establish first production application, its exact one-row
 ledger identity, the automatic runner path, exact deployed revision, and health
-for that deployment. They do not establish a later-start zero-op.
+for that deployment.
+
+## Later-start zero-op follow-up
+
+PR #162, the independently accepted documentation-only receipt follow-up,
+merged normally at `2026-09-04T09:47:56Z` as
+`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`. GitHub deployment `6261881255`
+and Railway deployment `8ea1badb-3a7f-49bd-a0f8-0fa0a94865df` reached the
+exact commit in `success` and `SUCCESS` / `RUNNING` state respectively. This was
+the ordinary sole automatic deployment; no manual restart or redeploy was used.
+
+The complete startup log for the later container start at
+`2026-09-04T09:48:41.774970382Z` contained no `[DB] Migration applied` entry.
+Read-only ledger and health verification at `2026-09-04T09:49:39.687Z` still
+reported 36 authoritative migration rows, exactly one migration 038 row, the
+unchanged checksum
+`84a0b65ec8cd01ff97043b66a543e30540e9a0bbb68a48c4b49415db3b766724`, and its
+original `applied_at = 2026-09-04 06:42:56.965851+00`. Health remained `ok`,
+with database and canonical persistence healthy.
+
+That later normal start therefore proves migration 038 restart zero-op at the
+frozen source identity: no second application, no additional ledger row, and no
+changed application timestamp. The follow-up did not inspect private rows or
+credentials and made no provider, configuration, or production-data mutation.
 
 ## Remaining release boundary
-
-A second application start after migration 038 was already present has not yet
-been observed. Therefore this receipt does **not** claim second-start zero-op,
-zero pending migrations on a later start, or unchanged 038 ledger identity after
-that later start. The later normal automatic deployment of this documentation-
-only receipt follow-up, after independent approval, is the planned opportunity
-to collect that evidence without a manual provider restart. Part 3 remains
-blocked until the root release coordinator verifies and records that result.
 
 No dated production backup receipt or isolated restore rehearsal is available.
 The previously authorized conservative disposition remains in force: preserve

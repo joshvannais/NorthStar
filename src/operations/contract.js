@@ -3,6 +3,10 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 const TRANSITIONS = new Set(['start', 'pause', 'resume']);
+const LABOR_ACTIONS = new Set(['start_timer', 'stop_timer', 'record_manual', 'correct', 'review']);
+const LABOR_CATEGORIES = new Set(['break', 'cleanup', 'other', 'production', 'setup', 'travel']);
+const LABOR_CATEGORY_CONTRACT_VERSION = 'm23-labor-category-v1';
+const LABOR_CATEGORY_CONTRACT_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
 const MAXIMUM_BODY_BYTES = 32 * 1024;
 
 class FieldExecutionContractError extends Error {
@@ -78,6 +82,125 @@ function idempotencyKey(value) {
   return value;
 }
 
+function actionCode(value) {
+  if (typeof value !== 'string' || !LABOR_ACTIONS.has(value)) {
+    fail(400, 'INVALID_LABOR_ACTION', 'Labor evidence action is invalid.');
+  }
+  return value;
+}
+
+function category(value) {
+  if (typeof value !== 'string' || !LABOR_CATEGORIES.has(value)) {
+    fail(400, 'INVALID_LABOR_CATEGORY', 'Labor category is invalid.');
+  }
+  return value;
+}
+
+function exactInstant(value, code, label) {
+  if (typeof value !== 'string' || value !== value.trim() || value.length > 64 ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+      !Number.isFinite(Date.parse(value))) {
+    fail(400, code, `${label} is invalid.`);
+  }
+  return value;
+}
+
+function timeZone(value) {
+  if (typeof value !== 'string' || value !== value.trim() || !value || value.length > 255 ||
+      !/^[A-Za-z0-9_+\-/]+$/.test(value)) {
+    fail(400, 'INVALID_LABOR_TIME_ZONE', 'Labor time-zone authority is invalid.');
+  }
+  try { new Intl.DateTimeFormat('en-US', { timeZone: value }); } catch (_error) {
+    fail(400, 'INVALID_LABOR_TIME_ZONE', 'Labor time-zone authority is invalid.');
+  }
+  return value;
+}
+
+function reviewOutcome(value) {
+  if (!['accepted', 'rejected'].includes(value)) {
+    fail(400, 'INVALID_LABOR_REVIEW', 'Labor review outcome is invalid.');
+  }
+  return value;
+}
+
+function normalizeLaborAction(input) {
+  const body = exactObject(input && input.body, new Set([
+    'action', 'performerProfileId', 'category', 'categoryContractVersion',
+    'categoryContractDigest', 'expectedExecutionRevision', 'expectedExecutionDigest',
+    'expectedAssignmentRevision', 'expectedAssignmentDigest', 'businessProfileId',
+    'businessProfileVersion', 'businessProfileHash', 'timeZone', 'observedStart',
+    'observedEnd', 'intervalId', 'expectedIntervalRevision', 'expectedIntervalDigest',
+    'reviewOutcome', 'reason',
+  ]), 'INVALID_LABOR_ACTION');
+  const common = [
+    'action', 'performerProfileId', 'categoryContractVersion', 'categoryContractDigest',
+    'expectedExecutionRevision', 'expectedExecutionDigest', 'expectedAssignmentRevision',
+    'expectedAssignmentDigest', 'businessProfileId', 'businessProfileVersion',
+    'businessProfileHash', 'timeZone', 'reason',
+  ];
+  if (common.some(key => !has(body, key))) {
+    fail(428, 'M23_LABOR_PRECONDITION_REQUIRED',
+      'Exact execution, assignment, category, time-zone, reason, and idempotency evidence are required.');
+  }
+  const action = actionCode(body.action);
+  if (body.categoryContractVersion !== LABOR_CATEGORY_CONTRACT_VERSION ||
+      body.categoryContractDigest !== LABOR_CATEGORY_CONTRACT_DIGEST) {
+    fail(409, 'M23_LABOR_CATEGORY_CONTRACT_STALE',
+      'Labor category authority changed; refresh before trying again.');
+  }
+  const needsCategory = ['start_timer', 'record_manual', 'correct'].includes(action);
+  const needsInterval = ['stop_timer', 'correct', 'review'].includes(action);
+  const needsManualTimes = ['record_manual', 'correct'].includes(action);
+  if ((needsCategory && !has(body, 'category')) || (needsInterval &&
+      ['intervalId', 'expectedIntervalRevision', 'expectedIntervalDigest'].some(key => !has(body, key))) ||
+      (needsManualTimes && ['observedStart', 'observedEnd'].some(key => !has(body, key))) ||
+      (action === 'review' && !has(body, 'reviewOutcome'))) {
+    fail(428, 'M23_LABOR_PRECONDITION_REQUIRED', 'The labor action is missing required exact evidence.');
+  }
+  if ((!needsCategory && has(body, 'category')) || (!needsInterval &&
+      ['intervalId', 'expectedIntervalRevision', 'expectedIntervalDigest'].some(key => has(body, key))) ||
+      (!needsManualTimes && ['observedStart', 'observedEnd'].some(key => has(body, key))) ||
+      (action !== 'review' && has(body, 'reviewOutcome'))) {
+    fail(400, 'INVALID_LABOR_ACTION', 'Labor action contains fields that do not apply.');
+  }
+  return Object.freeze({
+    ...trustedActor(input),
+    executionId: uuid(input && input.executionId, 'INVALID_EXECUTION_ID', 'Field execution'),
+    action,
+    performerProfileId: uuid(body.performerProfileId, 'INVALID_LABOR_PERFORMER', 'Labor performer'),
+    category: needsCategory ? category(body.category) : null,
+    categoryContractVersion: body.categoryContractVersion,
+    categoryContractDigest: digest(body.categoryContractDigest,
+      'INVALID_LABOR_CATEGORY_CONTRACT', 'Labor category contract digest'),
+    expectedExecutionRevision: revision(body.expectedExecutionRevision,
+      'INVALID_LABOR_SOURCE_PIN', 'Expected execution revision'),
+    expectedExecutionDigest: digest(body.expectedExecutionDigest,
+      'INVALID_LABOR_SOURCE_PIN', 'Expected execution digest'),
+    expectedAssignmentRevision: revision(body.expectedAssignmentRevision,
+      'INVALID_LABOR_SOURCE_PIN', 'Expected assignment revision'),
+    expectedAssignmentDigest: digest(body.expectedAssignmentDigest,
+      'INVALID_LABOR_SOURCE_PIN', 'Expected assignment digest'),
+    businessProfileId: uuid(body.businessProfileId, 'INVALID_LABOR_TIME_AUTHORITY', 'Business Profile'),
+    businessProfileVersion: revision(body.businessProfileVersion,
+      'INVALID_LABOR_TIME_AUTHORITY', 'Business Profile version'),
+    businessProfileHash: digest(body.businessProfileHash,
+      'INVALID_LABOR_TIME_AUTHORITY', 'Business Profile hash'),
+    timeZone: timeZone(body.timeZone),
+    observedStart: needsManualTimes ? exactInstant(body.observedStart,
+      'INVALID_LABOR_INSTANT', 'Observed start') : null,
+    observedEnd: needsManualTimes ? exactInstant(body.observedEnd,
+      'INVALID_LABOR_INSTANT', 'Observed end') : null,
+    intervalId: needsInterval ? uuid(body.intervalId, 'INVALID_LABOR_INTERVAL', 'Labor interval') : null,
+    expectedIntervalRevision: needsInterval ? revision(body.expectedIntervalRevision,
+      'INVALID_LABOR_PRECONDITION', 'Expected labor interval revision') : null,
+    expectedIntervalDigest: needsInterval ? digest(body.expectedIntervalDigest,
+      'INVALID_LABOR_PRECONDITION', 'Expected labor interval digest') : null,
+    reviewOutcome: action === 'review' ? reviewOutcome(body.reviewOutcome) : null,
+    reason: reason(body.reason),
+    idempotencyKey: idempotencyKey(input && input.idempotencyKey),
+  });
+}
+
 function trustedActor(input) {
   return Object.freeze({
     organizationId: uuid(input && input.organizationId, 'INVALID_EXECUTION_ORGANIZATION', 'Organization'),
@@ -144,10 +267,15 @@ function normalizeExecutionId(value) {
 module.exports = {
   DIGEST,
   FieldExecutionContractError,
+  LABOR_ACTIONS,
+  LABOR_CATEGORIES,
+  LABOR_CATEGORY_CONTRACT_DIGEST,
+  LABOR_CATEGORY_CONTRACT_VERSION,
   MAXIMUM_BODY_BYTES,
   TRANSITIONS,
   UUID,
   normalizeExecutionId,
   normalizeInitialization,
+  normalizeLaborAction,
   normalizeTransition,
 };

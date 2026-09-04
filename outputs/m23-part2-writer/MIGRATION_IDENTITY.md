@@ -25,6 +25,8 @@ dated production-readiness receipt proves exact pre-application history and
 compatibility through migration 037. The later
 `PRODUCTION_APPLICATION_RECEIPT.md` records the normal merge, sole automatic
 deployment, first-start application, exact one-row production checksum, and
-healthy application at the same frozen identity. A later production start
-remains required to prove restart zero-op; that gate is not inferred from the
-first successful start.
+healthy application at the same frozen identity. Its dated follow-up also
+records the later automatic container start with no migration-applied entry and
+the unchanged one-row checksum/timestamp, thereby proving restart zero-op. That
+evidence is distinct from the first successful start and was not inferred from
+it.

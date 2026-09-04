@@ -64,14 +64,14 @@ provider mutation, or production-data mutation was involved.
 ### Focused Part 1–4 ratification
 
 - Test suites: 5 passed / 5 total
-- Tests: 41 passed / 41 total
+- Tests: 42 passed / 42 total
 - Snapshots: 0
 - Failures: 0
 
 ### Complete ratification
 
 - Test suites: 22 passed / 22 total
-- Tests: 354 passed / 354 total
+- Tests: 355 passed / 355 total
 - Snapshots: 0
 - Failures: 0
 
@@ -85,7 +85,7 @@ provider mutation, or production-data mutation was involved.
 ### Mission 21–23 and protected cross-contract regression
 
 - Test suites: 12 passed / 12 total
-- Tests: 175 passed / 175 total
+- Tests: 176 passed / 176 total
 - Snapshots: 0
 - Failures: 0
 

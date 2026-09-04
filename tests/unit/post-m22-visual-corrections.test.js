@@ -233,8 +233,9 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(shell).toContain("node('button', 'today-sign-out')");
     expect(shell).toContain("control.setAttribute('aria-disabled', 'true')");
     expect(shared).toMatch(/\.northstar-theme-switch\s*\{[\s\S]*width:\s*76px\s*!important;[\s\S]*height:\s*38px\s*!important;[\s\S]*border-radius:\s*999px/);
-    expect(shared).toMatch(/\.northstar-theme-switch::before\s*\{[\s\S]*width:\s*30px;[\s\S]*height:\s*30px;/);
-    expect(shared).toMatch(/data-current-theme="dark"\]::before\s*\{\s*transform:\s*translateX\(38px\)/);
+    expect(shared).toMatch(/\.northstar-theme-switch::before\s*\{[\s\S]*top:\s*50%;[\s\S]*left:\s*25%;[\s\S]*width:\s*34px;[\s\S]*height:\s*34px;[\s\S]*transform:\s*translate\(-50%,\s*-50%\)/);
+    expect(shared).toMatch(/\.northstar-theme-switch\[data-current-theme="dark"\]::before\s*\{[^}]*left:\s*75%;/s);
+    expect(shared).not.toMatch(/data-current-theme="dark"\]::before\s*\{\s*transform:\s*translateX/);
     expect(today).toContain('.today-sign-out');
     expect(today).toContain('.today-sign-out:disabled');
   });
@@ -336,7 +337,9 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(css).not.toMatch(/\.demo-table-wrap table\s*\{[^}]*760px/);
     expect(css).toMatch(/\.demo-leads-panel \.demo-table-wrap\s*\{\s*display:\s*none/);
     expect(css).toMatch(/\.command-center-mobile-leads\s*\{\s*display:\s*grid/);
-    expect(page).toContain("element('article', 'command-center-mobile-customer')");
+    expect(page).toContain("element('details', 'command-center-mobile-customer customer-record-card')");
+    expect(page).toContain("element('summary', 'command-center-mobile-customer-header')");
+    expect(page).not.toContain('card.open = true');
     for (const label of ['Recorded Value', 'Status', 'Next Action']) expect(page).toContain(`'${label}'`);
   });
 

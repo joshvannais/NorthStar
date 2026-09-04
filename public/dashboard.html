@@ -144,16 +144,20 @@
     .cc-pipe-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
 
     /* ── Customers ── */
-    .cc-cust-list { display: flex; flex-direction: column; gap: 4px; }
+    .cc-cust-list { display: flex; flex-direction: column; gap: 8px; }
     .cc-cust-item {
-      display: flex; align-items: center; gap: 8px; padding: 7px 10px;
-      border-radius: 6px; background: var(--neutral-100); cursor: pointer;
-      transition: all 0.12s; text-decoration: none; color: inherit;
+      display: block; border: 1px solid var(--theme-border); border-radius: 14px;
+      background: var(--theme-surface); color: inherit; overflow: hidden;
     }
-    .cc-cust-item:hover { background: var(--neutral-200); }
-    .cc-cust-name { font-size: 12px; font-weight: 500; color: var(--neutral-800); flex: 1; }
-    [data-theme="dark"] .cc-cust-name { color: var(--neutral-200); }
-    .cc-cust-tag { font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 3px; }
+    .cc-cust-summary { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; gap:10px; padding:12px; cursor:pointer; list-style:none; }
+    .cc-cust-summary::-webkit-details-marker { display:none; }
+    .cc-cust-summary > * { min-width:0; }
+    .cc-cust-name { min-width:0; border:0; padding:0; background:transparent; font:inherit; font-size:13px; font-weight:700; color:var(--theme-text); text-align:left; cursor:pointer; overflow-wrap:anywhere; }
+    .cc-cust-tag { font-size:10px; font-weight:700; padding:4px 8px; border-radius:999px; }
+    .cc-cust-chevron { color:var(--theme-muted); transition:transform .16s ease; }
+    .cc-cust-item[open] .cc-cust-chevron { transform:rotate(180deg); }
+    .cc-cust-details { display:grid; gap:6px; padding:0 12px 12px; border-top:1px solid var(--theme-border); color:var(--theme-muted); font-size:12px; }
+    .cc-cust-details p { margin:8px 0 0; }
     .cc-cust-tag.new { background: rgba(16,185,129,0.15); color: var(--success); }
     .cc-cust-tag.returning { background: rgba(59,130,246,0.15); color: var(--info); }
     .cc-cust-tag.attention { background: rgba(239,68,68,0.15); color: var(--danger); }
@@ -286,6 +290,10 @@
   <script src="/js/simulator.js"></script>
   <script src="/js/polaris-engine.js"></script>
   <script src="/js/notification-service.js"></script>
+  <script src="/js/presentation-format.js"></script>
+  <script src="/js/transcript-renderer.js"></script>
+  <script src="/js/navigation-launcher.js"></script>
+  <script src="/js/customer-detail.js"></script>
 
   <script>
     (function() {
@@ -549,17 +557,43 @@
               var tag = 'new', tagLabel = 'New';
               if (c.totalJobs > 0 || c.status === 'active') { tag = 'returning'; tagLabel = 'Returning'; }
               if (c.health !== undefined && c.health < 40) { tag = 'attention'; tagLabel = 'Attention'; }
-              var link = document.createElement('a');
-              link.href = '/dashboard/polaris';
-              link.className = 'cc-cust-item';
-              var name = document.createElement('span');
+              var details = document.createElement('details');
+              details.className = 'cc-cust-item customer-record-card';
+              details.dataset.customerId = String(c.id || '');
+              var summary = document.createElement('summary');
+              summary.className = 'cc-cust-summary';
+              var avatar = document.createElement('span');
+              avatar.className = 'customer-record-avatar';
+              avatar.setAttribute('aria-hidden', 'true');
+              avatar.textContent = String(c.name || 'NS').split(/\s+/).filter(Boolean).slice(0, 2).map(function(part) { return part.charAt(0); }).join('').toUpperCase();
+              var name = document.createElement('button');
+              name.type = 'button';
               name.className = 'cc-cust-name';
               name.textContent = c.name || 'Unknown';
+              name.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (window.CustomerDetail && typeof window.CustomerDetail.open === 'function') {
+                  window.CustomerDetail.open(c.id, { source: 'customer' });
+                }
+              });
               var badge = document.createElement('span');
               badge.className = 'cc-cust-tag ' + tag;
               badge.textContent = tagLabel;
-              link.append(name, badge);
-              list.appendChild(link);
+              var chevron = document.createElement('span');
+              chevron.className = 'cc-cust-chevron';
+              chevron.textContent = '⌄';
+              chevron.setAttribute('aria-hidden', 'true');
+              summary.append(avatar, name, badge, chevron);
+              var customerFacts = document.createElement('div');
+              customerFacts.className = 'cc-cust-details';
+              var jobs = document.createElement('p');
+              jobs.textContent = 'Recorded jobs: ' + Number(c.totalJobs || 0).toLocaleString();
+              var contact = document.createElement('p');
+              contact.textContent = c.phone || c.email || 'Contact information not recorded';
+              customerFacts.append(jobs, contact);
+              details.append(summary, customerFacts);
+              list.appendChild(details);
             });
             el.appendChild(list);
             if (customers.length > 6) {

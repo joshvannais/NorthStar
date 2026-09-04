@@ -142,19 +142,31 @@
   function customerDetailControl(graph) {
     var name = presentationString(graph && graph.customer && graph.customer.name, 'Customer name unavailable');
     var customerId = safeString(graph && graph.ids && graph.ids.customer);
-    if (!customerId) return element('span', 'command-center-record-name', name);
-
-    var control = element('button', 'command-center-record-link', name);
-    control.type = 'button';
-    control.addEventListener('click', function () {
-      if (!global.CustomerDetail || typeof global.CustomerDetail.open !== 'function') {
-        setStatus('Customer details are unavailable. Try again shortly.', 'error');
-        return;
-      }
-      control.focus();
-      global.CustomerDetail.open(customerId, { source: 'leads' });
-    });
-    return control;
+    var service = presentationString(graph && graph.lead && graph.lead.serviceLabel, titleCase(graph && graph.lead && graph.lead.serviceType));
+    var initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (part) { return part.charAt(0); }).join('').toUpperCase() || 'NS';
+    var identity = element('span', 'customer-record-identity');
+    var heading = element('span', 'customer-record-heading');
+    var control = customerId
+      ? element('button', 'command-center-record-link', name)
+      : element('span', 'command-center-record-name', name);
+    if (customerId) {
+      control.type = 'button';
+      control.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!global.CustomerDetail || typeof global.CustomerDetail.open !== 'function') {
+          setStatus('Customer details are unavailable. Try again shortly.', 'error');
+          return;
+        }
+        control.focus();
+        global.CustomerDetail.open(customerId, { source: 'leads' });
+      });
+    }
+    heading.append(control, element('span', '', service));
+    var avatar = element('span', 'customer-record-avatar', initials);
+    avatar.setAttribute('aria-hidden', 'true');
+    identity.append(avatar, heading);
+    return identity;
   }
 
   function latestGraphs() {
@@ -616,11 +628,12 @@
       });
 
       var firstGraph = group.records[0];
-      var customerCard = element('article', 'command-center-mobile-customer');
-      var customerHeader = element('header', 'command-center-mobile-customer-header');
+      var customerCard = element('details', 'command-center-mobile-customer customer-record-card');
+      var customerHeader = element('summary', 'command-center-mobile-customer-header');
       customerHeader.append(
         customerDetailControl(firstGraph),
-        element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records'))
+        element('span', 'command-center-customer-record-count', group.records.length + (group.records.length === 1 ? ' work record' : ' work records')),
+        element('span', 'command-center-customer-chevron', '⌄')
       );
       var groupRecordedAt = formatDate(firstGraph.timestamps && firstGraph.timestamps.createdAt);
       if (groupRecordedAt) customerHeader.appendChild(element('span', 'command-center-customer-recorded-at', groupRecordedAt));

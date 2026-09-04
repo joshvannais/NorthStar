@@ -131,7 +131,16 @@
 @media (max-width: 768px) {
   .northstar-demo-toolbar { scroll-margin-top: 76px; }
   .command-center-blueprint-page .m22-state-summary { grid-template-columns: 1fr; }
-  .customer-drawer { inset: 0 !important; width: 100vw !important; max-width: none !important; height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; }
+  .customer-drawer {
+    inset: 50% auto auto 50% !important;
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    height: calc(100dvh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    border-radius: 18px !important;
+    transform: translate(-50%, -50%) scale(.98) !important;
+  }
+  .customer-drawer.open { transform: translate(-50%, -50%) scale(1) !important; }
   .calendar-page .cal-kpi-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calendar-page .cal-kpi-pill { min-height: 82px; padding: 12px; }
 }

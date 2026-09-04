@@ -61,6 +61,48 @@ function todayFixture(role) {
   };
 }
 
+function workforceFixture() {
+  return {
+    success: true,
+    data: {
+      members: [
+        {
+          profileId: '00000000-0000-4000-8000-000000000711',
+          membershipId: '00000000-0000-4000-8000-000000000712',
+          name: 'Cameron Fixture', email: 'cameron@example.com', phone: '(206) 555-0102',
+          membershipStatus: 'active', accessRole: 'owner', operationalRole: 'owner_operator',
+          homeLocationId: '00000000-0000-4000-8000-000000000715',
+          skillIds: ['00000000-0000-4000-8000-000000000716'],
+        },
+        {
+          profileId: '00000000-0000-4000-8000-000000000713',
+          membershipId: '00000000-0000-4000-8000-000000000714',
+          name: 'Avery Installer', email: 'avery@example.com', phone: '',
+          membershipStatus: 'active', accessRole: 'member', operationalRole: 'technician',
+          homeLocationId: '00000000-0000-4000-8000-000000000715',
+          skillIds: [],
+        },
+      ],
+      crews: [{
+        id: '00000000-0000-4000-8000-000000000717', key: 'north-crew', name: 'North Crew',
+        homeLocationId: '00000000-0000-4000-8000-000000000715',
+        members: [{ profileId: '00000000-0000-4000-8000-000000000713', role: 'lead' }],
+      }],
+      skills: [{
+        id: '00000000-0000-4000-8000-000000000716', key: 'roofing', name: 'Roofing',
+        description: 'Roof inspection and repair', serviceId: '00000000-0000-4000-8000-000000000718',
+      }],
+      invitations: [],
+      locations: [{ id: '00000000-0000-4000-8000-000000000715', name: 'Main Office' }],
+      services: [{ id: '00000000-0000-4000-8000-000000000718', name: 'Roof repair' }],
+      policies: [{
+        id: '00000000-0000-4000-8000-000000000719', name: 'Safety review',
+        description: 'Review access and equipment before dispatch.', enabled: true,
+      }],
+    },
+  };
+}
+
 function demoWorkspace() {
   return buildDemoWorkspace({
     tenantId: DEMO_TENANT_ID,
@@ -73,7 +115,7 @@ function demoWorkspace() {
   });
 }
 
-function canonicalFixture(request, surface, role) {
+function canonicalFixture(request, surface, role, viewerId, organizationId) {
   const fixture = {
     success: true,
     data: {
@@ -84,8 +126,8 @@ function canonicalFixture(request, surface, role) {
       records: [],
       metrics: { graphCount: 0, appointmentCount: 0, estimatedRevenue: null },
       authority: {
-        userId: '00000000-0000-4000-8000-000000000703',
-        organizationId: DEMO_TENANT_ID,
+        userId: viewerId || '00000000-0000-4000-8000-000000000703',
+        organizationId: organizationId || DEMO_TENANT_ID,
         sessionId: request.headers()['x-northstar-session-id'] || DEMO_SESSION_ID,
       },
     },
@@ -133,11 +175,21 @@ async function installBoundary(context, origin, role, evidence) {
     if (url.pathname === '/api/account/subscription') return route.fulfill(response({ subscription: accountFixture(role, framePath).account.subscription }));
     if (url.pathname === '/api/demo/command-center') return route.fulfill(response({ success: true, data: demoWorkspace() }));
     const demoCompat = url.pathname.match(/^\/api\/demo\/command-center\/canonical\/compat\/([^/]+)$/);
-    if (demoCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(demoCompat[1]), role)));
+    if (demoCompat) {
+      const workspace = demoWorkspace();
+      return route.fulfill(response(canonicalFixture(
+        request,
+        decodeURIComponent(demoCompat[1]),
+        role,
+        workspace.viewer.id,
+        workspace.tenant.id
+      )));
+    }
     const paidCompat = url.pathname.match(/^\/api\/v1\/canonical\/compat\/([^/]+)$/);
     if (paidCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(paidCompat[1]), role)));
     if (url.pathname === '/api/v1/business-profile') return route.fulfill(response({ success: true, profile: null }));
     if (url.pathname === '/api/v1/today') return route.fulfill(response({ success: true, data: todayFixture(role) }));
+    if (url.pathname === '/api/workforce') return route.fulfill(response(workforceFixture()));
     if (url.pathname === '/api/health') return route.fulfill(response({ status: 'ok', database: 'healthy', persistence: 'healthy' }));
     return route.fulfill(response({ success: true, data: {}, records: [], items: [] }));
   });
@@ -240,6 +292,165 @@ async function semanticAudit(page) {
       bodyText: document.body.innerText.replace(/\s+/g, ' ').trim(),
     };
   }, FORBIDDEN_PRESENTATION.source);
+}
+
+async function founderVisualCorrectionAudit(page, entry, viewportName) {
+  const route = entry.route;
+  const themeSelectorGeometry = await page.locator('[data-northstar-theme-toggle]:visible').first().evaluate(node => {
+    const track = getComputedStyle(node);
+    const selection = getComputedStyle(node, '::before');
+    return {
+      theme: node.getAttribute('data-current-theme'),
+      trackWidth: Number.parseFloat(track.width),
+      trackHeight: Number.parseFloat(track.height),
+      selectionCenterX: Number.parseFloat(selection.left),
+      selectionCenterY: Number.parseFloat(selection.top),
+      selectionWidth: Number.parseFloat(selection.width),
+      selectionHeight: Number.parseFloat(selection.height),
+    };
+  });
+  const expectedSelectionCenterX = themeSelectorGeometry.trackWidth *
+    (themeSelectorGeometry.theme === 'dark' ? .75 : .25);
+  assert.ok(Math.abs(themeSelectorGeometry.selectionCenterX - expectedSelectionCenterX) <= .5,
+    `${viewportName} ${route} centers the selected theme circle over its horizontal half`);
+  assert.ok(Math.abs(themeSelectorGeometry.selectionCenterY - themeSelectorGeometry.trackHeight / 2) <= .5,
+    `${viewportName} ${route} centers the selected theme circle vertically`);
+  assert.ok(Math.abs(themeSelectorGeometry.selectionWidth - themeSelectorGeometry.selectionHeight) <= .5,
+    `${viewportName} ${route} keeps the selected theme fill circular`);
+  assert.ok(themeSelectorGeometry.selectionWidth >= themeSelectorGeometry.trackHeight - 4,
+    `${viewportName} ${route} fills the selected half without an excessive inner gap`);
+
+  if (route === '/') {
+    assert.strictEqual(await page.locator('.pricing-feature-list').count(), 3,
+      `${viewportName} pricing publishes an included-items list for each public plan`);
+    const pricingTypography = await page.locator('.pricing-card .price').first().evaluate(node => ({
+      price: getComputedStyle(node).fontFamily,
+      body: getComputedStyle(document.body).fontFamily,
+    }));
+    assert.strictEqual(pricingTypography.price, pricingTypography.body,
+      `${viewportName} pricing uses the approved body typeface`);
+  }
+
+  if (/\/(?:team|leads|communications)$/.test(route)) {
+    const search = page.locator('.northstar-search:visible').first();
+    assert.strictEqual(await search.count(), 1, `${viewportName} ${route} exposes one visible shared search control`);
+    const spacing = await search.evaluate(node => {
+      const icon = node.querySelector('svg').getBoundingClientRect();
+      const input = node.querySelector('input[type="search"]').getBoundingClientRect();
+      return { iconRight: icon.right, inputLeft: input.left };
+    });
+    assert.ok(spacing.inputLeft >= spacing.iconRight + 4,
+      `${viewportName} ${route} keeps its search icon clear of its input text`);
+  }
+
+  if (route.endsWith('/team')) {
+    await page.waitForFunction(() => document.documentElement.getAttribute('data-workforce-state') === 'ready');
+    const search = page.locator('#teamSearchInput');
+    const originalVisibleCards = await page.locator('#workforceShell .wf-card').evaluateAll(nodes =>
+      nodes.filter(node => !node.hidden).length);
+    assert.ok(originalVisibleCards > 1, `${viewportName} ${route} begins with multiple searchable workforce records`);
+    const selectedMemberName = await page.locator('#membersList .wf-card h3').first().innerText();
+    assert.ok(selectedMemberName.trim(), `${viewportName} ${route} exposes a named workforce record for search`);
+    await search.fill(selectedMemberName);
+    const cardStates = await page.locator('#workforceShell .wf-card').evaluateAll(nodes =>
+      nodes.map(node => ({ hidden: node.hidden, text: node.innerText })));
+    const filteredCards = cardStates.filter(card => !card.hidden).map(card => card.text);
+    assert.strictEqual(filteredCards.length, 1,
+      `${viewportName} ${route} filters workforce records as the owner types: ${JSON.stringify(cardStates)}`);
+    assert.ok(filteredCards[0].includes(selectedMemberName),
+      `${viewportName} ${route} retains the matching workforce record`);
+    await search.fill('');
+    assert.strictEqual(await page.locator('#workforceShell .wf-card').evaluateAll(nodes =>
+      nodes.filter(node => !node.hidden).length), originalVisibleCards,
+      `${viewportName} ${route} restores workforce records when search is cleared`);
+  }
+
+  if (route.endsWith('/integrations')) {
+    const categories = page.locator('.integration-category-details');
+    const categoryCount = await categories.count();
+    if (route.startsWith('/demo')) {
+      assert.ok(categoryCount > 0, `${viewportName} ${route} renders integration categories`);
+    }
+    assert.strictEqual(await categories.evaluateAll(nodes => nodes.filter(node => node.open).length), 0,
+      `${viewportName} ${route} renders every integration category collapsed`);
+  }
+
+  if (route.endsWith('/polaris')) {
+    const placement = await page.locator('.polaris-prompt-bar').evaluate(node => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return { position: style.position, bottomGap: innerHeight - rect.bottom, left: rect.left, right: innerWidth - rect.right };
+    });
+    assert.strictEqual(placement.position, 'fixed', `${viewportName} ${route} fixes the Polaris composer to the viewport`);
+    assert.ok(Math.abs(placement.bottomGap) <= 1, `${viewportName} ${route} anchors the Polaris composer to the bottom edge`);
+    assert.ok(placement.left >= 0 && placement.right >= 0, `${viewportName} ${route} keeps the Polaris composer inside the viewport`);
+  }
+
+  if (route.endsWith('/business-profile') && viewportName !== 'zoom200') {
+    const rail = await page.locator('.bp-container').evaluate(node => {
+      const own = node.getBoundingClientRect();
+      const parent = node.parentElement.getBoundingClientRect();
+      const parentStyle = getComputedStyle(node.parentElement);
+      const parentContentWidth = parent.width
+        - Number.parseFloat(parentStyle.paddingLeft)
+        - Number.parseFloat(parentStyle.paddingRight);
+      return { ownWidth: own.width, parentContentWidth };
+    });
+    assert.ok(Math.abs(rail.parentContentWidth - rail.ownWidth) <= 2,
+      `${viewportName} ${route} uses the full available page rail`);
+  }
+
+  if (route === '/demo' && viewportName.startsWith('mobile')) {
+    const cards = page.locator('.command-center-mobile-customer');
+    assert.ok(await cards.count() > 0, `${viewportName} Command Center renders grouped customer cards`);
+    assert.strictEqual(await cards.evaluateAll(nodes => nodes.filter(node => node.open).length), 0,
+      `${viewportName} Command Center customer cards render collapsed`);
+    const firstCard = cards.first();
+    const firstSummary = firstCard.locator(':scope > summary');
+    await firstSummary.focus();
+    await firstSummary.press('Enter');
+    assert.strictEqual(await firstCard.evaluate(node => node.open), true,
+      `${viewportName} Command Center expands a customer card from the keyboard`);
+    const customerControl = firstSummary.locator('.command-center-record-link');
+    const routeBeforeCustomerOpen = new URL(page.url()).pathname;
+    await customerControl.focus();
+    await customerControl.press('Enter');
+    await page.locator('.customer-drawer.open[aria-hidden="false"]').waitFor();
+    assert.strictEqual(new URL(page.url()).pathname, routeBeforeCustomerOpen,
+      `${viewportName} Command Center customer names open the drawer without navigating to Polaris`);
+    assert.strictEqual(await firstCard.evaluate(node => node.open), true,
+      `${viewportName} Command Center customer-name activation does not collapse the selected card`);
+  }
+
+  if (route.endsWith('/leads') && viewportName !== 'zoom200') {
+    await page.evaluate(() => {
+      if (!document.querySelector('.customer-drawer')) {
+        const drawer = document.createElement('div');
+        drawer.className = 'customer-drawer open';
+        drawer.setAttribute('data-visual-contract-probe', 'true');
+        document.body.appendChild(drawer);
+      }
+    });
+    await page.locator('.customer-drawer').waitFor({ state: 'visible' });
+    const drawerAudit = await page.evaluate(() => {
+      const drawer = document.querySelector('.customer-drawer');
+      if (!drawer) return null;
+      const rect = drawer.getBoundingClientRect();
+      return {
+        left: rect.left, right: innerWidth - rect.right,
+        top: rect.top, bottom: innerHeight - rect.bottom,
+        radius: Number.parseFloat(getComputedStyle(drawer).borderTopLeftRadius),
+      };
+    });
+    assert.ok(drawerAudit, `${viewportName} ${route} mounts the shared customer drawer`);
+    if (viewportName.startsWith('mobile')) {
+      assert.ok(drawerAudit.left >= 11 && drawerAudit.right >= 11 && drawerAudit.top >= 11 && drawerAudit.bottom >= 11,
+        `${viewportName} ${route} keeps the customer drawer away from every viewport edge`);
+      assert.ok(drawerAudit.radius >= 18, `${viewportName} ${route} preserves the rounded mobile drawer border`);
+    } else {
+      assert.ok(drawerAudit.radius >= 16, `${viewportName} ${route} preserves the rounded desktop drawer border`);
+    }
+  }
 }
 
 async function exerciseQuickStartReopen(page) {
@@ -371,6 +582,7 @@ async function run(engine, origin) {
                 `${engine} ${viewportName} applies the requested zoom`);
             }
             const audit = await semanticAudit(page);
+            await founderVisualCorrectionAudit(page, entry, viewportName);
             const label = `${engine} ${viewportName} ${theme} ${entry.route}`;
             if (audit.h1.length !== 1) failures.push({ label, kind: 'h1', value: audit.h1 });
             if (audit.mainCount !== 1) failures.push({ label, kind: 'main', value: audit.mainCount });

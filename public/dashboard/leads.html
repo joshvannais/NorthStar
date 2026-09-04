@@ -314,6 +314,13 @@
       </div>
       </div>
 
+      <div class="ds-widget ds-widget-full">
+        <div class="northstar-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <label class="sr-only" for="leadSearchInput">Search leads</label>
+          <input type="search" id="leadSearchInput" placeholder="Search customers, phones, services, statuses, or descriptions" oninput="setLeadSearch(this.value)">
+        </div>
+      </div>
       <!-- Leads Table -->
       <div class="ds-widget ds-widget-full">
       <div class="table-container">
@@ -372,6 +379,8 @@
 
     // Page-local leads array — fetched from canonical Polaris API (server source of truth).
     var pageLeads = [];
+    var filteredPageLeads = [];
+    var pageLeadSearch = '';
     var pageCustomers = {};
     var leadsLoadState = 'loading';
 
@@ -438,7 +447,7 @@
 
     function openLeadDrawer(el) {
       var idx = parseInt(el.getAttribute('data-lead-index'), 10);
-      var lead = pageLeads[idx];
+      var lead = filteredPageLeads[idx];
       if (!lead) return;
       if (lead.customerId && typeof CustomerDetail !== 'undefined') {
         if (typeof el.focus === 'function') el.focus({ preventScroll: true });
@@ -453,11 +462,32 @@
 
     function loadLeads() {
       fetchLeads().then(function() {
-        document.getElementById('leadCount').textContent = pageLeads.length + ' leads';
-        renderLeads(pageLeads);
+        renderCurrentLeads();
         renderKpiCards(pageLeads);
         document.getElementById('leadsContent').setAttribute('aria-busy', 'false');
       });
+    }
+
+    function leadMatchesSearch(lead, query) {
+      if (!query) return true;
+      var haystack = [lead.callerName, lead.customerName, lead.phone, lead.phoneNumber, lead.service,
+        lead.status, lead.stageDisplayName, lead.description, lead.jobDetail].join(' ').toLowerCase();
+      return haystack.indexOf(query) >= 0;
+    }
+
+    function renderCurrentLeads() {
+      var query = pageLeadSearch.trim().toLowerCase();
+      filteredPageLeads = pageLeads.filter(function(lead) { return leadMatchesSearch(lead, query); });
+      var count = document.getElementById('leadCount');
+      count.textContent = query
+        ? filteredPageLeads.length + ' of ' + pageLeads.length + ' leads'
+        : pageLeads.length + (pageLeads.length === 1 ? ' lead' : ' leads');
+      renderLeads(filteredPageLeads);
+    }
+
+    function setLeadSearch(value) {
+      pageLeadSearch = String(value || '');
+      renderCurrentLeads();
     }
 
     function csvCell(value) {
@@ -511,9 +541,11 @@
     // === Leads Table ===
     function renderLeads(leads) {
       if (leads.length === 0) {
+        var hasSearch = pageLeadSearch.trim().length > 0;
         var emptyMessage = leadsLoadState === 'denied' ?
           '<div class="empty-state" role="status" aria-live="polite" aria-atomic="true"><div aria-hidden="true">!</div><h3>Lead access unavailable</h3><p>Your current access does not include these lead details. Ask an owner or administrator to review your access.</p></div>' : leadsLoadState === 'error' ?
           '<div class="empty-state" role="status" aria-live="polite" aria-atomic="true"><div aria-hidden="true">!</div><h3>Leads unavailable</h3><p>Lead details could not be loaded. Try again shortly.</p></div>' :
+          hasSearch ? '<div class="empty-state" role="status" aria-live="polite" aria-atomic="true"><h3>No matching leads</h3><p>Try another customer, phone, service, status, or description.</p></div>' :
           '<div class="empty-state" role="status" aria-live="polite" aria-atomic="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>No leads yet</h3><p>Connect your phone number to start receiving calls.</p></div>';
         document.getElementById('leadsContent').innerHTML = emptyMessage;
         return;

@@ -380,11 +380,15 @@ function runCalendar(source, includeEvent) {
   };
 }
 
-async function runCustomerDetail(source, launcherApi) {
+async function runCustomerDetail(source, launcherApi, includeEstimate) {
   var projections = {
     'customer-detail': { digest: 'customer-digest', records: [{ id: 'customer-1', name: 'Avery <Cedar>', address: CANONICAL_ADDRESS, status: 'active' }], items: [source] },
     leads: { digest: 'customer-digest', records: [{ id: 'lead-1', status: 'qualified' }], items: [] },
-    estimates: { digest: 'customer-digest', records: [], items: [] },
+    estimates: {
+      digest: 'customer-digest',
+      records: includeEstimate ? [{ id: 'estimate-1', canonical: source }] : [],
+      items: includeEstimate ? [source] : [],
+    },
     communications: { digest: 'customer-digest', records: [], items: [] },
   };
   var canonicalIntelligence = {
@@ -413,6 +417,7 @@ async function runCustomerDetail(source, launcherApi) {
     confidence: runtime.document.getElementById('cdPolConfidence'),
     revenue: runtime.document.getElementById('cdPolRevenue'),
     action: runtime.document.getElementById('cdPolAction'),
+    pricingBreakdown: runtime.document.getElementById('cdPricingBreakdown'),
     loading: runtime.document.getElementById('cdDrawerLoading'),
     selectorCalls: runtime.selectorCalls,
   };
@@ -808,6 +813,20 @@ describe('Mission 19 Part 4 Slice 3 shared Polaris presentation selector', () =>
     expect(result.summary.textContent).toBe('Persisted Profile Fence');
     expect(result.price.textContent).toBe('$37,376');
     expect(result.action.textContent).toBe('Schedule the requested estimate window');
+  });
+
+  test('real CustomerDetail discloses a canonical serviceCharge permit under Permits And Fees only', async () => {
+    const values = productionCalculation();
+    const result = await runCustomerDetail(canonicalEnvelope(values), undefined, true);
+    const rendered = result.pricingBreakdown.innerHTML;
+    const fees = rendered.match(/id="cdPricingCategory-fees"[\s\S]*?<\/section>/)[0];
+    const service = rendered.match(/id="cdPricingCategory-service"[\s\S]*?<\/section>/)[0];
+
+    expect(fees).toContain('Profile permit charge');
+    expect(fees).toContain('$9,999');
+    expect(fees).not.toContain('Awaiting a recorded input.');
+    expect(service).not.toContain('Profile permit charge');
+    expect(rendered.match(/Profile permit charge/g)).toHaveLength(1);
   });
 
   test.each([

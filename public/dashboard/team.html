@@ -38,6 +38,13 @@
         <div><h1>Team</h1><p>Individual access, job roles, skills, crews, locations, and workforce policies.</p></div>
         <span class="wf-badge" id="workforceAuthority">Role-authorized workspace</span>
       </div>
+      <div class="ds-widget ds-widget-full">
+        <div class="northstar-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <label class="sr-only" for="teamSearchInput">Search team and workforce</label>
+          <input type="search" id="teamSearchInput" placeholder="Search people, roles, skills, crews, or policies">
+        </div>
+      </div>
       <p id="workforceStatus" class="wf-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <section class="wf-overview" id="workforceSummary" aria-label="Team summary" aria-busy="true">
         <div class="wf-overview-card"><span class="wf-overview-label">People</span><span class="wf-overview-value" data-workforce-summary="members">—</span></div>
@@ -108,7 +115,7 @@
   <script>
   (function () {
     'use strict';
-    var state = { account: null, data: null, policies: [] };
+    var state = { account: null, data: null, policies: [], search: '' };
     var generatedControlId = 0;
     var operationalRoles = [
       ['owner','Owner'],['administrator','Administrator'],['dispatcher','Dispatcher'],
@@ -236,6 +243,18 @@
       });
       return root;
     }
+    function indexWorkforceCard(card, values) {
+      var terms = [];
+      (function collect(value) {
+        if (Array.isArray(value)) {
+          value.forEach(collect);
+        } else if (value !== null && value !== undefined) {
+          terms.push(String(value));
+        }
+      })(values);
+      card.dataset.searchText = terms.join(' ').normalize('NFC').toLowerCase();
+      return card;
+    }
     async function mutate(url, options, success) {
       status('Saving…');
       try {
@@ -257,6 +276,14 @@
       state.data.invitations.forEach(function (invitation) {
         var card = element('article', 'wf-card');
         card.dataset.invitationId = invitation.invitationId;
+        var invitationSkills = state.data.skills.filter(function (skill) {
+          return invitation.skillIds.includes(skill.id);
+        }).map(function (skill) { return skill.name; });
+        indexWorkforceCard(card, [
+          'invitation pending invite', invitation.name, invitation.email, invitation.phone,
+          invitation.accessRole, labelFor(operationalRoles, invitation.operationalRole, invitation.operationalRole),
+          labelFor(locationEntries(), invitation.homeLocationId, 'None'), invitationSkills
+        ]);
         var head = element('div', 'wf-card-head');
         head.append(element('h3', '', invitation.name));
         var badge = element('span', 'wf-badge', invitation.status);
@@ -267,10 +294,7 @@
           'Access: ' + invitation.accessRole + ' Â· Job role: ' +
           labelFor(operationalRoles, invitation.operationalRole, invitation.operationalRole) + ' Â· Location: ' +
           labelFor(locationEntries(), invitation.homeLocationId, 'None')));
-        var skillNames = state.data.skills.filter(function (skill) {
-          return invitation.skillIds.includes(skill.id);
-        }).map(function (skill) { return skill.name; });
-        card.appendChild(element('p', 'wf-meta', 'Skills: ' + (skillNames.length ? skillNames.join(', ') : 'None')));
+        card.appendChild(element('p', 'wf-meta', 'Skills: ' + (invitationSkills.length ? invitationSkills.join(', ') : 'None')));
         var actions = element('div', 'wf-actions');
         var resend = element('button', 'btn btn-secondary btn-sm', 'Resend invitation');
         resend.type = 'button';
@@ -294,6 +318,13 @@
       state.data.members.forEach(function (member) {
         var card = element('article', 'wf-card');
         card.dataset.profileId = member.profileId;
+        var memberSkills = state.data.skills.filter(function (skill) { return member.skillIds.includes(skill.id); })
+          .map(function (skill) { return skill.name; });
+        indexWorkforceCard(card, [
+          'person people member', member.name, member.email, member.phone, member.membershipStatus,
+          member.accessRole, labelFor(operationalRoles, member.operationalRole, member.operationalRole),
+          labelFor(locationEntries(), member.homeLocationId, 'Not assigned'), memberSkills
+        ]);
         var head = element('div', 'wf-card-head');
         head.append(element('h3', '', member.name));
         var badge = element('span', 'wf-badge', member.membershipStatus.replace('_',' '));
@@ -301,8 +332,6 @@
         head.appendChild(badge);
         card.append(head, element('p', 'wf-meta', member.email + (member.phone ? ' · ' + member.phone : '')));
         if (isDemoMode()) {
-          var memberSkills = state.data.skills.filter(function (skill) { return member.skillIds.includes(skill.id); })
-            .map(function (skill) { return skill.name; });
           card.appendChild(summaryRows([
             ['Job role', labelFor(operationalRoles, member.operationalRole, member.operationalRole)],
             ['Home location', labelFor(locationEntries(), member.homeLocationId, 'Not assigned')],
@@ -372,6 +401,10 @@
       state.data.skills.forEach(function (skill) {
         var card = element('article', 'wf-card');
         card.dataset.skillKey = skill.key;
+        indexWorkforceCard(card, [
+          'skill capability', skill.key, skill.name, skill.description,
+          labelFor(serviceEntries(), skill.serviceId, 'No service reference')
+        ]);
         if (isDemoMode()) {
           card.append(element('h3', '', skill.name), summaryRows([
             ['Description', skill.description || 'No description recorded'],
@@ -420,12 +453,16 @@
       state.data.crews.forEach(function (crew) {
         var card = element('article', 'wf-card');
         card.dataset.crewKey = crew.key;
+        var crewMembers = (crew.members || []).map(function (crewMember) {
+          var profile = state.data.members.find(function (member) { return member.profileId === crewMember.profileId; });
+          var memberName = profile ? profile.name : 'Unknown member';
+          return crewMember.role === 'lead' ? memberName + ' (lead)' : memberName;
+        });
+        indexWorkforceCard(card, [
+          'crew team', crew.key, crew.name,
+          labelFor(locationEntries(), crew.homeLocationId, 'Not assigned'), crewMembers
+        ]);
         if (isDemoMode()) {
-          var crewMembers = (crew.members || []).map(function (crewMember) {
-            var profile = state.data.members.find(function (member) { return member.profileId === crewMember.profileId; });
-            var memberName = profile ? profile.name : 'Unknown member';
-            return crewMember.role === 'lead' ? memberName + ' (lead)' : memberName;
-          });
           card.append(element('h3', '', crew.name), summaryRows([
             ['Home location', labelFor(locationEntries(), crew.homeLocationId, 'Not assigned')],
             ['Members', crewMembers.length ? crewMembers.join(', ') : 'None assigned']
@@ -448,6 +485,7 @@
     }
     function policyCard(policy) {
       var card = element('article', 'wf-card'); card.dataset.policyId = policy.id;
+      indexWorkforceCard(card, ['policy workforce policy', policy.name, policy.description, policy.enabled ? 'enabled' : 'disabled']);
       var name = document.createElement('input'); name.className = 'policy-name'; name.value = policy.name; name.maxLength = 120; name.disabled = !canManage();
       var description = document.createElement('textarea'); description.className = 'policy-description'; description.value = policy.description; description.maxLength = 4096; description.disabled = !canManage();
       var enabled = document.createElement('input'); enabled.className = 'policy-enabled'; enabled.type = 'checkbox'; enabled.checked = policy.enabled; enabled.disabled = !canManage();
@@ -462,6 +500,7 @@
         if (!isDemoMode()) { root.appendChild(policyCard(policy)); return; }
         var card = element('article', 'wf-card');
         card.dataset.policyId = policy.id;
+        indexWorkforceCard(card, ['policy workforce policy', policy.name, policy.description, policy.enabled ? 'enabled' : 'disabled']);
         card.append(element('h3', '', policy.name), summaryRows([
           ['Status', policy.enabled ? 'Enabled' : 'Disabled'],
           ['Guidance', policy.description || 'No guidance recorded']
@@ -481,9 +520,16 @@
       fillSelect(document.getElementById('skillService'), serviceEntries(), null, 'No service reference');
       document.getElementById('inviteSkills').replaceChildren.apply(document.getElementById('inviteSkills'), Array.from(skillChecks([], 'invite-skills', false).childNodes));
     }
+    function applyWorkforceSearch() {
+      var query = String(state.search || '').normalize('NFC').trim().toLowerCase();
+      document.querySelectorAll('#workforceShell .wf-card').forEach(function(card) {
+        card.hidden = Boolean(query) && String(card.dataset.searchText || '').indexOf(query) < 0;
+      });
+    }
     function render() {
       state.policies = JSON.parse(JSON.stringify(state.data.policies || []));
       renderSummary(); renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
+      applyWorkforceSearch();
       document.getElementById('workforceShell').removeAttribute('inert');
       document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
       document.documentElement.setAttribute('data-workforce-state', 'ready');
@@ -562,6 +608,10 @@
         expectedVersion: state.data.businessProfile.version,
         value: { policies: policies }
       }), 'Workforce policies saved to the Business Profile.');
+    });
+    document.getElementById('teamSearchInput').addEventListener('input', function(event) {
+      state.search = event.target.value;
+      applyWorkforceSearch();
     });
     window.NorthStarWorkforce = Object.freeze({ reload: function () { return loadData(false); } });
     loadData(true);

@@ -16,7 +16,7 @@ describe('Pre-Mission-23 P1 design system and employee foundation', () => {
       '--northstar-control-radius', '--northstar-page-title-size', '--northstar-page-title-line',
     ]) expect(css).toContain(token);
 
-    expect(css).toMatch(/\.stat-value,[\s\S]*\.ds-kpi-value,[\s\S]*\.price,[\s\S]*font-family:\s*var\(--font-numeric\)\s*!important;/);
+    expect(css).toMatch(/\.stat-value,[\s\S]*\.ds-kpi-value,[\s\S]*\.price,[\s\S]*font-family:\s*var\(--font-body\)\s*!important;/);
     expect(css).toMatch(/font-variant-numeric:\s*tabular-nums lining-nums;/);
     expect(css).toMatch(/\.page-header h1,[\s\S]*\.cal-title,[\s\S]*\.polaris-inline-name,[\s\S]*font-size:\s*var\(--northstar-page-title-size\)\s*!important;/);
     expect(css).toMatch(/\.dashboard-main,[\s\S]*\.command-center-blueprint-main[\s\S]*max-width:\s*var\(--northstar-rail-max\);/);
@@ -60,8 +60,8 @@ describe('Pre-Mission-23 P1 design system and employee foundation', () => {
     expect(theme).toContain("global.localStorage.setItem(STORAGE_KEY, theme)");
     expect(theme).toContain('northstar-theme-sun');
     expect(theme).toContain('northstar-theme-moon');
-    expect(css).toMatch(/\.northstar-theme-switch::before[\s\S]*width:\s*30px;[\s\S]*height:\s*30px;/);
-    expect(css).toMatch(/data-current-theme="dark"\]::before[\s\S]*translateX\(38px\)/);
+    expect(css).toMatch(/\.northstar-theme-switch::before[\s\S]*top:\s*50%;[\s\S]*left:\s*25%;[\s\S]*width:\s*34px;[\s\S]*height:\s*34px;[\s\S]*transform:\s*translate\(-50%,\s*-50%\)/);
+    expect(css).toMatch(/data-current-theme="dark"\]::before\s*\{[^}]*left:\s*75%;/s);
   });
 
   test('keeps Today responsive, compact, centered in non-ready states, and free of layout emoji', () => {

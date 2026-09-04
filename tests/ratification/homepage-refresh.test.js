@@ -50,7 +50,7 @@ describe('authorized Homepage Refresh contracts', () => {
     expect(homepage).not.toMatch(/no forwarding|no new numbers to hand out|starts answering calls immediately/i);
   });
 
-  test('pricing preserves the three authorized monthly list prices and adds a conservative unpriced enterprise path', () => {
+  test('pricing preserves the authorized prices, published usage allowances, and unpriced enterprise path', () => {
     const pricing = blockById(homepage, 'pricing');
     expect(pricing).toContain('Starter');
     expect(pricing).toContain('$149');
@@ -58,13 +58,16 @@ describe('authorized Homepage Refresh contracts', () => {
     expect(pricing).toContain('$299');
     expect(pricing).toContain('Complete');
     expect(pricing).toContain('$499');
-    expect(pricing).toContain('Monthly list price');
-    expect(pricing).toContain('Plan-specific features, limits, taxes, discounts, and trial-to-paid terms will appear before anyone chooses a paid plan');
+    expect(pricing).toContain('Published Monthly List Pricing');
+    expect(pricing).toContain('Provider activation, taxes, discounts, and any authorized overage terms are confirmed before purchase');
+    expect(pricing).toContain('<strong>160</strong> billed call minutes per month');
+    expect(pricing).toContain('<strong>325</strong> billed call minutes per month');
+    expect(pricing).toContain('<strong>540</strong> billed call minutes per month');
     expect(pricing).toContain('Enterprise');
     expect(pricing).toContain('Contact NorthStar');
     expect(pricing).toContain('Eligibility thresholds, price, included usage, and overage terms are not yet published.');
     expect(pricing).not.toMatch(/\b30\s+(?:or more\s+)?employees\b/i);
-    expect(pricing).not.toMatch(/\$99|\$199|Professional|Everything in|phone number|included minutes|included calls|included seats|overage price|add-on price/i);
+    expect(pricing).not.toMatch(/\$99|\$199|Professional|Everything in|included seats|overage price|add-on price/i);
   });
 
   test('the account-free browser Web Call exposes only mounted supported industries and no scripted scenario catalogue', () => {
@@ -90,7 +93,9 @@ describe('authorized Homepage Refresh contracts', () => {
   test('FAQ and support are focused, truthful destinations with the canonical entity footer', () => {
     expect(homepage).toContain('href="/faq"');
     expect(faq).toContain('Frequently Asked Questions');
-    expect(faq).toContain('Starter $149, Growth $299, and Complete $499');
+    expect(faq).toContain('Starter at $149 with 160 billed call minutes');
+    expect(faq).toContain('Growth at $299 with 325 billed call minutes');
+    expect(faq).toContain('Complete at $499 with 540 billed call minutes');
     expect(faq).toContain('Production activation remains unavailable');
     expect(contact).toContain('href="mailto:Support@northstar-os.ai"');
     expect(contact).toContain('Delivery boundary:');

@@ -571,6 +571,56 @@ html body .customer-drawer .drawer-pricing-item {
   border-bottom: 1px solid rgba(255, 255, 255, .18);
 }
 
+html body .customer-drawer .drawer-polaris-analysis {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, .28);
+}
+
+html body .customer-drawer .drawer-polaris-analysis > summary,
+html body .customer-drawer .drawer-polaris-pricing > summary {
+  padding: 4px 0;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+html body .customer-drawer .drawer-polaris-analysis .drawer-work-details {
+  margin-top: 14px;
+}
+
+html body .customer-drawer .drawer-polaris-analysis .drawer-work-detail {
+  border-color: rgba(255, 255, 255, .22);
+  background: rgba(255, 255, 255, .09);
+}
+
+html body .customer-drawer .drawer-polaris-analysis .drawer-work-detail :is(h4, p) {
+  color: #fff;
+}
+
+html body .customer-drawer .drawer-pricing-category {
+  display: grid;
+  gap: 5px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .18);
+}
+
+html body .customer-drawer .drawer-pricing-category-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #fff;
+  font-weight: 700;
+}
+
+html body .customer-drawer .drawer-pricing-category-detail {
+  margin: 0;
+  color: rgba(255, 255, 255, .76);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 html body .polaris-surface-card-shell,
 html body .polaris-intelligence-card[data-polaris-card] {
   border-color: rgba(196, 181, 253, .55);
@@ -913,15 +963,15 @@ html body .integration-card-map .integration-status {
 
 @media (max-width: 720px) {
   html body .customer-drawer {
-    top: max(8px, env(safe-area-inset-top));
-    left: max(8px, env(safe-area-inset-left));
-    right: max(8px, env(safe-area-inset-right));
-    bottom: max(8px, env(safe-area-inset-bottom));
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
     width: auto;
     max-width: none;
     max-height: none;
     transform: scale(.98);
-    border-radius: 14px;
+    border-radius: 18px;
   }
 
   html body .customer-drawer.open {
@@ -1016,6 +1066,8 @@ html body .northstar-theme-switch {
   width: 76px !important;
   min-width: 76px !important;
   height: 38px !important;
+  box-sizing: border-box;
+  border: 0 !important;
   border-radius: 999px !important;
   overflow: hidden;
   background: var(--theme-surface-soft) !important;
@@ -1026,19 +1078,19 @@ html body .northstar-theme-switch::before {
   content: '';
   position: absolute;
   z-index: 0;
-  top: 4px;
-  left: 4px;
-  width: 30px;
-  height: 30px;
+  top: 50%;
+  left: 25%;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: var(--theme-surface);
   box-shadow: 0 2px 7px rgba(15, 23, 42, .18);
-  transform: translateX(0);
-  transition: transform .2s ease;
+  transform: translate(-50%, -50%);
+  transition: left .2s ease;
 }
 
 html body .northstar-theme-switch[data-current-theme="dark"]::before {
-  transform: translateX(38px);
+  left: 75%;
 }
 
 html body .northstar-theme-switch [data-theme-icon] {
@@ -1212,9 +1264,9 @@ html body :is(
   .polaris-report-kpi-value,
   [data-northstar-numeric]
 ) {
-  font-family: var(--font-numeric) !important;
+  font-family: var(--font-body) !important;
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-feature-settings: normal;
   letter-spacing: -.02em;
 }
 
@@ -1244,6 +1296,7 @@ html body :is(
   .page-title,
   .bp-title,
   .cal-title,
+  .polaris-page-title,
   .polaris-inline-name,
   .command-center-blueprint-main > .page-header h1
 ) {
@@ -1252,6 +1305,105 @@ html body :is(
   font-weight: 700 !important;
   line-height: var(--northstar-page-title-line) !important;
   letter-spacing: -.035em !important;
+}
+
+html body .northstar-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--northstar-control-height);
+  padding: 10px 14px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--northstar-control-radius);
+  background: var(--theme-surface);
+  color: var(--theme-muted);
+  box-shadow: var(--shadow-sm);
+}
+
+html body .northstar-search:focus-within {
+  border-color: var(--northstar-brand-gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--northstar-brand-gold) 18%, transparent);
+}
+
+html body .northstar-search svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
+html body .northstar-search input[type="search"] {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--theme-text);
+  box-shadow: none;
+  font: inherit;
+  line-height: 1.4;
+}
+
+html body .northstar-search input[type="search"]::placeholder {
+  color: var(--theme-muted);
+  opacity: .9;
+  text-overflow: ellipsis;
+}
+
+html body :is(.customer-record-card, .call-card, .command-center-mobile-customer) {
+  min-width: 0;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--northstar-card-radius) !important;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  box-shadow: var(--shadow-sm);
+  overflow: clip;
+}
+
+html body .customer-record-avatar {
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--northstar-brand-gold) 32%, var(--theme-surface-soft));
+  color: var(--theme-text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+html body .customer-record-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+html body .customer-record-heading {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+html body .customer-record-heading > :first-child {
+  color: var(--theme-text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+html body .customer-record-heading > :last-child {
+  color: var(--theme-muted);
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 html body .polaris-inline-brand {
@@ -1464,6 +1616,24 @@ html body .m22-state-chip {
 @media (max-width: 430px), (max-resolution: 1dppx) and (max-width: 860px) {
   html body :is(.card, .stat-card, .ds-card, .ds-kpi-card, .demo-panel, .demo-kpi-card) {
     max-width: 100%;
+    min-width: 0;
+  }
+
+  html body :is(.demo-count-pill, .integration-status, .status-badge, .call-status-badge) {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding: 6px 10px !important;
+    white-space: normal !important;
+    text-align: center;
+    overflow-wrap: anywhere !important;
+  }
+
+  html body .mobile-header {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  html body .mobile-header > * {
     min-width: 0;
   }
 }

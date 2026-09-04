@@ -23,6 +23,7 @@ const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
 const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
 const { approvalBodyBoundary } = require('./scheduling/approvalHttpBoundary');
+const { executionBodyBoundary } = require('./operations/httpBoundary');
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const { createAuthRouter } = require('./routes/auth');
@@ -40,6 +41,7 @@ const { createCommandCenterRouter } = require('./routes/commandCenter');
 const { createTodayRouter } = require('./routes/today');
 const { createKnowledgeManagementRouter } = require('./routes/knowledgeManagement');
 const { createSupportRouter } = require('./routes/support');
+const { createFieldExecutionsRouter } = require('./routes/fieldExecutions');
 const { SupportCaseOutboxWorker } = require('./support/outbox');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
 const { HomepageDemoAdmissionHousekeepingWorker } = require('./services/homepageDemoAdmission');
@@ -73,6 +75,9 @@ app.use(recommendationBodyBoundary);
 // unambiguous bytes before the broader application parser. The preview is
 // evidence only and never a bearer capability.
 app.use(approvalBodyBoundary);
+// Mission 23 Part 2 field-execution mutations own exact, bounded,
+// unambiguous bytes before the broader application parser consumes them.
+app.use(executionBodyBoundary);
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {
@@ -246,6 +251,7 @@ app.use('/api/v1/knowledge-management', createKnowledgeManagementRouter());
 app.use('/api/v1/voice', voiceRoutes);
 app.use('/api/v1/integrations', createIntegrationStatusRouter());
 app.use('/api/v1/support', createSupportRouter());
+app.use('/api/v1/field-executions', createFieldExecutionsRouter());
 app.use('/api/v1', createLegacyAuthorityRetirementRouter());
 
 // Canonical /api lead adapters precede the file-era router. The compatibility

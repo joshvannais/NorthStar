@@ -593,27 +593,52 @@ window.CustomerDetail = (function() {
     var values = presentation && presentation.values;
     var items = values && Array.isArray(values.pricingLineItems) ? values.pricingLineItems : [];
     var categories = [
-      { key: 'service', label: 'Service And Scope', aliases: ['service', 'servicecharge', 'scope', 'base'] },
-      { key: 'labor', label: 'Labor', aliases: ['labor', 'labour'] },
-      { key: 'materials', label: 'Materials', aliases: ['material', 'materials'] },
-      { key: 'equipment', label: 'Equipment And Machinery', aliases: ['equipment', 'machinery', 'rental'] },
-      { key: 'travel', label: 'Travel And Mobilization', aliases: ['travel', 'mobilization', 'distance'] },
-      { key: 'fees', label: 'Permits And Fees', aliases: ['permit', 'permits', 'fee', 'fees'] },
-      { key: 'markup', label: 'Overhead, Margin, And Adjustments', aliases: ['markup', 'margin', 'overhead', 'adjustment', 'emergency'] }
+      { key: 'service', label: 'Service And Scope' },
+      { key: 'labor', label: 'Labor' },
+      { key: 'materials', label: 'Materials' },
+      { key: 'equipment', label: 'Equipment And Machinery' },
+      { key: 'travel', label: 'Travel And Mobilization' },
+      { key: 'fees', label: 'Permits And Fees' },
+      { key: 'markup', label: 'Overhead, Margin, And Adjustments' },
+      { key: 'other', label: 'Other Recorded Charges' }
     ];
+    function normalized(value) {
+      return String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+    }
+    function containsAny(value, aliases) {
+      return aliases.some(function(alias) { return value.indexOf(alias) >= 0; });
+    }
     function itemCategory(item) {
-      return String(item && (item.category || item.type || item.code) || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+      var meaning = [item && item.code, item && item.label, item && item.type].map(normalized).join(' ');
+      var authority = normalized(item && item.category);
+      // Code and label are more specific than the broad canonical serviceCharge
+      // bucket. For example, a permit can validly be stored as serviceCharge,
+      // but it must still be disclosed to the owner under Permits And Fees.
+      if (containsAny(meaning, ['permit', 'licensefee', 'inspectionfee', 'filingfee'])) return 'fees';
+      if (containsAny(meaning, ['labor', 'labour', 'technicianhour', 'crewhour'])) return 'labor';
+      if (containsAny(meaning, ['material', 'supply'])) return 'materials';
+      if (containsAny(meaning, ['equipment', 'machinery', 'rental', 'tooling'])) return 'equipment';
+      if (containsAny(meaning, ['travel', 'mobilization', 'distance', 'mileage', 'tripcharge'])) return 'travel';
+      if (containsAny(meaning, ['markup', 'margin', 'overhead', 'adjustment', 'emergency'])) return 'markup';
+      if (containsAny(meaning, ['service', 'scope', 'base', 'diagnostic'])) return 'service';
+      if (authority === 'labor' || authority === 'labour') return 'labor';
+      if (authority === 'material' || authority === 'materials') return 'materials';
+      if (authority === 'equipment' || authority === 'machinery') return 'equipment';
+      if (authority === 'travel' || authority === 'mobilization') return 'travel';
+      if (authority === 'permit' || authority === 'permits' || authority === 'fee' || authority === 'fees') return 'fees';
+      if (authority === 'markup' || authority === 'margin' || authority === 'overhead' || authority === 'adjustment') return 'markup';
+      if (authority === 'service' || authority === 'servicecharge' || authority === 'scope' || authority === 'base') return 'service';
+      return 'other';
     }
     function categoryMarkup(category) {
       var matches = items.filter(function(item) {
-        var normalized = itemCategory(item);
-        return category.aliases.some(function(alias) { return normalized.indexOf(alias) >= 0; });
+        return itemCategory(item) === category.key;
       });
       var amount = matches.reduce(function(total, item) { return total + (Number(item.customerCharge) || 0); }, 0);
       var detail = matches.length
         ? matches.map(function(item) { return escapeText(item.label || item.code || category.label); }).join(', ')
         : 'Awaiting a recorded input.';
-      return '<section class="drawer-pricing-category" data-pricing-category="' + category.key + '">' +
+      return '<section class="drawer-pricing-category" id="cdPricingCategory-' + category.key + '" data-pricing-category="' + category.key + '">' +
         '<div class="drawer-pricing-category-header"><span>' + category.label + '</span><span>' + (matches.length ? escapeText(fmtCurrency(amount)) : '\u2014') + '</span></div>' +
         '<p class="drawer-pricing-category-detail">' + detail + '</p></section>';
     }

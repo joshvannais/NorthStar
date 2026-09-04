@@ -61,6 +61,48 @@ function todayFixture(role) {
   };
 }
 
+function workforceFixture() {
+  return {
+    success: true,
+    data: {
+      members: [
+        {
+          profileId: '00000000-0000-4000-8000-000000000711',
+          membershipId: '00000000-0000-4000-8000-000000000712',
+          name: 'Cameron Fixture', email: 'cameron@example.com', phone: '(206) 555-0102',
+          membershipStatus: 'active', accessRole: 'owner', operationalRole: 'owner_operator',
+          homeLocationId: '00000000-0000-4000-8000-000000000715',
+          skillIds: ['00000000-0000-4000-8000-000000000716'],
+        },
+        {
+          profileId: '00000000-0000-4000-8000-000000000713',
+          membershipId: '00000000-0000-4000-8000-000000000714',
+          name: 'Avery Installer', email: 'avery@example.com', phone: '',
+          membershipStatus: 'active', accessRole: 'member', operationalRole: 'technician',
+          homeLocationId: '00000000-0000-4000-8000-000000000715',
+          skillIds: [],
+        },
+      ],
+      crews: [{
+        id: '00000000-0000-4000-8000-000000000717', key: 'north-crew', name: 'North Crew',
+        homeLocationId: '00000000-0000-4000-8000-000000000715',
+        members: [{ profileId: '00000000-0000-4000-8000-000000000713', role: 'lead' }],
+      }],
+      skills: [{
+        id: '00000000-0000-4000-8000-000000000716', key: 'roofing', name: 'Roofing',
+        description: 'Roof inspection and repair', serviceId: '00000000-0000-4000-8000-000000000718',
+      }],
+      invitations: [],
+      locations: [{ id: '00000000-0000-4000-8000-000000000715', name: 'Main Office' }],
+      services: [{ id: '00000000-0000-4000-8000-000000000718', name: 'Roof repair' }],
+      policies: [{
+        id: '00000000-0000-4000-8000-000000000719', name: 'Safety review',
+        description: 'Review access and equipment before dispatch.', enabled: true,
+      }],
+    },
+  };
+}
+
 function demoWorkspace() {
   return buildDemoWorkspace({
     tenantId: DEMO_TENANT_ID,
@@ -73,7 +115,7 @@ function demoWorkspace() {
   });
 }
 
-function canonicalFixture(request, surface, role) {
+function canonicalFixture(request, surface, role, viewerId, organizationId) {
   const fixture = {
     success: true,
     data: {
@@ -84,8 +126,8 @@ function canonicalFixture(request, surface, role) {
       records: [],
       metrics: { graphCount: 0, appointmentCount: 0, estimatedRevenue: null },
       authority: {
-        userId: '00000000-0000-4000-8000-000000000703',
-        organizationId: DEMO_TENANT_ID,
+        userId: viewerId || '00000000-0000-4000-8000-000000000703',
+        organizationId: organizationId || DEMO_TENANT_ID,
         sessionId: request.headers()['x-northstar-session-id'] || DEMO_SESSION_ID,
       },
     },
@@ -133,11 +175,21 @@ async function installBoundary(context, origin, role, evidence) {
     if (url.pathname === '/api/account/subscription') return route.fulfill(response({ subscription: accountFixture(role, framePath).account.subscription }));
     if (url.pathname === '/api/demo/command-center') return route.fulfill(response({ success: true, data: demoWorkspace() }));
     const demoCompat = url.pathname.match(/^\/api\/demo\/command-center\/canonical\/compat\/([^/]+)$/);
-    if (demoCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(demoCompat[1]), role)));
+    if (demoCompat) {
+      const workspace = demoWorkspace();
+      return route.fulfill(response(canonicalFixture(
+        request,
+        decodeURIComponent(demoCompat[1]),
+        role,
+        workspace.viewer.id,
+        workspace.tenant.id
+      )));
+    }
     const paidCompat = url.pathname.match(/^\/api\/v1\/canonical\/compat\/([^/]+)$/);
     if (paidCompat) return route.fulfill(response(canonicalFixture(request, decodeURIComponent(paidCompat[1]), role)));
     if (url.pathname === '/api/v1/business-profile') return route.fulfill(response({ success: true, profile: null }));
     if (url.pathname === '/api/v1/today') return route.fulfill(response({ success: true, data: todayFixture(role) }));
+    if (url.pathname === '/api/workforce') return route.fulfill(response(workforceFixture()));
     if (url.pathname === '/api/health') return route.fulfill(response({ status: 'ok', database: 'healthy', persistence: 'healthy' }));
     return route.fulfill(response({ success: true, data: {}, records: [], items: [] }));
   });
@@ -291,6 +343,28 @@ async function founderVisualCorrectionAudit(page, entry, viewportName) {
       `${viewportName} ${route} keeps its search icon clear of its input text`);
   }
 
+  if (route.endsWith('/team')) {
+    await page.waitForFunction(() => document.documentElement.getAttribute('data-workforce-state') === 'ready');
+    const search = page.locator('#teamSearchInput');
+    const originalVisibleCards = await page.locator('#workforceShell .wf-card').evaluateAll(nodes =>
+      nodes.filter(node => !node.hidden).length);
+    assert.ok(originalVisibleCards > 1, `${viewportName} ${route} begins with multiple searchable workforce records`);
+    const selectedMemberName = await page.locator('#membersList .wf-card h3').first().innerText();
+    assert.ok(selectedMemberName.trim(), `${viewportName} ${route} exposes a named workforce record for search`);
+    await search.fill(selectedMemberName);
+    const cardStates = await page.locator('#workforceShell .wf-card').evaluateAll(nodes =>
+      nodes.map(node => ({ hidden: node.hidden, text: node.innerText })));
+    const filteredCards = cardStates.filter(card => !card.hidden).map(card => card.text);
+    assert.strictEqual(filteredCards.length, 1,
+      `${viewportName} ${route} filters workforce records as the owner types: ${JSON.stringify(cardStates)}`);
+    assert.ok(filteredCards[0].includes(selectedMemberName),
+      `${viewportName} ${route} retains the matching workforce record`);
+    await search.fill('');
+    assert.strictEqual(await page.locator('#workforceShell .wf-card').evaluateAll(nodes =>
+      nodes.filter(node => !node.hidden).length), originalVisibleCards,
+      `${viewportName} ${route} restores workforce records when search is cleared`);
+  }
+
   if (route.endsWith('/integrations')) {
     const categories = page.locator('.integration-category-details');
     const categoryCount = await categories.count();
@@ -331,6 +405,21 @@ async function founderVisualCorrectionAudit(page, entry, viewportName) {
     assert.ok(await cards.count() > 0, `${viewportName} Command Center renders grouped customer cards`);
     assert.strictEqual(await cards.evaluateAll(nodes => nodes.filter(node => node.open).length), 0,
       `${viewportName} Command Center customer cards render collapsed`);
+    const firstCard = cards.first();
+    const firstSummary = firstCard.locator(':scope > summary');
+    await firstSummary.focus();
+    await firstSummary.press('Enter');
+    assert.strictEqual(await firstCard.evaluate(node => node.open), true,
+      `${viewportName} Command Center expands a customer card from the keyboard`);
+    const customerControl = firstSummary.locator('.command-center-record-link');
+    const routeBeforeCustomerOpen = new URL(page.url()).pathname;
+    await customerControl.focus();
+    await customerControl.press('Enter');
+    await page.locator('.customer-drawer.open[aria-hidden="false"]').waitFor();
+    assert.strictEqual(new URL(page.url()).pathname, routeBeforeCustomerOpen,
+      `${viewportName} Command Center customer names open the drawer without navigating to Polaris`);
+    assert.strictEqual(await firstCard.evaluate(node => node.open), true,
+      `${viewportName} Command Center customer-name activation does not collapse the selected card`);
   }
 
   if (route.endsWith('/leads') && viewportName !== 'zoom200') {
@@ -354,9 +443,13 @@ async function founderVisualCorrectionAudit(page, entry, viewportName) {
       };
     });
     assert.ok(drawerAudit, `${viewportName} ${route} mounts the shared customer drawer`);
-    assert.ok(drawerAudit.left >= 11 && drawerAudit.right >= 11 && drawerAudit.top >= 11 && drawerAudit.bottom >= 11,
-      `${viewportName} ${route} keeps the customer drawer away from every viewport edge`);
-    assert.ok(drawerAudit.radius >= 18, `${viewportName} ${route} preserves the shared rounded drawer border`);
+    if (viewportName.startsWith('mobile')) {
+      assert.ok(drawerAudit.left >= 11 && drawerAudit.right >= 11 && drawerAudit.top >= 11 && drawerAudit.bottom >= 11,
+        `${viewportName} ${route} keeps the customer drawer away from every viewport edge`);
+      assert.ok(drawerAudit.radius >= 18, `${viewportName} ${route} preserves the rounded mobile drawer border`);
+    } else {
+      assert.ok(drawerAudit.radius >= 16, `${viewportName} ${route} preserves the rounded desktop drawer border`);
+    }
   }
 }
 

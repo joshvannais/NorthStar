@@ -13,6 +13,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS = path.join(ROOT, 'migrations');
 const MIGRATION = '038_canonical_field_execution_authority.sql';
 const LABOR_MIGRATION = '039_canonical_labor_time_evidence.sql';
+const LABOR_CORRECTION_MIGRATION = '040_canonical_labor_time_audit_corrections.sql';
 const LABOR_CATEGORY_VERSION = 'm23-labor-category-v1';
 const LABOR_CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -28,7 +29,7 @@ const IDS = Object.freeze({
   viewer: 'c2000000-0000-4000-8000-000000000005',
   otherOwner: 'c2000000-0000-4000-8000-000000000006',
   crew: 'c3000000-0000-4000-8000-000000000001',
-  appointments: Array.from({ length: 35 }, (_unused, index) => {
+  appointments: Array.from({ length: 37 }, (_unused, index) => {
     const sequence = index < 8 ? index + 1 : index + 2;
     return `c4000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
   }),
@@ -282,6 +283,34 @@ async function executionEvidence(pool, executionId) {
       WHERE execution.id=$1`,
     [executionId]
   )).rows[0];
+}
+
+async function laborEvidence(pool, intervalId) {
+  return (await pool.query(
+    `SELECT to_jsonb(current_interval) AS current,
+            (SELECT count(*)::int FROM public.canonical_labor_events
+              WHERE interval_id=current_interval.id) AS events,
+            (SELECT count(*)::int FROM public.canonical_labor_revisions
+              WHERE interval_id=current_interval.id) AS revisions,
+            (SELECT count(*)::int FROM public.canonical_labor_audit_events
+              WHERE interval_id=current_interval.id) AS audits,
+            (SELECT count(*)::int FROM public.canonical_labor_idempotency
+              WHERE interval_id=current_interval.id) AS replays
+       FROM public.canonical_labor_intervals current_interval
+      WHERE current_interval.id=$1`,
+    [intervalId]
+  )).rows[0];
+}
+
+function tenantRfc3339(date) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', hourCycle: 'h23', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    timeZoneName: 'longOffset',
+  }).formatToParts(date).filter(part => part.type !== 'literal')
+    .map(part => [part.type, part.value]));
+  const offset = parts.timeZoneName === 'GMT' ? 'Z' : parts.timeZoneName.replace('GMT', '');
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${offset}`;
 }
 
 function entry(input, session, role, overrides = {}) {
@@ -1129,6 +1158,163 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     expect(noEffects).toEqual({ intervals: 0, events: 0, replays: 0 });
   });
 
+  test('Part 3 review cannot restore rejected evidence into an authoritative overlap', async () => {
+    const contextA = await createStartedExecution(30);
+    const contextB = await createStartedExecution(31);
+    const intervalA = (await repository.mutateLaborTime(runtimePool, labor({
+      ...contextA, actorUserId: IDS.member, action: 'record_manual', category: 'production',
+      observedStart: '2026-08-14T08:00:00-04:00', observedEnd: '2026-08-14T09:00:00-04:00',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    const rejectedA = (await repository.mutateLaborTime(runtimePool, labor({
+      ...contextA, actorUserId: IDS.member, action: 'review', interval: intervalA,
+      reviewOutcome: 'rejected',
+    }, sessions.member, 'member', timeAuthority))).body.data;
+    await repository.mutateLaborTime(runtimePool, labor({
+      ...contextB, actorUserId: IDS.member, action: 'record_manual', category: 'setup',
+      observedStart: '2026-08-14T08:30:00-04:00', observedEnd: '2026-08-14T09:30:00-04:00',
+    }, sessions.member, 'member', timeAuthority));
+    const before = await laborEvidence(migrationPool, rejectedA.id);
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...contextA, actorUserId: IDS.member, action: 'review', interval: rejectedA,
+      reviewOutcome: 'accepted', key: 'm23-p3-review-overlap-denied-01',
+    }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({
+      status: 409, code: 'M23_LABOR_OVERLAP',
+    });
+    expect(await laborEvidence(migrationPool, rejectedA.id)).toEqual(before);
+  });
+
+  test('Part 3 serializes concurrent reviews that would create a worker overlap', async () => {
+    const contextA = await createStartedExecution(32);
+    const contextB = await createStartedExecution(33);
+    const createRejected = async (context, start, end) => {
+      const recorded = (await repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'cleanup',
+        observedStart: start, observedEnd: end,
+      }, sessions.member, 'member', timeAuthority))).body.data;
+      return (await repository.mutateLaborTime(runtimePool, labor({
+        ...context, actorUserId: IDS.member, action: 'review', interval: recorded,
+        reviewOutcome: 'rejected',
+      }, sessions.member, 'member', timeAuthority))).body.data;
+    };
+    const rejectedA = await createRejected(
+      contextA, '2026-08-14T10:00:00-04:00', '2026-08-14T11:00:00-04:00'
+    );
+    const rejectedB = await createRejected(
+      contextB, '2026-08-14T10:30:00-04:00', '2026-08-14T11:30:00-04:00'
+    );
+    const inputs = [
+      labor({
+        ...contextA, actorUserId: IDS.member, action: 'review', interval: rejectedA,
+        reviewOutcome: 'accepted', key: 'm23-p3-review-race-a-0001',
+      }, sessions.member, 'member', timeAuthority),
+      labor({
+        ...contextB, actorUserId: IDS.member, action: 'review', interval: rejectedB,
+        reviewOutcome: 'accepted', key: 'm23-p3-review-race-b-0001',
+      }, sessions.member, 'member', timeAuthority),
+    ];
+    const results = await Promise.allSettled(inputs.map(input =>
+      repository.mutateLaborTime(runtimePool, input)));
+    expect(results.filter(item => item.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(item => item.status === 'rejected').reason).toMatchObject({
+      status: 409, code: 'M23_LABOR_OVERLAP',
+    });
+    const rejectedIndex = results.findIndex(item => item.status === 'rejected');
+    const rejectedInterval = rejectedIndex === 0 ? rejectedA : rejectedB;
+    const beforeRetry = await laborEvidence(migrationPool, rejectedInterval.id);
+    await expect(repository.mutateLaborTime(runtimePool, inputs[rejectedIndex]))
+      .rejects.toMatchObject({ status: 409, code: 'M23_LABOR_OVERLAP' });
+    expect(await laborEvidence(migrationPool, rejectedInterval.id)).toEqual(beforeRetry);
+  }, 30000);
+
+  test('Part 3 rejects future manual and correction end instants with zero effects', async () => {
+    const context = await createStartedExecution(34);
+    const now = Date.now();
+    const nearNow = tenantRfc3339(new Date(now - 60 * 1000));
+    const farFuture = tenantRfc3339(new Date(now + 24 * 60 * 60 * 1000));
+    const beforeManual = (await migrationPool.query(
+      `SELECT count(*)::int AS intervals FROM public.canonical_labor_intervals
+        WHERE execution_id=$1`, [context.execution.id]
+    )).rows[0];
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'other',
+      observedStart: nearNow, observedEnd: farFuture,
+      key: 'm23-p3-manual-future-end-01',
+    }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({
+      status: 400, code: 'INVALID_LABOR_REQUEST',
+    });
+    expect((await migrationPool.query(
+      `SELECT count(*)::int AS intervals FROM public.canonical_labor_intervals
+        WHERE execution_id=$1`, [context.execution.id]
+    )).rows[0]).toEqual(beforeManual);
+
+    const recordedInput = labor({
+      ...context, actorUserId: IDS.member, action: 'record_manual', category: 'other',
+      observedStart: '2026-08-15T08:00:00-04:00', observedEnd: '2026-08-15T08:30:00-04:00',
+      key: 'm23-p3-future-correction-source-01',
+    }, sessions.member, 'member', timeAuthority);
+    const recorded = (await repository.mutateLaborTime(runtimePool, recordedInput)).body.data;
+    const beforeCorrection = await laborEvidence(migrationPool, recorded.id);
+    await expect(repository.mutateLaborTime(runtimePool, labor({
+      ...context, actorUserId: IDS.member, action: 'correct', interval: recorded,
+      category: 'other', observedStart: nearNow, observedEnd: farFuture,
+      key: 'm23-p3-correction-future-end-01',
+    }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({
+      status: 400, code: 'INVALID_LABOR_REQUEST',
+    });
+    expect(await laborEvidence(migrationPool, recorded.id)).toEqual(beforeCorrection);
+  });
+
+  test.each([[' Demo ', 35], [' SIMULATION ', 36]])(
+    'Part 3 normalizes %p transcript source for mutation, read, and replay denial',
+    async (source, contextIndex) => {
+      const context = await createStartedExecution(contextIndex);
+      const recordedHour = contextIndex === 35 ? '09' : '11';
+      const replayInput = labor({
+        ...context, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
+        observedStart: `2026-08-15T${recordedHour}:00:00-04:00`,
+        observedEnd: `2026-08-15T${recordedHour}:30:00-04:00`,
+        key: `m23-p3-normalized-source-${source.trim().toLowerCase()}-01`,
+      }, sessions.member, 'member', timeAuthority);
+      const recorded = (await repository.mutateLaborTime(runtimePool, replayInput)).body.data;
+      await migrationPool.query(
+        `UPDATE public.canonical_transcripts transcript SET source=$2
+           FROM public.canonical_field_executions execution
+          WHERE execution.organization_id=$1 AND execution.id=$3
+            AND transcript.organization_id=execution.organization_id
+            AND transcript.operation_id=execution.operation_id
+            AND transcript.graph_id=execution.graph_id`,
+        [IDS.organization, source, context.execution.id]
+      );
+      try {
+        const before = await laborEvidence(migrationPool, recorded.id);
+        await expect(repository.mutateLaborTime(runtimePool, replayInput))
+          .rejects.toMatchObject({ status: 404 });
+        await expect(repository.mutateLaborTime(runtimePool, labor({
+          ...context, actorUserId: IDS.member, action: 'record_manual', category: 'travel',
+          observedStart: '2026-08-15T10:00:00-04:00',
+          observedEnd: '2026-08-15T10:30:00-04:00',
+          key: `m23-p3-normalized-source-new-${source.trim().toLowerCase()}-01`,
+        }, sessions.member, 'member', timeAuthority))).rejects.toMatchObject({ status: 404 });
+        await expect(repository.readLaborTime(runtimePool, {
+          organizationId: IDS.organization, actorUserId: IDS.member,
+          actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+          executionId: context.execution.id,
+        })).rejects.toMatchObject({ status: 404 });
+        expect(await laborEvidence(migrationPool, recorded.id)).toEqual(before);
+      } finally {
+        await migrationPool.query(
+          `UPDATE public.canonical_transcripts transcript SET source='manual'
+             FROM public.canonical_field_executions execution
+            WHERE execution.organization_id=$1 AND execution.id=$2
+              AND transcript.organization_id=execution.organization_id
+              AND transcript.operation_id=execution.operation_id
+              AND transcript.graph_id=execution.graph_id`,
+          [IDS.organization, context.execution.id]
+        );
+      }
+    }
+  );
+
   test('Part 3 withholds direct SQL/helpers and makes history immutable', async () => {
     for (const sql of [
       'SELECT * FROM public.canonical_labor_intervals LIMIT 1',
@@ -1191,6 +1377,75 @@ realPostgres('Mission 23 Part 2 migration interruption and retry', () => {
       expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
       const final = (await migrationPool.query(
         'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1', [MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+    } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 3 correction migration interruption and retry', () => {
+  test('rolls back interrupted 040, then applies once and restarts as zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p3-correction-retry');
+    const roles = await createRoles(database, 'p3-correction-retry');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p3-correction-'));
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < LABOR_CORRECTION_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({
+        pool: migrationPool, runtimePool, migrationsDirectory: temporary,
+      })).toBe(true);
+      const before = (await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition;
+      expect(before).not.toContain('lower(btrim(transcript.source))');
+      const client = await migrationPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fs.readFileSync(
+          path.join(MIGRATIONS, LABOR_CORRECTION_MIGRATION), 'utf8'
+        ));
+        await expect(client.query('SELECT public.m23_part3_040_forced_interruption()'))
+          .rejects.toBeDefined();
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      expect((await migrationPool.query(
+        `SELECT pg_get_functiondef(
+          'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)'::regprocedure
+        ) AS definition`
+      )).rows[0].definition).toBe(before);
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [LABOR_CORRECTION_MIGRATION]
+      )).rows[0].count).toBe(0);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const source = localDb.loadMigrations(MIGRATIONS)
+        .find(item => item.file === LABOR_CORRECTION_MIGRATION);
+      const applied = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1',
+        [LABOR_CORRECTION_MIGRATION]
+      )).rows;
+      expect(applied).toHaveLength(1);
+      expect(applied[0].checksum).toBe(source.digest);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const final = (await migrationPool.query(
+        'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1',
+        [LABOR_CORRECTION_MIGRATION]
       )).rows[0];
       expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
       expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());

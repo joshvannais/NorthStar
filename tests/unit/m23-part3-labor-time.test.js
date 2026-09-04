@@ -154,12 +154,28 @@ describe('Mission 23 Part 3 labor/time contract', () => {
 
   test('keeps Part 3 backend-only and records explicit non-inference boundaries', () => {
     const root = path.join(__dirname, '..', '..');
-    const migration = fs.readFileSync(path.join(root, 'migrations',
+    const migration039 = fs.readFileSync(path.join(root, 'migrations',
       '039_canonical_labor_time_evidence.sql'), 'utf8');
-    expect(migration).toContain('Observed or entered operational time evidence only');
-    expect(migration).toContain("transcript.source NOT IN ('simulation','demo')");
-    expect(migration).not.toContain('CREATE TABLE public.canonical_material');
-    expect(migration).not.toContain('latitude');
+    const migration040 = fs.readFileSync(path.join(root, 'migrations',
+      '040_canonical_labor_time_audit_corrections.sql'), 'utf8');
+    expect(migration039).toContain('Observed or entered operational time evidence only');
+    expect(migration040).toContain(
+      "lower(btrim(transcript.source)) NOT IN ('simulation','demo')"
+    );
+    expect(migration040).toContain(
+      "OR observed_end_value>transaction_timestamp()+INTERVAL '5 minutes'"
+    );
+    expect(migration040).toContain(
+      "review_state_value<>'rejected' AND action_value IN " +
+      "('start_timer','record_manual','correct','review')"
+    );
+    expect((migration040.match(/lower\(btrim\(transcript\.source\)\)/g) || []))
+      .toHaveLength(2);
+    expect(migration040).not.toContain("transcript.source NOT IN ('simulation','demo')");
+    expect(migration039).not.toContain('CREATE TABLE public.canonical_material');
+    expect(migration040).not.toContain('CREATE TABLE');
+    expect(migration039).not.toContain('latitude');
+    expect(migration040).not.toContain('latitude');
     const changedRuntime = ['src/db.js', 'src/operations/contract.js',
       'src/operations/httpBoundary.js', 'src/operations/repository.js', 'src/routes/fieldExecutions.js'];
     for (const file of changedRuntime) expect(file).not.toMatch(/public[\\/]|views?[\\/]|browser[\\/]/);

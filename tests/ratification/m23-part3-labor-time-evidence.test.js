@@ -7,6 +7,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const read = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8');
 const migration = read('migrations', '039_canonical_labor_time_evidence.sql');
+const correctionMigration = read('migrations', '040_canonical_labor_time_audit_corrections.sql');
 const contract = read('src', 'operations', 'contract.js');
 const boundary = read('src', 'operations', 'httpBoundary.js');
 const repository = read('src', 'operations', 'repository.js');
@@ -76,8 +77,18 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
       "CONSTRAINT='canonical_labor_overlap'",
       "CONSTRAINT='canonical_labor_timer_open'",
       'FROM public.workforce_crew_members',
-      "transcript.source NOT IN ('simulation','demo')",
     ]) expect(migration).toContain(required);
+    for (const required of [
+      "lower(btrim(transcript.source)) NOT IN ('simulation','demo')",
+      "OR observed_end_value>transaction_timestamp()+INTERVAL '5 minutes'",
+      "review_state_value<>'rejected' AND action_value IN " +
+        "('start_timer','record_manual','correct','review')",
+    ]) expect(correctionMigration).toContain(required);
+    expect((correctionMigration.match(/lower\(btrim\(transcript\.source\)\)/g) || []))
+      .toHaveLength(2);
+    expect(correctionMigration).not.toContain(
+      "transcript.source NOT IN ('simulation','demo')"
+    );
     expect(repository).toContain("'M23_LABOR_SOURCE_STALE'");
     expect(repository).toContain("'M23_LABOR_TIMER_ALREADY_OPEN'");
   });
@@ -125,7 +136,9 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
       'accessibility', 'Chrome', 'WebKit', 'visual inspection',
     ]) expect(roadmap).toContain(quality);
     expect(requirements).toContain('The candidate changes no `public`, `views`, browser, CSS, or UI files.');
-    expect(corrections).toContain('No correction changes protected migrations 001–038.');
+    expect(corrections).toContain('No correction changes protected migrations 001–039.');
+    expect(correctionMigration).not.toContain('CREATE TABLE');
+    expect(correctionMigration).not.toContain('CREATE VIEW');
   });
 
   test('migration identity receipt matches exact mutable bytes once frozen', () => {
@@ -135,6 +148,23 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
     const bytes = fs.readFileSync(path.join(ROOT, 'migrations', '039_canonical_labor_time_evidence.sql'));
     expect(identity).toContain(`Blob byte count: \`${bytes.length}\` bytes`);
     expect(identity).toContain(`\`${crypto.createHash('sha256').update(bytes).digest('hex')}\``);
+    expect(identity).toContain('This identity was frozen from the committed Git object');
+  });
+
+  test('preserves the frozen 039 identity while adding a separately frozen 040', () => {
+    const identity = read('outputs', 'm23-part3-writer', 'MIGRATION_040_IDENTITY.md');
+    const bytes039 = fs.readFileSync(path.join(
+      ROOT, 'migrations', '039_canonical_labor_time_evidence.sql'
+    ));
+    expect(crypto.createHash('sha256').update(bytes039).digest('hex'))
+      .toBe('2204695c9be757a66094897f6bb9e86bee9c84f1582a3bc27812d7bbdebdf13a');
+    const bytes040 = fs.readFileSync(path.join(
+      ROOT, 'migrations', '040_canonical_labor_time_audit_corrections.sql'
+    ));
+    expect(identity).toContain(`Blob byte count: \`${bytes040.length}\` bytes`);
+    expect(identity).toContain(
+      `\`${crypto.createHash('sha256').update(bytes040).digest('hex')}\``
+    );
     expect(identity).toContain('This identity was frozen from the committed Git object');
   });
 

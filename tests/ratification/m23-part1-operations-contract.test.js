@@ -83,6 +83,7 @@ describe('Mission 23 Part 1 Operations root contract', () => {
       .toEqual([
         '038_canonical_field_execution_authority.sql',
         '039_canonical_labor_time_evidence.sql',
+        '040_canonical_labor_time_audit_corrections.sql',
       ]);
     expect(fs.readdirSync(path.join(ROOT, 'src', 'operations')).sort()).toEqual([
       'contract.js', 'httpBoundary.js', 'repository.js',

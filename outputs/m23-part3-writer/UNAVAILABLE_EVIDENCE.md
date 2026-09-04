@@ -2,12 +2,14 @@
 
 ## Release and production evidence
 
-- The first independent exact-head audit occurred and required one P1 plus two
-  P2 corrections. A fresh independent audit of the corrected exact head,
-  zero-finding verdict, ready state, normal merge, sole automatic deployment,
-  exact running revision, credential-free health, passive acceptance, final
-  evidence seal, and cleanup have not occurred. Writer tests do not substitute
-  for them.
+- The implementation's independent acceptance, normal merge, sole automatic
+  first deployment, exact first application, read-only production ledger, and
+  credential-free health are recorded in `PRODUCTION_APPLICATION_RECEIPT.md`;
+  they are no longer unavailable.
+- Fresh independent exact-head audit, ready state, normal merge, automatic
+  deployment, later-start readback, and final release seal for this
+  documentation-only receipt follow-up have not occurred. Writer tests do not
+  substitute for them.
 - Authoritative read-only production migration-history/checksum reconciliation,
   PostgreSQL UTC/locale compatibility, and exact frozen 039+040 pending state
   against corrected head `b920362...` are recorded in
@@ -15,14 +17,21 @@
   migration 041 and is not terminal-candidate preflight evidence. A new
   read-only production history/compatibility preflight covering exact frozen
   039+040+041 is unavailable and not claimed.
-- Production first application, exact one-row 039, 040, and 041 ledger identities,
-  automatic-runner log, later-start zero-op, and unchanged checksums/timestamps
-  have not occurred and are not claimed.
+- Production first application, exact one-row 039, 040, and 041 ledger
+  identities, the automatic-runner log, and three healthy credential-free
+  health observations are recorded in `PRODUCTION_APPLICATION_RECEIPT.md`; they
+  are no longer unavailable.
+- A later ordinary automatic application start with zero migration-application
+  entries and unchanged single rows, checksums, and original
+  `2026-09-04T14:30:01.345Z` timestamps has not yet occurred. It must be supplied
+  by the audited, normally merged, automatically deployed receipt follow-up;
+  Part 4 remains blocked until that separate zero-op evidence is recorded.
 - Production interruption/retry is not induced. Disposable PostgreSQL 18.4
   interruption/retry evidence remains bounded to its isolated database.
 - No production private/customer row, credential, provider configuration,
-  environment variable, unrestricted log, DDL, or data mutation was read or
-  performed by the Part 3 writer.
+  environment variable, DDL, or data mutation was read or performed by the
+  Part 3 receipt writer. The receipt uses only supplied bounded startup, health,
+  and migration-ledger evidence.
 
 ## Recovery evidence and authorized disposition
 

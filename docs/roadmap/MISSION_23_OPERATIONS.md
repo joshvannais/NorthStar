@@ -16,14 +16,20 @@ knowledge authorities without replacing any of them.
   `e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`. The exact migration 038 row,
   healthy first start, later automatic container start with no migration
   application, and unchanged one-row checksum/timestamp are recorded.
-- **Part 3: terminal audit-correction writer candidate in progress; not
-  independently re-audited, merged, deployed, or production-accepted.** The
-  independent audit of first candidate head
+- **Part 3: independently accepted, normally merged, automatically deployed,
+  first-start production-applied, and health verified; later-start zero-op is
+  pending.** The independent audit of first candidate head
   `a08421e601a0125a89298c3dca68dea2e1d888b1` required one P1 and two P2
   corrections. A second independent audit of corrected head
   `b92036215618ef2b26804fc7fce300ea3d34f331` found no P0/P1 finding and one
   remaining P2 transcript-source normalization gap. Forward-only migration 041
-  is the writer correction candidate; no writer result is a release claim.
+  closed that gap. Exact accepted candidate
+  `8de66512d1baa335e4e7151b6a7232c94de9dc0a` merged as
+  `ee6cac8b729f73a5af22c7d5747fd52c1d1d4035`; automatic Railway deployment
+  `e1d88caa-339e-49b6-a08a-60cd20eddcf9` applied migrations 039–041 once and
+  returned healthy canonical PostgreSQL persistence. A later ordinary
+  application start with unchanged one-row checksums and timestamps remains a
+  required separate zero-op receipt before Part 4.
 - **Parts 4–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
@@ -146,9 +152,9 @@ application timestamp unchanged. A backup/restore rehearsal remains unavailable.
 The authorized conservative release disposition permits only a reviewed forward
 fix and forbids destructive database rollback.
 
-## Part 3 writer-candidate implementation boundary
+## Part 3 deployed implementation boundary
 
-The Part 3 candidate is additive to the exact deployed Part 2 receipt base. It
+The Part 3 implementation is additive to the exact deployed Part 2 receipt base. It
 records operational labor/time evidence only: individually attributable timer
 and manual intervals tied to the exact current field execution and Mission 22
 assignment revision/digest; an explicit versioned category vocabulary; UTC
@@ -192,6 +198,16 @@ union, geolocation, consent, or any legal conclusion. Part 3 does not add
 materials, inventory, equipment, files, checklists, notes, progress, blockers,
 changes, completion, reopening, UI, Polaris, providers, or later-part behavior.
 It preserves Part 2 lifecycle state and every Mission 20–32 authority boundary.
+
+The exact accepted Part 3 candidate
+`8de66512d1baa335e4e7151b6a7232c94de9dc0a` merged normally as
+`ee6cac8b729f73a5af22c7d5747fd52c1d1d4035`. Its sole automatic deployment
+applied migrations 039, 040, and 041 once. The read-only production ledger
+contains 39 rows and exactly one matching checksum row for each migration, all
+with `applied_at = 2026-09-04T14:30:01.345Z`; three credential-free health GETs
+returned HTTP 200 with PostgreSQL and canonical persistence healthy. The
+separate later-start zero-op and unchanged-ledger receipt remains pending and is
+required before Part 4.
 
 Part 3 changes no rendered surface. That no-UI boundary prevents a premature
 visual implementation; it is not browser or founder visual approval. The Part

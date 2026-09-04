@@ -20,10 +20,13 @@ The blob SHA-256 and checksum loaded by `src/db.js` are identical. Migrations
 039 and 040 remain frozen separately and unchanged. No later candidate commit
 may modify migrations 039, 040, or 041.
 
-This local identity proves no production fact. The completed bounded read-only
-production-history preflight proved exact 039+040 compatibility but predates
-041. A new bounded read-only preflight must verify the exact combined
-039+040+041 pending candidate before release. Fresh independent exact-head
-audit, normal merge/automatic application, exact ledger rows, health, and
-later-start zero-op remain subsequent evidence. No private production row or
-credential was required for this identity check.
+This local identity alone proves no production fact. The historical bounded
+read-only production-history preflight proved exact 039+040 compatibility but
+predates 041; no terminal pre-application 039+040+041 receipt was supplied. The
+later `PRODUCTION_APPLICATION_RECEIPT.md` records independent acceptance, normal
+merge, automatic first application, exact one-row production identity, and
+health for all three migrations. That post-application receipt does not
+retroactively prove the missing pre-application inspection. A later ordinary
+application-start zero-op with the row checksum and timestamp unchanged remains
+pending. No private production row or credential was required for these
+identity checks.

@@ -23,6 +23,19 @@
   checklists, inspections, progress, blockers, changes, completion/reopening,
   UI, Polaris, providers, pricing, payroll, invoice/payment, and Parts 4–12.
 
+## Production application receipt follow-up boundary
+
+- Exact deployed base:
+  `ee6cac8b729f73a5af22c7d5747fd52c1d1d4035`
+- Exact independently accepted Part 3 candidate:
+  `8de66512d1baa335e4e7151b6a7232c94de9dc0a`
+- Branch: `mission23/part3-production-receipt`
+- Worktree:
+  `/home/joshv/codex-writers/mission23-part3-production-receipt`
+- Scope: documentation, evidence, and ratification assertions only.
+- Excluded: runtime, schemas, migrations, routes, UI, providers, credentials,
+  configuration, production mutation, calculator work, and Parts 4–12.
+
 Part 2's later-start gate passed before editing: PR #162 merged normally at
 `2026-09-04T09:47:56Z` as
 `e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`; GitHub deployment `6261881255`
@@ -58,10 +71,46 @@ data mutation was involved.
 | Part 2/M20–M32 preservation | Migrations 001–040 are unchanged. Migration 041 adds one Part 3 classifier and replaces only the two Part 3 entry functions. Part 2 lifecycle remains `not_started`/`in_progress`/`paused`, and Part 3 adds no later-domain authority. | Pass in focused and protected-migration regression |
 | Rendered-surface boundary | The candidate changes no `public`, `views`, browser, CSS, or UI files. This proves no Part 3 rendered-surface diff, not browser/founder visual approval. The Part 9 contract now requires the current deployed NorthStar design system as the minimum bar. | Pass for source scope; visual acceptance not applicable |
 | Migration runner, exact-once, retry, and local restart zero-op | Normal application runner applies 001–041 using separated migration/runtime roles. Forced 039, 040, and 041 transaction interruptions leave no target effect/ledger row; retry applies each exactly once; rerun preserves one row/checksum/timestamp. Primary runtime restart verifies the normal runner and privileges. | Pass in disposable PostgreSQL 18.4 |
-| Production history/recovery truth | Exact 039, 040, and 041 Git identities are recorded separately after freeze. A bounded combined read-only receipt proved production history compatibility for exact 039+040 against corrected head `b920362...`: 36 applied rows, no source/history mismatches, and only 039/040 pending. That receipt predates 041 and does not prove the terminal candidate. No backup receipt or restore rehearsal is available; conservative forward-fix/no destructive rollback disposition remains. | 039+040 preflight passed; complete 039+040+041 production preflight unavailable and not claimed |
-| No premature release claim | This ledger reports writer evidence only. The first independent audit required changes. Fresh independent audit of the corrected exact head, ready, merge, deployment, production ledger, health, and passive acceptance are not claimed. | Truthful writer boundary |
+| Production history/recovery truth | Exact 039, 040, and 041 Git identities are recorded separately after freeze. A bounded combined read-only receipt proved pre-application compatibility for exact 039+040 against corrected head `b920362...`: 36 applied rows, no source/history mismatches, and only 039/040 pending. It predates 041. The later post-application ledger proves 39 rows and exact one-row identities for 039–041, but cannot retroactively prove an unsupplied terminal 039+040+041 pre-application inspection. No backup receipt or restore rehearsal is available; conservative forward-fix/no destructive rollback disposition remains. | 039+040 historical preflight and 039–041 post-application ledger recorded; terminal pre-application and recovery evidence remain unavailable |
+| Independent acceptance and normal merge | The terminal Part 3 candidate `8de66512d1baa335e4e7151b6a7232c94de9dc0a` was independently accepted. PR #163 merged normally at `2026-09-04T14:29:12Z` as `ee6cac8b729f73a5af22c7d5747fd52c1d1d4035`; accepted and merge trees both equal `2abaf5251a16e52afac0bf1a4f2b1da7783ea460`. | Achieved for the Part 3 implementation |
+| Sole automatic deployment and first application | Railway deployment `e1d88caa-339e-49b6-a08a-60cd20eddcf9` reached `SUCCESS` at the exact merge using image `sha256:35bc3cf838052c911a93ca01bd2892a3f6db054da67b7742fc462aac4970082a`. Its complete ordinary startup log contained exactly one application entry for each of 039, 040, and 041. | Achieved for the first production start |
+| Exact production migration ledger | Read-only production verification reported PostgreSQL 18.6, Etc/UTC, UTF8, en_US.utf8, `migrationCount = 39`, and exactly one row for each of 039, 040, and 041. Checksums exactly match their frozen identities and every row retains `applied_at = 2026-09-04T14:30:01.345Z`. | Achieved for exact one-row first application |
+| Production health | Three credential-free `GET https://northstar-os.ai/api/health` requests each returned HTTP 200 with status `ok`, PostgreSQL persistence, and `database` plus `canonicalPersistence` healthy. | Achieved for the observed automatic deployment |
+| Later-start migration zero-op | A first application start is not a later-start check. If this documentation-only receipt PR passes fresh audit, merges normally, and deploys automatically, its later start must contain no migration-application entry and read-only verification must retain the exact 39-row ledger, one row per 039–041, all three checksums, all three original timestamps, and healthy canonical persistence. | Pending; Part 4 remains blocked |
+| Receipt-follow-up scope | `PRODUCTION_APPLICATION_RECEIPT.md`, this ledger, unavailable evidence, roadmap status, migration identity cross-references, and ratification assertions only. No runtime/schema/migration/route/UI/provider/calculator or later-part source is changed. | Pass for writer source scope; independent receipt audit pending |
+| No premature release claim | The implementation's independent acceptance, normal merge, first automatic application, exact ledger, and health are recorded. The documentation-only receipt writer does not claim its own audit/merge/deployment, a later-start zero-op, missing terminal pre-application history, backup/restore, or Part 4 authority. | Truthful release boundary |
 
-## Current writer test results
+## Production application receipt follow-up test results
+
+### Focused Part 1/Part 2/Part 3 receipt ratification
+
+- Test suites: 4 passed / 4 total
+- Tests: 31 passed / 31 total
+- Snapshots: 0
+- Failures: 0
+
+### Complete ratification regression
+
+- Test suites: 20 passed / 20 total
+- Tests: 336 passed / 336 total
+- Snapshots: 0
+- Failures: 0
+
+### Mission 21–23 and protected-migration cross-contract regression
+
+- Test suites: 7 passed / 7 total
+- Tests: 113 passed / 113 total
+- Snapshots: 0
+- Failures: 0
+- Included the new production-receipt ratification plus Part 2/Part 3 HTTP
+  contracts, Mission 21 and Mission 22 contract/time suites, and protected
+  migration checks.
+
+These follow-up runs used the repository's locked dependencies and Windows Node
+through the native WSL/ext4 worktree. They are writer evidence, not an
+independent exact-head audit or release verdict.
+
+## Part 3 implementation writer test results
 
 ### Focused Part 2/Part 3 unit boundary
 

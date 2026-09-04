@@ -20,8 +20,10 @@ remain separate immutable release identities and are recorded at the writer
 gate.
 
 This local identity alone proves no production fact. The separate dated, read-
-only `PRODUCTION_MIGRATION_READINESS_RECEIPT.md` records authoritative history/
-compatibility and the exact frozen 039 pending. A fresh auditor must still
-verify the Git object. Normal merge/automatic application, exact one-row ledger
-identity, health, and later-start zero-op remain subsequent release evidence. No
-private production row or credential was required for either identity check.
+only `PRODUCTION_MIGRATION_READINESS_RECEIPT.md` records historical production
+compatibility and the exact frozen 039 pending at that inspection. The later
+`PRODUCTION_APPLICATION_RECEIPT.md` records independent acceptance, normal
+merge, automatic first application, exact one-row production identity, and
+health. A later ordinary application-start zero-op with the row checksum and
+timestamp unchanged remains pending. No private production row or credential
+was required for these identity checks.

@@ -66,6 +66,15 @@ No private/customer row or credential was accessed. The preflight performed no
 DDL, data, provider, configuration, or other production mutation. Its temporary
 inspection script was deleted.
 
+## Terminal application cross-reference
+
+The later `PRODUCTION_APPLICATION_RECEIPT.md` records the independently accepted
+039+040+041 candidate, normal merge, sole automatic first application, exact
+post-application ledger identities, and health. That post-application evidence
+does not retroactively create a terminal 039+040+041 pre-application inspection;
+this readiness receipt remains historical and bounded to the exact 039-only and
+039+040 observations above. The separate later-start zero-op is also pending.
+
 ## Recovery boundary
 
 No dated production backup receipt or isolated restore rehearsal is available.

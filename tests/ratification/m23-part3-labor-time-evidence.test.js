@@ -21,6 +21,9 @@ const corrections = read('outputs', 'm23-part3-writer', 'CORRECTION_CHANGELOG.md
 const productionReadiness = read(
   'outputs', 'm23-part3-writer', 'PRODUCTION_MIGRATION_READINESS_RECEIPT.md'
 );
+const productionApplication = read(
+  'outputs', 'm23-part3-writer', 'PRODUCTION_APPLICATION_RECEIPT.md'
+);
 
 const CATEGORY_VERSION = 'm23-labor-category-v1';
 const CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
@@ -28,10 +31,11 @@ const CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc5
 describe('Mission 23 Part 3 labor and time evidence boundary', () => {
   test('pins the exact deployed base and truthful candidate/release boundary', () => {
     expect(requirements).toContain('`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`');
-    expect(roadmap).toContain('**Part 3: terminal audit-correction writer candidate in progress; not');
+    expect(roadmap).toContain('**Part 3: independently accepted, normally merged, automatically deployed,');
+    expect(roadmap).toContain('later-start zero-op is\n  pending');
     expect(roadmap).toContain('**Parts 4–12: not implemented.**');
-    expect(unavailable).toContain('Writer tests do not substitute\n  for them.');
-    expect(roadmap).toContain('no writer result is a release claim.');
+    expect(unavailable).toContain('Writer tests do not\n  substitute for them.');
+    expect(productionApplication).toContain('Part 4 must not begin');
   });
 
   test('keeps categories explicit and versioned in JavaScript and PostgreSQL', () => {

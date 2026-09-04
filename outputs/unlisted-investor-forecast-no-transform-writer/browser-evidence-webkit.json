@@ -1,0 +1,69 @@
+{
+  "browser": "webkit",
+  "cases": [
+    {
+      "case": "desktop-light",
+      "rows": 120,
+      "annualRows": 10,
+      "monthlyRows": 120,
+      "recalculateStartingOperatingCash": 25001,
+      "pageOverflow": 0,
+      "computedColorScheme": "light",
+      "blobWorkerSimulation": "completed-1-seeded-iteration",
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "requestFailures": 0,
+      "externalRequests": 0,
+      "screenshot": "outputs/unlisted-investor-forecast-no-transform-writer/screenshots/webkit-desktop-light.png",
+      "screenshotSha256": "10bed06e5ace1a799c94ed404c521759804dc64c7a7ec21bc16b8d2fa82eda9a"
+    },
+    {
+      "case": "desktop-dark-preference",
+      "rows": 120,
+      "annualRows": 10,
+      "monthlyRows": 120,
+      "recalculateStartingOperatingCash": 25001,
+      "pageOverflow": 0,
+      "computedColorScheme": "light",
+      "blobWorkerSimulation": "not-run",
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "requestFailures": 0,
+      "externalRequests": 0,
+      "screenshot": "outputs/unlisted-investor-forecast-no-transform-writer/screenshots/webkit-desktop-dark-preference.png",
+      "screenshotSha256": "03a212f42ea21ac2a8dd8a31fc7d0722bf8a4bbe795911d202422b6351b9affd"
+    },
+    {
+      "case": "mobile-light",
+      "rows": 120,
+      "annualRows": 10,
+      "monthlyRows": 120,
+      "recalculateStartingOperatingCash": 25001,
+      "pageOverflow": 0,
+      "computedColorScheme": "light",
+      "blobWorkerSimulation": "not-run",
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "requestFailures": 0,
+      "externalRequests": 0,
+      "screenshot": "outputs/unlisted-investor-forecast-no-transform-writer/screenshots/webkit-mobile-light.png",
+      "screenshotSha256": "9c5d4d38fa1843a312725cadeca70915198e3209a2362c77c997d36cf60875df"
+    },
+    {
+      "case": "mobile-dark-preference",
+      "rows": 120,
+      "annualRows": 10,
+      "monthlyRows": 120,
+      "recalculateStartingOperatingCash": 25001,
+      "pageOverflow": 0,
+      "computedColorScheme": "light",
+      "blobWorkerSimulation": "not-run",
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "requestFailures": 0,
+      "externalRequests": 0,
+      "screenshot": "outputs/unlisted-investor-forecast-no-transform-writer/screenshots/webkit-mobile-dark-preference.png",
+      "screenshotSha256": "0d8005b71e0aeda8c5c97ed785983bb063881d5d42c14201282c291c03ea7df1"
+    }
+  ]
+}

@@ -70,7 +70,7 @@ describe('unlisted investor forecast hosting contract', () => {
       expect(response.headers['x-content-type-options']).toBe('nosniff');
       expect(response.headers['x-frame-options']).toBe('DENY');
       expect(response.headers['cross-origin-resource-policy']).toBe('same-origin');
-      expect(response.headers['cache-control']).toBe('no-store, no-cache, must-revalidate');
+      expect(response.headers['cache-control']).toBe('no-store, no-cache, must-revalidate, no-transform');
       const csp = response.headers['content-security-policy'];
       expect(csp).toContain("default-src 'none'");
       expect(csp).toContain("script-src 'unsafe-inline' blob:");
@@ -96,6 +96,13 @@ describe('unlisted investor forecast hosting contract', () => {
       .expect(200);
     expect(httpsResponse.headers['strict-transport-security'])
       .toBe('max-age=31536000; includeSubDomains; preload');
+  });
+
+  test('no-transform is isolated to the exact calculator route', async () => {
+    for (const siblingRoute of ['/', '/faq']) {
+      const response = await request(app).get(siblingRoute).expect(200);
+      expect(response.headers['cache-control'] || '').not.toMatch(/(?:^|,\s*)no-transform(?:,|$)/);
+    }
   });
 
   test('the exact route is not broadened into a directory or alternate URL', async () => {

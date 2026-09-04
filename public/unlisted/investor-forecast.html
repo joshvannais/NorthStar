@@ -173,6 +173,30 @@ input[aria-invalid="true"] { border-color: var(--red); background: var(--red-sof
 .organization-event-table td:nth-child(5) { white-space: normal; min-width: 260px; }
 .bounded-table { max-height: min(70vh, 760px); overflow: auto; }
 .bounded-table thead { position: sticky; top: 0; z-index: 2; }
+.monthly-projection-panel { overflow: hidden; }
+.monthly-projection-panel > .plain { margin: 0 0 16px; }
+.monthly-scroll-region {
+  --monthly-header-height: 50px;
+  --monthly-row-height: 64px;
+  height: calc(var(--monthly-header-height) + (12 * var(--monthly-row-height)) + 2px);
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  background: #fff;
+}
+.monthly-scroll-region:focus-visible { outline: 3px solid rgba(122, 92, 8, .25); outline-offset: 3px; }
+.monthly-table { min-width: 3450px; table-layout: auto; }
+.monthly-table thead { position: sticky; top: 0; z-index: 3; }
+.monthly-table thead tr, .monthly-table th { height: var(--monthly-header-height); }
+.monthly-table tbody tr, .monthly-table td { height: var(--monthly-row-height); }
+.monthly-table th, .monthly-table td { vertical-align: middle; }
+.monthly-table th:first-child, .monthly-table td:first-child { position: sticky; left: 0; z-index: 1; }
+.monthly-table th:first-child { z-index: 4; }
+.monthly-table td:first-child { background: #fff; box-shadow: 1px 0 0 var(--line); }
+.monthly-table tbody tr:nth-child(even) td:first-child { background: #f7f9fc; }
+.monthly-table tbody tr.funding-gap td:first-child { background: var(--red-soft); }
 .year-groups { display: grid; gap: 12px; margin-top: 12px; }
 .year-group { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .year-group > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; color: var(--navy); background: #f8fafc; cursor: pointer; list-style: none; font-weight: 820; }
@@ -371,8 +395,27 @@ footer { padding: 26px 18px 40px; text-align: center; color: var(--muted); font-
       <div id="fundingWarning" class="callout warning hidden"></div>
     </section>
 
+    <section class="panel monthly-projection-panel" id="monthlyDetails" aria-labelledby="monthlyProjectionTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">Detailed results</p><h2 id="monthlyProjectionTitle">Monthly projection</h2></div>
+      </div>
+      <p class="plain">Every customer source, plan, cost, reserve, and cash movement remains inspectable.</p>
+      <p class="sr-only" id="monthlyProjectionHelp">Scroll vertically and horizontally to review all 120 forecast months.</p>
+      <div class="table-wrap monthly-scroll-region" id="monthlyProjectionScroll" role="region" aria-labelledby="monthlyProjectionTitle" aria-describedby="monthlyProjectionHelp" tabindex="0">
+        <table class="monthly-table"><thead id="monthlyHeader"></thead><tbody id="monthlyRows"></tbody></table>
+      </div>
+    </section>
+
+    <details class="panel advanced" id="annualDetails">
+      <summary><span><b>Annual summary</b><small>Year 1 through Year 10 results</small></span></summary>
+      <div class="advanced-body">
+        <div id="growthBenchmarkNote" class="benchmark-note"></div>
+        <div class="table-wrap"><table><thead><tr><th>Year</th><th>Beginning customers</th><th>Planned additions</th><th>Capacity-supported additions</th><th>Blocked demand</th><th>Churned</th><th>Ending customers</th><th>Net revenue</th><th>Direct provider costs</th><th>Gross margin</th><th>Total OPEX</th><th>Operating profit</th><th>Cash flow before distributions</th><th>Exit ARR</th><th>Payroll</th><th>Ending cash</th><th>Company distribution pool</th><th>Investor distributions</th><th>Market penetration</th><th>Growth</th><th>Endurance</th><th>Reference-only comparison</th></tr></thead><tbody id="annualRows"></tbody></table></div>
+      </div>
+    </details>
+
     <details class="panel advanced details-hub" id="exploreDetails">
-      <summary><span><b>Explore assumptions and detailed results</b><small>Acquisition, retention, organization, annual results, monthly detail, and more</small></span></summary>
+      <summary><span><b>Explore assumptions and detailed results</b><small>Acquisition, retention, organization, evidence, warnings, and more</small></span></summary>
       <div class="advanced-body details-hub-body">
 
     <details class="panel advanced" id="comparisonDetails">
@@ -507,14 +550,6 @@ footer { padding: 26px 18px 40px; text-align: center; color: var(--muted); font-
       </div>
     </details>
 
-    <details class="panel advanced" id="annualDetails">
-      <summary><span><b>Annual summary</b><small>Year 1 through Year 10 results</small></span></summary>
-      <div class="advanced-body">
-        <div id="growthBenchmarkNote" class="benchmark-note"></div>
-        <div class="table-wrap"><table><thead><tr><th>Year</th><th>Beginning customers</th><th>Planned additions</th><th>Capacity-supported additions</th><th>Blocked demand</th><th>Churned</th><th>Ending customers</th><th>Net revenue</th><th>Direct provider costs</th><th>Gross margin</th><th>Total OPEX</th><th>Operating profit</th><th>Cash flow before distributions</th><th>Exit ARR</th><th>Payroll</th><th>Ending cash</th><th>Company distribution pool</th><th>Investor distributions</th><th>Market penetration</th><th>Growth</th><th>Endurance</th><th>Reference-only comparison</th></tr></thead><tbody id="annualRows"></tbody></table></div>
-      </div>
-    </details>
-
     <details class="panel advanced" id="unitDetails">
       <summary><span><b>Unit economics and retention</b><small>CAC, margins, retention, and customer economics</small></span></summary>
       <div class="advanced-body"><div id="unitMetrics" class="metric-grid"></div></div>
@@ -556,11 +591,6 @@ footer { padding: 26px 18px 40px; text-align: center; color: var(--muted); font-
         <div class="table-wrap"><table><thead><tr><th>Month</th><th>Forecast customers</th><th>Actual customers</th><th>Variance</th><th>Forecast MRR</th><th>Actual MRR</th><th>Variance</th><th>Forecast churn</th><th>Actual churn</th><th>Forecast CAC</th><th>Actual CAC</th><th>Forecast direct costs total</th><th>Actual direct costs total</th><th>Forecast OPEX</th><th>Actual OPEX</th></tr></thead><tbody id="actualVarianceRows"></tbody></table></div>
         <div id="recalibrationRecommendations" class="gate-grid"></div>
       </div>
-    </details>
-
-    <details class="panel advanced" id="monthlyDetails">
-      <summary><span><b>Monthly projection</b><small>Every customer source, plan, cost, reserve, and cash movement remains inspectable</small></span></summary>
-      <div class="advanced-body"><p class="plain">Open one year at a time. Planned demand, capacity-supported customers, blocking reasons, workforce changes, and all cost classes appear together.</p><div id="monthlyYearGroups" class="year-groups"></div></div>
     </details>
 
     <details class="panel advanced" id="warningsDetails">
@@ -8467,16 +8497,13 @@ globalThis.NorthStarBenchmarkRegistry = {"registryVersion":"2026-09-02-v5","offl
       ? `<b>External context only.</b> The benchmark registry provides comparison ranges; NorthStar’s entered drivers control this forecast.`
       : '<b>Growth benchmark unavailable.</b> No external growth/endurance reference is loaded; the model does not invent one.';
     $('#annualRows').innerHTML = state.driver.annualSummary.map((year) => `<tr><td>${year.year}${year.completedYear ? '' : ` (${year.monthsIncluded} mo partial)`}</td><td>${count(year.beginningCustomers, year.year * 12)}</td><td>${count(year.plannedGrossAdditions, year.year * 12)}</td><td>${count(year.capacitySupportedGrossAdditions, year.year * 12)}</td><td>${count(year.blockedUnservedDemand, year.year * 12)}</td><td>${count(year.churnedCustomers, year.year * 12)}</td><td>${count(year.endingCustomers, year.year * 12)}</td><td>${money(year.netRevenue, year.year * 12)}</td><td>${money(year.directProviderCosts, year.year * 12)}</td><td>${percent(year.grossMargin)}</td><td>${money(year.totalOpex, year.year * 12)}</td><td>${money(year.operatingProfit, year.year * 12)}</td><td>${money(year.cashFlowBeforeInvestorDistribution, year.year * 12)}</td><td>${money(year.arrExitRunRate, year.year * 12)}</td><td>${money(year.payroll, year.year * 12)}</td><td>${money(year.endingCash, year.year * 12)}</td><td>${money(year.companyDistributionPool, year.year * 12)}</td><td>${money(year.investorDistributions, year.year * 12)}</td><td>${percent(year.marketPenetration)}</td><td>${percent(year.growthRate)}</td><td>${percent(year.growthEndurance)}</td><td>${escapeHtml(year.growthBenchmarkStatus)}</td></tr>`).join('');
-    const rowHeader = '<tr><th>Month / date</th><th>Forecast range</th><th>Acquisition phase</th><th>Planned new</th><th>Capacity-supported new</th><th>Blocked / limiter</th><th>Beginning</th><th>Reactivated</th><th>Churned</th><th>Net change</th><th>Ending expected</th><th>Starter</th><th>Growth</th><th>Complete</th><th>Revenue</th><th>Retell</th><th>Customer-variable costs</th><th>Base fixed</th><th>Step-fixed</th><th>People costs</th><th>Total OPEX</th><th>Operating profit</th><th>Cash flow</th><th>Company distribution pool</th><th>Investor distribution</th><th>Ending cash</th><th>Workforce events</th></tr>';
+    const rowHeader = '<tr><th scope="col">Month / date</th><th scope="col">Forecast range</th><th scope="col">Acquisition phase</th><th scope="col">Planned new</th><th scope="col">Capacity-supported new</th><th scope="col">Blocked / limiter</th><th scope="col">Beginning</th><th scope="col">Reactivated</th><th scope="col">Churned</th><th scope="col">Net change</th><th scope="col">Ending expected</th><th scope="col">Starter</th><th scope="col">Growth</th><th scope="col">Complete</th><th scope="col">Revenue</th><th scope="col">Retell</th><th scope="col">Customer-variable costs</th><th scope="col">Base fixed</th><th scope="col">Step-fixed</th><th scope="col">People costs</th><th scope="col">Total OPEX</th><th scope="col">Operating profit</th><th scope="col">Cash flow</th><th scope="col">Company distribution pool</th><th scope="col">Investor distribution</th><th scope="col">Ending cash</th><th scope="col">Workforce events</th></tr>';
     const eventNames = (row) => (row.automaticOrganizationEvents || []).map((event) => professionalLabel(event.role || event.label || event.type)).filter(Boolean).join(' · ') || 'None';
-    const groups = [];
-    for (let start = 0; start < state.driver.rows.length; start += 12) {
-      const yearRows = state.driver.rows.slice(start, start + 12);
-      const year = Math.floor(start / 12) + 1;
-      const body = yearRows.map((row) => `<tr class="${row.fundingGap ? 'funding-gap' : ''}"><td>Month ${row.month}<small>${escapeHtml(row.calendarDate)}</small></td><td>${escapeHtml(row.horizon)}</td><td>${escapeHtml(professionalLabel(row.acquisitionPhase || row.acquisitionAuthority, 'Channel drivers'))}</td><td>${count(row.plannedNewPayingCustomers, row.month)}</td><td>${count(row.newPayingCustomers, row.month)}</td><td>${count(row.blockedUnservedDemand, row.month)}<small>${escapeHtml(professionalList(row.limitingFunctions))}</small></td><td>${count(row.beginningCustomers, row.month)}</td><td>${count(row.reactivations, row.month)}</td><td>${count(row.churnedCustomers, row.month)}</td><td>${count(row.netCustomerChange, row.month)}</td><td>${count(row.activeCustomers, row.month)}</td><td>${count(row.planEnding && row.planEnding.starter, row.month)}</td><td>${count(row.planEnding && row.planEnding.growth, row.month)}</td><td>${count(row.planEnding && row.planEnding.complete, row.month)}</td><td>${money(row.totalRevenue, row.month)}</td><td>${money(row.retellCost, row.month)}</td><td>${money(row.customerUsageVariableCosts, row.month)}</td><td>${money(row.baseFixedOperatingCost, row.month)}</td><td>${money(row.stepFixedOperatingCosts, row.month)}</td><td>${money(row.peopleOperatingCosts, row.month)}</td><td>${money(row.totalOperatingExpense, row.month)}</td><td>${money(row.operatingProfit, row.month)}</td><td>${money(row.cashFlowBeforeInvestorDistribution, row.month)}</td><td>${money(row.totalDistributionPool, row.month)}</td><td>${money(row.investorDistribution, row.month)}</td><td>${money(row.endingCash, row.month)}</td><td>${escapeHtml(eventNames(row))}</td></tr>`).join('');
-      groups.push(`<details class="year-group" ${year === 1 ? 'open' : ''}><summary><span>Year ${year}</span><small>Months ${yearRows[0].month}–${yearRows[yearRows.length - 1].month} · ending ${count(yearRows[yearRows.length - 1].activeCustomers, yearRows[yearRows.length - 1].month)} expected customers</small></summary><div class="table-wrap bounded-table monthly-table"><table><thead>${rowHeader}</thead><tbody>${body}</tbody></table></div></details>`);
-    }
-    $('#monthlyYearGroups').innerHTML = groups.join('');
+    $('#monthlyHeader').innerHTML = rowHeader;
+    $('#monthlyRows').innerHTML = state.driver.rows.map((row) => `<tr data-month="${row.month}" class="${row.fundingGap ? 'funding-gap' : ''}"><td>Month ${row.month}<small>${escapeHtml(row.calendarDate)}</small></td><td>${escapeHtml(row.horizon)}</td><td>${escapeHtml(professionalLabel(row.acquisitionPhase || row.acquisitionAuthority, 'Channel drivers'))}</td><td>${count(row.plannedNewPayingCustomers, row.month)}</td><td>${count(row.newPayingCustomers, row.month)}</td><td>${count(row.blockedUnservedDemand, row.month)}<small>${escapeHtml(professionalList(row.limitingFunctions))}</small></td><td>${count(row.beginningCustomers, row.month)}</td><td>${count(row.reactivations, row.month)}</td><td>${count(row.churnedCustomers, row.month)}</td><td>${count(row.netCustomerChange, row.month)}</td><td>${count(row.activeCustomers, row.month)}</td><td>${count(row.planEnding && row.planEnding.starter, row.month)}</td><td>${count(row.planEnding && row.planEnding.growth, row.month)}</td><td>${count(row.planEnding && row.planEnding.complete, row.month)}</td><td>${money(row.totalRevenue, row.month)}</td><td>${money(row.retellCost, row.month)}</td><td>${money(row.customerUsageVariableCosts, row.month)}</td><td>${money(row.baseFixedOperatingCost, row.month)}</td><td>${money(row.stepFixedOperatingCosts, row.month)}</td><td>${money(row.peopleOperatingCosts, row.month)}</td><td>${money(row.totalOperatingExpense, row.month)}</td><td>${money(row.operatingProfit, row.month)}</td><td>${money(row.cashFlowBeforeInvestorDistribution, row.month)}</td><td>${money(row.totalDistributionPool, row.month)}</td><td>${money(row.investorDistribution, row.month)}</td><td>${money(row.endingCash, row.month)}</td><td>${escapeHtml(eventNames(row))}</td></tr>`).join('');
+    const monthlyScroll = $('#monthlyProjectionScroll');
+    monthlyScroll.scrollTop = 0;
+    monthlyScroll.scrollLeft = 0;
     renderWorkforceTimeline();
   }
 

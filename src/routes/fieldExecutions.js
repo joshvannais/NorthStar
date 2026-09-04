@@ -8,12 +8,15 @@ const { rateLimit } = require('../middleware/rateLimit');
 const {
   normalizeExecutionId,
   normalizeInitialization,
+  normalizeLaborAction,
   normalizeTransition,
 } = require('../operations/contract');
 const { requireExecutionBodyBoundary } = require('../operations/httpBoundary');
 const {
   initializeFieldExecution,
+  mutateLaborTime,
   readFieldExecution,
+  readLaborTime,
   transitionFieldExecution,
 } = require('../operations/repository');
 
@@ -58,6 +61,8 @@ function createFieldExecutionsRouter(options = {}) {
   const initialize = typeof options.initialize === 'function' ? options.initialize : initializeFieldExecution;
   const transition = typeof options.transition === 'function' ? options.transition : transitionFieldExecution;
   const read = typeof options.read === 'function' ? options.read : readFieldExecution;
+  const laborMutate = typeof options.laborMutate === 'function' ? options.laborMutate : mutateLaborTime;
+  const laborRead = typeof options.laborRead === 'function' ? options.laborRead : readLaborTime;
 
   router.post('/appointments/:appointmentId', requireExecutionBodyBoundary,
     mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
@@ -115,6 +120,53 @@ function createFieldExecutionsRouter(options = {}) {
             code: 'M23_EXECUTION_UNAVAILABLE',
             message: 'Field execution is temporarily unavailable.',
           },
+        });
+      }
+    });
+
+  router.post('/:executionId/labor-actions', requireExecutionBodyBoundary,
+    mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = normalizeLaborAction({
+          ...actor(req), executionId: req.params.executionId,
+          idempotencyKey: req.get('Idempotency-Key'), body: req.body,
+        });
+        const result = await laborMutate(poolProvider(), {
+          ...normalized,
+          csrfToken: req.get('X-CSRF-Token'),
+          requestCorrelationId: requestId(req),
+        });
+        res.set('Cache-Control', 'no-store, private');
+        if (result.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(result.status).json(result.body);
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({
+          success: false, requestId: requestId(req),
+          error: { code: 'M23_LABOR_UNAVAILABLE', message: 'Labor evidence is temporarily unavailable.' },
+        });
+      }
+    });
+
+  router.get('/:executionId/labor', tenantAuth, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      if (!req.query || Object.keys(req.query).length !== 0) {
+        return res.status(400).json({
+          success: false, requestId: requestId(req),
+          error: { code: 'M23_LABOR_QUERY_FORBIDDEN',
+            message: 'Labor evidence reads derive authority from the current signed-in session.' },
+        });
+      }
+      try {
+        const executionId = normalizeExecutionId(req.params.executionId);
+        const result = await laborRead(poolProvider(), { ...actor(req), executionId });
+        res.set('Cache-Control', 'no-store, private');
+        return res.status(result.status).json({ ...result.body, requestId: requestId(req) });
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({
+          success: false, requestId: requestId(req),
+          error: { code: 'M23_LABOR_UNAVAILABLE', message: 'Labor evidence is temporarily unavailable.' },
         });
       }
     });

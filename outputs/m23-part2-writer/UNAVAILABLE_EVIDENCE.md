@@ -11,18 +11,17 @@
   exact running revision, and healthy HTTP/PostgreSQL persistence are now
   recorded in `PRODUCTION_APPLICATION_RECEIPT.md`; they are no longer
   unavailable.
-- A later production application start has not yet been observed. Therefore
-  second-start runner zero-op, zero pending migrations on that later start, and
-  an unchanged one-row 038 ledger after that start remain unavailable.
+- The later automatic production application start, second-start runner zero-
+  op, and unchanged one-row migration 038 ledger identity are recorded in
+  `PRODUCTION_APPLICATION_RECEIPT.md`; they are no longer unavailable.
 - Production interruption/retry was not induced. The disposable PostgreSQL
   interruption/retry evidence remains bounded to its isolated test environment.
 - Private production/customer rows, database credentials, Railway variables,
   and unrestricted production logs were not accessed or mutated during the
   read-only verification.
 
-Disposable PostgreSQL 18 evidence is not substituted for the still-pending
-production later-start zero-op. Part 3 remains blocked until that production
-receipt passes.
+Disposable PostgreSQL 18 evidence was not substituted for production. The
+separate dated production later-start receipt passed before Part 3 began.
 
 ## Recovery evidence and disposition
 
@@ -33,8 +32,8 @@ receipt passes.
   healthy application revision with the exact 038 source retained, leaves any
   committed additive schema inert, permits only a new reviewed forward-fix
   migration for schema correction, forbids destructive rollback/data deletion,
-  assigns the root release coordinator, and blocks Part 3 until exact production
-  health and migration/zero-op evidence pass.
+  assigns the root release coordinator, and permits progression only while exact
+  production health and migration/zero-op evidence remain consistent.
 
 Backup/restore rehearsal remains unavailable and explicitly not passing. The
 authorized disposition satisfies only the ratified alternative release path; it

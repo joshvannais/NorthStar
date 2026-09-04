@@ -10,13 +10,15 @@ knowledge authorities without replacing any of them.
 - **Part 1: independently accepted, merged, deployed, and production-accepted at
   `935a27e94f5df2869308a1b1ac691d212f35ae94`.**
 - **Part 2: independently accepted, normally merged, automatically deployed,
-  and first-start production-applied at
-  `403576639ea0223a2a18340d87882a6cdfa47ca4`.** The exact migration 038
-  production ledger row and healthy application start are recorded. A later
-  production start has not yet proved the required restart zero-op, so Part 3
-  remains blocked and Part 2 is not described as having every release-evidence
-  gate complete.
-- **Parts 3–12: not implemented.**
+  first-start production-applied, and later-start zero-op verified.** The
+  implementation applied at `403576639ea0223a2a18340d87882a6cdfa47ca4`; the
+  independently accepted receipt follow-up merged as
+  `e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`. The exact migration 038 row,
+  healthy first start, later automatic container start with no migration
+  application, and unchanged one-row checksum/timestamp are recorded.
+- **Part 3: writer candidate in progress; not independently audited, merged,
+  deployed, or production-accepted.** No writer result is a release claim.
+- **Parts 4–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and
@@ -132,11 +134,45 @@ independent audit, normal merge, sole automatic deployment, first production
 application, exact migration ledger row, and credential-free health are now
 separately recorded in
 `outputs/m23-part2-writer/PRODUCTION_APPLICATION_RECEIPT.md`. That receipt proves
-the frozen 038 was applied once on the first deployed start; it does not prove a
-later application start is zero-op. A backup/restore rehearsal also remains
-unavailable. The authorized conservative release disposition permits only a
-reviewed forward fix, forbids destructive database rollback, and blocks Part 3
-until the later-start zero-op receipt passes.
+the frozen 038 was applied once on the first deployed start and that a later
+ordinary automatic start was zero-op with the original row, checksum, and
+application timestamp unchanged. A backup/restore rehearsal remains unavailable.
+The authorized conservative release disposition permits only a reviewed forward
+fix and forbids destructive database rollback.
+
+## Part 3 writer-candidate implementation boundary
+
+The Part 3 candidate is additive to the exact deployed Part 2 receipt base. It
+records operational labor/time evidence only: individually attributable timer
+and manual intervals tied to the exact current field execution and Mission 22
+assignment revision/digest; an explicit versioned category vocabulary; UTC
+instants plus raw RFC3339 offsets and the pinned tenant Business Profile time-
+zone version/hash used for local display; immutable events, revisions, audits,
+idempotency receipts, review decisions, and correction history; worker-wide
+overlap/open-timer gates; and bounded operational summaries.
+
+The server derives tenant, individual actor, session, role, and CSRF authority.
+PostgreSQL reloads the current membership/account/workforce/session/
+subscription/onboarding, direct or active-crew assignment, dispatch, execution,
+Business Profile, and non-demo transcript authority on every mutation,
+including cached replay. Writes are serializable and use worker/idempotency
+locks; reads use repeatable-read read-only snapshots. The runtime role has no
+direct table/helper access and can invoke only the two labor entry points.
+
+Observed or manually entered intervals are evidence of recorded operational
+time. They are not payroll timecards, wages, billable hours, customer pricing,
+profitability, overtime/break compliance, tax, employment classification,
+union, geolocation, consent, or any legal conclusion. Part 3 does not add
+materials, inventory, equipment, files, checklists, notes, progress, blockers,
+changes, completion, reopening, UI, Polaris, providers, or later-part behavior.
+It preserves Part 2 lifecycle state and every Mission 20–32 authority boundary.
+
+Part 3 changes no rendered surface. That no-UI boundary prevents a premature
+visual implementation; it is not browser or founder visual approval. The Part
+9 experience must use the then-current deployed NorthStar design system as its
+minimum bar across typography, spacing, radii, borders, cards/drawers,
+responsive widths, controls, dark/light themes, mobile/desktop behavior,
+accessibility, mounted Chrome, Playwright WebKit, and visual inspection.
 
 ## Non-negotiable ownership boundaries
 
@@ -483,7 +519,10 @@ and correction history. Never infer completion from appointment or progress.
 
 Mount the worker mobile execution flow and owner/administrator operational view
 over Parts 2–8, integrate existing Today/Calendar/Command Center/customer
-surfaces, and cover every truthful state without browser-side authority.
+surfaces, and cover every truthful state without browser-side authority. Match
+or exceed the current deployed NorthStar design system across typography,
+spacing, radii, borders, cards/drawers, responsive widths, controls, dark/light
+themes, mobile/desktop, accessibility, Chrome, WebKit, and visual inspection.
 
 ### Part 10 — Polaris operational intelligence
 
@@ -597,8 +636,9 @@ evidence seal.
   separate evidence.
 - The founder delegated routine visual decisions for this overnight sequence.
   Any resulting receipt is labelled **agent visual acceptance**, never founder
-  personal review. Part 1 changes no rendered UI, so its visual verdict is not
-  applicable.
+  personal review. Parts 1–3 change no rendered UI, so their visual verdict is
+  not applicable; this no-surface evidence is not substituted for Part 9's
+  required browser and visual acceptance.
 
 ### Release
 

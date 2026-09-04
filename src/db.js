@@ -1141,6 +1141,39 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'GRANT EXECUTE ON FUNCTION public.canonical_field_execution_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
         );
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_labor_intervals') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_labor_intervals, public.canonical_labor_events, public.canonical_labor_revisions, public.canonical_labor_audit_events, public.canonical_labor_idempotency FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_labor_reason_valid(text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_labor_interval_digest(uuid,uuid,uuid,uuid,text,text,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,bigint,text,text,text,bigint,text,bigint,text,bigint) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_labor_projection(public.canonical_labor_intervals) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_labor_immutable_evidence() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_labor_guard_current() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_labor_validate_complete() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_labor_request_digest(uuid,uuid,uuid,uuid,text,uuid,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_labor_time_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
+        );
+      END IF;
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role
@@ -1223,6 +1256,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_field_execution_revisions',
              'canonical_field_execution_audit_events',
              'canonical_field_execution_idempotency',
+             'canonical_labor_intervals',
+             'canonical_labor_events',
+             'canonical_labor_revisions',
+             'canonical_labor_audit_events',
+             'canonical_labor_idempotency',
              'polaris_provider_monthly_usage',
              'polaris_provider_requests',
              'polaris_provider_security_events'
@@ -1320,6 +1358,41 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_field_execution_guard_current()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_field_execution_validate_complete()','EXECUTE')
        )) AS field_execution_helpers_withheld,
+       (to_regclass('public.canonical_labor_intervals') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_labor_intervals','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_intervals','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_intervals','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_intervals','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_events','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_events','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_events','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_events','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_revisions','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_revisions','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_revisions','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_revisions','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_audit_events','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_audit_events','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_audit_events','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_audit_events','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_idempotency','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_idempotency','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_labor_idempotency','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_labor_idempotency','DELETE')
+       )) AS labor_tables_withheld,
+       (to_regclass('public.canonical_labor_intervals') IS NULL OR (
+         has_function_privilege($1,'public.canonical_labor_time_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_labor_time_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS labor_entry_execute,
+       (to_regclass('public.canonical_labor_intervals') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_labor_reason_valid(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_labor_interval_digest(uuid,uuid,uuid,uuid,text,text,text,text,timestamp with time zone,timestamp with time zone,text,text,uuid,bigint,text,text,text,bigint,text,bigint,text,bigint)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_labor_projection(public.canonical_labor_intervals)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_labor_immutable_evidence()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_labor_guard_current()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_labor_validate_complete()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_labor_request_digest(uuid,uuid,uuid,uuid,text,uuid,text,bigint,text,bigint,text,uuid,bigint,text,text,text,text,uuid,bigint,text,text,text,text)','EXECUTE')
+       )) AS labor_helpers_withheld,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
          AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
@@ -1369,6 +1442,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.field_execution_tables_withheld ||
       !runtimePrivileges.field_execution_entry_execute ||
       !runtimePrivileges.field_execution_helpers_withheld ||
+      !runtimePrivileges.labor_tables_withheld ||
+      !runtimePrivileges.labor_entry_execute ||
+      !runtimePrivileges.labor_helpers_withheld ||
       !runtimePrivileges.polaris_provider_usage_guarded ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {

@@ -79,7 +79,7 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     );
 
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations'));
-    expect(migrations.filter((name) => /mission[_-]?23|field[_-]?execution|^03[89]_/i.test(name)))
+    expect(migrations.filter((name) => /mission[_-]?23|field[_-]?execution|^03[89]_/i.test(name)).sort())
       .toEqual([
         '038_canonical_field_execution_authority.sql',
         '039_canonical_labor_time_evidence.sql',
@@ -288,8 +288,8 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     expect(part2ProductionReceipt).toMatch(/zero checksum\s+mismatches/);
     expect(part2ProductionReceipt).toContain('No customer/private business row was accessed.');
     expect(part2ProductionReceipt).toContain('No destructive down migration or data deletion is authorized.');
-    expect(part2UnavailableLedger).toContain('second-start runner zero-op');
-    expect(part2UnavailableLedger).toContain('Part 3 remains blocked');
+    expect(part2UnavailableLedger).toContain('second-start runner zero-\n  op');
+    expect(part2UnavailableLedger).toContain('they are no longer unavailable');
     expect(part2UnavailableLedger).toContain('Backup/restore rehearsal remains unavailable');
     expect(part2UnavailableLedger).toContain('authorized conservative release disposition');
   });

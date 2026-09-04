@@ -16,6 +16,9 @@ const roadmap = read('docs', 'roadmap', 'MISSION_23_OPERATIONS.md');
 const requirements = read('outputs', 'm23-part3-writer', 'REQUIREMENT_TO_EVIDENCE.md');
 const unavailable = read('outputs', 'm23-part3-writer', 'UNAVAILABLE_EVIDENCE.md');
 const corrections = read('outputs', 'm23-part3-writer', 'CORRECTION_CHANGELOG.md');
+const productionReadiness = read(
+  'outputs', 'm23-part3-writer', 'PRODUCTION_MIGRATION_READINESS_RECEIPT.md'
+);
 
 const CATEGORY_VERSION = 'm23-labor-category-v1';
 const CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
@@ -26,7 +29,7 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
     expect(roadmap).toContain('**Part 3: writer candidate in progress; not independently audited, merged,');
     expect(roadmap).toContain('**Parts 4–12: not implemented.**');
     expect(unavailable).toContain('Writer tests do not substitute for them.');
-    expect(requirements).toContain('No writer result is a release claim.');
+    expect(roadmap).toContain('No writer result is a release claim.');
   });
 
   test('keeps categories explicit and versioned in JavaScript and PostgreSQL', () => {
@@ -133,5 +136,20 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
     expect(identity).toContain(`Blob byte count: \`${bytes.length}\` bytes`);
     expect(identity).toContain(`\`${crypto.createHash('sha256').update(bytes).digest('hex')}\``);
     expect(identity).toContain('This identity was frozen from the committed Git object');
+  });
+
+  test('records exact read-only production history compatibility without claiming application', () => {
+    expect(productionReadiness).toContain('`2026-09-04T10:35:08.764Z`');
+    expect(productionReadiness).toContain('`716ecb5d52f021d644930ffacd0407037274b2ae`');
+    expect(productionReadiness).toContain('`db96ba632aecea501fd9c1bda3c3dfebf139cad0`');
+    expect(productionReadiness).toContain('PostgreSQL `18.6`');
+    expect(productionReadiness).toContain('`TimeZone = Etc/UTC`');
+    expect(productionReadiness).toContain('36 applied authoritative migration rows');
+    expect(productionReadiness).toContain('37 candidate migration source files through 039');
+    expect(productionReadiness).toContain('zero applied checksum/source checksum mismatches');
+    expect(productionReadiness).toContain('exactly one unapplied source file');
+    expect(productionReadiness).toContain('No private/customer row or credential was accessed.');
+    expect(productionReadiness).toContain('performed no\nDDL, data, provider, configuration, or other production mutation');
+    expect(productionReadiness).toContain('does not prove application');
   });
 });

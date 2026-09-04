@@ -73,7 +73,7 @@ describe('Mission 23 Part 2 production application receipt', () => {
     expect(roadmap).toContain('**Part 3: writer candidate in progress; not independently audited, merged,');
     expect(roadmap).toContain('**Parts 4–12: not implemented.**');
     expect(requirementLedger).toContain('| Receipt-follow-up scope |');
-    expect(requirementLedger).toContain('No runtime, migration, route, provider, credential, configuration, or production mutation');
+    expect(requirementLedger).toContain('without adding runtime, migration, route, provider, credential, configuration, or production mutation');
     expect(unavailableLedger).toContain('Time, material, inventory, equipment, file, note, checklist, progress, blocker,');
   });
 });

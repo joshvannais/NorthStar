@@ -7,8 +7,9 @@
   credential-free health, passive acceptance, final evidence seal, and cleanup
   have not occurred. Writer tests do not substitute for them.
 - Authoritative read-only production migration-history/checksum reconciliation,
-  PostgreSQL UTC/locale/expression compatibility for migration 039, and the
-  exact frozen 039 pending state are not yet recorded.
+  PostgreSQL UTC/locale compatibility, and exact frozen 039 pending state are
+  recorded in `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`; they are no longer
+  unavailable. Production application remains separate.
 - Production first application, exact one-row 039 ledger identity, automatic-
   runner log, later-start zero-op, and unchanged checksum/timestamp have not
   occurred and are not claimed.

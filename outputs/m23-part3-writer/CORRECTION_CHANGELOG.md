@@ -13,6 +13,7 @@
 | Text boundary | An initial binary regular-expression check was not a robust PostgreSQL UTF-8 control-byte validator. | Reused the explicit bounded UTF-8 byte-loop pattern already accepted in Part 2 while retaining NFC/length limits. | Direct repository-to-SQL control-byte request rejects with zero effects. |
 | Performer freshness | Exact assignment pins alone did not prove the performer's membership/account remained active at mutation time. | Reload active workforce-profile, membership, and user authority for the performer within the serializable transaction. | Forged/inactive/out-of-scope cases fail closed. |
 | Atomic evidence completeness | Row guards alone did not prove all four immutable companion authorities existed at commit. | Added a deferred completeness trigger matching current state to event, revision, audit, and idempotency evidence. | Forced audit insertion failure rolls the entire evidence set back to zero. |
+| Evidence ratification | Historical Part 1/Part 2 assertions still described the now-achieved later-start zero-op as blocked, and one migration-list assertion depended on filesystem order. | Updated only the evolving evidence assertions to the exact PR #162 receipt and sorted the migration list before comparison. | Focused Part 1–3 ratification 22/22; final complete ratification 328/328. |
 
 No correction changes protected migrations 001–038. Migration 039 remains
 mutable until its committed Git-object identity is frozen and documented; after

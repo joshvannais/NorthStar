@@ -9,13 +9,16 @@ knowledge authorities without replacing any of them.
 
 - **Part 1: independently accepted, merged, deployed, and production-accepted at
   `935a27e94f5df2869308a1b1ac691d212f35ae94`.**
-- **Part 2: writer candidate only.** The candidate adds the canonical
-  field-execution authority described below. It is not accepted, ready, merged,
-  deployed, or production-proven until a different exact-head auditor and the
-  serialized release gates say so.
+- **Part 2: independently accepted, normally merged, automatically deployed,
+  and first-start production-applied at
+  `403576639ea0223a2a18340d87882a6cdfa47ca4`.** The exact migration 038
+  production ledger row and healthy application start are recorded. A later
+  production start has not yet proved the required restart zero-op, so Part 3
+  remains blocked and Part 2 is not described as having every release-evidence
+  gate complete.
 - **Parts 3–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
-  released diff. They do not describe the Part 2 candidate.
+  released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and
   terminal release. A writer test result is never a release claim.
 
@@ -66,15 +69,15 @@ mutation at this base. Any existing demo copy, analytics output, recommendation,
 appointment status, legacy object, or browser-local value that resembles job
 progress remains non-authoritative.
 
-## Part 2 candidate implementation boundary
+## Part 2 deployed implementation boundary
 
-The Part 2 writer candidate is additive to the released Part 1 base. It creates
+The Part 2 implementation is additive to the released Part 1 base. It creates
 one distinct current execution per canonical appointment plus immutable event,
 revision, audit, and idempotency evidence. The exact upstream operation, graph,
 opportunity, appointment, and Mission 22 assignment identities are retained;
 each mutation must match the current assignment revision and digest.
 
-The candidate deliberately implements only these lifecycle facts:
+The implementation deliberately implements only these lifecycle facts:
 
 - initialization into `not_started`;
 - `start`: `not_started` to `in_progress`;
@@ -124,16 +127,16 @@ changes, completion, reopening, UI, Polaris, provider state, price, invoice, or
 payment. Demo/simulation transcript sources are rejected. Retired legacy job,
 workflow, and asset routes remain non-authoritative.
 
-Disposable PostgreSQL and writer tests are evidence about the candidate only. A
-dated read-only receipt separately reconciles exact production history through
-037, PostgreSQL 18.6, UTF8, `Etc/UTC`, and locale compatibility, with exactly
-frozen 038 pending. Production automatic application/restart, independent audit,
-merge, deployment, health, and production acceptance remain separate gates. A
-backup/restore rehearsal remains unavailable; the authorized conservative
-release disposition keeps/restores the previous healthy application with the
-exact 038 source retained, leaves committed additive schema inert, permits only
-a new reviewed forward-fix migration, and blocks Part 3 pending exact production
-health and migration/zero-op evidence.
+Disposable PostgreSQL and writer tests remain candidate evidence only. The
+independent audit, normal merge, sole automatic deployment, first production
+application, exact migration ledger row, and credential-free health are now
+separately recorded in
+`outputs/m23-part2-writer/PRODUCTION_APPLICATION_RECEIPT.md`. That receipt proves
+the frozen 038 was applied once on the first deployed start; it does not prove a
+later application start is zero-op. A backup/restore rehearsal also remains
+unavailable. The authorized conservative release disposition permits only a
+reviewed forward fix, forbids destructive database rollback, and blocks Part 3
+until the later-start zero-op receipt passes.
 
 ## Non-negotiable ownership boundaries
 

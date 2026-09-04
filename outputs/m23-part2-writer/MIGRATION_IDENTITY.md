@@ -21,7 +21,10 @@ head and PR head remain separate immutable release identities and are reported
 at the writer gate.
 
 This local identity alone does not prove any production fact. The separate
-dated production-readiness receipt now proves exact pre-application history and
-compatibility through migration 037 with this exact 038 pending. Production
-application, its exact ledger row, restart zero-op, health, and acceptance remain
-unavailable until the authorized release stage observes them.
+dated production-readiness receipt proves exact pre-application history and
+compatibility through migration 037. The later
+`PRODUCTION_APPLICATION_RECEIPT.md` records the normal merge, sole automatic
+deployment, first-start application, exact one-row production checksum, and
+healthy application at the same frozen identity. A later production start
+remains required to prove restart zero-op; that gate is not inferred from the
+first successful start.

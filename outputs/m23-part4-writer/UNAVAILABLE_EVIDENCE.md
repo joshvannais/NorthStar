@@ -14,6 +14,9 @@
   available. The conservative disposition preserves exact migration sources,
   permits only a separately reviewed forward fix, and forbids destructive
   rollback or data deletion. Recovery evidence is not passing.
+- GitHub reports no hosted checks for the draft branch. Local syntax, unit,
+  ratification, cross-contract, and disposable PostgreSQL evidence does not
+  substitute for unavailable hosted CI.
 
 ## Product authority
 

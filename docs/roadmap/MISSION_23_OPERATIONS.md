@@ -440,9 +440,52 @@ scope is re-established.
 
 - Every operational event references the exact Mission 20 tenant asset version
   when a catalogue identity exists. Free-text equipment never creates an asset.
+- A generic truck, trailer, machine, or equipment placeholder is not accepted
+  knowledge or operational capability. The tenant asset identifies the specific
+  make, model, year, series, and relevant engine, configuration, and attachment
+  when applicable. Missing or ambiguous configuration remains unknown and
+  `needs_review`; category, a similar model, and marketing shorthand cannot fill
+  the gap.
+- The exact configuration pins a cited, versioned Mission 21 universal-knowledge
+  research record with provenance, confidence, and freshness evidence. That
+  non-tenant-private research may be reused across tenants and is refreshed only
+  when missing, stale, conflicting, superseded, or materially different from the
+  tenant asset configuration. Part 5 does not itself authorize live web or
+  provider research.
+- The Mission 20 tenant-private asset instance pins the exact universal knowledge
+  version. Serial/VIN, ownership, financing, condition, hours or mileage,
+  location, attachments, maintenance, faults, downtime, and tenant-specific
+  costs remain tenant-private and never enter universal knowledge or another
+  tenant.
+- Part 5 supplies two asset-onboarding entry paths: a professional Business
+  Profile **Vehicles & Equipment** `Add equipment` workflow for minimal
+  identifiers and use context, and a Polaris conversational request such as
+  `add a Ford F-350 that I sometimes use for hauling or plowing`. Both call one
+  server-authoritative reviewed draft/research pipeline; neither uses separate
+  browser logic or browser state as authority.
+- Polaris asks only the sequential clarifying questions needed to resolve exact
+  year, series, make, model, engine, configuration, attachments, and access
+  type. It proposes the categorized record, then requires explicit confirmation
+  from an authorized tenant actor before durable Mission 20 tenant-inventory
+  mutation. There is no silent AI write. The existing server OpenAI Responses
+  integration, gated by `POLARIS_OPENAI_ENABLED` and the server-only
+  `OPENAI_API_KEY`, is reused; no browser key or second credential is created.
+  Model memory is never factual authority.
+- The Business Profile Vehicles & Equipment surface must meet the current
+  NorthStar design system on desktop, tablet, mobile, light, and dark themes.
+  Categories such as Trucks, Trailers, Equipment, and configuration-derived
+  categories render only when at least one saved tenant asset belongs to them.
+  They provide accessible expand/collapse, counts, and search/filter where
+  appropriate, with strong spacing, radii, typography, no edge-touching content
+  or overflow, and truthful empty, loading, researching, `needs_review`,
+  conflict, failure, and success states. Assets saved through either entry path
+  appear in the same correct category. Part 9 still owns the full worker and
+  owner operational-execution UI; this Part 5 surface is only existing Business
+  Profile asset onboarding and catalogue presentation.
 - Check-out/use/check-in, operator, hours, distance, meter readings, fuel or
   charge observations, condition, faults, downtime, and maintenance events are
-  separate attributable facts with units and provenance.
+  separate attributable facts with units and provenance linked to the exact
+  tenant asset and its pinned universal-knowledge version.
 - Meter readings are monotonic unless an explicit bounded correction or meter
   replacement/reset event explains the change.
 - An assignment or use event does not prove qualification, safety, insurance,
@@ -596,10 +639,33 @@ inventing stock, cost, purchasing, or pricing.
 
 ### Part 5 — Equipment, vehicle, and machinery operations
 
-Link Mission 20 asset identities to execution use, operator, check-out/in,
+Link the exact Mission 20 tenant asset version and its pinned Mission 21
+universal-knowledge version to execution use, operator, check-out/in,
 hours/distance/readings, condition, fault, downtime, maintenance, corrections,
-and availability implications without provider, telematics, geolocation, cost,
-qualification, or safety invention.
+and availability implications. Require specific make/model/year/series and the
+relevant engine/configuration/attachment where applicable; generic placeholders,
+category inference, similar-model substitution, and marketing shorthand are not
+knowledge or capability. Reuse cited/versioned/provenance/confidence/freshness-
+backed universal research across tenants and refresh it only when missing,
+stale, conflicting, superseded, or materially configuration-different. Keep
+serial/VIN, ownership, financing, condition, hours/mileage, location,
+attachments, maintenance, faults, downtime, and tenant costs private to the
+tenant asset. Unknown specifications/capabilities remain unknown or
+`needs_review`. Do not authorize live research, providers, telematics,
+geolocation, cost, qualification, or safety invention.
+
+Expose the shared reviewed asset-draft pipeline through both Business Profile
+Vehicles & Equipment `Add equipment` and Polaris conversation. Keep all draft,
+research, categorization, authorization, and durable mutation logic on the
+server; require explicit authorized confirmation and never permit silent AI or
+browser-state writes. Reuse the existing server-only OpenAI Responses
+integration and Mission 21 cited-source authority rather than model memory, a
+browser key, or a second credential. The Business Profile catalogue follows the
+NorthStar design system across responsive light/dark experiences, renders only
+non-empty generated categories, and provides accessible disclosure, counts,
+search/filter where appropriate, and truthful lifecycle states without
+edge-touching content or overflow. Part 9 retains ownership of full operational
+execution UI.
 
 ### Part 6 — Checklists, inspections, photos, notes, and field evidence
 

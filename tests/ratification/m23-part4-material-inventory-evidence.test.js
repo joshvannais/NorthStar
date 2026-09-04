@@ -17,6 +17,8 @@ const unavailable = read('outputs', 'm23-part4-writer', 'UNAVAILABLE_EVIDENCE.md
 const corrections = read('outputs', 'm23-part4-writer', 'CORRECTION_CHANGELOG.md');
 const migrationIdentity = read('outputs', 'm23-part4-writer', 'MIGRATION_IDENTITY.md');
 const laterStart = read('outputs', 'm23-part3-writer', 'LATER_START_ZERO_OP_RECEIPT.md');
+const historyInspector = read('scripts', 'inspect-production-migration-history.js');
+const packageManifest = JSON.parse(read('package.json'));
 
 const UNIT_VERSION = 'm23-material-unit-v1';
 const UNIT_DIGEST = '8fcbf0c5a646dbd199e6fa8a93f863d851fab24d83c7a819ed65573c22761eba';
@@ -76,6 +78,18 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
       '5efac96a5c275f58e56b117cdae135d4f16ce4847cccdbab8de580b5a3c1d6c4',
     ]) expect(migrationIdentity).toContain(value);
     expect(migrationIdentity).toContain('Migration\n042 must remain byte-for-byte unchanged');
+  });
+
+  test('provides a bounded credential-silent read-only production-history inspector', () => {
+    expect(packageManifest.scripts['inspect:production-migrations'])
+      .toBe('node scripts/inspect-production-migration-history.js');
+    expect(historyInspector).toContain("await client.query('BEGIN READ ONLY')");
+    expect(historyInspector).toContain("SET LOCAL statement_timeout = '5000ms'");
+    expect(historyInspector).toContain('FROM pg_catalog.pg_database database');
+    expect(historyInspector).toContain('FROM public._migrations');
+    expect(historyInspector).toContain('LIMIT ${MAX_MIGRATIONS + 1}');
+    expect(historyInspector).toContain("process.stderr.write('Production migration-history inspection failed.\\n')");
+    expect(historyInspector).not.toMatch(/console\.log|process\.stdout\.write\([^)]*(?:DATABASE_URL|connectionString)|password|credential/i);
   });
 
   test('limits actions and movement facts to Part 4 vocabulary', () => {
@@ -166,5 +180,28 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(corrections).toContain('Current row lineage guard');
     expect(corrections).toContain('Read-current authority');
     expect(corrections).toContain('No correction changes migrations 001–041.');
+  });
+
+  test('records the future Part 5 exact-asset and universal-knowledge boundary without implementing it', () => {
+    for (const phrase of [
+      'generic truck, trailer, machine, or equipment placeholder is not accepted',
+      'make, model, year, series, and relevant engine, configuration, and attachment',
+      'pins a cited, versioned Mission 21 universal-knowledge',
+      'provenance, confidence, and freshness evidence',
+      'Serial/VIN, ownership, financing, condition, hours or mileage',
+      'Unknown specifications/capabilities remain unknown or',
+      'Profile **Vehicles & Equipment** `Add equipment` workflow',
+      'Both call one\n  server-authoritative reviewed draft/research pipeline',
+      'requires explicit confirmation\n  from an authorized tenant actor',
+      '`POLARIS_OPENAI_ENABLED` and the server-only',
+      'Model memory is never factual authority',
+      'accessible expand/collapse, counts, and search/filter',
+      'Assets saved through either entry path',
+      'Part 9 still owns the full worker and',
+    ]) expect(roadmap).toContain(phrase);
+    expect(requirements).toContain('| Future Part 5 exact-asset boundary |');
+    expect(requirements).toContain('adds no Part 5 runtime, UI, or live research authority');
+    expect(unavailable).toContain('No equipment/vehicle/machinery');
+    expect(routes).not.toMatch(/equipment|vehicle|machinery|maintenance/);
   });
 });

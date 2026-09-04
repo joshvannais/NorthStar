@@ -2,17 +2,21 @@
 
 ## Release and production evidence
 
-- Independent fresh-worktree exact-head audit, zero-finding verdict, ready
-  state, normal merge, sole automatic deployment, exact running revision,
-  credential-free health, passive acceptance, final evidence seal, and cleanup
-  have not occurred. Writer tests do not substitute for them.
+- The first independent exact-head audit occurred and required one P1 plus two
+  P2 corrections. A fresh independent audit of the corrected exact head,
+  zero-finding verdict, ready state, normal merge, sole automatic deployment,
+  exact running revision, credential-free health, passive acceptance, final
+  evidence seal, and cleanup have not occurred. Writer tests do not substitute
+  for them.
 - Authoritative read-only production migration-history/checksum reconciliation,
   PostgreSQL UTC/locale compatibility, and exact frozen 039 pending state are
-  recorded in `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`; they are no longer
-  unavailable. Production application remains separate.
-- Production first application, exact one-row 039 ledger identity, automatic-
-  runner log, later-start zero-op, and unchanged checksum/timestamp have not
-  occurred and are not claimed.
+  recorded in `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`; that receipt
+  predates migration 040 and is not complete-candidate preflight evidence.
+  A new read-only production history/compatibility preflight covering exact
+  frozen 039 plus 040 is unavailable and not claimed.
+- Production first application, exact one-row 039 and 040 ledger identities,
+  automatic-runner log, later-start zero-op, and unchanged checksums/timestamps
+  have not occurred and are not claimed.
 - Production interruption/retry is not induced. Disposable PostgreSQL 18.4
   interruption/retry evidence remains bounded to its isolated database.
 - No production private/customer row, credential, provider configuration,

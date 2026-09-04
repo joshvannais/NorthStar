@@ -27,6 +27,14 @@ This proves compatible authoritative history and exact frozen 039 pending before
 release. It does not prove application, a production 039 ledger row, runtime
 health after application, or later-start zero-op.
 
+## Forward-correction boundary
+
+This receipt predates the independently required forward-only migration 040.
+It proves the stated production history and exact 039 readiness at the 039
+freeze; it does not prove a complete-candidate preflight for 040, the combined
+039/040 pending set, or the corrected PR head. Those facts remain unavailable
+until a new bounded read-only inspection is performed and recorded.
+
 No private/customer row or credential was accessed. The preflight performed no
 DDL, data, provider, configuration, or other production mutation. Its temporary
 inspection script was deleted.

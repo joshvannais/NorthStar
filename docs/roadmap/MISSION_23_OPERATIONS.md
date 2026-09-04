@@ -16,8 +16,11 @@ knowledge authorities without replacing any of them.
   `e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`. The exact migration 038 row,
   healthy first start, later automatic container start with no migration
   application, and unchanged one-row checksum/timestamp are recorded.
-- **Part 3: writer candidate in progress; not independently audited, merged,
-  deployed, or production-accepted.** No writer result is a release claim.
+- **Part 3: audit-correction writer candidate in progress; not independently
+  re-audited, merged, deployed, or production-accepted.** The independent audit
+  of first candidate head `a08421e601a0125a89298c3dca68dea2e1d888b1`
+  required one P1 and two P2 corrections. The forward-only migration 040
+  candidate addresses those findings; no writer result is a release claim.
 - **Parts 4–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
@@ -159,6 +162,15 @@ including cached replay. Writes are serializable and use worker/idempotency
 locks; reads use repeatable-read read-only snapshots. The runtime role has no
 direct table/helper access and can invoke only the two labor entry points.
 
+The first candidate's independent audit found that review could restore a
+rejected interval into an overlap, a manual/correction end instant could exceed
+the future ceiling, and case/whitespace transcript-source variants could bypass
+demo/simulation isolation. Frozen migration 039 remains unchanged. Forward-only
+migration 040 redefines only the two labor entry functions: any review that
+would restore authoritative evidence now passes the same serialized worker-wide
+overlap gate before an evidence write; both manual/correction endpoints must be
+no more than five minutes in the future; and every Part 3 mutation/read source
+gate, including the pre-replay path, uses `lower(btrim(source))`.
 Observed or manually entered intervals are evidence of recorded operational
 time. They are not payroll timecards, wages, billable hours, customer pricing,
 profitability, overtime/break compliance, tax, employment classification,

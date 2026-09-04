@@ -72,14 +72,14 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     expect(roadmap).toContain('`403576639ea0223a2a18340d87882a6cdfa47ca4`; the');
     expect(roadmap).toContain('`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`');
     expect(roadmap).toContain('later-start zero-op verified');
-    expect(roadmap).toContain('**Part 3: writer candidate in progress; not independently audited, merged,');
+    expect(roadmap).toContain('**Part 3: audit-correction writer candidate in progress; not independently');
     expect(roadmap).toContain('**Parts 4–12: not implemented.**');
     expect(roadmap).toContain(
       'There is no accepted Mission 23 migration, table, route, repository, or browser'
     );
 
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations'));
-    expect(migrations.filter((name) => /mission[_-]?23|field[_-]?execution|^03[89]_/i.test(name)).sort())
+    expect(migrations.filter((name) => /mission[_-]?23|field[_-]?execution|^0(?:3[89]|40)_/i.test(name)).sort())
       .toEqual([
         '038_canonical_field_execution_authority.sql',
         '039_canonical_labor_time_evidence.sql',

@@ -27,10 +27,10 @@ const CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc5
 describe('Mission 23 Part 3 labor and time evidence boundary', () => {
   test('pins the exact deployed base and truthful candidate/release boundary', () => {
     expect(requirements).toContain('`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`');
-    expect(roadmap).toContain('**Part 3: writer candidate in progress; not independently audited, merged,');
+    expect(roadmap).toContain('**Part 3: audit-correction writer candidate in progress; not independently');
     expect(roadmap).toContain('**Parts 4–12: not implemented.**');
-    expect(unavailable).toContain('Writer tests do not substitute for them.');
-    expect(roadmap).toContain('No writer result is a release claim.');
+    expect(unavailable).toContain('Writer tests do not substitute\n  for them.');
+    expect(roadmap).toContain('no writer result is a release claim.');
   });
 
   test('keeps categories explicit and versioned in JavaScript and PostgreSQL', () => {

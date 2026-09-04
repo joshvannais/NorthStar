@@ -6,6 +6,7 @@ const vm = require('vm');
 const contract = require('../../public/js/command-center-contract');
 
 const ROOT = path.resolve(__dirname, '..', '..');
+const CANONICAL_STANDALONE_CALCULATOR = path.join(ROOT, 'public/unlisted/investor-forecast.html');
 const ALLOWLIST = Object.freeze(['command-center', 'leads', 'communications']);
 const PAGE_BY_ROUTE = Object.freeze({
   'command-center': 'public/demo-dashboard.html',
@@ -75,7 +76,11 @@ describe('surgical site professionalism correction', () => {
     expect(read('public/demo-dashboard.html')).not.toContain('src="/assets/logo.svg"');
     expect(read('public/index.html')).not.toMatch(/font-family\s*:\s*Inter\b/);
 
+    // The unlisted calculator is separately provenance-locked to its canonical
+    // self-contained source and has its own browser ratification. Do not make
+    // this shared-shell inventory rewrite that standalone artifact.
     const source = allFiles(path.join(ROOT, 'public'), ['.css', '.html'])
+      .filter(file => file !== CANONICAL_STANDALONE_CALCULATOR)
       .map(file => fs.readFileSync(file, 'utf8')).join('\n');
     expect(source).not.toMatch(/font-weight\s*:\s*(?:650|720|750|760|780|850)\b/);
     expect(source).not.toMatch(/font\s*:\s*(?:650|720|750|760|780|850)\b/);

@@ -15,6 +15,7 @@ const roadmap = read('docs', 'roadmap', 'MISSION_23_OPERATIONS.md');
 const requirements = read('outputs', 'm23-part4-writer', 'REQUIREMENT_TO_EVIDENCE.md');
 const unavailable = read('outputs', 'm23-part4-writer', 'UNAVAILABLE_EVIDENCE.md');
 const corrections = read('outputs', 'm23-part4-writer', 'CORRECTION_CHANGELOG.md');
+const migrationIdentity = read('outputs', 'm23-part4-writer', 'MIGRATION_IDENTITY.md');
 const laterStart = read('outputs', 'm23-part3-writer', 'LATER_START_ZERO_OP_RECEIPT.md');
 
 const UNIT_VERSION = 'm23-material-unit-v1';
@@ -64,6 +65,17 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(migration).toContain('999999999999.999999::NUMERIC');
     expect(migration).toContain("'conversionPolicy','none'");
     expect(migration).toContain("'conversionApplied',FALSE");
+  });
+
+  test('freezes migration 042 by exact commit, tree, blob, bytes, and SHA-256', () => {
+    for (const value of [
+      '5e91449f3655dcfe9eec7cd0086a5a9c440c0f64',
+      '23f626170471804c551e51d4bd6c1822f91fbea8',
+      '8adb615f30626fe940ab7e444727184fed5bfe9b',
+      '70623',
+      '5efac96a5c275f58e56b117cdae135d4f16ce4847cccdbab8de580b5a3c1d6c4',
+    ]) expect(migrationIdentity).toContain(value);
+    expect(migrationIdentity).toContain('Migration\n042 must remain byte-for-byte unchanged');
   });
 
   test('limits actions and movement facts to Part 4 vocabulary', () => {

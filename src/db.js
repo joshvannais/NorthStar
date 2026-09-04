@@ -1096,6 +1096,48 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_field_executions') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_field_executions, public.canonical_field_execution_events, public.canonical_field_execution_revisions, public.canonical_field_execution_audit_events, public.canonical_field_execution_idempotency FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_reason_valid(text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_digest(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint,text,uuid,uuid) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_request_digest(uuid,uuid,uuid,text,text,uuid,bigint,text,bigint,text,text,text) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_actor_authority(uuid,uuid,text,uuid,text,boolean) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_actor_in_scope(uuid,text,uuid,public.canonical_schedule_assignments) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_projection(public.canonical_field_executions) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_immutable_evidence() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_guard_current() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_validate_complete() FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_field_execution_initialize(uuid,uuid,text,uuid,text,uuid,bigint,text,text,text,text) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_field_execution_transition(uuid,uuid,text,uuid,text,uuid,bigint,text,bigint,text,text,text,text,text) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_field_execution_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
+        );
+      END IF;
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role
@@ -1173,6 +1215,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_schedule_human_approvals',
              'canonical_schedule_human_audit_events',
              'canonical_schedule_human_idempotency',
+             'canonical_field_executions',
+             'canonical_field_execution_events',
+             'canonical_field_execution_revisions',
+             'canonical_field_execution_audit_events',
+             'canonical_field_execution_idempotency',
              'polaris_provider_monthly_usage',
              'polaris_provider_requests',
              'polaris_provider_security_events'
@@ -1229,6 +1276,46 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           (NOT has_function_privilege($1,'public.canonical_schedule_guard_assignment()','EXECUTE')
            AND NOT has_function_privilege($1,'public.canonical_schedule_create_for_appointment()','EXECUTE')))
          AS schedule_helpers_withheld,
+       (to_regclass('public.canonical_field_executions') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_field_executions','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_field_executions','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_field_executions','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_field_executions','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_events','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_events','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_events','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_events','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_revisions','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_revisions','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_revisions','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_revisions','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_audit_events','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_audit_events','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_audit_events','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_audit_events','DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_idempotency','SELECT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_idempotency','INSERT')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_idempotency','UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_field_execution_idempotency','DELETE')
+       )) AS field_execution_tables_withheld,
+       (to_regprocedure('public.canonical_field_execution_initialize(uuid,uuid,text,uuid,text,uuid,bigint,text,text,text,text)') IS NULL OR
+         has_function_privilege($1,'public.canonical_field_execution_initialize(uuid,uuid,text,uuid,text,uuid,bigint,text,text,text,text)','EXECUTE'))
+         AND (to_regprocedure('public.canonical_field_execution_transition(uuid,uuid,text,uuid,text,uuid,bigint,text,bigint,text,text,text,text,text)') IS NULL OR
+         has_function_privilege($1,'public.canonical_field_execution_transition(uuid,uuid,text,uuid,text,uuid,bigint,text,bigint,text,text,text,text,text)','EXECUTE'))
+         AND (to_regprocedure('public.canonical_field_execution_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+         has_function_privilege($1,'public.canonical_field_execution_read(uuid,uuid,text,uuid,uuid)','EXECUTE'))
+         AS field_execution_entry_execute,
+       (to_regclass('public.canonical_field_executions') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_field_execution_reason_valid(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_digest(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_request_digest(uuid,uuid,uuid,text,text,uuid,bigint,text,bigint,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_actor_authority(uuid,uuid,text,uuid,text,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_actor_in_scope(uuid,text,uuid,public.canonical_schedule_assignments)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_projection(public.canonical_field_executions)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_immutable_evidence()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_guard_current()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_validate_complete()','EXECUTE')
+       )) AS field_execution_helpers_withheld,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
          AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
@@ -1275,6 +1362,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.schedule_assignment_guarded_dml ||
       !runtimePrivileges.preview_entry_execute || !runtimePrivileges.approval_entry_execute ||
       !runtimePrivileges.schedule_helpers_withheld ||
+      !runtimePrivileges.field_execution_tables_withheld ||
+      !runtimePrivileges.field_execution_entry_execute ||
+      !runtimePrivileges.field_execution_helpers_withheld ||
       !runtimePrivileges.polaris_provider_usage_guarded ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {

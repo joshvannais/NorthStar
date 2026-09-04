@@ -65,7 +65,7 @@ provider mutation, or production-data mutation was involved.
 ### Focused Part 1–4 ratification
 
 - Test suites: 5 passed / 5 total
-- Tests: 42 passed / 42 total
+- Tests: 44 passed / 44 total
 - Snapshots: 0
 - Failures: 0
 

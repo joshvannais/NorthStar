@@ -47,7 +47,7 @@ provider mutation, or production-data mutation was involved.
 | Part 2/Part 3 and M20–M32 preservation | Migration 042 is additive. Protected migrations 001–041 remain byte-for-byte unchanged. Part 2 lifecycle and Part 3 labor stay independent; Part 4 reuses current authorities without mutating them. | Protected/cross-contract regression pass |
 | Rendered-surface boundary | No `public`, `views`, browser, style, or UI source changes. This is no rendered-surface diff, not browser/founder approval. Part 9 retains the requirement to match or exceed the then-current deployed NorthStar design system on desktop/mobile, dark/light, accessibility, Chrome, WebKit, and visual inspection. | Source scope pass; visual acceptance not applicable |
 | Future Part 5 exact-asset boundary | The roadmap now requires a specific make/model/year/series and relevant engine/configuration/attachment, exact Mission 20 tenant-asset and Mission 21 universal-knowledge-version pins, reusable cited/versioned/provenance/confidence/freshness-backed non-private research, and fail-closed unknown/needs-review handling. It keeps serial/VIN, ownership, financing, condition, readings, location, attachments, maintenance, faults, downtime, and tenant costs private. Business Profile `Add equipment` and Polaris conversation feed one server-authoritative reviewed draft/research pipeline, use the existing server-only OpenAI Responses integration, and require explicit authorized confirmation before durable mutation. The responsive Business Profile catalogue has non-empty generated categories, accessible disclosure/count/search/filter behavior, and truthful lifecycle states; Part 9 still owns full operational execution UI. This Part 4 diff adds no Part 5 runtime, UI, or live research authority. | Roadmap and ratification source pass only; Part 5 remains unimplemented |
-| Migration exact-once and recovery | Disposable PostgreSQL 18.4 UTC exercises fresh runner, upgrade runner, forced 042 interruption/rollback, exact retry, and restart zero-op under separated owner/runtime roles. Exact 042 Git identity is frozen. The repository-owned bounded inspector uses a read-only transaction, only `pg_database`/`current_setting`/`public._migrations`, runner-compatible source checksums, capped result counts, and credential-silent output; its authoritative production receipt is recorded separately. No backup/restore rehearsal is available; only forward-fix/no-destructive-rollback disposition is authorized. | Local runner and inspector unit pass; production preflight pending |
+| Migration exact-once and recovery | Disposable PostgreSQL 18.4 UTC exercises fresh runner, upgrade runner, forced 042 interruption/rollback, exact retry, and restart zero-op under separated owner/runtime roles. Exact 042 Git identity is frozen. The repository-owned bounded inspector uses a read-only transaction, only `pg_database`/`current_setting`/`public._migrations`, runner-compatible source checksums, capped result counts, and credential-silent output. `PRODUCTION_MIGRATION_READINESS_RECEIPT.md` records production PostgreSQL 18.6/Etc-UTC/UTF8/en_US.utf8, 39 exact applied rows against 40 sources, no missing/duplicate/mismatched source, and only exact frozen 042 pending. No backup/restore rehearsal is available; only forward-fix/no-destructive-rollback disposition is authorized. | Local runner, inspector, and bounded production preflight pass; recovery remains unavailable |
 | Independent acceptance and release | Writer results do not self-approve. Fresh exact-head independent audit, normal merge, automatic deployment, production application/ledger, health, and later-start zero-op remain required. | Not performed or claimed |
 
 ## Current focused results
@@ -65,14 +65,14 @@ provider mutation, or production-data mutation was involved.
 ### Focused Part 1–4 ratification
 
 - Test suites: 5 passed / 5 total
-- Tests: 44 passed / 44 total
+- Tests: 45 passed / 45 total
 - Snapshots: 0
 - Failures: 0
 
 ### Complete ratification
 
 - Test suites: 22 passed / 22 total
-- Tests: 357 passed / 357 total
+- Tests: 358 passed / 358 total
 - Snapshots: 0
 - Failures: 0
 
@@ -90,6 +90,16 @@ provider mutation, or production-data mutation was involved.
 - Snapshots: 0
 - Failures: 0
 
+### Final receipt-sensitive cross-contract rerun
+
+- Test suites: 12 passed / 12 total
+- Tests: 158 passed / 158 total
+- Snapshots: 0
+- Failures: 0
+- Scope: Mission 21 root knowledge, Mission 22 root schedule/time, Mission 23
+  Part 2–4 unit contracts, pre-Mission-21 reliability, and every Mission 23
+  ratification/production-receipt contract.
+
 ### PostgreSQL 18.4 UTC regression
 
 - Part 2–4 field execution/material authority: 1 suite, 52/52 passed.
@@ -103,5 +113,5 @@ provider mutation, or production-data mutation was involved.
   separated migration/runtime roles.
 
 These are writer results, not independent acceptance. Exact migration identity
-is frozen. Bounded read-only production-history compatibility remains pending
-until the separate authorized production receipt is supplied.
+is frozen and the bounded read-only production-history receipt matches it.
+Independent audit and all post-merge release evidence remain pending.

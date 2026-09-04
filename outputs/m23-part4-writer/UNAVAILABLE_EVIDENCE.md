@@ -6,10 +6,12 @@
   normal merge, automatic deployment, production migration application, exact
   production ledger, health, and a later ordinary start proving zero-op have
   not occurred and are not claimed.
-- A bounded read-only production-history compatibility preflight for exact
-  frozen migration 042 is pending. No production DDL/data mutation, private or
-  customer row access, credential display, provider action, manual restart, or
-  manual deployment is authorized in this writer lane.
+- The bounded read-only production-history compatibility preflight passed for
+  exact frozen migration 042 and is recorded in
+  `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`. It does not prove production
+  application, the 042 ledger row, deployment health, or later-start zero-op.
+  No production DDL/data mutation, private or customer row access, credential
+  display, provider action, manual restart, or manual deployment occurred.
 - No dated relevant production backup receipt or isolated restore rehearsal is
   available. The conservative disposition preserves exact migration sources,
   permits only a separately reviewed forward fix, and forbids destructive

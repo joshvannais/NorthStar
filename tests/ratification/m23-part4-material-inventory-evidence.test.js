@@ -16,6 +16,9 @@ const requirements = read('outputs', 'm23-part4-writer', 'REQUIREMENT_TO_EVIDENC
 const unavailable = read('outputs', 'm23-part4-writer', 'UNAVAILABLE_EVIDENCE.md');
 const corrections = read('outputs', 'm23-part4-writer', 'CORRECTION_CHANGELOG.md');
 const migrationIdentity = read('outputs', 'm23-part4-writer', 'MIGRATION_IDENTITY.md');
+const productionReadiness = read(
+  'outputs', 'm23-part4-writer', 'PRODUCTION_MIGRATION_READINESS_RECEIPT.md'
+);
 const laterStart = read('outputs', 'm23-part3-writer', 'LATER_START_ZERO_OP_RECEIPT.md');
 const historyInspector = read('scripts', 'inspect-production-migration-history.js');
 const packageManifest = JSON.parse(read('package.json'));
@@ -90,6 +93,29 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(historyInspector).toContain('LIMIT ${MAX_MIGRATIONS + 1}');
     expect(historyInspector).toContain("process.stderr.write('Production migration-history inspection failed.\\n')");
     expect(historyInspector).not.toMatch(/console\.log|process\.stdout\.write\([^)]*(?:DATABASE_URL|connectionString)|password|credential/i);
+  });
+
+  test('records exact production-history compatibility without claiming application', () => {
+    for (const value of [
+      'a568b08c9ffc7dd353864fffe2f2d07f2c5cb1ee',
+      '18.6 (Debian 18.6-1.pgdg13+2)',
+      'TimeZone = Etc/UTC',
+      'sourceMigrationCount = 40',
+      'appliedMigrationCount = 39',
+      'appliedWithoutSource = []',
+      'duplicateApplied = []',
+      'mismatches = []',
+      '042_canonical_material_inventory_evidence.sql',
+      '8adb615f30626fe940ab7e444727184fed5bfe9b',
+      '5efac96a5c275f58e56b117cdae135d4f16ce4847cccdbab8de580b5a3c1d6c4',
+      'DATABASE_PUBLIC_URL',
+    ]) expect(productionReadiness).toContain(value);
+    expect(productionReadiness).toContain('failed closed with\nits generic error');
+    expect(productionReadiness).toContain('printed or mutated');
+    expect(productionReadiness).toContain('does not\nprove application');
+    expect(requirements).toContain('bounded production preflight pass');
+    expect(unavailable).toContain('production-history compatibility preflight passed');
+    expect(unavailable).toContain('does not prove production');
   });
 
   test('limits actions and movement facts to Part 4 vocabulary', () => {

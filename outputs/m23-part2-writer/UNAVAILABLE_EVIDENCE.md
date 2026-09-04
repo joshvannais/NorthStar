@@ -6,15 +6,23 @@
   obtained read-only and are recorded separately in
   `PRODUCTION_MIGRATION_READINESS_RECEIPT.md` against the corrected frozen 038
   bytes. They are no longer unavailable.
-- Production automatic-runner invocation, exact-once application of migration
-  038, its one production ledger row, process interruption behavior, second-run
-  zero-op, and application-restart zero-op were not observed.
-- Private production rows, logs, database credentials, Railway variables, and
-  migration-worker output were not accessed or mutated.
+- The normal merge, sole automatic deployment, first production runner
+  invocation, exact one-row application of migration 038, matching checksum,
+  exact running revision, and healthy HTTP/PostgreSQL persistence are now
+  recorded in `PRODUCTION_APPLICATION_RECEIPT.md`; they are no longer
+  unavailable.
+- A later production application start has not yet been observed. Therefore
+  second-start runner zero-op, zero pending migrations on that later start, and
+  an unchanged one-row 038 ledger after that start remain unavailable.
+- Production interruption/retry was not induced. The disposable PostgreSQL
+  interruption/retry evidence remains bounded to its isolated test environment.
+- Private production/customer rows, database credentials, Railway variables,
+  and unrestricted production logs were not accessed or mutated during the
+  read-only verification.
 
-Disposable PostgreSQL 18 evidence is not substituted for production application.
-Ready, merge, and deployment remain blocked until independent exact-head audit;
-production application remains unavailable until the sole automatic deployment.
+Disposable PostgreSQL 18 evidence is not substituted for the still-pending
+production later-start zero-op. Part 3 remains blocked until that production
+receipt passes.
 
 ## Recovery evidence and disposition
 
@@ -36,11 +44,11 @@ assumed.
 ## Other unavailable or out-of-scope evidence
 
 - Independent exact-head audit, ready state, normal merge, automatic deployment,
-  credential-free health, production acceptance, and final ref reconciliation.
+  and post-deployment readback for this documentation-only receipt follow-up.
 - Hosted GitHub Actions unless GitHub publishes checks for the exact PR head.
 - Chrome, WebKit, physical Safari/device, assistive-technology, and founder
   personal visual evidence. Part 2 adds no rendered UI, so visual acceptance is
-  not applicable to this candidate.
+  not applicable to this receipt follow-up.
 - Provider credentials/configuration or live OpenAI/Polaris, Retell, Stripe,
   storage, file scanner, map, telematics, email/SMS, call, customer-contact,
   material-ordering, or machine-control evidence.

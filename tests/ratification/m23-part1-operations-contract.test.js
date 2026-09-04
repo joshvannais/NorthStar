@@ -66,9 +66,11 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     );
   });
 
-  test('preserves historical Part 1 truth and states the truthful Part 2-only candidate boundary', () => {
+  test('preserves historical Part 1 truth and states the truthful deployed Part 2 boundary', () => {
     expect(roadmap).toContain('**Part 1: independently accepted, merged, deployed, and production-accepted at');
-    expect(roadmap).toContain('**Part 2: writer candidate only.**');
+    expect(roadmap).toContain('**Part 2: independently accepted, normally merged, automatically deployed,');
+    expect(roadmap).toContain('`403576639ea0223a2a18340d87882a6cdfa47ca4`.**');
+    expect(roadmap).toContain('production start has not yet proved the required restart zero-op');
     expect(roadmap).toContain('**Parts 3–12: not implemented.**');
     expect(roadmap).toContain(
       'There is no accepted Mission 23 migration, table, route, repository, or browser'
@@ -281,7 +283,8 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     expect(part2ProductionReceipt).toMatch(/zero checksum\s+mismatches/);
     expect(part2ProductionReceipt).toContain('No customer/private business row was accessed.');
     expect(part2ProductionReceipt).toContain('No destructive down migration or data deletion is authorized.');
-    expect(part2UnavailableLedger).toMatch(/production application remains unavailable/i);
+    expect(part2UnavailableLedger).toContain('second-start runner zero-op');
+    expect(part2UnavailableLedger).toContain('Part 3 remains blocked');
     expect(part2UnavailableLedger).toContain('Backup/restore rehearsal remains unavailable');
     expect(part2UnavailableLedger).toContain('authorized conservative release disposition');
   });

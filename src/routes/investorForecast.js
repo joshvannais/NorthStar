@@ -42,7 +42,10 @@ function setInvestorForecastHeaders(_req, res, next) {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  // Preserve the canonical response body at intermediaries. Cloudflare's
+  // automatic Web Analytics injection respects the standard no-transform
+  // directive without widening this route's script/connect CSP.
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, no-transform');
   next();
 }
 

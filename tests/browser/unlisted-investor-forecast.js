@@ -90,6 +90,11 @@ async function main() {
         'noindex, nofollow, noarchive, nosnippet',
         `${testCase.label}: response noindex`
       );
+      assert.match(
+        response.headers()['cache-control'] || '',
+        /(?:^|,\s*)no-transform(?:,|$)/,
+        `${testCase.label}: intermediary transformation is forbidden`
+      );
       await page.waitForFunction(() => (
         window.currentNorthStarInvestorResult
         && window.currentNorthStarInvestorResult.rows

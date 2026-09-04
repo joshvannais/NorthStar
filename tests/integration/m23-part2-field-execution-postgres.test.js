@@ -25,16 +25,10 @@ const IDS = Object.freeze({
   viewer: 'c2000000-0000-4000-8000-000000000005',
   otherOwner: 'c2000000-0000-4000-8000-000000000006',
   crew: 'c3000000-0000-4000-8000-000000000001',
-  appointments: [
-    'c4000000-0000-4000-8000-000000000001',
-    'c4000000-0000-4000-8000-000000000002',
-    'c4000000-0000-4000-8000-000000000003',
-    'c4000000-0000-4000-8000-000000000004',
-    'c4000000-0000-4000-8000-000000000005',
-    'c4000000-0000-4000-8000-000000000006',
-    'c4000000-0000-4000-8000-000000000007',
-    'c4000000-0000-4000-8000-000000000008',
-  ],
+  appointments: Array.from({ length: 20 }, (_unused, index) => {
+    const sequence = index < 8 ? index + 1 : index + 2;
+    return `c4000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
+  }),
   otherAppointment: 'c4000000-0000-4000-8000-000000000009',
 });
 
@@ -185,6 +179,106 @@ async function forceAcceptedAssignment(pool, organizationId, appointmentId, prof
   } finally {
     await pool.query('ALTER TABLE public.canonical_schedule_assignments ENABLE TRIGGER USER');
   }
+}
+
+async function forceAssignmentAuthority(pool, organizationId, appointmentId, changes = {}) {
+  const current = (await pool.query(
+    `SELECT target_state,workforce_profile_id,workforce_crew_id,dispatch_state,
+            appointment_status
+       FROM public.canonical_schedule_assignments
+      WHERE organization_id=$1 AND appointment_id=$2`,
+    [organizationId, appointmentId]
+  )).rows[0];
+  if (!current) throw new Error('Expected current canonical assignment fixture');
+  const next = {
+    targetState: changes.targetState === undefined ? current.target_state : changes.targetState,
+    profileId: changes.profileId === undefined ? current.workforce_profile_id : changes.profileId,
+    crewId: changes.crewId === undefined ? current.workforce_crew_id : changes.crewId,
+    dispatchState: changes.dispatchState === undefined ? current.dispatch_state : changes.dispatchState,
+    appointmentStatus: changes.appointmentStatus === undefined
+      ? current.appointment_status : changes.appointmentStatus,
+  };
+  await pool.query('ALTER TABLE public.canonical_schedule_assignments DISABLE TRIGGER USER');
+  try {
+    const result = await pool.query(
+      `UPDATE public.canonical_schedule_assignments
+          SET target_state=$3::text,workforce_profile_id=$4::uuid,workforce_crew_id=$5::uuid,
+              dispatch_state=$6::text,appointment_status=$7::text,revision=revision+1,
+              canonical_digest=public.canonical_schedule_assignment_digest(
+                $3::text,$4::uuid,$5::uuid,schedule_state,$6::text,
+                scheduled_start,scheduled_end,$7::text,
+                needs_review,review_reasons),
+              last_action_code='test_authority_change',
+              last_reason='Adversarial current-authority replay fixture.',
+              updated_at=transaction_timestamp()
+        WHERE organization_id=$1 AND appointment_id=$2
+        RETURNING id,revision,rtrim(canonical_digest) AS digest`,
+      [organizationId, appointmentId, next.targetState, next.profileId, next.crewId,
+        next.dispatchState, next.appointmentStatus]
+    );
+    if (result.rowCount !== 1) throw new Error('Expected one current assignment mutation');
+    return result.rows[0];
+  } finally {
+    await pool.query('ALTER TABLE public.canonical_schedule_assignments ENABLE TRIGGER USER');
+  }
+}
+
+async function assignCrew(pool, appointmentId, crewId) {
+  await pool.query(
+    `INSERT INTO public.workforce_crews(
+       id,organization_id,crew_key,name,created_by_user_id,updated_by_user_id)
+     VALUES ($1,$2,$3,$4,$5,$5)`,
+    [crewId, IDS.organization, `m23-replay-${crewId.slice(-2)}`,
+      `M23 replay crew ${crewId.slice(-2)}`, IDS.owner]
+  );
+  await pool.query(
+    `INSERT INTO public.workforce_crew_members(
+       organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+     VALUES ($1,$2,$3,'member',$4)`,
+    [IDS.organization, crewId, IDS.member, IDS.owner]
+  );
+  return forceAssignmentAuthority(pool, IDS.organization, appointmentId, {
+    targetState: 'assigned', profileId: null, crewId, dispatchState: 'dispatched',
+  });
+}
+
+async function forceAppointmentStatus(pool, appointmentId, status) {
+  await pool.query('ALTER TABLE public.canonical_appointments DISABLE TRIGGER USER');
+  try {
+    await pool.query(
+      `UPDATE public.canonical_appointments
+          SET status=$3,updated_at=transaction_timestamp()
+        WHERE organization_id=$1 AND id=$2`,
+      [IDS.organization, appointmentId, status]
+    );
+  } finally {
+    await pool.query('ALTER TABLE public.canonical_appointments ENABLE TRIGGER USER');
+  }
+}
+
+async function executionEvidence(pool, executionId) {
+  return (await pool.query(
+    `SELECT to_jsonb(execution) AS current,
+            (SELECT count(*)::int FROM public.canonical_field_execution_events
+              WHERE execution_id=execution.id) AS events,
+            (SELECT count(*)::int FROM public.canonical_field_execution_revisions
+              WHERE execution_id=execution.id) AS revisions,
+            (SELECT count(*)::int FROM public.canonical_field_execution_audit_events
+              WHERE execution_id=execution.id) AS audits,
+            (SELECT count(*)::int FROM public.canonical_field_execution_idempotency
+              WHERE execution_id=execution.id) AS idempotency_count,
+            (SELECT jsonb_agg(jsonb_build_object(
+                'keyHash',rtrim(replay.idempotency_key_hash),
+                'requestDigest',rtrim(replay.request_digest),
+                'responseStatus',replay.response_status,
+                'responseBody',replay.response_body
+              ) ORDER BY replay.idempotency_key_hash)
+               FROM public.canonical_field_execution_idempotency replay
+              WHERE replay.execution_id=execution.id) AS stored_replays
+       FROM public.canonical_field_executions execution
+      WHERE execution.id=$1`,
+    [executionId]
+  )).rows[0];
 }
 
 function entry(input, session, role, overrides = {}) {
@@ -420,6 +514,209 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     })).rejects.toMatchObject({ status: 409, code: 'M23_EXECUTION_IDEMPOTENCY_CONFLICT' });
   });
 
+  test('preserves exact replay after a benign current assignment revision while authority remains valid', async () => {
+    const appointmentId = IDS.appointments[7];
+    const assignment = assignments.get(appointmentId);
+    const initializeInput = entry({
+      appointmentId, assignment, actorUserId: IDS.member,
+      key: 'm23-benign-init-replay-0001', requestCorrelationId: 'm23-benign-init-original',
+    }, sessions.member, 'member');
+    const initializedResult = await repository.initializeFieldExecution(runtimePool, initializeInput);
+    const initialized = initializedResult.body.data;
+    const transitionInput = transition({
+      execution: initialized, assignment, actorUserId: IDS.member, action: 'start',
+      key: 'm23-benign-start-replay-001', requestCorrelationId: 'm23-benign-start-original',
+    }, sessions.member, 'member');
+    const startedResult = await repository.transitionFieldExecution(runtimePool, transitionInput);
+    await forceAssignmentAuthority(migrationPool, IDS.organization, appointmentId);
+    const before = await executionEvidence(migrationPool, initialized.id);
+
+    const initializeReplay = await repository.initializeFieldExecution(runtimePool, initializeInput);
+    const transitionReplay = await repository.transitionFieldExecution(runtimePool, transitionInput);
+
+    expect(initializeReplay).toMatchObject({ status: 201, replayed: true });
+    expect(initializeReplay.body).toEqual(initializedResult.body);
+    expect(transitionReplay).toMatchObject({ status: 200, replayed: true });
+    expect(transitionReplay.body).toEqual(startedResult.body);
+    expect(await executionEvidence(migrationPool, initialized.id)).toEqual(before);
+  });
+
+  test('denies initialize and transition replay after every current-authority loss without new effects', async () => {
+    const scenarios = [
+      {
+        label: 'direct reassignment',
+        revoke: context => forceAssignmentAuthority(
+          migrationPool, IDS.organization, context.appointmentId,
+          { profileId: IDS.unassignedMember, crewId: null }
+        ),
+      },
+      {
+        label: 'crew removal',
+        prepare: async context => {
+          context.crewId = 'd3000000-0000-4000-8000-000000000010';
+          return assignCrew(migrationPool, context.appointmentId, context.crewId);
+        },
+        revoke: context => migrationPool.query(
+          `DELETE FROM public.workforce_crew_members
+            WHERE organization_id=$1 AND crew_id=$2 AND profile_id=$3`,
+          [IDS.organization, context.crewId, IDS.member]
+        ),
+      },
+      {
+        label: 'dispatch revocation',
+        revoke: context => forceAssignmentAuthority(
+          migrationPool, IDS.organization, context.appointmentId,
+          { dispatchState: 'revoked' }
+        ),
+      },
+      {
+        label: 'assignment removal',
+        revoke: context => forceAssignmentAuthority(
+          migrationPool, IDS.organization, context.appointmentId,
+          { targetState: 'unassigned', profileId: null, crewId: null, dispatchState: 'revoked' }
+        ),
+      },
+      {
+        label: 'assignment appointment completion',
+        revoke: context => forceAssignmentAuthority(
+          migrationPool, IDS.organization, context.appointmentId,
+          { appointmentStatus: 'completed' }
+        ),
+      },
+      {
+        label: 'canonical appointment completion',
+        revoke: context => forceAppointmentStatus(
+          migrationPool, context.appointmentId, 'completed'
+        ),
+      },
+      {
+        label: 'transcript source invalidation',
+        revoke: context => migrationPool.query(
+          `UPDATE public.canonical_transcripts transcript SET source='demo'
+            FROM public.canonical_appointments appointment
+           WHERE appointment.organization_id=$1 AND appointment.id=$2
+             AND transcript.organization_id=appointment.organization_id
+             AND transcript.operation_id=appointment.operation_id`,
+          [IDS.organization, context.appointmentId]
+        ),
+      },
+      {
+        label: 'subscription loss',
+        revoke: async context => {
+          context.originalSubscriptionStatus = (await migrationPool.query(
+            'SELECT status FROM public.subscriptions WHERE organization_id=$1',
+            [IDS.organization]
+          )).rows[0].status;
+          await migrationPool.query(
+            "UPDATE public.subscriptions SET status='past_due' WHERE organization_id=$1",
+            [IDS.organization]
+          );
+        },
+        restore: context => migrationPool.query(
+          'UPDATE public.subscriptions SET status=$2 WHERE organization_id=$1',
+          [IDS.organization, context.originalSubscriptionStatus]
+        ),
+      },
+      {
+        label: 'session revocation',
+        revoke: () => migrationPool.query(
+          `UPDATE public.auth_sessions
+              SET status='revoked',revoked_at=transaction_timestamp(),revoke_reason='m23_test'
+            WHERE id=$1`,
+          [sessions.member.sessionId]
+        ),
+        restore: () => migrationPool.query(
+          `UPDATE public.auth_sessions
+              SET status='active',revoked_at=NULL,revoke_reason=NULL
+            WHERE id=$1`,
+          [sessions.member.sessionId]
+        ),
+      },
+      {
+        label: 'crew-member account inactivation',
+        prepare: async context => {
+          context.crewId = 'd3000000-0000-4000-8000-000000000018';
+          return assignCrew(migrationPool, context.appointmentId, context.crewId);
+        },
+        revoke: () => migrationPool.query(
+          "UPDATE public.users SET status='suspended' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.member]
+        ),
+        restore: () => migrationPool.query(
+          "UPDATE public.users SET status='active' WHERE organization_id=$1 AND id=$2",
+          [IDS.organization, IDS.member]
+        ),
+      },
+      {
+        label: 'membership inactivation',
+        revoke: () => migrationPool.query(
+          "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND user_id=$2",
+          [IDS.organization, IDS.member]
+        ),
+        restore: () => migrationPool.query(
+          "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND user_id=$2",
+          [IDS.organization, IDS.member]
+        ),
+      },
+      {
+        label: 'actor permission loss',
+        revoke: () => migrationPool.query(
+          "UPDATE public.organization_memberships SET role='viewer' WHERE organization_id=$1 AND user_id=$2",
+          [IDS.organization, IDS.member]
+        ),
+        restore: () => migrationPool.query(
+          "UPDATE public.organization_memberships SET role='member' WHERE organization_id=$1 AND user_id=$2",
+          [IDS.organization, IDS.member]
+        ),
+      },
+    ];
+
+    for (let index = 0; index < scenarios.length; index += 1) {
+      const scenario = scenarios[index];
+      const appointmentId = IDS.appointments[index + 8];
+      const context = { appointmentId };
+      const assignment = scenario.prepare
+        ? await scenario.prepare(context)
+        : assignments.get(appointmentId);
+      const initializeInput = entry({
+        appointmentId, assignment, actorUserId: IDS.member,
+        key: `m23-revoked-init-${String(index).padStart(2, '0')}-0001`,
+        requestCorrelationId: `m23-revoked-init-original-${index}`,
+      }, sessions.member, 'member');
+      const initialized = (await repository.initializeFieldExecution(
+        runtimePool, initializeInput
+      )).body.data;
+      const transitionInput = transition({
+        execution: initialized, assignment, actorUserId: IDS.member, action: 'start',
+        key: `m23-revoked-start-${String(index).padStart(2, '0')}-001`,
+        requestCorrelationId: `m23-revoked-start-original-${index}`,
+      }, sessions.member, 'member');
+      await repository.transitionFieldExecution(runtimePool, transitionInput);
+      const before = await executionEvidence(migrationPool, initialized.id);
+      expect(before).toMatchObject({
+        events: 2, revisions: 2, audits: 2, idempotency_count: 2,
+      });
+
+      await scenario.revoke(context);
+      try {
+        for (const replay of [
+          () => repository.initializeFieldExecution(runtimePool, initializeInput),
+          () => repository.transitionFieldExecution(runtimePool, transitionInput),
+        ]) {
+          await expect(replay()).rejects.toMatchObject({
+            status: 403, code: 'M23_EXECUTION_FORBIDDEN',
+          });
+        }
+        expect(await executionEvidence(migrationPool, initialized.id)).toEqual(before);
+      } catch (error) {
+        error.message = `${scenario.label}: ${error.message}`;
+        throw error;
+      } finally {
+        if (scenario.restore) await scenario.restore(context);
+      }
+    }
+  }, 120000);
+
   test('serializes concurrent mutations to one winner and makes same-key concurrency one effect', async () => {
     const appointmentId = IDS.appointments[4];
     const assignment = assignments.get(appointmentId);
@@ -490,6 +787,8 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
       'SELECT * FROM public.canonical_field_executions LIMIT 1',
       'INSERT INTO public.canonical_field_execution_events(id) VALUES (gen_random_uuid())',
       "SELECT public.canonical_field_execution_reason_valid('bypass')",
+      `SELECT public.canonical_field_execution_replay_authorized(
+         NULL::uuid,NULL::text,NULL::uuid,NULL::uuid,NULL::uuid)`,
     ]) {
       await expect(runtimePool.query(sql)).rejects.toMatchObject({ code: '42501' });
     }

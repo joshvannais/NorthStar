@@ -534,6 +534,58 @@ AS $function$
   END
 $function$;
 
+CREATE OR REPLACE FUNCTION public.canonical_field_execution_replay_authorized(
+  organization_id_value UUID,
+  actor_access_role_value TEXT,
+  actor_profile_id_value UUID,
+  execution_id_value UUID,
+  appointment_id_value UUID
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  assignment_record public.canonical_schedule_assignments%ROWTYPE;
+BEGIN
+  SELECT assignment.* INTO assignment_record
+    FROM public.canonical_field_executions execution
+    JOIN public.canonical_schedule_assignments assignment
+      ON assignment.organization_id=execution.organization_id
+     AND assignment.id=execution.assignment_id
+     AND assignment.appointment_id=execution.appointment_id
+     AND assignment.operation_id=execution.operation_id
+     AND assignment.graph_id=execution.graph_id
+     AND assignment.opportunity_id=execution.opportunity_id
+    JOIN public.canonical_appointments appointment
+      ON appointment.organization_id=execution.organization_id
+     AND appointment.id=execution.appointment_id
+     AND appointment.operation_id=execution.operation_id
+     AND appointment.graph_id=execution.graph_id
+     AND appointment.opportunity_id=execution.opportunity_id
+    JOIN public.canonical_transcripts transcript
+      ON transcript.organization_id=execution.organization_id
+     AND transcript.operation_id=execution.operation_id
+     AND transcript.graph_id=execution.graph_id
+   WHERE execution.organization_id=organization_id_value
+     AND execution.id=execution_id_value
+     AND (appointment_id_value IS NULL OR execution.appointment_id=appointment_id_value)
+     AND assignment.target_state='assigned'
+     AND assignment.dispatch_state='dispatched'
+     AND lower(btrim(assignment.appointment_status)) NOT IN ('cancelled','completed')
+     AND lower(btrim(appointment.status)) NOT IN ('cancelled','completed')
+     AND lower(btrim(transcript.source)) NOT IN ('simulation','demo')
+   FOR SHARE OF execution,assignment,appointment,transcript;
+  IF NOT FOUND THEN
+    RETURN FALSE;
+  END IF;
+  RETURN public.canonical_field_execution_actor_in_scope(
+    organization_id_value,actor_access_role_value,actor_profile_id_value,assignment_record
+  );
+END
+$function$;
+
 CREATE OR REPLACE FUNCTION public.canonical_field_execution_projection(
   execution_record public.canonical_field_executions
 )
@@ -815,6 +867,13 @@ BEGIN
       RAISE EXCEPTION 'The Idempotency-Key was already used for another field execution mutation'
         USING ERRCODE='23505',CONSTRAINT='canonical_field_execution_idempotency_conflict';
     END IF;
+    IF NOT public.canonical_field_execution_replay_authorized(
+      organization_id_value,actor_access_role_value,actor_profile_id,
+      replay_record.execution_id,appointment_id_value
+    ) THEN
+      RAISE EXCEPTION 'Current field execution replay authority is unavailable'
+        USING ERRCODE='42501',CONSTRAINT='canonical_field_execution_replay_unauthorized';
+    END IF;
     RETURN jsonb_build_object(
       'status',replay_record.response_status,
       'body',replay_record.response_body,
@@ -1017,6 +1076,13 @@ BEGIN
        OR replay_record.identity_id<>execution_id_value THEN
       RAISE EXCEPTION 'The Idempotency-Key was already used for another field execution mutation'
         USING ERRCODE='23505',CONSTRAINT='canonical_field_execution_idempotency_conflict';
+    END IF;
+    IF NOT public.canonical_field_execution_replay_authorized(
+      organization_id_value,actor_access_role_value,actor_profile_id,
+      replay_record.execution_id,NULL::UUID
+    ) THEN
+      RAISE EXCEPTION 'Current field execution replay authority is unavailable'
+        USING ERRCODE='42501',CONSTRAINT='canonical_field_execution_replay_unauthorized';
     END IF;
     RETURN jsonb_build_object(
       'status',replay_record.response_status,
@@ -1234,6 +1300,9 @@ REVOKE ALL ON FUNCTION public.canonical_field_execution_actor_authority(
 ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_field_execution_actor_in_scope(
   UUID,TEXT,UUID,public.canonical_schedule_assignments
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_field_execution_replay_authorized(
+  UUID,TEXT,UUID,UUID,UUID
 ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_field_execution_projection(
   public.canonical_field_executions

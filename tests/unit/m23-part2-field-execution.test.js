@@ -236,4 +236,31 @@ describe('Mission 23 Part 2 field-execution contract', () => {
       'auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id)'
     );
   });
+
+  test('revalidates current linked authority before either cached mutation response returns', () => {
+    const source = fs.readFileSync(path.join(
+      __dirname, '..', '..', 'migrations', '038_canonical_field_execution_authority.sql'
+    ), 'utf8');
+    const initialize = source.slice(
+      source.indexOf('CREATE OR REPLACE FUNCTION public.canonical_field_execution_initialize('),
+      source.indexOf('CREATE OR REPLACE FUNCTION public.canonical_field_execution_transition(')
+    );
+    const transitionSource = source.slice(
+      source.indexOf('CREATE OR REPLACE FUNCTION public.canonical_field_execution_transition('),
+      source.indexOf('CREATE OR REPLACE FUNCTION public.canonical_field_execution_read(')
+    );
+    for (const entrypoint of [initialize, transitionSource]) {
+      const replayLookup = entrypoint.indexOf('SELECT * INTO replay_record');
+      const authorityCheck = entrypoint.indexOf(
+        'canonical_field_execution_replay_authorized(', replayLookup
+      );
+      const cachedReturn = entrypoint.indexOf("'replayed',TRUE", replayLookup);
+      expect(replayLookup).toBeGreaterThan(-1);
+      expect(authorityCheck).toBeGreaterThan(replayLookup);
+      expect(cachedReturn).toBeGreaterThan(authorityCheck);
+    }
+    expect(source).toContain("assignment.dispatch_state='dispatched'");
+    expect(source).toContain("lower(btrim(appointment.status)) NOT IN ('cancelled','completed')");
+    expect(source).toContain("lower(btrim(transcript.source)) NOT IN ('simulation','demo')");
+  });
 });

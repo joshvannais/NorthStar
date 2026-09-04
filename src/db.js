@@ -1117,6 +1117,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'REVOKE ALL ON FUNCTION public.canonical_field_execution_actor_in_scope(uuid,text,uuid,public.canonical_schedule_assignments) FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_field_execution_replay_authorized(uuid,text,uuid,uuid,uuid) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_field_execution_projection(public.canonical_field_executions) FROM %I', runtime_role
         );
         EXECUTE pg_catalog.format(
@@ -1311,6 +1314,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_field_execution_request_digest(uuid,uuid,uuid,text,text,uuid,bigint,text,bigint,text,text,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_field_execution_actor_authority(uuid,uuid,text,uuid,text,boolean)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_field_execution_actor_in_scope(uuid,text,uuid,public.canonical_schedule_assignments)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_field_execution_replay_authorized(uuid,text,uuid,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_field_execution_projection(public.canonical_field_executions)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_field_execution_immutable_evidence()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_field_execution_guard_current()','EXECUTE')

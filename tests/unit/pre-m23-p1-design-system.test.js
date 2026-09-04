@@ -5,6 +5,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
+const CANONICAL_STANDALONE_CALCULATOR = path.join(ROOT, 'public/unlisted/investor-forecast.html');
 
 describe('Pre-Mission-23 P1 design system and employee foundation', () => {
   test('publishes one shared typography, rail, card, control, and page-title contract', () => {
@@ -23,12 +24,12 @@ describe('Pre-Mission-23 P1 design system and employee foundation', () => {
     expect(css).toMatch(/\.polaris-inline-star,[\s\S]*\.demo-polaris-mark[\s\S]*clip-path:\s*polygon/);
   });
 
-  test('mounts the shared professionalism layer on every shipped HTML route', () => {
+  test('mounts the shared professionalism layer on every shipped application-shell HTML route', () => {
     const files = [];
     const walk = directory => fs.readdirSync(directory, { withFileTypes: true }).forEach(entry => {
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) walk(absolute);
-      else if (entry.name.endsWith('.html')) files.push(absolute);
+      else if (entry.name.endsWith('.html') && absolute !== CANONICAL_STANDALONE_CALCULATOR) files.push(absolute);
     });
     walk(path.join(ROOT, 'public'));
     expect(files.length).toBeGreaterThan(25);

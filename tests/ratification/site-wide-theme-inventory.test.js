@@ -68,6 +68,7 @@ describe('mounted site-wide theme inventory', () => {
     const expectedRoutes = [
       ...MOUNTED_THEME_PAGES.map(page => page.route),
       ...MOUNTED_REDIRECTS,
+      '/investor/forecast', // Unlisted, self-contained canonical calculator.
       '/site.webmanifest', // Explicit non-HTML install metadata; not a themed page.
     ].sort();
     expect(mountedGetRoutes()).toEqual(expectedRoutes);
@@ -93,6 +94,7 @@ describe('mounted site-wide theme inventory', () => {
       'public/dashboard/command-center.html', // Preserved unmounted Command Center source provenance.
       'public/dashboard/my-number.html', // Preserved unmounted redirect-target provenance.
       'public/design-system.html', // Deliberately unmounted internal design reference.
+      'public/unlisted/investor-forecast.html', // Direct-link-only canonical standalone artifact.
     ].sort();
     expect(htmlFiles(path.join(ROOT, 'public')).sort()).toEqual(expectedHtml);
   });

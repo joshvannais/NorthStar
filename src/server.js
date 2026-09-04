@@ -42,6 +42,7 @@ const { createTodayRouter } = require('./routes/today');
 const { createKnowledgeManagementRouter } = require('./routes/knowledgeManagement');
 const { createSupportRouter } = require('./routes/support');
 const { createFieldExecutionsRouter } = require('./routes/fieldExecutions');
+const { mountInvestorForecast } = require('./routes/investorForecast');
 const { SupportCaseOutboxWorker } = require('./support/outbox');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
 const { HomepageDemoAdmissionHousekeepingWorker } = require('./services/homepageDemoAdmission');
@@ -86,6 +87,10 @@ app.use(express.json({
 }));
 app.use(securityHeaders);
 app.use(auditLogger);
+
+// Deliberately unlisted, direct-link-only investor forecast. This exact route
+// owns the self-contained calculator policy before ordinary page routing.
+mountInvestorForecast(app);
 
 // Static assets (CSS, JS)
 app.use('/css', express.static('public/css'));

@@ -439,6 +439,39 @@ evidence seal.
   protected. Fresh install and every supported upgrade run on PostgreSQL 18.x,
   UTF-8, UTC, deterministic locale, checksums on, and separate owner/runtime
   roles.
+- Every Part 2–12 candidate release records whether its exact diff adds a
+  migration. A
+  new migration is frozen by exact repository path, Git blob object ID, byte
+  count, and SHA-256 over the bytes returned by `git cat-file blob`; writer,
+  auditor, merge, and deployed-revision evidence must match that identity. A
+  checkout-normalized or post-audit copy is not substitute evidence.
+- Before any migration-dependent release, an authorized read-only production
+  inspection records the authoritative migration history and reconciles its
+  sequence and recorded checksums with the candidate. It also records the
+  applicable PostgreSQL version, server encoding, `TimeZone = UTC`, locale, and
+  timestamp/default-expression compatibility without exposing secrets or
+  private production rows. Missing or conflicting evidence blocks the
+  migration-dependent release; a disposable database cannot stand in for the
+  authoritative production history.
+- The same automatic migration runner and invocation used by the sole production
+  deployment must discover the candidate, respect existing production history,
+  apply it in deterministic order with the migration owner, and require no
+  hidden manual DDL or configuration. A production-shaped rehearsal proves the
+  new migration applies exactly once, creates one matching ledger entry, and
+  leaves no partial state after a tested interruption/retry. A second runner
+  invocation and an application restart must both be zero-op, with zero pending
+  migrations at the candidate revision.
+- Every migration-dependent release records recoverability evidence: a dated,
+  relevant backup receipt plus a restore rehearsal into an isolated database,
+  with integrity checks and stated recovery scope. If backup/restore evidence is
+  unavailable, the unavailable-evidence ledger must bound why and what is
+  unproved, and the release disposition must explicitly choose a forward fix or
+  an application rollback, prove the chosen path's schema/data compatibility,
+  identify responsible authority and release consequence, and state that no
+  destructive down-migration is inferred. Without that disposition, ready,
+  merge, and deployment are blocked. Proceeding despite unavailable recovery
+  evidence requires separate founder authorization and remains an unavailable
+  recovery claim rather than a pass.
 - Runtime has no schema/DDL, ownership, role assumption, migration-ledger,
   trigger, truncate, or direct immutable-history authority. Entry routines use
   fixed search paths and revoke public execution.
@@ -500,9 +533,12 @@ evidence seal.
 - All P0–P3 findings are corrected on the same branch and re-reviewed. Only a
   zero-finding exact-head verdict permits ready/normal merge.
 - Observe only the sole automatic deployment. Record exact base/head/merge/
-  deployed revisions, migration outcome, credential-free health, authorized
-  passive acceptance, final refs, evidence hashes, cleanup, and unavailable
-  gates. Never manufacture a pass with a manual redeploy or hidden configuration.
+  deployed revisions; exact migration Git-blob/SHA-256 identity; authoritative
+  production history and UTC/time compatibility; automatic-runner, exact-once,
+  rerun/restart zero-op, and recovery/disposition outcomes; credential-free
+  health; authorized passive acceptance; final refs; evidence hashes; cleanup;
+  and unavailable gates. Never manufacture a pass with a manual redeploy or
+  hidden configuration.
 
 ## Part 1 requirement-to-evidence boundary
 
@@ -516,6 +552,7 @@ evidence seal.
 | Owner/worker experience and accessibility | Experience and acceptance contracts | Part 9 mounted Chrome/WebKit evidence and agent visual receipt. |
 | Polaris and downstream limits | Parts 10–11 and explicit ownership table | Non-capability, minimization, human-approval, and handoff tests. |
 | Security/privacy/legal/provider boundaries | Acceptance sections and unavailable ledger | Technical proof where authorized; external approvals remain separate. |
+| Parts 2–12 migration release safety | PostgreSQL/release contract and ratification assertions require exact blob identity, production history and UTC/time compatibility, automatic/exact-once/zero-op proof, and recovery or an explicit release disposition | Each later part records whether it adds a migration and supplies the applicable exact-head, production, runner, restart, and recovery evidence before release. |
 | Release truth | Serialized release contract | Exact-head audit, merge, automatic deployment, health, passive acceptance. |
 
 ## Part 1 acceptance contract
@@ -526,7 +563,8 @@ Part 1 is complete only when:
    schema/routes/legacy engine boundaries have been reconciled.
 2. This document retains the exact twelve parts and mission ownership map.
 3. The focused ratification test proves the current Part 1-only status, required
-   invariants, preservation rules, downstream boundaries, and unavailable gates.
+   invariants, preservation rules, downstream boundaries, migration-release
+   evidence contract, and unavailable gates.
 4. No accepted Mission 20–22 authority, migration, route, page, fixture, provider
    contract, or production configuration is changed.
 5. The diff adds no Mission 23 runtime, migration, route, repository, UI, or

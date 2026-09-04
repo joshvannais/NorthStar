@@ -25,6 +25,7 @@
 | Mobile worker/owner experience and accessibility | Operational experiences and accessibility acceptance sections. No rendered UI changes in Part 1. | Contract ratified; runtime evidence belongs to Part 9 |
 | Polaris advisory-only and no forward authority | Polaris section and test assertions; Mission 28 automation and Mission 24 pricing remain separate. | Pass |
 | Security/concurrency/stale-write/file/privacy/legal/provider gates | Security, database, HTTP/browser, file, privacy/legal/provider sections plus unavailable-evidence ledger. | Pass |
+| Parts 2–12 migration release proof | Root PostgreSQL and release contracts require each part to classify its migration delta; freeze exact path, Git blob, byte count, and SHA-256; reconcile authoritative production history and UTC/time compatibility; prove the production automatic runner, exact-once application, retry integrity, and rerun/restart zero-op behavior; and prove backup/restore or record a separately authorized forward-fix/rollback disposition and its release consequence. The focused test asserts the contract and both ledgers. | Contract ratified; no migration exists in Part 1, so runtime/production/recovery proof belongs to the first applicable later part |
 | Prevent premature implementation claims | Status says Part 1 only/Parts 2–12 not implemented. Test verifies no Mission 23 migration, operations route/module, or server mount exists. | Pass |
 | Preserve accepted migrations | Protected-migration checksum test included in the proportional regression set. | Pass |
 
@@ -35,9 +36,10 @@
 `tests/ratification/m23-part1-operations-contract.test.js`
 
 - Test suites: 1 passed / 1 total
-- Tests: 8 passed / 8 total
+- Tests: 9 passed / 9 total
 - Snapshots: 0
 - Failures: 0
+- Final focused runtime: 2.721 seconds as reported by Jest
 
 ### Cross-contract proportional regression
 
@@ -50,10 +52,29 @@
 Result:
 
 - Test suites: 5 passed / 5 total
-- Tests: 84 passed / 84 total
+- Tests: 85 passed / 85 total
 - Snapshots: 0
 - Failures: 0
-- Final pre-commit runtime: 6.08 seconds as reported by Jest
+- Final correction runtime: 9.65 seconds as reported by Jest
+
+### Complete ratification regression
+
+`tests/ratification`
+
+- Test suites: 17 passed / 17 total
+- Tests: 314 passed / 314 total
+- Snapshots: 0
+- Failures: 0
+- Final correction runtime: 65.165 seconds as reported by Jest
+
+The final runs used Windows Node.js `v24.18.1` against the native WSL/ext4
+writer worktree through its UNC path. `npm ci --ignore-scripts --no-audit
+--no-fund` installed 479 local packages without changing a tracked file. A
+preliminary broad run using only an external `NODE_PATH` was red at 313/314
+because an older ratification test deliberately sanitizes the spawned child
+environment and therefore could not resolve `supertest`; no source workaround
+was made. The complete suite was rerun from the unchanged source with the local
+dependency installation and passed 314/314.
 
 These are writer results, not an independent audit. The draft PR must remain
 unmerged and not ready until a different fresh exact-head auditor reproduces the

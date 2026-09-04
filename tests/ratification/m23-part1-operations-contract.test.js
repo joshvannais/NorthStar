@@ -6,6 +6,14 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const ROADMAP_PATH = path.join(ROOT, 'docs', 'roadmap', 'MISSION_23_OPERATIONS.md');
 const roadmap = fs.readFileSync(ROADMAP_PATH, 'utf8');
+const requirementLedger = fs.readFileSync(
+  path.join(ROOT, 'outputs', 'm23-part1-writer', 'REQUIREMENT_TO_EVIDENCE.md'),
+  'utf8'
+);
+const unavailableLedger = fs.readFileSync(
+  path.join(ROOT, 'outputs', 'm23-part1-writer', 'UNAVAILABLE_EVIDENCE.md'),
+  'utf8'
+);
 
 const EXPECTED_PARTS = Object.freeze([
   'Root contract and live-state reconciliation',
@@ -198,5 +206,32 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     ]) {
       expect(roadmap).toContain(required);
     }
+  });
+
+  test('requires complete migration release evidence for every applicable Part 2–12 release', () => {
+    for (const required of [
+      'Every Part 2–12 candidate release records whether its exact diff adds a\n  migration.',
+      'Git blob object ID, byte\n  count, and SHA-256 over the bytes returned by `git cat-file blob`',
+      'authoritative migration history and reconciles its\n  sequence and recorded checksums',
+      '`TimeZone = UTC`, locale, and\n  timestamp/default-expression compatibility',
+      'same automatic migration runner and invocation used by the sole production',
+      'new migration applies exactly once, creates one matching ledger entry',
+      'second runner\n  invocation and an application restart must both be zero-op',
+      'dated,\n  relevant backup receipt plus a restore rehearsal into an isolated database',
+      'explicitly choose a forward fix or\n  an application rollback',
+      'Without that disposition, ready,\n  merge, and deployment are blocked.',
+      'requires separate founder authorization and remains an unavailable',
+    ]) {
+      expect(roadmap).toContain(required);
+    }
+
+    expect(requirementLedger).toContain('| Parts 2–12 migration release proof |');
+    expect(requirementLedger).toContain('production automatic runner, exact-once application');
+    expect(unavailableLedger).toContain('Exact new-migration Git-blob/SHA-256 identity');
+    expect(unavailableLedger).toContain(
+      'missing exact\nidentity, authoritative production history/UTC compatibility'
+    );
+    expect(unavailableLedger).toContain('separate founder-authorized\nrisk disposition');
+    expect(unavailableLedger).toContain('No destructive database rollback is assumed.');
   });
 });

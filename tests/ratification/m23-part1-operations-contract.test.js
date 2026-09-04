@@ -14,6 +14,22 @@ const unavailableLedger = fs.readFileSync(
   path.join(ROOT, 'outputs', 'm23-part1-writer', 'UNAVAILABLE_EVIDENCE.md'),
   'utf8'
 );
+const part2RequirementLedger = fs.readFileSync(
+  path.join(ROOT, 'outputs', 'm23-part2-writer', 'REQUIREMENT_TO_EVIDENCE.md'),
+  'utf8'
+);
+const part2UnavailableLedger = fs.readFileSync(
+  path.join(ROOT, 'outputs', 'm23-part2-writer', 'UNAVAILABLE_EVIDENCE.md'),
+  'utf8'
+);
+const part2MigrationIdentity = fs.readFileSync(
+  path.join(ROOT, 'outputs', 'm23-part2-writer', 'MIGRATION_IDENTITY.md'),
+  'utf8'
+);
+const part2ProductionReceipt = fs.readFileSync(
+  path.join(ROOT, 'outputs', 'm23-part2-writer', 'PRODUCTION_MIGRATION_READINESS_RECEIPT.md'),
+  'utf8'
+);
 
 const EXPECTED_PARTS = Object.freeze([
   'Root contract and live-state reconciliation',
@@ -50,23 +66,26 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     );
   });
 
-  test('states the truthful Part 1-only boundary and adds no premature runtime', () => {
-    expect(roadmap).toContain('**Part 1: root-ratified contract and live-state reconciliation only.**');
-    expect(roadmap).toContain('**Parts 2–12: not implemented.**');
-    expect(roadmap).toContain(
-      'Part 1 adds no database migration, production route, runtime repository,'
-    );
+  test('preserves historical Part 1 truth and states the truthful Part 2-only candidate boundary', () => {
+    expect(roadmap).toContain('**Part 1: independently accepted, merged, deployed, and production-accepted at');
+    expect(roadmap).toContain('**Part 2: writer candidate only.**');
+    expect(roadmap).toContain('**Parts 3–12: not implemented.**');
     expect(roadmap).toContain(
       'There is no accepted Mission 23 migration, table, route, repository, or browser'
     );
 
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations'));
     expect(migrations.filter((name) => /mission[_-]?23|field[_-]?execution|^038_/i.test(name)))
-      .toEqual([]);
-    expect(fs.existsSync(path.join(ROOT, 'src', 'operations'))).toBe(false);
-    expect(fs.existsSync(path.join(ROOT, 'src', 'routes', 'operations.js'))).toBe(false);
-    expect(fs.readFileSync(path.join(ROOT, 'src', 'server.js'), 'utf8'))
-      .not.toMatch(/createOperationsRouter|routes\/operations/);
+      .toEqual(['038_canonical_field_execution_authority.sql']);
+    expect(fs.readdirSync(path.join(ROOT, 'src', 'operations')).sort()).toEqual([
+      'contract.js', 'httpBoundary.js', 'repository.js',
+    ]);
+    expect(fs.existsSync(path.join(ROOT, 'src', 'routes', 'fieldExecutions.js'))).toBe(true);
+    const server = fs.readFileSync(path.join(ROOT, 'src', 'server.js'), 'utf8');
+    expect(server).toContain('executionBodyBoundary');
+    expect(server).toContain("app.use('/api/v1/field-executions'");
+    expect(server).not.toMatch(/time-entries|material-usage|equipment-usage|execution-completion/);
+    expect(roadmap).toContain('No Part 2 route writes schedule/dispatch state, time, labor, materials,');
   });
 
   test('preserves accepted authorities instead of reviving or relabeling legacy state', () => {
@@ -233,5 +252,24 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     );
     expect(unavailableLedger).toContain('separate founder-authorized\nrisk disposition');
     expect(unavailableLedger).toContain('No destructive database rollback is assumed.');
+
+    expect(part2MigrationIdentity).toContain('`migrations/038_canonical_field_execution_authority.sql`');
+    expect(part2MigrationIdentity).toContain('`4e9697acd5290c4c01b89d8c0bacb20039784ba6`');
+    expect(part2MigrationIdentity).toContain('`62286` bytes');
+    expect(part2MigrationIdentity).toContain('`9ccc85101d72d7535269ab2ceb8b28627b22801ee5992d226512941d9cb59657`');
+    expect(part2RequirementLedger).toContain('Fresh automatic application');
+    expect(part2RequirementLedger).toContain('Interrupted upgrade transaction, retry, exact-once ledger, and zero-op');
+    expect(part2ProductionReceipt).toContain('`2026-09-04T05:14:41.190Z`');
+    expect(part2ProductionReceipt).toContain('`94cee07e5400ec815a7818707a3613ea505cc86f`');
+    expect(part2ProductionReceipt).toContain('62,286 bytes');
+    expect(part2ProductionReceipt).toContain('`9ccc85101d72d7535269ab2ceb8b28627b22801ee5992d226512941d9cb59657`');
+    expect(part2ProductionReceipt).toContain('PostgreSQL `18.6`');
+    expect(part2ProductionReceipt).toContain('35 authoritative `_migrations` ledger rows');
+    expect(part2ProductionReceipt).toMatch(/zero checksum\s+mismatches/);
+    expect(part2ProductionReceipt).toContain('No customer/private business row was accessed.');
+    expect(part2ProductionReceipt).toContain('No destructive down migration or data deletion is authorized.');
+    expect(part2UnavailableLedger).toMatch(/production application remains unavailable/i);
+    expect(part2UnavailableLedger).toContain('Backup/restore rehearsal remains unavailable');
+    expect(part2UnavailableLedger).toContain('authorized conservative release disposition');
   });
 });

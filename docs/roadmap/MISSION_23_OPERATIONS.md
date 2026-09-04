@@ -7,14 +7,17 @@ knowledge authorities without replacing any of them.
 
 ## Ratified status
 
-- **Part 1: root-ratified contract and live-state reconciliation only.**
-- **Parts 2–12: not implemented.**
-- Part 1 adds no database migration, production route, runtime repository,
-  browser control, provider transport, credential, production configuration, or
-  claim that field execution is already available.
-- Part 1 records the implementation and evidence boundaries that every later
-  part must satisfy. Each later part must update this status only after its own
-  exact-head audit and terminal release.
+- **Part 1: independently accepted, merged, deployed, and production-accepted at
+  `935a27e94f5df2869308a1b1ac691d212f35ae94`.**
+- **Part 2: writer candidate only.** The candidate adds the canonical
+  field-execution authority described below. It is not accepted, ready, merged,
+  deployed, or production-proven until a different exact-head auditor and the
+  serialized release gates say so.
+- **Parts 3–12: not implemented.**
+- Part 1's no-runtime statements remain historical evidence about its exact
+  released diff. They do not describe the Part 2 candidate.
+- Every later part must update status only after its own exact-head audit and
+  terminal release. A writer test result is never a release claim.
 
 The twelve-part sequence in this document is authoritative. It must not be
 renumbered, compressed, reordered, or silently widened.
@@ -62,6 +65,65 @@ There is no accepted Mission 23 migration, table, route, repository, or browser
 mutation at this base. Any existing demo copy, analytics output, recommendation,
 appointment status, legacy object, or browser-local value that resembles job
 progress remains non-authoritative.
+
+## Part 2 candidate implementation boundary
+
+The Part 2 writer candidate is additive to the released Part 1 base. It creates
+one distinct current execution per canonical appointment plus immutable event,
+revision, audit, and idempotency evidence. The exact upstream operation, graph,
+opportunity, appointment, and Mission 22 assignment identities are retained;
+each mutation must match the current assignment revision and digest.
+
+The candidate deliberately implements only these lifecycle facts:
+
+- initialization into `not_started`;
+- `start`: `not_started` to `in_progress`;
+- `pause`: `in_progress` to `paused`; and
+- `resume`: `paused` to `in_progress`.
+
+It mounts only:
+
+- `POST /api/v1/field-executions/appointments/:appointmentId`;
+- `POST /api/v1/field-executions/:executionId/transitions`; and
+- `GET /api/v1/field-executions/:executionId`.
+
+Mutation bytes are owned before the general JSON parser, require exact UTF-8
+JSON and an idempotency key, and reject duplicate keys, compression, extra
+authority fields, missing pins, and oversize requests. Authenticated requests use
+the existing bounded internal-API availability rate limit keyed by server-derived
+tenant and individual account; database statement/lock/transaction deadlines and
+record/replay locks bound concurrent work. The route derives tenant, individual
+account, access role, session, and CSRF evidence from the current server-
+authenticated request. PostgreSQL independently reloads the membership,
+account, workforce profile, session, subscription, onboarding, assignment, crew,
+appointment, and transcript authority inside the transaction. Owners and
+administrators may act tenant-wide; a member may act only on a direct assignment
+or current crew assignment. Dispatcher operational role alone grants nothing;
+viewers cannot mutate. Reads remain tenant-private and assigned-member bounded.
+
+The runtime role has no direct table or helper-function authority. It may invoke
+only the three `SECURITY DEFINER` entry points. Writes use serializable
+transactions; reads use repeatable-read, read-only snapshots. PostgreSQL computes
+the canonical request and current-state digests, hashes idempotency keys, locks
+replay identity, rejects stale pins, and requires current state plus matching
+immutable event/revision/audit/idempotency evidence to commit atomically.
+
+No Part 2 route writes schedule/dispatch state, time, labor, materials,
+inventory, equipment, vehicles, machinery, files, notes, progress, blockers,
+changes, completion, reopening, UI, Polaris, provider state, price, invoice, or
+payment. Demo/simulation transcript sources are rejected. Retired legacy job,
+workflow, and asset routes remain non-authoritative.
+
+Disposable PostgreSQL and writer tests are evidence about the candidate only. A
+dated read-only receipt separately reconciles exact production history through
+037, PostgreSQL 18.6, UTF8, `Etc/UTC`, and locale compatibility, with exactly
+frozen 038 pending. Production automatic application/restart, independent audit,
+merge, deployment, health, and production acceptance remain separate gates. A
+backup/restore rehearsal remains unavailable; the authorized conservative
+release disposition keeps/restores the previous healthy application with the
+exact 038 source retained, leaves committed additive schema inert, permits only
+a new reviewed forward-fix migration, and blocks Part 3 pending exact production
+health and migration/zero-op evidence.
 
 ## Non-negotiable ownership boundaries
 

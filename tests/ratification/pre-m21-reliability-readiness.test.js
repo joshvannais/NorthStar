@@ -165,8 +165,8 @@ describe('Pre-Mission 21 reliability and readiness correction', () => {
     const signup = read('public/signup.html');
     const integrations = read('public/dashboard/integrations.html');
     const telemetry = read('public/js/product-telemetry.js');
-    expect(home).toContain('Compare what is published today');
-    expect(home).toContain('Plan features and limits');
+    expect(home).toContain('Compare the published plans');
+    expect(home).toContain('Included billed call minutes');
     expect(signup).not.toContain('id="phone"');
     expect(signup).toContain('during guided setup');
     expect(integrations).toContain('Available to configure');

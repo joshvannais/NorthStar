@@ -38,6 +38,13 @@
         <div><h1>Team</h1><p>Individual access, job roles, skills, crews, locations, and workforce policies.</p></div>
         <span class="wf-badge" id="workforceAuthority">Role-authorized workspace</span>
       </div>
+      <div class="ds-widget ds-widget-full">
+        <div class="northstar-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <label class="sr-only" for="teamSearchInput">Search team and workforce</label>
+          <input type="search" id="teamSearchInput" placeholder="Search people, roles, skills, crews, or policies">
+        </div>
+      </div>
       <p id="workforceStatus" class="wf-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <section class="wf-overview" id="workforceSummary" aria-label="Team summary" aria-busy="true">
         <div class="wf-overview-card"><span class="wf-overview-label">People</span><span class="wf-overview-value" data-workforce-summary="members">—</span></div>
@@ -108,7 +115,7 @@
   <script>
   (function () {
     'use strict';
-    var state = { account: null, data: null, policies: [] };
+    var state = { account: null, data: null, policies: [], search: '' };
     var generatedControlId = 0;
     var operationalRoles = [
       ['owner','Owner'],['administrator','Administrator'],['dispatcher','Dispatcher'],
@@ -481,9 +488,16 @@
       fillSelect(document.getElementById('skillService'), serviceEntries(), null, 'No service reference');
       document.getElementById('inviteSkills').replaceChildren.apply(document.getElementById('inviteSkills'), Array.from(skillChecks([], 'invite-skills', false).childNodes));
     }
+    function applyWorkforceSearch() {
+      var query = String(state.search || '').trim().toLowerCase();
+      document.querySelectorAll('#workforceShell .wf-card').forEach(function(card) {
+        card.hidden = Boolean(query) && card.textContent.toLowerCase().indexOf(query) < 0;
+      });
+    }
     function render() {
       state.policies = JSON.parse(JSON.stringify(state.data.policies || []));
       renderSummary(); renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
+      applyWorkforceSearch();
       document.getElementById('workforceShell').removeAttribute('inert');
       document.getElementById('workforceShell').setAttribute('aria-busy', 'false');
       document.documentElement.setAttribute('data-workforce-state', 'ready');
@@ -562,6 +576,10 @@
         expectedVersion: state.data.businessProfile.version,
         value: { policies: policies }
       }), 'Workforce policies saved to the Business Profile.');
+    });
+    document.getElementById('teamSearchInput').addEventListener('input', function(event) {
+      state.search = event.target.value;
+      applyWorkforceSearch();
     });
     window.NorthStarWorkforce = Object.freeze({ reload: function () { return loadData(false); } });
     loadData(true);

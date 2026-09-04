@@ -600,13 +600,13 @@ function buildSimulatedGraph(input) {
     scenario.job.scope.businessContext = selection.business;
     const transcript = pipeline.generateTranscript(scenario);
     transcript.splice(2, 0,
-      { speaker: 'ai', text: 'What outcome would be most useful from this call?' },
+      { speaker: 'ai', text: 'Absolutely. Would you like us to arrange a visit, or would you prefer an estimate first?' },
       { speaker: 'customer', text: profile.intent.material.customerLine },
-      { speaker: 'ai', text: 'How quickly does the team need to respond?' },
+      { speaker: 'ai', text: 'Is there a particular day or deadline you are working toward?' },
       { speaker: 'customer', text: profile.urgency.material.customerLine },
-      { speaker: 'ai', text: 'Is there customer, property, or access context we should account for?' },
-      { speaker: 'customer', text: profile.context.label + '. ' + profile.scheduling.material.customerLine },
-      { speaker: 'ai', text: 'What should happen after we confirm the scope?' },
+      { speaker: 'ai', text: 'Before we choose a time, is there anything about the property or access that we should know?' },
+      { speaker: 'customer', text: profile.context.material.customerLine + ' ' + profile.scheduling.material.customerLine },
+      { speaker: 'ai', text: 'Once we confirm the scope, would you like us to book the work or send the estimate for review?' },
       { speaker: 'customer', text: profile.outcome.material.customerLine }
     );
     const extracted = pipeline.extractScope(transcript, scenario);

@@ -57,12 +57,12 @@ describe('Pre-Mission-23 P2 public clarity', () => {
     const css = read('public/css/public-site.css');
     expect(css).toMatch(/\.demo-hero\s*\{[^}]*opacity:\s*1;[^}]*filter:\s*none;/);
     expect(css).toMatch(/\.demo-web-call-pending\s*\{[^}]*align-items:\s*center;[^}]*justify-items:\s*center;[^}]*text-align:\s*center;/);
-    expect(css).toMatch(/\.pricing-card \.price\s*\{[^}]*font-family:\s*var\(--font-numeric\)\s*!important;/);
+    expect(css).toMatch(/\.pricing-card \.price\s*\{[^}]*font-family:\s*var\(--font-body\)\s*!important;/);
     expect(css).toMatch(/\.pricing-card \.pricing-note\s*\{[^}]*font-family:\s*var\(--font-body\)\s*!important;/);
     expect(css).toMatch(/\.truth-band \.stats-bar-value\s*\{[^}]*font-family:\s*var\(--font-display\)\s*!important;/);
   });
 
-  test('publishes only sourced prices and keeps plan allocations explicitly unpublished', () => {
+  test('publishes approved prices and billed-minute allowances without inventing enterprise terms', () => {
     const html = read('public/index.html');
     for (const [plan, price] of [['Starter', '$149'], ['Growth', '$299'], ['Complete', '$499']]) {
       expect(html).toContain(`<h3>${plan}</h3>`);
@@ -73,7 +73,10 @@ describe('Pre-Mission-23 P2 public clarity', () => {
     expect(html).not.toMatch(/\b30\s+(?:or more\s+)?employees\b/i);
     const enterpriseCard = html.match(/<div class="pricing-card enterprise">([\s\S]*?)<\/div>\s*<\/div>/)[1];
     expect(enterpriseCard).not.toMatch(/\$\d/);
-    expect((html.match(/Included features and usage limits are not yet published\./g) || []).length).toBe(3);
+    expect(html).toContain('<strong>160</strong> billed call minutes per month');
+    expect(html).toContain('<strong>325</strong> billed call minutes per month');
+    expect(html).toContain('<strong>540</strong> billed call minutes per month');
+    expect(html).not.toContain('Plan allocation not yet published');
     const comparison = html.match(/<table class="pricing-comparison">([\s\S]*?)<\/table>/)[1];
     for (const outcome of PUBLISHED_OUTCOMES) {
       expect((comparison.match(new RegExp(outcome, 'g')) || []).length).toBe(1);

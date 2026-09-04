@@ -242,6 +242,100 @@ async function semanticAudit(page) {
   }, FORBIDDEN_PRESENTATION.source);
 }
 
+async function founderVisualCorrectionAudit(page, entry, viewportName) {
+  const route = entry.route;
+  if (route === '/') {
+    assert.strictEqual(await page.locator('.pricing-feature-list').count(), 3,
+      `${viewportName} pricing publishes an included-items list for each public plan`);
+    const pricingTypography = await page.locator('.pricing-card .price').first().evaluate(node => ({
+      price: getComputedStyle(node).fontFamily,
+      body: getComputedStyle(document.body).fontFamily,
+    }));
+    assert.strictEqual(pricingTypography.price, pricingTypography.body,
+      `${viewportName} pricing uses the approved body typeface`);
+  }
+
+  if (/\/(?:team|leads|communications)$/.test(route)) {
+    const search = page.locator('.northstar-search:visible').first();
+    assert.strictEqual(await search.count(), 1, `${viewportName} ${route} exposes one visible shared search control`);
+    const spacing = await search.evaluate(node => {
+      const icon = node.querySelector('svg').getBoundingClientRect();
+      const input = node.querySelector('input[type="search"]').getBoundingClientRect();
+      return { iconRight: icon.right, inputLeft: input.left };
+    });
+    assert.ok(spacing.inputLeft >= spacing.iconRight + 4,
+      `${viewportName} ${route} keeps its search icon clear of its input text`);
+  }
+
+  if (route.endsWith('/integrations')) {
+    const categories = page.locator('.integration-category-details');
+    const categoryCount = await categories.count();
+    if (route.startsWith('/demo')) {
+      assert.ok(categoryCount > 0, `${viewportName} ${route} renders integration categories`);
+    }
+    assert.strictEqual(await categories.evaluateAll(nodes => nodes.filter(node => node.open).length), 0,
+      `${viewportName} ${route} renders every integration category collapsed`);
+  }
+
+  if (route.endsWith('/polaris')) {
+    const placement = await page.locator('.polaris-prompt-bar').evaluate(node => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return { position: style.position, bottomGap: innerHeight - rect.bottom, left: rect.left, right: innerWidth - rect.right };
+    });
+    assert.strictEqual(placement.position, 'fixed', `${viewportName} ${route} fixes the Polaris composer to the viewport`);
+    assert.ok(Math.abs(placement.bottomGap) <= 1, `${viewportName} ${route} anchors the Polaris composer to the bottom edge`);
+    assert.ok(placement.left >= 0 && placement.right >= 0, `${viewportName} ${route} keeps the Polaris composer inside the viewport`);
+  }
+
+  if (route.endsWith('/business-profile') && viewportName !== 'zoom200') {
+    const rail = await page.locator('.bp-container').evaluate(node => {
+      const own = node.getBoundingClientRect();
+      const parent = node.parentElement.getBoundingClientRect();
+      const parentStyle = getComputedStyle(node.parentElement);
+      const parentContentWidth = parent.width
+        - Number.parseFloat(parentStyle.paddingLeft)
+        - Number.parseFloat(parentStyle.paddingRight);
+      return { ownWidth: own.width, parentContentWidth };
+    });
+    assert.ok(Math.abs(rail.parentContentWidth - rail.ownWidth) <= 2,
+      `${viewportName} ${route} uses the full available page rail`);
+  }
+
+  if (route === '/demo' && viewportName.startsWith('mobile')) {
+    const cards = page.locator('.command-center-mobile-customer');
+    assert.ok(await cards.count() > 0, `${viewportName} Command Center renders grouped customer cards`);
+    assert.strictEqual(await cards.evaluateAll(nodes => nodes.filter(node => node.open).length), 0,
+      `${viewportName} Command Center customer cards render collapsed`);
+  }
+
+  if (route.endsWith('/leads') && viewportName !== 'zoom200') {
+    await page.evaluate(() => {
+      if (!document.querySelector('.customer-drawer')) {
+        const drawer = document.createElement('div');
+        drawer.className = 'customer-drawer open';
+        drawer.setAttribute('data-visual-contract-probe', 'true');
+        document.body.appendChild(drawer);
+      }
+    });
+    await page.locator('.customer-drawer').waitFor({ state: 'visible' });
+    const drawerAudit = await page.evaluate(() => {
+      const drawer = document.querySelector('.customer-drawer');
+      if (!drawer) return null;
+      const rect = drawer.getBoundingClientRect();
+      return {
+        left: rect.left, right: innerWidth - rect.right,
+        top: rect.top, bottom: innerHeight - rect.bottom,
+        radius: Number.parseFloat(getComputedStyle(drawer).borderTopLeftRadius),
+      };
+    });
+    assert.ok(drawerAudit, `${viewportName} ${route} mounts the shared customer drawer`);
+    assert.ok(drawerAudit.left >= 11 && drawerAudit.right >= 11 && drawerAudit.top >= 11 && drawerAudit.bottom >= 11,
+      `${viewportName} ${route} keeps the customer drawer away from every viewport edge`);
+    assert.ok(drawerAudit.radius >= 18, `${viewportName} ${route} preserves the shared rounded drawer border`);
+  }
+}
+
 async function exerciseQuickStartReopen(page) {
   let trigger = page.locator('[data-quick-start-reopen]:visible').first();
   let openedMobileNavigation = false;
@@ -371,6 +465,7 @@ async function run(engine, origin) {
                 `${engine} ${viewportName} applies the requested zoom`);
             }
             const audit = await semanticAudit(page);
+            await founderVisualCorrectionAudit(page, entry, viewportName);
             const label = `${engine} ${viewportName} ${theme} ${entry.route}`;
             if (audit.h1.length !== 1) failures.push({ label, kind: 'h1', value: audit.h1 });
             if (audit.mainCount !== 1) failures.push({ label, kind: 'main', value: audit.mainCount });

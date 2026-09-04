@@ -201,15 +201,6 @@ window.CustomerDetail = (function() {
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Estimated Value</span><span class="drawer-detail-value" id="cdEstValue">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Opportunity Stage</span><span class="drawer-detail-value" id="cdStage">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Close Probability</span><span class="drawer-detail-value" id="cdProb">\u2014</span></div>';
-    html += '        <div class="drawer-work-details" aria-label="Readable customer and work details">';
-    html += '          <section class="drawer-work-detail"><h4>Description</h4><p id="cdDescription">No customer or work description has been recorded.</p></section>';
-    html += '          <section class="drawer-work-detail"><h4>Gates and missing information</h4><p id="cdWorkGates">No missing-input guidance is recorded.</p></section>';
-    html += '          <section class="drawer-work-detail"><h4>Materials</h4><p id="cdWorkMaterials">Material requirements are unavailable because they have not been recorded.</p></section>';
-    html += '          <section class="drawer-work-detail"><h4>Equipment</h4><p id="cdWorkEquipment">Equipment requirements are unavailable because they have not been recorded.</p></section>';
-    html += '          <section class="drawer-work-detail"><h4>Scheduling</h4><p id="cdWorkScheduling">Scheduling inputs are unavailable because they have not been recorded.</p></section>';
-    html += '          <section class="drawer-work-detail"><h4>Pricing</h4><p id="cdWorkPricing">Pricing is unavailable because a role-authorized estimate has not been recorded.</p></section>';
-    html += '          <section class="drawer-work-detail"><h4>Risk</h4><p id="cdWorkRisk">No specific risk is supported by the current recorded inputs.</p></section>';
-    html += '        </div>';
     html += '      </div>';
 
     // POLARIS\u2122 Intelligence
@@ -223,8 +214,20 @@ window.CustomerDetail = (function() {
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Revenue Opportunity</div><div class="drawer-polaris-item-value" id="cdPolRevenue">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommended Action</div><div class="drawer-polaris-item-value" id="cdPolAction">\u2014</div></div>';
     html += '          </div>';
+    html += '          <details class="drawer-polaris-analysis">';
+    html += '            <summary>Work scope and estimate factors</summary>';
+    html += '            <div class="drawer-work-details" aria-label="Recorded work scope and estimate factors">';
+    html += '              <section class="drawer-work-detail"><h4>Description</h4><p id="cdDescription">No customer or work description has been recorded.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Gates and missing information</h4><p id="cdWorkGates">No missing-input guidance is recorded.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Materials</h4><p id="cdWorkMaterials">Material requirements are unavailable because they have not been recorded.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Equipment</h4><p id="cdWorkEquipment">Equipment requirements are unavailable because they have not been recorded.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Scheduling</h4><p id="cdWorkScheduling">Scheduling inputs are unavailable because they have not been recorded.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Pricing</h4><p id="cdWorkPricing">Pricing is unavailable because a role-authorized estimate has not been recorded.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Risk</h4><p id="cdWorkRisk">No specific risk is supported by the current recorded inputs.</p></section>';
+    html += '            </div>';
+    html += '          </details>';
     html += '          <details class="drawer-polaris-pricing">';
-    html += '            <summary>Pricing Breakdown And Supporting Factors</summary>';
+    html += '            <summary>Complete price breakdown</summary>';
     html += '            <div id="cdPricingBreakdown"><p>No role-authorized estimate factors are available.</p></div>';
     html += '          </details>';
     html += '        </div>';
@@ -585,32 +588,49 @@ window.CustomerDetail = (function() {
   // ── Render Pricing Breakdown ──
 
   function renderPricingBreakdown(estimates) {
-    if (!estimates || estimates.length === 0) {
-      return '<p>Pricing factors are not available because no role-authorized estimate has been recorded.</p>';
-    }
-    var est = estimates[0];
-    var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(est.canonical);
+    var est = estimates && estimates.length ? estimates[0] : null;
+    var presentation = est && window.PolarisEngine && window.PolarisEngine.selectPresentation(est.canonical);
     var values = presentation && presentation.values;
-    if (values && Array.isArray(values.pricingLineItems) && values.pricingLineItems.length > 0) {
-      var html = '';
-      values.pricingLineItems.forEach(function(item) {
-        var amt = item.customerCharge;
-        var label = item.label || item.code || 'Item';
-        html += '<div class="drawer-pricing-item"><span>' + escapeText(label) + '</span> <span>' + escapeText(fmtCurrency(amt)) + '</span></div>';
+    var items = values && Array.isArray(values.pricingLineItems) ? values.pricingLineItems : [];
+    var categories = [
+      { key: 'service', label: 'Service And Scope', aliases: ['service', 'servicecharge', 'scope', 'base'] },
+      { key: 'labor', label: 'Labor', aliases: ['labor', 'labour'] },
+      { key: 'materials', label: 'Materials', aliases: ['material', 'materials'] },
+      { key: 'equipment', label: 'Equipment And Machinery', aliases: ['equipment', 'machinery', 'rental'] },
+      { key: 'travel', label: 'Travel And Mobilization', aliases: ['travel', 'mobilization', 'distance'] },
+      { key: 'fees', label: 'Permits And Fees', aliases: ['permit', 'permits', 'fee', 'fees'] },
+      { key: 'markup', label: 'Overhead, Margin, And Adjustments', aliases: ['markup', 'margin', 'overhead', 'adjustment', 'emergency'] }
+    ];
+    function itemCategory(item) {
+      return String(item && (item.category || item.type || item.code) || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+    }
+    function categoryMarkup(category) {
+      var matches = items.filter(function(item) {
+        var normalized = itemCategory(item);
+        return category.aliases.some(function(alias) { return normalized.indexOf(alias) >= 0; });
       });
-      html += '<div class="drawer-pricing-item"><span><strong>Subtotal</strong></span> <span><strong>' + fmtCurrency(values.subtotalBeforeTax) + '</strong></span></div>';
-      if (values.taxDisposition && values.taxDisposition.status === 'calculated') {
-        html += '<div class="drawer-pricing-item"><span>Tax</span> <span>' + fmtCurrency(values.tax) + '</span></div>';
-        html += '<div class="drawer-pricing-item"><span><strong>Total</strong></span> <span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
-      } else {
-        html += '<div class="drawer-pricing-item"><span>Tax</span> <span>Unavailable because ' + escapeText(describe(values.taxDisposition && values.taxDisposition.reason, 'tax configuration has not been recorded', 'reason').toLowerCase()) + '.</span></div>';
-      }
-      return html;
+      var amount = matches.reduce(function(total, item) { return total + (Number(item.customerCharge) || 0); }, 0);
+      var detail = matches.length
+        ? matches.map(function(item) { return escapeText(item.label || item.code || category.label); }).join(', ')
+        : 'Awaiting a recorded input.';
+      return '<section class="drawer-pricing-category" data-pricing-category="' + category.key + '">' +
+        '<div class="drawer-pricing-category-header"><span>' + category.label + '</span><span>' + (matches.length ? escapeText(fmtCurrency(amount)) : '\u2014') + '</span></div>' +
+        '<p class="drawer-pricing-category-detail">' + detail + '</p></section>';
     }
-    if (presentation && presentation.customerPrice !== null) {
-      return '<p>Recorded Customer Estimate: <strong>' + presentation.customerPriceRoundedText + '</strong>. A more detailed factor breakdown requires recorded labor, material, equipment, travel, tax, and margin inputs.</p>';
+    var html = '<p class="drawer-pricing-category-detail">Every pricing category stays visible. Missing amounts remain unpriced until a role-authorized business record supplies them.</p>';
+    categories.forEach(function(category) { html += categoryMarkup(category); });
+    var subtotal = values && Number.isFinite(Number(values.subtotalBeforeTax)) ? fmtCurrency(values.subtotalBeforeTax) : '\u2014';
+    html += '<div class="drawer-pricing-item"><span><strong>Recorded subtotal</strong></span><span><strong>' + subtotal + '</strong></span></div>';
+    if (values && values.taxDisposition && values.taxDisposition.status === 'calculated') {
+      html += '<div class="drawer-pricing-item"><span>Tax</span><span>' + fmtCurrency(values.tax) + '</span></div>';
+      html += '<div class="drawer-pricing-item"><span><strong>Recorded total</strong></span><span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
+    } else {
+      var taxReason = values && values.taxDisposition && values.taxDisposition.reason;
+      html += '<section class="drawer-pricing-category" data-pricing-category="tax"><div class="drawer-pricing-category-header"><span>Tax</span><span>\u2014</span></div><p class="drawer-pricing-category-detail">' + escapeText(describe(taxReason, 'Awaiting a recorded tax configuration.', 'reason')) + '</p></section>';
+      var recordedTotal = presentation && presentation.customerPrice !== null ? presentation.customerPriceRoundedText : '\u2014';
+      html += '<div class="drawer-pricing-item"><span><strong>Recorded estimate</strong></span><span><strong>' + escapeText(recordedTotal) + '</strong></span></div>';
     }
-    return '<p>Pricing factors are not available because the required estimate inputs have not been recorded.</p>';
+    return html;
   }
 
   // ── Public API ──

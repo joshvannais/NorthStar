@@ -16,7 +16,7 @@ describe('Pre-Mission-23 P1 design system and employee foundation', () => {
       '--northstar-control-radius', '--northstar-page-title-size', '--northstar-page-title-line',
     ]) expect(css).toContain(token);
 
-    expect(css).toMatch(/\.stat-value,[\s\S]*\.ds-kpi-value,[\s\S]*\.price,[\s\S]*font-family:\s*var\(--font-numeric\)\s*!important;/);
+    expect(css).toMatch(/\.stat-value,[\s\S]*\.ds-kpi-value,[\s\S]*\.price,[\s\S]*font-family:\s*var\(--font-body\)\s*!important;/);
     expect(css).toMatch(/font-variant-numeric:\s*tabular-nums lining-nums;/);
     expect(css).toMatch(/\.page-header h1,[\s\S]*\.cal-title,[\s\S]*\.polaris-inline-name,[\s\S]*font-size:\s*var\(--northstar-page-title-size\)\s*!important;/);
     expect(css).toMatch(/\.dashboard-main,[\s\S]*\.command-center-blueprint-main[\s\S]*max-width:\s*var\(--northstar-rail-max\);/);

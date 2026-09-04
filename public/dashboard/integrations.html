@@ -484,7 +484,7 @@
           </div>
 
           <div class="map-preferences-grid" id="mapPreferencesContent" hidden>
-            <details class="map-preference-scope" id="mapPreferencesOrganization" aria-labelledby="organizationMapPreferencesHeading" open>
+            <details class="map-preference-scope" id="mapPreferencesOrganization" aria-labelledby="organizationMapPreferencesHeading">
               <summary id="organizationMapPreferencesHeading">Company default</summary>
               <div class="map-preference-scope-body">
               <p class="map-preference-scope-copy" id="organizationMapPreferencesCopy">Owners and admins can update the company default. Other roles can review it.</p>
@@ -520,7 +520,7 @@
               </div>
             </details>
 
-            <details class="map-preference-scope" id="mapPreferencesUser" aria-labelledby="userMapPreferencesHeading" open>
+            <details class="map-preference-scope" id="mapPreferencesUser" aria-labelledby="userMapPreferencesHeading">
               <summary id="userMapPreferencesHeading">My preference</summary>
               <div class="map-preference-scope-body">
               <p class="map-preference-scope-copy" id="userMapPreferencesCopy">You currently inherit the company default. Saving creates a complete personal override.</p>
@@ -811,7 +811,7 @@
           });
           categoryItem.dataset.availability = plannedOnly ? 'planned' : 'mixed';
           var categoryDetails = createElement('details', 'integration-category-details');
-          categoryDetails.open = storedDisclosure(category.key, !plannedOnly);
+          categoryDetails.open = false;
           var categorySummary = createElement('summary', '');
           var count = createElement(
             'span',
@@ -820,9 +820,6 @@
           );
           categorySummary.append(heading, count);
           categoryDetails.append(categorySummary, providerList);
-          categoryDetails.addEventListener('toggle', function() {
-            persistDisclosure(category.key, categoryDetails.open);
-          });
           categoryItem.append(categoryDetails);
           fragment.append(categoryItem);
         });
@@ -867,7 +864,7 @@
           });
           category.hidden = visible === 0;
           var details = category.querySelector('.integration-category-details');
-          if (details && filter !== 'all' && visible > 0) details.open = true;
+          if (details && filter !== 'all' && visible === 0) details.open = false;
         });
         if (filter !== 'all') {
           var definition = availabilityDefinitions.find(function(item) { return item.key === filter; });

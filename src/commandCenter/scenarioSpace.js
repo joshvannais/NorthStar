@@ -83,7 +83,7 @@ const DIMENSIONS = Object.freeze({
     label: 'Caller intent',
     options: Object.freeze([
       option('new_estimate', 'Request a new estimate', 'The caller wants a written estimate for new work.', {
-        customerLine: 'I would like a written estimate for this project.', action: 'Confirm the complete estimating scope.'
+        customerLine: 'A written estimate would be great. I want to understand the full cost before I decide.', action: 'Confirm the complete estimating scope.'
       }),
       option('repair_request', 'Request a repair', 'The caller needs an existing issue diagnosed and repaired.', {
         customerLine: 'I need someone to diagnose the problem and explain the repair options.', action: 'Confirm symptoms and diagnostic access.'
@@ -106,7 +106,7 @@ const DIMENSIONS = Object.freeze({
         customerLine: 'There is no emergency; I am planning ahead.', priority: 'low', hoursUntilVisit: 120, emergency: false
       }),
       option('this_week', 'Needed this week', 'The caller wants action during the next several days.', {
-        customerLine: 'I would like to handle this during the coming week.', priority: 'medium', hoursUntilVisit: 72, emergency: false
+        customerLine: 'Sometime next week would be great, but it is not an emergency.', priority: 'medium', hoursUntilVisit: 72, emergency: false
       }),
       option('within_24_hours', 'Within 24 hours', 'Active conditions make a prompt response important.', {
         customerLine: 'The condition is active, so I need help within 24 hours.', priority: 'high', hoursUntilVisit: 20, emergency: false
@@ -120,16 +120,16 @@ const DIMENSIONS = Object.freeze({
     label: 'Customer and work context',
     options: Object.freeze([
       option('new_customer', 'New customer', 'This is the customer’s first recorded interaction.', {
-        customerLabel: 'New customer', missing: 'Prior service history is not available.'
+        customerLabel: 'New customer', customerLine: 'This is my first time calling your company.', missing: 'Prior service history is not available.'
       }),
       option('returning_customer', 'Returning customer', 'The caller references prior work with the company.', {
-        customerLabel: 'Returning customer', missing: 'The prior-work record must be confirmed before dispatch.'
+        customerLabel: 'Returning customer', customerLine: 'Your team has worked here before, so the address should already be on file.', missing: 'The prior-work record must be confirmed before dispatch.'
       }),
       option('property_manager', 'Property manager', 'The caller coordinates access and approval for another party.', {
-        customerLabel: 'Property manager', missing: 'On-site access and approval authority need confirmation.'
+        customerLabel: 'Property manager', customerLine: 'I manage the property and can coordinate access with the tenant.', missing: 'On-site access and approval authority need confirmation.'
       }),
       option('insurance_claim', 'Insurance-related work', 'The request may depend on claim documentation or adjuster timing.', {
-        customerLabel: 'Insurance-related', missing: 'Claim status and documentation authority need confirmation.'
+        customerLabel: 'Insurance-related', customerLine: 'This may be part of an insurance claim, and I can share the adjuster information.', missing: 'Claim status and documentation authority need confirmation.'
       }),
     ]),
   }),

@@ -39,7 +39,7 @@ describe('Pre-Mission-23 P4 administrative information architecture', () => {
     expect(profile).toContain('<h1 class="bp-title">Business Profile</h1>');
     expect(profile).not.toContain('⚙️ Business Profile');
     expect(profile).not.toContain('This Business Profile is protected by your account role.');
-    expect(profile).toMatch(/\.bp-container\s*\{[^}]*width:\s*100%[^}]*max-width:\s*var\(--northstar-rail-max/);
+    expect(profile).toMatch(/\.bp-container\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/);
     expect(profile).toContain('id="businessProfileRole"');
   });
 

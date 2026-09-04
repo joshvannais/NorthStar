@@ -336,7 +336,9 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(css).not.toMatch(/\.demo-table-wrap table\s*\{[^}]*760px/);
     expect(css).toMatch(/\.demo-leads-panel \.demo-table-wrap\s*\{\s*display:\s*none/);
     expect(css).toMatch(/\.command-center-mobile-leads\s*\{\s*display:\s*grid/);
-    expect(page).toContain("element('article', 'command-center-mobile-customer')");
+    expect(page).toContain("element('details', 'command-center-mobile-customer customer-record-card')");
+    expect(page).toContain("element('summary', 'command-center-mobile-customer-header')");
+    expect(page).not.toContain('card.open = true');
     for (const label of ['Recorded Value', 'Status', 'Next Action']) expect(page).toContain(`'${label}'`);
   });
 

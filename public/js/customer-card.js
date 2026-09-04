@@ -180,7 +180,6 @@ window.CustomerCard = (function() {
    */
   function renderCompact(lead, options) {
     options = options || {};
-    var icon = options.icon || '👤';
     var name = formatName(lead);
     var svc = formatService(lead);
     var time = formatTime(lead);
@@ -195,8 +194,8 @@ window.CustomerCard = (function() {
       clickStyle = 'cursor:pointer;';
     }
 
-    return '<div class="ds-list-item" style="' + clickStyle + '"' + clickAttr + '>' +
-      '<div class="ds-list-item-icon">' + escapeMarkup(icon) + '</div>' +
+    return '<div class="ds-list-item customer-record-card" style="' + clickStyle + '"' + clickAttr + '>' +
+      '<div class="ds-list-item-icon customer-record-avatar" aria-hidden="true">' + escapeMarkup(getInitials(lead)) + '</div>' +
       '<div class="ds-list-item-content">' +
         '<div class="ds-list-item-title">' + escapeMarkup(name) + '</div>' +
         '<div class="ds-list-item-sub">' + escapeMarkup(svc) + ' · ' + escapeMarkup(time) + '</div>' +
@@ -231,10 +230,10 @@ window.CustomerCard = (function() {
         '<svg viewBox="0 0 24 24" aria-hidden="true">' + kind.icon + '</svg>' + escapeMarkup(kind.label) + '</span>';
     }).join('');
 
-    return '<div class="call-card" id="call-' + index + '">' +
+    return '<div class="call-card customer-record-card" id="call-' + index + '">' +
       '<div class="call-card-header" data-customer-card-action="open-call" data-lead-index="' + index + '" role="button" tabindex="0" aria-label="Open details for ' + escapeMarkup(name) + '">' +
         '<div class="call-caller">' +
-          '<div class="call-avatar">' + escapeMarkup(inits) + '</div>' +
+          '<div class="call-avatar customer-record-avatar">' + escapeMarkup(inits) + '</div>' +
           '<div class="call-info">' +
             '<div class="call-name">' + escapeMarkup(name) + '</div>' +
             '<div class="call-meta">' + metaHtml + '</div>' +
@@ -261,7 +260,7 @@ window.CustomerCard = (function() {
     var unavailableActionsId = 'northstarUnavailableLeadActions-' + index;
 
     return '<tr style="cursor:pointer;" data-customer-card-action="open-lead" data-lead-index="' + index + '" role="button" tabindex="0" aria-label="Open details for ' + escapeMarkup(name) + '">' +
-      '<td data-label="Customer"><strong>' + escapeMarkup(name) + '</strong></td>' +
+      '<td data-label="Customer"><span class="customer-record-identity"><span class="customer-record-avatar" aria-hidden="true">' + escapeMarkup(getInitials(lead)) + '</span><span class="customer-record-heading"><strong>' + escapeMarkup(name) + '</strong><span>' + escapeMarkup(svc) + '</span></span></span></td>' +
       '<td data-label="Phone">' + escapeMarkup(phone) + '</td>' +
       '<td data-label="Service" style="text-align:center"><span class="lead-service-badge">' + escapeMarkup(svc) + '</span></td>' +
       '<td data-label="Estimated value"><strong>' + escapeMarkup(val) + '</strong></td>' +

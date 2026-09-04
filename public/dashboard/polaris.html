@@ -23,14 +23,14 @@
       flex-direction: column;
       height: 100%;
       min-height: calc(100vh - 60px);
-      max-width: 1400px;
+      max-width: none;
       margin: 0 auto;
       padding: 0;
     }
 
     /* ── Polaris Inline Header (inherits app shell) ── */
     .polaris-inline-header {
-      padding: 12px 24px;
+      padding: 24px var(--northstar-page-gutter) 18px;
       border-bottom: 1px solid var(--neutral-200);
       background: var(--neutral-50);
     }
@@ -54,8 +54,6 @@
     }
     .polaris-page-title {
       margin: 0;
-      font-size: 22px;
-      line-height: 1.2;
       color: var(--neutral-900);
     }
     .polaris-inline-subtitle {
@@ -82,6 +80,7 @@
       display: flex;
       flex: 1;
       overflow: hidden;
+      padding-bottom: 88px;
     }
 
     /* Left: Conversation Panel */
@@ -264,14 +263,21 @@
 
     /* Bottom Prompt Bar */
     .polaris-prompt-bar {
-      padding: 16px 24px;
+      position: fixed;
+      z-index: 120;
+      right: 0;
+      bottom: 0;
+      left: 240px;
+      padding: 14px max(var(--northstar-page-gutter), env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(var(--northstar-page-gutter), env(safe-area-inset-left));
       border-top: 1px solid var(--neutral-200);
       background: var(--neutral-50);
+      box-shadow: 0 -10px 28px color-mix(in srgb, #000 12%, transparent);
     }
     .polaris-prompt-input-wrapper {
       display: flex;
       gap: 8px;
-      max-width: 800px;
+      width: 100%;
+      max-width: none;
       margin: 0 auto;
     }
     .polaris-prompt-input {
@@ -505,23 +511,28 @@
       .polaris-conversation { border-right: none; }
     }
     @media (max-width: 640px) {
-      .polaris-inline-header { padding: 10px 16px; }
+      .polaris-inline-header { padding: 20px 16px 14px; }
       .polaris-conversation-body { padding: 16px; }
       .polaris-prompt-bar { padding: 12px 16px; }
       .polaris-quick-prompts { grid-template-columns: 1fr; }
       .polaris-conversation-header { padding: 12px 16px 10px; }
+    }
+
+    @media (max-width: 768px) {
+      .polaris-prompt-bar { left: 0; }
+      .polaris-main { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
     }
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
-<body>  <script src="/js/event-bus.js"></script>
+<body class="polaris-page">  <script src="/js/event-bus.js"></script>
 <div class="app-layout">
     <main class="main-content" id="mainContent">
       <div class="polaris-workspace">
         <!-- Inline Polaris brand header (minimal, inherits shell) -->
-        <div class="polaris-inline-header">
+        <div class="polaris-inline-header page-header">
           <div class="polaris-inline-brand">
             <span class="polaris-inline-star" aria-hidden="true">✦</span>
             <div>

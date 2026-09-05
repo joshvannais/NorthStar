@@ -15,6 +15,9 @@ on loopback ports 55479 and 55481 with separately exercised owner/runtime roles.
 | Audit-correction broad available-only inventory | 196 suites and 6,637 tests passed; zero failures; 2 suites/50 tests explicitly unavailable; 619.658 seconds |
 | Lost-COMMIT/orphan correction focused unit, PostgreSQL 18.4, migration lifecycle/upgrade, migration inspector and ratification | 5 suites, 49 tests passed; zero failures |
 | Lost-COMMIT/orphan correction broad available-only inventory | 196 suites and 6,641 tests passed; zero failures; 2 suites/50 tests explicitly unavailable; 631.167 seconds |
+| Correlation-telemetry correction focused unit, PostgreSQL 18.4, migration lifecycle/upgrade, migration inspector and ratification | 5 suites, 50 tests passed; zero failures |
+| Correlation-telemetry correction broad available-only inventory | 195 suites and 6,641 tests passed; one unrelated Mission 21 Part 3 test failed on an unhandled expected PostgreSQL administrator-termination event; 2 suites/50 tests explicitly unavailable; 619.283 seconds |
+| Isolated retry of the sole broad failure | 1 suite, 17 tests passed; zero failures; 4.277 seconds |
 
 The real migration-runner test interrupts 047 after DDL and before ledger commit,
 proves the schema and ledger both roll back, retries exactly once, and proves a
@@ -39,5 +42,20 @@ rejection, and an accepted-record fence against cleanup. One initial broad
 attempt was stopped after the task-owned cluster reported `America/New_York`
 instead of required `UTC`; it is retained as invalid environment evidence and
 not counted. The corrected UTC run produced the final inventory above.
+
+The correlation-telemetry correction cases additionally prove that distinct
+server-generated request IDs do not alter upload idempotency: accepted retries
+return the exact canonical record without provider work, active attempts remain
+busy, and expired or reconciliation-marked reservations rotate to a fresh
+generation and the current attempt's correlation before storage begins. Digest
+changes remain conflicts; old generation/claim mutation remains stale; accepted
+objects remain ineligible for cleanup. The mounted production router exercises
+the real per-request correlation middleware with injected bounded storage. The
+sealed pre-correction reproduction changed from accepted/expired `409` failures
+and one generation to accepted replay, successful expired takeover, and two
+generations. The sole broad failure was SQLSTATE `57P01` emitted by an idle pool
+client after a Mission 21 test intentionally terminated a backend; the exact
+suite passed all 17 tests immediately in isolation. It is retained as a broad
+failure and is not relabelled as a pass.
 
 Raw Jest JSON is local and ignored. Failures remain evidence and are not erased.

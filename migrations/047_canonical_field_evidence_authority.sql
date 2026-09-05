@@ -473,7 +473,7 @@ BEGIN
   WHERE r.organization_id=org AND r.actor_user_id=actor AND r.auth_session_id=session_value AND r.key_hash=key_hash_value FOR UPDATE;
  reservation_found:=FOUND;
  IF reservation_found THEN
-   IF rtrim(reservation.request_digest)<>request_hash_value OR reservation.execution_id<>execution_value OR reservation.performer_profile_id<>performer OR reservation.request_correlation_id<>correlation_value THEN
+   IF rtrim(reservation.request_digest)<>request_hash_value OR reservation.execution_id<>execution_value OR reservation.performer_profile_id<>performer THEN
      RAISE EXCEPTION 'Idempotency conflict' USING ERRCODE='23505',CONSTRAINT='canonical_field_evidence_idempotency_conflict';
    END IF;
    IF reservation.status='accepted' THEN
@@ -494,7 +494,8 @@ BEGIN
  IF reservation_found THEN
    UPDATE public.canonical_field_evidence_file_upload_reservations SET
     reservation_id=reservation_value,storage_generation_id=generation_value,object_id=object_value,
-    claim_token_hash=encode(sha256(convert_to(claim_token,'UTF8')),'hex'),lease_until=now_value+interval '15 minutes',updated_at=now_value
+    claim_token_hash=encode(sha256(convert_to(claim_token,'UTF8')),'hex'),lease_until=now_value+interval '15 minutes',
+    status='pending',request_correlation_id=correlation_value,updated_at=now_value
     WHERE organization_id=org AND actor_user_id=actor AND auth_session_id=session_value AND key_hash=key_hash_value;
  ELSE
    INSERT INTO public.canonical_field_evidence_file_upload_reservations(

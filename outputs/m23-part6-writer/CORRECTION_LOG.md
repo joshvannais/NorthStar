@@ -69,3 +69,25 @@ report was read from
 The skill-required fresh read-only bypass reviewer found no actionable defect in
 the correction. That review is not the independent exact-head release audit.
 Real provider behavior remains unavailable and is not claimed.
+
+## P2 follow-up: request telemetry blocked replay and takeover
+
+A fresh independent audit of exact head
+`1dac74a0eeb7ce869a3d19b5064710807ba84287` returned one P2. The sealed report
+was read from `audit-evidence-pr170-1dac74a0/report.md`; its verified SHA-256 was
+`7a4b4891e7a1b55b8e8ca494dd1c911187cca838d73636d10c1f309606270a67`.
+
+- The semantic upload request digest already excluded correlation telemetry;
+  the redundant existing-reservation comparison now does the same.
+- An active exact retry with a different server-generated request ID remains
+  `M23_FIELD_UPLOAD_IN_PROGRESS`, while a changed semantic request remains an
+  idempotency conflict.
+- Expired takeover records the new attempt's correlation ID and resets the new
+  reservation/generation/claim state to `pending`. Final registration therefore
+  binds telemetry to the current attempt while stale prior workers remain fenced
+  by their old reservation, generation, object and claim identities.
+- Accepted retry returns the original immutable response across a new request
+  ID without provider mutation. Expired retry issues the new generation and
+  cleanup claim required to reconcile the prior orphan.
+
+No provider, UI, Part 7+, production, merge or deployment scope was added.

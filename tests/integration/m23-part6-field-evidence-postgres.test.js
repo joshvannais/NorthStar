@@ -195,7 +195,8 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       reservationId: expect.any(String), storageGenerationId: expect.any(String), objectId: expect.any(String), claimToken: expect.stringMatching(/^[0-9a-f]{64}$/),
     } } });
     const { reservationId, storageGenerationId, objectId, claimToken } = reservation.body.data;
-    await expect(authorizeFileUpload(runtimePool, uploadAuthority)).rejects.toMatchObject({ status: 409, code: 'M23_FIELD_UPLOAD_IN_PROGRESS' });
+    await expect(authorizeFileUpload(runtimePool, { ...uploadAuthority, requestCorrelationId: 'p6-file-active-retry' }))
+      .rejects.toMatchObject({ status: 409, code: 'M23_FIELD_UPLOAD_IN_PROGRESS' });
     await expect(authorizeFileUpload(runtimePool, { ...uploadAuthority, expectedContentDigest: digest('9') })).rejects.toMatchObject({ status: 409, code: 'M23_FIELD_EVIDENCE_IDEMPOTENCY_CONFLICT' });
     await expect(authorizeFileUpload(runtimePool, { ...uploadAuthority, expectedAssignmentRevision: 3 })).rejects.toMatchObject({ status: 409 });
     const document = { kind: 'file', uploadReservationId: reservationId, storageGenerationId, storageObjectVersion: 'object-version-1',
@@ -212,7 +213,7 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       document, uploadClaimToken: claimToken, idempotencyKey: key, reason: uploadAuthority.reason, requestCorrelationId: uploadAuthority.requestCorrelationId });
     expect(saved.body.data.document).toMatchObject({ objectId, malwareClearanceClaim: false, retentionDays: 30,
       accessibility: { state: 'unavailable' }, retainedUntil: expect.any(String) });
-    const replay = await authorizeFileUpload(runtimePool, uploadAuthority);
+    const replay = await authorizeFileUpload(runtimePool, { ...uploadAuthority, requestCorrelationId: 'p6-file-accepted-retry' });
     expect(replay).toMatchObject({ status: 201, replayed: true, body: saved.body });
     await expect(authorizeFileUpload(runtimePool, { ...uploadAuthority, expectedContentDigest: digest('9') })).rejects.toMatchObject({ status: 409 });
     expect((await ownerPool.query('SELECT object_id,storage_generation_id,status FROM canonical_field_evidence_file_upload_reservations WHERE organization_id=$1 AND key_hash=encode(sha256(convert_to($2,\'UTF8\')),\'hex\')', [IDS.org, key])).rows[0]).toMatchObject({ object_id: objectId, storage_generation_id: storageGenerationId, status: 'accepted' });
@@ -316,6 +317,76 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       status: 201, replayed: true, body: result.body });
   });
 
+  test('mounted upload route replays across production-generated correlation IDs without another provider mutation', async () => {
+    const image = Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0x00,0x00,0xff,0xd9]);
+    const storageCalls = { begin: 0, scan: 0, delete: 0 };
+    const storage = {
+      capabilities: () => ({ available: true, durable: true, encryptionAtRest: true, quarantine: true,
+        malwareScan: true, metadataStrip: true, decompressionSafety: true, retentionCleanup: true,
+        orphanCleanup: true, shortLivedRetrieval: true, immutableObjectCreate: true,
+        generationScopedCleanup: true, databaseFencedCleanup: true,
+        version: 'route-fixture-v1', digest: digest('f') }),
+      beginQuarantine: async () => { storageCalls.begin += 1; return {
+        write: async () => {}, finish: async () => {}, abort: async () => {},
+      }; },
+      scanAndRelease: async value => { storageCalls.scan += 1; return {
+        disposition: 'released_after_clean_scan', malwareDetected: false, exifPresent: false,
+        geolocationPresent: false, decompressionSafe: true, decodedPixelCount: 16,
+        storageGenerationId: value.storageGenerationId, storageObjectVersion: 'route-object-v1',
+        releasedObjectId: value.objectId, releasedMediaType: value.mediaType,
+        releasedByteCount: value.byteCount, releasedContentDigest: value.contentDigest,
+        scannerVersion: 'route-scanner-v1', scannerEvidenceDigest: digest('7'), metadataRemovalDigest: digest('8'),
+      }; },
+      deleteGeneration: async () => { storageCalls.delete += 1; },
+      createAuthorizedRetrieval: async () => { throw new Error('unused'); },
+    };
+    const actorMiddleware = (req, _res, next) => { req.tenantContext = { organizationId: IDS.org, userId: IDS.owner };
+      req.accountAuthority = { membership_id: IDS.owner }; req.userRole = 'owner';
+      req.authSession = { id: session.sessionId }; next(); };
+    const mounted = express(); mounted.use(require('../../src/middleware/auditLog').correlationId);
+    mounted.use(require('../../src/operations/httpBoundary').executionBodyBoundary); mounted.use(express.json());
+    mounted.use('/api/v1/field-executions', require('../../src/routes/fieldExecutions').createFieldExecutionsRouter({
+      poolProvider: () => runtimePool, tenantAuth: actorMiddleware, mutationAuth: actorMiddleware,
+      permission: () => (_req, _res, next) => next(), throttle: (_req, _res, next) => next(), fileStorage: storage,
+    }));
+    mounted.use(require('../../src/middleware/errorHandler').errorHandler);
+    const upload = key => request(mounted).post(`/api/v1/field-executions/${execution.id}/files`)
+      .set('Content-Type', 'image/jpeg').set('Content-Length', String(image.length))
+      .set('X-CSRF-Token', session.csrfToken).set('Idempotency-Key', key)
+      .set('X-Performer-Profile-Id', IDS.member)
+      .set('X-Execution-Revision', String(execution.revision)).set('X-Execution-Digest', execution.digest)
+      .set('X-Assignment-Revision', String(assignment.revision)).set('X-Assignment-Digest', assignment.digest)
+      .set('X-Evidence-Reason', 'Exercise mounted changed-correlation replay.').set('X-File-Name', 'mounted.jpg')
+      .set('X-Privacy-Flags', 'none').set('X-Retention-Days', '30')
+      .set('X-Content-SHA256', crypto.createHash('sha256').update(image).digest('hex'))
+      .set('X-Accessibility-State', 'unavailable')
+      .set('X-Accessibility-Unavailable-Reason', 'A trustworthy description is not available.').send(image);
+    const key = crypto.randomUUID(); const first = await upload(key); const replay = await upload(key);
+    expect(first.status).toBe(201); expect(replay.status).toBe(201);
+    expect(replay.headers['idempotency-replayed']).toBe('true'); expect(replay.body).toEqual(first.body);
+    expect(first.headers['x-request-id']).not.toBe(replay.headers['x-request-id']);
+    expect(storageCalls).toEqual({ begin: 1, scan: 1, delete: 0 });
+
+    const activeKey = crypto.randomUUID(); const expectedContentDigest = crypto.createHash('sha256').update(image).digest('hex');
+    const activeAuthority = { ...actor, executionId: execution.id, performerProfileId: IDS.member,
+      expectedExecutionRevision: execution.revision, expectedExecutionDigest: execution.digest,
+      expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
+      displayName: 'mounted.jpg', extension: 'jpg', contentType: 'image/jpeg', contentLength: image.length,
+      expectedContentDigest, privacyFlags: ['none'], privacy: null, retentionDays: 30,
+      accessibility: { state: 'unavailable', description: null, reason: 'A trustworthy description is not available.' },
+      idempotencyKey: activeKey, reason: 'Exercise mounted changed-correlation replay.',
+      requestCorrelationId: 'route-active-request-a', csrfToken: session.csrfToken };
+    const active = (await authorizeFileUpload(runtimePool, activeAuthority)).body.data;
+    const busy = await upload(activeKey);
+    expect(busy.status).toBe(409); expect(busy.body.error.code).toBe('M23_FIELD_UPLOAD_IN_PROGRESS');
+    expect(storageCalls).toEqual({ begin: 1, scan: 1, delete: 0 });
+    await ownerPool.query("UPDATE canonical_field_evidence_file_upload_reservations SET lease_until=clock_timestamp()-interval '1 second' WHERE organization_id=$1 AND storage_generation_id=$2", [IDS.org, active.storageGenerationId]);
+    const takeover = await upload(activeKey);
+    expect(takeover.status).toBe(201); expect(takeover.headers['x-request-id']).not.toBe(busy.headers['x-request-id']);
+    expect(storageCalls).toEqual({ begin: 2, scan: 2, delete: 1 });
+    expect((await ownerPool.query("SELECT count(*)::int AS count FROM canonical_field_evidence_file_upload_generations WHERE organization_id=$1 AND key_hash=encode(sha256(convert_to($2,'UTF8')),'hex')", [IDS.org, activeKey])).rows[0].count).toBe(2);
+  });
+
   test('retains expired generations for hard-crash reconciliation and fences accepted cleanup', async () => {
     const key = crypto.randomUUID();
     const upload = { ...actor, executionId: execution.id, performerProfileId: IDS.member,
@@ -327,12 +398,15 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       idempotencyKey: key, reason: 'Prove hard-crash generation recovery.', requestCorrelationId: 'p6-hard-crash', csrfToken: session.csrfToken };
     const first = (await authorizeFileUpload(runtimePool, upload)).body.data;
     await ownerPool.query("UPDATE canonical_field_evidence_file_upload_reservations SET lease_until=clock_timestamp()-interval '1 second' WHERE organization_id=$1 AND storage_generation_id=$2", [IDS.org, first.storageGenerationId]);
-    const second = (await authorizeFileUpload(runtimePool, upload)).body.data;
+    const takeoverCorrelation = 'p6-hard-crash-takeover';
+    const second = (await authorizeFileUpload(runtimePool, { ...upload, requestCorrelationId: takeoverCorrelation })).body.data;
     expect(second.storageGenerationId).not.toBe(first.storageGenerationId);
     expect(second.cleanupCandidates).toEqual([expect.objectContaining({ storageGenerationId: first.storageGenerationId, objectId: first.objectId,
       cleanupClaimId: expect.any(String), cleanupToken: expect.stringMatching(/^[0-9a-f]{64}$/) })]);
     expect((await ownerPool.query('SELECT storage_generation_id FROM canonical_field_evidence_file_upload_generations WHERE organization_id=$1 AND key_hash=encode(sha256(convert_to($2,\'UTF8\')),\'hex\') ORDER BY issued_at', [IDS.org, key])).rows)
       .toEqual(expect.arrayContaining([{ storage_generation_id: first.storageGenerationId }, { storage_generation_id: second.storageGenerationId }]));
+    expect((await ownerPool.query("SELECT status,request_correlation_id FROM canonical_field_evidence_file_upload_reservations WHERE organization_id=$1 AND storage_generation_id=$2", [IDS.org, second.storageGenerationId])).rows[0])
+      .toEqual({ status: 'pending', request_correlation_id: takeoverCorrelation });
     const fileDocument = reserved => ({ kind: 'file', uploadReservationId: reserved.reservationId,
       storageGenerationId: reserved.storageGenerationId, storageObjectVersion: 'object-version-orphan', objectId: reserved.objectId,
       displayName: upload.displayName, extension: upload.extension, mediaType: upload.contentType,
@@ -342,12 +416,12 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       encryptionAtRest: true, decompressionSafe: true, decodedPixelCount: 12000000, activeContentInline: false,
       privacyFlags: upload.privacyFlags, privacyPolicy: upload.privacy, retentionDays: upload.retentionDays,
       accessibility: upload.accessibility, consentOrComplianceConclusion: false, malwareClearanceClaim: false });
-    const mutation = reserved => mutateFieldEvidence(runtimePool, { ...actor, executionId: execution.id, action: 'register_file',
+    const mutation = (reserved, requestCorrelationId = upload.requestCorrelationId) => mutateFieldEvidence(runtimePool, { ...actor, executionId: execution.id, action: 'register_file',
       performerProfileId: IDS.member, subjectId: null, expectedSubjectRevision: null, expectedSubjectDigest: null,
       expectedExecutionRevision: execution.revision, expectedExecutionDigest: execution.digest,
       expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
       document: fileDocument(reserved), uploadClaimToken: reserved.claimToken, idempotencyKey: key,
-      reason: upload.reason, requestCorrelationId: upload.requestCorrelationId });
+      reason: upload.reason, requestCorrelationId });
     await expect(mutation(first)).rejects.toMatchObject({ status: 409 });
     const candidate = second.cleanupCandidates[0];
     await expect(confirmFileCleanup(runtimePool, { ...actor, csrfToken: session.csrfToken, executionId: execution.id,
@@ -355,7 +429,7 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
         storageGenerationId: first.storageGenerationId, cleaned: true } } });
     await expect(confirmFileCleanup(runtimePool, { ...actor, csrfToken: session.csrfToken, executionId: execution.id,
       cleanupClaimId: candidate.cleanupClaimId, cleanupToken: candidate.cleanupToken })).resolves.toMatchObject({ replayed: true });
-    const accepted = await mutation(second);
+    const accepted = await mutation(second, takeoverCorrelation);
     const acceptedResolution = await reconcileFileUpload(runtimePool, { ...actor, csrfToken: session.csrfToken,
       executionId: execution.id, idempotencyKey: key, reservationId: second.reservationId,
       storageGenerationId: second.storageGenerationId, objectId: second.objectId, claimToken: second.claimToken });
@@ -365,6 +439,18 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       [forgedCleanupClaim, IDS.org, second.storageGenerationId, second.objectId, crypto.createHash('sha256').update(forgedCleanupToken).digest('hex'), IDS.owner, session.sessionId]);
     await expect(confirmFileCleanup(runtimePool, { ...actor, csrfToken: session.csrfToken, executionId: execution.id,
       cleanupClaimId: forgedCleanupClaim, cleanupToken: forgedCleanupToken })).rejects.toMatchObject({ status: 409 });
+
+    const reconciledKey = crypto.randomUUID(); const reconciledUpload = { ...upload, idempotencyKey: reconciledKey,
+      requestCorrelationId: 'p6-cleanup-pending-first' };
+    const reconciledFirst = (await authorizeFileUpload(runtimePool, reconciledUpload)).body.data;
+    await expect(reconcileFileUpload(runtimePool, { ...actor, csrfToken: session.csrfToken, executionId: execution.id,
+      idempotencyKey: reconciledKey, reservationId: reconciledFirst.reservationId,
+      storageGenerationId: reconciledFirst.storageGenerationId, objectId: reconciledFirst.objectId,
+      claimToken: reconciledFirst.claimToken })).resolves.toMatchObject({ resolution: 'cleanup_authorized' });
+    const reconciledSecond = (await authorizeFileUpload(runtimePool, { ...reconciledUpload,
+      requestCorrelationId: 'p6-cleanup-pending-takeover' })).body.data;
+    expect((await ownerPool.query("SELECT status,request_correlation_id FROM canonical_field_evidence_file_upload_reservations WHERE organization_id=$1 AND storage_generation_id=$2", [IDS.org, reconciledSecond.storageGenerationId])).rows[0])
+      .toEqual({ status: 'pending', request_correlation_id: 'p6-cleanup-pending-takeover' });
   });
 
   test('returns one stable bounded snapshot cursor and mounts JSON plus explicit unavailable-storage routes', async () => {

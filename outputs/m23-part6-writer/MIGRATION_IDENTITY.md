@@ -1,9 +1,9 @@
 # Frozen additive migration 047
 
 - Path: `migrations/047_canonical_field_evidence_authority.sql`
-- Git blob: `6526ac7d2bb563ba64e2b442d11361ad454a34e4`
-- Bytes: `94197`
-- SHA-256: `b24b3018ce296ff1d5986dc8a5ab6e48742039d713d7d76a680890d8b90e6314`
+- Git blob: `fe6f68075c6a3ce9e73206b0c51edbebdc58cd7f`
+- Bytes: `94203`
+- SHA-256: `f54418be9a5972e2a529e999399dc0bac44a61cbf4070af0a8246d61e2cd6bf8`
 - Exact released base: `dfc769520ea56fdb7fde44dda6fe0bd65202fcdb`
 - Released migration files 001–046: 44 files, byte-for-byte preserved.
 

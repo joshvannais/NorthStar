@@ -17,10 +17,10 @@ describe('Mission 23 Part 6 unified field evidence ratification contract', () =>
     expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^047_.*\.sql$/.test(name)))
       .toEqual(['047_canonical_field_evidence_authority.sql']);
     const bytes = fs.readFileSync(path.join(ROOT, MIGRATION_PATH));
-    expect(bytes.length).toBe(94197);
-    expect(hash(bytes)).toBe('b24b3018ce296ff1d5986dc8a5ab6e48742039d713d7d76a680890d8b90e6314');
+    expect(bytes.length).toBe(94203);
+    expect(hash(bytes)).toBe('f54418be9a5972e2a529e999399dc0bac44a61cbf4070af0a8246d61e2cd6bf8');
     expect(execFileSync('git', ['hash-object', MIGRATION_PATH], { cwd: ROOT, encoding: 'utf8' }).trim())
-      .toBe('6526ac7d2bb563ba64e2b442d11361ad454a34e4');
+      .toBe('fe6f68075c6a3ce9e73206b0c51edbebdc58cd7f');
   });
 
   test('preserves every released migration byte from the exact full-history base', () => {

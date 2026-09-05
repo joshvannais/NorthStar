@@ -71,6 +71,16 @@ customer contact, legal decision, merge, deployment or release is included.
   reviewer found no actionable defect; a different exact-head release auditor
   is still required. See `CORRECTION_LOG.md`.
 
+- A later fresh independent audit of exact head
+  `1dac74a0eeb7ce869a3d19b5064710807ba84287` found one P2: per-request
+  correlation telemetry was still compared before accepted replay and expired
+  takeover, while takeover retained the prior attempt's telemetry. The bounded
+  correction removes correlation only from semantic conflict identity and binds
+  each new takeover attempt's correlation while resetting its state to
+  `pending`. Digest conflicts, active busy behavior, stale generation/claim
+  rejection and accepted cleanup protection remain unchanged. See
+  `CORRECTION_LOG.md`.
+
 - Corrected an initial result-document rule that treated absent measurements as
   invalid instead of requiring values only for the `measurement` result type.
 - Corrected SQL parameter ambiguity, a read-only locking attempt and validator
@@ -109,6 +119,13 @@ customer contact, legal decision, merge, deployment or release is included.
   with zero failures; 2 suites/50 tests remained explicitly unavailable. It
   completed in 631.167 seconds. An earlier attempt stopped on the disposable
   cluster's wrong timezone and is retained as invalid environment evidence.
+- The correlation-telemetry focused gate passed 5 suites/50 tests. Its broad
+  available-only inventory passed 195 suites/6,641 tests and retained one
+  unrelated Mission 21 Part 3 failure caused by an unhandled SQLSTATE `57P01`
+  after that test intentionally terminated a PostgreSQL backend; 2 suites/50
+  tests remained explicitly unavailable. The exact failed suite then passed all
+  17 tests in isolation. The failure remains recorded rather than being
+  relabelled as a broad pass.
 
 An independent auditor must evaluate the final immutable PR head. Local green
 tests cannot grant approval or release authority.

@@ -1,0 +1,188 @@
+'use strict';
+
+const crypto = require('crypto');
+const { Readable } = require('stream');
+const {
+  AD_HOC_TEMPLATE_DIGEST,
+  AD_HOC_TEMPLATE_VERSION,
+  normalizeEvidenceAction,
+  normalizeFileHeaders,
+  normalizeReadQuery,
+} = require('../../src/fieldEvidence/contract');
+const {
+  createAuthorizedRetrieval,
+  createUnavailableStorage,
+  ingestFileEvidence,
+  opaqueObjectId,
+} = require('../../src/fieldEvidence/fileStorage');
+
+const IDS = Object.freeze({
+  organizationId: 'a1000000-0000-4000-8000-000000000001',
+  actorUserId: 'a2000000-0000-4000-8000-000000000001',
+  authSessionId: 'a3000000-0000-4000-8000-000000000001',
+  executionId: 'a4000000-0000-4000-8000-000000000001',
+  performerProfileId: 'a5000000-0000-4000-8000-000000000001',
+});
+const digest = character => character.repeat(64);
+const baseBody = action => ({ action, performerProfileId: IDS.performerProfileId,
+  expectedExecutionRevision: 2, expectedExecutionDigest: digest('a'),
+  expectedAssignmentRevision: 4, expectedAssignmentDigest: digest('b'),
+  reason: 'Attributable field evidence test.' });
+const input = body => ({ ...IDS, actorAccessRole: 'member', idempotencyKey: crypto.randomUUID(), body });
+
+describe('Mission 23 Part 6 field evidence contract', () => {
+  test('pins ad-hoc and exact published checklist versions without mutable template state', () => {
+    const adHoc = normalizeEvidenceAction(input({ ...baseBody('create_checklist'), template: null,
+      items: [{ key: 'arrival', prompt: 'Record the arrival observation.', required: true }] }));
+    expect(adHoc.document).toMatchObject({ kind: 'checklist', adHocTemplateVersion: AD_HOC_TEMPLATE_VERSION,
+      adHocTemplateDigest: AD_HOC_TEMPLATE_DIGEST });
+    const published = normalizeEvidenceAction(input({ ...baseBody('create_checklist'), template: {
+      entryId: crypto.randomUUID(), versionId: crypto.randomUUID(), versionNumber: 3,
+      digest: digest('c'), publicationId: crypto.randomUUID(),
+    }, items: [{ key: 'quality', prompt: 'Record the observed finish.', required: false }] }));
+    expect(published.document.template.versionNumber).toBe(3);
+    expect(Object.isFrozen(published.document.items[0])).toBe(true);
+  });
+
+  test.each(['observation', 'pass', 'fail', 'unavailable', 'needs_review'])('retains distinct %s semantics', resultType => {
+    const normalized = normalizeEvidenceAction(input({ ...baseBody('record_observation'), observationClass: 'quality', resultType,
+      observation: 'Observed condition recorded without a professional conclusion.', supportingEvidenceIds: [] }));
+    expect(normalized.document).toMatchObject({ kind: 'observation', resultType, measurement: null,
+      professionalConclusion: false });
+  });
+
+  test('requires an explicit bounded measurement value and unit', () => {
+    const normalized = normalizeEvidenceAction(input({ ...baseBody('record_observation'), observationClass: 'inspection', resultType: 'measurement',
+      observation: 'Measured surface width.', measurement: { value: '12.500', unit: 'ft' },
+      supportingEvidenceIds: [] }));
+    expect(normalized.document.measurement).toEqual({ value: '12.500', unit: 'ft' });
+    expect(() => normalizeEvidenceAction(input({ ...baseBody('record_observation'), observationClass: 'inspection', resultType: 'measurement',
+      observation: 'Missing measurement.', supportingEvidenceIds: [] }))).toThrow(/Measurement/);
+  });
+
+  test('rejects fields from a different action instead of accepting an ambiguous union contract', () => {
+    expect(() => normalizeEvidenceAction(input({ ...baseBody('record_note'), note: 'Bounded note.', caption: null,
+      resultType: 'pass' }))).toThrow(/do not belong/);
+  });
+
+  test.each(['<img src=x onerror=alert(1)>', 'https://customer.example/private',
+    'safe\u202Egnp.exe', 'javascript:alert(1)'])('rejects active, URL, or Unicode-control text: %s', hostile => {
+    expect(() => normalizeEvidenceAction(input({ ...baseBody('record_note'), note: hostile, caption: null }))).toThrow();
+  });
+
+  test('binds immutable item response and correction predecessor pins', () => {
+    const checklistId = crypto.randomUUID();
+    const response = normalizeEvidenceAction(input({ ...baseBody('respond_item'), checklistId,
+      expectedChecklistRevision: 1, expectedChecklistDigest: digest('d'), itemKey: 'arrival',
+      resultType: 'needs_review', observation: 'Access evidence is incomplete.',
+      exception: 'Owner review is required.', supportingEvidenceIds: [] }));
+    expect(response.subjectId).toBe(checklistId);
+    const corrected = normalizeEvidenceAction(input({ ...baseBody('correct'), evidenceId: crypto.randomUUID(),
+      expectedEvidenceRevision: 1, expectedEvidenceDigest: digest('e'), replacement: {
+        kind: 'checklist_response', checklistId, itemKey: 'arrival', resultType: 'pass',
+        observation: 'Access was observed after review.', measurement: null, exception: null,
+        supportingEvidenceIds: [],
+      } }));
+    expect(corrected.document).toMatchObject({ kind: 'checklist_response', itemKey: 'arrival', resultType: 'pass' });
+  });
+
+  test('file header gate rejects active formats, signatures, and ungated sensitive media', () => {
+    const headers = {
+      'idempotency-key': crypto.randomUUID(), 'x-performer-profile-id': IDS.performerProfileId,
+      'x-execution-revision': '2', 'x-execution-digest': digest('a'),
+      'x-assignment-revision': '4', 'x-assignment-digest': digest('b'),
+      'x-evidence-reason': 'Record bounded file evidence.', 'x-file-name': 'arrival.jpg',
+      'content-type': 'image/jpeg', 'content-length': '20', 'x-privacy-flags': 'none',
+      'x-retention-days': '30',
+    };
+    expect(normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, headers)).toMatchObject({ extension: 'jpg', retentionDays: 30 });
+    expect(() => normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers, 'content-type': 'image/svg+xml', 'x-file-name': 'active.svg' })).toThrow();
+    expect(() => normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers, 'x-privacy-flags': 'signature' })).toThrow();
+    expect(() => normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers, 'x-privacy-flags': 'customer_property' })).toThrow();
+    expect(normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers,
+      'x-privacy-flags': 'faces,customer_property', 'x-privacy-policy-version': 'm23-private-media-v1',
+      'x-privacy-policy-digest': digest('c'), 'x-consent-evidence-id': crypto.randomUUID(),
+      'x-consent-evidence-digest': digest('d') })).toMatchObject({ privacyFlags: ['faces', 'customer_property'],
+      privacy: { policyVersion: 'm23-private-media-v1' } });
+  });
+
+  test('parses a dataset-bound opaque pagination cursor', () => {
+    const cutoff = new Date(Date.now() - 1000); const lastTime = new Date(cutoff.getTime() - 1000);
+    const data = { cutoff: cutoff.toISOString(), lastTime: lastTime.toISOString(), lastId: crypto.randomUUID() };
+    expect(normalizeReadQuery({ limit: '20', cursor: Buffer.from(JSON.stringify(data)).toString('base64url') })).toEqual({ limit: 20, cursor: data });
+    const future = { ...data, cutoff: new Date(Date.now() + 60000).toISOString() };
+    expect(() => normalizeReadQuery({ limit: '20', cursor: Buffer.from(JSON.stringify(future)).toString('base64url') })).toThrow(/cursor/i);
+  });
+});
+
+describe('Mission 23 Part 6 streaming file pipeline', () => {
+  const capabilities = { available: true, durable: true, encryptionAtRest: true, quarantine: true,
+    malwareScan: true, metadataStrip: true, decompressionSafety: true,
+    retentionCleanup: true, orphanCleanup: true,
+    shortLivedRetrieval: true, version: 'fixture-v1', digest: digest('f') };
+  function storage(overrides = {}) {
+    const chunks = [];
+    return { chunks, capabilities: () => capabilities,
+      beginQuarantine: jest.fn(async () => ({ write: async chunk => chunks.push(Buffer.from(chunk)), finish: async () => {}, abort: async () => {} })),
+      scanAndRelease: jest.fn(async request => ({ disposition: 'released_after_clean_scan', malwareDetected: false,
+        exifPresent: false, geolocationPresent: false, decompressionSafe: true,
+        decodedPixelCount: 12000000, scannerVersion: 'scanner-v1',
+        releasedObjectId: request.objectId, releasedMediaType: request.mediaType,
+        releasedByteCount: request.byteCount, releasedContentDigest: request.contentDigest,
+        scannerEvidenceDigest: digest('1'), metadataRemovalDigest: digest('2') })),
+      deleteOrphan: jest.fn(async () => {}),
+      createAuthorizedRetrieval: jest.fn(async request => ({ url: 'https://storage.example.test/object?token=short', expiresInSeconds: 300,
+        objectId: request.objectId, contentDigest: request.contentDigest,
+        contentDisposition: request.contentDisposition, mediaType: request.mediaType })),
+      ...overrides };
+  }
+  function jpeg() { return Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0x00,0x00,0xff,0xd9]); }
+  function metadata(bytes) { return { ...IDS, actorAccessRole: 'member', performerProfileId: IDS.performerProfileId,
+    expectedExecutionRevision: 2, expectedExecutionDigest: digest('a'), expectedAssignmentRevision: 4,
+    expectedAssignmentDigest: digest('b'), idempotencyKey: crypto.randomUUID(), reason: 'Store evidence.',
+    displayName: 'arrival.jpg', extension: 'jpg', contentType: 'image/jpeg', contentLength: bytes.length,
+    privacyFlags: ['none'], privacy: null, retentionDays: 30 } }
+
+  test('streams allowlisted bytes through quarantine, scan, metadata removal, encryption gate and one database mutation', async () => {
+    const bytes = jpeg(); const provider = storage(); const authorizeUpload = jest.fn(async () => ({ status: 200 }));
+    const mutate = jest.fn(async (_pool, value) => ({ status: 201, replayed: false, body: { success: true, data: { document: value.document } } }));
+    const result = await ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes.subarray(0, 5), bytes.subarray(5)]),
+      metadata: metadata(bytes), csrfToken: 'x'.repeat(32), requestCorrelationId: 'file-test', mutate, authorizeUpload });
+    expect(result.status).toBe(201); expect(Buffer.concat(provider.chunks)).toEqual(bytes); expect(mutate).toHaveBeenCalledTimes(1);
+    expect(authorizeUpload).toHaveBeenCalledTimes(1);
+    expect(mutate.mock.calls[0][1].document).toMatchObject({ quarantineDisposition: 'released_after_clean_scan',
+      encryptionAtRest: true, activeContentInline: false, malwareClearanceClaim: false,
+      contentDigest: crypto.createHash('sha256').update(bytes).digest('hex'), retentionDays: 30 });
+    expect(provider.deleteOrphan).not.toHaveBeenCalled();
+    expect(provider.beginQuarantine.mock.invocationCallOrder[0]).toBeGreaterThan(authorizeUpload.mock.invocationCallOrder[0]);
+    const sameMetadata = metadata(bytes); sameMetadata.idempotencyKey = 'stable-upload-key-1234567890';
+    expect(opaqueObjectId(sameMetadata)).toBe(opaqueObjectId({ ...sameMetadata }));
+  });
+
+  test.each([
+    ['magic mismatch', Buffer.from('not-a-jpeg'), {}],
+    ['polyglot active content', Buffer.concat([jpeg(), Buffer.from('<svg onload=alert(1)>')]), {}],
+    ['scanner unavailable', jpeg(), { scanAndRelease: jest.fn(async () => ({ disposition: 'unavailable' })) }],
+    ['decompression bomb', jpeg(), { scanAndRelease: jest.fn(async request => ({
+      disposition: 'released_after_clean_scan', malwareDetected: false, exifPresent: false,
+      geolocationPresent: false, decompressionSafe: false, decodedPixelCount: 90000000,
+      scannerVersion: 'scanner-v1', releasedObjectId: request.objectId,
+      releasedMediaType: request.mediaType, releasedByteCount: request.byteCount,
+      releasedContentDigest: request.contentDigest, scannerEvidenceDigest: digest('1'),
+      metadataRemovalDigest: digest('2'),
+    })) }],
+  ])('fails closed and cleans orphan for %s', async (_label, bytes, overrides) => {
+    const provider = storage(overrides); const mutate = jest.fn();
+    await expect(ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes]),
+      metadata: metadata(bytes), csrfToken: 'x'.repeat(32), requestCorrelationId: 'file-fail', mutate,
+      authorizeUpload: jest.fn(async () => ({ status: 200 })) })).rejects.toBeDefined();
+    expect(mutate).not.toHaveBeenCalled(); expect(provider.deleteOrphan).toHaveBeenCalledTimes(1);
+  });
+
+  test('production default remains explicitly unavailable and retrieval is attachment-only for five minutes', async () => {
+    expect(() => createUnavailableStorage().beginQuarantine()).toThrow(/not configured/);
+    const provider = storage();
+    await expect(createAuthorizedRetrieval(provider, { objectId: crypto.randomUUID(), organizationId: IDS.organizationId,
+      executionId: IDS.executionId, contentDigest: digest('a') })).resolves.toEqual(expect.objectContaining({ disposition: 'attachment', expiresInSeconds: 300 }));
+  });
+});

@@ -74,8 +74,9 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     expect(roadmap).toContain('later-start zero-op verified');
     expect(roadmap).toContain('**Part 3: independently accepted, normally merged, automatically deployed,');
     expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
-    expect(roadmap).toContain('**Part 4: audit-correction writer candidate in progress after the first');
-    expect(roadmap).toContain('**Parts 5–12: not implemented.**');
+    expect(roadmap).toContain('**Part 4: independently approved, normally merged, deployed, and health');
+    expect(roadmap).toContain('**Part 5: implementation writer candidate; independent audit and release');
+    expect(roadmap).toContain('**Parts 6–12: not implemented.**');
     expect(roadmap).toContain(
       'There is no accepted Mission 23 migration, table, route, repository, or browser'
     );

@@ -99,7 +99,8 @@ describe('Mission 23 Part 3 production application receipt', () => {
     expect(requirements).toContain('| Achieved; Part 4 progression gate passed |');
     expect(unavailable).toContain('independent audit or release decision for Part 4');
     expect(roadmap).toContain('Part 3 changes no rendered surface.');
-    expect(roadmap).toContain('**Part 4: audit-correction writer candidate in progress after the first');
-    expect(roadmap).toContain('**Parts 5–12: not implemented.**');
+    expect(roadmap).toContain('**Part 4: independently approved, normally merged, deployed, and health');
+    expect(roadmap).toContain('**Part 5: implementation writer candidate; independent audit and release');
+    expect(roadmap).toContain('**Parts 6–12: not implemented.**');
   });
 });

@@ -21,7 +21,7 @@ realPostgres('Mission 20 Part 2F tenant asset catalogue migration', () => {
     pool = new Pool({ connectionString: suiteDatabase.connectionString });
     preAssetDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m20-p2f-pre-'));
     for (const filename of fs.readdirSync(MIGRATIONS)
-      .filter(name => /^\d+.*\.sql$/.test(name) && name !== '016_tenant_asset_catalogue.sql')) {
+      .filter(name => /^\d+.*\.sql$/.test(name) && name !== '016_tenant_asset_catalogue.sql' && Number(name.slice(0, 3)) < 46)) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preAssetDirectory, filename));
     }
   });

@@ -24,6 +24,8 @@ const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
 const { approvalBodyBoundary } = require('./scheduling/approvalHttpBoundary');
 const { executionBodyBoundary } = require('./operations/httpBoundary');
+const { equipmentBodyBoundary } = require('./equipment/httpBoundary');
+const { createEquipmentRouter } = require('./routes/equipment');
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
 const { createAuthRouter } = require('./routes/auth');
@@ -79,6 +81,7 @@ app.use(approvalBodyBoundary);
 // Mission 23 Part 2 field-execution mutations own exact, bounded,
 // unambiguous bytes before the broader application parser consumes them.
 app.use(executionBodyBoundary);
+app.use(equipmentBodyBoundary);
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {
@@ -222,6 +225,9 @@ app.use('/api/workforce', createWorkforceRouter());
 // The normalized catalogue owns only /api/assets. It must precede the broad
 // legacy retirement router; /api/v1/assets remains retired.
 app.use('/api/assets', createAssetCatalogueRouter());
+app.use('/api/equipment', createEquipmentRouter({
+  extractIdentifiers: require('./equipment/provider').createEquipmentExtractor(productionPolarisRuntime, productionPolarisUsageLedger),
+}));
 
 // Legacy demo credential minting is retired. Canonical demo access requires a
 // separately provisioned account attached to canonical_demo_authority.

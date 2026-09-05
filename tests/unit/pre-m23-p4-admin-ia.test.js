@@ -69,7 +69,7 @@ describe('Pre-Mission-23 P4 administrative information architecture', () => {
   test('ADM-20 tracks only durable controls and restores the canonical Company section', () => {
     expect(workspaceFormState).toContain("var durableControlSelector = options.durable || 'input,textarea,select';");
     expect(profile).toContain("durable: '.bp-section input, .bp-section textarea, .bp-section select'");
-    expect(profile).toContain("ignore: '[data-knowledge-management]'");
+    expect(profile).toContain("ignore: '[data-knowledge-management], #assetCatalogueContainer, .equipment-dialog'");
     expect(profile).toContain("if (!requested || validSections.indexOf(requested) < 0) requested = 'company';");
     expect(notificationBrowser).toContain("assert.strictEqual(snapshot.saveDisabled, true, label + ': save remains disabled until a real dirty state');");
   });

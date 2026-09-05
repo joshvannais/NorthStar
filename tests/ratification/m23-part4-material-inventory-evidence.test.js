@@ -46,16 +46,18 @@ const UNIT_VERSION = 'm23-material-unit-v1';
 const UNIT_DIGEST = '8fcbf0c5a646dbd199e6fa8a93f863d851fab24d83c7a819ed65573c22761eba';
 
 describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () => {
-  test('pins the exact base, closes Part 3 truthfully, and keeps Part 4 at writer gate', () => {
+  test('preserves historical writer evidence and records only the exact supplied Part 4 release facts', () => {
     expect(requirements).toContain('`961245ebd12a28d2c7aa1c0b3e003530e4428f09`');
     expect(requirements).toContain('`666a1a385a93a5baad31e77e2e5ed89d5ebd18ef`');
     expect(laterStart).toContain('`2abef4be3e31c2c468762598edc0e79859f67c2f`');
     expect(laterStart).toContain('`15c61f89e4dd52ae768f1d30d1d6a3808c2d7ec5`');
     expect(laterStart).toContain('`2b498fe1-d025-4be7-bd90-cef6154f9bb8`');
     expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
-    expect(roadmap).toContain('**Part 4: audit-correction writer candidate in progress after the first');
-    expect(roadmap).toContain('Daybreak exact-head re-audit');
-    expect(roadmap).toContain('**Parts 5–12: not implemented.**');
+    expect(roadmap).toContain('**Part 4: independently approved, normally merged, deployed, and health');
+    expect(roadmap).toContain('2e682e4bc33d419c1fc357957e825c18cdec2cd6');
+    expect(roadmap).toContain('eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375');
+    expect(roadmap).toContain('f5f6caab-08a5-490a-93c4-386e84f3b4f8');
+    expect(roadmap).toContain('**Parts 6–12: not implemented.**');
     expect(unavailable).toContain('This is a writer candidate.');
   });
 

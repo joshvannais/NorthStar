@@ -7,7 +7,9 @@ const {
   MATERIAL_UNIT_CONTRACT_DIGEST,
   MATERIAL_UNIT_CONTRACT_VERSION,
   normalizeMaterialAction,
+  normalizeMaterialReadQuery,
 } = require('../../src/operations/contract');
+const materialTextUnicodeContract = require('../../src/operations/materialTextUnicodeContract.json');
 const { executionBodyBoundary, isExecutionMutationRequest } = require('../../src/operations/httpBoundary');
 const { createFieldExecutionsRouter } = require('../../src/routes/fieldExecutions');
 const { mapDatabaseError } = require('../../src/operations/repository');
@@ -135,6 +137,41 @@ describe('Mission 23 Part 4 materials and inventory contract', () => {
     try { normalizeMaterialAction(value); } catch (error) { expect(error.code).toBe(code); }
   });
 
+  test.each(materialTextUnicodeContract.corpus)(
+    'shares the code-point material-text contract for $label', ({ value, valid }) => {
+      const candidate = input('record', materialFields({ description: value }));
+      if (valid) {
+        expect(normalizeMaterialAction(candidate).description).toBe(value);
+      } else {
+        expect(() => normalizeMaterialAction(candidate)).toThrow(FieldExecutionContractError);
+      }
+    }
+  );
+
+  test.each([
+    ['execution revision', { expectedExecutionRevision: null }],
+    ['execution digest', { expectedExecutionDigest: null }],
+    ['assignment revision', { expectedAssignmentRevision: null }],
+    ['assignment digest', { expectedAssignmentDigest: null }],
+    ['movement revision', { expectedMovementRevision: null }],
+    ['movement digest', { expectedMovementDigest: null }],
+  ])('rejects an explicit NULL %s pin before repository work', (_label, override) => {
+    const body = override.expectedMovementRevision === null || override.expectedMovementDigest === null
+      ? { ...common('correct'), ...materialFields(), ...existingFields(), ...override }
+      : { ...common('record'), ...materialFields(), ...override };
+    expect(() => normalizeMaterialAction(input(body.action, body))).toThrow(FieldExecutionContractError);
+  });
+
+  test('normalizes a bounded independent balance window and rejects query ambiguity', () => {
+    expect(normalizeMaterialReadQuery({})).toEqual({ balanceOffset: 0, balanceLimit: 200 });
+    expect(normalizeMaterialReadQuery({ balanceOffset: '200', balanceLimit: '50' }))
+      .toEqual({ balanceOffset: 200, balanceLimit: 50 });
+    for (const query of [
+      { balanceOffset: '-1' }, { balanceOffset: '01' }, { balanceOffset: ['1'] },
+      { balanceLimit: '0' }, { balanceLimit: '201' }, { cursor: 'hidden' },
+    ]) expect(() => normalizeMaterialReadQuery(query)).toThrow(FieldExecutionContractError);
+  });
+
   test('the raw HTTP boundary owns material mutation bytes', async () => {
     const target = `/api/v1/field-executions/${IDS.execution}/material-actions`;
     expect(isExecutionMutationRequest({ method: 'POST', originalUrl: target, url: target })).toBe(true);
@@ -185,6 +222,35 @@ describe('Mission 23 Part 4 materials and inventory contract', () => {
       authSessionId: IDS.session, performerProfileId: IDS.performer,
       quantity: '12.000000', unitCode: 'each',
     } });
+  });
+
+  test('material read route exposes only a strict bounded balance window', async () => {
+    const observed = [];
+    const app = express();
+    app.use((req, _res, next) => {
+      req.tenantContext = { organizationId: IDS.organization, userId: IDS.actor };
+      req.userRole = 'member'; req.authSession = { id: IDS.session };
+      req.accountAuthority = { membership_id: IDS.actor }; req.requestId = 'm23-p4-read'; next();
+    });
+    app.use('/api/v1/field-executions', createFieldExecutionsRouter({
+      poolProvider: () => ({ marker: 'pool' }),
+      tenantAuth: (_req, _res, next) => next(),
+      permission: () => (_req, _res, next) => next(), throttle: (_req, _res, next) => next(),
+      materialRead: async (_pool, value) => {
+        observed.push(value);
+        return { status: 200, body: { success: true, data: { balances: [] } } };
+      },
+    }));
+    app.use(errorMiddleware);
+    const response = await request(app)
+      .get(`/api/v1/field-executions/${IDS.execution}/materials?balanceOffset=200&balanceLimit=50`);
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toContain('no-store');
+    expect(observed[0]).toMatchObject({ balanceOffset: 200, balanceLimit: 50 });
+    const rejected = await request(app)
+      .get(`/api/v1/field-executions/${IDS.execution}/materials?balanceOffset=01`);
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.error.code).toBe('M23_MATERIAL_QUERY_INVALID');
   });
 
   test('maps balance, stale, reversal, authorization, and input failures safely', () => {

@@ -1,11 +1,15 @@
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
 const read = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8');
 const migration = read('migrations', '042_canonical_material_inventory_evidence.sql');
+const correctionMigration = read('migrations', '043_canonical_material_inventory_audit_corrections.sql');
+const unicodeContractSource = read('src', 'operations', 'materialTextUnicodeContract.json');
+const unicodeContract = JSON.parse(unicodeContractSource);
 const contract = read('src', 'operations', 'contract.js');
 const boundary = read('src', 'operations', 'httpBoundary.js');
 const repository = read('src', 'operations', 'repository.js');
@@ -34,7 +38,7 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(laterStart).toContain('`15c61f89e4dd52ae768f1d30d1d6a3808c2d7ec5`');
     expect(laterStart).toContain('`2b498fe1-d025-4be7-bd90-cef6154f9bb8`');
     expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
-    expect(roadmap).toContain('**Part 4: writer implementation candidate in progress; not independently');
+    expect(roadmap).toContain('**Part 4: audit-correction writer candidate in progress after the first');
     expect(roadmap).toContain('**Parts 5–12: not implemented.**');
     expect(unavailable).toContain('This is a writer candidate.');
   });
@@ -113,9 +117,10 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(productionReadiness).toContain('failed closed with\nits generic error');
     expect(productionReadiness).toContain('printed or mutated');
     expect(productionReadiness).toContain('does not\nprove application');
-    expect(requirements).toContain('bounded production preflight pass');
+    expect(requirements).toContain('corrected-source production preflight and recovery remain unavailable');
     expect(unavailable).toContain('production-history compatibility preflight passed');
     expect(unavailable).toContain('does not prove production');
+    expect(unavailable).toContain('predates forward-only migration 043');
   });
 
   test('limits actions and movement facts to Part 4 vocabulary', () => {
@@ -162,11 +167,62 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(routes).toContain("router.post('/:executionId/material-actions'");
     expect(routes).toContain("router.get('/:executionId/materials'");
     expect(routes).toContain("res.set('Cache-Control', 'no-store, private')");
-    expect(routes).toContain('M23_MATERIAL_QUERY_FORBIDDEN');
+    expect(routes).toContain('normalizeMaterialReadQuery(req.query)');
+    expect(contract).toContain('M23_MATERIAL_QUERY_INVALID');
     expect(routes).toContain('requestCorrelationId: requestId(req)');
     expect(contract).toContain('normalizeMaterialAction');
     expect(contract).toContain('INVALID_MATERIAL_QUANTITY');
     expect(contract).toContain('INVALID_MATERIAL_TEXT');
+  });
+
+  test('closes all five audit findings in forward-only migration 043', () => {
+    expect(correctionMigration).toContain('Migration 042 remains byte-for-byte frozen');
+    expect(correctionMigration).toContain('expected_execution_revision_value IS NULL');
+    expect(correctionMigration).toContain('expected_execution_digest_value IS NULL');
+    expect(correctionMigration).toContain('expected_assignment_revision_value IS NULL');
+    expect(correctionMigration).toContain('expected_assignment_digest_value IS NULL');
+    expect(correctionMigration).toContain('expected_movement_revision_value IS NULL');
+    expect(correctionMigration).toContain('expected_movement_digest_value IS NULL');
+    expect(correctionMigration).toContain("held.locktype='advisory'");
+    expect(correctionMigration).toContain('held.pid=pg_catalog.pg_backend_pid()');
+    expect(correctionMigration).toContain('canonical_material_authority_changed');
+    expect(correctionMigration).toContain('pg_advisory_xact_lock(230004,4)');
+    expect(correctionMigration).toContain('FOR EACH STATEMENT EXECUTE FUNCTION');
+    for (const relation of [
+      'auth_sessions','subscriptions','organization_onboarding','users',
+      'organization_memberships','workforce_profiles','workforce_crew_members',
+      'canonical_transcripts','canonical_appointments','canonical_schedule_assignments',
+      'canonical_field_executions',
+    ]) expect(correctionMigration).toContain(`'${relation}'`);
+    expect(repository).toContain('SELECT pg_advisory_lock_shared(230004,4)');
+    expect(repository).toContain('SELECT pg_advisory_unlock_shared(230004,4)');
+    expect(repository).toContain('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const materialSerializableSource = repository.slice(
+      repository.indexOf('async function materialSerializable'),
+      repository.indexOf('async function initializeFieldExecution'));
+    expect(materialSerializableSource.indexOf('SELECT pg_advisory_lock_shared(230004,4)'))
+      .toBeLessThan(materialSerializableSource.indexOf('BEGIN ISOLATION LEVEL SERIALIZABLE'));
+    expect(correctionMigration).toContain("'{data,totalBalanceCount}'");
+    expect(correctionMigration).toContain("'{data,balancePage}'");
+    expect(correctionMigration).toContain('OFFSET balance_offset_value LIMIT balance_limit_value');
+  });
+
+  test('shares one versioned code-point Unicode contract across JS and PostgreSQL', () => {
+    expect(unicodeContract).toMatchObject({
+      version: 'm23-material-text-unicode-v1', maximumCodePoints: 500, maximumUtf8Bytes: 2000,
+    });
+    expect(contract).toContain("require('./materialTextUnicodeContract.json')");
+    expect(contract).toContain('codePointAt(0)');
+    expect(correctionMigration).toContain(unicodeContract.version);
+    expect(correctionMigration).toContain('ascii(substr(value,position_value,1))');
+    expect(correctionMigration).toContain('0280502fc832fce9ff2daccb962f3a8a9de36e202441406257d910dce535b74b');
+    expect(crypto.createHash('sha256').update(Buffer.from(unicodeContractSource, 'utf8')).digest('hex'))
+      .toBe('0280502fc832fce9ff2daccb962f3a8a9de36e202441406257d910dce535b74b');
+    for (const label of ['currency','Han','ordinary emoji','soft hyphen',
+      'unpaired surrogate','interlinear annotation','object replacement',
+      'replacement character','tag character']) {
+      expect(unicodeContract.corpus.map(row => row.label)).toContain(label);
+    }
   });
 
   test('enforces runtime EXECUTE-only entry authority', () => {
@@ -205,7 +261,7 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(unavailable).toContain('Chrome, WebKit');
     expect(corrections).toContain('Current row lineage guard');
     expect(corrections).toContain('Read-current authority');
-    expect(corrections).toContain('No correction changes migrations 001–041.');
+    expect(corrections).toContain('No correction changes migrations 001–042.');
   });
 
   test('records the future Part 5 exact-asset and universal-knowledge boundary without implementing it', () => {

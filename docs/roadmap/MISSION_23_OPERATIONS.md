@@ -33,8 +33,8 @@ knowledge authorities without replacing any of them.
   `2b498fe1-d025-4be7-bd90-cef6154f9bb8` supplied the separate later ordinary
   application start with no migration application and unchanged exact one-row
   checksums and original timestamps for migrations 039–041.
-- **Part 4: writer implementation candidate in progress; not independently
-  audited, merged, deployed, or production-applied.**
+- **Part 4: audit-correction writer candidate in progress after the first
+  independent review; not accepted, merged, deployed, or production-applied.**
 - **Parts 5–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
@@ -257,10 +257,28 @@ movement evidence; it is never a claim that physical stock exists.
 The server derives actor, tenant, role, session, and CSRF evidence. PostgreSQL
 reloads active membership/account/workforce, subscription/onboarding, current
 appointment, assignment, dispatch, execution, performer, crew, and fail-closed
-production transcript authority before any new effect or cached replay. Reads
-use bounded repeatable-read snapshots and the same current scope. Runtime SQL
-may execute only the material mutation/read entry points and has no direct
+production transcript authority before any new effect or cached replay. A
+single ordered supporting-authority lock is acquired before the material
+transaction snapshot; every insert/update/delete/truncate writer for those
+authorities acquires the exclusive counterpart before its statement. Mutation,
+replay, and read therefore reauthorize only after any earlier revocation has
+committed, while a later revocation waits until the material operation ends.
+Both database entry points verify that the shared session lock was acquired
+before the snapshot and deny a direct caller that bypasses this ordering.
+Reads use bounded repeatable-read snapshots and the same current scope. Runtime
+SQL may execute only the material mutation/read entry points and has no direct
 table or helper privilege.
+
+Every required execution, assignment, and existing-movement revision/digest
+pin rejects explicit `NULL` before replay or evidence access. Material
+descriptions use the shared `m23-material-text-unicode-v1` code-point contract:
+ordinary NFC international text is accepted within its character/byte bounds,
+while defined controls, invisible formatting, bidi overrides, interlinear
+annotation, object replacement, and tag characters fail closed in JavaScript
+and PostgreSQL. Movement and balance truncation are reported independently;
+balance reads expose a strict bounded offset/limit window with total, returned,
+previous, and next evidence rather than silently presenting 200 groups as all
+balances.
 
 The writer candidate mounts only:
 

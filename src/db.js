@@ -1185,6 +1185,17 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_text_valid(text) FROM %I', runtime_role);
+        IF pg_catalog.to_regprocedure('public.canonical_material_text_unicode_contract()') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_text_unicode_contract() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_supporting_authority_read_lock() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_supporting_authority_write_lock() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL ON FUNCTION public.canonical_material_inventory_mutate_v042(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text) FROM %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL ON FUNCTION public.canonical_material_inventory_read_v042(uuid,uuid,text,uuid,uuid) FROM %I', runtime_role
+          );
+        END IF;
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_key_valid(text) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_quantity_text_valid(text) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_signed_quantity(text,text,numeric,text) FROM %I', runtime_role);
@@ -1204,9 +1215,17 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_material_inventory_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text) TO %I', runtime_role
         );
-        EXECUTE pg_catalog.format(
-          'GRANT EXECUTE ON FUNCTION public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
-        );
+        IF pg_catalog.to_regprocedure(
+          'public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid,integer,integer)'
+        ) IS NOT NULL THEN
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid,integer,integer) TO %I', runtime_role
+          );
+        ELSE
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
+          );
+        END IF;
       END IF;
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
@@ -1458,10 +1477,20 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        )) AS material_tables_withheld,
        (to_regclass('public.canonical_material_movements') IS NULL OR (
          has_function_privilege($1,'public.canonical_material_inventory_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text)','EXECUTE')
-         AND has_function_privilege($1,'public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND ((to_regprocedure('public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid,integer,integer)') IS NOT NULL
+           AND has_function_privilege($1,'public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid,integer,integer)','EXECUTE'))
+          OR (to_regprocedure('public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid,integer,integer)') IS NULL
+           AND has_function_privilege($1,'public.canonical_material_inventory_read(uuid,uuid,text,uuid,uuid)','EXECUTE')))
        )) AS material_entry_execute,
        (to_regclass('public.canonical_material_movements') IS NULL OR (
          NOT has_function_privilege($1,'public.canonical_material_text_valid(text)','EXECUTE')
+         AND (to_regprocedure('public.canonical_material_text_unicode_contract()') IS NULL OR (
+           NOT has_function_privilege($1,'public.canonical_material_text_unicode_contract()','EXECUTE')
+           AND NOT has_function_privilege($1,'public.canonical_material_supporting_authority_read_lock()','EXECUTE')
+           AND NOT has_function_privilege($1,'public.canonical_material_supporting_authority_write_lock()','EXECUTE')
+           AND NOT has_function_privilege($1,'public.canonical_material_inventory_mutate_v042(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text)','EXECUTE')
+           AND NOT has_function_privilege($1,'public.canonical_material_inventory_read_v042(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         ))
          AND NOT has_function_privilege($1,'public.canonical_material_key_valid(text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_material_quantity_text_valid(text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_material_signed_quantity(text,text,numeric,text)','EXECUTE')

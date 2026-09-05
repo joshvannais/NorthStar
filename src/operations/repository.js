@@ -180,6 +180,39 @@ async function serializable(pool, operation) {
     'Field execution authority changed; refresh before trying again.');
 }
 
+async function materialSerializable(pool, operation) {
+  requirePool(pool);
+  const client = await pool.connect();
+  let authorityLockHeld = false;
+  try {
+    await client.query("SET statement_timeout='5000ms'");
+    await client.query("SET lock_timeout='2000ms'");
+    await client.query("SET idle_in_transaction_session_timeout='5000ms'");
+    await client.query('SELECT pg_advisory_lock_shared(230004,4)');
+    authorityLockHeld = true;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await client.query('SET LOCAL search_path=pg_catalog,public');
+        const result = await operation(client);
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        if (error && ['40001', '40P01'].includes(error.code) &&
+            !String(error.constraint || '').includes('stale') && attempt < 2) continue;
+        throw mapDatabaseError(error);
+      }
+    }
+    fail(409, 'M23_EXECUTION_STALE',
+      'Field execution authority changed; refresh before trying again.');
+  } finally {
+    if (authorityLockHeld) await client.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+    await client.query('RESET ALL').catch(() => {});
+    client.release();
+  }
+}
+
 async function initializeFieldExecution(pool, input) {
   return serializable(pool, async client => {
     const result = await client.query(
@@ -297,7 +330,7 @@ async function readLaborTime(pool, input) {
 }
 
 async function mutateMaterialInventory(pool, input) {
-  return serializable(pool, async client => {
+  return materialSerializable(pool, async client => {
     const result = await client.query(
       `SELECT public.canonical_material_inventory_mutate(
          $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,$8::uuid,
@@ -322,7 +355,13 @@ async function mutateMaterialInventory(pool, input) {
 async function readMaterialInventory(pool, input) {
   requirePool(pool);
   const client = await pool.connect();
+  let authorityLockHeld = false;
   try {
+    await client.query("SET statement_timeout='5000ms'");
+    await client.query("SET lock_timeout='2000ms'");
+    await client.query("SET idle_in_transaction_session_timeout='5000ms'");
+    await client.query('SELECT pg_advisory_lock_shared(230004,4)');
+    authorityLockHeld = true;
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await client.query("SET LOCAL statement_timeout='5000ms'");
     await client.query("SET LOCAL lock_timeout='2000ms'");
@@ -330,10 +369,12 @@ async function readMaterialInventory(pool, input) {
     await client.query('SET LOCAL search_path=pg_catalog,public');
     const result = await client.query(
       `SELECT public.canonical_material_inventory_read(
-         $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid
+         $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::integer,$7::integer
        ) AS result`,
       [input.organizationId, input.actorUserId, input.actorAccessRole,
-        input.authSessionId, input.executionId]
+        input.authSessionId, input.executionId,
+        input.balanceOffset === undefined ? 0 : input.balanceOffset,
+        input.balanceLimit === undefined ? 200 : input.balanceLimit]
     );
     await client.query('COMMIT');
     const body = result.rows[0] && result.rows[0].result;
@@ -346,6 +387,8 @@ async function readMaterialInventory(pool, input) {
     await client.query('ROLLBACK').catch(() => {});
     throw mapDatabaseError(error);
   } finally {
+    if (authorityLockHeld) await client.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+    await client.query('RESET ALL').catch(() => {});
     client.release();
   }
 }

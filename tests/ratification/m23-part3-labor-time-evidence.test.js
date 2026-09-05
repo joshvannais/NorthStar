@@ -36,7 +36,7 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
     expect(requirements).toContain('`e8c30f96d9c0bc0c4287c1f181a400e3cedd4748`');
     expect(roadmap).toContain('**Part 3: independently accepted, normally merged, automatically deployed,');
     expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
-    expect(roadmap).toContain('**Part 4: writer implementation candidate in progress; not independently');
+    expect(roadmap).toContain('**Part 4: audit-correction writer candidate in progress after the first');
     expect(roadmap).toContain('**Parts 5–12: not implemented.**');
     expect(laterStartReceipt).toContain('This closes Part 3\'s separate later-start zero-op gate.');
     expect(unavailable).toContain('do not substitute for an independent audit or release decision for Part 4.');

@@ -10,6 +10,7 @@ const {
   normalizeInitialization,
   normalizeLaborAction,
   normalizeMaterialAction,
+  normalizeMaterialReadQuery,
   normalizeTransition,
 } = require('../operations/contract');
 const { requireExecutionBodyBoundary } = require('../operations/httpBoundary');
@@ -206,16 +207,12 @@ function createFieldExecutionsRouter(options = {}) {
   router.get('/:executionId/materials', tenantAuth, throttle,
     permission('operations', 'read'), async (req, res) => {
       res.set('Cache-Control', 'no-store, private');
-      if (!req.query || Object.keys(req.query).length !== 0) {
-        return res.status(400).json({
-          success: false, requestId: requestId(req),
-          error: { code: 'M23_MATERIAL_QUERY_FORBIDDEN',
-            message: 'Material evidence reads derive authority from the current signed-in session.' },
-        });
-      }
       try {
         const executionId = normalizeExecutionId(req.params.executionId);
-        const result = await materialRead(poolProvider(), { ...actor(req), executionId });
+        const balanceWindow = normalizeMaterialReadQuery(req.query);
+        const result = await materialRead(poolProvider(), {
+          ...actor(req), executionId, ...balanceWindow,
+        });
         return res.status(result.status).json({ ...result.body, requestId: requestId(req) });
       } catch (error) {
         if (typedError(req, res, error)) return undefined;

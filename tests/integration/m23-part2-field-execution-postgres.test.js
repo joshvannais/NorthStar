@@ -16,6 +16,8 @@ const LABOR_MIGRATION = '039_canonical_labor_time_evidence.sql';
 const LABOR_CORRECTION_MIGRATION = '040_canonical_labor_time_audit_corrections.sql';
 const LABOR_SOURCE_MIGRATION = '041_canonical_labor_transcript_source_authority.sql';
 const MATERIAL_MIGRATION = '042_canonical_material_inventory_evidence.sql';
+const MATERIAL_CORRECTION_MIGRATION = '043_canonical_material_inventory_audit_corrections.sql';
+const MATERIAL_TEXT_UNICODE_CONTRACT = require('../../src/operations/materialTextUnicodeContract.json');
 const LABOR_CATEGORY_VERSION = 'm23-labor-category-v1';
 const LABOR_CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
 const MATERIAL_UNIT_VERSION = 'm23-material-unit-v1';
@@ -464,6 +466,26 @@ async function materialEvidence(pool, executionId) {
       (SELECT count(*)::int FROM public.canonical_material_idempotency WHERE execution_id=$1) AS replays`,
     [executionId]
   )).rows[0];
+}
+
+async function directMaterialMutation(pool, input) {
+  return pool.query(
+    `SELECT public.canonical_material_inventory_mutate(
+       $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,$8::uuid,
+       $9::text,$10::text,$11::text,$12::text,$13::text,$14::text,$15::text,
+       $16::text,$17::text,$18::text,$19::text,$20::uuid,$21::bigint,$22::text,
+       $23::text,$24::bigint,$25::text,$26::bigint,$27::text,$28::text,$29::text,$30::text
+     ) AS result`,
+    [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId,
+      input.csrfToken, input.executionId, input.action, input.performerProfileId,
+      input.movementKind, input.itemKey, input.description, input.quantity, input.unitCode,
+      input.unitContractVersion, input.unitContractDigest, input.locationKey,
+      input.destinationLocationKey, input.lotCode, input.adjustmentDirection, input.movementId,
+      input.expectedMovementRevision, input.expectedMovementDigest, input.reviewOutcome,
+      input.expectedExecutionRevision, input.expectedExecutionDigest,
+      input.expectedAssignmentRevision, input.expectedAssignmentDigest,
+      input.idempotencyKey, input.reason, input.requestCorrelationId]
+  );
 }
 
 realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority', () => {
@@ -1751,6 +1773,9 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     for (const sql of [
       'SELECT * FROM public.canonical_material_movements LIMIT 1',
       "SELECT public.canonical_material_text_valid('bypass')",
+      'SELECT public.canonical_material_text_unicode_contract()',
+      'SELECT public.canonical_material_supporting_authority_read_lock()',
+      'SELECT public.canonical_material_inventory_read_v042(NULL,NULL,NULL,NULL,NULL)',
       `SELECT public.canonical_material_projection(NULL::public.canonical_material_movements)`,
     ]) await expect(runtimePool.query(sql)).rejects.toMatchObject({ code: '42501' });
     const event = (await migrationPool.query(
@@ -1772,6 +1797,195 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     )).rows[0];
     expect(validation).toEqual({ nfc: true, control: false, bidi: false });
   });
+
+  test('Part 4 rejects every NULL exact source or movement pin before replay with zero effects', async () => {
+    const context = await createStartedExecution(62);
+    const recorded = (await repository.mutateMaterialInventory(runtimePool, material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'null.pin', description: 'Recorded material for NULL pin regression.',
+      quantity: '1', unitCode: 'each', locationKey: 'truck-9', key: 'm23-p4-null-pin-base-0001',
+    }, sessions.member, 'member'))).body.data.material;
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    const recordBase = material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'null.pin', description: 'Denied source-pin material evidence.',
+      quantity: '1', unitCode: 'each', locationKey: 'truck-9', key: 'm23-p4-null-source-replay1',
+    }, sessions.member, 'member');
+    const correctionBase = material({
+      ...context, actorUserId: IDS.member, action: 'correct', movement: recorded,
+      movementKind: 'returned', itemKey: 'null.pin',
+      description: 'Denied movement-pin material correction.', quantity: '1', unitCode: 'each',
+      locationKey: 'truck-9', key: 'm23-p4-null-movement-pin1',
+    }, sessions.member, 'member');
+    for (const [candidate, field] of [
+      [recordBase, 'expectedExecutionRevision'], [recordBase, 'expectedExecutionDigest'],
+      [recordBase, 'expectedAssignmentRevision'], [recordBase, 'expectedAssignmentDigest'],
+      [correctionBase, 'expectedMovementRevision'], [correctionBase, 'expectedMovementDigest'],
+    ]) {
+      await expect(repository.mutateMaterialInventory(runtimePool, { ...candidate, [field]: null }))
+        .rejects.toMatchObject({ status: 400, code: 'INVALID_MATERIAL_REQUEST' });
+      expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+    }
+    await expect(repository.mutateMaterialInventory(runtimePool,
+      { ...recordBase, expectedExecutionRevision: null, idempotencyKey: 'm23-p4-null-source-replay1' }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+  });
+
+  test('Part 4 applies one code-point Unicode contract identically in PostgreSQL', async () => {
+    const contract = (await migrationPool.query(
+      'SELECT public.canonical_material_text_unicode_contract() AS contract'
+    )).rows[0].contract;
+    expect(contract).toMatchObject({
+      version: MATERIAL_TEXT_UNICODE_CONTRACT.version,
+      maximumCodePoints: MATERIAL_TEXT_UNICODE_CONTRACT.maximumCodePoints,
+      maximumUtf8Bytes: MATERIAL_TEXT_UNICODE_CONTRACT.maximumUtf8Bytes,
+    });
+    expect(contract.edgeWhitespaceRanges).toEqual(MATERIAL_TEXT_UNICODE_CONTRACT.edgeWhitespaceRanges);
+    expect(contract.rejectedCodePointRanges)
+      .toEqual(MATERIAL_TEXT_UNICODE_CONTRACT.rejectedCodePointRanges);
+    for (const corpusRow of MATERIAL_TEXT_UNICODE_CONTRACT.corpus) {
+      const actual = (await migrationPool.query(
+        'SELECT public.canonical_material_text_valid($1) AS valid', [corpusRow.value]
+      )).rows[0].valid;
+      expect({ label: corpusRow.label, actual }).toEqual({ label: corpusRow.label, actual: corpusRow.valid });
+    }
+  });
+
+  test('Part 4 serializes supporting-authority revocation ahead of mutation reauthorization', async () => {
+    const triggerRows = (await migrationPool.query(
+      `SELECT relation.relname
+         FROM pg_catalog.pg_trigger trigger
+         JOIN pg_catalog.pg_class relation ON relation.oid=trigger.tgrelid
+         JOIN pg_catalog.pg_namespace namespace ON namespace.oid=relation.relnamespace
+        WHERE namespace.nspname='public' AND NOT trigger.tgisinternal
+          AND trigger.tgname='canonical_material_supporting_authority_serialization'
+        ORDER BY relation.relname`
+    )).rows.map(row => row.relname);
+    expect(triggerRows).toEqual([
+      'auth_sessions','canonical_appointments','canonical_field_executions',
+      'canonical_schedule_assignments','canonical_transcripts','organization_memberships',
+      'organization_onboarding','subscriptions','users','workforce_crew_members','workforce_profiles',
+    ]);
+
+    const context = await createStartedExecution(63);
+    const input = material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'race.guard', description: 'Authority race must fail closed.', quantity: '1',
+      unitCode: 'each', locationKey: 'truck-10', key: 'm23-p4-authority-race-0001',
+    }, sessions.member, 'member');
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    const writer = await migrationPool.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query(
+        `UPDATE public.organization_memberships SET status='suspended'
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      );
+      const pending = repository.mutateMaterialInventory(runtimePool, input);
+      const disposition = await Promise.race([
+        pending.then(() => 'settled', () => 'settled'),
+        new Promise(resolve => setTimeout(() => resolve('blocked'), 250)),
+      ]);
+      expect(disposition).toBe('blocked');
+      await writer.query('COMMIT');
+      await expect(pending).rejects.toMatchObject({ status: 403 });
+    } finally {
+      await writer.query('ROLLBACK').catch(() => {});
+      writer.release();
+      await migrationPool.query(
+        `UPDATE public.organization_memberships SET status='active'
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      );
+    }
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+
+    const readContext = await createStartedExecution(65);
+    await repository.mutateMaterialInventory(runtimePool, material({
+      ...readContext, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'read.race', description: 'Read authority race evidence.', quantity: '1',
+      unitCode: 'each', locationKey: 'truck-11', key: 'm23-p4-read-authority-race1',
+    }, sessions.member, 'member'));
+    const readWriter = await migrationPool.connect();
+    try {
+      await readWriter.query('BEGIN');
+      await readWriter.query(
+        `UPDATE public.canonical_transcripts transcript SET source='demo'
+          FROM public.canonical_field_executions execution
+         WHERE execution.organization_id=$1 AND execution.id=$2
+           AND transcript.organization_id=execution.organization_id
+           AND transcript.operation_id=execution.operation_id
+           AND transcript.graph_id=execution.graph_id`,
+        [IDS.organization, readContext.execution.id]
+      );
+      const pendingRead = repository.readMaterialInventory(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.member, actorAccessRole: 'member',
+        authSessionId: sessions.member.sessionId, executionId: readContext.execution.id,
+      });
+      const readDisposition = await Promise.race([
+        pendingRead.then(() => 'settled', () => 'settled'),
+        new Promise(resolve => setTimeout(() => resolve('blocked'), 250)),
+      ]);
+      expect(readDisposition).toBe('blocked');
+      await readWriter.query('COMMIT');
+      await expect(pendingRead).rejects.toMatchObject({ status: 404 });
+    } finally {
+      await readWriter.query('ROLLBACK').catch(() => {});
+      readWriter.release();
+    }
+  });
+
+  test('Part 4 database entries require the pre-transaction authority lock protocol', async () => {
+    const context = await createStartedExecution(66);
+    const input = material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'direct.entry', description: 'Direct entry must fail before evidence.', quantity: '1',
+      unitCode: 'each', locationKey: 'truck-12', key: 'm23-p4-direct-entry-0001',
+    }, sessions.member, 'member');
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    await expect(directMaterialMutation(runtimePool, input)).rejects.toMatchObject({
+      code: '40001', constraint: 'canonical_material_authority_changed',
+    });
+    await expect(runtimePool.query(
+      `SELECT public.canonical_material_inventory_read(
+         $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,0,200)`,
+      [IDS.organization, IDS.member, 'member', sessions.member.sessionId, context.execution.id]
+    )).rejects.toMatchObject({
+      code: '40001', constraint: 'canonical_material_authority_changed',
+    });
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+  });
+
+  test('Part 4 reports and pages balance summaries independently from movement truncation', async () => {
+    const context = await createStartedExecution(64);
+    for (let index = 0; index < 101; index += 1) {
+      await repository.mutateMaterialInventory(runtimePool, material({
+        ...context, actorUserId: IDS.member, action: 'record', movementKind: 'transferred',
+        itemKey: `paged.item.${String(index).padStart(3, '0')}`,
+        description: `Recorded transfer ${index} for balance pagination evidence.`, quantity: '1',
+        unitCode: 'each', locationKey: 'warehouse-origin',
+        destinationLocationKey: `truck-${String(index).padStart(3, '0')}`,
+        key: `m23-p4-balance-page-${String(index).padStart(6, '0')}`,
+      }, sessions.member, 'member'));
+    }
+    const first = (await repository.readMaterialInventory(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      authSessionId: sessions.owner.sessionId, executionId: context.execution.id,
+      balanceOffset: 0, balanceLimit: 200,
+    })).body.data;
+    expect(first).toMatchObject({ totalMovementCount: 101, truncated: false,
+      totalBalanceCount: 202, balanceTruncated: true,
+      balancePage: { offset: 0, limit: 200, returnedCount: 200, totalCount: 202,
+        hasPrevious: false, hasNext: true, previousOffset: null, nextOffset: 200 } });
+    const second = (await repository.readMaterialInventory(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      authSessionId: sessions.owner.sessionId, executionId: context.execution.id,
+      balanceOffset: 200, balanceLimit: 200,
+    })).body.data;
+    expect(second.balances).toHaveLength(2);
+    expect(second.balancePage).toMatchObject({ offset: 200, returnedCount: 2,
+      totalCount: 202, hasPrevious: true, hasNext: false, nextOffset: null });
+  }, 180000);
 
   test('Part 4 rolls back current, history, audit, and replay when audit evidence cannot commit', async () => {
     const context = await createStartedExecution(60);
@@ -2104,6 +2318,75 @@ realPostgres('Mission 23 Part 4 migration interruption and retry', () => {
       )).rows[0];
       expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
       expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+    } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 4 correction migration interruption and retry', () => {
+  test('rolls back interrupted 043, then applies once and restarts as zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p4-correction-retry');
+    const roles = await createRoles(database, 'p4-correction');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p4-correction-'));
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < MATERIAL_CORRECTION_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      const migration042Before = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1', [MATERIAL_MIGRATION]
+      )).rows[0];
+      const client = await migrationPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fs.readFileSync(
+          path.join(MIGRATIONS, MATERIAL_CORRECTION_MIGRATION), 'utf8'
+        ));
+        await expect(client.query('SELECT public.m23_part4_correction_forced_interruption()'))
+          .rejects.toBeDefined();
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      expect((await migrationPool.query(
+        "SELECT to_regprocedure('public.canonical_material_inventory_mutate_v042(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text)') AS routine"
+      )).rows[0].routine).toBeNull();
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [MATERIAL_CORRECTION_MIGRATION]
+      )).rows[0].count).toBe(0);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const source = localDb.loadMigrations(MIGRATIONS)
+        .find(item => item.file === MATERIAL_CORRECTION_MIGRATION);
+      const applied = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1',
+        [MATERIAL_CORRECTION_MIGRATION]
+      )).rows;
+      expect(applied).toHaveLength(1);
+      expect(applied[0].checksum).toBe(source.digest);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const final = (await migrationPool.query(
+        'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1',
+        [MATERIAL_CORRECTION_MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+      const migration042After = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1', [MATERIAL_MIGRATION]
+      )).rows[0];
+      expect(migration042After.checksum).toBe(migration042Before.checksum);
+      expect(migration042After.applied_at.toISOString())
+        .toBe(migration042Before.applied_at.toISOString());
     } finally {
       await migrationPool.end().catch(() => {});
       await runtimePool.end().catch(() => {});

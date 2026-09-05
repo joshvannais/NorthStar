@@ -7,9 +7,13 @@
   production ledger, health, and a later ordinary start proving zero-op have
   not occurred and are not claimed.
 - The bounded read-only production-history compatibility preflight passed for
-  exact frozen migration 042 and is recorded in
+  exact frozen migration 042 at pre-correction head `a568b08c9ffc7dd353864fffe2f2d07f2c5cb1ee`
+  and is recorded in
   `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`. It does not prove production
   application, the 042 ledger row, deployment health, or later-start zero-op.
+  That historical receipt predates forward-only migration 043 and does not
+  establish 043 compatibility. A new credential-silent SELECT-only preflight
+  against the final corrected source set is required before release.
   No production DDL/data mutation, private or customer row access, credential
   display, provider action, manual restart, or manual deployment occurred.
 - No dated relevant production backup receipt or isolated restore rehearsal is

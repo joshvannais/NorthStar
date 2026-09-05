@@ -19,15 +19,12 @@ realPostgres('Mission 20 Part 2E workforce migration', () => {
     suiteDatabase = await createSuiteDatabase('m20-part2e-migration');
     pool = new Pool({ connectionString: suiteDatabase.connectionString });
     preWorkforceDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m20-p2e-pre-'));
-    const deferred = new Set([
-      '015_workforce_authority.sql',
-      '020_canonical_workforce_access_roles.sql',
-      '032_canonical_schedule_assignment_authority.sql',
-      '033_canonical_schedule_time_evidence.sql',
-      '034_schedule_availability_conflict_authority.sql',
-      '035_schedule_human_preview_approval.sql',
-    ]);
-    for (const filename of fs.readdirSync(MIGRATIONS).filter(name => /^\d+.*\.sql$/.test(name) && !deferred.has(name))) {
+    // A valid historical pre-workforce database contains the complete 001-014
+    // prefix. Copying later migrations while withholding their 015/020/032-035
+    // dependencies creates a state that no released migration runner could
+    // have produced and is not a meaningful upgrade fixture.
+    for (const filename of fs.readdirSync(MIGRATIONS).filter(name =>
+      /^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < '015_workforce_authority.sql')) {
       fs.copyFileSync(path.join(MIGRATIONS, filename), path.join(preWorkforceDirectory, filename));
     }
   });

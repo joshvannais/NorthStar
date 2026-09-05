@@ -13,13 +13,19 @@ describe('bounded read-only production migration-history inspector', () => {
     expect(() => canonicalBytes(Buffer.from('one\rtwo'))).toThrow('lone carriage return');
   });
 
-  test('loads the exact ordered repository migration set through frozen 042', () => {
+  test('loads the exact ordered repository migration set through correction 043', () => {
     const sources = sourceMigrations();
-    expect(sources).toHaveLength(40);
+    expect(sources).toHaveLength(41);
+    expect(sources.find(source => source.filename === '042_canonical_material_inventory_evidence.sql'))
+      .toEqual({
+        filename: '042_canonical_material_inventory_evidence.sql',
+        bytes: 70623,
+        checksum: '5efac96a5c275f58e56b117cdae135d4f16ce4847cccdbab8de580b5a3c1d6c4',
+      });
     expect(sources.at(-1)).toEqual({
-      filename: '042_canonical_material_inventory_evidence.sql',
-      bytes: 70623,
-      checksum: '5efac96a5c275f58e56b117cdae135d4f16ce4847cccdbab8de580b5a3c1d6c4',
+      filename: '043_canonical_material_inventory_audit_corrections.sql',
+      bytes: 16936,
+      checksum: '9f9d43d1d631953203a0d45accdfc757f3ce005a81cd4915c06bf2c3fd6ec228',
     });
   });
 

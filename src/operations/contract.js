@@ -1,5 +1,7 @@
 'use strict';
 
+const MATERIAL_TEXT_UNICODE_CONTRACT = require('./materialTextUnicodeContract.json');
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 const TRANSITIONS = new Set(['start', 'pause', 'resume']);
@@ -135,10 +137,18 @@ function materialKey(value) {
 }
 
 function materialText(value) {
-  if (typeof value !== 'string' || value !== value.trim() || value !== value.normalize('NFC') ||
-      Array.from(value).length < 1 || Array.from(value).length > 500 ||
-      Buffer.byteLength(value, 'utf8') > 2000 ||
-      /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u.test(value)) {
+  const codePoints = typeof value === 'string' ? Array.from(value, character => character.codePointAt(0)) : [];
+  const within = (codePoint, ranges) => ranges.some(([start, end]) =>
+    codePoint >= start && codePoint <= end);
+  if (typeof value !== 'string' || codePoints.length < 1 ||
+      codePoints.length > MATERIAL_TEXT_UNICODE_CONTRACT.maximumCodePoints ||
+      Buffer.byteLength(value, 'utf8') > MATERIAL_TEXT_UNICODE_CONTRACT.maximumUtf8Bytes ||
+      value !== value.normalize('NFC') ||
+      within(codePoints[0], MATERIAL_TEXT_UNICODE_CONTRACT.edgeWhitespaceRanges) ||
+      within(codePoints[codePoints.length - 1], MATERIAL_TEXT_UNICODE_CONTRACT.edgeWhitespaceRanges) ||
+      codePoints.some(codePoint => within(
+        codePoint, MATERIAL_TEXT_UNICODE_CONTRACT.rejectedCodePointRanges
+      ))) {
     fail(400, 'INVALID_MATERIAL_TEXT', 'Material description evidence is invalid.');
   }
   return value;
@@ -154,6 +164,30 @@ function materialQuantity(value) {
     fail(400, 'INVALID_MATERIAL_QUANTITY', 'Material quantity evidence is invalid.');
   }
   return value;
+}
+
+function normalizeMaterialReadQuery(value) {
+  const query = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  if (Object.keys(query).some(key => !['balanceOffset', 'balanceLimit'].includes(key))) {
+    fail(400, 'M23_MATERIAL_QUERY_INVALID', 'Material balance window is invalid.');
+  }
+  const canonicalInteger = (candidate, fallback, maximum) => {
+    if (candidate === undefined) return fallback;
+    if (typeof candidate !== 'string' || !/^(?:0|[1-9][0-9]*)$/.test(candidate)) {
+      fail(400, 'M23_MATERIAL_QUERY_INVALID', 'Material balance window is invalid.');
+    }
+    const parsed = Number(candidate);
+    if (!Number.isSafeInteger(parsed) || parsed > maximum) {
+      fail(400, 'M23_MATERIAL_QUERY_INVALID', 'Material balance window is invalid.');
+    }
+    return parsed;
+  };
+  const balanceOffset = canonicalInteger(query.balanceOffset, 0, 10000);
+  const balanceLimit = canonicalInteger(query.balanceLimit, 200, 200);
+  if (balanceLimit < 1) {
+    fail(400, 'M23_MATERIAL_QUERY_INVALID', 'Material balance window is invalid.');
+  }
+  return Object.freeze({ balanceOffset, balanceLimit });
 }
 
 function normalizeMaterialAction(input) {
@@ -428,5 +462,6 @@ module.exports = {
   normalizeInitialization,
   normalizeLaborAction,
   normalizeMaterialAction,
+  normalizeMaterialReadQuery,
   normalizeTransition,
 };

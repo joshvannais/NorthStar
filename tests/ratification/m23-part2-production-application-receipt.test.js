@@ -72,7 +72,7 @@ describe('Mission 23 Part 2 production application receipt', () => {
   test('keeps the follow-up documentation-only and later release claims bounded', () => {
     expect(roadmap).toContain('**Part 3: independently accepted, normally merged, automatically deployed,');
     expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
-    expect(roadmap).toContain('**Part 4: writer implementation candidate in progress; not independently');
+    expect(roadmap).toContain('**Part 4: audit-correction writer candidate in progress after the first');
     expect(roadmap).toContain('**Parts 5–12: not implemented.**');
     expect(requirementLedger).toContain('| Receipt-follow-up scope |');
     expect(requirementLedger).toContain('without adding runtime, migration, route, provider, credential, configuration, or production mutation');

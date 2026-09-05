@@ -1,6 +1,16 @@
 (function (global) {
   'use strict';
   var catalogue = null; var serial = 0; var activeDialog = null;
+  // A bounded presentation shortcut, never an identity/category/capability
+  // decision. Unrecognized prose stays on the ordinary Polaris path; every
+  // accepted shortcut still requires the same server draft and confirmation.
+  function isEquipmentRequest(message) {
+    if (typeof message !== 'string' || message.length > 1500 || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/.test(message)) return false;
+    var text = message.trim();
+    var subject = /^add +(?:(?:a|an|my|our|the) +)?(?:exact +)?(?:equipment|vehicle|machinery|truck|trailer|tractor|excavator|loader|mower|snowplow)(?:[.!?]?| +(?:for|that|with) +.+)$/i;
+    var namedExample = /^add +(?:(?:a|an|my|our|the) +)?(?:(?:19|20)[0-9]{2} +)?ford +f[- ]350(?:[.!?]?| +(?:for|that|with) +.+)$/i;
+    return subject.test(text) || namedExample.test(text);
+  }
   var labels = { manufacturer: 'Manufacturer', model: 'Exact model', modelYear: 'Model year', series: 'Series / trim', engine: 'Engine / power', configuration: 'Configuration', attachments: 'Your attachments', accessType: 'Access type', useContext: 'Your intended use' };
   function node(tag, className, text) { var value = document.createElement(tag); if (className) value.className = className; if (text !== undefined) value.textContent = text; return value; }
   function button(label, action, primary) { var value = node('button', 'equipment-button' + (primary ? ' equipment-button-primary' : ''), label); value.type = 'button'; value.addEventListener('click', function () { value.focus(); action(); }); return value; }
@@ -163,5 +173,5 @@
     if (opener && opener.isConnected) opener.focus({ preventScroll: true });
     dialog.showModal(); render();
   }
-  global.NorthStarEquipment = Object.freeze({ open: open, loadCatalogue: loadCatalogue });
+  global.NorthStarEquipment = Object.freeze({ open: open, loadCatalogue: loadCatalogue, isEquipmentRequest: isEquipmentRequest });
 })(window);

@@ -43,6 +43,13 @@ safety, insurance, ownership, availability, or legal status.
 
 Business Profile Vehicles & Equipment and Polaris's add-equipment conversation
 both use `/api/equipment/drafts` and the same sequential draft actions.
+The Polaris presentation shortcut requires an explicit add-equipment subject
+(equipment, vehicle, machinery or a bounded equipment noun), or the literal
+Ford F-350 example, optionally followed by a use/configuration phrase. It does
+not match equipment words elsewhere in note prose. Other or ambiguous messages
+continue through ordinary Polaris, including its existing selected-record gate.
+This shortcut assigns no asset identity, category, research or capability and
+does not change Business Profile's free-form reviewed intake contract.
 Admission derives organization, user, role, durable session, CSRF and account
 state from the server and database before optional provider assistance. The
 existing server-only Responses runtime, existing entitlement and usage ledger,

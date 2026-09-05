@@ -84,7 +84,7 @@ conditional('Mission 23 Part 5 mounted PostgreSQL equipment authority', () => {
     delete process.env.DATABASE_URL; delete process.env.MIGRATION_DATABASE_URL;
   });
   test('initializes exact migration and denies runtime research import and direct private tables', async () => {
-    const found = await ownerPool.query("SELECT checksum FROM _migrations WHERE filename='046_reviewed_equipment_operations.sql'");
+    const found = await ownerPool.query("SELECT checksum FROM _migrations WHERE filename='046_m23_equipment_operations.sql'");
     expect(found.rowCount).toBe(1);
     await expect(runtimePool.query('SELECT * FROM canonical_equipment_drafts')).rejects.toMatchObject({ code: '42501' });
     await expect(runtimePool.query('SELECT equipment_import_reviewed($1,NULL,$2,$3,$4)', [research, 'fixture reviewer', 'b'.repeat(64), 'Test only'])).rejects.toMatchObject({ code: '42501' });

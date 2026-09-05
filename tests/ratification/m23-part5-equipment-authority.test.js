@@ -5,14 +5,19 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '../..');
 const read = name => fs.readFileSync(path.join(ROOT, name), 'utf8');
-const migration = read('migrations/046_reviewed_equipment_operations.sql');
+const migration = read('migrations/046_m23_equipment_operations.sql');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const BASE = 'eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375';
 describe('Mission 23 Part 5 unified equipment ratification contract', () => {
+  test('uses only the canonical path as part of the frozen migration identity', () => {
+    expect(fs.existsSync(path.join(ROOT, 'migrations/046_m23_equipment_operations.sql'))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, 'migrations/046_reviewed_equipment_operations.sql'))).toBe(false);
+    expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^046_.*\.sql$/.test(name))).toEqual(['046_m23_equipment_operations.sql']);
+  });
   test('seals the exact frozen additive migration bytes and Git blob', () => {
-    const bytes = fs.readFileSync(path.join(ROOT, 'migrations/046_reviewed_equipment_operations.sql'));
+    const bytes = fs.readFileSync(path.join(ROOT, 'migrations/046_m23_equipment_operations.sql'));
     expect(bytes.length).toBe(57208); expect(hash(bytes)).toBe('86284c861a014b462e3456e87ec7be703f299e19d23cc7b1650bcd87cb47513f');
-    expect(execFileSync('git', ['hash-object', 'migrations/046_reviewed_equipment_operations.sql'], { cwd: ROOT, encoding: 'utf8' }).trim()).toBe('5b9d294954fb27857299be0b9ef15873ba07cc45');
+    expect(execFileSync('git', ['hash-object', 'migrations/046_m23_equipment_operations.sql'], { cwd: ROOT, encoding: 'utf8' }).trim()).toBe('5b9d294954fb27857299be0b9ef15873ba07cc45');
   });
   test('preserves every released migration byte from the exact full-history released base', () => {
     const names = execFileSync('git', ['ls-tree','-r','--name-only',BASE,'migrations'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter(name => name.endsWith('.sql'));

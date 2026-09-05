@@ -1279,14 +1279,109 @@
       "failedTests": 0,
       "pendingTests": 0,
       "failures": []
+    },
+    {
+      "file": "available-results.json",
+      "bytes": 3462124,
+      "sha256": "fae3decfc62b95c81df336df26ba7e7bc257e74594ba6342da7c79755ce60ad4",
+      "startedAt": "2026-09-05T16:01:59.934Z",
+      "passedSuites": 193,
+      "failedSuites": 0,
+      "pendingSuites": 2,
+      "passedTests": 6596,
+      "failedTests": 0,
+      "pendingTests": 50,
+      "failures": []
+    },
+    {
+      "file": "post-freeze-results.json",
+      "bytes": 40895,
+      "sha256": "a8a9540ed283d953423a432ebe7d198f530c94d43d71cbf5869d325bf16c3307",
+      "startedAt": "2026-09-05T14:11:20.246Z",
+      "passedSuites": 7,
+      "failedSuites": 0,
+      "pendingSuites": 0,
+      "passedTests": 79,
+      "failedTests": 0,
+      "pendingTests": 0,
+      "failures": []
+    },
+    {
+      "file": "correction-red-results.json",
+      "bytes": 7563,
+      "sha256": "64172f71374055caec219078ee5dafe92e0da9aa09bc03a37daa965c44b2b084",
+      "startedAt": "2026-09-05T15:27:47.925Z",
+      "passedSuites": 0,
+      "failedSuites": 1,
+      "pendingSuites": 0,
+      "passedTests": 6,
+      "failedTests": 1,
+      "pendingTests": 0,
+      "failures": [
+        {
+          "file": "tests/ratification/m23-part5-equipment-authority.test.js",
+          "cases": [
+            {
+              "name": "Mission 23 Part 5 unified equipment ratification contract uses only the canonical path as part of the frozen migration identity",
+              "failure": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.toBe (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/ratification/m23-part5-equipment-authority.test.js:13:91)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusTest (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1011:40)\n    a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "correction-focused-results.json",
+      "bytes": 42978,
+      "sha256": "a7ba3dacf34a11072d807349a9329d4f16b0183cb7f223b4f1d3bed9b7f4198a",
+      "startedAt": "2026-09-05T15:59:25.128Z",
+      "passedSuites": 5,
+      "failedSuites": 0,
+      "pendingSuites": 0,
+      "passedTests": 78,
+      "failedTests": 0,
+      "pendingTests": 0,
+      "failures": []
+    },
+    {
+      "file": "correction-final-contract-results.json",
+      "bytes": 3051290,
+      "sha256": "373e9f07ba068a61baafbd34795b5e8b63a03327d288045e9f0a704019f985fa",
+      "startedAt": "2026-09-05T16:00:02.739Z",
+      "passedSuites": 119,
+      "failedSuites": 0,
+      "pendingSuites": 0,
+      "passedTests": 5890,
+      "failedTests": 0,
+      "pendingTests": 0,
+      "failures": []
     }
   ],
   "browsers": [
     {
       "file": "chrome/evidence.json",
-      "sha256": "a4d59ed448cfb0944d3a3d22fe7767a97b5e97f72621c75f290c07f38fcb5a0b",
+      "sha256": "88ccb46e5b3f1f003ae89ce864967ed7dd131331fc0bcf4cf859dfe70247781c",
       "browser": "chrome",
       "cases": [
+        {
+          "ordinaryPolaris": "Add a note to the customer record",
+          "normalPolarisHttpStatus": 400,
+          "equipmentWrites": 0
+        },
+        {
+          "ordinaryPolaris": "Add 2 and 2",
+          "normalPolarisHttpStatus": 400,
+          "equipmentWrites": 0
+        },
+        {
+          "ordinaryPolaris": "Add a note about my truck",
+          "normalPolarisHttpStatus": 400,
+          "equipmentWrites": 0
+        },
+        {
+          "equipmentIntent": "Add a Ford F-350 that I sometimes use for hauling or plowing",
+          "serverDraft": true,
+          "cancelledWithoutAsset": true
+        },
         {
           "entry": "business_profile",
           "explicitConfirmation": true
@@ -1306,6 +1401,186 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 503.578125,
+                "bottom": 550.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2110,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 70.578125,
+                "bottom": 94.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 104.171875,
+                "bottom": 148.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 70.578125,
+                "bottom": 117.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 176.953125,
+                "bottom": 214.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 230.953125,
+                "bottom": 308.546875,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 231.84375,
+                "bottom": 307.640625,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 324.546875,
+                "bottom": 373.34375,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 390.34375,
+                "bottom": 454.234375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2543,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 70.578125,
+                "bottom": 94.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 104.171875,
+                "bottom": 148.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 70.578125,
+                "bottom": 117.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 176.953125,
+                "bottom": 214.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 230.953125,
+                "bottom": 308.546875,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 231.84375,
+                "bottom": 307.640625,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 324.546875,
+                "bottom": 373.34375,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 390.34375,
+                "bottom": 454.234375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2543,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1333,6 +1608,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 516.78125,
+                "bottom": 563.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2232,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 108.78125,
+                "bottom": 132.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 142.375,
+                "bottom": 187.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 108.78125,
+                "bottom": 155.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 215.15625,
+                "bottom": 253.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 269.15625,
+                "bottom": 346.75,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 270.046875,
+                "bottom": 345.84375,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 362.75,
+                "bottom": 411.546875,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 428.546875,
+                "bottom": 492.4375,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2640,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 108.78125,
+                "bottom": 132.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 142.375,
+                "bottom": 187.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 108.78125,
+                "bottom": 155.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 215.15625,
+                "bottom": 253.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 269.15625,
+                "bottom": 346.75,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 270.046875,
+                "bottom": 345.84375,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 362.75,
+                "bottom": 411.546875,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 428.546875,
+                "bottom": 492.4375,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2640,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1350,6 +1832,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 853.171875,
+                "bottom": 899.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3008,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 546.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 562.359375,
+                "bottom": 611.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 628.15625,
+                "bottom": 688.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 546.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 562.359375,
+                "bottom": 611.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 628.15625,
+                "bottom": 688.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1366,6 +2055,213 @@
             "clientWidth": 214,
             "bad": [],
             "xss": 0
+          },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 853.65625,
+                "bottom": 900.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3928,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 611.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 627.640625,
+                "bottom": 701.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 718.234375,
+                "bottom": 778.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 611.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 627.640625,
+                "bottom": 701.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 718.234375,
+                "bottom": 778.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
           },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
@@ -1384,6 +2280,186 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 516.578125,
+                "bottom": 563.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2097,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 81.578125,
+                "bottom": 105.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 115.171875,
+                "bottom": 159.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 81.578125,
+                "bottom": 128.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 187.953125,
+                "bottom": 225.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 241.953125,
+                "bottom": 319.546875,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 242.84375,
+                "bottom": 318.640625,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 335.546875,
+                "bottom": 384.34375,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 401.34375,
+                "bottom": 465.234375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2532,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 81.578125,
+                "bottom": 105.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 115.171875,
+                "bottom": 159.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 81.578125,
+                "bottom": 128.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 187.953125,
+                "bottom": 225.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 241.953125,
+                "bottom": 319.546875,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 242.84375,
+                "bottom": 318.640625,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 335.546875,
+                "bottom": 384.34375,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 401.34375,
+                "bottom": 465.234375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2532,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1411,6 +2487,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 516.78125,
+                "bottom": 563.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2232,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 108.78125,
+                "bottom": 132.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 142.375,
+                "bottom": 187.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 108.78125,
+                "bottom": 155.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 215.15625,
+                "bottom": 253.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 269.15625,
+                "bottom": 346.75,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 270.046875,
+                "bottom": 345.84375,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 362.75,
+                "bottom": 411.546875,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 428.546875,
+                "bottom": 492.4375,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2640,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 108.78125,
+                "bottom": 132.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 142.375,
+                "bottom": 187.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 108.78125,
+                "bottom": 155.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 215.15625,
+                "bottom": 253.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 269.15625,
+                "bottom": 346.75,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 270.046875,
+                "bottom": 345.84375,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 362.75,
+                "bottom": 411.546875,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 428.546875,
+                "bottom": 492.4375,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2640,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1427,6 +2710,213 @@
             "clientWidth": 284,
             "bad": [],
             "xss": 0
+          },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 853.171875,
+                "bottom": 899.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3008,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 546.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 562.359375,
+                "bottom": 611.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 628.15625,
+                "bottom": 688.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 546.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 562.359375,
+                "bottom": 611.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 628.15625,
+                "bottom": 688.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
           },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
@@ -1445,6 +2935,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 853.65625,
+                "bottom": 900.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3928,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 611.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 627.640625,
+                "bottom": 701.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 718.234375,
+                "bottom": 778.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 611.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 75.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 627.640625,
+                "bottom": 701.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 718.234375,
+                "bottom": 778.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1461,6 +3158,18 @@
       "externalBlocked": [],
       "pageErrors": [],
       "httpFailures": [
+        {
+          "path": "/api/v1/canonical/polaris/assistant/messages",
+          "status": 400
+        },
+        {
+          "path": "/api/v1/canonical/polaris/assistant/messages",
+          "status": 400
+        },
+        {
+          "path": "/api/v1/canonical/polaris/assistant/messages",
+          "status": 400
+        },
         {
           "path": "/api/equipment/catalogue",
           "status": 503
@@ -1474,9 +3183,29 @@
     },
     {
       "file": "webkit/evidence.json",
-      "sha256": "9de3319f99319101996ebd8e17b25045b948fa4b28a17b585e014c2ee03c2b20",
+      "sha256": "7c23a8f93cf177b799b8937733baca172167e55f8d7b0bdf80fabc0e206770d9",
       "browser": "webkit",
       "cases": [
+        {
+          "ordinaryPolaris": "Add a note to the customer record",
+          "normalPolarisHttpStatus": 400,
+          "equipmentWrites": 0
+        },
+        {
+          "ordinaryPolaris": "Add 2 and 2",
+          "normalPolarisHttpStatus": 400,
+          "equipmentWrites": 0
+        },
+        {
+          "ordinaryPolaris": "Add a note about my truck",
+          "normalPolarisHttpStatus": 400,
+          "equipmentWrites": 0
+        },
+        {
+          "equipmentIntent": "Add a Ford F-350 that I sometimes use for hauling or plowing",
+          "serverDraft": true,
+          "cancelledWithoutAsset": true
+        },
         {
           "entry": "business_profile",
           "explicitConfirmation": true
@@ -1496,6 +3225,186 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 64.578125,
+                "bottom": 111.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2549,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 64.578125,
+                "bottom": 88.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 98.171875,
+                "bottom": 142.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 64.578125,
+                "bottom": 111.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 170.953125,
+                "bottom": 208.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 228.046875,
+                "bottom": 305.640625,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 224.953125,
+                "bottom": 308.75,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 324.75,
+                "bottom": 373.546875,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 390.546875,
+                "bottom": 454.4375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2549,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 64.578125,
+                "bottom": 88.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 98.171875,
+                "bottom": 142.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 64.578125,
+                "bottom": 111.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 170.953125,
+                "bottom": 208.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 228.046875,
+                "bottom": 305.640625,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 224.953125,
+                "bottom": 308.75,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 324.75,
+                "bottom": 373.546875,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 390.546875,
+                "bottom": 454.4375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2549,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1523,6 +3432,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 101.78125,
+                "bottom": 148.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2647,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 101.78125,
+                "bottom": 125.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 135.375,
+                "bottom": 180.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 101.78125,
+                "bottom": 148.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 208.15625,
+                "bottom": 246.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 265.25,
+                "bottom": 342.84375,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 262.15625,
+                "bottom": 345.953125,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 361.953125,
+                "bottom": 410.75,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 427.75,
+                "bottom": 491.640625,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2647,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 101.78125,
+                "bottom": 125.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 135.375,
+                "bottom": 180.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 101.78125,
+                "bottom": 148.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 208.15625,
+                "bottom": 246.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 265.25,
+                "bottom": 342.84375,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 262.15625,
+                "bottom": 345.953125,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 361.953125,
+                "bottom": 410.75,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 427.75,
+                "bottom": 491.640625,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2647,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1540,6 +3656,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 325.171875,
+                "bottom": 371.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3536,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 554.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 570.359375,
+                "bottom": 619.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 636.15625,
+                "bottom": 696.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 554.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 570.359375,
+                "bottom": 619.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 636.15625,
+                "bottom": 696.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1556,6 +3879,213 @@
             "clientWidth": 214,
             "bad": [],
             "xss": 0
+          },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 425.65625,
+                "bottom": 472.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4356,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 619.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 635.640625,
+                "bottom": 709.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 726.234375,
+                "bottom": 786.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 619.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 635.640625,
+                "bottom": 709.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 726.234375,
+                "bottom": 786.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
           },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
@@ -1574,6 +4104,186 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 64.578125,
+                "bottom": 111.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2549,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 64.578125,
+                "bottom": 88.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 98.171875,
+                "bottom": 142.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 64.578125,
+                "bottom": 111.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 170.953125,
+                "bottom": 208.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 228.046875,
+                "bottom": 305.640625,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 224.953125,
+                "bottom": 308.75,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 324.75,
+                "bottom": 373.546875,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 390.546875,
+                "bottom": 454.4375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2549,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 64.578125,
+                "bottom": 88.171875,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 98.171875,
+                "bottom": 142.953125,
+                "left": 327.390625,
+                "right": 1029.09375,
+                "width": 701.703125,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 64.578125,
+                "bottom": 111.375,
+                "left": 1045.09375,
+                "right": 1192.609375,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 170.953125,
+                "bottom": 208.953125,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 228.046875,
+                "bottom": 305.640625,
+                "left": 327.390625,
+                "right": 754,
+                "width": 426.609375,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 224.953125,
+                "bottom": 308.75,
+                "left": 766,
+                "right": 1192.609375,
+                "width": 426.609375,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 324.75,
+                "bottom": 373.546875,
+                "left": 327.390625,
+                "right": 1192.609375,
+                "width": 865.21875,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 390.546875,
+                "bottom": 454.4375,
+                "left": 328.390625,
+                "right": 1191.609375,
+                "width": 863.21875,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2549,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1601,6 +4311,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 101.78125,
+                "bottom": 148.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2647,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 101.78125,
+                "bottom": 125.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 135.375,
+                "bottom": 180.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 101.78125,
+                "bottom": 148.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 208.15625,
+                "bottom": 246.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 265.25,
+                "bottom": 342.84375,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 262.15625,
+                "bottom": 345.953125,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 361.953125,
+                "bottom": 410.75,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 427.75,
+                "bottom": 491.640625,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2647,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 768,
+                "width": 768,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 101.78125,
+                "bottom": 125.375,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 135.375,
+                "bottom": 180.15625,
+                "left": 53,
+                "right": 551.484375,
+                "width": 498.484375,
+                "height": 44.78125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 101.78125,
+                "bottom": 148.578125,
+                "left": 567.484375,
+                "right": 715,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 208.15625,
+                "bottom": 246.15625,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 38
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 265.25,
+                "bottom": 342.84375,
+                "left": 53,
+                "right": 378,
+                "width": 325,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 262.15625,
+                "bottom": 345.953125,
+                "left": 390,
+                "right": 715,
+                "width": 325,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 361.953125,
+                "bottom": 410.75,
+                "left": 53,
+                "right": 715,
+                "width": 662,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 427.75,
+                "bottom": 491.640625,
+                "left": 54,
+                "right": 714,
+                "width": 660,
+                "height": 63.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 2647,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1617,6 +4534,213 @@
             "clientWidth": 284,
             "bad": [],
             "xss": 0
+          },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 415.171875,
+                "bottom": 461.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3446,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 554.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 570.359375,
+                "bottom": 619.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 636.15625,
+                "bottom": 696.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 390,
+                "width": 390,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.015625,
+                "bottom": 100.609375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.609375,
+                "bottom": 200.171875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 89.5625
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 232.171875,
+                "bottom": 278.96875,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 290.96875,
+                "bottom": 364.96875,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 74
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 380.96875,
+                "bottom": 458.5625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 77.59375
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 470.5625,
+                "bottom": 554.359375,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 570.359375,
+                "bottom": 619.15625,
+                "left": 53,
+                "right": 337,
+                "width": 284,
+                "height": 48.796875
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 636.15625,
+                "bottom": 696.046875,
+                "left": 54,
+                "right": 336,
+                "width": 282,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 3629,
+            "viewport": 900,
+            "focused": "addAssetButton"
           },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
@@ -1635,6 +4759,213 @@
             "bad": [],
             "xss": 0
           },
+          "focusReturnGeometry": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": "#addAssetButton",
+                "top": 425.65625,
+                "bottom": 472.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4356,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureBefore": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 619.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 635.640625,
+                "bottom": 709.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 726.234375,
+                "bottom": 786.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
+          "captureAfter": {
+            "headers": [
+              {
+                "top": 0,
+                "bottom": 61,
+                "left": 0,
+                "right": 320,
+                "width": 320,
+                "height": 61
+              }
+            ],
+            "targets": [
+              {
+                "selector": ".equipment-surface h3",
+                "top": 77.109375,
+                "bottom": 100.703125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 23.59375
+              },
+              {
+                "selector": ".equipment-surface .bp-section-desc",
+                "top": 110.703125,
+                "bottom": 222.65625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 111.953125
+              },
+              {
+                "selector": "#addAssetButton",
+                "top": 254.65625,
+                "bottom": 301.453125,
+                "left": 53,
+                "right": 200.515625,
+                "width": 147.515625,
+                "height": 46.796875
+              },
+              {
+                "selector": "#assetCatalogueAuthority",
+                "top": 313.453125,
+                "bottom": 405.453125,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 92
+              },
+              {
+                "selector": ".equipment-toolbar label:first-child",
+                "top": 421.453125,
+                "bottom": 523.84375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 102.390625
+              },
+              {
+                "selector": ".equipment-toolbar label:last-child",
+                "top": 535.84375,
+                "bottom": 619.640625,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 83.796875
+              },
+              {
+                "selector": "#assetCatalogueContainer > .equipment-state",
+                "top": 635.640625,
+                "bottom": 709.234375,
+                "left": 53,
+                "right": 267,
+                "width": 214,
+                "height": 73.59375
+              },
+              {
+                "selector": ".equipment-group > summary",
+                "top": 726.234375,
+                "bottom": 786.125,
+                "left": 54,
+                "right": 266,
+                "width": 212,
+                "height": 59.890625
+              }
+            ],
+            "scrollX": 0,
+            "scrollY": 4527,
+            "viewport": 900,
+            "focused": "addAssetButton"
+          },
           "collapsedByDefault": true,
           "keyboardDisclosure": true,
           "focusReturn": true,
@@ -1651,6 +4982,18 @@
       "externalBlocked": [],
       "pageErrors": [],
       "httpFailures": [
+        {
+          "path": "/api/v1/canonical/polaris/assistant/messages",
+          "status": 400
+        },
+        {
+          "path": "/api/v1/canonical/polaris/assistant/messages",
+          "status": 400
+        },
+        {
+          "path": "/api/v1/canonical/polaris/assistant/messages",
+          "status": 400
+        },
         {
           "path": "/api/equipment/catalogue",
           "status": 503

@@ -36,6 +36,8 @@ real('Mission 23 Part 5 additive migration lifecycle', () => {
     await require('../../src/db').runMigrations({ pool });
     const applied = (await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows;
     expect(applied).toHaveLength(before.length + 1); expect(applied.slice(0, -1)).toEqual(before);
+    expect(applied.at(-1)).toMatchObject({ filename: '046_m23_equipment_operations.sql', checksum: '86284c861a014b462e3456e87ec7be703f299e19d23cc7b1650bcd87cb47513f' });
+    expect(applied.some(row => row.filename === '046_reviewed_equipment_operations.sql')).toBe(false);
     await require('../../src/db').runMigrations({ pool });
     expect((await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows).toEqual(applied);
     expect((await pool.query("SELECT count(*)::int AS count FROM pg_constraint WHERE conrelid IN (SELECT oid FROM pg_class WHERE relname LIKE 'canonical_equipment_%') AND NOT convalidated")).rows[0].count).toBe(0);

@@ -1,9 +1,12 @@
 # Mission 23 Part 5 writer evidence
 
-Status: complete implementation candidate awaiting a different fresh independent
-exact-head audit. This is not an audit approval, release, deployment, live research
-claim, or founder visual approval. The draft PR's immutable head is the final
-writer handoff identity; no Part 6 work is included.
+Status: corrected implementation candidate awaiting a different fresh independent
+exact-head re-audit. The first audited head was
+`ec63f9065fc869669b47b04e062a6d42e53bbfda`; its terminal audit required the
+three bounded corrections recorded in `CORRECTION_LOG.md`. This is not an audit
+approval, release, deployment, live research claim, or founder visual approval.
+The draft PR's new immutable head is the final writer handoff identity; no Part 6
+work is included.
 
 ## Provenance and authority
 
@@ -50,9 +53,9 @@ vanilla version metadata. No production connection was used.
 
 | Final verification group | Result |
 | --- | --- |
-| Entire available-only Jest inventory, fully staged candidate | 193 suites, 6,573 tests passed; 50 explicit exclusions; zero failures |
-| Unit, contract and ratification directories | 119 suites, 5,867 tests passed |
-| Explicit equipment unit/provider/PostgreSQL/migration/ratification plus administrative form-state regression | 6 suites, 74 tests passed |
+| Entire available-only Jest inventory, fully staged corrected candidate | 193 suites, 6,596 tests passed; 50 explicit exclusions; zero failures |
+| Unit, contract and ratification directories | 119 suites, 5,890 tests passed |
+| Exact correction-focused equipment/migration/inspector group | 5 suites, 78 tests passed |
 | Prior operations and full ratification regression | 24 suites, 437 tests passed |
 | Account migration available cases | 23 passed; one absent archived negative control unavailable |
 | Chrome 152.0.7977.82 mounted browser | Passed |
@@ -62,17 +65,24 @@ Browser evidence exercises both entry paths and explicit confirmation against
 the actual mounted server/disposable PostgreSQL, 1280/768/390/320 CSS-pixel
 viewports in light and dark, collapsed categories, keyboard disclosure and focus
 return, touch emulation, inert persisted markup, semantic labels, reduced motion,
-CSS 200% zoom and 320-pixel reflow equivalent. Both runs recorded zero page errors
-and zero provider calls. Their sole HTTP failure is the intentionally intercepted
-503 catalogue request used to prove failure is not rendered as an empty result.
+CSS 200% zoom and 320-pixel reflow equivalent. At 768/390/320, both engines and
+both themes assert the title, action and complete captured catalogue controls are
+inside the viewport and vertically clear the actual fixed header before and after
+the screenshot. The Polaris trace proves the Ford F-350 prompt opens a reviewed
+server draft, while the two required unrelated prompts and an equipment-word note
+stay in ordinary Polaris with zero equipment draft/asset writes. Both runs recorded
+zero page errors and zero provider calls. Their expected HTTP failures are the
+three ordinary Polaris selected-record 400s and the intentionally intercepted 503
+catalogue request used to prove failure is not rendered as an empty result.
 
 Broad-suite history is retained in `evidence-summary.json`, including failures.
 The first available-only run had 6,566 passes, 50 explicit exclusions and one
 obsolete static form-state expectation; that expectation was corrected and both
 the complete unit/contract/ratification directories and explicit equipment group
-passed afterward. The final fully staged broad rerun passed 193 suites and
-6,573 tests with zero failures and the same 50 exclusions in 651.124 seconds;
-the exact run is recorded in the generated summary.
+passed afterward. The final pre-audit fully staged broad rerun passed 193 suites
+and 6,573 tests. After the terminal audit corrections, the fully staged broad
+rerun passed 193 suites and 6,596 tests with zero failures and the same 50
+exclusions in 676.676 seconds; the exact run is recorded in the generated summary.
 An additional staged-inventory rerun passed 6,572 tests and exposed one
 historical public-script allowlist assertion for the newly tracked equipment.js;
 that explicit authorized-addition expectation was updated without changing
@@ -97,7 +107,9 @@ ignored. Committed summary records retain run counts, failure names and raw
 result byte hashes; committed browser evidence includes screenshots.
 
 All 43 released migration blobs remain byte-identical. Additive migration 046 is
-frozen at Git blob `5b9d294954fb27857299be0b9ef15873ba07cc45`, 57,208 bytes,
+at the required canonical path `migrations/046_m23_equipment_operations.sql` and
+the alternate audited path is absent. Its unchanged bytes remain frozen at Git
+blob `5b9d294954fb27857299be0b9ef15873ba07cc45`, 57,208 bytes,
 SHA-256 `86284c861a014b462e3456e87ec7be703f299e19d23cc7b1650bcd87cb47513f`.
 See `MIGRATION_IDENTITY.md`, `REQUIREMENT_TO_EVIDENCE.md`, `CORRECTION_LOG.md`
 and `UNAVAILABLE_EVIDENCE.md` for the exact contract and evidence boundaries.

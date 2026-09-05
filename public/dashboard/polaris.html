@@ -1272,7 +1272,7 @@
         input.value = '';
         resetInputHeight();
         if (respondToAccountFreeDemoChat(message)) return;
-        if (/^add\b/i.test(message) && window.NorthStarEquipment) {
+        if (window.NorthStarEquipment && window.NorthStarEquipment.isEquipmentRequest(message)) {
           window.NorthStarEquipment.open({ entryPath: 'polaris', message: message });
           return;
         }

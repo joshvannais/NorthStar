@@ -39,7 +39,7 @@ describe('bounded read-only production migration-history inspector', () => {
       bytes: 2050,
       checksum: '24b8249c0b686b497e5251516f9a7663947ee6ac491fe9d132fb3b8bc020e9ee',
     });
-    expect(sources.at(-1).filename).toBe('046_reviewed_equipment_operations.sql');
+    expect(sources.at(-1).filename).toBe('046_m23_equipment_operations.sql');
   });
 
   test('reports only bounded names and checksums needed for compatibility', () => {

@@ -1,5 +1,34 @@
 # Writer correction-quality ledger
 
+## Terminal audit corrections after first audited head
+
+The fresh independent audit of
+`ec63f9065fc869669b47b04e062a6d42e53bbfda` required exactly three corrections.
+This writer recovery preserves that head as provenance and changes only those
+bounded subjects:
+
+- Moved the unchanged 57,208-byte migration 046 blob to the required canonical
+  `migrations/046_m23_equipment_operations.sql` path, removed the alternate
+  path, updated all live references, and added presence/absence/single-046,
+  byte/hash/blob, ledger filename/checksum, retry and restart assertions.
+- Replaced Polaris's generic leading `Add` shortcut with a bounded explicit
+  equipment-intent predicate. Positive equipment and Ford F-350 prompts still
+  enter reviewed onboarding; unrelated note/arithmetic prompts remain ordinary
+  Polaris and the mounted browser trace proves zero equipment draft/asset writes.
+- Replaced section-only screenshots with stable viewport captures after an
+  explicit fixed-header-safe scroll. Chrome and actual Playwright WebKit now
+  assert title/action/control vertical clearance before and after capture at
+  768/390/320 in light and dark, while retaining the 1280 and prior interaction
+  evidence.
+
+The migration-path oracle was first run red against the audited head and is
+retained in `correction-red-results.json`. The exact corrected five-suite group,
+full unit/contract/ratification directories, full available-only inventory,
+migration lifecycle, Chrome and WebKit matrices all pass. The correction is not
+an independent re-audit, merge authority, deployment, or founder visual verdict.
+
+## Earlier pre-freeze writer corrections
+
 These are pre-freeze writer corrections, not independent audit findings.
 
 - Fixed mounted session fixture header lookup (`headers.Cookie`), then reran

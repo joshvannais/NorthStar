@@ -32,6 +32,22 @@ async function main() {
       await page.locator('[data-section="vehicles"]').click();
       await page.locator('#section-vehicles.active').waitFor();
     }
+    async function safeArea(page, capture) {
+      return page.evaluate(capture => {
+        const box = element => { const r = element.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
+        const headers = [...document.querySelectorAll('[data-northstar-fixed-header]')].filter(element => ['fixed','sticky'].includes(getComputedStyle(element).position)).map(box).filter(r => r.width && r.height && r.bottom > 0 && r.top < innerHeight);
+        const selectors = capture ? ['.equipment-surface h3', '.equipment-surface .bp-section-desc', '#addAssetButton', '#assetCatalogueAuthority', '.equipment-toolbar label:first-child', '.equipment-toolbar label:last-child', '#assetCatalogueContainer > .equipment-state', '.equipment-group > summary'] : ['#addAssetButton'];
+        const targets = selectors.map(selector => ({ selector, ...box(document.querySelector(selector)) }));
+        return { headers, targets, scrollX, scrollY, viewport: innerHeight, focused: document.activeElement.id };
+      }, capture);
+    }
+    function assertSafeArea(state, margin = 0) {
+      for (const target of state.targets) {
+        // Match the existing horizontal oracle's one-CSS-pixel raster tolerance.
+        assert.ok(target.width > 0 && target.height > 0 && target.top >= -1 && target.bottom <= state.viewport + 1, JSON.stringify(state));
+        for (const header of state.headers) if (header.left < target.right && header.right > target.left) assert.ok(target.top >= header.bottom + margin, JSON.stringify(state));
+      }
+    }
     async function create(page, entry, marker) {
       const before = (await fixture.ownerPool.query('SELECT count(*)::int AS n FROM tenant_assets WHERE organization_id=$1', [fixture.org])).rows[0].n;
       if (entry === 'business_profile') { await catalogue(page); await page.getByRole('button', { name: 'Add equipment', exact: true }).click(); }
@@ -57,6 +73,33 @@ async function main() {
       ledger.cases.push({ entry, explicitConfirmation: true });
     }
     const ownerContext = await contextFor(1280, 'light'); const ownerPage = await ownerContext.newPage();
+    for (const message of ['Add a note to the customer record', 'Add 2 and 2', 'Add a note about my truck']) {
+      await ownerPage.goto(origin + '/dashboard/polaris', { waitUntil: 'domcontentloaded' });
+      await ownerPage.waitForFunction(() => !document.getElementById('polarisPromptInput').disabled);
+      const before = (await fixture.ownerPool.query('SELECT (SELECT count(*) FROM canonical_equipment_drafts WHERE organization_id=$1)::int AS drafts,(SELECT count(*) FROM tenant_assets WHERE organization_id=$1)::int AS assets', [fixture.org])).rows[0];
+      const requests = []; const capture = request => { if (request.method() === 'POST') requests.push({ path: new URL(request.url()).pathname, body: request.postDataJSON() }); };
+      ownerPage.on('request', capture);
+      const ordinaryResponse = ownerPage.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/canonical/polaris/assistant/messages');
+      await ownerPage.locator('#polarisPromptInput').fill(message); await ownerPage.locator('#polarisPromptInput').press('Enter');
+      const response = await ordinaryResponse;
+      assert.strictEqual(await ownerPage.locator('.equipment-dialog').count(), 0, 'unrelated command must not open equipment: ' + message);
+      assert.strictEqual(response.status(), 400, 'ordinary unselected Polaris keeps its existing selected-record boundary');
+      assert.strictEqual((await response.json()).error.code, 'POLARIS_SELECTED_RECORD_REQUIRED');
+      assert.strictEqual(requests.filter(item => item.path === '/api/v1/canonical/polaris/assistant/messages' && item.body.message === message).length, 1);
+      assert.strictEqual(requests.filter(item => item.path.startsWith('/api/equipment/')).length, 0);
+      assert.deepStrictEqual((await fixture.ownerPool.query('SELECT (SELECT count(*) FROM canonical_equipment_drafts WHERE organization_id=$1)::int AS drafts,(SELECT count(*) FROM tenant_assets WHERE organization_id=$1)::int AS assets', [fixture.org])).rows[0], before);
+      ownerPage.off('request', capture); ledger.cases.push({ ordinaryPolaris: message, normalPolarisHttpStatus: response.status(), equipmentWrites: 0 });
+    }
+    await ownerPage.goto(origin + '/dashboard/polaris', { waitUntil: 'domcontentloaded' });
+    await ownerPage.waitForFunction(() => !document.getElementById('polarisPromptInput').disabled);
+    const namedMessage = 'Add a Ford F-350 that I sometimes use for hauling or plowing';
+    await ownerPage.locator('#polarisPromptInput').fill(namedMessage); await ownerPage.locator('#polarisPromptInput').press('Enter');
+    const namedDialog = ownerPage.getByRole('dialog', { name: 'Add equipment' }); await namedDialog.waitFor();
+    assert.strictEqual(await namedDialog.locator('textarea').inputValue(), namedMessage);
+    await namedDialog.getByRole('button', { name: 'Prepare reviewed draft' }).click(); await namedDialog.locator('input').waitFor();
+    await namedDialog.getByRole('button', { name: 'Cancel draft', exact: true }).click(); await namedDialog.getByRole('button', { name: 'Close', exact: true }).click();
+    assert.strictEqual((await fixture.ownerPool.query('SELECT count(*)::int AS n FROM tenant_assets WHERE organization_id=$1', [fixture.org])).rows[0].n, 0);
+    ledger.cases.push({ equipmentIntent: namedMessage, serverDraft: true, cancelledWithoutAsset: true });
     await create(ownerPage, 'business_profile', 'profile path <img src=x onerror=window.__equipmentXss++>'); await create(ownerPage, 'polaris', 'conversation path'); await ownerContext.close();
     for (const theme of ['light','dark']) for (const width of [1280,768,390,320]) {
       const context = await contextFor(width, theme, fixture.session, { hasTouch: width <= 390 }); const page = await context.newPage(); await catalogue(page);
@@ -82,8 +125,23 @@ async function main() {
       await page.keyboard.press('Tab'); assert.strictEqual(await page.evaluate(() => document.querySelector('.equipment-dialog').contains(document.activeElement)), true);
       await page.keyboard.press('Escape'); assert.strictEqual(await dialog.count(), 0);
       assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'addAssetButton');
-      await page.locator('#section-vehicles').screenshot({ path: path.join(output, `${theme}-${width}.png`) });
-      ledger.cases.push({ theme, width, geometry, collapsedByDefault: true, keyboardDisclosure: true, focusReturn: true, touch: width <= 390, reducedMotion: true });
+      const focusReturnGeometry = await safeArea(page, false); assertSafeArea(focusReturnGeometry);
+      // Capture the actual viewport after a deliberate fixed-header-safe scroll.
+      // Element screenshots can auto-scroll this tall section after our oracle.
+      await page.evaluate(() => {
+        document.querySelectorAll('.equipment-group').forEach(group => { group.open = false; });
+      });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+      await page.evaluate(() => {
+        const target = document.querySelector('.equipment-surface h3').getBoundingClientRect();
+        const headerBottom = Math.max(0, ...[...document.querySelectorAll('[data-northstar-fixed-header]')].filter(element => ['fixed','sticky'].includes(getComputedStyle(element).position)).map(element => element.getBoundingClientRect()).filter(r => r.width && r.height && r.left < target.right && r.right > target.left && r.bottom > 0 && r.top < innerHeight).map(r => r.bottom));
+        window.scrollBy({ top: target.top - headerBottom - 16, behavior: 'instant' });
+      });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+      const captureBefore = await safeArea(page, true); assertSafeArea(captureBefore, 8);
+      await page.screenshot({ path: path.join(output, `${theme}-${width}.png`) });
+      const captureAfter = await safeArea(page, true); assertSafeArea(captureAfter, 8); assert.deepStrictEqual(captureAfter, captureBefore, 'capture must not change the tested scroll/focus/geometry state');
+      ledger.cases.push({ theme, width, geometry, focusReturnGeometry, captureBefore, captureAfter, collapsedByDefault: true, keyboardDisclosure: true, focusReturn: true, touch: width <= 390, reducedMotion: true });
       if (width === 1280) {
         await page.evaluate(() => { document.body.style.zoom = '2'; });
         const reflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: innerWidth }));

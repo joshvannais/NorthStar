@@ -32,7 +32,8 @@ exercise that authority.
 
 The file pipeline remains unavailable by default. Its injectable provider
 boundary is accepted only when durable encrypted quarantine, malware scanning,
-metadata removal, retention/orphan cleanup and short-lived retrieval are all
+metadata removal, immutable object creation, generation-scoped retention/orphan
+cleanup and short-lived retrieval are all
 independently declared and evidenced. Files are registered only after a clean
 release with exact resulting bytes and digest. No real storage or scanner was
 configured or called.
@@ -47,6 +48,16 @@ activation, secret/configuration change, production/private-data access,
 customer contact, legal decision, merge, deployment or release is included.
 
 ## Correction history
+
+- The independent audit of exact head
+  `78906517ffae3de3f0dc4678640675988baab259` required two corrections. P2 now
+  reserves and validates the complete idempotent upload request in PostgreSQL
+  before provider mutation, issues a fresh opaque object/generation/claim, and
+  permits cleanup only for that generation. Exact accepted replay and conflicting
+  or concurrent requests do not enter storage. P3 now requires and persists
+  bounded inert described/unavailable/needs-review accessibility state, binds it
+  to reservation/content/record digests, audits and retrieval, and permits only
+  append-only accessibility correction. See `CORRECTION_LOG.md`.
 
 - Corrected an initial result-document rule that treated absent measurements as
   invalid instead of requiring values only for the `measurement` result type.
@@ -77,6 +88,10 @@ customer contact, legal decision, merge, deployment or release is included.
   The final frozen-byte rerun passed 196 suites and 6,633 tests with zero
   failures; the same 2 suites/50 tests remained explicitly unavailable. It
   completed in 619.252 seconds; both results are recorded in `TEST_RESULTS.md`.
+- The audit-correction focused gate passed 5 suites/45 tests, and the corrected
+  broad available-only inventory passed 196 suites/6,637 tests with zero
+  failures; 2 suites/50 tests remained explicitly unavailable. It completed in
+  619.658 seconds.
 
 An independent auditor must evaluate the final immutable PR head. Local green
 tests cannot grant approval or release authority.

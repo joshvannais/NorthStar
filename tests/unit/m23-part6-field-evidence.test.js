@@ -13,7 +13,6 @@ const {
   createAuthorizedRetrieval,
   createUnavailableStorage,
   ingestFileEvidence,
-  opaqueObjectId,
 } = require('../../src/fieldEvidence/fileStorage');
 
 const IDS = Object.freeze({
@@ -93,7 +92,8 @@ describe('Mission 23 Part 6 field evidence contract', () => {
       'x-assignment-revision': '4', 'x-assignment-digest': digest('b'),
       'x-evidence-reason': 'Record bounded file evidence.', 'x-file-name': 'arrival.jpg',
       'content-type': 'image/jpeg', 'content-length': '20', 'x-privacy-flags': 'none',
-      'x-retention-days': '30',
+      'x-retention-days': '30', 'x-content-sha256': digest('d'),
+      'x-accessibility-state': 'described', 'x-accessibility-description': 'Photo of the recorded arrival condition.',
     };
     expect(normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, headers)).toMatchObject({ extension: 'jpg', retentionDays: 30 });
     expect(() => normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers, 'content-type': 'image/svg+xml', 'x-file-name': 'active.svg' })).toThrow();
@@ -104,6 +104,18 @@ describe('Mission 23 Part 6 field evidence contract', () => {
       'x-privacy-policy-digest': digest('c'), 'x-consent-evidence-id': crypto.randomUUID(),
       'x-consent-evidence-digest': digest('d') })).toMatchObject({ privacyFlags: ['faces', 'customer_property'],
       privacy: { policyVersion: 'm23-private-media-v1' } });
+    expect(() => normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers,
+      'x-accessibility-state': undefined, 'x-accessibility-description': undefined })).toThrow(/accessibility/i);
+    expect(normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers,
+      'x-accessibility-state': 'unavailable', 'x-accessibility-description': undefined,
+      'x-accessibility-unavailable-reason': 'A trustworthy description is not available.' })).toMatchObject({
+      accessibility: { state: 'unavailable', description: null } });
+    expect(normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers,
+      'x-accessibility-state': 'needs_review', 'x-accessibility-description': undefined,
+      'x-accessibility-unavailable-reason': 'An authorized reviewer must verify the description.' })).toMatchObject({
+      accessibility: { state: 'needs_review', description: null } });
+    expect(() => normalizeFileHeaders({ ...IDS, actorAccessRole: 'member' }, { ...headers,
+      'x-accessibility-description': '<img onerror=alert(1)>' })).toThrow();
   });
 
   test('parses a dataset-bound opaque pagination cursor', () => {
@@ -119,7 +131,8 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
   const capabilities = { available: true, durable: true, encryptionAtRest: true, quarantine: true,
     malwareScan: true, metadataStrip: true, decompressionSafety: true,
     retentionCleanup: true, orphanCleanup: true,
-    shortLivedRetrieval: true, version: 'fixture-v1', digest: digest('f') };
+    shortLivedRetrieval: true, immutableObjectCreate: true, generationScopedCleanup: true,
+    version: 'fixture-v1', digest: digest('f') };
   function storage(overrides = {}) {
     const chunks = [];
     return { chunks, capabilities: () => capabilities,
@@ -127,12 +140,14 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
       scanAndRelease: jest.fn(async request => ({ disposition: 'released_after_clean_scan', malwareDetected: false,
         exifPresent: false, geolocationPresent: false, decompressionSafe: true,
         decodedPixelCount: 12000000, scannerVersion: 'scanner-v1',
+        storageGenerationId: request.storageGenerationId, storageObjectVersion: 'object-version-1',
         releasedObjectId: request.objectId, releasedMediaType: request.mediaType,
         releasedByteCount: request.byteCount, releasedContentDigest: request.contentDigest,
         scannerEvidenceDigest: digest('1'), metadataRemovalDigest: digest('2') })),
-      deleteOrphan: jest.fn(async () => {}),
+      deleteGeneration: jest.fn(async () => {}),
       createAuthorizedRetrieval: jest.fn(async request => ({ url: 'https://storage.example.test/object?token=short', expiresInSeconds: 300,
         objectId: request.objectId, contentDigest: request.contentDigest,
+        storageGenerationId: request.storageGenerationId, storageObjectVersion: request.storageObjectVersion,
         contentDisposition: request.contentDisposition, mediaType: request.mediaType })),
       ...overrides };
   }
@@ -141,10 +156,16 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
     expectedExecutionRevision: 2, expectedExecutionDigest: digest('a'), expectedAssignmentRevision: 4,
     expectedAssignmentDigest: digest('b'), idempotencyKey: crypto.randomUUID(), reason: 'Store evidence.',
     displayName: 'arrival.jpg', extension: 'jpg', contentType: 'image/jpeg', contentLength: bytes.length,
-    privacyFlags: ['none'], privacy: null, retentionDays: 30 } }
+    expectedContentDigest: crypto.createHash('sha256').update(bytes).digest('hex'),
+    privacyFlags: ['none'], privacy: null, retentionDays: 30,
+    accessibility: { state: 'described', description: 'Photo of the recorded arrival condition.', reason: null } } }
+  function reservation() { return { status: 200, replayed: false, body: { success: true, data: {
+    reservationId: crypto.randomUUID(), storageGenerationId: crypto.randomUUID(), objectId: crypto.randomUUID(),
+    claimToken: crypto.randomBytes(32).toString('hex'),
+  } } }; }
 
   test('streams allowlisted bytes through quarantine, scan, metadata removal, encryption gate and one database mutation', async () => {
-    const bytes = jpeg(); const provider = storage(); const authorizeUpload = jest.fn(async () => ({ status: 200 }));
+    const bytes = jpeg(); const provider = storage(); const authorizeUpload = jest.fn(async () => reservation());
     const mutate = jest.fn(async (_pool, value) => ({ status: 201, replayed: false, body: { success: true, data: { document: value.document } } }));
     const result = await ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes.subarray(0, 5), bytes.subarray(5)]),
       metadata: metadata(bytes), csrfToken: 'x'.repeat(32), requestCorrelationId: 'file-test', mutate, authorizeUpload });
@@ -152,11 +173,10 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
     expect(authorizeUpload).toHaveBeenCalledTimes(1);
     expect(mutate.mock.calls[0][1].document).toMatchObject({ quarantineDisposition: 'released_after_clean_scan',
       encryptionAtRest: true, activeContentInline: false, malwareClearanceClaim: false,
-      contentDigest: crypto.createHash('sha256').update(bytes).digest('hex'), retentionDays: 30 });
-    expect(provider.deleteOrphan).not.toHaveBeenCalled();
+      expectedContentDigest: crypto.createHash('sha256').update(bytes).digest('hex'),
+      accessibility: { state: 'described' }, retentionDays: 30 });
+    expect(provider.deleteGeneration).not.toHaveBeenCalled();
     expect(provider.beginQuarantine.mock.invocationCallOrder[0]).toBeGreaterThan(authorizeUpload.mock.invocationCallOrder[0]);
-    const sameMetadata = metadata(bytes); sameMetadata.idempotencyKey = 'stable-upload-key-1234567890';
-    expect(opaqueObjectId(sameMetadata)).toBe(opaqueObjectId({ ...sameMetadata }));
   });
 
   test.each([
@@ -166,7 +186,8 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
     ['decompression bomb', jpeg(), { scanAndRelease: jest.fn(async request => ({
       disposition: 'released_after_clean_scan', malwareDetected: false, exifPresent: false,
       geolocationPresent: false, decompressionSafe: false, decodedPixelCount: 90000000,
-      scannerVersion: 'scanner-v1', releasedObjectId: request.objectId,
+      scannerVersion: 'scanner-v1', storageGenerationId: request.storageGenerationId,
+      storageObjectVersion: 'object-version-1', releasedObjectId: request.objectId,
       releasedMediaType: request.mediaType, releasedByteCount: request.byteCount,
       releasedContentDigest: request.contentDigest, scannerEvidenceDigest: digest('1'),
       metadataRemovalDigest: digest('2'),
@@ -175,14 +196,59 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
     const provider = storage(overrides); const mutate = jest.fn();
     await expect(ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes]),
       metadata: metadata(bytes), csrfToken: 'x'.repeat(32), requestCorrelationId: 'file-fail', mutate,
-      authorizeUpload: jest.fn(async () => ({ status: 200 })) })).rejects.toBeDefined();
-    expect(mutate).not.toHaveBeenCalled(); expect(provider.deleteOrphan).toHaveBeenCalledTimes(1);
+      authorizeUpload: jest.fn(async () => reservation()) })).rejects.toBeDefined();
+    expect(mutate).not.toHaveBeenCalled(); expect(provider.deleteGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  test('accepted replay and conflicting reservation failure happen before storage mutation', async () => {
+    const bytes = jpeg(); const accepted = { status: 201, replayed: true, body: { success: true, data: { id: crypto.randomUUID() } } };
+    const replayStorage = storage();
+    await expect(ingestFileEvidence({ pool: {}, storage: replayStorage, stream: Readable.from([bytes]), metadata: metadata(bytes),
+      csrfToken: 'x'.repeat(32), requestCorrelationId: 'replay', authorizeUpload: jest.fn(async () => accepted) })).resolves.toBe(accepted);
+    expect(replayStorage.beginQuarantine).not.toHaveBeenCalled(); expect(replayStorage.deleteGeneration).not.toHaveBeenCalled();
+    const conflictStorage = storage(); const conflict = Object.assign(new Error('conflict'), { constraint: 'canonical_field_evidence_idempotency_conflict' });
+    await expect(ingestFileEvidence({ pool: {}, storage: conflictStorage, stream: Readable.from([bytes]), metadata: metadata(bytes),
+      csrfToken: 'x'.repeat(32), requestCorrelationId: 'conflict', authorizeUpload: jest.fn(async () => { throw conflict; }) })).rejects.toBe(conflict);
+    expect(conflictStorage.beginQuarantine).not.toHaveBeenCalled(); expect(conflictStorage.deleteGeneration).not.toHaveBeenCalled();
+  });
+
+  test('concurrent upload claims cannot overwrite or clean up the one accepted byte generation', async () => {
+    const bytes = jpeg(); const provider = storage(); const reserved = reservation(); let claimed = false;
+    const authorizeUpload = jest.fn(async () => {
+      if (claimed) throw Object.assign(new Error('Upload already in progress'), { code: 'M23_FIELD_UPLOAD_IN_PROGRESS' });
+      claimed = true; return reserved;
+    });
+    const sharedMetadata = metadata(bytes);
+    const mutate = jest.fn(async (_pool, value) => ({ status: 201, replayed: false,
+      body: { success: true, data: { document: value.document } } }));
+    const options = () => ({ pool: {}, storage: provider, stream: Readable.from([bytes]), metadata: sharedMetadata,
+      csrfToken: 'x'.repeat(32), requestCorrelationId: 'concurrent-generation', authorizeUpload, mutate });
+    const settled = await Promise.allSettled([ingestFileEvidence(options()), ingestFileEvidence(options())]);
+    expect(settled.filter(value => value.status === 'fulfilled')).toHaveLength(1);
+    expect(settled.filter(value => value.status === 'rejected')).toHaveLength(1);
+    expect(provider.beginQuarantine).toHaveBeenCalledTimes(1);
+    expect(provider.deleteGeneration).not.toHaveBeenCalled();
+    expect(Buffer.concat(provider.chunks)).toEqual(bytes);
+  });
+
+  test('generation-scoped cleanup cannot target a previously accepted object generation', async () => {
+    const bytes = jpeg(); const provider = storage(); const reserved = reservation();
+    const mutate = jest.fn(async () => { throw new Error('database unavailable'); });
+    await expect(ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes]), metadata: metadata(bytes),
+      csrfToken: 'x'.repeat(32), requestCorrelationId: 'generation-cleanup', authorizeUpload: jest.fn(async () => reserved), mutate })).rejects.toThrow();
+    expect(provider.deleteGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      objectId: reserved.body.data.objectId, storageGenerationId: reserved.body.data.storageGenerationId,
+      claimToken: reserved.body.data.claimToken,
+    }));
   });
 
   test('production default remains explicitly unavailable and retrieval is attachment-only for five minutes', async () => {
     expect(() => createUnavailableStorage().beginQuarantine()).toThrow(/not configured/);
     const provider = storage();
     await expect(createAuthorizedRetrieval(provider, { objectId: crypto.randomUUID(), organizationId: IDS.organizationId,
-      executionId: IDS.executionId, contentDigest: digest('a') })).resolves.toEqual(expect.objectContaining({ disposition: 'attachment', expiresInSeconds: 300 }));
+      executionId: IDS.executionId, storageGenerationId: crypto.randomUUID(), storageObjectVersion: 'object-version-1',
+      contentDigest: digest('a'), accessibility: { state: 'unavailable', description: null, reason: 'No description is available.' } }))
+      .resolves.toEqual(expect.objectContaining({ disposition: 'attachment', expiresInSeconds: 300,
+        accessibility: expect.objectContaining({ state: 'unavailable' }) }));
   });
 });

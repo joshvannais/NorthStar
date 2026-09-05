@@ -123,6 +123,18 @@ function evidenceIds(value) {
   }
   return Object.freeze(value.map(item => uuid(item)));
 }
+function accessibility(value) {
+  exactObject(value, new Set(['state', 'description', 'reason']), 'INVALID_FIELD_FILE_ACCESSIBILITY');
+  if (!['described', 'unavailable', 'needs_review'].includes(value.state)) {
+    fail(400, 'INVALID_FIELD_FILE_ACCESSIBILITY', 'An explicit field-file accessibility state is required.');
+  }
+  if (value.state === 'described') {
+    if (value.reason !== null) fail(400, 'INVALID_FIELD_FILE_ACCESSIBILITY', 'Described field files cannot include an unavailable reason.');
+    return Object.freeze({ state: value.state, description: inertText(value.description, 500), reason: null });
+  }
+  if (value.description !== null) fail(400, 'INVALID_FIELD_FILE_ACCESSIBILITY', 'Unavailable field files cannot include an invented description.');
+  return Object.freeze({ state: value.state, description: null, reason: inertText(value.reason, 500) });
+}
 function resultDocument(body, kindValue) {
   const type = resultType(body.resultType);
   const observed = inertText(body.observation, 2000);
@@ -196,7 +208,7 @@ function normalizeEvidenceAction(input) {
     expectedSubjectDigest = digest(body.expectedEvidenceDigest);
     const replacement = exactObject(body.replacement, new Set([
       'kind', 'resultType', 'observation', 'measurement', 'exception', 'supportingEvidenceIds',
-      'observationClass', 'checklistId', 'itemKey', 'note', 'caption',
+      'observationClass', 'checklistId', 'itemKey', 'note', 'caption', 'accessibility',
     ]));
     if (replacement.kind === 'note') {
       document = Object.freeze({ kind: 'note', note: inertText(replacement.note, 4000),
@@ -206,7 +218,10 @@ function normalizeEvidenceAction(input) {
     } else if (replacement.kind === 'checklist_response') {
       document = Object.freeze({ ...resultDocument(replacement, 'checklist_response'),
         checklistId: uuid(replacement.checklistId), itemKey: key(replacement.itemKey, 'Checklist item key') });
-    } else fail(400, 'INVALID_FIELD_EVIDENCE_CORRECTION', 'Only notes, observations, and item responses may be corrected.');
+    } else if (replacement.kind === 'file_accessibility') {
+      exactObject(replacement, new Set(['kind', 'accessibility']), 'INVALID_FIELD_FILE_ACCESSIBILITY');
+      document = Object.freeze({ kind: 'file_accessibility_correction', accessibility: accessibility(replacement.accessibility) });
+    } else fail(400, 'INVALID_FIELD_EVIDENCE_CORRECTION', 'Only notes, observations, item responses, and file accessibility may be corrected.');
   } else fail(400, 'INVALID_FIELD_EVIDENCE_ACTION', 'Field evidence action is invalid.');
   return Object.freeze({ ...base, action, subjectId, expectedSubjectRevision, expectedSubjectDigest, document });
 }
@@ -228,6 +243,7 @@ function normalizeFileHeaders(input, headers) {
   if (!FILE_MEDIA[contentType] || !FILE_MEDIA[contentType].extensions.has(extension)) fail(415, 'M23_FIELD_FILE_MEDIA_UNSUPPORTED', 'Field files are limited to allowlisted JPEG, PNG, and WebP media with matching extensions.');
   const contentLength = Number(headers['content-length']);
   if (!Number.isSafeInteger(contentLength) || contentLength < 1 || contentLength > MAX_FILE_BYTES) fail(413, 'M23_FIELD_FILE_SIZE_INVALID', 'A positive Content-Length within the 10 MiB file limit is required.');
+  const expectedContentDigest = digest(headers['x-content-sha256'], 'INVALID_FIELD_FILE_CONTENT_DIGEST');
   const flags = String(headers['x-privacy-flags'] || 'none').split(',').map(value => value.trim()).filter(Boolean);
   if (flags.length > 4 || new Set(flags).size !== flags.length || flags.some(value => !['none', 'faces', 'customer_property', 'signature'].includes(value)) ||
       (flags.includes('none') && flags.length !== 1) || flags.includes('signature')) fail(400, 'M23_FIELD_FILE_PRIVACY_GATED', 'Sensitive field media is unavailable without the exact permitted privacy gate; signatures are not accepted.');
@@ -240,7 +256,12 @@ function normalizeFileHeaders(input, headers) {
   }) : null;
   const retentionDays = Number(headers['x-retention-days']);
   if (!Number.isSafeInteger(retentionDays) || retentionDays < 1 || retentionDays > 365) fail(400, 'M23_FIELD_FILE_RETENTION_INVALID', 'Field file retention must be explicitly bounded from 1 to 365 days.');
-  return Object.freeze({ ...base, displayName, extension, contentType, contentLength, privacyFlags: flags, privacy, retentionDays });
+  const accessibilityState = headers['x-accessibility-state'];
+  const accessibilityValue = accessibility({ state: accessibilityState,
+    description: accessibilityState === 'described' ? headers['x-accessibility-description'] : null,
+    reason: accessibilityState === 'described' ? null : headers['x-accessibility-unavailable-reason'] });
+  return Object.freeze({ ...base, displayName, extension, contentType, contentLength,
+    expectedContentDigest, privacyFlags: flags, privacy, retentionDays, accessibility: accessibilityValue });
 }
 
 function detectMagic(buffer) {

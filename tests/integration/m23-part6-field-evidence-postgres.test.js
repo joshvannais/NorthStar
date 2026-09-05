@@ -106,12 +106,14 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       { ['safe\u202Ekey']: 'value' }, { kind: 'note', note: 'Safe note.', caption: null, unexpected: 'forged' },
       { kind: 'observation', observationClass: 'inspection', resultType: 'pass', observation: 'Observed.', measurement: null, exception: null,
         supportingEvidenceIds: ['not-a-uuid'], professionalConclusion: false },
-      { kind: 'file', objectId: crypto.randomUUID(), displayName: 'forged.png', extension: 'png', mediaType: 'image/jpeg',
-        byteCount: 1, contentDigest: digest('1'), quarantineDisposition: 'released_after_clean_scan', scannerVersion: 'scanner-v1',
+      { kind: 'file', uploadReservationId: crypto.randomUUID(), storageGenerationId: crypto.randomUUID(), storageObjectVersion: 'object-v1',
+        objectId: crypto.randomUUID(), displayName: 'forged.png', extension: 'png', mediaType: 'image/jpeg',
+        uploadByteCount: 1, byteCount: 1, expectedContentDigest: digest('1'), contentDigest: digest('1'), quarantineDisposition: 'released_after_clean_scan', scannerVersion: 'scanner-v1',
         scannerEvidenceDigest: digest('2'), metadataRemovalDigest: digest('3'), storageCapabilityVersion: 'storage-v1',
         storageCapabilityDigest: digest('4'), encryptionAtRest: true, decompressionSafe: true,
         decodedPixelCount: 12000000, activeContentInline: false, privacyFlags: ['none'],
-        privacyPolicy: null, retentionDays: 30, consentOrComplianceConclusion: false, malwareClearanceClaim: false },
+        privacyPolicy: null, retentionDays: 30, accessibility: { state: 'unavailable', description: null, reason: 'No description is available.' },
+        consentOrComplianceConclusion: false, malwareClearanceClaim: false },
     ]);
     expect(invalid.rows[0]).toEqual({ hostile_key: false, extra_field: false, forged_link: false, mismatched_media: false });
     expect(await db.runMigrations({ pool: ownerPool, runtimePool })).toBe(true);
@@ -177,57 +179,93 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
   });
 
   test('registers only released encrypted bounded file metadata and authorizes short-lived retrieval separately', async () => {
-    const objectId = crypto.randomUUID();
-    const uploadAuthority = { ...actor, executionId: execution.id, performerProfileId: IDS.member, objectId,
+    const key = crypto.randomUUID();
+    const uploadAuthority = { ...actor, executionId: execution.id, performerProfileId: IDS.member,
       expectedExecutionRevision: execution.revision, expectedExecutionDigest: execution.digest,
       expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
-      idempotencyKey: crypto.randomUUID(), csrfToken: session.csrfToken };
-    await expect(authorizeFileUpload(runtimePool, uploadAuthority)).resolves.toMatchObject({ body: { data: { objectId, authorized: true } } });
+      displayName: 'arrival.jpg', extension: 'jpg', contentType: 'image/jpeg', contentLength: 16,
+      expectedContentDigest: digest('3'), privacyFlags: ['none'], privacy: null, retentionDays: 30,
+      accessibility: { state: 'unavailable', description: null, reason: 'A trustworthy description is not available.' },
+      idempotencyKey: key, reason: 'Register released storage metadata.', requestCorrelationId: 'p6-file', csrfToken: session.csrfToken };
+    const reservation = await authorizeFileUpload(runtimePool, uploadAuthority);
+    expect(reservation).toMatchObject({ status: 200, replayed: false, body: { data: {
+      reservationId: expect.any(String), storageGenerationId: expect.any(String), objectId: expect.any(String), claimToken: expect.stringMatching(/^[0-9a-f]{64}$/),
+    } } });
+    const { reservationId, storageGenerationId, objectId, claimToken } = reservation.body.data;
+    await expect(authorizeFileUpload(runtimePool, uploadAuthority)).rejects.toMatchObject({ status: 409, code: 'M23_FIELD_UPLOAD_IN_PROGRESS' });
+    await expect(authorizeFileUpload(runtimePool, { ...uploadAuthority, expectedContentDigest: digest('9') })).rejects.toMatchObject({ status: 409, code: 'M23_FIELD_EVIDENCE_IDEMPOTENCY_CONFLICT' });
     await expect(authorizeFileUpload(runtimePool, { ...uploadAuthority, expectedAssignmentRevision: 3 })).rejects.toMatchObject({ status: 409 });
-    const document = { kind: 'file', objectId, displayName: 'arrival.jpg', extension: 'jpg', mediaType: 'image/jpeg',
-      byteCount: 16, contentDigest: digest('3'), quarantineDisposition: 'released_after_clean_scan', scannerVersion: 'scanner-v1',
+    const document = { kind: 'file', uploadReservationId: reservationId, storageGenerationId, storageObjectVersion: 'object-version-1',
+      objectId, displayName: 'arrival.jpg', extension: 'jpg', mediaType: 'image/jpeg',
+      uploadByteCount: 16, byteCount: 16, expectedContentDigest: digest('3'), contentDigest: digest('3'), quarantineDisposition: 'released_after_clean_scan', scannerVersion: 'scanner-v1',
       scannerEvidenceDigest: digest('4'), metadataRemovalDigest: digest('5'), storageCapabilityVersion: 'storage-v1',
       storageCapabilityDigest: digest('6'), encryptionAtRest: true, decompressionSafe: true,
       decodedPixelCount: 12000000, activeContentInline: false, privacyFlags: ['none'],
-      privacyPolicy: null, retentionDays: 30,
+      privacyPolicy: null, retentionDays: 30, accessibility: uploadAuthority.accessibility,
       consentOrComplianceConclusion: false, malwareClearanceClaim: false };
     const saved = await mutateFieldEvidence(runtimePool, { ...actor, executionId: execution.id, action: 'register_file', performerProfileId: IDS.member,
       subjectId: null, expectedSubjectRevision: null, expectedSubjectDigest: null, expectedExecutionRevision: execution.revision,
       expectedExecutionDigest: execution.digest, expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
-      document, idempotencyKey: crypto.randomUUID(), reason: 'Register released storage metadata.', requestCorrelationId: 'p6-file' });
+      document, uploadClaimToken: claimToken, idempotencyKey: key, reason: uploadAuthority.reason, requestCorrelationId: uploadAuthority.requestCorrelationId });
     expect(saved.body.data.document).toMatchObject({ objectId, malwareClearanceClaim: false, retentionDays: 30,
-      retainedUntil: expect.any(String) });
+      accessibility: { state: 'unavailable' }, retainedUntil: expect.any(String) });
+    const replay = await authorizeFileUpload(runtimePool, uploadAuthority);
+    expect(replay).toMatchObject({ status: 201, replayed: true, body: saved.body });
+    await expect(authorizeFileUpload(runtimePool, { ...uploadAuthority, expectedContentDigest: digest('9') })).rejects.toMatchObject({ status: 409 });
+    expect((await ownerPool.query('SELECT object_id,storage_generation_id,status FROM canonical_field_evidence_file_upload_reservations WHERE organization_id=$1 AND key_hash=encode(sha256(convert_to($2,\'UTF8\')),\'hex\')', [IDS.org, key])).rows[0]).toMatchObject({ object_id: objectId, storage_generation_id: storageGenerationId, status: 'accepted' });
     await ownerPool.query('BEGIN');
     const ownedAccess = await ownerPool.query(`INSERT INTO canonical_field_evidence_file_access_events(
-      organization_id,execution_id,record_id,object_id,content_digest,actor_user_id,auth_session_id,transaction_id,authorized_at)
-      VALUES($1,$2,$3,$4,$5,$6,$7,1,'2000-01-01T00:00:00Z') RETURNING transaction_id,authorized_at`,
-    [IDS.org, execution.id, saved.body.data.id, objectId, document.contentDigest, IDS.owner, session.sessionId]);
+      organization_id,execution_id,record_id,object_id,storage_generation_id,storage_object_version,content_digest,accessibility,actor_user_id,auth_session_id,transaction_id,authorized_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,'2000-01-01T00:00:00Z') RETURNING transaction_id,authorized_at`,
+    [IDS.org, execution.id, saved.body.data.id, objectId, storageGenerationId, document.storageObjectVersion, document.contentDigest, document.accessibility, IDS.owner, session.sessionId]);
     expect(Number(ownedAccess.rows[0].transaction_id)).not.toBe(1);
     expect(ownedAccess.rows[0].authorized_at.toISOString()).not.toBe('2000-01-01T00:00:00.000Z');
     await ownerPool.query('ROLLBACK');
     await ownerPool.query('BEGIN');
     await expect(ownerPool.query(`INSERT INTO canonical_field_evidence_file_access_events(
-      organization_id,execution_id,record_id,object_id,content_digest,actor_user_id,auth_session_id)
-      VALUES($1,$2,$3,$4,$5,$6,$7)`,
-    [IDS.org, execution.id, saved.body.data.id, objectId, digest('9'), IDS.owner, session.sessionId]))
+      organization_id,execution_id,record_id,object_id,storage_generation_id,storage_object_version,content_digest,accessibility,actor_user_id,auth_session_id)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [IDS.org, execution.id, saved.body.data.id, objectId, storageGenerationId, document.storageObjectVersion, digest('9'), document.accessibility, IDS.owner, session.sessionId]))
       .rejects.toMatchObject({ code: '23514' });
     await ownerPool.query('ROLLBACK');
+    const corrected = await mutate({ ...common('correct'), evidenceId: saved.body.data.id,
+      expectedEvidenceRevision: saved.body.data.revision, expectedEvidenceDigest: saved.body.data.digest,
+      replacement: { kind: 'file_accessibility', accessibility: { state: 'described', description: 'Photo of the recorded arrival condition.', reason: null } } });
+    expect(corrected.body.data).toMatchObject({ type: 'file', previousRecordId: saved.body.data.id,
+      document: { objectId, storageGenerationId, accessibility: { state: 'described' } } });
     await expect(authorizeFileRetrieval(runtimePool, { organizationId: IDS.org, actorUserId: IDS.owner, actorAccessRole: 'owner',
       authSessionId: session.sessionId, executionId: execution.id, objectId })).resolves.toMatchObject({ objectId, executionId: execution.id,
+      storageGenerationId, storageObjectVersion: 'object-version-1', accessibility: { state: 'described' },
       accessEventId: expect.any(String), authorizedAt: expect.any(String) });
     expect((await ownerPool.query('SELECT count(*)::int AS count FROM canonical_field_evidence_file_access_events WHERE organization_id=$1 AND object_id=$2', [IDS.org, objectId])).rows[0].count).toBe(1);
     await expect(authorizeFileRetrieval(runtimePool, { organizationId: IDS.otherOrg, actorUserId: IDS.otherOwner, actorAccessRole: 'owner',
       authSessionId: session.sessionId, executionId: execution.id, objectId })).rejects.toMatchObject({ status: 403 });
+    const concurrencyKey = crypto.randomUUID(); const concurrencyAuthority = { ...uploadAuthority, idempotencyKey: concurrencyKey,
+      requestCorrelationId: 'p6-concurrent-file' };
+    const concurrent = await Promise.allSettled([authorizeFileUpload(runtimePool, concurrencyAuthority), authorizeFileUpload(runtimePool, concurrencyAuthority)]);
+    expect(concurrent.filter(value => value.status === 'fulfilled')).toHaveLength(1);
+    expect(concurrent.filter(value => value.status === 'rejected')[0].reason).toMatchObject({ code: 'M23_FIELD_UPLOAD_IN_PROGRESS' });
+
     const consent = await mutate({ ...common('record_note'), note: 'Configured sensitive-media policy evidence.', caption: null });
-    const sensitiveObject = crypto.randomUUID(); const sensitive = { ...document, objectId: sensitiveObject,
-      displayName: 'private-area.jpg', contentDigest: digest('7'), privacyFlags: ['faces', 'customer_property'],
-      privacyPolicy: { policyVersion: 'm23-private-media-v1', policyDigest: digest('8'),
-        consentEvidenceId: consent.body.data.id, consentEvidenceDigest: consent.body.data.digest } };
+    const sensitiveKey = crypto.randomUUID(); const sensitiveAuthority = { ...uploadAuthority, idempotencyKey: sensitiveKey,
+      displayName: 'private-area.jpg', expectedContentDigest: digest('7'), privacyFlags: ['faces', 'customer_property'],
+      privacy: { policyVersion: 'm23-private-media-v1', policyDigest: digest('8'),
+        consentEvidenceId: consent.body.data.id, consentEvidenceDigest: consent.body.data.digest },
+      accessibility: { state: 'needs_review', description: null, reason: 'An authorized reviewer must verify the description.' },
+      reason: 'Register policy-evidenced sensitive metadata.', requestCorrelationId: 'p6-sensitive-file' };
+    const sensitiveReservation = await authorizeFileUpload(runtimePool, sensitiveAuthority); const sensitiveReserved = sensitiveReservation.body.data;
+    const sensitive = { ...document, uploadReservationId: sensitiveReserved.reservationId,
+      storageGenerationId: sensitiveReserved.storageGenerationId, objectId: sensitiveReserved.objectId,
+      displayName: sensitiveAuthority.displayName, expectedContentDigest: digest('7'), contentDigest: digest('7'),
+      privacyFlags: sensitiveAuthority.privacyFlags, privacyPolicy: sensitiveAuthority.privacy,
+      accessibility: sensitiveAuthority.accessibility };
     await expect(mutateFieldEvidence(runtimePool, { ...actor, executionId: execution.id, action: 'register_file', performerProfileId: IDS.member,
       subjectId: null, expectedSubjectRevision: null, expectedSubjectDigest: null, expectedExecutionRevision: execution.revision,
       expectedExecutionDigest: execution.digest, expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
-      document: sensitive, idempotencyKey: crypto.randomUUID(), reason: 'Register policy-evidenced sensitive metadata.', requestCorrelationId: 'p6-sensitive-file' }))
-      .resolves.toMatchObject({ body: { data: { document: { objectId: sensitiveObject, consentOrComplianceConclusion: false } } } });
+      document: sensitive, uploadClaimToken: sensitiveReserved.claimToken, idempotencyKey: sensitiveKey,
+      reason: sensitiveAuthority.reason, requestCorrelationId: sensitiveAuthority.requestCorrelationId }))
+      .resolves.toMatchObject({ body: { data: { document: { objectId: sensitiveReserved.objectId,
+        accessibility: { state: 'needs_review' }, consentOrComplianceConclusion: false } } } });
   });
 
   test('returns one stable bounded snapshot cursor and mounts JSON plus explicit unavailable-storage routes', async () => {
@@ -254,7 +292,10 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       .set('X-Execution-Revision', String(execution.revision)).set('X-Execution-Digest', execution.digest)
       .set('X-Assignment-Revision', String(assignment.revision)).set('X-Assignment-Digest', assignment.digest)
       .set('X-Evidence-Reason', 'Mounted unavailable storage check.').set('X-File-Name', 'arrival.jpg')
-      .set('X-Privacy-Flags', 'none').set('X-Retention-Days', '30').send(image);
+      .set('X-Privacy-Flags', 'none').set('X-Retention-Days', '30')
+      .set('X-Content-SHA256', crypto.createHash('sha256').update(image).digest('hex'))
+      .set('X-Accessibility-State', 'unavailable').set('X-Accessibility-Unavailable-Reason', 'A description is not available.')
+      .send(image);
     expect(upload.status).toBe(503); expect(upload.body.error.code).toBe('M23_FIELD_STORAGE_UNAVAILABLE');
   });
 });

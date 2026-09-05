@@ -44,6 +44,42 @@ SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT value ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
 $$;
 
+CREATE FUNCTION public.canonical_field_evidence_accessibility_valid(value JSONB)
+RETURNS BOOLEAN LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+SET search_path=pg_catalog,public,pg_temp AS $$
+ SELECT public.canonical_field_evidence_object_keys_exact(value,ARRAY['state','description','reason']) AND (
+   (value->>'state'='described' AND length(value->>'description') BETWEEN 1 AND 500 AND value->'reason'='null'::jsonb) OR
+   (value->>'state' IN ('unavailable','needs_review') AND value->'description'='null'::jsonb AND length(value->>'reason') BETWEEN 1 AND 500)
+ )
+$$;
+
+CREATE FUNCTION public.canonical_field_file_request_valid(value JSONB)
+RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ IF NOT public.canonical_field_evidence_json_valid(value)
+ OR NOT public.canonical_field_evidence_object_keys_exact(value,ARRAY['displayName','extension','contentType','contentLength','expectedContentDigest','privacyFlags','privacyPolicy','retentionDays','accessibility'])
+ OR length(value->>'displayName') NOT BETWEEN 1 AND 120 OR value->>'displayName' LIKE '%..%'
+ OR value->>'contentType' NOT IN ('image/jpeg','image/png','image/webp')
+ OR value->>'extension' NOT IN ('jpg','jpeg','png','webp')
+ OR NOT ((value->>'contentType'='image/jpeg' AND value->>'extension' IN ('jpg','jpeg')) OR (value->>'contentType'='image/png' AND value->>'extension'='png') OR (value->>'contentType'='image/webp' AND value->>'extension'='webp'))
+ OR (value->>'contentLength')::bigint NOT BETWEEN 1 AND 10485760
+ OR value->>'expectedContentDigest' !~ '^[0-9a-f]{64}$'
+ OR (value->>'retentionDays')::integer NOT BETWEEN 1 AND 365
+ OR jsonb_typeof(value->'privacyFlags')<>'array' OR jsonb_array_length(value->'privacyFlags') NOT BETWEEN 1 AND 3
+ OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(value->'privacyFlags') flag WHERE flag NOT IN ('none','faces','customer_property'))
+ OR NOT (SELECT count(*)=count(DISTINCT flag) FROM jsonb_array_elements_text(value->'privacyFlags') flags(flag))
+ OR NOT public.canonical_field_evidence_accessibility_valid(value->'accessibility') THEN RETURN FALSE; END IF;
+ IF value->'privacyFlags'='["none"]'::jsonb THEN RETURN value->'privacyPolicy'='null'::jsonb; END IF;
+ RETURN NOT (value->'privacyFlags' ? 'none')
+   AND public.canonical_field_evidence_object_keys_exact(value->'privacyPolicy',ARRAY['policyVersion','policyDigest','consentEvidenceId','consentEvidenceDigest'])
+   AND length(value->'privacyPolicy'->>'policyVersion') BETWEEN 1 AND 80
+   AND value->'privacyPolicy'->>'policyDigest' ~ '^[0-9a-f]{64}$'
+   AND public.canonical_field_evidence_uuid_valid(value->'privacyPolicy'->>'consentEvidenceId')
+   AND value->'privacyPolicy'->>'consentEvidenceDigest' ~ '^[0-9a-f]{64}$';
+EXCEPTION WHEN others THEN RETURN FALSE;
+END $$;
+
 CREATE FUNCTION public.canonical_field_evidence_document_valid(action_value TEXT, document_value JSONB)
 RETURNS BOOLEAN LANGUAGE plpgsql STABLE PARALLEL SAFE
 SET search_path=pg_catalog,public,pg_temp AS $$
@@ -86,14 +122,23 @@ BEGIN
   ELSIF action_value IN ('record_note','correct') AND document_value->>'kind'='note' THEN
     RETURN public.canonical_field_evidence_object_keys_exact(document_value,ARRAY['kind','note','caption'])
       AND length(document_value->>'note') BETWEEN 1 AND 4000 AND (document_value->'caption'='null'::jsonb OR length(document_value->>'caption') BETWEEN 1 AND 500);
+  ELSIF action_value='correct' AND document_value->>'kind'='file_accessibility_correction' THEN
+    RETURN public.canonical_field_evidence_object_keys_exact(document_value,ARRAY['kind','accessibility'])
+      AND public.canonical_field_evidence_accessibility_valid(document_value->'accessibility');
   ELSIF action_value='register_file' THEN
-    RETURN public.canonical_field_evidence_object_keys_exact(document_value,ARRAY['kind','objectId','displayName','extension','mediaType','byteCount','contentDigest','quarantineDisposition','scannerVersion','scannerEvidenceDigest','metadataRemovalDigest','storageCapabilityVersion','storageCapabilityDigest','encryptionAtRest','decompressionSafe','decodedPixelCount','activeContentInline','privacyFlags','privacyPolicy','retentionDays','consentOrComplianceConclusion','malwareClearanceClaim'])
-      AND document_value->>'kind'='file' AND public.canonical_field_evidence_uuid_valid(document_value->>'objectId')
+    RETURN public.canonical_field_evidence_object_keys_exact(document_value,ARRAY['kind','uploadReservationId','storageGenerationId','storageObjectVersion','objectId','displayName','extension','mediaType','uploadByteCount','byteCount','expectedContentDigest','contentDigest','quarantineDisposition','scannerVersion','scannerEvidenceDigest','metadataRemovalDigest','storageCapabilityVersion','storageCapabilityDigest','encryptionAtRest','decompressionSafe','decodedPixelCount','activeContentInline','privacyFlags','privacyPolicy','retentionDays','accessibility','consentOrComplianceConclusion','malwareClearanceClaim'])
+      AND document_value->>'kind'='file'
+      AND public.canonical_field_evidence_uuid_valid(document_value->>'uploadReservationId')
+      AND public.canonical_field_evidence_uuid_valid(document_value->>'storageGenerationId')
+      AND (document_value->>'storageObjectVersion') ~ '^[a-z0-9][a-z0-9._:-]{0,127}$'
+      AND public.canonical_field_evidence_uuid_valid(document_value->>'objectId')
       AND length(document_value->>'displayName') BETWEEN 1 AND 120
       AND document_value->>'mediaType' IN ('image/jpeg','image/png','image/webp')
       AND (document_value->>'extension') IN ('jpg','jpeg','png','webp')
       AND ((document_value->>'mediaType'='image/jpeg' AND document_value->>'extension' IN ('jpg','jpeg')) OR (document_value->>'mediaType'='image/png' AND document_value->>'extension'='png') OR (document_value->>'mediaType'='image/webp' AND document_value->>'extension'='webp'))
+      AND (document_value->>'uploadByteCount')::bigint BETWEEN 1 AND 10485760
       AND (document_value->>'byteCount')::bigint BETWEEN 1 AND 10485760
+      AND (document_value->>'expectedContentDigest') ~ '^[0-9a-f]{64}$'
       AND (document_value->>'contentDigest') ~ '^[0-9a-f]{64}$'
       AND document_value->>'quarantineDisposition'='released_after_clean_scan'
       AND (document_value->>'scannerVersion') ~ '^[a-z0-9][a-z0-9._-]{0,79}$'
@@ -119,7 +164,8 @@ BEGIN
           AND public.canonical_field_evidence_uuid_valid(document_value->'privacyPolicy'->>'consentEvidenceId')
           AND (document_value->'privacyPolicy'->>'consentEvidenceDigest') ~ '^[0-9a-f]{64}$'))
       AND (document_value->>'retentionDays') ~ '^[1-9][0-9]{0,2}$'
-      AND (document_value->>'retentionDays')::integer BETWEEN 1 AND 365;
+      AND (document_value->>'retentionDays')::integer BETWEEN 1 AND 365
+      AND public.canonical_field_evidence_accessibility_valid(document_value->'accessibility');
   END IF;
   RETURN FALSE;
 EXCEPTION WHEN others THEN RETURN FALSE;
@@ -154,6 +200,7 @@ CREATE TABLE public.canonical_field_evidence_records (
     (action_code='record_observation' AND evidence_type='observation' AND public.canonical_field_evidence_document_valid(action_code,document)) OR
     (action_code='record_note' AND evidence_type='note' AND public.canonical_field_evidence_document_valid(action_code,document)) OR
     (action_code='correct' AND evidence_type IN ('checklist_response','observation','note') AND public.canonical_field_evidence_document_valid(action_code,document)) OR
+    (action_code='correct' AND evidence_type='file' AND public.canonical_field_evidence_document_valid('register_file',document-'retainedUntil')) OR
     (action_code='register_file' AND evidence_type='file' AND public.canonical_field_evidence_document_valid(action_code,document-'retainedUntil') AND
       document->>'retainedUntil' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$')
   )),
@@ -161,7 +208,7 @@ CREATE TABLE public.canonical_field_evidence_records (
   CONSTRAINT canonical_field_evidence_records_correlation_check CHECK(request_correlation_id~'^[ -~]{1,128}$')
 );
 CREATE INDEX canonical_field_evidence_records_execution_time ON public.canonical_field_evidence_records(organization_id,execution_id,decided_at DESC,id DESC);
-CREATE UNIQUE INDEX canonical_field_evidence_object_unique ON public.canonical_field_evidence_records(organization_id,((document->>'objectId'))) WHERE evidence_type='file';
+CREATE UNIQUE INDEX canonical_field_evidence_object_unique ON public.canonical_field_evidence_records(organization_id,((document->>'objectId'))) WHERE evidence_type='file' AND previous_record_id IS NULL;
 
 CREATE FUNCTION public.canonical_field_evidence_record_digest_valid(record_value public.canonical_field_evidence_records)
 RETURNS BOOLEAN LANGUAGE SQL IMMUTABLE PARALLEL SAFE SET search_path=pg_catalog,public,pg_temp AS $$
@@ -233,9 +280,41 @@ CREATE TABLE public.canonical_field_evidence_idempotency (
   CONSTRAINT canonical_field_evidence_idempotency_response_check CHECK(action_code IN ('create_checklist','respond_item','record_observation','record_note','correct','register_file') AND response_status=201 AND jsonb_typeof(response_body)='object')
 );
 
+CREATE TABLE public.canonical_field_evidence_file_upload_reservations (
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+  actor_user_id UUID NOT NULL, auth_session_id UUID NOT NULL, key_hash CHAR(64) NOT NULL,
+  request_digest CHAR(64) NOT NULL, request_document JSONB NOT NULL,
+  execution_id UUID NOT NULL, performer_profile_id UUID NOT NULL,
+  source_execution_revision BIGINT NOT NULL, source_execution_digest CHAR(64) NOT NULL,
+  source_assignment_revision BIGINT NOT NULL, source_assignment_digest CHAR(64) NOT NULL,
+  reason TEXT NOT NULL, request_correlation_id VARCHAR(128) NOT NULL,
+  reservation_id UUID NOT NULL DEFAULT gen_random_uuid(), storage_generation_id UUID NOT NULL DEFAULT gen_random_uuid(),
+  object_id UUID NOT NULL DEFAULT gen_random_uuid(), claim_token_hash CHAR(64) NOT NULL,
+  lease_until TIMESTAMPTZ NOT NULL, status TEXT NOT NULL DEFAULT 'pending', record_id UUID,
+  response_status INTEGER, response_body JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(), updated_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+  PRIMARY KEY(organization_id,actor_user_id,auth_session_id,key_hash),
+  CONSTRAINT canonical_field_file_upload_reservation_identity UNIQUE(organization_id,reservation_id),
+  CONSTRAINT canonical_field_file_upload_generation_identity UNIQUE(organization_id,storage_generation_id),
+  CONSTRAINT canonical_field_file_upload_object_identity UNIQUE(organization_id,object_id),
+  CONSTRAINT canonical_field_file_upload_actor_fk FOREIGN KEY(organization_id,actor_user_id) REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_upload_session_fk FOREIGN KEY(organization_id,actor_user_id,auth_session_id) REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_upload_execution_fk FOREIGN KEY(organization_id,execution_id) REFERENCES public.canonical_field_executions(organization_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_upload_performer_fk FOREIGN KEY(organization_id,performer_profile_id) REFERENCES public.workforce_profiles(organization_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_upload_record_fk FOREIGN KEY(organization_id,record_id) REFERENCES public.canonical_field_evidence_records(organization_id,id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+  CONSTRAINT canonical_field_file_upload_digest_check CHECK(key_hash~'^[0-9a-f]{64}$' AND request_digest~'^[0-9a-f]{64}$' AND claim_token_hash~'^[0-9a-f]{64}$' AND source_execution_digest~'^[0-9a-f]{64}$' AND source_assignment_digest~'^[0-9a-f]{64}$'),
+  CONSTRAINT canonical_field_file_upload_request_check CHECK(public.canonical_field_file_request_valid(request_document) AND source_execution_revision>=1 AND source_assignment_revision>=1 AND public.canonical_field_execution_reason_valid(reason) AND request_correlation_id~'^[ -~]{1,128}$'),
+  CONSTRAINT canonical_field_file_upload_state_check CHECK(
+    (status='pending' AND record_id IS NULL AND response_status IS NULL AND response_body IS NULL) OR
+    (status='accepted' AND record_id IS NOT NULL AND response_status=201 AND jsonb_typeof(response_body)='object')
+  )
+);
+
 CREATE TABLE public.canonical_field_evidence_file_access_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
-  execution_id UUID NOT NULL, record_id UUID NOT NULL, object_id UUID NOT NULL, content_digest CHAR(64) NOT NULL,
+  execution_id UUID NOT NULL, record_id UUID NOT NULL, object_id UUID NOT NULL,
+  storage_generation_id UUID NOT NULL, storage_object_version VARCHAR(128) NOT NULL,
+  content_digest CHAR(64) NOT NULL, accessibility JSONB NOT NULL,
   actor_user_id UUID NOT NULL, auth_session_id UUID NOT NULL,
   transaction_id BIGINT NOT NULL DEFAULT txid_current(), authorized_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
   CONSTRAINT canonical_field_file_access_tenant_identity UNIQUE(organization_id,id),
@@ -243,7 +322,8 @@ CREATE TABLE public.canonical_field_evidence_file_access_events (
   CONSTRAINT canonical_field_file_access_record_fk FOREIGN KEY(organization_id,record_id) REFERENCES public.canonical_field_evidence_records(organization_id,id) ON DELETE RESTRICT,
   CONSTRAINT canonical_field_file_access_actor_fk FOREIGN KEY(organization_id,actor_user_id) REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
   CONSTRAINT canonical_field_file_access_session_fk FOREIGN KEY(organization_id,actor_user_id,auth_session_id) REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT,
-  CONSTRAINT canonical_field_file_access_digest_check CHECK(content_digest~'^[0-9a-f]{64}$')
+  CONSTRAINT canonical_field_file_access_digest_check CHECK(content_digest~'^[0-9a-f]{64}$'),
+  CONSTRAINT canonical_field_file_access_storage_check CHECK(storage_object_version~'^[a-z0-9][a-z0-9._:-]{0,127}$' AND public.canonical_field_evidence_accessibility_valid(accessibility))
 );
 CREATE INDEX canonical_field_evidence_file_access_record_time ON public.canonical_field_evidence_file_access_events(organization_id,record_id,authorized_at DESC,id DESC);
 
@@ -271,7 +351,7 @@ CREATE FUNCTION public.canonical_field_evidence_own_access() RETURNS TRIGGER LAN
 SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
  NEW.transaction_id:=txid_current(); NEW.authorized_at:=transaction_timestamp();
- IF NOT EXISTS(SELECT 1 FROM public.canonical_field_evidence_records r WHERE r.organization_id=NEW.organization_id AND r.execution_id=NEW.execution_id AND r.id=NEW.record_id AND r.evidence_type='file' AND r.document->>'objectId'=NEW.object_id::text AND r.document->>'contentDigest'=NEW.content_digest) THEN
+ IF NOT EXISTS(SELECT 1 FROM public.canonical_field_evidence_records r WHERE r.organization_id=NEW.organization_id AND r.execution_id=NEW.execution_id AND r.id=NEW.record_id AND r.evidence_type='file' AND r.document->>'objectId'=NEW.object_id::text AND r.document->>'storageGenerationId'=NEW.storage_generation_id::text AND r.document->>'storageObjectVersion'=NEW.storage_object_version AND r.document->>'contentDigest'=NEW.content_digest AND r.document->'accessibility'=NEW.accessibility) THEN
    RAISE EXCEPTION 'File access evidence diverges from record' USING ERRCODE='23514',CONSTRAINT='canonical_field_file_access_divergent';
  END IF;
  RETURN NEW;
@@ -306,18 +386,25 @@ $$;
 
 CREATE FUNCTION public.canonical_field_file_upload_authorize(
  org UUID, actor UUID, role_value TEXT, session_value UUID, csrf_value TEXT, execution_value UUID,
- performer UUID, object_value UUID, expected_execution_revision BIGINT, expected_execution_digest TEXT,
- expected_assignment_revision BIGINT, expected_assignment_digest TEXT, idempotency_key TEXT
+ performer UUID, request_value JSONB, expected_execution_revision BIGINT, expected_execution_digest TEXT,
+ expected_assignment_revision BIGINT, expected_assignment_digest TEXT, idempotency_key TEXT,
+ reason_value TEXT, correlation_value TEXT
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB; execution_record public.canonical_field_executions%ROWTYPE; assignment_record public.canonical_schedule_assignments%ROWTYPE;
+ reservation public.canonical_field_evidence_file_upload_reservations%ROWTYPE; key_hash_value TEXT; request_hash_value TEXT;
+ claim_token TEXT; now_value TIMESTAMPTZ:=transaction_timestamp(); reservation_value UUID; generation_value UUID; object_value UUID;
+ reservation_found BOOLEAN;
 BEGIN
- IF current_setting('transaction_isolation')<>'serializable' OR object_value IS NULL
+ IF current_setting('transaction_isolation')<>'serializable' OR NOT public.canonical_field_file_request_valid(request_value)
  OR idempotency_key IS NULL OR idempotency_key !~ '^[!-~]{16,128}$'
  OR expected_execution_revision IS NULL OR expected_execution_digest !~ '^[0-9a-f]{64}$'
- OR expected_assignment_revision IS NULL OR expected_assignment_digest !~ '^[0-9a-f]{64}$' THEN
+ OR expected_assignment_revision IS NULL OR expected_assignment_digest !~ '^[0-9a-f]{64}$'
+ OR NOT public.canonical_field_execution_reason_valid(reason_value) OR correlation_value !~ '^[ -~]{1,128}$' THEN
    RAISE EXCEPTION 'Invalid field file authorization input' USING ERRCODE='22023';
  END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf_value,TRUE);
+ key_hash_value:=encode(sha256(convert_to(idempotency_key,'UTF8')),'hex');
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':field-evidence:'||key_hash_value,0));
  SELECT * INTO execution_record FROM public.canonical_field_executions WHERE organization_id=org AND id=execution_value FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Execution unavailable' USING ERRCODE='P0002',CONSTRAINT='canonical_field_evidence_not_found'; END IF;
  SELECT * INTO assignment_record FROM public.canonical_schedule_assignments WHERE organization_id=org AND id=execution_record.assignment_id FOR SHARE;
@@ -333,24 +420,63 @@ BEGIN
    WHERE p.organization_id=org AND p.id=performer AND m.status='active' AND u.status='active'
    AND (assignment_record.workforce_profile_id=p.id OR (assignment_record.workforce_crew_id IS NOT NULL AND EXISTS(SELECT 1 FROM public.workforce_crew_members cm WHERE cm.organization_id=org AND cm.crew_id=assignment_record.workforce_crew_id AND cm.profile_id=p.id))))
  OR (role_value='member' AND performer<>(authority->>'profileId')::uuid) THEN RAISE EXCEPTION 'Performer unavailable' USING ERRCODE='42501'; END IF;
- RETURN jsonb_build_object('status',200,'body',jsonb_build_object('success',TRUE,'data',jsonb_build_object('objectId',object_value,'authorized',TRUE)),'replayed',FALSE);
+ request_hash_value:=encode(sha256(convert_to(jsonb_build_object('organizationId',org,'actorUserId',actor,'sessionId',session_value,'executionId',execution_value,'action','register_file','performerId',performer,'subjectId',NULL,'expectedSubjectRevision',NULL,'expectedSubjectDigest',NULL,'expectedExecutionRevision',expected_execution_revision,'expectedExecutionDigest',expected_execution_digest,'expectedAssignmentRevision',expected_assignment_revision,'expectedAssignmentDigest',expected_assignment_digest,'request',request_value,'keyHash',key_hash_value,'reason',reason_value)::text,'UTF8')),'hex');
+ SELECT * INTO reservation FROM public.canonical_field_evidence_file_upload_reservations r
+  WHERE r.organization_id=org AND r.actor_user_id=actor AND r.auth_session_id=session_value AND r.key_hash=key_hash_value FOR UPDATE;
+ reservation_found:=FOUND;
+ IF reservation_found THEN
+   IF rtrim(reservation.request_digest)<>request_hash_value OR reservation.execution_id<>execution_value OR reservation.performer_profile_id<>performer OR reservation.request_correlation_id<>correlation_value THEN
+     RAISE EXCEPTION 'Idempotency conflict' USING ERRCODE='23505',CONSTRAINT='canonical_field_evidence_idempotency_conflict';
+   END IF;
+   IF reservation.status='accepted' THEN
+     RETURN jsonb_build_object('status',reservation.response_status,'body',reservation.response_body,'replayed',TRUE);
+   END IF;
+   IF reservation.lease_until>clock_timestamp() THEN
+     RAISE EXCEPTION 'Upload already in progress' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_upload_busy';
+   END IF;
+ ELSE
+   IF (SELECT count(*) FROM public.canonical_field_evidence_file_upload_reservations r WHERE r.organization_id=org AND r.execution_id=execution_value)>=2000 THEN
+     RAISE EXCEPTION 'Upload reservation limit' USING ERRCODE='54000',CONSTRAINT='canonical_field_evidence_upload_reservation_limit';
+   END IF;
+ END IF;
+ claim_token:=encode(sha256(convert_to(gen_random_uuid()::text||clock_timestamp()::text||txid_current()::text,'UTF8')),'hex'); reservation_value:=gen_random_uuid(); generation_value:=gen_random_uuid(); object_value:=gen_random_uuid();
+ IF reservation_found THEN
+   UPDATE public.canonical_field_evidence_file_upload_reservations SET
+    reservation_id=reservation_value,storage_generation_id=generation_value,object_id=object_value,
+    claim_token_hash=encode(sha256(convert_to(claim_token,'UTF8')),'hex'),lease_until=now_value+interval '15 minutes',updated_at=now_value
+    WHERE organization_id=org AND actor_user_id=actor AND auth_session_id=session_value AND key_hash=key_hash_value;
+ ELSE
+   INSERT INTO public.canonical_field_evidence_file_upload_reservations(
+    organization_id,actor_user_id,auth_session_id,key_hash,request_digest,request_document,execution_id,performer_profile_id,
+    source_execution_revision,source_execution_digest,source_assignment_revision,source_assignment_digest,reason,request_correlation_id,
+    reservation_id,storage_generation_id,object_id,claim_token_hash,lease_until)
+   VALUES(org,actor,session_value,key_hash_value,request_hash_value,request_value,execution_value,performer,
+    expected_execution_revision,expected_execution_digest,expected_assignment_revision,expected_assignment_digest,reason_value,correlation_value,
+    reservation_value,generation_value,object_value,encode(sha256(convert_to(claim_token,'UTF8')),'hex'),now_value+interval '15 minutes');
+ END IF;
+ RETURN jsonb_build_object('status',200,'body',jsonb_build_object('success',TRUE,'data',jsonb_build_object(
+   'reservationId',reservation_value,'storageGenerationId',generation_value,'objectId',object_value,'claimToken',claim_token)),'replayed',FALSE);
 END $$;
 
 CREATE FUNCTION public.canonical_field_evidence_mutate(
  org UUID, actor UUID, role_value TEXT, session_value UUID, csrf_value TEXT, execution_value UUID,
  action_value TEXT, performer UUID, subject_value UUID, expected_subject_revision BIGINT, expected_subject_digest TEXT,
  expected_execution_revision BIGINT, expected_execution_digest TEXT, expected_assignment_revision BIGINT,
- expected_assignment_digest TEXT, document_value JSONB, idempotency_key TEXT, reason_value TEXT, correlation_value TEXT
+ expected_assignment_digest TEXT, document_value JSONB, idempotency_key TEXT, reason_value TEXT, correlation_value TEXT,
+ upload_claim_token TEXT
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB; execution_record public.canonical_field_executions%ROWTYPE; assignment_record public.canonical_schedule_assignments%ROWTYPE;
  receipt public.canonical_field_evidence_idempotency%ROWTYPE; subject_record public.canonical_field_evidence_records%ROWTYPE;
+ upload_reservation public.canonical_field_evidence_file_upload_reservations%ROWTYPE; upload_request JSONB;
  record_value public.canonical_field_evidence_records%ROWTYPE; event_value UUID:=gen_random_uuid(); record_id UUID:=gen_random_uuid();
  key_hash_value TEXT; request_hash_value TEXT; record_digest TEXT; before_revision BIGINT:=0; before_digest TEXT:=NULL; root_value UUID; response JSONB;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' OR action_value NOT IN ('create_checklist','respond_item','record_observation','record_note','correct','register_file')
  OR idempotency_key IS NULL OR idempotency_key !~ '^[!-~]{16,128}$' OR expected_execution_revision IS NULL OR expected_execution_digest IS NULL
  OR expected_assignment_revision IS NULL OR expected_assignment_digest IS NULL OR NOT public.canonical_field_execution_reason_valid(reason_value)
- OR correlation_value !~ '^[ -~]{1,128}$' OR NOT public.canonical_field_evidence_document_valid(action_value,document_value) THEN
+ OR correlation_value !~ '^[ -~]{1,128}$' OR NOT public.canonical_field_evidence_document_valid(action_value,document_value)
+ OR (action_value='register_file' AND (upload_claim_token IS NULL OR upload_claim_token !~ '^[0-9a-f]{64}$'))
+ OR (action_value<>'register_file' AND upload_claim_token IS NOT NULL) THEN
   RAISE EXCEPTION 'Invalid field evidence input' USING ERRCODE='22023',CONSTRAINT='canonical_field_evidence_input_invalid';
  END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf_value,TRUE);
@@ -371,7 +497,25 @@ BEGIN
    AND (assignment_record.workforce_profile_id=p.id OR (assignment_record.workforce_crew_id IS NOT NULL AND EXISTS(SELECT 1 FROM public.workforce_crew_members cm WHERE cm.organization_id=org AND cm.crew_id=assignment_record.workforce_crew_id AND cm.profile_id=p.id))))
  OR (role_value='member' AND performer<>(authority->>'profileId')::uuid) THEN RAISE EXCEPTION 'Performer unavailable' USING ERRCODE='42501'; END IF;
  key_hash_value:=encode(sha256(convert_to(idempotency_key,'UTF8')),'hex');
- request_hash_value:=encode(sha256(convert_to(jsonb_build_object('organizationId',org,'actorUserId',actor,'sessionId',session_value,'executionId',execution_value,'action',action_value,'performerId',performer,'subjectId',subject_value,'expectedSubjectRevision',expected_subject_revision,'expectedSubjectDigest',expected_subject_digest,'expectedExecutionRevision',expected_execution_revision,'expectedExecutionDigest',expected_execution_digest,'expectedAssignmentRevision',expected_assignment_revision,'expectedAssignmentDigest',expected_assignment_digest,'document',document_value,'keyHash',key_hash_value,'reason',reason_value)::text,'UTF8')),'hex');
+ IF action_value='register_file' THEN
+   SELECT * INTO upload_reservation FROM public.canonical_field_evidence_file_upload_reservations r
+    WHERE r.organization_id=org AND r.actor_user_id=actor AND r.auth_session_id=session_value AND r.key_hash=key_hash_value FOR UPDATE;
+   upload_request:=jsonb_build_object('displayName',document_value->'displayName','extension',document_value->'extension','contentType',document_value->'mediaType','contentLength',document_value->'uploadByteCount','expectedContentDigest',document_value->'expectedContentDigest','privacyFlags',document_value->'privacyFlags','privacyPolicy',document_value->'privacyPolicy','retentionDays',document_value->'retentionDays','accessibility',document_value->'accessibility');
+   IF NOT FOUND OR upload_reservation.status<>'pending' OR upload_reservation.lease_until<=clock_timestamp()
+    OR upload_reservation.reservation_id::text<>document_value->>'uploadReservationId'
+    OR upload_reservation.storage_generation_id::text<>document_value->>'storageGenerationId'
+    OR upload_reservation.object_id::text<>document_value->>'objectId'
+    OR rtrim(upload_reservation.claim_token_hash)<>encode(sha256(convert_to(upload_claim_token,'UTF8')),'hex')
+    OR upload_reservation.execution_id<>execution_value OR upload_reservation.performer_profile_id<>performer
+    OR upload_reservation.source_execution_revision<>expected_execution_revision OR rtrim(upload_reservation.source_execution_digest)<>expected_execution_digest
+    OR upload_reservation.source_assignment_revision<>expected_assignment_revision OR rtrim(upload_reservation.source_assignment_digest)<>expected_assignment_digest
+    OR upload_reservation.request_document<>upload_request OR upload_reservation.reason<>reason_value OR upload_reservation.request_correlation_id<>correlation_value THEN
+     RAISE EXCEPTION 'Upload reservation unavailable' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_upload_reservation_stale';
+   END IF;
+   request_hash_value:=rtrim(upload_reservation.request_digest);
+ ELSE
+   request_hash_value:=encode(sha256(convert_to(jsonb_build_object('organizationId',org,'actorUserId',actor,'sessionId',session_value,'executionId',execution_value,'action',action_value,'performerId',performer,'subjectId',subject_value,'expectedSubjectRevision',expected_subject_revision,'expectedSubjectDigest',expected_subject_digest,'expectedExecutionRevision',expected_execution_revision,'expectedExecutionDigest',expected_execution_digest,'expectedAssignmentRevision',expected_assignment_revision,'expectedAssignmentDigest',expected_assignment_digest,'document',document_value,'keyHash',key_hash_value,'reason',reason_value)::text,'UTF8')),'hex');
+ END IF;
  SELECT * INTO receipt FROM public.canonical_field_evidence_idempotency i WHERE i.organization_id=org AND i.actor_user_id=actor AND i.auth_session_id=session_value AND i.key_hash=key_hash_value;
  IF FOUND THEN IF rtrim(receipt.request_digest)<>request_hash_value THEN RAISE EXCEPTION 'Idempotency conflict' USING ERRCODE='23505',CONSTRAINT='canonical_field_evidence_idempotency_conflict'; END IF; RETURN jsonb_build_object('status',receipt.response_status,'body',receipt.response_body,'replayed',TRUE); END IF;
  IF action_value='register_file' THEN
@@ -396,8 +540,12 @@ BEGIN
    IF EXISTS(SELECT 1 FROM public.canonical_field_evidence_records r WHERE r.organization_id=org AND r.execution_id=execution_value AND r.evidence_type='checklist_response' AND r.document->>'checklistId'=subject_record.id::text AND r.document->>'itemKey'=document_value->>'itemKey') THEN RAISE EXCEPTION 'Checklist response exists' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_subject_stale'; END IF;
  ELSIF action_value='correct' THEN
    SELECT * INTO subject_record FROM public.canonical_field_evidence_records WHERE organization_id=org AND execution_id=execution_value AND id=subject_value FOR UPDATE;
-   IF NOT FOUND OR subject_record.revision<>expected_subject_revision OR rtrim(subject_record.canonical_digest)<>expected_subject_digest OR subject_record.evidence_type NOT IN ('checklist_response','observation','note') OR document_value->>'kind'<>subject_record.evidence_type OR EXISTS(SELECT 1 FROM public.canonical_field_evidence_records r WHERE r.organization_id=org AND r.previous_record_id=subject_record.id) THEN RAISE EXCEPTION 'Evidence stale' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_subject_stale'; END IF;
+   IF NOT FOUND OR subject_record.revision<>expected_subject_revision OR rtrim(subject_record.canonical_digest)<>expected_subject_digest
+    OR NOT ((subject_record.evidence_type IN ('checklist_response','observation','note') AND document_value->>'kind'=subject_record.evidence_type)
+      OR (subject_record.evidence_type='file' AND document_value->>'kind'='file_accessibility_correction'))
+    OR EXISTS(SELECT 1 FROM public.canonical_field_evidence_records r WHERE r.organization_id=org AND r.previous_record_id=subject_record.id) THEN RAISE EXCEPTION 'Evidence stale' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_subject_stale'; END IF;
    IF subject_record.evidence_type='checklist_response' AND (document_value->>'checklistId' IS DISTINCT FROM subject_record.document->>'checklistId' OR document_value->>'itemKey' IS DISTINCT FROM subject_record.document->>'itemKey') THEN RAISE EXCEPTION 'Checklist identity changed' USING ERRCODE='22023'; END IF;
+   IF subject_record.evidence_type='file' THEN document_value:=subject_record.document || jsonb_build_object('accessibility',document_value->'accessibility'); END IF;
    record_id:=gen_random_uuid(); root_value:=subject_record.root_id; before_revision:=subject_record.revision; before_digest:=rtrim(subject_record.canonical_digest);
  ELSE
    IF subject_value IS NOT NULL OR expected_subject_revision IS NOT NULL OR expected_subject_digest IS NOT NULL THEN RAISE EXCEPTION 'Unexpected subject' USING ERRCODE='22023'; END IF;
@@ -420,6 +568,10 @@ BEGIN
  response:=jsonb_build_object('success',TRUE,'data',public.canonical_field_evidence_projection(record_value));
  INSERT INTO public.canonical_field_evidence_idempotency(organization_id,actor_user_id,auth_session_id,key_hash,request_digest,action_code,record_id,response_status,response_body)
  VALUES(org,actor,session_value,key_hash_value,request_hash_value,action_value,record_id,201,response);
+ IF action_value='register_file' THEN
+   UPDATE public.canonical_field_evidence_file_upload_reservations SET status='accepted',record_id=record_value.id,response_status=201,response_body=response,updated_at=transaction_timestamp()
+    WHERE organization_id=org AND actor_user_id=actor AND auth_session_id=session_value AND key_hash=key_hash_value;
+ END IF;
  RETURN jsonb_build_object('status',201,'body',response,'replayed',FALSE);
 END $$;
 
@@ -447,11 +599,14 @@ BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXCEPTION 'Serializable retrieval required' USING ERRCODE='22023'; END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,NULL,FALSE);
  IF NOT public.canonical_field_evidence_read_authorized(org,role_value,(authority->>'profileId')::uuid,execution_value) THEN RAISE EXCEPTION 'Retrieval unavailable' USING ERRCODE='42501'; END IF;
- SELECT * INTO record_value FROM public.canonical_field_evidence_records WHERE organization_id=org AND execution_id=execution_value AND evidence_type='file' AND document->>'objectId'=object_value::text;
+ SELECT * INTO record_value FROM public.canonical_field_evidence_records WHERE organization_id=org AND execution_id=execution_value AND evidence_type='file' AND document->>'objectId'=object_value::text ORDER BY revision DESC LIMIT 1;
  IF NOT FOUND OR (record_value.document->>'retainedUntil')::timestamptz<=clock_timestamp() OR record_value.document->>'quarantineDisposition'<>'released_after_clean_scan' THEN RAISE EXCEPTION 'File unavailable' USING ERRCODE='P0002',CONSTRAINT='canonical_field_evidence_not_found'; END IF;
- INSERT INTO public.canonical_field_evidence_file_access_events(id,organization_id,execution_id,record_id,object_id,content_digest,actor_user_id,auth_session_id,authorized_at)
- VALUES(access_value,org,execution_value,record_value.id,object_value,record_value.document->>'contentDigest',actor,session_value,access_time);
- RETURN jsonb_build_object('organizationId',org,'executionId',execution_value,'objectId',object_value,'contentDigest',record_value.document->>'contentDigest','accessEventId',access_value,'authorizedAt',to_char(access_time AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'));
+ INSERT INTO public.canonical_field_evidence_file_access_events(id,organization_id,execution_id,record_id,object_id,storage_generation_id,storage_object_version,content_digest,accessibility,actor_user_id,auth_session_id,authorized_at)
+ VALUES(access_value,org,execution_value,record_value.id,object_value,(record_value.document->>'storageGenerationId')::uuid,record_value.document->>'storageObjectVersion',record_value.document->>'contentDigest',record_value.document->'accessibility',actor,session_value,access_time);
+ RETURN jsonb_build_object('organizationId',org,'executionId',execution_value,'objectId',object_value,
+  'storageGenerationId',record_value.document->>'storageGenerationId','storageObjectVersion',record_value.document->>'storageObjectVersion',
+  'contentDigest',record_value.document->>'contentDigest','accessibility',record_value.document->'accessibility',
+  'accessEventId',access_value,'authorizedAt',to_char(access_time AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'));
 END $$;
 
 CREATE CONSTRAINT TRIGGER canonical_field_evidence_complete AFTER INSERT ON public.canonical_field_evidence_records DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.canonical_field_evidence_complete();

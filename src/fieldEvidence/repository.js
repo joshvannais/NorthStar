@@ -14,6 +14,7 @@ class FieldEvidenceRepositoryError extends Error {
 function mapDatabaseError(error) {
   if (error instanceof FieldEvidenceRepositoryError) return error;
   const constraint = String(error && error.constraint || '');
+  if (constraint.includes('upload_busy') || error && error.code === '40001' && /upload already in progress/i.test(String(error.message || ''))) return new FieldEvidenceRepositoryError(409, 'M23_FIELD_UPLOAD_IN_PROGRESS', 'This field-file upload is already in progress.', error);
   if (constraint.includes('idempotency')) return new FieldEvidenceRepositoryError(409, 'M23_FIELD_EVIDENCE_IDEMPOTENCY_CONFLICT', 'The Idempotency-Key was already used for different field evidence.', error);
   if (constraint.includes('stale') || error && ['40001', '40P01'].includes(error.code)) return new FieldEvidenceRepositoryError(409, 'M23_FIELD_EVIDENCE_STALE', 'Field evidence authority changed; refresh before trying again.', error);
   if (constraint.includes('not_found') || error && error.code === 'P0002') return new FieldEvidenceRepositoryError(404, 'NOT_FOUND', 'Field evidence was not found.', error);
@@ -44,7 +45,10 @@ async function transaction(pool, isolation, operation) {
       return value;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
-      if (isolation === 'SERIALIZABLE' && error && ['40001', '40P01'].includes(error.code) && !String(error.constraint || '').includes('stale') && attempt < 2) continue;
+      if (isolation === 'SERIALIZABLE' && error && error.code === '23505' &&
+          error.constraint === 'canonical_field_evidence_file_upload_reservations_pkey' && attempt < 2) continue;
+      if (isolation === 'SERIALIZABLE' && error && ['40001', '40P01'].includes(error.code) &&
+          !/(stale|upload_busy)/.test(String(error.constraint || '')) && !/upload already in progress/i.test(String(error.message || '')) && attempt < 2) continue;
       throw mapDatabaseError(error);
     } finally { client.release(); }
   }
@@ -56,28 +60,34 @@ async function mutateFieldEvidence(pool, input) {
     `SELECT public.canonical_field_evidence_mutate(
        $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,$8::uuid,
        $9::uuid,$10::bigint,$11::text,$12::bigint,$13::text,$14::bigint,$15::text,
-       $16::jsonb,$17::text,$18::text,$19::text
+       $16::jsonb,$17::text,$18::text,$19::text,$20::text
      ) AS result`,
     [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId,
       input.csrfToken, input.executionId, input.action, input.performerProfileId,
       input.subjectId, input.expectedSubjectRevision, input.expectedSubjectDigest,
       input.expectedExecutionRevision, input.expectedExecutionDigest,
       input.expectedAssignmentRevision, input.expectedAssignmentDigest,
-      input.document, input.idempotencyKey, input.reason, input.requestCorrelationId]
+      input.document, input.idempotencyKey, input.reason, input.requestCorrelationId,
+      input.uploadClaimToken || null]
   )).rows[0]));
 }
 
 async function authorizeFileUpload(pool, input) {
   return transaction(pool, 'SERIALIZABLE', async client => result((await client.query(
     `SELECT public.canonical_field_file_upload_authorize(
-       $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::uuid,$8::uuid,
-       $9::bigint,$10::text,$11::bigint,$12::text,$13::text
+       $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::uuid,$8::jsonb,
+       $9::bigint,$10::text,$11::bigint,$12::text,$13::text,$14::text,$15::text
      ) AS result`,
     [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId,
-      input.csrfToken, input.executionId, input.performerProfileId, input.objectId,
+      input.csrfToken, input.executionId, input.performerProfileId, {
+        displayName: input.displayName, extension: input.extension, contentType: input.contentType,
+        contentLength: input.contentLength, expectedContentDigest: input.expectedContentDigest,
+        privacyFlags: input.privacyFlags, privacyPolicy: input.privacy,
+        retentionDays: input.retentionDays, accessibility: input.accessibility,
+      },
       input.expectedExecutionRevision, input.expectedExecutionDigest,
       input.expectedAssignmentRevision, input.expectedAssignmentDigest,
-      input.idempotencyKey]
+      input.idempotencyKey, input.reason, input.requestCorrelationId]
   )).rows[0]));
 }
 

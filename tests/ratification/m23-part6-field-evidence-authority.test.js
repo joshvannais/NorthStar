@@ -17,10 +17,10 @@ describe('Mission 23 Part 6 unified field evidence ratification contract', () =>
     expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^047_.*\.sql$/.test(name)))
       .toEqual(['047_canonical_field_evidence_authority.sql']);
     const bytes = fs.readFileSync(path.join(ROOT, MIGRATION_PATH));
-    expect(bytes.length).toBe(59435);
-    expect(hash(bytes)).toBe('8c01ba40fa1afe5bc0a5653c82607b42faf38f359866884d23c6731cc5932aa9');
+    expect(bytes.length).toBe(74729);
+    expect(hash(bytes)).toBe('b9c08d267cbf373202e621b381f5821bb96c54fde3046be25fe08005d8f16048');
     expect(execFileSync('git', ['hash-object', MIGRATION_PATH], { cwd: ROOT, encoding: 'utf8' }).trim())
-      .toBe('b2a7a64dc6f5497b7eb7de7c5864a132b89b9d3e');
+      .toBe('f8a94d64d20bc3076819b6f719ca02a1f2508318');
   });
 
   test('preserves every released migration byte from the exact full-history base', () => {
@@ -99,6 +99,21 @@ describe('Mission 23 Part 6 unified field evidence ratification contract', () =>
     expect(contract).toContain("'image/png'");
     expect(contract).toContain("'image/webp'");
     expect(contract).not.toContain("'image/svg+xml'");
+  });
+
+  test('reserves idempotency before storage mutation and binds immutable generations plus accessibility', () => {
+    const storage = read('src/fieldEvidence/fileStorage.js');
+    const contract = read('src/fieldEvidence/contract.js');
+    expect(storage.indexOf('await authorizeUpload')).toBeLessThan(storage.indexOf('storage.beginQuarantine'));
+    for (const fragment of ['immutableObjectCreate', 'generationScopedCleanup', 'deleteGeneration',
+      'storageGenerationId', 'storageObjectVersion', 'expectedContentDigest']) expect(storage).toContain(fragment);
+    expect(storage).not.toContain('deleteOrphan');
+    expect(migration).toContain('canonical_field_evidence_file_upload_reservations');
+    expect(migration).toContain("reservation.status='accepted'");
+    expect(migration).toContain('claim_token_hash');
+    expect(contract).toContain("['described', 'unavailable', 'needs_review']");
+    expect(contract).toContain("'x-accessibility-state'");
+    expect(migration).toContain("document_value->>'kind'='file_accessibility_correction'");
   });
 
   test('mounts only bounded Part 6 APIs and leaves the rendered Part 9 surface untouched', () => {

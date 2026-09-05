@@ -20,6 +20,9 @@ const requirements = read('outputs', 'm23-part4-writer', 'REQUIREMENT_TO_EVIDENC
 const unavailable = read('outputs', 'm23-part4-writer', 'UNAVAILABLE_EVIDENCE.md');
 const corrections = read('outputs', 'm23-part4-writer', 'CORRECTION_CHANGELOG.md');
 const migrationIdentity = read('outputs', 'm23-part4-writer', 'MIGRATION_IDENTITY.md');
+const correctionMigrationIdentity = read(
+  'outputs', 'm23-part4-writer', 'MIGRATION_043_IDENTITY.md'
+);
 const productionReadiness = read(
   'outputs', 'm23-part4-writer', 'PRODUCTION_MIGRATION_READINESS_RECEIPT.md'
 );
@@ -85,6 +88,19 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
       '5efac96a5c275f58e56b117cdae135d4f16ce4847cccdbab8de580b5a3c1d6c4',
     ]) expect(migrationIdentity).toContain(value);
     expect(migrationIdentity).toContain('Migration\n042 must remain byte-for-byte unchanged');
+  });
+
+  test('freezes forward-only migration 043 without rewriting migration 042', () => {
+    for (const value of [
+      'd6fc5fa5aaa66906e40413e912b0881a7e50f2c4',
+      'c9cb884eb5dd4980a08fa9e5e714ac925137c046',
+      '90379f78425cbe476ab8406e2bed33c6c575d16a',
+      '16,936',
+      '9f9d43d1d631953203a0d45accdfc757f3ce005a81cd4915c06bf2c3fd6ec228',
+      '8adb615f30626fe940ab7e444727184fed5bfe9b',
+      '5efac96a5c275f58e56b117cdae135d4f16ce4847cccdbab8de580b5a3c1d6c4',
+    ]) expect(correctionMigrationIdentity).toContain(value);
+    expect(correctionMigrationIdentity).toContain('A new SELECT-only\nproduction-history check');
   });
 
   test('provides a bounded credential-silent read-only production-history inspector', () => {

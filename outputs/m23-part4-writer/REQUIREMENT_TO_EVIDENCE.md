@@ -3,6 +3,8 @@
 ## Frozen scope boundary
 
 - Exact live base: `961245ebd12a28d2c7aa1c0b3e003530e4428f09`
+- Frozen correction migration source commit: `d6fc5fa5aaa66906e40413e912b0881a7e50f2c4`
+- Frozen migration 043 blob/bytes/SHA-256: `90379f78425cbe476ab8406e2bed33c6c575d16a` / `16,936` / `9f9d43d1d631953203a0d45accdfc757f3ce005a81cd4915c06bf2c3fd6ec228`
 - Base tree: `666a1a385a93a5baad31e77e2e5ed89d5ebd18ef`
 - Branch: `mission23/part4-materials-inventory`
 - Worktree:
@@ -66,14 +68,14 @@ provider mutation, or production-data mutation was involved.
 ### Focused Part 1–4 ratification
 
 - Test suites: 2 passed / 2 total
-- Tests: 74 passed / 74 total
+- Tests: 75 passed / 75 total
 - Snapshots: 0
 - Failures: 0
 
 ### Complete ratification
 
 - Test suites: 22 passed / 22 total
-- Tests: 360 passed / 360 total
+- Tests: 361 passed / 361 total
 - Snapshots: 0
 - Failures: 0
 
@@ -94,7 +96,7 @@ provider mutation, or production-data mutation was involved.
 ### Final receipt-sensitive cross-contract rerun
 
 - Test suites: 12 passed / 12 total
-- Tests: 191 passed / 191 total
+- Tests: 192 passed / 192 total
 - Snapshots: 0
 - Failures: 0
 - Scope: Mission 21 root knowledge, Mission 22 root schedule/time, Mission 23

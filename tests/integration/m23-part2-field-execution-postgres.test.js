@@ -18,6 +18,7 @@ const LABOR_SOURCE_MIGRATION = '041_canonical_labor_transcript_source_authority.
 const MATERIAL_MIGRATION = '042_canonical_material_inventory_evidence.sql';
 const MATERIAL_CORRECTION_MIGRATION = '043_canonical_material_inventory_audit_corrections.sql';
 const MATERIAL_SNAPSHOT_FENCE_MIGRATION = '044_canonical_material_authority_snapshot_fence.sql';
+const MATERIAL_UPGRADE_FENCE_MIGRATION = '045_canonical_material_authority_upgrade_fence.sql';
 const MATERIAL_TEXT_UNICODE_CONTRACT = require('../../src/operations/materialTextUnicodeContract.json');
 const LABOR_CATEGORY_VERSION = 'm23-labor-category-v1';
 const LABOR_CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
@@ -2791,6 +2792,187 @@ realPostgres('Mission 23 Part 4 snapshot-fence migration interruption and retry'
           .toBe(protectedBefore[filename].applied_at.toISOString());
       }
     } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 4 rolling-upgrade authority quiescence', () => {
+  test('drains a writer entered through 043, survives interruption, fences its commit, and restarts zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p4-upgrade-fence');
+    const roles = await createRoles(database, 'p4-upgrade-fence');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 5 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 3 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p4-upgrade-'));
+    let writer;
+    let stale;
+    let shared = false;
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name <= MATERIAL_CORRECTION_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      const localRepository = require('../../src/operations/repository');
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      await seedTenant(migrationPool, IDS.organization, 'Mission 23 Part 4 upgrade fence', [
+        { id: IDS.owner, role: 'owner', name: 'Upgrade owner' },
+        { id: IDS.member, role: 'member', name: 'Upgrade worker' },
+      ]);
+      await migrationPool.query(
+        "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.member]
+      );
+      const session = await provisionDurableSession(migrationPool, {
+        userId: IDS.member, organizationId: IDS.organization,
+        membershipId: IDS.member, role: 'member',
+      });
+      const appointmentId = IDS.appointments[0];
+      await seedAppointment(migrationPool, IDS.organization, appointmentId);
+      const assignment = await forceAcceptedAssignment(
+        migrationPool, IDS.organization, appointmentId, IDS.member
+      );
+      const created = (await localRepository.initializeFieldExecution(runtimePool, entry({
+        appointmentId, assignment, actorUserId: IDS.member,
+      }, session, 'member'))).body.data;
+      const execution = (await localRepository.transitionFieldExecution(runtimePool, transition({
+        execution: created, assignment, actorUserId: IDS.member, action: 'start',
+      }, session, 'member'))).body.data;
+      await localRepository.mutateMaterialInventory(runtimePool, material({
+        execution, assignment, actorUserId: IDS.member, action: 'record',
+        movementKind: 'returned', itemKey: 'upgrade.fence',
+        description: 'Writer entered through migration 043.', quantity: '1',
+        unitCode: 'each', locationKey: 'truck-upgrade',
+        key: 'm23-p4-upgrade-fence-base1',
+      }, session, 'member'));
+      const before = await materialEvidence(migrationPool, execution.id);
+
+      writer = await migrationPool.connect();
+      await writer.query('BEGIN');
+      await writer.query(
+        `UPDATE public.organization_memberships SET status='suspended'
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      );
+
+      fs.copyFileSync(
+        path.join(MIGRATIONS, MATERIAL_SNAPSHOT_FENCE_MIGRATION),
+        path.join(temporary, MATERIAL_SNAPSHOT_FENCE_MIGRATION)
+      );
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      expect((await migrationPool.query(
+        'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+      )).rows[0].revision).toBe('1');
+
+      stale = await runtimePool.connect();
+      await stale.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+      expect((await stale.query(
+        'SELECT status FROM public.organization_memberships WHERE organization_id=$1 AND user_id=$2',
+        [IDS.organization, IDS.member]
+      )).rows[0].status).toBe('active');
+
+      const interruptedClient = await migrationPool.connect();
+      const interrupted = (async () => {
+        try {
+          await interruptedClient.query('BEGIN');
+          await interruptedClient.query(fs.readFileSync(
+            path.join(MIGRATIONS, MATERIAL_UPGRADE_FENCE_MIGRATION), 'utf8'
+          ));
+          await interruptedClient.query('SELECT public.m23_part4_upgrade_fence_forced_interruption()');
+        } finally {
+          await interruptedClient.query('ROLLBACK').catch(() => {});
+          interruptedClient.release();
+        }
+      })();
+      expect(await Promise.race([
+        interrupted.then(() => 'settled', () => 'settled'),
+        new Promise(resolve => setTimeout(() => resolve('blocked'), 250)),
+      ])).toBe('blocked');
+      await writer.query('COMMIT');
+      writer.release();
+      writer = null;
+      await expect(interrupted).rejects.toBeDefined();
+      expect((await migrationPool.query(
+        'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+      )).rows[0].revision).toBe('1');
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [MATERIAL_UPGRADE_FENCE_MIGRATION]
+      )).rows[0].count).toBe(0);
+
+      const protectedBefore = {};
+      for (const filename of [MATERIAL_MIGRATION, MATERIAL_CORRECTION_MIGRATION,
+        MATERIAL_SNAPSHOT_FENCE_MIGRATION]) {
+        protectedBefore[filename] = (await migrationPool.query(
+          'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1', [filename]
+        )).rows[0];
+      }
+      fs.copyFileSync(
+        path.join(MIGRATIONS, MATERIAL_UPGRADE_FENCE_MIGRATION),
+        path.join(temporary, MATERIAL_UPGRADE_FENCE_MIGRATION)
+      );
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      expect(BigInt((await migrationPool.query(
+        'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+      )).rows[0].revision)).toBeGreaterThan(1n);
+
+      await stale.query('SELECT pg_advisory_lock_shared(230004,4)');
+      shared = true;
+      await expect(directMaterialRead(stale, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: session.sessionId,
+        executionId: execution.id,
+      })).rejects.toMatchObject({
+        code: '40001', constraint: 'canonical_material_authority_changed',
+      });
+      await stale.query('ROLLBACK');
+      await stale.query('SELECT pg_advisory_unlock_shared(230004,4)');
+      shared = false;
+      stale.release();
+      stale = null;
+      expect(await materialEvidence(migrationPool, execution.id)).toEqual(before);
+
+      const source = localDb.loadMigrations(temporary)
+        .find(item => item.file === MATERIAL_UPGRADE_FENCE_MIGRATION);
+      const first = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1',
+        [MATERIAL_UPGRADE_FENCE_MIGRATION]
+      )).rows[0];
+      expect(first.checksum).toBe(source.digest);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      const final = (await migrationPool.query(
+        `SELECT checksum,applied_at,count(*) OVER ()::int AS rows
+           FROM public._migrations WHERE filename=$1`, [MATERIAL_UPGRADE_FENCE_MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: first.checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(first.applied_at.toISOString());
+      for (const filename of Object.keys(protectedBefore)) {
+        const after = (await migrationPool.query(
+          'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1', [filename]
+        )).rows[0];
+        expect(after.checksum).toBe(protectedBefore[filename].checksum);
+        expect(after.applied_at.toISOString())
+          .toBe(protectedBefore[filename].applied_at.toISOString());
+      }
+    } finally {
+      if (writer) {
+        await writer.query('ROLLBACK').catch(() => {});
+        writer.release();
+      }
+      if (stale) {
+        await stale.query('ROLLBACK').catch(() => {});
+        if (shared) await stale.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+        stale.release();
+      }
       await migrationPool.end().catch(() => {});
       await runtimePool.end().catch(() => {});
       await database.cleanup();

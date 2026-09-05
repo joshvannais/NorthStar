@@ -13,9 +13,9 @@ describe('bounded read-only production migration-history inspector', () => {
     expect(() => canonicalBytes(Buffer.from('one\rtwo'))).toThrow('lone carriage return');
   });
 
-  test('loads the exact ordered repository migration set through correction 044', () => {
+  test('loads the exact ordered repository migration set through correction 045', () => {
     const sources = sourceMigrations();
-    expect(sources).toHaveLength(42);
+    expect(sources).toHaveLength(43);
     expect(sources.find(source => source.filename === '042_canonical_material_inventory_evidence.sql'))
       .toEqual({
         filename: '042_canonical_material_inventory_evidence.sql',
@@ -28,10 +28,16 @@ describe('bounded read-only production migration-history inspector', () => {
       bytes: 16936,
       checksum: '9f9d43d1d631953203a0d45accdfc757f3ce005a81cd4915c06bf2c3fd6ec228',
     });
-    expect(sources.at(-1)).toEqual({
+    expect(sources.find(source => source.filename === '044_canonical_material_authority_snapshot_fence.sql'))
+      .toEqual({
       filename: '044_canonical_material_authority_snapshot_fence.sql',
       bytes: 3995,
       checksum: '8d4c895fb06d5b0dc49ee968ad64d777efa9d1b861094f00571170e4d6e6b32d',
+    });
+    expect(sources.at(-1)).toEqual({
+      filename: '045_canonical_material_authority_upgrade_fence.sql',
+      bytes: 2050,
+      checksum: '24b8249c0b686b497e5251516f9a7663947ee6ac491fe9d132fb3b8bc020e9ee',
     });
   });
 

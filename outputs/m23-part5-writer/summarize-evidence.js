@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const names = ['unit-results.json','regression-results.json','contracts-results.json','vanilla-regression-results.json','baseline-results.json','operations-ratification-results.json','available-results.json','equipment-final-results.json','final-contract-results.json','post-freeze-results.json','correction-red-results.json','correction-focused-results.json','correction-final-contract-results.json'];
+const names = ['unit-results.json','regression-results.json','contracts-results.json','vanilla-regression-results.json','baseline-results.json','operations-ratification-results.json','available-results.json','equipment-final-results.json','final-contract-results.json','post-freeze-results.json','correction-red-results.json','correction-focused-results.json','correction-final-contract-results.json','reaudit-correction-focused-results.json','reaudit-final-contract-results.json'];
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const summaryFile = path.join(__dirname, 'evidence-summary.json');
 const runs = fs.existsSync(summaryFile) ? JSON.parse(fs.readFileSync(summaryFile, 'utf8')).runs : [];

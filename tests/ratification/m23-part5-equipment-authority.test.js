@@ -50,6 +50,14 @@ describe('Mission 23 Part 5 unified equipment ratification contract', () => {
     expect(read('src/equipment/provider.js')).toContain('usageLedger.reserve');
     expect(read('src/polaris/openaiRuntime.js')).toContain('northstar_equipment_literal_identifiers_v1');
   });
+  test('keeps reduced-motion viewport scrolling immediate for fixed-header-safe equipment presentation', () => {
+    const css = read('public/css/equipment.css');
+    expect(css).toMatch(/@media\(prefers-reduced-motion: reduce\)\s*\{\s*html \{ scroll-behavior: auto !important; \}/);
+    const browser = read('tests/browser/m23-part5-equipment.js');
+    expect(browser).toContain("assert.strictEqual(rootScrollBehavior, 'auto'");
+    expect(browser).toContain('width === 390 ? 4 : 1');
+    expect(browser).toContain('fixed-header-safe geometry must remain invariant across animation frames');
+  });
   test('keeps Part 5 a writer candidate and preserves every excluded later authority', () => {
     const roadmap = read('docs/roadmap/MISSION_23_OPERATIONS.md');
     expect(roadmap).toContain('**Part 5: implementation writer candidate; independent audit and release');

@@ -1,5 +1,27 @@
 # Writer correction-quality ledger
 
+## Fresh exact-head re-audit correction
+
+The fresh independent re-audit of
+`48c8acd95122d1e0b8d0a5df70611d11a9aea4ff` required exactly one P3
+correction. Installed Chrome 152 could still capture the 390-pixel heading
+under the fixed header because the global smooth-scroll policy remained active
+even though the mounted evidence context requested reduced motion. The writer
+reproduced the audit trigger before editing by running 320 before 390: the dark
+390 heading reached only 58.015625 pixels while the header ended at 61 pixels
+and the oracle required at least 69 pixels.
+
+The scoped equipment stylesheet now makes the root viewport scroll behavior
+immediate when reduced motion is requested. The browser oracle asserts that
+computed root policy, retains the auditor's 320-before-390 order, and requires
+four identical fixed-header-safe geometry samples on consecutive animation
+frames at 390 pixels before capture. Installed Chrome passed the complete
+light/dark matrix three consecutive times after the correction, and actual
+Playwright WebKit passed the same complete matrix. In both engines, both 390
+themes recorded a 61-pixel header bottom, 77.015625-pixel heading top, and four
+identical samples. The migration identity and bounded Polaris intent files are
+unchanged from the re-audited head.
+
 ## Terminal audit corrections after first audited head
 
 The fresh independent audit of

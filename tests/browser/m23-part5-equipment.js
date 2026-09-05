@@ -48,6 +48,16 @@ async function main() {
         for (const header of state.headers) if (header.left < target.right && header.right > target.left) assert.ok(target.top >= header.bottom + margin, JSON.stringify(state));
       }
     }
+    async function assertStableSafeArea(page, capture, margin, sampleCount) {
+      const samples = [];
+      for (let index = 0; index < sampleCount; index += 1) {
+        const state = await safeArea(page, capture); assertSafeArea(state, margin);
+        if (samples.length) assert.deepStrictEqual(state, samples[0], 'fixed-header-safe geometry must remain invariant across animation frames');
+        samples.push(state);
+        if (index + 1 < sampleCount) await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+      }
+      return samples;
+    }
     async function create(page, entry, marker) {
       const before = (await fixture.ownerPool.query('SELECT count(*)::int AS n FROM tenant_assets WHERE organization_id=$1', [fixture.org])).rows[0].n;
       if (entry === 'business_profile') { await catalogue(page); await page.getByRole('button', { name: 'Add equipment', exact: true }).click(); }
@@ -101,7 +111,9 @@ async function main() {
     assert.strictEqual((await fixture.ownerPool.query('SELECT count(*)::int AS n FROM tenant_assets WHERE organization_id=$1', [fixture.org])).rows[0].n, 0);
     ledger.cases.push({ equipmentIntent: namedMessage, serverDraft: true, cancelledWithoutAsset: true });
     await create(ownerPage, 'business_profile', 'profile path <img src=x onerror=window.__equipmentXss++>'); await create(ownerPage, 'polaris', 'conversation path'); await ownerContext.close();
-    for (const theme of ['light','dark']) for (const width of [1280,768,390,320]) {
+    // Keep 390 after 320: installed Chrome exposed its prior smooth-scroll race
+    // under this ordering in both themes during independent exact-head audit.
+    for (const theme of ['light','dark']) for (const width of [1280,768,320,390]) {
       const context = await contextFor(width, theme, fixture.session, { hasTouch: width <= 390 }); const page = await context.newPage(); await catalogue(page);
       const groups = page.locator('.equipment-group'); assert.strictEqual(await groups.count(), 1); assert.strictEqual(await groups.first().getAttribute('open'), null);
       const summary = groups.locator('summary').first(); assert.match(await summary.textContent(), /Trucks \(2\)/); await summary.focus(); await page.keyboard.press('Enter');
@@ -132,16 +144,19 @@ async function main() {
         document.querySelectorAll('.equipment-group').forEach(group => { group.open = false; });
       });
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+      const rootScrollBehavior = await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior);
+      assert.strictEqual(rootScrollBehavior, 'auto', 'reduced-motion equipment pages must disable root smooth scrolling');
       await page.evaluate(() => {
         const target = document.querySelector('.equipment-surface h3').getBoundingClientRect();
         const headerBottom = Math.max(0, ...[...document.querySelectorAll('[data-northstar-fixed-header]')].filter(element => ['fixed','sticky'].includes(getComputedStyle(element).position)).map(element => element.getBoundingClientRect()).filter(r => r.width && r.height && r.left < target.right && r.right > target.left && r.bottom > 0 && r.top < innerHeight).map(r => r.bottom));
-        window.scrollBy({ top: target.top - headerBottom - 16, behavior: 'instant' });
+        window.scrollBy({ top: target.top - headerBottom - 16, behavior: 'auto' });
       });
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
-      const captureBefore = await safeArea(page, true); assertSafeArea(captureBefore, 8);
+      const captureStability = await assertStableSafeArea(page, true, 8, width === 390 ? 4 : 1);
+      const captureBefore = captureStability[0];
       await page.screenshot({ path: path.join(output, `${theme}-${width}.png`) });
       const captureAfter = await safeArea(page, true); assertSafeArea(captureAfter, 8); assert.deepStrictEqual(captureAfter, captureBefore, 'capture must not change the tested scroll/focus/geometry state');
-      ledger.cases.push({ theme, width, geometry, focusReturnGeometry, captureBefore, captureAfter, collapsedByDefault: true, keyboardDisclosure: true, focusReturn: true, touch: width <= 390, reducedMotion: true });
+      ledger.cases.push({ theme, width, geometry, focusReturnGeometry, rootScrollBehavior, captureBefore, captureStability, captureAfter, collapsedByDefault: true, keyboardDisclosure: true, focusReturn: true, touch: width <= 390, reducedMotion: true });
       if (width === 1280) {
         await page.evaluate(() => { document.body.style.zoom = '2'; });
         const reflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: innerWidth }));

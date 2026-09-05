@@ -3,10 +3,12 @@
 Status: corrected implementation candidate awaiting a different fresh independent
 exact-head re-audit. The first audited head was
 `ec63f9065fc869669b47b04e062a6d42e53bbfda`; its terminal audit required the
-three bounded corrections recorded in `CORRECTION_LOG.md`. This is not an audit
-approval, release, deployment, live research claim, or founder visual approval.
-The draft PR's new immutable head is the final writer handoff identity; no Part 6
-work is included.
+three bounded corrections recorded in `CORRECTION_LOG.md`. A subsequent fresh
+re-audit of `48c8acd95122d1e0b8d0a5df70611d11a9aea4ff` required one P3 correction
+to Chrome 390-pixel fixed-header clearance; that bounded correction is also
+recorded in the ledger. This is not an audit approval, release, deployment, live
+research claim, or founder visual approval. The draft PR's new immutable head is
+the final writer handoff identity; no Part 6 work is included.
 
 ## Provenance and authority
 
@@ -53,12 +55,12 @@ vanilla version metadata. No production connection was used.
 
 | Final verification group | Result |
 | --- | --- |
-| Entire available-only Jest inventory, fully staged corrected candidate | 193 suites, 6,596 tests passed; 50 explicit exclusions; zero failures |
-| Unit, contract and ratification directories | 119 suites, 5,890 tests passed |
-| Exact correction-focused equipment/migration/inspector group | 5 suites, 78 tests passed |
+| Entire available-only Jest inventory, corrected candidate | 193 suites, 6,597 tests passed; 50 explicit exclusions; zero failures |
+| Unit, contract and ratification directories | 119 suites, 5,891 tests passed |
+| Exact correction-focused equipment/migration/inspector group | 5 suites, 79 tests passed |
 | Prior operations and full ratification regression | 24 suites, 437 tests passed |
 | Account migration available cases | 23 passed; one absent archived negative control unavailable |
-| Chrome 152.0.7977.82 mounted browser | Passed |
+| Chrome 152.0.7977.82 mounted browser | Complete matrix passed three consecutive times after the P3 correction |
 | Actual Playwright WebKit 26.5 mounted browser | Passed |
 
 Browser evidence exercises both entry paths and explicit confirmation against
@@ -68,7 +70,10 @@ return, touch emulation, inert persisted markup, semantic labels, reduced motion
 CSS 200% zoom and 320-pixel reflow equivalent. At 768/390/320, both engines and
 both themes assert the title, action and complete captured catalogue controls are
 inside the viewport and vertically clear the actual fixed header before and after
-the screenshot. The Polaris trace proves the Ford F-350 prompt opens a reviewed
+the screenshot. At 390 pixels the oracle also asserts reduced-motion root scroll
+behavior is `auto` and requires four identical safe-area samples on consecutive
+animation frames before capture, using the audit-triggering 320-before-390 order.
+The Polaris trace proves the Ford F-350 prompt opens a reviewed
 server draft, while the two required unrelated prompts and an equipment-word note
 stay in ordinary Polaris with zero equipment draft/asset writes. Both runs recorded
 zero page errors and zero provider calls. Their expected HTTP failures are the
@@ -83,6 +88,10 @@ passed afterward. The final pre-audit fully staged broad rerun passed 193 suites
 and 6,573 tests. After the terminal audit corrections, the fully staged broad
 rerun passed 193 suites and 6,596 tests with zero failures and the same 50
 exclusions in 676.676 seconds; the exact run is recorded in the generated summary.
+After the later Chrome-clearance P3 correction, the exact available-only inventory
+passed 193 suites and 6,597 tests with zero failures and the same 50 exclusions in
+588.314 seconds; the unit/contract/ratification directories passed 5,891 tests and
+the five-suite focused group passed 79 tests.
 An additional staged-inventory rerun passed 6,572 tests and exposed one
 historical public-script allowlist assertion for the newly tracked equipment.js;
 that explicit authorized-addition expectation was updated without changing

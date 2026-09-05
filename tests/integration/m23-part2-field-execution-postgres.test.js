@@ -17,6 +17,7 @@ const LABOR_CORRECTION_MIGRATION = '040_canonical_labor_time_audit_corrections.s
 const LABOR_SOURCE_MIGRATION = '041_canonical_labor_transcript_source_authority.sql';
 const MATERIAL_MIGRATION = '042_canonical_material_inventory_evidence.sql';
 const MATERIAL_CORRECTION_MIGRATION = '043_canonical_material_inventory_audit_corrections.sql';
+const MATERIAL_SNAPSHOT_FENCE_MIGRATION = '044_canonical_material_authority_snapshot_fence.sql';
 const MATERIAL_TEXT_UNICODE_CONTRACT = require('../../src/operations/materialTextUnicodeContract.json');
 const LABOR_CATEGORY_VERSION = 'm23-labor-category-v1';
 const LABOR_CATEGORY_DIGEST = '298ead37057f362ae32de59f23cfda8e9cae8f78dd0cd1e9c637cc525bc27738';
@@ -35,7 +36,7 @@ const IDS = Object.freeze({
   viewer: 'c2000000-0000-4000-8000-000000000005',
   otherOwner: 'c2000000-0000-4000-8000-000000000006',
   crew: 'c3000000-0000-4000-8000-000000000001',
-  appointments: Array.from({ length: 70 }, (_unused, index) => {
+  appointments: Array.from({ length: 72 }, (_unused, index) => {
     const sequence = index < 8 ? index + 1 : index + 2;
     return `c4000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
   }),
@@ -485,6 +486,18 @@ async function directMaterialMutation(pool, input) {
       input.expectedExecutionRevision, input.expectedExecutionDigest,
       input.expectedAssignmentRevision, input.expectedAssignmentDigest,
       input.idempotencyKey, input.reason, input.requestCorrelationId]
+  );
+}
+
+async function directMaterialRead(client, input) {
+  return client.query(
+    `SELECT public.canonical_material_inventory_read(
+       $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::integer,$7::integer
+     ) AS result`,
+    [input.organizationId, input.actorUserId, input.actorAccessRole,
+      input.authSessionId, input.executionId,
+      input.balanceOffset === undefined ? 0 : input.balanceOffset,
+      input.balanceLimit === undefined ? 200 : input.balanceLimit]
   );
 }
 
@@ -1772,6 +1785,7 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     )).rows[0]).toEqual(beforeCurrent);
     for (const sql of [
       'SELECT * FROM public.canonical_material_movements LIMIT 1',
+      'SELECT * FROM public.canonical_material_authority_fence',
       "SELECT public.canonical_material_text_valid('bypass')",
       'SELECT public.canonical_material_text_unicode_contract()',
       'SELECT public.canonical_material_supporting_authority_read_lock()',
@@ -1955,6 +1969,281 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     });
     expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
   });
+
+  test('Part 4 rejects stale MVCC snapshots after each supporting-authority writer', async () => {
+    const context = await createStartedExecution(67);
+    await repository.mutateMaterialInventory(runtimePool, material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'snapshot.fence', description: 'Snapshot-fence read evidence.', quantity: '1',
+      unitCode: 'each', locationKey: 'truck-13', key: 'm23-p4-snapshot-fence-base1',
+    }, sessions.member, 'member'));
+    const crewId = crypto.randomUUID();
+    const crewKey = `snapshot-fence-${crewId.slice(0, 8)}`;
+    await migrationPool.query(
+      `INSERT INTO public.workforce_crews(
+         id,organization_id,crew_key,name,created_by_user_id,updated_by_user_id)
+       VALUES ($1,$2,$3,'Snapshot fence crew',$4,$4)`,
+      [crewId, IDS.organization, crewKey, IDS.owner]
+    );
+    await migrationPool.query(
+      `INSERT INTO public.workforce_crew_members(
+         organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+       VALUES ($1,$2,$3,'member',$4)`,
+      [IDS.organization, crewId, IDS.member, IDS.owner]
+    );
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    const authorityWriters = [
+      ['auth_sessions',
+        `UPDATE public.auth_sessions
+            SET status='revoked',revoked_at=transaction_timestamp(),revoke_reason='snapshot_fence_test'
+          WHERE id=$1`,
+        [sessions.member.sessionId], 1,
+        `UPDATE public.auth_sessions
+            SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1`],
+      ['subscriptions',
+        "UPDATE public.subscriptions SET status='canceled' WHERE organization_id=$1",
+        [IDS.organization], 1,
+        "UPDATE public.subscriptions SET status='active' WHERE organization_id=$1"],
+      ['organization_onboarding',
+        `UPDATE public.organization_onboarding
+            SET status='business_profile_required',active_business_profile_id=NULL,completed_at=NULL
+          WHERE organization_id=$1`,
+        [IDS.organization], 1,
+        `UPDATE public.organization_onboarding onboarding
+            SET status='complete',active_business_profile_id=profile.id,
+                completed_at=transaction_timestamp()
+           FROM public.canonical_business_profiles profile
+          WHERE onboarding.organization_id=$1 AND profile.organization_id=onboarding.organization_id
+            AND profile.is_active`],
+      ['users',
+        "UPDATE public.users SET status='suspended' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.member], 1,
+        "UPDATE public.users SET status='active' WHERE organization_id=$1 AND id=$2"],
+      ['organization_memberships',
+        "UPDATE public.organization_memberships SET status='suspended' WHERE organization_id=$1 AND user_id=$2",
+        [IDS.organization, IDS.member], 1,
+        "UPDATE public.organization_memberships SET status='active' WHERE organization_id=$1 AND user_id=$2"],
+      ['workforce_profiles',
+        "UPDATE public.workforce_profiles SET operational_role='other' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.member], 1,
+        "UPDATE public.workforce_profiles SET operational_role='technician' WHERE organization_id=$1 AND id=$2"],
+      ['workforce_crew_members',
+        'DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2 AND profile_id=$3',
+        [IDS.organization, crewId, IDS.member], 1,
+        `INSERT INTO public.workforce_crew_members(
+           organization_id,crew_id,profile_id,crew_role,created_by_user_id)
+         VALUES ($1,$2,$3,'member',$4)`, [IDS.organization, crewId, IDS.member, IDS.owner]],
+      ['canonical_transcripts',
+        `UPDATE public.canonical_transcripts transcript SET source='demo'
+          FROM public.canonical_field_executions execution
+         WHERE execution.organization_id=$1 AND execution.id=$2
+           AND transcript.organization_id=execution.organization_id
+           AND transcript.operation_id=execution.operation_id`,
+        [IDS.organization, context.execution.id], 1,
+        `UPDATE public.canonical_transcripts transcript SET source='lead'
+          FROM public.canonical_field_executions execution
+         WHERE execution.organization_id=$1 AND execution.id=$2
+           AND transcript.organization_id=execution.organization_id
+           AND transcript.operation_id=execution.operation_id`],
+      ['canonical_appointments',
+        'UPDATE public.canonical_appointments SET updated_at=updated_at WHERE FALSE AND organization_id=$1 AND id=$2',
+        [IDS.organization, context.appointmentId], 0],
+      ['canonical_schedule_assignments',
+        'UPDATE public.canonical_schedule_assignments SET updated_at=updated_at WHERE FALSE AND organization_id=$1 AND id=$2',
+        [IDS.organization, context.assignment.id], 0],
+      ['canonical_field_executions',
+        'UPDATE public.canonical_field_executions SET updated_at=updated_at WHERE FALSE AND organization_id=$1 AND id=$2',
+        [IDS.organization, context.execution.id], 0],
+    ];
+    for (const [label, sql, params, expectedRows = 1, restoreSql, restoreParams = params]
+      of authorityWriters) {
+      const stale = await runtimePool.connect();
+      let shared = false;
+      try {
+        await stale.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+        await stale.query(
+          'SELECT status FROM public.organization_memberships WHERE organization_id=$1 AND user_id=$2',
+          [IDS.organization, IDS.member]
+        );
+        const priorFence = (await migrationPool.query(
+          'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+        )).rows[0].revision;
+        const written = await migrationPool.query(sql, params);
+        expect({ label, rows: written.rowCount }).toEqual({ label, rows: expectedRows });
+        const nextFence = (await migrationPool.query(
+          'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+        )).rows[0].revision;
+        expect({ label, advanced: BigInt(nextFence) > BigInt(priorFence) })
+          .toEqual({ label, advanced: true });
+        await stale.query('SELECT pg_advisory_lock_shared(230004,4)');
+        shared = true;
+        await expect(directMaterialRead(stale, {
+          organizationId: IDS.organization, actorUserId: IDS.member,
+          actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+          executionId: context.execution.id,
+        })).rejects.toMatchObject({
+          code: '40001', constraint: 'canonical_material_authority_changed',
+        });
+      } finally {
+        await stale.query('ROLLBACK').catch(() => {});
+        if (shared) await stale.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+        stale.release();
+        if (restoreSql) await migrationPool.query(restoreSql, restoreParams).catch(() => {});
+      }
+      expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+    }
+  }, 180000);
+
+  test('Part 4 fences stale fresh mutation and exact replay with zero effects', async () => {
+    const context = await createStartedExecution(68);
+    const replayInput = material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'snapshot.replay', description: 'Exact replay snapshot-fence evidence.',
+      quantity: '1', unitCode: 'each', locationKey: 'truck-14',
+      key: 'm23-p4-snapshot-fence-replay1',
+    }, sessions.member, 'member');
+    await repository.mutateMaterialInventory(runtimePool, replayInput);
+    const freshInput = material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'snapshot.fresh', description: 'Fresh mutation snapshot-fence evidence.',
+      quantity: '1', unitCode: 'each', locationKey: 'truck-14',
+      key: 'm23-p4-snapshot-fence-fresh01',
+    }, sessions.member, 'member');
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    for (const [label, input] of [['fresh mutation', freshInput], ['exact replay', replayInput]]) {
+      const stale = await runtimePool.connect();
+      let shared = false;
+      try {
+        await stale.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await stale.query(
+          'SELECT status FROM public.organization_memberships WHERE organization_id=$1 AND user_id=$2',
+          [IDS.organization, IDS.member]
+        );
+        await migrationPool.query(
+          `UPDATE public.organization_memberships SET status='suspended'
+            WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+        );
+        await stale.query('SELECT pg_advisory_lock_shared(230004,4)');
+        shared = true;
+        await expect(directMaterialMutation(stale, input)).rejects.toMatchObject({
+          code: '40001', constraint: 'canonical_material_authority_changed',
+        });
+      } finally {
+        await stale.query('ROLLBACK').catch(() => {});
+        if (shared) await stale.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+        stale.release();
+        await migrationPool.query(
+          `UPDATE public.organization_memberships SET status='active'
+            WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+        ).catch(() => {});
+      }
+      expect({ label, evidence: await materialEvidence(migrationPool, context.execution.id) })
+        .toEqual({ label, evidence: before });
+    }
+  });
+
+  test('Part 4 rejects same-backend authority DML reentrancy and tolerates rolled-back writers', async () => {
+    const context = await createStartedExecution(69);
+    await repository.mutateMaterialInventory(runtimePool, material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'snapshot.rollback', description: 'Rollback snapshot-fence evidence.', quantity: '1',
+      unitCode: 'each', locationKey: 'truck-15', key: 'm23-p4-snapshot-fence-rollback',
+    }, sessions.member, 'member'));
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    const sameBackend = await runtimePool.connect();
+    let shared = false;
+    try {
+      await sameBackend.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await sameBackend.query(
+        `UPDATE public.organization_memberships SET updated_at=updated_at
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      );
+      await sameBackend.query('SELECT pg_advisory_lock_shared(230004,4)');
+      shared = true;
+      await expect(directMaterialRead(sameBackend, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      })).rejects.toMatchObject({
+        code: '40001', constraint: 'canonical_material_authority_changed',
+      });
+    } finally {
+      await sameBackend.query('ROLLBACK').catch(() => {});
+      if (shared) await sameBackend.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+      sameBackend.release();
+    }
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+
+    const stale = await runtimePool.connect();
+    const writer = await migrationPool.connect();
+    shared = false;
+    try {
+      await stale.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+      await stale.query(
+        'SELECT status FROM public.organization_memberships WHERE organization_id=$1 AND user_id=$2',
+        [IDS.organization, IDS.member]
+      );
+      await writer.query('BEGIN');
+      await writer.query(
+        `UPDATE public.organization_memberships SET updated_at=updated_at
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      );
+      await writer.query('ROLLBACK');
+      await stale.query('SELECT pg_advisory_lock_shared(230004,4)');
+      shared = true;
+      const allowed = await directMaterialRead(stale, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      });
+      expect(allowed.rows[0].result.data.movements).toHaveLength(1);
+    } finally {
+      await stale.query('ROLLBACK').catch(() => {});
+      if (shared) await stale.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+      stale.release();
+      await writer.query('ROLLBACK').catch(() => {});
+      writer.release();
+    }
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+  });
+
+  test('Part 4 bounds authority-lock contention and succeeds on a clean caller retry', async () => {
+    const context = await createStartedExecution(70);
+    await repository.mutateMaterialInventory(runtimePool, material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'snapshot.timeout', description: 'Bounded authority-lock contention evidence.',
+      quantity: '1', unitCode: 'each', locationKey: 'truck-16',
+      key: 'm23-p4-snapshot-fence-timeout1',
+    }, sessions.member, 'member'));
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    const writer = await migrationPool.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query(
+        `UPDATE public.organization_memberships SET updated_at=updated_at
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      );
+      const startedAt = Date.now();
+      await expect(repository.readMaterialInventory(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      })).rejects.toMatchObject({ status: 503, code: 'M23_EXECUTION_PERSISTENCE_UNAVAILABLE' });
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(1500);
+      expect(Date.now() - startedAt).toBeLessThan(4500);
+      await writer.query('ROLLBACK');
+      const retried = await repository.readMaterialInventory(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      });
+      expect(retried.body.data.movements).toHaveLength(1);
+    } finally {
+      await writer.query('ROLLBACK').catch(() => {});
+      writer.release();
+    }
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+  }, 30000);
 
   test('Part 4 reports and pages balance summaries independently from movement truncation', async () => {
     const context = await createStartedExecution(64);
@@ -2387,6 +2676,80 @@ realPostgres('Mission 23 Part 4 correction migration interruption and retry', ()
       expect(migration042After.checksum).toBe(migration042Before.checksum);
       expect(migration042After.applied_at.toISOString())
         .toBe(migration042Before.applied_at.toISOString());
+    } finally {
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+});
+
+realPostgres('Mission 23 Part 4 snapshot-fence migration interruption and retry', () => {
+  test('rolls back interrupted 044, then applies once and restarts as zero-op', async () => {
+    const database = await createSuiteDatabase('m23-p4-fence-retry');
+    const roles = await createRoles(database, 'p4-fence');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p4-fence-'));
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < MATERIAL_SNAPSHOT_FENCE_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      const protectedBefore = {};
+      for (const filename of [MATERIAL_MIGRATION, MATERIAL_CORRECTION_MIGRATION]) {
+        protectedBefore[filename] = (await migrationPool.query(
+          'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1', [filename]
+        )).rows[0];
+      }
+      const client = await migrationPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(fs.readFileSync(
+          path.join(MIGRATIONS, MATERIAL_SNAPSHOT_FENCE_MIGRATION), 'utf8'
+        ));
+        await expect(client.query('SELECT public.m23_part4_fence_forced_interruption()'))
+          .rejects.toBeDefined();
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      expect((await migrationPool.query(
+        "SELECT to_regclass('public.canonical_material_authority_fence') AS relation"
+      )).rows[0].relation).toBeNull();
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [MATERIAL_SNAPSHOT_FENCE_MIGRATION]
+      )).rows[0].count).toBe(0);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const source = localDb.loadMigrations(MIGRATIONS)
+        .find(item => item.file === MATERIAL_SNAPSHOT_FENCE_MIGRATION);
+      const applied = (await migrationPool.query(
+        'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1',
+        [MATERIAL_SNAPSHOT_FENCE_MIGRATION]
+      )).rows;
+      expect(applied).toHaveLength(1);
+      expect(applied[0].checksum).toBe(source.digest);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      const final = (await migrationPool.query(
+        'SELECT checksum,applied_at,count(*) OVER ()::int AS rows FROM public._migrations WHERE filename=$1',
+        [MATERIAL_SNAPSHOT_FENCE_MIGRATION]
+      )).rows[0];
+      expect(final).toMatchObject({ checksum: applied[0].checksum, rows: 1 });
+      expect(final.applied_at.toISOString()).toBe(applied[0].applied_at.toISOString());
+      for (const filename of [MATERIAL_MIGRATION, MATERIAL_CORRECTION_MIGRATION]) {
+        const protectedAfter = (await migrationPool.query(
+          'SELECT checksum,applied_at FROM public._migrations WHERE filename=$1', [filename]
+        )).rows[0];
+        expect(protectedAfter.checksum).toBe(protectedBefore[filename].checksum);
+        expect(protectedAfter.applied_at.toISOString())
+          .toBe(protectedBefore[filename].applied_at.toISOString());
+      }
     } finally {
       await migrationPool.end().catch(() => {});
       await runtimePool.end().catch(() => {});

@@ -12,7 +12,7 @@ const {
 const materialTextUnicodeContract = require('../../src/operations/materialTextUnicodeContract.json');
 const { executionBodyBoundary, isExecutionMutationRequest } = require('../../src/operations/httpBoundary');
 const { createFieldExecutionsRouter } = require('../../src/routes/fieldExecutions');
-const { mapDatabaseError } = require('../../src/operations/repository');
+const { mapDatabaseError, mutateMaterialInventory } = require('../../src/operations/repository');
 
 const IDS = Object.freeze({
   organization: 'e1000000-0000-4000-8000-000000000001',
@@ -272,6 +272,41 @@ describe('Mission 23 Part 4 materials and inventory contract', () => {
     expect(mapped('canonical_material_input_invalid')).toMatchObject({
       status: 400, code: 'INVALID_MATERIAL_REQUEST',
     });
+  });
+
+  test('retries one bounded material deadlock while retaining the ordered authority lock', async () => {
+    const queries = [];
+    let entryAttempts = 0;
+    const client = {
+      query: jest.fn(async sql => {
+        queries.push(sql);
+        if (sql.includes('canonical_material_inventory_mutate')) {
+          entryAttempts += 1;
+          if (entryAttempts === 1) {
+            const deadlock = new Error('test-owned deadlock');
+            deadlock.code = '40P01';
+            throw deadlock;
+          }
+          return { rows: [{ result: {
+            status: 200, replayed: false, body: { success: true, data: { id: IDS.movement } },
+          } }] };
+        }
+        return { rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    const normalized = normalizeMaterialAction(input('record', materialFields()));
+    const result = await mutateMaterialInventory({ connect: async () => client }, {
+      ...normalized, csrfToken: 'c'.repeat(64), requestCorrelationId: 'm23-p4-deadlock-retry',
+    });
+    expect(result).toMatchObject({ status: 200, replayed: false });
+    expect(entryAttempts).toBe(2);
+    expect(queries.filter(sql => sql === 'SELECT pg_advisory_lock_shared(230004,4)')).toHaveLength(1);
+    expect(queries.filter(sql => sql === 'BEGIN ISOLATION LEVEL SERIALIZABLE')).toHaveLength(2);
+    expect(queries.filter(sql => sql === 'ROLLBACK')).toHaveLength(1);
+    expect(queries.filter(sql => sql === 'COMMIT')).toHaveLength(1);
+    expect(queries.filter(sql => sql === 'SELECT pg_advisory_unlock_shared(230004,4)')).toHaveLength(1);
+    expect(client.release).toHaveBeenCalledTimes(1);
   });
 
   test('keeps Part 4 backend-only and excludes stock, cost, purchasing, pricing, and later authorities', () => {

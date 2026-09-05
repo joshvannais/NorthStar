@@ -362,7 +362,11 @@ async function readMaterialInventory(pool, input) {
     await client.query("SET idle_in_transaction_session_timeout='5000ms'");
     await client.query('SELECT pg_advisory_lock_shared(230004,4)');
     authorityLockHeld = true;
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    // The material authority fence takes a PostgreSQL row lock so that a stale
+    // MVCC snapshot is rejected after any committed supporting-authority write.
+    // This transaction remains semantically read-only: runtime has no direct
+    // table write privilege and invokes only the read entry point.
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
     await client.query("SET LOCAL statement_timeout='5000ms'");
     await client.query("SET LOCAL lock_timeout='2000ms'");
     await client.query("SET LOCAL idle_in_transaction_session_timeout='5000ms'");

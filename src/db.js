@@ -1184,6 +1184,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'REVOKE ALL PRIVILEGES ON TABLE public.canonical_material_movements, public.canonical_material_events, public.canonical_material_revisions, public.canonical_material_audit_events, public.canonical_material_idempotency FROM %I',
           runtime_role
         );
+        IF pg_catalog.to_regclass('public.canonical_material_authority_fence') IS NOT NULL THEN
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL PRIVILEGES ON TABLE public.canonical_material_authority_fence FROM %I',
+            runtime_role
+          );
+        END IF;
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_text_valid(text) FROM %I', runtime_role);
         IF pg_catalog.to_regprocedure('public.canonical_material_text_unicode_contract()') IS NOT NULL THEN
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_text_unicode_contract() FROM %I', runtime_role);
@@ -1319,6 +1325,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_material_revisions',
              'canonical_material_audit_events',
              'canonical_material_idempotency',
+             'canonical_material_authority_fence',
              'polaris_provider_monthly_usage',
              'polaris_provider_requests',
              'polaris_provider_security_events'
@@ -1474,6 +1481,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1,'public.canonical_material_idempotency','INSERT')
          AND NOT has_table_privilege($1,'public.canonical_material_idempotency','UPDATE')
          AND NOT has_table_privilege($1,'public.canonical_material_idempotency','DELETE')
+         AND (to_regclass('public.canonical_material_authority_fence') IS NULL OR (
+           NOT has_table_privilege($1,'public.canonical_material_authority_fence','SELECT')
+           AND NOT has_table_privilege($1,'public.canonical_material_authority_fence','INSERT')
+           AND NOT has_table_privilege($1,'public.canonical_material_authority_fence','UPDATE')
+           AND NOT has_table_privilege($1,'public.canonical_material_authority_fence','DELETE')
+         ))
        )) AS material_tables_withheld,
        (to_regclass('public.canonical_material_movements') IS NULL OR (
          has_function_privilege($1,'public.canonical_material_inventory_mutate(uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text,text)','EXECUTE')

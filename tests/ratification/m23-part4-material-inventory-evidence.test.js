@@ -11,6 +11,9 @@ const correctionMigration = read('migrations', '043_canonical_material_inventory
 const snapshotFenceMigration = read(
   'migrations', '044_canonical_material_authority_snapshot_fence.sql'
 );
+const upgradeFenceMigration = read(
+  'migrations', '045_canonical_material_authority_upgrade_fence.sql'
+);
 const unicodeContractSource = read('src', 'operations', 'materialTextUnicodeContract.json');
 const unicodeContract = JSON.parse(unicodeContractSource);
 const contract = read('src', 'operations', 'contract.js');
@@ -28,6 +31,9 @@ const correctionMigrationIdentity = read(
 );
 const snapshotFenceMigrationIdentity = read(
   'outputs', 'm23-part4-writer', 'MIGRATION_044_IDENTITY.md'
+);
+const upgradeFenceMigrationIdentity = read(
+  'outputs', 'm23-part4-writer', 'MIGRATION_045_IDENTITY.md'
 );
 const productionReadiness = read(
   'outputs', 'm23-part4-writer', 'PRODUCTION_MIGRATION_READINESS_RECEIPT.md'
@@ -123,6 +129,19 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(snapshotFenceMigrationIdentity).toContain('Migrations 001–043 remain byte-for-byte unchanged.');
   });
 
+  test('freezes forward-only migration 045 without rewriting migrations 042 through 044', () => {
+    for (const value of [
+      'e3912055f48d263acd2f43c572f05431fefdf80e',
+      '865820d32fca9364ce4ec2fc350bdf6a5b1c23b6',
+      'e54f935d6a6648479226005ff7a45e7278527d52',
+      '2,050',
+      '24b8249c0b686b497e5251516f9a7663947ee6ac491fe9d132fb3b8bc020e9ee',
+      '1cf68d95f77e717ebb34c1d50c05cceb658bd135',
+      '8d4c895fb06d5b0dc49ee968ad64d777efa9d1b861094f00571170e4d6e6b32d',
+    ]) expect(upgradeFenceMigrationIdentity).toContain(value);
+    expect(upgradeFenceMigrationIdentity).toContain('Migrations 001–044 remain byte-for-byte unchanged.');
+  });
+
   test('provides a bounded credential-silent read-only production-history inspector', () => {
     expect(packageManifest.scripts['inspect:production-migrations'])
       .toBe('node scripts/inspect-production-migration-history.js');
@@ -156,7 +175,7 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(requirements).toContain('exact-final-source production preflight and recovery remain unavailable');
     expect(unavailable).toContain('production-history compatibility preflight passed');
     expect(unavailable).toContain('does not prove production');
-    expect(unavailable).toContain('predates forward-only migrations 043 and 044');
+    expect(unavailable).toContain('predates forward-only migrations 043 through 045');
   });
 
   test('limits actions and movement facts to Part 4 vocabulary', () => {
@@ -269,6 +288,25 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(db).toContain("NOT has_table_privilege($1,'public.canonical_material_authority_fence','SELECT')");
   });
 
+  test('closes the rolling-upgrade writer gap in forward-only migration 045', () => {
+    expect(upgradeFenceMigration).toContain('Migrations 042-044 remain');
+    expect(upgradeFenceMigration).toContain('IN SHARE ROW EXCLUSIVE MODE NOWAIT');
+    expect(upgradeFenceMigration).toContain('attempt>=200');
+    expect(upgradeFenceMigration).toContain('pg_catalog.pg_sleep(0.05)');
+    expect(upgradeFenceMigration).toContain("CONSTRAINT='canonical_material_authority_upgrade_busy'");
+    expect(upgradeFenceMigration).toContain('pg_catalog.pg_advisory_xact_lock(230004,4)');
+    expect(upgradeFenceMigration).toContain('UPDATE public.canonical_material_authority_fence');
+    expect(db).toContain("migration.file === '045_canonical_material_authority_upgrade_fence.sql'");
+    expect(db).toContain('Number(upgradeTimeouts.lock_timeout) || 5000');
+    expect(db).toContain('Number(upgradeTimeouts.statement_timeout) || 20000');
+    for (const relation of [
+      'auth_sessions','subscriptions','organization_onboarding','users',
+      'organization_memberships','workforce_profiles','workforce_crew_members',
+      'canonical_transcripts','canonical_appointments','canonical_schedule_assignments',
+      'canonical_field_executions',
+    ]) expect(upgradeFenceMigration).toContain(`public.${relation}`);
+  });
+
   test('shares one versioned code-point Unicode contract across JS and PostgreSQL', () => {
     expect(unicodeContract).toMatchObject({
       version: 'm23-material-text-unicode-v1', maximumCodePoints: 500, maximumUtf8Bytes: 2000,
@@ -324,7 +362,8 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(corrections).toContain('Current row lineage guard');
     expect(corrections).toContain('Read-current authority');
     expect(corrections).toContain('Daybreak exact-head re-audit — stale MVCC snapshot');
-    expect(corrections).toContain('No correction changes migrations 001–043.');
+    expect(corrections).toContain('Independent bypass review — rolling-upgrade writer');
+    expect(corrections).toContain('No correction changes migrations 001–044.');
   });
 
   test('records the future Part 5 exact-asset and universal-knowledge boundary without implementing it', () => {

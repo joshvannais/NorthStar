@@ -2104,6 +2104,29 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
       key: 'm23-p4-snapshot-fence-readonly',
     }, sessions.member, 'member'));
     const before = await materialEvidence(migrationPool, context.execution.id);
+    // Even a valid old-runtime caller cannot use READ ONLY after the fence
+    // upgrade. Make the intentional mixed-version fail-closed contract explicit
+    // without requiring any intervening authority change.
+    const legacy = await runtimePool.connect();
+    try {
+      await legacy.query('SELECT pg_advisory_lock_shared(230004,4)');
+      await legacy.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await expect(directMaterialRead(legacy, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      })).rejects.toMatchObject({ code: '25006' });
+    } finally {
+      await legacy.query('ROLLBACK').catch(() => {});
+      await legacy.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+      legacy.release();
+    }
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+    expect(await repository.readMaterialInventory(runtimePool, {
+      organizationId: IDS.organization, actorUserId: IDS.member,
+      actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+      executionId: context.execution.id,
+    })).toMatchObject({ status: 200, body: { success: true } });
     const stale = await runtimePool.connect();
     let shared = false;
     try {
@@ -2285,6 +2308,36 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     }
     expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
   }, 30000);
+
+  test('Part 4 fence preserves real appointment, assignment, and execution writer compatibility', async () => {
+    const appointmentId = 'c4000000-0000-4000-8000-000000000099';
+    const fenceRevision = async () => BigInt((await migrationPool.query(
+      'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+    )).rows[0].revision);
+    const before = await fenceRevision();
+    // These real inserts retain all triggers: transcript, appointment, then
+    // the appointment's canonical assignment trigger each advance the fence.
+    await seedAppointment(migrationPool, IDS.organization, appointmentId);
+    expect(await fenceRevision()).toBe(before + 3n);
+    expect((await migrationPool.query(
+      'SELECT count(*)::int AS count FROM public.canonical_schedule_assignments WHERE organization_id=$1 AND appointment_id=$2',
+      [IDS.organization, appointmentId]
+    )).rows[0].count).toBe(1);
+    // The existing accepted-assignment helper supplies setup only. Actual
+    // execution entry mutations below run with all production guards enabled.
+    const assignment = await forceAcceptedAssignment(migrationPool, IDS.organization, appointmentId, IDS.member);
+    const beforeExecution = await fenceRevision();
+    const created = (await repository.initializeFieldExecution(runtimePool, entry({
+      appointmentId, assignment, actorUserId: IDS.member,
+    }, sessions.member, 'member'))).body.data;
+    expect(await fenceRevision()).toBe(beforeExecution + 1n);
+    const started = (await repository.transitionFieldExecution(runtimePool, transition({
+      execution: created, assignment, actorUserId: IDS.member, action: 'start',
+    }, sessions.member, 'member'))).body.data;
+    expect(await fenceRevision()).toBe(beforeExecution + 2n);
+    expect(started).toMatchObject({ lifecycleState: 'in_progress' });
+    expect((await executionEvidence(migrationPool, started.id)).events).toBe(2);
+  });
 
   test('Part 4 reports and pages balance summaries independently from movement truncation', async () => {
     const context = await createStartedExecution(64);
@@ -2802,6 +2855,102 @@ realPostgres('Mission 23 Part 4 snapshot-fence migration interruption and retry'
 });
 
 realPostgres('Mission 23 Part 4 rolling-upgrade authority quiescence', () => {
+  test('bounds upgrade advisory contention, releases table locks, preserves tighter timeouts, and retries cleanly', async () => {
+    const database = await createSuiteDatabase('m23-p4-upgrade-bound');
+    const roles = await createRoles(database, 'p4-upgrade-bound');
+    const migrationPool = new Pool({ connectionString: roles.migrationUrl, max: 1 });
+    const runtimePool = new Pool({ connectionString: roles.runtimeUrl, max: 2 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m23-p4-upgrade-bound-'));
+    let reader;
+    try {
+      for (const name of fs.readdirSync(MIGRATIONS)) {
+        if (/^\d{3}_[a-z0-9_]+\.sql$/.test(name) && name < MATERIAL_UPGRADE_FENCE_MIGRATION) {
+          fs.copyFileSync(path.join(MIGRATIONS, name), path.join(temporary, name));
+        }
+      }
+      jest.resetModules();
+      const localDb = require('../../src/db');
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool,
+        migrationsDirectory: temporary })).toBe(true);
+      const before = (await migrationPool.query(
+        'SELECT revision,updated_at FROM public.canonical_material_authority_fence WHERE singleton'
+      )).rows[0];
+      const ledgerBefore = (await migrationPool.query(
+        'SELECT filename,checksum,applied_at FROM public._migrations ORDER BY filename'
+      )).rows;
+      reader = await runtimePool.connect();
+      await reader.query('SELECT pg_advisory_lock_shared(230004,4)');
+      const start = Date.now();
+      await expect(localDb.runMigrations({ pool: migrationPool, runtimePool }))
+        .rejects.toThrow('lock timeout');
+      expect(Date.now() - start).toBeLessThan(15000);
+      expect((await migrationPool.query(
+        'SELECT revision,updated_at FROM public.canonical_material_authority_fence WHERE singleton'
+      )).rows[0]).toEqual(before);
+      expect((await migrationPool.query(
+        'SELECT filename,checksum,applied_at FROM public._migrations ORDER BY filename'
+      )).rows).toEqual(ledgerBefore);
+      expect((await migrationPool.query(
+        "SELECT current_setting('lock_timeout') AS lock_timeout,current_setting('statement_timeout') AS statement_timeout"
+      )).rows[0]).toEqual({ lock_timeout: '0', statement_timeout: '0' });
+      // A failed runner must release every exclusion lock, even though the
+      // read session intentionally remains open until the clean retry.
+      const check = await migrationPool.connect();
+      try {
+        await check.query('BEGIN');
+        await check.query(`LOCK TABLE public.auth_sessions,public.subscriptions,
+          public.organization_onboarding,public.users,public.organization_memberships,
+          public.workforce_profiles,public.workforce_crew_members,
+          public.canonical_transcripts,public.canonical_appointments,
+          public.canonical_schedule_assignments,public.canonical_field_executions
+          IN ROW EXCLUSIVE MODE NOWAIT`);
+      } finally {
+        await check.query('ROLLBACK');
+        check.release();
+      }
+      await migrationPool.query("SET statement_timeout='150ms'");
+      await expect(localDb.runMigrations({ pool: migrationPool, runtimePool }))
+        .rejects.toThrow('statement timeout');
+      expect((await migrationPool.query(
+        "SELECT current_setting('lock_timeout') AS lock_timeout,current_setting('statement_timeout') AS statement_timeout"
+      )).rows[0]).toEqual({ lock_timeout: '0', statement_timeout: '150ms' });
+      expect((await migrationPool.query(
+        'SELECT filename,checksum,applied_at FROM public._migrations ORDER BY filename'
+      )).rows).toEqual(ledgerBefore);
+      await migrationPool.query("SET statement_timeout='15000ms'");
+      await migrationPool.query("SET lock_timeout='500ms'");
+      await reader.query('SELECT pg_advisory_unlock_shared(230004,4)');
+      reader.release();
+      reader = null;
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      expect((await migrationPool.query(
+        "SELECT current_setting('lock_timeout') AS lock_timeout,current_setting('statement_timeout') AS statement_timeout"
+      )).rows[0]).toEqual({ lock_timeout: '500ms', statement_timeout: '15s' });
+      const after = (await migrationPool.query(
+        'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+      )).rows[0];
+      expect(BigInt(after.revision)).toBe(BigInt(before.revision) + 1n);
+      expect(await localDb.runMigrations({ pool: migrationPool, runtimePool })).toBe(true);
+      expect((await migrationPool.query(
+        'SELECT revision FROM public.canonical_material_authority_fence WHERE singleton'
+      )).rows[0]).toEqual(after);
+      expect((await migrationPool.query(
+        'SELECT count(*)::int AS count FROM public._migrations WHERE filename=$1',
+        [MATERIAL_UPGRADE_FENCE_MIGRATION]
+      )).rows[0].count).toBe(1);
+    } finally {
+      if (reader) {
+        await reader.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+        reader.release();
+      }
+      await migrationPool.end().catch(() => {});
+      await runtimePool.end().catch(() => {});
+      await database.cleanup();
+      await dropRoles(roles);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
+
   test('drains a writer entered through 043, survives interruption, fences its commit, and restarts zero-op', async () => {
     const database = await createSuiteDatabase('m23-p4-upgrade-fence');
     const roles = await createRoles(database, 'p4-upgrade-fence');

@@ -7,6 +7,8 @@
 - Frozen migration 043 blob/bytes/SHA-256: `90379f78425cbe476ab8406e2bed33c6c575d16a` / `16,936` / `9f9d43d1d631953203a0d45accdfc757f3ce005a81cd4915c06bf2c3fd6ec228`
 - Frozen terminal-correction migration source commit: `f8bbf55080af2a3e617124f12ee658fd544a46f0`
 - Frozen migration 044 blob/bytes/SHA-256: `1cf68d95f77e717ebb34c1d50c05cceb658bd135` / `3,995` / `8d4c895fb06d5b0dc49ee968ad64d777efa9d1b861094f00571170e4d6e6b32d`
+- Frozen rolling-upgrade migration source commit: `e3912055f48d263acd2f43c572f05431fefdf80e`
+- Frozen migration 045 blob/bytes/SHA-256: `e54f935d6a6648479226005ff7a45e7278527d52` / `2,050` / `24b8249c0b686b497e5251516f9a7663947ee6ac491fe9d132fb3b8bc020e9ee`
 - Base tree: `666a1a385a93a5baad31e77e2e5ed89d5ebd18ef`
 - Branch: `mission23/part4-materials-inventory`
 - Worktree:
@@ -49,35 +51,40 @@ provider mutation, or production-data mutation was involved.
 | Safe output and resource bounds | Responses are `no-store`; generic unavailable handling avoids an oracle. Reads cap movements at 200 and balances at a caller-selected 1–200 window with offset capped at 10,000; independent totals and continuation evidence prevent silent truncation. Repository sets statement, lock, transaction, and idle timeouts. | Unit and PostgreSQL pass |
 | Runtime least privilege | `src/db.js` revokes material-table, authority-fence, and helper privileges, grants only the mutate/read entry points, and verifies EXECUTE-only authority at startup. Runtime direct table/helper/fence SQL fails with `42501`. The material read transaction is semantically read-only but cannot use PostgreSQL `READ ONLY` because the database-enforced snapshot proof requires `FOR SHARE`; runtime still has no direct write authority. | PostgreSQL privilege and direct-runtime-SQL pass |
 | No invented commercial/operational authority | Schema comments, route responses, roadmap, and unavailable ledger state that evidence is not stock existence, cost/value, procurement/purchasing, supplier truth, pricing/quote, invoice/payment, profitability, provider, contact, schedule mutation, Polaris, or later-part authority. | Source and ratification pass |
-| Part 2/Part 3 and M20–M32 preservation | Migrations 042 and 043 remain byte-for-byte frozen; correction migration 044 is forward-only. Protected migrations 001–043 remain unchanged. Part 2 lifecycle and Part 3 labor stay independent; Part 4 reuses current authorities without mutating them. The M20 legacy-upgrade fixture uses the valid released 001–014 historical prefix rather than a dependency-impossible subset. | Protected/cross-contract and isolated M20 PostgreSQL upgrade pass |
+| Part 2/Part 3 and M20–M32 preservation | Migrations 042–044 remain byte-for-byte frozen; correction migration 045 is forward-only. Protected migrations 001–044 remain unchanged. Part 2 lifecycle and Part 3 labor stay independent; Part 4 reuses current authorities without mutating them. The M20 legacy-upgrade fixture uses the valid released 001–014 historical prefix rather than a dependency-impossible subset. | Protected/cross-contract and isolated M20 PostgreSQL upgrade pass |
 | Rendered-surface boundary | No `public`, `views`, browser, style, or UI source changes. This is no rendered-surface diff, not browser/founder approval. Part 9 retains the requirement to match or exceed the then-current deployed NorthStar design system on desktop/mobile, dark/light, accessibility, Chrome, WebKit, and visual inspection. | Source scope pass; visual acceptance not applicable |
 | Future Part 5 exact-asset boundary | The roadmap now requires a specific make/model/year/series and relevant engine/configuration/attachment, exact Mission 20 tenant-asset and Mission 21 universal-knowledge-version pins, reusable cited/versioned/provenance/confidence/freshness-backed non-private research, and fail-closed unknown/needs-review handling. It keeps serial/VIN, ownership, financing, condition, readings, location, attachments, maintenance, faults, downtime, and tenant costs private. Business Profile `Add equipment` and Polaris conversation feed one server-authoritative reviewed draft/research pipeline, use the existing server-only OpenAI Responses integration, and require explicit authorized confirmation before durable mutation. The responsive Business Profile catalogue has non-empty generated categories, accessible disclosure/count/search/filter behavior, and truthful lifecycle states; Part 9 still owns full operational execution UI. This Part 4 diff adds no Part 5 runtime, UI, or live research authority. | Roadmap and ratification source pass only; Part 5 remains unimplemented |
-| Migration exact-once and recovery | Disposable PostgreSQL 18.4 UTC exercises fresh runner, upgrade runner, forced 042/043/044 interruption and rollback, exact retry, and restart zero-op under separated owner/runtime roles. Exact 042, 043, and 044 Git identities are frozen separately. The historical production preflight at `a568b08…` covers 39 exact applied rows and pending 042 only; it predates 043 and 044, so exact-final-source production compatibility remains required. No backup/restore rehearsal is available; only forward-fix/no-destructive-rollback disposition is authorized. | Local runner pass; exact-final-source production preflight and recovery remain unavailable |
+| Migration exact-once and recovery | Disposable PostgreSQL 18.4 UTC exercises fresh runner, upgrade runner, forced 042/043/044 interruption and rollback, exact retry, and restart zero-op under separated owner/runtime roles. Migration 045 adds the old-trigger-writer upgrade barrier and interruption/retry/restart coverage. Exact 042–045 Git identities are frozen separately. The historical production preflight at `a568b08…` covers 39 exact applied rows and pending 042 only; it predates 043 through 045, so exact-final-source production compatibility remains required. No backup/restore rehearsal is available; only forward-fix/no-destructive-rollback disposition is authorized. | Local runner pass; exact-final-source production preflight and recovery remain unavailable |
 | Independent acceptance and release | Writer results do not self-approve. Fresh exact-head independent audit, normal merge, automatic deployment, production application/ledger, health, and later-start zero-op remain required. | Not performed or claimed |
 
 ## Current focused results
 
 - Part 4 unit boundary: 1 suite, 59 tests, all passed.
-- Part 2–4 real PostgreSQL authority suite: 1 suite, 64 tests, all passed on
+- Part 2–4 real PostgreSQL authority suite: 1 suite, 67 tests, all passed on
   disposable PostgreSQL 18.4, UTC, UTF8, C locale, checksums enabled.
 
-## Terminal corrected-head writer regression results
+## Recovered 044/045 candidate writer regression results
+
+The recovery preserved the previous writer's commits and every frozen migration
+identity. A fresh static boundary review identified the upgrade wait bound;
+the runner correction and real PostgreSQL validation are described in
+`RECOVERY_VALIDATION.md`. These results supersede the earlier 044-only counts.
 
 ### Syntax
 
-- `node --check`: 17 changed JavaScript files passed.
+- `node --check`: 19 changed JavaScript files passed.
 
-### Focused Part 1–4 ratification
+### Focused Part 4 unit and ratification
 
 - Test suites: 2 passed / 2 total
-- Tests: 78 passed / 78 total
+- Tests: 80 passed / 80 total
 - Snapshots: 0
 - Failures: 0
 
 ### Complete ratification
 
 - Test suites: 22 passed / 22 total
-- Tests: 363 passed / 363 total
+- Tests: 365 passed / 365 total
 - Snapshots: 0
 - Failures: 0
 
@@ -91,7 +98,7 @@ provider mutation, or production-data mutation was involved.
 ### Mission 21–23, protected, and receipt-sensitive cross-contract regression
 
 - Test suites: 12 passed / 12 total
-- Tests: 195 passed / 195 total
+- Tests: 197 passed / 197 total
 - Snapshots: 0
 - Failures: 0
 - Scope: Mission 21 root knowledge, Mission 22 root schedule/time, Mission 23
@@ -100,16 +107,18 @@ provider mutation, or production-data mutation was involved.
 
 ### PostgreSQL 18.4 UTC regression
 
-- Part 2–4 field execution/material authority: 1 suite, 64/64 passed.
-- Mission 22 predecessor plus Mission 20 security/role authority: 4 suites,
-  40/40 passed. The repaired valid-prefix Mission 20 workforce legacy-upgrade
-  fixture passed separately, 1/1.
+- Part 2–4 field execution/material authority: 1 suite, 67/67 passed.
+- The repaired valid-prefix Mission 20 workforce legacy-upgrade fixture
+  passed separately, 1/1. Expanded Mission 22 predecessor and Mission 20
+  security/role results are recorded in `RECOVERY_VALIDATION.md`.
 - Isolated account authority: 1 suite, 11/11 passed.
 - All PostgreSQL runs used the approved disposable loopback PostgreSQL 18.4
-  cluster with UTC, UTF8, C locale, data checksums, per-suite databases, and
-  separated migration/runtime roles.
+  cluster with UTC, UTF8, C locale, data checksums, and per-suite databases.
+  Part 2–4 uses separated migration/runtime roles; historical predecessor
+  fixtures retain their declared role setup, including the test-only M20
+  legacy-upgrade administrative fixture.
 
 These are writer results, not independent acceptance. Exact migration identities
 are frozen. The bounded read-only production-history receipt matches migration
-042 but predates migrations 043 and 044. A new exact-final-source compatibility
+042 but predates migrations 043 through 045. A new exact-final-source compatibility
 receipt, independent audit, and all post-merge release evidence remain pending.

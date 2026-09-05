@@ -11,7 +11,7 @@
   and is recorded in
   `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`. It does not prove production
   application, the 042 ledger row, deployment health, or later-start zero-op.
-  That historical receipt predates forward-only migrations 043 and 044 and
+  That historical receipt predates forward-only migrations 043 through 045 and
   does not establish their compatibility. A new credential-silent SELECT-only
   preflight against the exact final corrected source set is required before
   release.

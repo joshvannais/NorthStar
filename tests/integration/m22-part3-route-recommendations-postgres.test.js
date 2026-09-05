@@ -534,7 +534,8 @@ realPostgres('Mission 22 Part 3 mounted route implications and Polaris recommend
       version: expect.stringMatching(/^18\./), timezone: 'UTC', runtime_role: roles.runtimeRole, replication_role: 'origin',
     });
     const files = fs.readdirSync(MIGRATIONS).filter(name => /^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
-    expect(files.at(-1)).toBe('037_polaris_provider_usage_authority.sql');
+    expect(files.filter(name => name <= '037_polaris_provider_usage_authority.sql').at(-1))
+      .toBe('037_polaris_provider_usage_authority.sql');
     const ledgers = (await migrationPool.query('SELECT filename,checksum FROM public._migrations ORDER BY filename')).rows;
     expect(ledgers).toHaveLength(files.length);
     for (const row of ledgers) {

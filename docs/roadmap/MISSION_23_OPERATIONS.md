@@ -38,8 +38,13 @@ knowledge authorities without replacing any of them.
   deployed, or production-applied.** The first correction set closed five
   findings in forward-only migration 043. The Daybreak re-audit identified one
   remaining stale-MVCC-snapshot gap after supporting-authority lock acquisition;
-  forward-only migration 044 adds the database-enforced snapshot fence. This
-  corrected candidate still requires a fresh independent exact-head audit.
+  forward-only migration 044 adds the database-enforced steady-state snapshot
+  fence. A subsequent independent bypass review identified the rolling-upgrade
+  interval in which a writer already entered through migration 043 could commit
+  without advancing that new fence. Forward-only migration 045 quiesces all
+  eleven supporting-authority writer tables and advances the fence atomically
+  before the corrected release can serve traffic. This corrected candidate
+  still requires a fresh independent exact-head audit.
 - **Parts 5–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
@@ -276,6 +281,17 @@ committed fence replacement. Reads are semantically read-only bounded
 repeatable-read snapshots: the row lock requires a read-write transaction, but
 the runtime role has no direct material or fence-table write authority and may
 execute only the material mutation/read entry points.
+
+The additive rolling-upgrade migration drains any writer that entered through
+the pre-fence trigger before it can commit past the upgrade boundary. It takes
+all eleven supporting-authority table locks through a bounded deadlock-avoiding
+NOWAIT retry, then the established exclusive advisory lock, then advances the
+fence in one transaction. Failure to quiesce aborts the migration without a
+partial effect; a separately retried migration must complete before release.
+The runner bounds frozen migration 045 to at most five seconds per lock wait
+and twenty seconds for its SQL statement, preserving any tighter configured
+timeouts and restoring them afterward. A timeout rolls back the entire run,
+including all acquired table locks, fence changes, and migration-ledger writes.
 
 Every required execution, assignment, and existing-movement revision/digest
 pin rejects explicit `NULL` before replay or evidence access. Material

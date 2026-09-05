@@ -1632,7 +1632,30 @@ async function runMigrations(options = {}) {
         continue;
       }
 
+      // Frozen 045 takes all supporting-authority table locks before waiting
+      // for its advisory barrier. Bound that complete operation in the runner
+      // so a lingering shared session cannot leave authority writers excluded
+      // indefinitely. Preserve tighter operator timeouts and restore them on
+      // success; transaction rollback restores them on any failure.
+      let upgradeTimeouts = null;
+      if (migration.file === '045_canonical_material_authority_upgrade_fence.sql') {
+        const settings = await client.query(
+          "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
+        );
+        upgradeTimeouts = Object.fromEntries(settings.rows.map(row => [row.name, row.setting]));
+        await client.query(
+          "SELECT set_config('lock_timeout',$1,true),set_config('statement_timeout',$2,true)",
+          [String(Math.min(Number(upgradeTimeouts.lock_timeout) || 5000, 5000)) + 'ms',
+            String(Math.min(Number(upgradeTimeouts.statement_timeout) || 20000, 20000)) + 'ms']
+        );
+      }
       await client.query(migration.sql);
+      if (upgradeTimeouts) {
+        await client.query(
+          "SELECT set_config('lock_timeout',$1,true),set_config('statement_timeout',$2,true)",
+          [upgradeTimeouts.lock_timeout + 'ms', upgradeTimeouts.statement_timeout + 'ms']
+        );
+      }
       await client.query(
         'INSERT INTO public._migrations (filename, checksum) VALUES ($1, $2)',
         [migration.file, migration.digest]

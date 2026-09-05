@@ -13,9 +13,9 @@ describe('bounded read-only production migration-history inspector', () => {
     expect(() => canonicalBytes(Buffer.from('one\rtwo'))).toThrow('lone carriage return');
   });
 
-  test('loads the additive repository migration set through equipment 046 while preserving released checksums', () => {
+  test('loads the additive repository migration set through field evidence 047 while preserving released checksums', () => {
     const sources = sourceMigrations();
-    expect(sources).toHaveLength(44);
+    expect(sources).toHaveLength(45);
     expect(sources.find(source => source.filename === '042_canonical_material_inventory_evidence.sql'))
       .toEqual({
         filename: '042_canonical_material_inventory_evidence.sql',
@@ -39,7 +39,11 @@ describe('bounded read-only production migration-history inspector', () => {
       bytes: 2050,
       checksum: '24b8249c0b686b497e5251516f9a7663947ee6ac491fe9d132fb3b8bc020e9ee',
     });
-    expect(sources.at(-1).filename).toBe('046_m23_equipment_operations.sql');
+    expect(sources.at(-1)).toEqual({
+      filename: '047_canonical_field_evidence_authority.sql',
+      bytes: 94203,
+      checksum: 'f54418be9a5972e2a529e999399dc0bac44a61cbf4070af0a8246d61e2cd6bf8',
+    });
   });
 
   test('reports only bounded names and checksums needed for compatibility', () => {

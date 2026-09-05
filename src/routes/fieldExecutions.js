@@ -15,6 +15,21 @@ const {
 } = require('../operations/contract');
 const { requireExecutionBodyBoundary } = require('../operations/httpBoundary');
 const {
+  normalizeEvidenceAction,
+  normalizeFileHeaders,
+  normalizeReadQuery,
+} = require('../fieldEvidence/contract');
+const {
+  authorizeFileRetrieval,
+  mutateFieldEvidence,
+  readFieldEvidence,
+} = require('../fieldEvidence/repository');
+const {
+  createAuthorizedRetrieval,
+  createUnavailableStorage,
+  ingestFileEvidence,
+} = require('../fieldEvidence/fileStorage');
+const {
   initializeFieldExecution,
   mutateLaborTime,
   mutateMaterialInventory,
@@ -71,6 +86,14 @@ function createFieldExecutionsRouter(options = {}) {
     ? options.materialMutate : mutateMaterialInventory;
   const materialRead = typeof options.materialRead === 'function'
     ? options.materialRead : readMaterialInventory;
+  const evidenceMutate = typeof options.evidenceMutate === 'function'
+    ? options.evidenceMutate : mutateFieldEvidence;
+  const evidenceRead = typeof options.evidenceRead === 'function'
+    ? options.evidenceRead : readFieldEvidence;
+  const fileAuthorize = typeof options.fileAuthorize === 'function'
+    ? options.fileAuthorize : authorizeFileRetrieval;
+  const fileIngest = typeof options.fileIngest === 'function' ? options.fileIngest : ingestFileEvidence;
+  const storage = options.fileStorage || createUnavailableStorage();
 
   router.post('/appointments/:appointmentId', requireExecutionBodyBoundary,
     mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
@@ -221,6 +244,81 @@ function createFieldExecutionsRouter(options = {}) {
           error: { code: 'M23_MATERIAL_UNAVAILABLE',
             message: 'Material evidence is temporarily unavailable.' },
         });
+      }
+    });
+
+  router.post('/:executionId/field-evidence-actions', requireExecutionBodyBoundary,
+    mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const normalized = normalizeEvidenceAction({
+          ...actor(req), executionId: req.params.executionId,
+          idempotencyKey: req.get('Idempotency-Key'), body: req.body,
+        });
+        const result = await evidenceMutate(poolProvider(), {
+          ...normalized, csrfToken: req.get('X-CSRF-Token'), requestCorrelationId: requestId(req),
+        });
+        if (result.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(result.status).json(result.body);
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({ success: false, requestId: requestId(req),
+          error: { code: 'M23_FIELD_EVIDENCE_UNAVAILABLE', message: 'Field evidence is temporarily unavailable.' } });
+      }
+    });
+
+  router.post('/:executionId/files', mutationAuth, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const normalized = normalizeFileHeaders({ ...actor(req), executionId: req.params.executionId }, req.headers);
+        const result = await fileIngest({
+          pool: poolProvider(), storage, stream: req, metadata: normalized,
+          csrfToken: req.get('X-CSRF-Token'), requestCorrelationId: requestId(req),
+          contentEncoding: req.get('Content-Encoding') || 'identity',
+        });
+        if (result.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(result.status).json(result.body);
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({ success: false, requestId: requestId(req),
+          error: { code: 'M23_FIELD_STORAGE_UNAVAILABLE', message: 'Field file storage is temporarily unavailable.' } });
+      }
+    });
+
+  router.get('/:executionId/field-evidence', tenantAuth, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const executionId = normalizeExecutionId(req.params.executionId);
+        const window = normalizeReadQuery(req.query);
+        const result = await evidenceRead(poolProvider(), { ...actor(req), executionId, ...window });
+        const body = { ...result.body, requestId: requestId(req) };
+        const cursorData = body.nextCursorData;
+        delete body.nextCursorData;
+        body.nextCursor = cursorData ? Buffer.from(JSON.stringify(cursorData), 'utf8').toString('base64url') : null;
+        return res.status(result.status).json(body);
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({ success: false, requestId: requestId(req),
+          error: { code: 'M23_FIELD_EVIDENCE_UNAVAILABLE', message: 'Field evidence is temporarily unavailable.' } });
+      }
+    });
+
+  router.get('/:executionId/files/:objectId', tenantAuth, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const authorization = await fileAuthorize(poolProvider(), {
+          ...actor(req), executionId: normalizeExecutionId(req.params.executionId),
+          objectId: normalizeExecutionId(req.params.objectId),
+        });
+        const retrieval = await createAuthorizedRetrieval(storage, authorization);
+        return res.status(200).json({ success: true, requestId: requestId(req), data: retrieval });
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({ success: false, requestId: requestId(req),
+          error: { code: 'M23_FIELD_STORAGE_UNAVAILABLE', message: 'Field file retrieval is temporarily unavailable.' } });
       }
     });
 

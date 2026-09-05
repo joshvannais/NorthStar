@@ -33,19 +33,20 @@ knowledge authorities without replacing any of them.
   `2b498fe1-d025-4be7-bd90-cef6154f9bb8` supplied the separate later ordinary
   application start with no migration application and unchanged exact one-row
   checksums and original timestamps for migrations 039–041.
-- **Part 4: audit-correction writer candidate in progress after the first
-  independent review and Daybreak exact-head re-audit; not accepted, merged,
-  deployed, or production-applied.** The first correction set closed five
-  findings in forward-only migration 043. The Daybreak re-audit identified one
-  remaining stale-MVCC-snapshot gap after supporting-authority lock acquisition;
-  forward-only migration 044 adds the database-enforced steady-state snapshot
-  fence. A subsequent independent bypass review identified the rolling-upgrade
-  interval in which a writer already entered through migration 043 could commit
-  without advancing that new fence. Forward-only migration 045 quiesces all
-  eleven supporting-authority writer tables and advances the fence atomically
-  before the corrected release can serve traffic. This corrected candidate
-  still requires a fresh independent exact-head audit.
-- **Parts 5–12: not implemented.**
+- **Part 4: independently approved, normally merged, deployed, and health
+  verified.** Approved head `2e682e4bc33d419c1fc357957e825c18cdec2cd6`
+  merged normally and deployed as `eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375`.
+  Railway deployment `f5f6caab-08a5-490a-93c4-386e84f3b4f8` applied the pending
+  sequence 042–045. Three health requests returned HTTP 200. These are the
+  exact supplied release facts, not evidence of physical Safari/devices,
+  provider operation, private production data, legal review, or founder visual
+  approval. No additional later-start zero-op verification is claimed here.
+- **Part 5: implementation writer candidate; independent audit and release
+  pending.** The additive reviewed equipment authority, shared reviewed draft
+  paths, private operational ledger, and catalogue are described in
+  [Equipment authority](../operations/EQUIPMENT_AUTHORITY.md). Local writer
+  evidence does not establish independent acceptance or release.
+- **Parts 6–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and

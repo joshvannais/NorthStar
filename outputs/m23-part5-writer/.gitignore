@@ -1,0 +1,4 @@
+*.log
+*-results.json
+chrome/failed-*.png
+webkit/failed-*.png

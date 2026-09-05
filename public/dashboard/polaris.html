@@ -1272,6 +1272,10 @@
         input.value = '';
         resetInputHeight();
         if (respondToAccountFreeDemoChat(message)) return;
+        if (/^add\b/i.test(message) && window.NorthStarEquipment) {
+          window.NorthStarEquipment.open({ entryPath: 'polaris', message: message });
+          return;
+        }
         sendPaidMessage(message, requestKey);
       }
 
@@ -1398,5 +1402,7 @@
 <script src="/js/command-center-contract.js"></script>
 <script src="/js/nav-component.js"></script>
   <script>NavComponent.init("polaris");</script>
+  <link rel="stylesheet" href="/css/equipment.css">
+  <script src="/js/equipment.js"></script>
 </body>
 </html>

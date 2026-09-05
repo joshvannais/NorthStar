@@ -1,0 +1,1666 @@
+{
+  "base": "eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375",
+  "runs": [
+    {
+      "file": "unit-results.json",
+      "bytes": 2802141,
+      "sha256": "ea18e18f55ce951ad765143453fce940f43f88e1ecc9b96d049ff05cec7ff5e7",
+      "startedAt": "2026-09-05T12:47:00.943Z",
+      "passedSuites": 93,
+      "failedSuites": 1,
+      "pendingSuites": 0,
+      "passedTests": 5387,
+      "failedTests": 1,
+      "pendingTests": 0,
+      "failures": [
+        {
+          "file": "tests/unit/production-migration-history-inspector.test.js",
+          "cases": [
+            {
+              "name": "bounded read-only production migration-history inspector loads the exact ordered repository migration set through correction 045",
+              "failure": "Error: expect(received).toHaveLength(expected)\n\nExpected length: 43\nReceived length: 44\nReceived array:  [{\"bytes\": 15275, \"checksum\": \"74ee47a852a376c3f5f8b2a5bf24579d24eb6a20dc8284e8b233a0159e858c14\", \"filename\": \"001_initial_schema.sql\"}, {\"bytes\": 3973, \"checksum\": \"370b2b2cd466817724f4788e104adef3f93d3d8a02bd877f252d1e3d6f588cd5\", \"filename\": \"002_seed_data.sql\"}, {\"bytes\": 2729, \"checksum\": \"535a47115df60e96a7d18d8b7c557b378aa18391a19eb658750f86faa18d1e1f\", \"filename\": \"003_voice_sessions.sql\"}, {\"bytes\": 14771, \"checksum\": \"097f398d0bf37982947d35b04890c396dee2d84ce8acdb34fa5434e13ba1263a\", \"filename\": \"004_canonical_persistence_v2.sql\"}, {\"bytes\": 4518, \"checksum\": \"b45c61d2da94d6aba7"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "regression-results.json",
+      "bytes": 3079974,
+      "sha256": "363342f58a54998a666c0ed625c2d077efb943e30685c7a07572b912b3f309dd",
+      "startedAt": "2026-09-05T12:49:32.364Z",
+      "passedSuites": 124,
+      "failedSuites": 6,
+      "pendingSuites": 0,
+      "passedTests": 5747,
+      "failedTests": 27,
+      "pendingTests": 0,
+      "failures": [
+        {
+          "file": "tests/integration/account-migration-010-postgres.test.js",
+          "cases": [
+            {
+              "name": "production account migration authority on required PostgreSQL 18 real lexer handles exact legacy envelopes and protected provenance uses raw Git blobs",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 fresh and legacy-ledger upgrade paths use the real runner, preserve data, and converge",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 branch-era TIMESTAMP NULL ledger is physically rebuilt, preserves a known moment, and marks unknown time",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 genuine prior ledger rows, known timestamps, sequence state, checksums, and uniqueness are durable",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 catalog comparator detects the exact archived 9ec fresh/upgrade physical ordinal mismatch",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 canonical physical shape with stale sequence state is transactionally repaired beyond the greatest ID",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 supported legacy shape with swap-sensitive metadata fails closed without changing rows or metadata",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 primary-key constraint comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 primary-key index comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 filename unique constraint comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 filename unique index comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 all four catalog objects comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 Unicode content comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 whitespace content comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 punctuation content comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 long content comment fails closed with exact catalog, data, sequence, and containment preservation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 NULL catalog comments are supported and comment removal retries migrations exactly once",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 two concurrent production runners both reject catalog comments without mutation",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 ledger insertion failure rolls migration 010 schema back and a fault-free retry commits exactly once",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 migration 011 schema and ledger insertion roll back together and retry exactly once",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 two independent migration processes serialize on the advisory transaction lock",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 terminating the owned migration backend before commit leaves neither schema nor ledger success",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 blank identity aborts through the real runner without partial migration state",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            },
+            {
+              "name": "production account migration authority on required PostgreSQL 18 duplicate normalized identity aborts through the real runner without partial migration state",
+              "failure": "Error: Required disposable PostgreSQL 18 identity is missing\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/account-migration-010-postgres.test.js:644:13)\n    at Promise.finally.completed (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)\n    at _callCircusHook (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/jest-circus/build/jestAdapterInit.js:980:40)\n    at _runTestsForDescribeBlo"
+            }
+          ]
+        },
+        {
+          "file": "tests/integration/m21-part5-knowledge-projection-postgres.test.js",
+          "cases": []
+        },
+        {
+          "file": "tests/integration/m19-part3-persistence-v2-postgres.test.js",
+          "cases": []
+        },
+        {
+          "file": "tests/integration/m20-phase6d-map-preferences-migration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 6D canonical map preference migration upgrades authentic history additively, enforces both normalized authorities, and records exact source",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"listen_addresses\": \"127.0.0.1\",\n    \"port\": 55465,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/m20-phase6d-map-preferences-migration-postgres.test.js:140:22)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/integration/m20-phase7-lane2-account-email-migration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 7 Lane 2 account email migration authority fresh PG18.4 UTC/checksum schema is exact, validated, bounded, and LF source-sealed",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"listen_addresses\": \"127.0.0.1\",\n    \"port\": 55465,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/m20-phase7-lane2-account-email-migration-postgres.test.js:79:22)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/integration/m20-part2f-asset-catalogue-migration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Part 2F tenant asset catalogue migration adds identity-only authority without inventing assets from legacy profile assumptions",
+              "failure": "Error: Migration run failed: relation \"public.tenant_assets\" does not exist\n    at Object.runMigrations (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/src/db.js:1680:11)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/integration/m20-part2f-asset-catalogue-migration-postgres.test.js:43:12)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "contracts-results.json",
+      "bytes": 612923,
+      "sha256": "e7a0c866fde3e08f1c436ce93952b0779c9e1061e3008e14ce6c6ba2fedd85ea",
+      "startedAt": "2026-09-05T12:58:09.605Z",
+      "passedSuites": 51,
+      "failedSuites": 12,
+      "pendingSuites": 0,
+      "passedTests": 730,
+      "failedTests": 104,
+      "pendingTests": 0,
+      "failures": [
+        {
+          "file": "tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 6A Retell webhook containment terminal-call serialization remains isolated by resolved tenant and call",
+              "failure": "Error: tenant/call-isolated terminal controls timed out\n    at Timeout.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js:403:45)\n    at listOnTimeout (node:internal/timers:605:17)\n    at processTimers (node:internal/timers:541:7)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs controlled fence fixture has one graph, byte-equivalent replay, conflict isolation, and no raw key",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted Polaris assistant context uses exact PostgreSQL tenant records and remains provider-unconfigured",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant routes enforce one organization-user budget before query or interceptor work",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant route joins and replays exact idempotent requests while isolating authority and context",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects missing nested key from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects extra nested key from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects wrong nested type from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unbounded nested label from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unsupported nested version from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects nested prototype smuggling from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted route rejects an unbounded intercepted status before executing the seam",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs static routes precede parameter routes and status reports no Redis requirement",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs organization, user, and session matrix fails closed without disclosing identifiers",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs organization-wide reads retain legitimate simulation, voice, and Retell graphs without cross-tenant disclosure",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical and compatibility projections return identical values and digests",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs all Part 3 surface projections expose one graph digest and value object",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs every surface exposes the persisted fact, source, profile, fingerprint, and timestamp metadata",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs dashboard and analytics are equal and derived from the canonical snapshot",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility analytics and recommendations project persisted canonical intelligence truthfully",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted context envelopes use persisted canonical intelligence without the retired service chain",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility projections exclude other organizations and distinguish genuine empty state",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs unsupported canonical projection inputs return explicit unavailable dispositions",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs every canonical read queries PostgreSQL while generic cache expiry remains isolated",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical reads never invoke an injected cache and Redis configuration is ignored",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs legacy identifier mutation is uniformly preview-required and leaves authority unchanged",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs required PostgreSQL outage returns 503 instead of empty success",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation missing customerId retains unfiltered organization-scoped collection",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation valid customerId filters normally",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation empty-string customerId returns 400 INVALID_CUSTOMER_ID",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation whitespace-only customerId returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed UUID returns 400 INVALID_CUSTOMER_ID",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation partial UUID fails closed",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on dashboard endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on surfaces endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on compat endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation analytics endpoint also rejects malformed customerId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation persistence outage remains 503, not 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation invalid filter error body includes requestId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation 503 error body includes requestId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase5-financial-configuration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority GET projects recognized fields and a versioned write preserves unrelated PostgreSQL bytes with zero provider calls",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority strict envelopes, roles, tenants, stale and concurrent writes fail closed without invalid version advances",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority current exact whole writes preserve Financial authority and fail closed when Financial-only",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority Voice, Operational, general, and every Financial-adjacent generic section preserve all eight legacy keys and canonical state",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority alternate whole and section paths cannot overwrite Financial authority in either write order",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority margin migration remains projection-only until a dedicated save materializes it and blank deletion cannot reintroduce it",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority mounted production Polaris calculation consumes profile fallback and service zero precedence without changing base or tax",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority reserved own keys fail before migration and leave the exact active bytes and version untouched",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority section replacement clears recognized legacy migration sources, preserves unknown bytes, and null is first-write only",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:211:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase6b-profile-readiness-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority GET is tenant-scoped for every actual role while only owner and admin can mutate",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority strict envelope rejection and forbidden applicability actions make zero durable writes",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority valid mark_applicable clears historical provenance until the restored source is explicitly reviewed again",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority mark_applicable is state-guarded, stale-safe, and clears Not applicable without review provenance",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority null first-write, stale retry, and simultaneous expected-version writes are atomic",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority dedicated, generic, operational, voice, financial, and whole writers preserve exact readiness and hostile sibling bytes",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority alternate writer orders and a simultaneous generic race preserve readiness presence and raw value",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority recognized source changes alone invalidate review while integration state and elapsed time do not",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority blank contact and context siblings are hash-neutral while qualifying mounted changes invalidate",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority unchanged legacy-v1 reads are inert and neutral mounted writes transition exactly one reviewed hash",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority legacy missing and invalid siblings stay neutral while qualifying mounted changes preserve metadata and invalidate",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority stale and simultaneous mounted writers cannot create a hybrid legacy transition",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority Not applicable cannot hide later configuration and readiness metadata is calculation-neutral",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority operating-origin Not applicable is rejected for selected but incomplete origins",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 6B mounted Profile Readiness authority other tenant raw authority remains byte-for-byte unchanged across all organization A writes",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6b-profile-readiness-postgres.test.js:185:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase7-login-timing-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety missing and existing wrong credentials have equal verification work and indistinguishable distributions",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety supported bcrypt costs 4 through 6 have adjacent current-cost controls",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety supported bcrypt costs 7 through 9 have adjacent current-cost controls",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety supported bcrypt costs 10 through 12 have adjacent current-cost controls",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety every supported bcrypt prefix and cost authenticates and noncanonical material upgrades",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety malformed and unsupported cost hashes fail closed through bounded dummy work",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety inactive supported legacy authorities and progressive throttle semantics remain intact",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety a bcrypt failure during lower-cost padding fails closed before failure mutation",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety a correct login still succeeds, creates one session, and clears only its own throttle keys",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety the source limiter caps expensive missing-account work before an eleventh bcrypt verification",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted login timing safety a bcrypt failure on the missing-account path fails closed without a session or credential response",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-timing-postgres.test.js:139:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority explicit 9 percent tax and zero emergency/travel round-trip and drive the next canonical calculation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority missing remains unavailable, malformed input is rejected, and organizations remain isolated",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority raw section authority rejects unknown, malformed, dangerous, and excessive structures without advancing the active version",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority valid raw strings and compatibility fields remain byte-exact while response metadata and tenant authority stay server-owned",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority company identity, locations, service area, hours, holidays, and policies persist byte-exact with tenant and version authority",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority service catalogue ids and pricing rules persist byte-exact and malformed or unauthorized writes do not advance authority",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase7-refresh-reset-race-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 7 password-reset/refresh transaction authority both legal orders serialize refresh and reset without a recovery deadlock",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 password-reset/refresh transaction authority ordinary ungated reset/refresh races never abort recovery",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 password-reset/refresh transaction authority refresh insertion failure rolls back and the exact original credential remains retryable",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 password-reset/refresh transaction authority a nonlocking route read cannot authorize after exact token/session identity changes",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 password-reset/refresh transaction authority CSRF, replay-family, and inactive-membership controls remain fail closed",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-refresh-reset-race-postgres.test.js:218:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase7-login-reset-race-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 7 password-reset/login transaction authority reset-first rejects stale deterministic canonical, raw, and current-material logins",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 password-reset/login transaction authority ordinary ungated reset-first rejects canonical, raw, and current-material logins",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 password-reset/login transaction authority login-first serializes canonical and supported upgrades before reset revokes the committed session",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 password-reset/login transaction authority session transaction failure rolls back supported upgrade and both credential inserts",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-login-reset-race-postgres.test.js:407:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase7-oauth-reset-race-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 7 OAuth-state/password-reset transaction authority both legal issue/reset orders serialize without a deadlock or stale authority",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 OAuth-state/password-reset transaction authority both legal consume/reset orders serialize without a deadlock or stale authority",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 OAuth-state/password-reset transaction authority ordinary ungated issue/consume/reset races preserve recovery authority",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 OAuth-state/password-reset transaction authority legitimate OAuth single-use and reset controls remain intact",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-oauth-reset-race-postgres.test.js:297:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase4-operational-configuration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 4 mounted Operational Configuration authority GET projects recognized authority and the dedicated versioned write preserves every unrelated raw authority",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase4-operational-configuration-postgres.test.js:81:22)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 4 mounted Operational Configuration authority strict contract, permissions, tenant isolation, stale and concurrent writes fail closed without advancing invalid versions",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase4-operational-configuration-postgres.test.js:81:22)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 4 mounted Operational Configuration authority whole and section APIs require exact envelopes and enforce versions",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase4-operational-configuration-postgres.test.js:81:22)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase7-forgot-password-timing-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 7 mounted forgot-password timing safety eligible and every non-authoritative outcome have adjacent indistinguishable distributions",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted forgot-password timing safety source throttling bounds recovery delay and creates no dummy authority",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 7 mounted forgot-password timing safety bounded equalization preserves repository errors and never runs after a denied limit",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n    \"checksums\": \"on\",\n    \"max_connections\": 100,\n    \"timezone\": \"UTC\",\n-   \"version\": \"18.4\",\n+   \"version\": \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\",\n  }\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase7-forgot-password-timing-postgres.test.js:130:17)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase3a-ai-configuration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 3A mounted AI configuration authority only the exact versioned section write can change raw voice authority",
+              "failure": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"18.4\"\nReceived: \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\"\n    at Object.toBe (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase3a-ai-configuration-postgres.test.js:74:30)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 3A mounted AI configuration authority strict envelope, nested validation, permissions, CSRF, and tenant isolation fail closed",
+              "failure": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"18.4\"\nReceived: \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\"\n    at Object.toBe (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase3a-ai-configuration-postgres.test.js:74:30)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 3A mounted AI configuration authority legacy Settings greeting remains byte-exact and cannot change canonical voice authority",
+              "failure": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"18.4\"\nReceived: \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\"\n    at Object.toBe (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase3a-ai-configuration-postgres.test.js:74:30)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            },
+            {
+              "name": "Mission 20 Phase 3A mounted AI configuration authority retired request-body agent creation preserves gates and reaches no provider or persistence boundary",
+              "failure": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"18.4\"\nReceived: \"18.4 (Ubuntu 18.4-0ubuntu0.26.04.1)\"\n    at Object.toBe (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase3a-ai-configuration-postgres.test.js:74:30)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "vanilla-regression-results.json",
+      "bytes": 4264345,
+      "sha256": "7e63cdc0b844ed3d46797318f706f44227d8479cb89ce090bcbbdaf93bfedcb5",
+      "startedAt": "2026-09-05T13:04:54.660Z",
+      "passedSuites": 183,
+      "failedSuites": 9,
+      "pendingSuites": 0,
+      "passedTests": 6533,
+      "failedTests": 54,
+      "pendingTests": 0,
+      "failures": [
+        {
+          "file": "tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 6A Retell webhook containment terminal-call serialization remains isolated by resolved tenant and call",
+              "failure": "Error: tenant/call-isolated terminal controls timed out\n    at Timeout.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js:403:45)\n    at listOnTimeout (node:internal/timers:605:17)\n    at processTimers (node:internal/timers:541:7)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs controlled fence fixture has one graph, byte-equivalent replay, conflict isolation, and no raw key",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted Polaris assistant context uses exact PostgreSQL tenant records and remains provider-unconfigured",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant routes enforce one organization-user budget before query or interceptor work",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant route joins and replays exact idempotent requests while isolating authority and context",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects missing nested key from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects extra nested key from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects wrong nested type from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unbounded nested label from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unsupported nested version from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects nested prototype smuggling from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted route rejects an unbounded intercepted status before executing the seam",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs static routes precede parameter routes and status reports no Redis requirement",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs organization, user, and session matrix fails closed without disclosing identifiers",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs organization-wide reads retain legitimate simulation, voice, and Retell graphs without cross-tenant disclosure",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical and compatibility projections return identical values and digests",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs all Part 3 surface projections expose one graph digest and value object",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs every surface exposes the persisted fact, source, profile, fingerprint, and timestamp metadata",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs dashboard and analytics are equal and derived from the canonical snapshot",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility analytics and recommendations project persisted canonical intelligence truthfully",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted context envelopes use persisted canonical intelligence without the retired service chain",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility projections exclude other organizations and distinguish genuine empty state",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs unsupported canonical projection inputs return explicit unavailable dispositions",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs every canonical read queries PostgreSQL while generic cache expiry remains isolated",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical reads never invoke an injected cache and Redis configuration is ignored",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs legacy identifier mutation is uniformly preview-required and leaves authority unchanged",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs required PostgreSQL outage returns 503 instead of empty success",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation missing customerId retains unfiltered organization-scoped collection",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation valid customerId filters normally",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation empty-string customerId returns 400 INVALID_CUSTOMER_ID",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation whitespace-only customerId returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed UUID returns 400 INVALID_CUSTOMER_ID",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation partial UUID fails closed",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on dashboard endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on surfaces endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on compat endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation analytics endpoint also rejects malformed customerId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation persistence outage remains 503, not 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation invalid filter error body includes requestId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation 503 error body includes requestId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority explicit 9 percent tax and zero emergency/travel round-trip and drive the next canonical calculation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority missing remains unavailable, malformed input is rejected, and organizations remain isolated",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority raw section authority rejects unknown, malformed, dangerous, and excessive structures without advancing the active version",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority valid raw strings and compatibility fields remain byte-exact while response metadata and tenant authority stay server-owned",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority company identity, locations, service area, hours, holidays, and policies persist byte-exact with tenant and version authority",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority service catalogue ids and pricing rules persist byte-exact and malformed or unauthorized writes do not advance authority",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase5-financial-configuration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority mounted production Polaris calculation consumes profile fallback and service zero precedence without changing base or tax",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at resetCalculationGraph (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:988:7)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:994:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority reserved own keys fail before migration and leave the exact active bytes and version untouched",
+              "failure": "error: update or delete on table \"canonical_business_profiles\" violates RESTRICT setting of foreign key constraint \"canonical_estimates_profile_authority_fk\" on table \"canonical_estimates\"\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:258:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority section replacement clears recognized legacy migration sources, preserves unknown bytes, and null is first-write only",
+              "failure": "error: update or delete on table \"canonical_business_profiles\" violates RESTRICT setting of foreign key constraint \"canonical_estimates_profile_authority_fk\" on table \"canonical_estimates\"\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/api/m20-phase5-financial-configuration-postgres.test.js:258:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/integration/m23-part2-field-execution-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 23 Part 4 rolling-upgrade authority quiescence drains a writer entered through 043, survives interruption, fences its commit, and restarts zero-op",
+              "failure": "Error: Unhandled error. (error: terminating connection due to administrator command\n    at parseErrorMessage (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-protocol/src/parser.ts:394:9)\n    at Parser.handlePacket (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-protocol/src/parser.ts:212:19)\n    at Parser.parse (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-protocol/src/parser.ts:105:30)\n    at Socket.<anonymous> (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-protocol/src/index.ts:7:48)\n    at Socket.emit (node:events:509:28)\n    at addChunk (node:internal/streams/readable:563:12)\n    at rea"
+            }
+          ]
+        },
+        {
+          "file": "tests/ratification/m23-part3-labor-time-evidence.test.js",
+          "cases": [
+            {
+              "name": "Mission 23 Part 3 labor and time evidence boundary pins the exact deployed base and truthful candidate/release boundary",
+              "failure": "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"**Part 4: audit-correction writer candidate in progress after the first\"\nReceived string:    \"# Mission 23 — Operations·\nMission 23 establishes the tenant-scoped operating authority for what actually\nhappens while scheduled work is performed. It connects the accepted customer,\nopportunity, appointment, assignment, workforce, asset, Business Profile, and\nknowledge authorities without replacing any of them.·\n## Ratified status·\n- **Part 1: independently accepted, merged, deployed, and production-accepted at\n  `935a27e94f5df2869308a1b1ac691d212f35ae94`.**\n- **Part 2: independently accepted, normally merged, automatical"
+            }
+          ]
+        },
+        {
+          "file": "tests/ratification/m23-part1-operations-contract.test.js",
+          "cases": [
+            {
+              "name": "Mission 23 Part 1 Operations root contract preserves historical Part 1 truth and states truthful Part 2 through Part 4 boundaries",
+              "failure": "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"**Part 4: audit-correction writer candidate in progress after the first\"\nReceived string:    \"# Mission 23 — Operations·\nMission 23 establishes the tenant-scoped operating authority for what actually\nhappens while scheduled work is performed. It connects the accepted customer,\nopportunity, appointment, assignment, workforce, asset, Business Profile, and\nknowledge authorities without replacing any of them.·\n## Ratified status·\n- **Part 1: independently accepted, merged, deployed, and production-accepted at\n  `935a27e94f5df2869308a1b1ac691d212f35ae94`.**\n- **Part 2: independently accepted, normally merged, automatical"
+            }
+          ]
+        },
+        {
+          "file": "tests/ratification/m23-part3-production-application-receipt.test.js",
+          "cases": [
+            {
+              "name": "Mission 23 Part 3 production application receipt keeps the released follow-up documentation-only and Part 4 independently gated",
+              "failure": "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"**Part 4: audit-correction writer candidate in progress after the first\"\nReceived string:    \"# Mission 23 — Operations·\nMission 23 establishes the tenant-scoped operating authority for what actually\nhappens while scheduled work is performed. It connects the accepted customer,\nopportunity, appointment, assignment, workforce, asset, Business Profile, and\nknowledge authorities without replacing any of them.·\n## Ratified status·\n- **Part 1: independently accepted, merged, deployed, and production-accepted at\n  `935a27e94f5df2869308a1b1ac691d212f35ae94`.**\n- **Part 2: independently accepted, normally merged, automatical"
+            }
+          ]
+        },
+        {
+          "file": "tests/ratification/m23-part2-production-application-receipt.test.js",
+          "cases": [
+            {
+              "name": "Mission 23 Part 2 production application receipt keeps the follow-up documentation-only and later release claims bounded",
+              "failure": "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"**Part 4: audit-correction writer candidate in progress after the first\"\nReceived string:    \"# Mission 23 — Operations·\nMission 23 establishes the tenant-scoped operating authority for what actually\nhappens while scheduled work is performed. It connects the accepted customer,\nopportunity, appointment, assignment, workforce, asset, Business Profile, and\nknowledge authorities without replacing any of them.·\n## Ratified status·\n- **Part 1: independently accepted, merged, deployed, and production-accepted at\n  `935a27e94f5df2869308a1b1ac691d212f35ae94`.**\n- **Part 2: independently accepted, normally merged, automatical"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "baseline-results.json",
+      "bytes": 127084,
+      "sha256": "748220b0ba13da2a302dfff983e8a657b3a167b4308426564291f3805ac07864",
+      "startedAt": "2026-09-05T13:21:32.286Z",
+      "passedSuites": 0,
+      "failedSuites": 4,
+      "pendingSuites": 0,
+      "passedTests": 52,
+      "failedTests": 49,
+      "pendingTests": 0,
+      "failures": [
+        {
+          "file": "tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 6A Retell webhook containment terminal-call serialization remains isolated by resolved tenant and call",
+              "failure": "Error: tenant/call-isolated terminal controls timed out\n    at Timeout.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js:403:45)\n    at listOnTimeout (node:internal/timers:605:17)\n    at processTimers (node:internal/timers:541:7)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs controlled fence fixture has one graph, byte-equivalent replay, conflict isolation, and no raw key",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted Polaris assistant context uses exact PostgreSQL tenant records and remains provider-unconfigured",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant routes enforce one organization-user budget before query or interceptor work",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant route joins and replays exact idempotent requests while isolating authority and context",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects missing nested key from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects extra nested key from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects wrong nested type from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unbounded nested label from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unsupported nested version from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects nested prototype smuggling from the intercepted seam without canonical mutation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted route rejects an unbounded intercepted status before executing the seam",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs static routes precede parameter routes and status reports no Redis requirement",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs organization, user, and session matrix fails closed without disclosing identifiers",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs organization-wide reads retain legitimate simulation, voice, and Retell graphs without cross-tenant disclosure",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical and compatibility projections return identical values and digests",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs all Part 3 surface projections expose one graph digest and value object",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs every surface exposes the persisted fact, source, profile, fingerprint, and timestamp metadata",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs dashboard and analytics are equal and derived from the canonical snapshot",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility analytics and recommendations project persisted canonical intelligence truthfully",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted context envelopes use persisted canonical intelligence without the retired service chain",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility projections exclude other organizations and distinguish genuine empty state",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs unsupported canonical projection inputs return explicit unavailable dispositions",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs every canonical read queries PostgreSQL while generic cache expiry remains isolated",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical reads never invoke an injected cache and Redis configuration is ignored",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs legacy identifier mutation is uniformly preview-required and leaves authority unchanged",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs required PostgreSQL outage returns 503 instead of empty success",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation missing customerId retains unfiltered organization-scoped collection",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation valid customerId filters normally",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation empty-string customerId returns 400 INVALID_CUSTOMER_ID",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation whitespace-only customerId returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed UUID returns 400 INVALID_CUSTOMER_ID",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation partial UUID fails closed",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on dashboard endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on surfaces endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on compat endpoint returns 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation analytics endpoint also rejects malformed customerId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation persistence outage remains 503, not 400",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation invalid filter error body includes requestId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 1)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation 503 error body includes requestId",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Promise.all (index 0)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-canonical-api-postgres.test.js:262:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m20-phase5-financial-configuration-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority mounted production Polaris calculation consumes profile fallback and service zero precedence without changing base or tax",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at resetCalculationGraph (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m20-phase5-financial-configuration-postgres.test.js:988:7)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m20-phase5-financial-configuration-postgres.test.js:994:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority reserved own keys fail before migration and leave the exact active bytes and version untouched",
+              "failure": "error: update or delete on table \"canonical_business_profiles\" violates RESTRICT setting of foreign key constraint \"canonical_estimates_profile_authority_fk\" on table \"canonical_estimates\"\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m20-phase5-financial-configuration-postgres.test.js:258:5)"
+            },
+            {
+              "name": "Mission 20 Phase 5 mounted Financial Configuration authority section replacement clears recognized legacy migration sources, preserves unknown bytes, and null is first-write only",
+              "failure": "error: update or delete on table \"canonical_business_profiles\" violates RESTRICT setting of foreign key constraint \"canonical_estimates_profile_authority_fk\" on table \"canonical_estimates\"\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m20-phase5-financial-configuration-postgres.test.js:258:5)"
+            }
+          ]
+        },
+        {
+          "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+          "cases": [
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority explicit 9 percent tax and zero emergency/travel round-trip and drive the next canonical calculation",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority missing remains unavailable, malformed input is rejected, and organizations remain isolated",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority raw section authority rejects unknown, malformed, dangerous, and excessive structures without advancing the active version",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority valid raw strings and compatibility fields remain byte-exact while response metadata and tenant authority stay server-owned",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority company identity, locations, service area, hours, holidays, and policies persist byte-exact with tenant and version authority",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            },
+            {
+              "name": "Mission 19 Part 3 canonical Business Profile mounted authority service catalogue ids and pricing rules persist byte-exact and malformed or unauthorized writes do not advance authority",
+              "failure": "error: Canonical field execution evidence is immutable\n    at /home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at Object.<anonymous> (/home/joshv/northstar-m23-part5-baseline-eccc8e9/tests/api/m19-part3-business-profile-postgres.test.js:86:5)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "operations-ratification-results.json",
+      "bytes": 229993,
+      "sha256": "2b990bff17c25765f17e17f578c601df1dedce5f0bc058e12ec67a2feed4f86a",
+      "startedAt": "2026-09-05T13:17:30.227Z",
+      "passedSuites": 24,
+      "failedSuites": 0,
+      "pendingSuites": 0,
+      "passedTests": 437,
+      "failedTests": 0,
+      "pendingTests": 0,
+      "failures": []
+    },
+    {
+      "file": "available-results.json",
+      "bytes": 4094354,
+      "sha256": "4b298e3a1c04e38b81fda7b7113af786bc7ac5835150e8ed95eed2f70d9b1d2d",
+      "startedAt": "2026-09-05T13:23:53.883Z",
+      "passedSuites": 191,
+      "failedSuites": 1,
+      "pendingSuites": 2,
+      "passedTests": 6566,
+      "failedTests": 1,
+      "pendingTests": 50,
+      "failures": [
+        {
+          "file": "tests/unit/pre-m23-p4-admin-ia.test.js",
+          "cases": [
+            {
+              "name": "Pre-Mission-23 P4 administrative information architecture ADM-20 tracks only durable controls and restores the canonical Company section",
+              "failure": "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"ignore: '[data-knowledge-management]'\"\nReceived string:    \"<!DOCTYPE html>\n<html lang=\\\"en\\\">\n<head>\n  <meta charset=\\\"UTF-8\\\">\n  <link rel=\\\"icon\\\" type=\\\"image/svg+xml\\\" href=\\\"/assets/favicon.svg\\\">\n  <script src=\\\"/js/demo-runtime.js\\\"></script>\n  <link rel=\\\"stylesheet\\\" href=\\\"/css/demo-runtime.css\\\">\n  <meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\\\">\n  <title>Business Profile — NorthStar Solutions</title>\n  <script src=\\\"/js/theme.js\\\"></script>\n  <link rel=\\\"stylesheet\\\" href=\\\"/css/style.css\\\">\n  <link rel=\\\"stylesheet\\\" href=\\\"/css/workspace-form-state.css\\\">\n  <link rel=\\\"styles"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "equipment-final-results.json",
+      "bytes": 38048,
+      "sha256": "62feaf6e6a1cadb0d69902b856d46df510b9a1da23f95e28f4180cc7237a5852",
+      "startedAt": "2026-09-05T13:38:47.167Z",
+      "passedSuites": 6,
+      "failedSuites": 0,
+      "pendingSuites": 0,
+      "passedTests": 74,
+      "failedTests": 0,
+      "pendingTests": 0,
+      "failures": []
+    },
+    {
+      "file": "final-contract-results.json",
+      "bytes": 3036712,
+      "sha256": "7b239570b082f1ff1b2cac04e34c33f4bf1a4193e75956e23a37532e5d3dd578",
+      "startedAt": "2026-09-05T13:39:46.403Z",
+      "passedSuites": 119,
+      "failedSuites": 0,
+      "pendingSuites": 0,
+      "passedTests": 5867,
+      "failedTests": 0,
+      "pendingTests": 0,
+      "failures": []
+    },
+    {
+      "file": "available-results.json",
+      "bytes": 3453864,
+      "sha256": "5694592cb7627ed3c99d4e9d018493142a15450cfbaadd16b65792b534e7031a",
+      "startedAt": "2026-09-05T13:46:36.678Z",
+      "passedSuites": 192,
+      "failedSuites": 1,
+      "pendingSuites": 2,
+      "passedTests": 6572,
+      "failedTests": 1,
+      "pendingTests": 50,
+      "failures": [
+        {
+          "file": "tests/ratification/m19-part4-final-reachability.test.js",
+          "cases": [
+            {
+              "name": "Mission 19 Part 4 Slice 5 final reachability retirement only the authorized public script additions are present while retained boundaries remain",
+              "failure": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 0\n+ Received  + 1\n\n@@ -2,10 +2,11 @@\n    \"public/js/command-center-contract.js\",\n    \"public/js/command-center-page.js\",\n    \"public/js/demo-command-center.js\",\n    \"public/js/demo-runtime.js\",\n    \"public/js/display-projection.js\",\n+   \"public/js/equipment.js\",\n    \"public/js/homepage-demo.js\",\n    \"public/js/knowledge-management.js\",\n    \"public/js/navigation-launcher.js\",\n    \"public/js/polaris-card.js\",\n    \"public/js/polaris-native-card.js\",\n    at Object.toEqual (/home/joshv/northstar-m23-part5-writer-eccc8e9-20260905/tests/ratification/m19-part4-final-reachability.test.js:174:8)\n    at Promise.finally.completed "
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "available-results.json",
+      "bytes": 3447569,
+      "sha256": "94abc065d651c706bdd50c6fa557b4c41f05bf53bfd9e788f7565dfcfa060188",
+      "startedAt": "2026-09-05T13:59:25.834Z",
+      "passedSuites": 193,
+      "failedSuites": 0,
+      "pendingSuites": 2,
+      "passedTests": 6573,
+      "failedTests": 0,
+      "pendingTests": 50,
+      "failures": []
+    },
+    {
+      "file": "final-contract-results.json",
+      "bytes": 3036686,
+      "sha256": "f6c128c39db16a9cf17c6bc27e7ca35d3ff36960c51739ba936a886661eae78a",
+      "startedAt": "2026-09-05T13:59:37.018Z",
+      "passedSuites": 119,
+      "failedSuites": 0,
+      "pendingSuites": 0,
+      "passedTests": 5867,
+      "failedTests": 0,
+      "pendingTests": 0,
+      "failures": []
+    }
+  ],
+  "browsers": [
+    {
+      "file": "chrome/evidence.json",
+      "sha256": "a4d59ed448cfb0944d3a3d22fe7767a97b5e97f72621c75f290c07f38fcb5a0b",
+      "browser": "chrome",
+      "cases": [
+        {
+          "entry": "business_profile",
+          "explicitConfirmation": true
+        },
+        {
+          "entry": "polaris",
+          "explicitConfirmation": true
+        },
+        {
+          "theme": "light",
+          "width": 1280,
+          "geometry": {
+            "viewport": 1280,
+            "width": 1280,
+            "hostWidth": 865,
+            "clientWidth": 865,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "light",
+          "cssZoom": 200,
+          "reflow": {
+            "scroll": 1280,
+            "viewport": 1280
+          },
+          "nativeBrowserZoom": "not claimed",
+          "narrowViewport400PercentEquivalent": 320
+        },
+        {
+          "theme": "light",
+          "width": 768,
+          "geometry": {
+            "viewport": 768,
+            "width": 768,
+            "hostWidth": 662,
+            "clientWidth": 662,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "light",
+          "width": 390,
+          "geometry": {
+            "viewport": 390,
+            "width": 390,
+            "hostWidth": 284,
+            "clientWidth": 284,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "theme": "light",
+          "width": 320,
+          "geometry": {
+            "viewport": 320,
+            "width": 320,
+            "hostWidth": 214,
+            "clientWidth": 214,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "width": 1280,
+          "geometry": {
+            "viewport": 1280,
+            "width": 1280,
+            "hostWidth": 865,
+            "clientWidth": 865,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "cssZoom": 200,
+          "reflow": {
+            "scroll": 1280,
+            "viewport": 1280
+          },
+          "nativeBrowserZoom": "not claimed",
+          "narrowViewport400PercentEquivalent": 320
+        },
+        {
+          "theme": "dark",
+          "width": 768,
+          "geometry": {
+            "viewport": 768,
+            "width": 768,
+            "hostWidth": 662,
+            "clientWidth": 662,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "width": 390,
+          "geometry": {
+            "viewport": 390,
+            "width": 390,
+            "hostWidth": 284,
+            "clientWidth": 284,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "width": 320,
+          "geometry": {
+            "viewport": 320,
+            "width": 320,
+            "hostWidth": 214,
+            "clientWidth": 214,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "memberMutationHidden": true
+        },
+        {
+          "failedReadNotEmpty": true
+        }
+      ],
+      "externalBlocked": [],
+      "pageErrors": [],
+      "httpFailures": [
+        {
+          "path": "/api/equipment/catalogue",
+          "status": 503
+        }
+      ],
+      "providerCalls": 0,
+      "physicalSafari": "unavailable",
+      "founderVisualApproval": "unavailable",
+      "version": "152.0.7977.82",
+      "result": "passed"
+    },
+    {
+      "file": "webkit/evidence.json",
+      "sha256": "9de3319f99319101996ebd8e17b25045b948fa4b28a17b585e014c2ee03c2b20",
+      "browser": "webkit",
+      "cases": [
+        {
+          "entry": "business_profile",
+          "explicitConfirmation": true
+        },
+        {
+          "entry": "polaris",
+          "explicitConfirmation": true
+        },
+        {
+          "theme": "light",
+          "width": 1280,
+          "geometry": {
+            "viewport": 1280,
+            "width": 1280,
+            "hostWidth": 865,
+            "clientWidth": 865,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "light",
+          "cssZoom": 200,
+          "reflow": {
+            "scroll": 1280,
+            "viewport": 1280
+          },
+          "nativeBrowserZoom": "not claimed",
+          "narrowViewport400PercentEquivalent": 320
+        },
+        {
+          "theme": "light",
+          "width": 768,
+          "geometry": {
+            "viewport": 768,
+            "width": 768,
+            "hostWidth": 662,
+            "clientWidth": 662,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "light",
+          "width": 390,
+          "geometry": {
+            "viewport": 390,
+            "width": 390,
+            "hostWidth": 284,
+            "clientWidth": 284,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "theme": "light",
+          "width": 320,
+          "geometry": {
+            "viewport": 320,
+            "width": 320,
+            "hostWidth": 214,
+            "clientWidth": 214,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "width": 1280,
+          "geometry": {
+            "viewport": 1280,
+            "width": 1280,
+            "hostWidth": 865,
+            "clientWidth": 865,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "cssZoom": 200,
+          "reflow": {
+            "scroll": 1280,
+            "viewport": 1280
+          },
+          "nativeBrowserZoom": "not claimed",
+          "narrowViewport400PercentEquivalent": 320
+        },
+        {
+          "theme": "dark",
+          "width": 768,
+          "geometry": {
+            "viewport": 768,
+            "width": 768,
+            "hostWidth": 662,
+            "clientWidth": 662,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": false,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "width": 390,
+          "geometry": {
+            "viewport": 390,
+            "width": 390,
+            "hostWidth": 284,
+            "clientWidth": 284,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "theme": "dark",
+          "width": 320,
+          "geometry": {
+            "viewport": 320,
+            "width": 320,
+            "hostWidth": 214,
+            "clientWidth": 214,
+            "bad": [],
+            "xss": 0
+          },
+          "collapsedByDefault": true,
+          "keyboardDisclosure": true,
+          "focusReturn": true,
+          "touch": true,
+          "reducedMotion": true
+        },
+        {
+          "memberMutationHidden": true
+        },
+        {
+          "failedReadNotEmpty": true
+        }
+      ],
+      "externalBlocked": [],
+      "pageErrors": [],
+      "httpFailures": [
+        {
+          "path": "/api/equipment/catalogue",
+          "status": 503
+        }
+      ],
+      "providerCalls": 0,
+      "physicalSafari": "unavailable",
+      "founderVisualApproval": "unavailable",
+      "version": "26.5",
+      "result": "passed"
+    }
+  ]
+}

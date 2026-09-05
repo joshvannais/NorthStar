@@ -1,0 +1,188 @@
+{
+  "browser": "webkit",
+  "cases": [
+    {
+      "entry": "business_profile",
+      "explicitConfirmation": true
+    },
+    {
+      "entry": "polaris",
+      "explicitConfirmation": true
+    },
+    {
+      "theme": "light",
+      "width": 1280,
+      "geometry": {
+        "viewport": 1280,
+        "width": 1280,
+        "hostWidth": 865,
+        "clientWidth": 865,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": false,
+      "reducedMotion": true
+    },
+    {
+      "theme": "light",
+      "cssZoom": 200,
+      "reflow": {
+        "scroll": 1280,
+        "viewport": 1280
+      },
+      "nativeBrowserZoom": "not claimed",
+      "narrowViewport400PercentEquivalent": 320
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "hostWidth": 662,
+        "clientWidth": 662,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": false,
+      "reducedMotion": true
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "hostWidth": 284,
+        "clientWidth": 284,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": true,
+      "reducedMotion": true
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "hostWidth": 214,
+        "clientWidth": 214,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": true,
+      "reducedMotion": true
+    },
+    {
+      "theme": "dark",
+      "width": 1280,
+      "geometry": {
+        "viewport": 1280,
+        "width": 1280,
+        "hostWidth": 865,
+        "clientWidth": 865,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": false,
+      "reducedMotion": true
+    },
+    {
+      "theme": "dark",
+      "cssZoom": 200,
+      "reflow": {
+        "scroll": 1280,
+        "viewport": 1280
+      },
+      "nativeBrowserZoom": "not claimed",
+      "narrowViewport400PercentEquivalent": 320
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "hostWidth": 662,
+        "clientWidth": 662,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": false,
+      "reducedMotion": true
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "hostWidth": 284,
+        "clientWidth": 284,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": true,
+      "reducedMotion": true
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "hostWidth": 214,
+        "clientWidth": 214,
+        "bad": [],
+        "xss": 0
+      },
+      "collapsedByDefault": true,
+      "keyboardDisclosure": true,
+      "focusReturn": true,
+      "touch": true,
+      "reducedMotion": true
+    },
+    {
+      "memberMutationHidden": true
+    },
+    {
+      "failedReadNotEmpty": true
+    }
+  ],
+  "externalBlocked": [],
+  "pageErrors": [],
+  "httpFailures": [
+    {
+      "path": "/api/equipment/catalogue",
+      "status": 503
+    }
+  ],
+  "providerCalls": 0,
+  "physicalSafari": "unavailable",
+  "founderVisualApproval": "unavailable",
+  "version": "26.5",
+  "result": "passed"
+}

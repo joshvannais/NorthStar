@@ -40,6 +40,7 @@ const AUTHORIZED_PUBLIC_SCRIPT_ADDITIONS = Object.freeze([
   'public/js/demo-command-center.js',
   'public/js/demo-runtime.js',
   'public/js/display-projection.js',
+  'public/js/equipment.js',
   'public/js/homepage-demo.js',
   'public/js/knowledge-management.js',
   'public/js/navigation-launcher.js',

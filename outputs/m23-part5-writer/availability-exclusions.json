@@ -1,0 +1,252 @@
+[
+  {
+    "file": "tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js",
+    "name": "Mission 20 Phase 6A Retell webhook containment terminal-call serialization remains isolated by resolved tenant and call",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs controlled fence fixture has one graph, byte-equivalent replay, conflict isolation, and no raw key",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted Polaris assistant context uses exact PostgreSQL tenant records and remains provider-unconfigured",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant routes enforce one organization-user budget before query or interceptor work",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL assistant route joins and replays exact idempotent requests while isolating authority and context",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects missing nested key from the intercepted seam without canonical mutation",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects extra nested key from the intercepted seam without canonical mutation",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects wrong nested type from the intercepted seam without canonical mutation",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unbounded nested label from the intercepted seam without canonical mutation",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects unsupported nested version from the intercepted seam without canonical mutation",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted PostgreSQL route rejects nested prototype smuggling from the intercepted seam without canonical mutation",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted route rejects an unbounded intercepted status before executing the seam",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs static routes precede parameter routes and status reports no Redis requirement",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs organization, user, and session matrix fails closed without disclosing identifiers",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs organization-wide reads retain legitimate simulation, voice, and Retell graphs without cross-tenant disclosure",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical and compatibility projections return identical values and digests",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs all Part 3 surface projections expose one graph digest and value object",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs every surface exposes the persisted fact, source, profile, fingerprint, and timestamp metadata",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs dashboard and analytics are equal and derived from the canonical snapshot",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility analytics and recommendations project persisted canonical intelligence truthfully",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs mounted context envelopes use persisted canonical intelligence without the retired service chain",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs compatibility projections exclude other organizations and distinguish genuine empty state",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs unsupported canonical projection inputs return explicit unavailable dispositions",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs every canonical read queries PostgreSQL while generic cache expiry remains isolated",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs canonical reads never invoke an injected cache and Redis configuration is ignored",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs legacy identifier mutation is uniformly preview-required and leaves authority unchanged",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs required PostgreSQL outage returns 503 instead of empty success",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation missing customerId retains unfiltered organization-scoped collection",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation valid customerId filters normally",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation empty-string customerId returns 400 INVALID_CUSTOMER_ID",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation whitespace-only customerId returns 400",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed UUID returns 400 INVALID_CUSTOMER_ID",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation partial UUID fails closed",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on dashboard endpoint returns 400",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on surfaces endpoint returns 400",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation malformed customerId on compat endpoint returns 400",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation analytics endpoint also rejects malformed customerId",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation persistence outage remains 503, not 400",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation invalid filter error body includes requestId",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-canonical-api-postgres.test.js",
+    "name": "Mission 19 Part 3 organization-scoped canonical APIs customerId filter validation 503 error body includes requestId",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m20-phase5-financial-configuration-postgres.test.js",
+    "name": "Mission 20 Phase 5 mounted Financial Configuration authority mounted production Polaris calculation consumes profile fallback and service zero precedence without changing base or tax",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m20-phase5-financial-configuration-postgres.test.js",
+    "name": "Mission 20 Phase 5 mounted Financial Configuration authority reserved own keys fail before migration and leave the exact active bytes and version untouched",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m20-phase5-financial-configuration-postgres.test.js",
+    "name": "Mission 20 Phase 5 mounted Financial Configuration authority section replacement clears recognized legacy migration sources, preserves unknown bytes, and null is first-write only",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+    "name": "Mission 19 Part 3 canonical Business Profile mounted authority explicit 9 percent tax and zero emergency/travel round-trip and drive the next canonical calculation",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+    "name": "Mission 19 Part 3 canonical Business Profile mounted authority missing remains unavailable, malformed input is rejected, and organizations remain isolated",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+    "name": "Mission 19 Part 3 canonical Business Profile mounted authority raw section authority rejects unknown, malformed, dangerous, and excessive structures without advancing the active version",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+    "name": "Mission 19 Part 3 canonical Business Profile mounted authority valid raw strings and compatibility fields remain byte-exact while response metadata and tenant authority stay server-owned",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+    "name": "Mission 19 Part 3 canonical Business Profile mounted authority company identity, locations, service area, hours, holidays, and policies persist byte-exact with tenant and version authority",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/api/m19-part3-business-profile-postgres.test.js",
+    "name": "Mission 19 Part 3 canonical Business Profile mounted authority service catalogue ids and pricing rules persist byte-exact and malformed or unauthorized writes do not advance authority",
+    "reason": "Same failure reproduced on released eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375; not passing."
+  },
+  {
+    "file": "tests/integration/account-migration-010-postgres.test.js",
+    "name": "production account migration authority on required PostgreSQL 18 catalog comparator detects the exact archived 9ec fresh/upgrade physical ordinal mismatch",
+    "reason": "Exact archived negative-control databases are unavailable; not passing."
+  }
+]

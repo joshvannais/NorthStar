@@ -11,9 +11,10 @@
   and is recorded in
   `PRODUCTION_MIGRATION_READINESS_RECEIPT.md`. It does not prove production
   application, the 042 ledger row, deployment health, or later-start zero-op.
-  That historical receipt predates forward-only migration 043 and does not
-  establish 043 compatibility. A new credential-silent SELECT-only preflight
-  against the final corrected source set is required before release.
+  That historical receipt predates forward-only migrations 043 and 044 and
+  does not establish their compatibility. A new credential-silent SELECT-only
+  preflight against the exact final corrected source set is required before
+  release.
   No production DDL/data mutation, private or customer row access, credential
   display, provider action, manual restart, or manual deployment occurred.
 - No dated relevant production backup receipt or isolated restore rehearsal is
@@ -23,6 +24,12 @@
 - GitHub reports no hosted checks for the draft branch. Local syntax, unit,
   ratification, cross-contract, and disposable PostgreSQL evidence does not
   substitute for unavailable hosted CI.
+- Migration 044 intentionally makes a pre-044 runtime's PostgreSQL `READ ONLY`
+  material-read transaction fail closed after the schema upgrade because the
+  snapshot fence requires a row lock. The corrected runtime uses a semantically
+  read-only read-write transaction with no direct material/fence write grants.
+  Local tests prove denial/no disclosure and corrected-runtime recovery; no
+  rolling production application or availability observation is available.
 
 ## Product authority
 

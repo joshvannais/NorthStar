@@ -30,6 +30,11 @@ compatible with the exact frozen 042 candidate before application. It does not
 prove application, a production 042 ledger row, deployed runtime health, or a
 later-start zero-op.
 
+This historical receipt predates forward-only migrations 043 and 044. It does
+not prove compatibility or application for either correction migration. A new
+credential-silent SELECT-only compatibility preflight against the exact final
+source set remains required before release.
+
 ## Connection and access boundary
 
 The first repository-inspector attempt received the Postgres service's internal

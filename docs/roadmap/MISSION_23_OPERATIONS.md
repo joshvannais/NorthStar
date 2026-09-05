@@ -34,7 +34,12 @@ knowledge authorities without replacing any of them.
   application start with no migration application and unchanged exact one-row
   checksums and original timestamps for migrations 039–041.
 - **Part 4: audit-correction writer candidate in progress after the first
-  independent review; not accepted, merged, deployed, or production-applied.**
+  independent review and Daybreak exact-head re-audit; not accepted, merged,
+  deployed, or production-applied.** The first correction set closed five
+  findings in forward-only migration 043. The Daybreak re-audit identified one
+  remaining stale-MVCC-snapshot gap after supporting-authority lock acquisition;
+  forward-only migration 044 adds the database-enforced snapshot fence. This
+  corrected candidate still requires a fresh independent exact-head audit.
 - **Parts 5–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
@@ -260,14 +265,17 @@ appointment, assignment, dispatch, execution, performer, crew, and fail-closed
 production transcript authority before any new effect or cached replay. A
 single ordered supporting-authority lock is acquired before the material
 transaction snapshot; every insert/update/delete/truncate writer for those
-authorities acquires the exclusive counterpart before its statement. Mutation,
-replay, and read therefore reauthorize only after any earlier revocation has
-committed, while a later revocation waits until the material operation ends.
-Both database entry points verify that the shared session lock was acquired
-before the snapshot and deny a direct caller that bypasses this ordering.
-Reads use bounded repeatable-read snapshots and the same current scope. Runtime
-SQL may execute only the material mutation/read entry points and has no direct
-table or helper privilege.
+authorities acquires the exclusive counterpart before its statement and
+advances a singleton MVCC fence. Mutation, replay, and read therefore
+reauthorize only after any earlier revocation has committed, while a later
+revocation waits until the material operation ends. Both database entry points
+verify that the shared session lock is held, reject same-backend exclusive-lock
+reentrancy, and take a row lock on the fence. PostgreSQL denies a
+repeatable-read or serializable transaction whose fixed snapshot predates a
+committed fence replacement. Reads are semantically read-only bounded
+repeatable-read snapshots: the row lock requires a read-write transaction, but
+the runtime role has no direct material or fence-table write authority and may
+execute only the material mutation/read entry points.
 
 Every required execution, assignment, and existing-movement revision/digest
 pin rejects explicit `NULL` before replay or evidence access. Material

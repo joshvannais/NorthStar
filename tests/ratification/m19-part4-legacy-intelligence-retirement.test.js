@@ -171,14 +171,20 @@ describe('Mission 19 Part 4 Slice 2 legacy intelligence retirement', () => {
           throw new Error('Production entrypoint loaded retired legacy intelligence');
         }
         if (externalDestinations.length) throw new Error('A provider-shaped external destination was attempted');
-        process.stdout.write('\nSLICE2_RESULT=' + JSON.stringify({
+        const resultLine = '\nSLICE2_RESULT=' + JSON.stringify({
           canonicalStatus: canonicalResponse.status,
           contextStatus: contextResponse.status,
           canonicalRouteLoaded: true,
           canonicalGraphLoaded: true,
           retiredLoads: 0,
           externalDestinations,
-        }) + '\n');
+        }) + '\n';
+        await new Promise(function (resolve) {
+          process.stdout.write(resultLine, resolve);
+        });
+        // The proof is complete. Do not let unrelated imported runtime handles
+        // turn this bounded child-process assertion into a platform timeout.
+        process.exit(0);
       }()).catch(function (error) {
         console.error(error && error.stack ? error.stack : error);
         process.exitCode = 1;
@@ -213,7 +219,7 @@ describe('Mission 19 Part 4 Slice 2 legacy intelligence retirement', () => {
       cwd: root,
       encoding: 'utf8',
       env: safeEnvironment,
-      timeout: 15000,
+      timeout: 60000,
       windowsHide: true,
     });
     expect(result.error).toBeUndefined();

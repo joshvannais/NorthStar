@@ -2094,6 +2094,46 @@ realPostgres('Mission 23 Part 2 canonical field execution PostgreSQL authority',
     }
   }, 180000);
 
+  test('Part 4 exact read-only stale-snapshot reproduction fails closed without disclosure', async () => {
+    const context = await createStartedExecution(71);
+    await repository.mutateMaterialInventory(runtimePool, material({
+      ...context, actorUserId: IDS.member, action: 'record', movementKind: 'returned',
+      itemKey: 'snapshot.readonly', description: 'Read-only stale snapshot evidence.',
+      quantity: '1', unitCode: 'each', locationKey: 'truck-17',
+      key: 'm23-p4-snapshot-fence-readonly',
+    }, sessions.member, 'member'));
+    const before = await materialEvidence(migrationPool, context.execution.id);
+    const stale = await runtimePool.connect();
+    let shared = false;
+    try {
+      await stale.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await stale.query(
+        'SELECT status FROM public.organization_memberships WHERE organization_id=$1 AND user_id=$2',
+        [IDS.organization, IDS.member]
+      );
+      await migrationPool.query(
+        `UPDATE public.organization_memberships SET status='suspended'
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      );
+      await stale.query('SELECT pg_advisory_lock_shared(230004,4)');
+      shared = true;
+      await expect(directMaterialRead(stale, {
+        organizationId: IDS.organization, actorUserId: IDS.member,
+        actorAccessRole: 'member', authSessionId: sessions.member.sessionId,
+        executionId: context.execution.id,
+      })).rejects.toMatchObject({ code: '25006' });
+    } finally {
+      await stale.query('ROLLBACK').catch(() => {});
+      if (shared) await stale.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(() => {});
+      stale.release();
+      await migrationPool.query(
+        `UPDATE public.organization_memberships SET status='active'
+          WHERE organization_id=$1 AND user_id=$2`, [IDS.organization, IDS.member]
+      ).catch(() => {});
+    }
+    expect(await materialEvidence(migrationPool, context.execution.id)).toEqual(before);
+  });
+
   test('Part 4 fences stale fresh mutation and exact replay with zero effects', async () => {
     const context = await createStartedExecution(68);
     const replayInput = material({

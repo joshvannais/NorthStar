@@ -8,6 +8,9 @@ const ROOT = path.join(__dirname, '..', '..');
 const read = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8');
 const migration = read('migrations', '042_canonical_material_inventory_evidence.sql');
 const correctionMigration = read('migrations', '043_canonical_material_inventory_audit_corrections.sql');
+const snapshotFenceMigration = read(
+  'migrations', '044_canonical_material_authority_snapshot_fence.sql'
+);
 const unicodeContractSource = read('src', 'operations', 'materialTextUnicodeContract.json');
 const unicodeContract = JSON.parse(unicodeContractSource);
 const contract = read('src', 'operations', 'contract.js');
@@ -22,6 +25,9 @@ const corrections = read('outputs', 'm23-part4-writer', 'CORRECTION_CHANGELOG.md
 const migrationIdentity = read('outputs', 'm23-part4-writer', 'MIGRATION_IDENTITY.md');
 const correctionMigrationIdentity = read(
   'outputs', 'm23-part4-writer', 'MIGRATION_043_IDENTITY.md'
+);
+const snapshotFenceMigrationIdentity = read(
+  'outputs', 'm23-part4-writer', 'MIGRATION_044_IDENTITY.md'
 );
 const productionReadiness = read(
   'outputs', 'm23-part4-writer', 'PRODUCTION_MIGRATION_READINESS_RECEIPT.md'
@@ -42,6 +48,7 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(laterStart).toContain('`2b498fe1-d025-4be7-bd90-cef6154f9bb8`');
     expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
     expect(roadmap).toContain('**Part 4: audit-correction writer candidate in progress after the first');
+    expect(roadmap).toContain('Daybreak exact-head re-audit');
     expect(roadmap).toContain('**Parts 5–12: not implemented.**');
     expect(unavailable).toContain('This is a writer candidate.');
   });
@@ -103,6 +110,19 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(correctionMigrationIdentity).toContain('A new SELECT-only\nproduction-history check');
   });
 
+  test('freezes forward-only migration 044 without rewriting migrations 042 or 043', () => {
+    for (const value of [
+      'f8bbf55080af2a3e617124f12ee658fd544a46f0',
+      '01e9e3edc00053e496c8379d05afde2be831154c',
+      '1cf68d95f77e717ebb34c1d50c05cceb658bd135',
+      '3,995',
+      '8d4c895fb06d5b0dc49ee968ad64d777efa9d1b861094f00571170e4d6e6b32d',
+      '90379f78425cbe476ab8406e2bed33c6c575d16a',
+      '9f9d43d1d631953203a0d45accdfc757f3ce005a81cd4915c06bf2c3fd6ec228',
+    ]) expect(snapshotFenceMigrationIdentity).toContain(value);
+    expect(snapshotFenceMigrationIdentity).toContain('Migrations 001–043 remain byte-for-byte unchanged.');
+  });
+
   test('provides a bounded credential-silent read-only production-history inspector', () => {
     expect(packageManifest.scripts['inspect:production-migrations'])
       .toBe('node scripts/inspect-production-migration-history.js');
@@ -133,10 +153,10 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(productionReadiness).toContain('failed closed with\nits generic error');
     expect(productionReadiness).toContain('printed or mutated');
     expect(productionReadiness).toContain('does not\nprove application');
-    expect(requirements).toContain('corrected-source production preflight and recovery remain unavailable');
+    expect(requirements).toContain('exact-final-source production preflight and recovery remain unavailable');
     expect(unavailable).toContain('production-history compatibility preflight passed');
     expect(unavailable).toContain('does not prove production');
-    expect(unavailable).toContain('predates forward-only migration 043');
+    expect(unavailable).toContain('predates forward-only migrations 043 and 044');
   });
 
   test('limits actions and movement facts to Part 4 vocabulary', () => {
@@ -166,9 +186,15 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(migration).toContain("om.status='active' AND u.status='active'");
   });
 
-  test('uses serializable/idempotent writes and bounded read-only snapshots', () => {
+  test('uses serializable/idempotent writes and bounded semantically read-only snapshots', () => {
     expect(repository).toContain('return serializable(pool, async client =>');
-    expect(repository).toContain('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const materialReadSource = repository.slice(
+      repository.indexOf('async function readMaterialInventory'),
+      repository.indexOf('module.exports')
+    );
+    expect(materialReadSource).toContain('BEGIN ISOLATION LEVEL REPEATABLE READ');
+    expect(materialReadSource).not.toContain('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    expect(materialReadSource).toContain('This transaction remains semantically read-only');
     expect(repository).toContain("SET LOCAL statement_timeout='5000ms'");
     expect(migration).toContain("current_setting('transaction_isolation')<>'serializable'");
     expect(migration).toContain('pg_advisory_xact_lock');
@@ -212,7 +238,12 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     ]) expect(correctionMigration).toContain(`'${relation}'`);
     expect(repository).toContain('SELECT pg_advisory_lock_shared(230004,4)');
     expect(repository).toContain('SELECT pg_advisory_unlock_shared(230004,4)');
-    expect(repository).toContain('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const materialReadSource = repository.slice(
+      repository.indexOf('async function readMaterialInventory'),
+      repository.indexOf('module.exports')
+    );
+    expect(materialReadSource).toContain('BEGIN ISOLATION LEVEL REPEATABLE READ');
+    expect(materialReadSource).not.toContain('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const materialSerializableSource = repository.slice(
       repository.indexOf('async function materialSerializable'),
       repository.indexOf('async function initializeFieldExecution'));
@@ -221,6 +252,21 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(correctionMigration).toContain("'{data,totalBalanceCount}'");
     expect(correctionMigration).toContain("'{data,balancePage}'");
     expect(correctionMigration).toContain('OFFSET balance_offset_value LIMIT balance_limit_value');
+  });
+
+  test('closes the stale-MVCC-snapshot finding in forward-only migration 044', () => {
+    expect(snapshotFenceMigration).toContain('Migrations 042 and 043 remain');
+    expect(snapshotFenceMigration).toContain('CREATE TABLE public.canonical_material_authority_fence');
+    expect(snapshotFenceMigration).toContain('UPDATE public.canonical_material_authority_fence');
+    expect(snapshotFenceMigration).toContain('FOR SHARE');
+    expect(snapshotFenceMigration).toContain('WHEN serialization_failure THEN');
+    expect(snapshotFenceMigration).toContain("CONSTRAINT='canonical_material_authority_changed'");
+    expect(snapshotFenceMigration).toContain("held.mode='ExclusiveLock'");
+    expect(snapshotFenceMigration).toContain("held.mode='ShareLock'");
+    expect(snapshotFenceMigration).toContain('held.objsubid=2');
+    expect(snapshotFenceMigration).toContain('REVOKE ALL ON TABLE public.canonical_material_authority_fence FROM PUBLIC');
+    expect(db).toContain("'canonical_material_authority_fence'");
+    expect(db).toContain("NOT has_table_privilege($1,'public.canonical_material_authority_fence','SELECT')");
   });
 
   test('shares one versioned code-point Unicode contract across JS and PostgreSQL', () => {
@@ -250,7 +296,7 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     for (const table of [
       'canonical_material_movements', 'canonical_material_events',
       'canonical_material_revisions', 'canonical_material_audit_events',
-      'canonical_material_idempotency',
+      'canonical_material_idempotency', 'canonical_material_authority_fence',
     ]) expect(db).toContain(table);
     expect(migration).toContain('REVOKE ALL ON FUNCTION public.canonical_material_inventory_mutate');
     expect(migration).toContain('REVOKE ALL ON FUNCTION public.canonical_material_inventory_read');
@@ -277,7 +323,8 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(unavailable).toContain('Chrome, WebKit');
     expect(corrections).toContain('Current row lineage guard');
     expect(corrections).toContain('Read-current authority');
-    expect(corrections).toContain('No correction changes migrations 001–042.');
+    expect(corrections).toContain('Daybreak exact-head re-audit — stale MVCC snapshot');
+    expect(corrections).toContain('No correction changes migrations 001–043.');
   });
 
   test('records the future Part 5 exact-asset and universal-knowledge boundary without implementing it', () => {

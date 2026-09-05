@@ -91,6 +91,27 @@ async function authorizeFileUpload(pool, input) {
   )).rows[0]));
 }
 
+async function reconcileFileUpload(pool, input) {
+  return transaction(pool, 'SERIALIZABLE', async client => result((await client.query(
+    `SELECT public.canonical_field_file_upload_reconcile(
+       $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,$8::uuid,$9::uuid,$10::uuid,$11::text
+     ) AS result`,
+    [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId,
+      input.csrfToken, input.executionId, input.idempotencyKey, input.reservationId,
+      input.storageGenerationId, input.objectId, input.claimToken]
+  )).rows[0]));
+}
+
+async function confirmFileCleanup(pool, input) {
+  return transaction(pool, 'SERIALIZABLE', async client => result((await client.query(
+    `SELECT public.canonical_field_file_cleanup_confirm(
+       $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::uuid,$8::text
+     ) AS result`,
+    [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId,
+      input.csrfToken, input.executionId, input.cleanupClaimId, input.cleanupToken]
+  )).rows[0]));
+}
+
 async function readFieldEvidence(pool, input) {
   return transaction(pool, 'REPEATABLE READ READ ONLY', async client => result((await client.query(
     `SELECT public.canonical_field_evidence_read(
@@ -113,4 +134,5 @@ async function authorizeFileRetrieval(pool, input) {
   )).rows[0]));
 }
 
-module.exports = { FieldEvidenceRepositoryError, authorizeFileRetrieval, authorizeFileUpload, mapDatabaseError, mutateFieldEvidence, readFieldEvidence };
+module.exports = { FieldEvidenceRepositoryError, authorizeFileRetrieval, authorizeFileUpload, confirmFileCleanup,
+  mapDatabaseError, mutateFieldEvidence, readFieldEvidence, reconcileFileUpload };

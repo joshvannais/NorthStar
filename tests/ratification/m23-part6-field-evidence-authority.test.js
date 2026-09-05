@@ -17,10 +17,10 @@ describe('Mission 23 Part 6 unified field evidence ratification contract', () =>
     expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^047_.*\.sql$/.test(name)))
       .toEqual(['047_canonical_field_evidence_authority.sql']);
     const bytes = fs.readFileSync(path.join(ROOT, MIGRATION_PATH));
-    expect(bytes.length).toBe(74729);
-    expect(hash(bytes)).toBe('b9c08d267cbf373202e621b381f5821bb96c54fde3046be25fe08005d8f16048');
+    expect(bytes.length).toBe(94197);
+    expect(hash(bytes)).toBe('b24b3018ce296ff1d5986dc8a5ab6e48742039d713d7d76a680890d8b90e6314');
     expect(execFileSync('git', ['hash-object', MIGRATION_PATH], { cwd: ROOT, encoding: 'utf8' }).trim())
-      .toBe('f8a94d64d20bc3076819b6f719ca02a1f2508318');
+      .toBe('6526ac7d2bb563ba64e2b442d11361ad454a34e4');
   });
 
   test('preserves every released migration byte from the exact full-history base', () => {
@@ -75,13 +75,14 @@ describe('Mission 23 Part 6 unified field evidence ratification contract', () =>
     ]) expect(migration).toContain(fragment);
   });
 
-  test('withholds tables and helpers while granting only four fixed-search-path entry points', () => {
+  test('withholds tables and helpers while granting only six fixed-search-path entry points', () => {
     const authority = read('src/fieldEvidence/databaseAuthority.js');
     expect(authority).toContain("new Set(['canonical_field_evidence_mutate', 'canonical_field_evidence_read'");
-    expect(authority).toContain("'canonical_field_file_upload_authorize', 'canonical_field_file_retrieve_authorize']");
+    expect(authority).toContain("'canonical_field_file_upload_authorize', 'canonical_field_file_upload_reconcile'");
+    expect(authority).toContain("'canonical_field_file_cleanup_confirm', 'canonical_field_file_retrieve_authorize']");
     expect(authority).toContain('REVOKE ALL ON TABLE');
     expect(authority).toContain('REVOKE ALL ON FUNCTION');
-    expect(migration.match(/SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp/g)).toHaveLength(6);
+    expect(migration.match(/SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp/g)).toHaveLength(8);
   });
 
   test('keeps storage unavailable until every required privacy and file capability is evidenced', () => {
@@ -105,12 +106,17 @@ describe('Mission 23 Part 6 unified field evidence ratification contract', () =>
     const storage = read('src/fieldEvidence/fileStorage.js');
     const contract = read('src/fieldEvidence/contract.js');
     expect(storage.indexOf('await authorizeUpload')).toBeLessThan(storage.indexOf('storage.beginQuarantine'));
-    for (const fragment of ['immutableObjectCreate', 'generationScopedCleanup', 'deleteGeneration',
+    for (const fragment of ['immutableObjectCreate', 'generationScopedCleanup', 'databaseFencedCleanup', 'deleteGeneration',
       'storageGenerationId', 'storageObjectVersion', 'expectedContentDigest']) expect(storage).toContain(fragment);
     expect(storage).not.toContain('deleteOrphan');
     expect(migration).toContain('canonical_field_evidence_file_upload_reservations');
+    expect(migration).toContain('canonical_field_evidence_file_upload_generations');
+    expect(migration).toContain('canonical_field_evidence_file_cleanup_claims');
+    expect(migration).toContain('canonical_field_evidence_file_cleanup_tombstones');
     expect(migration).toContain("reservation.status='accepted'");
     expect(migration).toContain('claim_token_hash');
+    expect(storage).toContain("resolution === 'accepted'");
+    expect(storage).toContain("resolution === 'cleanup_authorized'");
     expect(contract).toContain("['described', 'unavailable', 'needs_review']");
     expect(contract).toContain("'x-accessibility-state'");
     expect(migration).toContain("document_value->>'kind'='file_accessibility_correction'");

@@ -132,6 +132,7 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
     malwareScan: true, metadataStrip: true, decompressionSafety: true,
     retentionCleanup: true, orphanCleanup: true,
     shortLivedRetrieval: true, immutableObjectCreate: true, generationScopedCleanup: true,
+    databaseFencedCleanup: true,
     version: 'fixture-v1', digest: digest('f') };
   function storage(overrides = {}) {
     const chunks = [];
@@ -161,8 +162,11 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
     accessibility: { state: 'described', description: 'Photo of the recorded arrival condition.', reason: null } } }
   function reservation() { return { status: 200, replayed: false, body: { success: true, data: {
     reservationId: crypto.randomUUID(), storageGenerationId: crypto.randomUUID(), objectId: crypto.randomUUID(),
-    claimToken: crypto.randomBytes(32).toString('hex'),
+    claimToken: crypto.randomBytes(32).toString('hex'), cleanupCandidates: [],
   } } }; }
+  function cleanupResolution(reserved) { return { status: 200, replayed: false, resolution: 'cleanup_authorized',
+    cleanupCandidate: { cleanupClaimId: crypto.randomUUID(), storageGenerationId: reserved.body.data.storageGenerationId,
+      objectId: reserved.body.data.objectId, cleanupToken: crypto.randomBytes(32).toString('hex') } }; }
 
   test('streams allowlisted bytes through quarantine, scan, metadata removal, encryption gate and one database mutation', async () => {
     const bytes = jpeg(); const provider = storage(); const authorizeUpload = jest.fn(async () => reservation());
@@ -193,11 +197,13 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
       metadataRemovalDigest: digest('2'),
     })) }],
   ])('fails closed and cleans orphan for %s', async (_label, bytes, overrides) => {
-    const provider = storage(overrides); const mutate = jest.fn();
+    const provider = storage(overrides); const mutate = jest.fn(); const reserved = reservation();
+    const reconcileUpload = jest.fn(async () => cleanupResolution(reserved)); const confirmCleanup = jest.fn(async () => ({ status: 200 }));
     await expect(ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes]),
       metadata: metadata(bytes), csrfToken: 'x'.repeat(32), requestCorrelationId: 'file-fail', mutate,
-      authorizeUpload: jest.fn(async () => reservation()) })).rejects.toBeDefined();
+      authorizeUpload: jest.fn(async () => reserved), reconcileUpload, confirmCleanup })).rejects.toBeDefined();
     expect(mutate).not.toHaveBeenCalled(); expect(provider.deleteGeneration).toHaveBeenCalledTimes(1);
+    expect(confirmCleanup).toHaveBeenCalledTimes(1);
   });
 
   test('accepted replay and conflicting reservation failure happen before storage mutation', async () => {
@@ -231,15 +237,38 @@ describe('Mission 23 Part 6 streaming file pipeline', () => {
     expect(Buffer.concat(provider.chunks)).toEqual(bytes);
   });
 
-  test('generation-scoped cleanup cannot target a previously accepted object generation', async () => {
+  test('lost COMMIT acknowledgement resolves accepted evidence without deleting its generation', async () => {
     const bytes = jpeg(); const provider = storage(); const reserved = reservation();
     const mutate = jest.fn(async () => { throw new Error('database unavailable'); });
+    const accepted = { status: 201, replayed: true, resolution: 'accepted', body: { success: true,
+      data: { document: { objectId: reserved.body.data.objectId } } } };
     await expect(ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes]), metadata: metadata(bytes),
-      csrfToken: 'x'.repeat(32), requestCorrelationId: 'generation-cleanup', authorizeUpload: jest.fn(async () => reserved), mutate })).rejects.toThrow();
-    expect(provider.deleteGeneration).toHaveBeenCalledWith(expect.objectContaining({
-      objectId: reserved.body.data.objectId, storageGenerationId: reserved.body.data.storageGenerationId,
-      claimToken: reserved.body.data.claimToken,
-    }));
+      csrfToken: 'x'.repeat(32), requestCorrelationId: 'lost-commit-ack', authorizeUpload: jest.fn(async () => reserved), mutate,
+      reconcileUpload: jest.fn(async () => accepted), confirmCleanup: jest.fn() })).resolves.toBe(accepted);
+    expect(provider.deleteGeneration).not.toHaveBeenCalled();
+  });
+
+  test('unknown commit outcome retains bytes when fresh reconciliation is unavailable', async () => {
+    const bytes = jpeg(); const provider = storage(); const reserved = reservation();
+    await expect(ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes]), metadata: metadata(bytes),
+      csrfToken: 'x'.repeat(32), requestCorrelationId: 'unknown-commit', authorizeUpload: jest.fn(async () => reserved),
+      mutate: jest.fn(async () => { throw new Error('commit acknowledgement unavailable'); }),
+      reconcileUpload: jest.fn(async () => { throw new Error('database unavailable'); }), confirmCleanup: jest.fn() })).rejects.toThrow(/commit acknowledgement/);
+    expect(provider.deleteGeneration).not.toHaveBeenCalled();
+  });
+
+  test('expired takeover cleanup uses only database-issued generation claims before new storage mutation', async () => {
+    const bytes = jpeg(); const provider = storage(); const reserved = reservation(); const priorReservation = reservation();
+    const prior = cleanupResolution(priorReservation).cleanupCandidate;
+    reserved.body.data.cleanupCandidates = [prior];
+    const confirmCleanup = jest.fn(async () => ({ status: 200 }));
+    const mutate = jest.fn(async (_pool, value) => ({ status: 201, replayed: false, body: { success: true, data: { document: value.document } } }));
+    await ingestFileEvidence({ pool: {}, storage: provider, stream: Readable.from([bytes]), metadata: metadata(bytes),
+      csrfToken: 'x'.repeat(32), requestCorrelationId: 'takeover-cleanup', authorizeUpload: jest.fn(async () => reserved), mutate, confirmCleanup });
+    expect(provider.deleteGeneration).toHaveBeenCalledWith(expect.objectContaining({ cleanupClaimId: prior.cleanupClaimId,
+      cleanupToken: prior.cleanupToken, storageGenerationId: prior.storageGenerationId, objectId: prior.objectId }));
+    expect(confirmCleanup).toHaveBeenCalledWith({}, expect.objectContaining({ cleanupClaimId: prior.cleanupClaimId }));
+    expect(provider.deleteGeneration.mock.invocationCallOrder[0]).toBeLessThan(provider.beginQuarantine.mock.invocationCallOrder[0]);
   });
 
   test('production default remains explicitly unavailable and retrieval is attachment-only for five minutes', async () => {

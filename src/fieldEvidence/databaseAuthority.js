@@ -1,14 +1,15 @@
 'use strict';
 
 const ENTRIES = new Set(['canonical_field_evidence_mutate', 'canonical_field_evidence_read',
-  'canonical_field_file_upload_authorize', 'canonical_field_file_retrieve_authorize']);
+  'canonical_field_file_upload_authorize', 'canonical_field_file_upload_reconcile',
+  'canonical_field_file_cleanup_confirm', 'canonical_field_file_retrieve_authorize']);
 const quote = name => '"' + name.replace(/"/g, '""') + '"';
 
 async function grantAndVerify(client, runtimeRole) {
   const exists = await client.query("SELECT to_regclass('public.canonical_field_evidence_records') IS NOT NULL AS present");
   if (!exists.rows[0].present) return;
   const tables = await client.query("SELECT oid,oid::regclass::text AS identity FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN ('r','p') AND relname LIKE 'canonical_field_evidence_%'");
-  const functions = await client.query("SELECT oid,proname,oid::regprocedure::text AS identity FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'canonical_field_evidence_%' OR proname IN ('canonical_field_file_upload_authorize','canonical_field_file_retrieve_authorize'))");
+  const functions = await client.query("SELECT oid,proname,oid::regprocedure::text AS identity FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'canonical_field_evidence_%' OR proname IN ('canonical_field_file_upload_authorize','canonical_field_file_upload_reconcile','canonical_field_file_cleanup_confirm','canonical_field_file_retrieve_authorize'))");
   const role = quote(runtimeRole);
   for (const row of tables.rows) {
     await client.query(`REVOKE ALL ON TABLE ${row.identity} FROM PUBLIC, ${role}`);

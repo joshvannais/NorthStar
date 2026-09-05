@@ -39,3 +39,33 @@ The report returned `CHANGES_REQUIRED` with exactly two reportable findings.
 This correction does not claim live storage, malware clearance, accessibility
 approval, consent/legal compliance, merge, deployment or release. A different
 fresh read-only auditor must inspect the exact corrected head.
+
+## P2 follow-up: unknown COMMIT outcome and hard-crash orphan
+
+A fresh re-audit of corrected head
+`050555b309dd0a801ca87b859282c8609e588a74` retained one P2. The immutable
+report was read from
+`pr170-reaudit-artifacts-050555b-20260905/report.md`; its verified SHA-256 was
+`cb0c74b08642b7b04ab536484eb2696812c2ddf54b82fd287a9ca63e146f75ba`.
+
+- Every issued reservation/object/storage generation is now retained in an
+  append-only tenant-scoped generation ledger; takeover no longer erases the
+  prior reconciliation pointer.
+- A fresh serializable reconciliation entry point reauthorizes current
+  actor/session/execution/assignment authority, serializes on the idempotency
+  key, and returns accepted replay before considering cleanup.
+- Current unaccepted work is fenced as `cleanup_pending`. Only a database-issued
+  hashed cleanup claim can reach generation-scoped provider deletion, and
+  cleanup confirmation rechecks that no immutable accepted record references
+  the generation before appending one tombstone.
+- Expired takeover emits bounded cleanup claims for retained unaccepted
+  generations. Provider deletion is required to be generation-scoped,
+  database-fenced and idempotent, so interruption before confirmation is safely
+  retryable.
+- If COMMIT or reconciliation outcome is unknown, bytes are retained. A real
+  PostgreSQL commit-then-throw test proves accepted bytes survive and exact retry
+  returns the stored canonical response.
+
+The skill-required fresh read-only bypass reviewer found no actionable defect in
+the correction. That review is not the independent exact-head release audit.
+Real provider behavior remains unavailable and is not claimed.

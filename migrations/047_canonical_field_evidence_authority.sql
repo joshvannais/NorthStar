@@ -305,9 +305,56 @@ CREATE TABLE public.canonical_field_evidence_file_upload_reservations (
   CONSTRAINT canonical_field_file_upload_digest_check CHECK(key_hash~'^[0-9a-f]{64}$' AND request_digest~'^[0-9a-f]{64}$' AND claim_token_hash~'^[0-9a-f]{64}$' AND source_execution_digest~'^[0-9a-f]{64}$' AND source_assignment_digest~'^[0-9a-f]{64}$'),
   CONSTRAINT canonical_field_file_upload_request_check CHECK(public.canonical_field_file_request_valid(request_document) AND source_execution_revision>=1 AND source_assignment_revision>=1 AND public.canonical_field_execution_reason_valid(reason) AND request_correlation_id~'^[ -~]{1,128}$'),
   CONSTRAINT canonical_field_file_upload_state_check CHECK(
-    (status='pending' AND record_id IS NULL AND response_status IS NULL AND response_body IS NULL) OR
+    (status IN ('pending','cleanup_pending') AND record_id IS NULL AND response_status IS NULL AND response_body IS NULL) OR
     (status='accepted' AND record_id IS NOT NULL AND response_status=201 AND jsonb_typeof(response_body)='object')
   )
+);
+
+CREATE TABLE public.canonical_field_evidence_file_upload_generations (
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+  reservation_id UUID NOT NULL, storage_generation_id UUID NOT NULL, object_id UUID NOT NULL,
+  actor_user_id UUID NOT NULL, auth_session_id UUID NOT NULL, key_hash CHAR(64) NOT NULL,
+  request_digest CHAR(64) NOT NULL, execution_id UUID NOT NULL, performer_profile_id UUID NOT NULL,
+  source_execution_revision BIGINT NOT NULL, source_execution_digest CHAR(64) NOT NULL,
+  source_assignment_revision BIGINT NOT NULL, source_assignment_digest CHAR(64) NOT NULL,
+  claim_token_hash CHAR(64) NOT NULL, lease_until TIMESTAMPTZ NOT NULL,
+  transaction_id BIGINT NOT NULL DEFAULT txid_current(), issued_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+  PRIMARY KEY(organization_id,storage_generation_id),
+  CONSTRAINT canonical_field_file_generation_reservation_unique UNIQUE(organization_id,reservation_id),
+  CONSTRAINT canonical_field_file_generation_object_unique UNIQUE(organization_id,object_id),
+  CONSTRAINT canonical_field_file_generation_binding_unique UNIQUE(organization_id,storage_generation_id,object_id),
+  CONSTRAINT canonical_field_file_generation_actor_fk FOREIGN KEY(organization_id,actor_user_id) REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_generation_session_fk FOREIGN KEY(organization_id,actor_user_id,auth_session_id) REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_generation_execution_fk FOREIGN KEY(organization_id,execution_id) REFERENCES public.canonical_field_executions(organization_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_generation_performer_fk FOREIGN KEY(organization_id,performer_profile_id) REFERENCES public.workforce_profiles(organization_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_generation_digest_check CHECK(key_hash~'^[0-9a-f]{64}$' AND request_digest~'^[0-9a-f]{64}$' AND claim_token_hash~'^[0-9a-f]{64}$' AND source_execution_digest~'^[0-9a-f]{64}$' AND source_assignment_digest~'^[0-9a-f]{64}$' AND source_execution_revision>=1 AND source_assignment_revision>=1)
+);
+
+CREATE TABLE public.canonical_field_evidence_file_cleanup_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+  storage_generation_id UUID NOT NULL, object_id UUID NOT NULL, cleanup_token_hash CHAR(64) NOT NULL,
+  actor_user_id UUID NOT NULL, auth_session_id UUID NOT NULL, reason_code TEXT NOT NULL,
+  transaction_id BIGINT NOT NULL DEFAULT txid_current(), issued_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+  CONSTRAINT canonical_field_file_cleanup_claim_tenant_identity UNIQUE(organization_id,id),
+  CONSTRAINT canonical_field_file_cleanup_claim_generation_fk FOREIGN KEY(organization_id,storage_generation_id,object_id) REFERENCES public.canonical_field_evidence_file_upload_generations(organization_id,storage_generation_id,object_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_cleanup_claim_binding_unique UNIQUE(organization_id,id,storage_generation_id,object_id),
+  CONSTRAINT canonical_field_file_cleanup_claim_actor_fk FOREIGN KEY(organization_id,actor_user_id) REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_cleanup_claim_session_fk FOREIGN KEY(organization_id,actor_user_id,auth_session_id) REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_cleanup_claim_check CHECK(cleanup_token_hash~'^[0-9a-f]{64}$' AND reason_code IN ('failed_attempt','expired_takeover'))
+);
+
+CREATE TABLE public.canonical_field_evidence_file_cleanup_tombstones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+  cleanup_claim_id UUID NOT NULL, storage_generation_id UUID NOT NULL, object_id UUID NOT NULL,
+  actor_user_id UUID NOT NULL, auth_session_id UUID NOT NULL,
+  transaction_id BIGINT NOT NULL DEFAULT txid_current(), decided_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+  CONSTRAINT canonical_field_file_cleanup_tombstone_tenant_identity UNIQUE(organization_id,id),
+  CONSTRAINT canonical_field_file_cleanup_tombstone_claim_unique UNIQUE(organization_id,cleanup_claim_id),
+  CONSTRAINT canonical_field_file_cleanup_tombstone_generation_unique UNIQUE(organization_id,storage_generation_id),
+  CONSTRAINT canonical_field_file_cleanup_tombstone_claim_fk FOREIGN KEY(organization_id,cleanup_claim_id,storage_generation_id,object_id) REFERENCES public.canonical_field_evidence_file_cleanup_claims(organization_id,id,storage_generation_id,object_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_cleanup_tombstone_generation_fk FOREIGN KEY(organization_id,storage_generation_id) REFERENCES public.canonical_field_evidence_file_upload_generations(organization_id,storage_generation_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_cleanup_tombstone_actor_fk FOREIGN KEY(organization_id,actor_user_id) REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_field_file_cleanup_tombstone_session_fk FOREIGN KEY(organization_id,actor_user_id,auth_session_id) REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT
 );
 
 CREATE TABLE public.canonical_field_evidence_file_access_events (
@@ -392,8 +439,9 @@ CREATE FUNCTION public.canonical_field_file_upload_authorize(
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB; execution_record public.canonical_field_executions%ROWTYPE; assignment_record public.canonical_schedule_assignments%ROWTYPE;
  reservation public.canonical_field_evidence_file_upload_reservations%ROWTYPE; key_hash_value TEXT; request_hash_value TEXT;
- claim_token TEXT; now_value TIMESTAMPTZ:=transaction_timestamp(); reservation_value UUID; generation_value UUID; object_value UUID;
- reservation_found BOOLEAN;
+ claim_token TEXT; cleanup_token TEXT; cleanup_claim_id UUID; cleanup_candidates JSONB:='[]'::jsonb;
+ now_value TIMESTAMPTZ:=transaction_timestamp(); reservation_value UUID; generation_value UUID; object_value UUID;
+ reservation_found BOOLEAN; orphan_generation RECORD;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' OR NOT public.canonical_field_file_request_valid(request_value)
  OR idempotency_key IS NULL OR idempotency_key !~ '^[!-~]{16,128}$'
@@ -434,12 +482,15 @@ BEGIN
    IF reservation.lease_until>clock_timestamp() THEN
      RAISE EXCEPTION 'Upload already in progress' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_upload_busy';
    END IF;
- ELSE
+	 ELSE
    IF (SELECT count(*) FROM public.canonical_field_evidence_file_upload_reservations r WHERE r.organization_id=org AND r.execution_id=execution_value)>=2000 THEN
      RAISE EXCEPTION 'Upload reservation limit' USING ERRCODE='54000',CONSTRAINT='canonical_field_evidence_upload_reservation_limit';
    END IF;
- END IF;
- claim_token:=encode(sha256(convert_to(gen_random_uuid()::text||clock_timestamp()::text||txid_current()::text,'UTF8')),'hex'); reservation_value:=gen_random_uuid(); generation_value:=gen_random_uuid(); object_value:=gen_random_uuid();
+	 END IF;
+	 IF (SELECT count(*) FROM public.canonical_field_evidence_file_upload_generations generation WHERE generation.organization_id=org AND generation.execution_id=execution_value)>=2000 THEN
+	  RAISE EXCEPTION 'Upload generation limit' USING ERRCODE='54000',CONSTRAINT='canonical_field_evidence_upload_generation_limit';
+	 END IF;
+	 claim_token:=encode(sha256(convert_to(gen_random_uuid()::text||clock_timestamp()::text||txid_current()::text,'UTF8')),'hex'); reservation_value:=gen_random_uuid(); generation_value:=gen_random_uuid(); object_value:=gen_random_uuid();
  IF reservation_found THEN
    UPDATE public.canonical_field_evidence_file_upload_reservations SET
     reservation_id=reservation_value,storage_generation_id=generation_value,object_id=object_value,
@@ -450,12 +501,39 @@ BEGIN
     organization_id,actor_user_id,auth_session_id,key_hash,request_digest,request_document,execution_id,performer_profile_id,
     source_execution_revision,source_execution_digest,source_assignment_revision,source_assignment_digest,reason,request_correlation_id,
     reservation_id,storage_generation_id,object_id,claim_token_hash,lease_until)
-   VALUES(org,actor,session_value,key_hash_value,request_hash_value,request_value,execution_value,performer,
+	   VALUES(org,actor,session_value,key_hash_value,request_hash_value,request_value,execution_value,performer,
     expected_execution_revision,expected_execution_digest,expected_assignment_revision,expected_assignment_digest,reason_value,correlation_value,
-    reservation_value,generation_value,object_value,encode(sha256(convert_to(claim_token,'UTF8')),'hex'),now_value+interval '15 minutes');
- END IF;
- RETURN jsonb_build_object('status',200,'body',jsonb_build_object('success',TRUE,'data',jsonb_build_object(
-   'reservationId',reservation_value,'storageGenerationId',generation_value,'objectId',object_value,'claimToken',claim_token)),'replayed',FALSE);
+	    reservation_value,generation_value,object_value,encode(sha256(convert_to(claim_token,'UTF8')),'hex'),now_value+interval '15 minutes');
+	 END IF;
+	 INSERT INTO public.canonical_field_evidence_file_upload_generations(
+	  organization_id,reservation_id,storage_generation_id,object_id,actor_user_id,auth_session_id,key_hash,request_digest,
+	  execution_id,performer_profile_id,source_execution_revision,source_execution_digest,source_assignment_revision,
+	  source_assignment_digest,claim_token_hash,lease_until)
+	 VALUES(org,reservation_value,generation_value,object_value,actor,session_value,key_hash_value,request_hash_value,
+	  execution_value,performer,expected_execution_revision,expected_execution_digest,expected_assignment_revision,
+	  expected_assignment_digest,encode(sha256(convert_to(claim_token,'UTF8')),'hex'),now_value+interval '15 minutes');
+	 FOR orphan_generation IN
+	  SELECT generation.storage_generation_id,generation.object_id
+	  FROM public.canonical_field_evidence_file_upload_generations generation
+	  WHERE generation.organization_id=org AND generation.actor_user_id=actor AND generation.auth_session_id=session_value
+	   AND generation.key_hash=key_hash_value AND generation.storage_generation_id<>generation_value
+	   AND NOT EXISTS(SELECT 1 FROM public.canonical_field_evidence_file_cleanup_tombstones tombstone
+	     WHERE tombstone.organization_id=org AND tombstone.storage_generation_id=generation.storage_generation_id)
+	   AND NOT EXISTS(SELECT 1 FROM public.canonical_field_evidence_records evidence
+	     WHERE evidence.organization_id=org AND evidence.evidence_type='file'
+	      AND evidence.document->>'storageGenerationId'=generation.storage_generation_id::text
+	      AND evidence.document->>'objectId'=generation.object_id::text)
+	  ORDER BY generation.issued_at,generation.storage_generation_id LIMIT 2000
+	 LOOP
+	  cleanup_token:=encode(sha256(convert_to(gen_random_uuid()::text||clock_timestamp()::text||txid_current()::text,'UTF8')),'hex');
+	  cleanup_claim_id:=gen_random_uuid();
+	  INSERT INTO public.canonical_field_evidence_file_cleanup_claims(id,organization_id,storage_generation_id,object_id,cleanup_token_hash,actor_user_id,auth_session_id,reason_code)
+	  VALUES(cleanup_claim_id,org,orphan_generation.storage_generation_id,orphan_generation.object_id,encode(sha256(convert_to(cleanup_token,'UTF8')),'hex'),actor,session_value,'expired_takeover');
+	  cleanup_candidates:=cleanup_candidates||jsonb_build_array(jsonb_build_object('cleanupClaimId',cleanup_claim_id,'storageGenerationId',orphan_generation.storage_generation_id,'objectId',orphan_generation.object_id,'cleanupToken',cleanup_token));
+	 END LOOP;
+	 RETURN jsonb_build_object('status',200,'body',jsonb_build_object('success',TRUE,'data',jsonb_build_object(
+	   'reservationId',reservation_value,'storageGenerationId',generation_value,'objectId',object_value,'claimToken',claim_token,
+	   'cleanupCandidates',cleanup_candidates)),'replayed',FALSE);
 END $$;
 
 CREATE FUNCTION public.canonical_field_evidence_mutate(
@@ -508,8 +586,14 @@ BEGIN
     OR rtrim(upload_reservation.claim_token_hash)<>encode(sha256(convert_to(upload_claim_token,'UTF8')),'hex')
     OR upload_reservation.execution_id<>execution_value OR upload_reservation.performer_profile_id<>performer
     OR upload_reservation.source_execution_revision<>expected_execution_revision OR rtrim(upload_reservation.source_execution_digest)<>expected_execution_digest
-    OR upload_reservation.source_assignment_revision<>expected_assignment_revision OR rtrim(upload_reservation.source_assignment_digest)<>expected_assignment_digest
-    OR upload_reservation.request_document<>upload_request OR upload_reservation.reason<>reason_value OR upload_reservation.request_correlation_id<>correlation_value THEN
+   OR upload_reservation.source_assignment_revision<>expected_assignment_revision OR rtrim(upload_reservation.source_assignment_digest)<>expected_assignment_digest
+    OR upload_reservation.request_document<>upload_request OR upload_reservation.reason<>reason_value OR upload_reservation.request_correlation_id<>correlation_value
+    OR NOT EXISTS(SELECT 1 FROM public.canonical_field_evidence_file_upload_generations generation
+      WHERE generation.organization_id=org AND generation.reservation_id=upload_reservation.reservation_id
+       AND generation.storage_generation_id=upload_reservation.storage_generation_id AND generation.object_id=upload_reservation.object_id
+       AND generation.actor_user_id=actor AND generation.auth_session_id=session_value AND generation.key_hash=key_hash_value
+       AND rtrim(generation.request_digest)=rtrim(upload_reservation.request_digest)
+       AND rtrim(generation.claim_token_hash)=rtrim(upload_reservation.claim_token_hash)) THEN
      RAISE EXCEPTION 'Upload reservation unavailable' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_upload_reservation_stale';
    END IF;
    request_hash_value:=rtrim(upload_reservation.request_digest);
@@ -575,6 +659,96 @@ BEGIN
  RETURN jsonb_build_object('status',201,'body',response,'replayed',FALSE);
 END $$;
 
+CREATE FUNCTION public.canonical_field_file_upload_reconcile(
+ org UUID, actor UUID, role_value TEXT, session_value UUID, csrf_value TEXT, execution_value UUID,
+ idempotency_key TEXT, reservation_value UUID, generation_value UUID, object_value UUID, upload_claim_token TEXT
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE authority JSONB; generation public.canonical_field_evidence_file_upload_generations%ROWTYPE;
+ reservation public.canonical_field_evidence_file_upload_reservations%ROWTYPE; execution_record public.canonical_field_executions%ROWTYPE;
+ assignment_record public.canonical_schedule_assignments%ROWTYPE; receipt public.canonical_field_evidence_idempotency%ROWTYPE;
+ key_hash_value TEXT; cleanup_token TEXT; cleanup_claim_id UUID;
+BEGIN
+ IF current_setting('transaction_isolation')<>'serializable' OR idempotency_key IS NULL OR idempotency_key !~ '^[!-~]{16,128}$'
+ OR reservation_value IS NULL OR generation_value IS NULL OR object_value IS NULL OR upload_claim_token !~ '^[0-9a-f]{64}$' THEN
+  RAISE EXCEPTION 'Invalid field file reconciliation input' USING ERRCODE='22023';
+ END IF;
+ authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf_value,TRUE);
+ key_hash_value:=encode(sha256(convert_to(idempotency_key,'UTF8')),'hex');
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':field-evidence:'||key_hash_value,0));
+ SELECT * INTO generation FROM public.canonical_field_evidence_file_upload_generations g
+  WHERE g.organization_id=org AND g.actor_user_id=actor AND g.auth_session_id=session_value AND g.key_hash=key_hash_value
+   AND g.reservation_id=reservation_value AND g.storage_generation_id=generation_value AND g.object_id=object_value
+   AND rtrim(g.claim_token_hash)=encode(sha256(convert_to(upload_claim_token,'UTF8')),'hex');
+ IF NOT FOUND OR generation.execution_id<>execution_value THEN RAISE EXCEPTION 'Upload generation unavailable' USING ERRCODE='42501'; END IF;
+ SELECT * INTO execution_record FROM public.canonical_field_executions WHERE organization_id=org AND id=execution_value FOR SHARE;
+ SELECT * INTO assignment_record FROM public.canonical_schedule_assignments WHERE organization_id=org AND id=execution_record.assignment_id FOR SHARE;
+ IF NOT FOUND OR NOT public.canonical_field_execution_replay_authorized(org,role_value,(authority->>'profileId')::uuid,execution_value,NULL)
+ OR execution_record.revision<>generation.source_execution_revision OR rtrim(execution_record.canonical_digest)<>rtrim(generation.source_execution_digest)
+ OR assignment_record.revision<>generation.source_assignment_revision OR rtrim(assignment_record.canonical_digest)<>rtrim(generation.source_assignment_digest) THEN
+  RAISE EXCEPTION 'Upload reconciliation authority unavailable' USING ERRCODE='42501';
+ END IF;
+ SELECT * INTO reservation FROM public.canonical_field_evidence_file_upload_reservations r
+  WHERE r.organization_id=org AND r.actor_user_id=actor AND r.auth_session_id=session_value AND r.key_hash=key_hash_value FOR UPDATE;
+ SELECT receipt_value.* INTO receipt FROM public.canonical_field_evidence_idempotency receipt_value
+  JOIN public.canonical_field_evidence_records evidence ON evidence.organization_id=receipt_value.organization_id AND evidence.id=receipt_value.record_id
+  WHERE receipt_value.organization_id=org AND receipt_value.actor_user_id=actor AND receipt_value.auth_session_id=session_value
+   AND receipt_value.key_hash=key_hash_value AND rtrim(receipt_value.request_digest)=rtrim(generation.request_digest)
+   AND evidence.evidence_type='file' AND evidence.document->>'storageGenerationId'=generation_value::text
+   AND evidence.document->>'objectId'=object_value::text;
+ IF FOUND THEN RETURN jsonb_build_object('status',receipt.response_status,'body',receipt.response_body,'replayed',TRUE,'resolution','accepted'); END IF;
+ IF EXISTS(SELECT 1 FROM public.canonical_field_evidence_file_cleanup_tombstones t WHERE t.organization_id=org AND t.storage_generation_id=generation_value) THEN
+  RETURN jsonb_build_object('status',200,'body',jsonb_build_object('success',TRUE),'replayed',TRUE,'resolution','cleaned');
+ END IF;
+ IF reservation.storage_generation_id=generation_value THEN
+  IF reservation.status='accepted' THEN RAISE EXCEPTION 'Accepted upload evidence missing' USING ERRCODE='55000'; END IF;
+  UPDATE public.canonical_field_evidence_file_upload_reservations SET status='cleanup_pending',lease_until=transaction_timestamp(),updated_at=transaction_timestamp()
+   WHERE organization_id=org AND actor_user_id=actor AND auth_session_id=session_value AND key_hash=key_hash_value;
+ END IF;
+ cleanup_token:=encode(sha256(convert_to(gen_random_uuid()::text||clock_timestamp()::text||txid_current()::text,'UTF8')),'hex');
+ cleanup_claim_id:=gen_random_uuid();
+ INSERT INTO public.canonical_field_evidence_file_cleanup_claims(id,organization_id,storage_generation_id,object_id,cleanup_token_hash,actor_user_id,auth_session_id,reason_code)
+ VALUES(cleanup_claim_id,org,generation_value,object_value,encode(sha256(convert_to(cleanup_token,'UTF8')),'hex'),actor,session_value,'failed_attempt');
+ RETURN jsonb_build_object('status',200,'body',jsonb_build_object('success',TRUE),'replayed',FALSE,'resolution','cleanup_authorized',
+  'cleanupCandidate',jsonb_build_object('cleanupClaimId',cleanup_claim_id,'storageGenerationId',generation_value,'objectId',object_value,'cleanupToken',cleanup_token));
+END $$;
+
+CREATE FUNCTION public.canonical_field_file_cleanup_confirm(
+ org UUID, actor UUID, role_value TEXT, session_value UUID, csrf_value TEXT, execution_value UUID,
+ cleanup_claim_value UUID, cleanup_token TEXT
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE authority JSONB; cleanup_claim public.canonical_field_evidence_file_cleanup_claims%ROWTYPE;
+ generation public.canonical_field_evidence_file_upload_generations%ROWTYPE; reservation public.canonical_field_evidence_file_upload_reservations%ROWTYPE;
+ tombstone_value UUID:=gen_random_uuid();
+BEGIN
+ IF current_setting('transaction_isolation')<>'serializable' OR cleanup_claim_value IS NULL OR cleanup_token !~ '^[0-9a-f]{64}$' THEN
+  RAISE EXCEPTION 'Invalid field file cleanup confirmation' USING ERRCODE='22023';
+ END IF;
+ authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf_value,TRUE);
+ SELECT * INTO cleanup_claim FROM public.canonical_field_evidence_file_cleanup_claims c
+  WHERE c.organization_id=org AND c.id=cleanup_claim_value AND c.actor_user_id=actor AND c.auth_session_id=session_value
+   AND rtrim(c.cleanup_token_hash)=encode(sha256(convert_to(cleanup_token,'UTF8')),'hex');
+ IF NOT FOUND THEN RAISE EXCEPTION 'Cleanup claim unavailable' USING ERRCODE='42501'; END IF;
+ SELECT * INTO generation FROM public.canonical_field_evidence_file_upload_generations g
+  WHERE g.organization_id=org AND g.storage_generation_id=cleanup_claim.storage_generation_id AND g.object_id=cleanup_claim.object_id;
+ IF NOT FOUND OR generation.execution_id<>execution_value
+ OR NOT public.canonical_field_execution_replay_authorized(org,role_value,(authority->>'profileId')::uuid,execution_value,NULL) THEN
+  RAISE EXCEPTION 'Cleanup authority unavailable' USING ERRCODE='42501';
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':field-evidence:'||rtrim(generation.key_hash),0));
+ SELECT * INTO reservation FROM public.canonical_field_evidence_file_upload_reservations r
+  WHERE r.organization_id=org AND r.actor_user_id=generation.actor_user_id AND r.auth_session_id=generation.auth_session_id AND r.key_hash=generation.key_hash FOR UPDATE;
+ IF (reservation.storage_generation_id=generation.storage_generation_id AND reservation.status<>'cleanup_pending')
+ OR EXISTS(SELECT 1 FROM public.canonical_field_evidence_records evidence WHERE evidence.organization_id=org AND evidence.evidence_type='file'
+   AND evidence.document->>'storageGenerationId'=generation.storage_generation_id::text AND evidence.document->>'objectId'=generation.object_id::text) THEN
+  RAISE EXCEPTION 'Accepted generation cannot be cleaned' USING ERRCODE='40001',CONSTRAINT='canonical_field_evidence_cleanup_stale';
+ END IF;
+ INSERT INTO public.canonical_field_evidence_file_cleanup_tombstones(id,organization_id,cleanup_claim_id,storage_generation_id,object_id,actor_user_id,auth_session_id)
+ VALUES(tombstone_value,org,cleanup_claim.id,generation.storage_generation_id,generation.object_id,actor,session_value)
+ ON CONFLICT(organization_id,storage_generation_id) DO NOTHING;
+ RETURN jsonb_build_object('status',200,'body',jsonb_build_object('success',TRUE,'data',jsonb_build_object(
+  'storageGenerationId',generation.storage_generation_id,'objectId',generation.object_id,'cleaned',TRUE)),'replayed',NOT FOUND);
+END $$;
+
 CREATE FUNCTION public.canonical_field_evidence_read(org UUID, actor UUID, role_value TEXT, session_value UUID, execution_value UUID, limit_value INTEGER, cutoff_value TIMESTAMPTZ, last_time TIMESTAMPTZ, last_id UUID)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB; cutoff TIMESTAMPTZ; records JSONB; returned INTEGER; more BOOLEAN; next_data JSONB; total_value INTEGER;
@@ -625,8 +799,14 @@ CREATE TRIGGER canonical_field_evidence_idempotency_immutable BEFORE UPDATE OR D
 CREATE TRIGGER canonical_field_evidence_idempotency_no_truncate BEFORE TRUNCATE ON public.canonical_field_evidence_idempotency FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
 CREATE TRIGGER canonical_field_evidence_file_access_immutable BEFORE UPDATE OR DELETE ON public.canonical_field_evidence_file_access_events FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
 CREATE TRIGGER canonical_field_evidence_file_access_no_truncate BEFORE TRUNCATE ON public.canonical_field_evidence_file_access_events FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
+CREATE TRIGGER canonical_field_evidence_file_generation_immutable BEFORE UPDATE OR DELETE ON public.canonical_field_evidence_file_upload_generations FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
+CREATE TRIGGER canonical_field_evidence_file_generation_no_truncate BEFORE TRUNCATE ON public.canonical_field_evidence_file_upload_generations FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
+CREATE TRIGGER canonical_field_evidence_file_cleanup_claim_immutable BEFORE UPDATE OR DELETE ON public.canonical_field_evidence_file_cleanup_claims FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
+CREATE TRIGGER canonical_field_evidence_file_cleanup_claim_no_truncate BEFORE TRUNCATE ON public.canonical_field_evidence_file_cleanup_claims FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
+CREATE TRIGGER canonical_field_evidence_file_cleanup_tombstone_immutable BEFORE UPDATE OR DELETE ON public.canonical_field_evidence_file_cleanup_tombstones FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
+CREATE TRIGGER canonical_field_evidence_file_cleanup_tombstone_no_truncate BEFORE TRUNCATE ON public.canonical_field_evidence_file_cleanup_tombstones FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_field_evidence_immutable();
 
 DO $$ DECLARE item RECORD; BEGIN
  FOR item IN SELECT oid::regclass AS identity FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN ('r','p') AND relname LIKE 'canonical_field_evidence_%' LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',item.identity); END LOOP;
- FOR item IN SELECT oid::regprocedure AS identity FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'canonical_field_evidence_%' OR proname IN ('canonical_field_file_upload_authorize','canonical_field_file_retrieve_authorize')) LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',item.identity); END LOOP;
+ FOR item IN SELECT oid::regprocedure AS identity FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'canonical_field_evidence_%' OR proname IN ('canonical_field_file_upload_authorize','canonical_field_file_upload_reconcile','canonical_field_file_cleanup_confirm','canonical_field_file_retrieve_authorize')) LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',item.identity); END LOOP;
 END $$;

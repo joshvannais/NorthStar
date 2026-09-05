@@ -41,8 +41,8 @@ describe('bounded read-only production migration-history inspector', () => {
     });
     expect(sources.at(-1)).toEqual({
       filename: '047_canonical_field_evidence_authority.sql',
-      bytes: 74729,
-      checksum: 'b9c08d267cbf373202e621b381f5821bb96c54fde3046be25fe08005d8f16048',
+      bytes: 94197,
+      checksum: 'b24b3018ce296ff1d5986dc8a5ab6e48742039d713d7d76a680890d8b90e6314',
     });
   });
 

@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { detectMagic, FILE_MEDIA, MAX_FILE_BYTES } = require('./contract');
-const { authorizeFileUpload, mutateFieldEvidence } = require('./repository');
+const { authorizeFileUpload, confirmFileCleanup, mutateFieldEvidence, reconcileFileUpload } = require('./repository');
 
 class FieldStorageError extends Error {
   constructor(status, code, message, cause) {
@@ -35,12 +35,29 @@ function requireCapabilities(storage) {
   const required = ['durable', 'encryptionAtRest', 'quarantine', 'malwareScan', 'metadataStrip',
     'decompressionSafety', 'retentionCleanup', 'orphanCleanup', 'shortLivedRetrieval',
     'immutableObjectCreate', 'generationScopedCleanup'];
+  required.push('databaseFencedCleanup');
   if (!value || value.available !== true || required.some(field => value[field] !== true) ||
       typeof value.version !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,79}$/.test(value.version) ||
       typeof value.digest !== 'string' || !/^[0-9a-f]{64}$/.test(value.digest) ||
       ['beginQuarantine', 'scanAndRelease', 'deleteGeneration', 'createAuthorizedRetrieval']
         .some(method => typeof storage[method] !== 'function')) unavailable();
   return value;
+}
+
+function cleanupCandidate(value) {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (!value || !uuid.test(String(value.cleanupClaimId || '')) || !uuid.test(String(value.storageGenerationId || '')) ||
+      !uuid.test(String(value.objectId || '')) || !/^[0-9a-f]{64}$/.test(String(value.cleanupToken || ''))) unavailable();
+  return value;
+}
+
+async function executeAuthorizedCleanup(pool, storage, metadata, csrfToken, candidate, confirmCleanup) {
+  const authorized = cleanupCandidate(candidate);
+  await storage.deleteGeneration({ cleanupClaimId: authorized.cleanupClaimId,
+    storageGenerationId: authorized.storageGenerationId, objectId: authorized.objectId,
+    cleanupToken: authorized.cleanupToken, reason: 'database_authorized_unaccepted_generation' });
+  await confirmCleanup(pool, { ...metadata, csrfToken, cleanupClaimId: authorized.cleanupClaimId,
+    cleanupToken: authorized.cleanupToken });
 }
 
 function activeContent(buffer) {
@@ -52,6 +69,8 @@ async function ingestFileEvidence(options) {
   const { pool, storage, stream, metadata, csrfToken, requestCorrelationId } = options;
   const mutate = typeof options.mutate === 'function' ? options.mutate : mutateFieldEvidence;
   const authorizeUpload = typeof options.authorizeUpload === 'function' ? options.authorizeUpload : authorizeFileUpload;
+  const reconcileUpload = typeof options.reconcileUpload === 'function' ? options.reconcileUpload : reconcileFileUpload;
+  const confirmCleanup = typeof options.confirmCleanup === 'function' ? options.confirmCleanup : confirmFileCleanup;
   if (String(options.contentEncoding || 'identity').toLowerCase() !== 'identity') {
     throw new FieldStorageError(415, 'M23_FIELD_FILE_ENCODING_UNSUPPORTED', 'Compressed field-file uploads are not supported.');
   }
@@ -64,6 +83,11 @@ async function ingestFileEvidence(options) {
       !uuid.test(String(reserved.storageGenerationId || '')) || !uuid.test(String(reserved.objectId || '')) ||
       !/^[0-9a-f]{64}$/.test(String(reserved.claimToken || ''))) unavailable();
   const { reservationId, storageGenerationId, objectId, claimToken } = reserved;
+  const pendingCleanup = reserved.cleanupCandidates === undefined ? [] : reserved.cleanupCandidates;
+  if (!Array.isArray(pendingCleanup) || pendingCleanup.length > 2000) unavailable();
+  for (const candidate of pendingCleanup) {
+    await executeAuthorizedCleanup(pool, storage, metadata, csrfToken, candidate, confirmCleanup);
+  }
   let writer;
   const hash = crypto.createHash('sha256');
   let count = 0;
@@ -137,8 +161,22 @@ async function ingestFileEvidence(options) {
     if (acceptedObjectId !== objectId) throw new FieldStorageError(503, 'M23_FIELD_STORAGE_UNAVAILABLE', 'Canonical storage acceptance diverged from the reserved generation.');
     return mutation;
   } catch (error) {
-    if (writer) await writer.abort().catch(() => {});
-    await storage.deleteGeneration({ reservationId, storageGenerationId, objectId, claimToken, reason: 'upload_not_committed' }).catch(() => {});
+    let resolution;
+    try {
+      resolution = await reconcileUpload(pool, { ...metadata, csrfToken, requestCorrelationId,
+        reservationId, storageGenerationId, objectId, claimToken });
+    } catch (_reconciliationUnavailable) {
+      throw error;
+    }
+    if (resolution && resolution.resolution === 'accepted') {
+      const acceptedObjectId = resolution.body && resolution.body.data && resolution.body.data.document && resolution.body.data.document.objectId;
+      if (acceptedObjectId !== objectId) unavailable();
+      return resolution;
+    }
+    if (resolution && resolution.resolution === 'cleanup_authorized') {
+      if (writer) await writer.abort().catch(() => {});
+      await executeAuthorizedCleanup(pool, storage, metadata, csrfToken, resolution.cleanupCandidate, confirmCleanup);
+    }
     throw error;
   }
 }

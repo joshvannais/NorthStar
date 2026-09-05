@@ -58,6 +58,6 @@ real('Mission 23 Part 6 additive migration lifecycle', () => {
     await require('../../src/db').runMigrations({ pool });
     expect((await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows).toEqual(applied);
     expect((await pool.query("SELECT count(*)::int AS count FROM pg_constraint WHERE conrelid IN (SELECT oid FROM pg_class WHERE relname LIKE 'canonical_field_evidence_%') AND NOT convalidated")).rows[0].count).toBe(0);
-    expect((await pool.query("SELECT count(*)::int AS count FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.pronamespace='public'::regnamespace AND (p.proname LIKE 'canonical_field_evidence_%' OR p.proname IN ('canonical_field_file_upload_authorize','canonical_field_file_retrieve_authorize')) AND a.grantee=0 AND a.privilege_type='EXECUTE'")).rows[0].count).toBe(0);
+    expect((await pool.query("SELECT count(*)::int AS count FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.pronamespace='public'::regnamespace AND (p.proname LIKE 'canonical_field_evidence_%' OR p.proname IN ('canonical_field_file_upload_authorize','canonical_field_file_upload_reconcile','canonical_field_file_cleanup_confirm','canonical_field_file_retrieve_authorize')) AND a.grantee=0 AND a.privilege_type='EXECUTE'")).rows[0].count).toBe(0);
   }, 120000);
 });

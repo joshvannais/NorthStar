@@ -1,13 +1,16 @@
 'use strict';
 
 const crypto = require('crypto');
+const { Readable } = require('stream');
 const express = require('express');
 const request = require('supertest');
 const { Client, Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
-const { mutateFieldEvidence, readFieldEvidence, authorizeFileRetrieval, authorizeFileUpload } = require('../../src/fieldEvidence/repository');
+const { mutateFieldEvidence, readFieldEvidence, authorizeFileRetrieval, authorizeFileUpload,
+  confirmFileCleanup, reconcileFileUpload } = require('../../src/fieldEvidence/repository');
+const { ingestFileEvidence } = require('../../src/fieldEvidence/fileStorage');
 const { normalizeEvidenceAction, AD_HOC_TEMPLATE_DIGEST, AD_HOC_TEMPLATE_VERSION } = require('../../src/fieldEvidence/contract');
 
 const conditional = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -266,6 +269,102 @@ conditional('Mission 23 Part 6 mounted PostgreSQL field evidence authority', () 
       reason: sensitiveAuthority.reason, requestCorrelationId: sensitiveAuthority.requestCorrelationId }))
       .resolves.toMatchObject({ body: { data: { document: { objectId: sensitiveReserved.objectId,
         accessibility: { state: 'needs_review' }, consentOrComplianceConclusion: false } } } });
+  });
+
+  test('recovers a commit-then-throw upload without deleting accepted bytes', async () => {
+    const bytes = Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0x00,0x00,0xff,0xd9]);
+    const expectedContentDigest = crypto.createHash('sha256').update(bytes).digest('hex');
+    const upload = { ...actor, executionId: execution.id, performerProfileId: IDS.member,
+      expectedExecutionRevision: execution.revision, expectedExecutionDigest: execution.digest,
+      expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
+      displayName: 'ambiguous.jpg', extension: 'jpg', contentType: 'image/jpeg', contentLength: bytes.length,
+      expectedContentDigest, privacyFlags: ['none'], privacy: null, retentionDays: 30,
+      accessibility: { state: 'unavailable', description: null, reason: 'A trustworthy description is not available.' },
+      idempotencyKey: crypto.randomUUID(), reason: 'Prove ambiguous commit recovery.', requestCorrelationId: 'p6-commit-then-throw' };
+    const stored = new Map(); const deleted = [];
+    const capabilities = { available: true, durable: true, encryptionAtRest: true, quarantine: true, malwareScan: true,
+      metadataStrip: true, decompressionSafety: true, retentionCleanup: true, orphanCleanup: true,
+      shortLivedRetrieval: true, immutableObjectCreate: true, generationScopedCleanup: true, databaseFencedCleanup: true,
+      version: 'fixture-v1', digest: digest('f') };
+    const storage = { capabilities: () => capabilities,
+      beginQuarantine: async request => { const chunks = []; return { write: async chunk => chunks.push(Buffer.from(chunk)),
+        finish: async () => {}, abort: async () => stored.delete(request.storageGenerationId),
+        chunks }; },
+      scanAndRelease: async request => { stored.set(request.storageGenerationId, Buffer.from(bytes)); return {
+        disposition: 'released_after_clean_scan', malwareDetected: false, exifPresent: false, geolocationPresent: false,
+        decompressionSafe: true, decodedPixelCount: 12000000, scannerVersion: 'scanner-v1',
+        storageGenerationId: request.storageGenerationId, storageObjectVersion: 'object-version-ambiguous',
+        releasedObjectId: request.objectId, releasedMediaType: request.mediaType, releasedByteCount: request.byteCount,
+        releasedContentDigest: request.contentDigest, scannerEvidenceDigest: digest('4'), metadataRemovalDigest: digest('5') }; },
+      deleteGeneration: async request => { deleted.push(request); stored.delete(request.storageGenerationId); },
+      createAuthorizedRetrieval: async () => { throw new Error('unused'); } };
+    let commitThrown = false;
+    const commitThenThrowPool = { connect: async () => { const client = await runtimePool.connect(); return {
+      query: async (...args) => { const value = await client.query(...args); const sql = typeof args[0] === 'string' ? args[0] : args[0].text;
+        if (sql === 'COMMIT' && !commitThrown) { commitThrown = true; const error = new Error('COMMIT acknowledgement lost'); error.code = '08006'; throw error; }
+        return value; }, release: () => client.release() }; } };
+    const result = await ingestFileEvidence({ pool: runtimePool, storage, stream: Readable.from([bytes]), metadata: upload,
+      csrfToken: session.csrfToken, requestCorrelationId: upload.requestCorrelationId,
+      authorizeUpload: (_pool, value) => authorizeFileUpload(runtimePool, value),
+      mutate: (_pool, value) => mutateFieldEvidence(commitThenThrowPool, value),
+      reconcileUpload: (_pool, value) => reconcileFileUpload(runtimePool, value),
+      confirmCleanup: (_pool, value) => confirmFileCleanup(runtimePool, value) });
+    expect(result).toMatchObject({ status: 201, replayed: true, resolution: 'accepted' });
+    const generation = result.body.data.document.storageGenerationId;
+    expect(stored.get(generation)).toEqual(bytes); expect(deleted).toHaveLength(0);
+    await expect(authorizeFileUpload(runtimePool, { ...upload, csrfToken: session.csrfToken })).resolves.toMatchObject({
+      status: 201, replayed: true, body: result.body });
+  });
+
+  test('retains expired generations for hard-crash reconciliation and fences accepted cleanup', async () => {
+    const key = crypto.randomUUID();
+    const upload = { ...actor, executionId: execution.id, performerProfileId: IDS.member,
+      expectedExecutionRevision: execution.revision, expectedExecutionDigest: execution.digest,
+      expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
+      displayName: 'orphan.jpg', extension: 'jpg', contentType: 'image/jpeg', contentLength: 16,
+      expectedContentDigest: digest('7'), privacyFlags: ['none'], privacy: null, retentionDays: 30,
+      accessibility: { state: 'needs_review', description: null, reason: 'An authorized reviewer must verify the description.' },
+      idempotencyKey: key, reason: 'Prove hard-crash generation recovery.', requestCorrelationId: 'p6-hard-crash', csrfToken: session.csrfToken };
+    const first = (await authorizeFileUpload(runtimePool, upload)).body.data;
+    await ownerPool.query("UPDATE canonical_field_evidence_file_upload_reservations SET lease_until=clock_timestamp()-interval '1 second' WHERE organization_id=$1 AND storage_generation_id=$2", [IDS.org, first.storageGenerationId]);
+    const second = (await authorizeFileUpload(runtimePool, upload)).body.data;
+    expect(second.storageGenerationId).not.toBe(first.storageGenerationId);
+    expect(second.cleanupCandidates).toEqual([expect.objectContaining({ storageGenerationId: first.storageGenerationId, objectId: first.objectId,
+      cleanupClaimId: expect.any(String), cleanupToken: expect.stringMatching(/^[0-9a-f]{64}$/) })]);
+    expect((await ownerPool.query('SELECT storage_generation_id FROM canonical_field_evidence_file_upload_generations WHERE organization_id=$1 AND key_hash=encode(sha256(convert_to($2,\'UTF8\')),\'hex\') ORDER BY issued_at', [IDS.org, key])).rows)
+      .toEqual(expect.arrayContaining([{ storage_generation_id: first.storageGenerationId }, { storage_generation_id: second.storageGenerationId }]));
+    const fileDocument = reserved => ({ kind: 'file', uploadReservationId: reserved.reservationId,
+      storageGenerationId: reserved.storageGenerationId, storageObjectVersion: 'object-version-orphan', objectId: reserved.objectId,
+      displayName: upload.displayName, extension: upload.extension, mediaType: upload.contentType,
+      uploadByteCount: 16, byteCount: 16, expectedContentDigest: upload.expectedContentDigest, contentDigest: upload.expectedContentDigest,
+      quarantineDisposition: 'released_after_clean_scan', scannerVersion: 'scanner-v1', scannerEvidenceDigest: digest('4'),
+      metadataRemovalDigest: digest('5'), storageCapabilityVersion: 'storage-v1', storageCapabilityDigest: digest('6'),
+      encryptionAtRest: true, decompressionSafe: true, decodedPixelCount: 12000000, activeContentInline: false,
+      privacyFlags: upload.privacyFlags, privacyPolicy: upload.privacy, retentionDays: upload.retentionDays,
+      accessibility: upload.accessibility, consentOrComplianceConclusion: false, malwareClearanceClaim: false });
+    const mutation = reserved => mutateFieldEvidence(runtimePool, { ...actor, executionId: execution.id, action: 'register_file',
+      performerProfileId: IDS.member, subjectId: null, expectedSubjectRevision: null, expectedSubjectDigest: null,
+      expectedExecutionRevision: execution.revision, expectedExecutionDigest: execution.digest,
+      expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
+      document: fileDocument(reserved), uploadClaimToken: reserved.claimToken, idempotencyKey: key,
+      reason: upload.reason, requestCorrelationId: upload.requestCorrelationId });
+    await expect(mutation(first)).rejects.toMatchObject({ status: 409 });
+    const candidate = second.cleanupCandidates[0];
+    await expect(confirmFileCleanup(runtimePool, { ...actor, csrfToken: session.csrfToken, executionId: execution.id,
+      cleanupClaimId: candidate.cleanupClaimId, cleanupToken: candidate.cleanupToken })).resolves.toMatchObject({ body: { data: {
+        storageGenerationId: first.storageGenerationId, cleaned: true } } });
+    await expect(confirmFileCleanup(runtimePool, { ...actor, csrfToken: session.csrfToken, executionId: execution.id,
+      cleanupClaimId: candidate.cleanupClaimId, cleanupToken: candidate.cleanupToken })).resolves.toMatchObject({ replayed: true });
+    const accepted = await mutation(second);
+    const acceptedResolution = await reconcileFileUpload(runtimePool, { ...actor, csrfToken: session.csrfToken,
+      executionId: execution.id, idempotencyKey: key, reservationId: second.reservationId,
+      storageGenerationId: second.storageGenerationId, objectId: second.objectId, claimToken: second.claimToken });
+    expect(acceptedResolution).toMatchObject({ resolution: 'accepted', body: accepted.body });
+    const forgedCleanupToken = crypto.randomBytes(32).toString('hex'); const forgedCleanupClaim = crypto.randomUUID();
+    await ownerPool.query("INSERT INTO canonical_field_evidence_file_cleanup_claims(id,organization_id,storage_generation_id,object_id,cleanup_token_hash,actor_user_id,auth_session_id,reason_code) VALUES($1,$2,$3,$4,$5,$6,$7,'failed_attempt')",
+      [forgedCleanupClaim, IDS.org, second.storageGenerationId, second.objectId, crypto.createHash('sha256').update(forgedCleanupToken).digest('hex'), IDS.owner, session.sessionId]);
+    await expect(confirmFileCleanup(runtimePool, { ...actor, csrfToken: session.csrfToken, executionId: execution.id,
+      cleanupClaimId: forgedCleanupClaim, cleanupToken: forgedCleanupToken })).rejects.toMatchObject({ status: 409 });
   });
 
   test('returns one stable bounded snapshot cursor and mounts JSON plus explicit unavailable-storage routes', async () => {

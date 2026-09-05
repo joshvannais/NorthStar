@@ -59,6 +59,18 @@ customer contact, legal decision, merge, deployment or release is included.
   to reservation/content/record digests, audits and retrieval, and permits only
   append-only accessibility correction. See `CORRECTION_LOG.md`.
 
+- A fresh re-audit of exact corrected head
+  `050555b309dd0a801ca87b859282c8609e588a74` retained one P2: a successful
+  PostgreSQL COMMIT followed by lost acknowledgement could still enter generic
+  cleanup, and expired takeover erased the only prior-generation pointer. The
+  follow-up correction adds an immutable generation ledger, serializable fresh
+  reconciliation, `cleanup_pending` acceptance fencing, database-issued cleanup
+  claims, append-only cleanup tombstones and bounded orphan claims on takeover.
+  Unknown database outcomes retain bytes; accepted outcomes return canonical
+  replay and never call deletion. The skill-required fresh read-only bypass
+  reviewer found no actionable defect; a different exact-head release auditor
+  is still required. See `CORRECTION_LOG.md`.
+
 - Corrected an initial result-document rule that treated absent measurements as
   invalid instead of requiring values only for the `measurement` result type.
 - Corrected SQL parameter ambiguity, a read-only locking attempt and validator
@@ -79,7 +91,7 @@ customer contact, legal decision, merge, deployment or release is included.
 
 - Node.js 24.18.1.
 - Disposable vanilla PostgreSQL 18.4, UTF-8/UTC, separate owner/runtime roles,
-  loopback port 55479. No production connection was used.
+  loopback ports 55479 and 55481. No production connection was used.
 - Exact migration identity is recorded in `MIGRATION_IDENTITY.md`.
 - Focused unit, mounted PostgreSQL, lifecycle, migration inspector and
   ratification results are recorded in `TEST_RESULTS.md`.
@@ -92,6 +104,11 @@ customer contact, legal decision, merge, deployment or release is included.
   broad available-only inventory passed 196 suites/6,637 tests with zero
   failures; 2 suites/50 tests remained explicitly unavailable. It completed in
   619.658 seconds.
+- The lost-COMMIT/orphan focused gate passed 5 suites/49 tests. The final
+  UTC-corrected broad available-only inventory passed 196 suites/6,641 tests
+  with zero failures; 2 suites/50 tests remained explicitly unavailable. It
+  completed in 631.167 seconds. An earlier attempt stopped on the disposable
+  cluster's wrong timezone and is retained as invalid environment evidence.
 
 An independent auditor must evaluate the final immutable PR head. Local green
 tests cannot grant approval or release authority.

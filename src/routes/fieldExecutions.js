@@ -9,14 +9,18 @@ const {
   normalizeExecutionId,
   normalizeInitialization,
   normalizeLaborAction,
+  normalizeMaterialAction,
+  normalizeMaterialReadQuery,
   normalizeTransition,
 } = require('../operations/contract');
 const { requireExecutionBodyBoundary } = require('../operations/httpBoundary');
 const {
   initializeFieldExecution,
   mutateLaborTime,
+  mutateMaterialInventory,
   readFieldExecution,
   readLaborTime,
+  readMaterialInventory,
   transitionFieldExecution,
 } = require('../operations/repository');
 
@@ -63,6 +67,10 @@ function createFieldExecutionsRouter(options = {}) {
   const read = typeof options.read === 'function' ? options.read : readFieldExecution;
   const laborMutate = typeof options.laborMutate === 'function' ? options.laborMutate : mutateLaborTime;
   const laborRead = typeof options.laborRead === 'function' ? options.laborRead : readLaborTime;
+  const materialMutate = typeof options.materialMutate === 'function'
+    ? options.materialMutate : mutateMaterialInventory;
+  const materialRead = typeof options.materialRead === 'function'
+    ? options.materialRead : readMaterialInventory;
 
   router.post('/appointments/:appointmentId', requireExecutionBodyBoundary,
     mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
@@ -167,6 +175,51 @@ function createFieldExecutionsRouter(options = {}) {
         return res.status(503).json({
           success: false, requestId: requestId(req),
           error: { code: 'M23_LABOR_UNAVAILABLE', message: 'Labor evidence is temporarily unavailable.' },
+        });
+      }
+    });
+
+  router.post('/:executionId/material-actions', requireExecutionBodyBoundary,
+    mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const normalized = normalizeMaterialAction({
+          ...actor(req), executionId: req.params.executionId,
+          idempotencyKey: req.get('Idempotency-Key'), body: req.body,
+        });
+        const result = await materialMutate(poolProvider(), {
+          ...normalized,
+          csrfToken: req.get('X-CSRF-Token'),
+          requestCorrelationId: requestId(req),
+        });
+        if (result.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(result.status).json(result.body);
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({
+          success: false, requestId: requestId(req),
+          error: { code: 'M23_MATERIAL_UNAVAILABLE',
+            message: 'Material evidence is temporarily unavailable.' },
+        });
+      }
+    });
+
+  router.get('/:executionId/materials', tenantAuth, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const executionId = normalizeExecutionId(req.params.executionId);
+        const balanceWindow = normalizeMaterialReadQuery(req.query);
+        const result = await materialRead(poolProvider(), {
+          ...actor(req), executionId, ...balanceWindow,
+        });
+        return res.status(result.status).json({ ...result.body, requestId: requestId(req) });
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({
+          success: false, requestId: requestId(req),
+          error: { code: 'M23_MATERIAL_UNAVAILABLE',
+            message: 'Material evidence is temporarily unavailable.' },
         });
       }
     });

@@ -76,6 +76,11 @@ any later-part product behavior.
 
 ## Required later-start zero-op follow-up
 
+This section described the follow-up still required when this first-application
+receipt was written. That follow-up subsequently passed through PR #164 and is
+recorded without rewriting the original first-start evidence in
+`LATER_START_ZERO_OP_RECEIPT.md`. Part 3's later-start gate is now achieved.
+
 The first deployed application start cannot also prove a later application
 start. This documentation/evidence/ratification receipt PR adds no migration or
 runtime code. If it passes fresh independent audit, merges normally, and is

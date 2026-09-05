@@ -408,6 +408,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     const ledger = (await migrationPool.query('SELECT filename,checksum FROM public._migrations ORDER BY filename')).rows;
     expect(ledger).toEqual(expected.map(({ file, digest }) => ({ filename: file, checksum: digest })));
     expect(ledger).toHaveLength(expected.length);
-    expect(ledger.at(-1).filename).toBe('037_polaris_provider_usage_authority.sql');
+    expect(ledger.filter(row => row.filename <= '037_polaris_provider_usage_authority.sql').at(-1).filename)
+      .toBe('037_polaris_provider_usage_authority.sql');
   });
 });

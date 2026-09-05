@@ -10,7 +10,8 @@
     "build:retell-web": "esbuild src/browser/retellWebEntry.mjs --bundle --format=esm --platform=browser --minify --drop:console --legal-comments=external --outfile=public/js/vendor/retell-web-client.mjs",
     "test:integration": "jest --config jest.config.js tests/integration/",
     "test:api": "jest --config jest.config.js tests/api/",
-    "test:regression": "jest --config jest.config.js tests/regression/"
+    "test:regression": "jest --config jest.config.js tests/regression/",
+    "inspect:production-migrations": "node scripts/inspect-production-migration-history.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

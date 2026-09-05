@@ -17,8 +17,8 @@ knowledge authorities without replacing any of them.
   healthy first start, later automatic container start with no migration
   application, and unchanged one-row checksum/timestamp are recorded.
 - **Part 3: independently accepted, normally merged, automatically deployed,
-  first-start production-applied, and health verified; later-start zero-op is
-  pending.** The independent audit of first candidate head
+  production-applied, health verified, and later-start zero-op verified.** The
+  independent audit of first candidate head
   `a08421e601a0125a89298c3dca68dea2e1d888b1` required one P1 and two P2
   corrections. A second independent audit of corrected head
   `b92036215618ef2b26804fc7fce300ea3d34f331` found no P0/P1 finding and one
@@ -27,10 +27,25 @@ knowledge authorities without replacing any of them.
   `8de66512d1baa335e4e7151b6a7232c94de9dc0a` merged as
   `ee6cac8b729f73a5af22c7d5747fd52c1d1d4035`; automatic Railway deployment
   `e1d88caa-339e-49b6-a08a-60cd20eddcf9` applied migrations 039–041 once and
-  returned healthy canonical PostgreSQL persistence. A later ordinary
-  application start with unchanged one-row checksums and timestamps remains a
-  required separate zero-op receipt before Part 4.
-- **Parts 4–12: not implemented.**
+  returned healthy canonical PostgreSQL persistence. Receipt head
+  `2abef4be3e31c2c468762598edc0e79859f67c2f` merged normally through PR #164
+  as `15c61f89e4dd52ae768f1d30d1d6a3808c2d7ec5`; automatic Railway deployment
+  `2b498fe1-d025-4be7-bd90-cef6154f9bb8` supplied the separate later ordinary
+  application start with no migration application and unchanged exact one-row
+  checksums and original timestamps for migrations 039–041.
+- **Part 4: audit-correction writer candidate in progress after the first
+  independent review and Daybreak exact-head re-audit; not accepted, merged,
+  deployed, or production-applied.** The first correction set closed five
+  findings in forward-only migration 043. The Daybreak re-audit identified one
+  remaining stale-MVCC-snapshot gap after supporting-authority lock acquisition;
+  forward-only migration 044 adds the database-enforced steady-state snapshot
+  fence. A subsequent independent bypass review identified the rolling-upgrade
+  interval in which a writer already entered through migration 043 could commit
+  without advancing that new fence. Forward-only migration 045 quiesces all
+  eleven supporting-authority writer tables and advances the fence atomically
+  before the corrected release can serve traffic. This corrected candidate
+  still requires a fresh independent exact-head audit.
+- **Parts 5–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and
@@ -205,9 +220,16 @@ The exact accepted Part 3 candidate
 applied migrations 039, 040, and 041 once. The read-only production ledger
 contains 39 rows and exactly one matching checksum row for each migration, all
 with `applied_at = 2026-09-04T14:30:01.345Z`; three credential-free health GETs
-returned HTTP 200 with PostgreSQL and canonical persistence healthy. The
-separate later-start zero-op and unchanged-ledger receipt remains pending and is
-required before Part 4.
+returned HTTP 200 with PostgreSQL and canonical persistence healthy.
+
+The separate later-start zero-op is recorded in
+`outputs/m23-part3-writer/LATER_START_ZERO_OP_RECEIPT.md`. PR #164 merged
+normally as `15c61f89e4dd52ae768f1d30d1d6a3808c2d7ec5`; automatic Railway
+deployment `2b498fe1-d025-4be7-bd90-cef6154f9bb8` produced the later ordinary
+application start with no migration application. The read-only ledger remained
+at 39 rows with exactly one unchanged checksum row for each of 039, 040, and
+041 and the original common `applied_at = 2026-09-04T14:30:01.345Z`.
+Part 3's later-start gate is therefore achieved rather than pending.
 
 Part 3 changes no rendered surface. That no-UI boundary prevents a premature
 visual implementation; it is not browser or founder visual approval. The Part
@@ -215,6 +237,88 @@ visual implementation; it is not browser or founder visual approval. The Part
 minimum bar across typography, spacing, radii, borders, cards/drawers,
 responsive widths, controls, dark/light themes, mobile/desktop behavior,
 accessibility, mounted Chrome, Playwright WebKit, and visual inspection.
+
+## Part 4 writer-candidate implementation boundary
+
+Part 4 adds tenant-scoped material movement evidence to the exact current Part
+2 field execution and Mission 22 assignment pins. The candidate recognizes
+only explicit `adjustment`, `consumed`, `returned`, `transferred`, and `waste`
+facts. Each fact records a positive bounded decimal quantity, an opaque
+tenant-authored material key and unit code under the pinned
+`m23-material-unit-v1` contract (digest
+`8fcbf0c5a646dbd199e6fa8a93f863d851fab24d83c7a819ed65573c22761eba`),
+optional source/destination location keys and
+lot code, performer, recorder, observed server instant, review state, and exact
+execution/assignment revision and digest. The unit contract applies no
+conversion and never treats two unit codes as interchangeable.
+
+The candidate uses immutable events, revision snapshots, audit evidence, and
+idempotency receipts around one versioned current projection. Corrections
+advance the original record while preserving every earlier revision. Reversal
+creates a separate exactly linked compensating record; it never deletes or
+rewrites the original. Tenant-wide serializable ledger locking makes concurrent
+retries and balance decisions deterministic. Owner/administrator review may
+accept or reject evidence only when the resulting recorded-movement balance is
+bounded; unresolved underflow or absent location evidence remains explicitly
+`needs_review`. Adjustments always require owner/administrator authority and
+review. A recorded balance is only a bounded projection of non-rejected
+movement evidence; it is never a claim that physical stock exists.
+
+The server derives actor, tenant, role, session, and CSRF evidence. PostgreSQL
+reloads active membership/account/workforce, subscription/onboarding, current
+appointment, assignment, dispatch, execution, performer, crew, and fail-closed
+production transcript authority before any new effect or cached replay. A
+single ordered supporting-authority lock is acquired before the material
+transaction snapshot; every insert/update/delete/truncate writer for those
+authorities acquires the exclusive counterpart before its statement and
+advances a singleton MVCC fence. Mutation, replay, and read therefore
+reauthorize only after any earlier revocation has committed, while a later
+revocation waits until the material operation ends. Both database entry points
+verify that the shared session lock is held, reject same-backend exclusive-lock
+reentrancy, and take a row lock on the fence. PostgreSQL denies a
+repeatable-read or serializable transaction whose fixed snapshot predates a
+committed fence replacement. Reads are semantically read-only bounded
+repeatable-read snapshots: the row lock requires a read-write transaction, but
+the runtime role has no direct material or fence-table write authority and may
+execute only the material mutation/read entry points.
+
+The additive rolling-upgrade migration drains any writer that entered through
+the pre-fence trigger before it can commit past the upgrade boundary. It takes
+all eleven supporting-authority table locks through a bounded deadlock-avoiding
+NOWAIT retry, then the established exclusive advisory lock, then advances the
+fence in one transaction. Failure to quiesce aborts the migration without a
+partial effect; a separately retried migration must complete before release.
+The runner bounds frozen migration 045 to at most five seconds per lock wait
+and twenty seconds for its SQL statement, preserving any tighter configured
+timeouts and restoring them afterward. A timeout rolls back the entire run,
+including all acquired table locks, fence changes, and migration-ledger writes.
+
+Every required execution, assignment, and existing-movement revision/digest
+pin rejects explicit `NULL` before replay or evidence access. Material
+descriptions use the shared `m23-material-text-unicode-v1` code-point contract:
+ordinary NFC international text is accepted within its character/byte bounds,
+while defined controls, invisible formatting, bidi overrides, interlinear
+annotation, object replacement, and tag characters fail closed in JavaScript
+and PostgreSQL. Movement and balance truncation are reported independently;
+balance reads expose a strict bounded offset/limit window with total, returned,
+previous, and next evidence rather than silently presenting 200 groups as all
+balances.
+
+The writer candidate mounts only:
+
+- `POST /api/v1/field-executions/:executionId/material-actions`; and
+- `GET /api/v1/field-executions/:executionId/materials`.
+
+It does not assert or infer stock existence, warehouse truth, unit conversion,
+stock cost or value, procurement, purchasing, supplier facts, customer price,
+quotes, invoices, payments, profitability, scheduling changes, customer
+contact, provider state, or Polaris conclusions. It adds no equipment/assets,
+files/photos/notes, checklists/inspections, progress/blockers/changes,
+completion/reopening, UI, or later-part behavior. Part 4 changes no rendered
+file; Part 9 retains the complete design-system and visual-acceptance gate.
+This is writer evidence only until a fresh independent exact-head audit, normal
+merge, sole automatic deployment, migration verification, and health evidence
+are complete.
 
 ## Non-negotiable ownership boundaries
 
@@ -378,9 +482,52 @@ scope is re-established.
 
 - Every operational event references the exact Mission 20 tenant asset version
   when a catalogue identity exists. Free-text equipment never creates an asset.
+- A generic truck, trailer, machine, or equipment placeholder is not accepted
+  knowledge or operational capability. The tenant asset identifies the specific
+  make, model, year, series, and relevant engine, configuration, and attachment
+  when applicable. Missing or ambiguous configuration remains unknown and
+  `needs_review`; category, a similar model, and marketing shorthand cannot fill
+  the gap.
+- The exact configuration pins a cited, versioned Mission 21 universal-knowledge
+  research record with provenance, confidence, and freshness evidence. That
+  non-tenant-private research may be reused across tenants and is refreshed only
+  when missing, stale, conflicting, superseded, or materially different from the
+  tenant asset configuration. Part 5 does not itself authorize live web or
+  provider research.
+- The Mission 20 tenant-private asset instance pins the exact universal knowledge
+  version. Serial/VIN, ownership, financing, condition, hours or mileage,
+  location, attachments, maintenance, faults, downtime, and tenant-specific
+  costs remain tenant-private and never enter universal knowledge or another
+  tenant.
+- Part 5 supplies two asset-onboarding entry paths: a professional Business
+  Profile **Vehicles & Equipment** `Add equipment` workflow for minimal
+  identifiers and use context, and a Polaris conversational request such as
+  `add a Ford F-350 that I sometimes use for hauling or plowing`. Both call one
+  server-authoritative reviewed draft/research pipeline; neither uses separate
+  browser logic or browser state as authority.
+- Polaris asks only the sequential clarifying questions needed to resolve exact
+  year, series, make, model, engine, configuration, attachments, and access
+  type. It proposes the categorized record, then requires explicit confirmation
+  from an authorized tenant actor before durable Mission 20 tenant-inventory
+  mutation. There is no silent AI write. The existing server OpenAI Responses
+  integration, gated by `POLARIS_OPENAI_ENABLED` and the server-only
+  `OPENAI_API_KEY`, is reused; no browser key or second credential is created.
+  Model memory is never factual authority.
+- The Business Profile Vehicles & Equipment surface must meet the current
+  NorthStar design system on desktop, tablet, mobile, light, and dark themes.
+  Categories such as Trucks, Trailers, Equipment, and configuration-derived
+  categories render only when at least one saved tenant asset belongs to them.
+  They provide accessible expand/collapse, counts, and search/filter where
+  appropriate, with strong spacing, radii, typography, no edge-touching content
+  or overflow, and truthful empty, loading, researching, `needs_review`,
+  conflict, failure, and success states. Assets saved through either entry path
+  appear in the same correct category. Part 9 still owns the full worker and
+  owner operational-execution UI; this Part 5 surface is only existing Business
+  Profile asset onboarding and catalogue presentation.
 - Check-out/use/check-in, operator, hours, distance, meter readings, fuel or
   charge observations, condition, faults, downtime, and maintenance events are
-  separate attributable facts with units and provenance.
+  separate attributable facts with units and provenance linked to the exact
+  tenant asset and its pinned universal-knowledge version.
 - Meter readings are monotonic unless an explicit bounded correction or meter
   replacement/reset event explains the change.
 - An assignment or use event does not prove qualification, safety, insurance,
@@ -534,10 +681,33 @@ inventing stock, cost, purchasing, or pricing.
 
 ### Part 5 — Equipment, vehicle, and machinery operations
 
-Link Mission 20 asset identities to execution use, operator, check-out/in,
+Link the exact Mission 20 tenant asset version and its pinned Mission 21
+universal-knowledge version to execution use, operator, check-out/in,
 hours/distance/readings, condition, fault, downtime, maintenance, corrections,
-and availability implications without provider, telematics, geolocation, cost,
-qualification, or safety invention.
+and availability implications. Require specific make/model/year/series and the
+relevant engine/configuration/attachment where applicable; generic placeholders,
+category inference, similar-model substitution, and marketing shorthand are not
+knowledge or capability. Reuse cited/versioned/provenance/confidence/freshness-
+backed universal research across tenants and refresh it only when missing,
+stale, conflicting, superseded, or materially configuration-different. Keep
+serial/VIN, ownership, financing, condition, hours/mileage, location,
+attachments, maintenance, faults, downtime, and tenant costs private to the
+tenant asset. Unknown specifications/capabilities remain unknown or
+`needs_review`. Do not authorize live research, providers, telematics,
+geolocation, cost, qualification, or safety invention.
+
+Expose the shared reviewed asset-draft pipeline through both Business Profile
+Vehicles & Equipment `Add equipment` and Polaris conversation. Keep all draft,
+research, categorization, authorization, and durable mutation logic on the
+server; require explicit authorized confirmation and never permit silent AI or
+browser-state writes. Reuse the existing server-only OpenAI Responses
+integration and Mission 21 cited-source authority rather than model memory, a
+browser key, or a second credential. The Business Profile catalogue follows the
+NorthStar design system across responsive light/dark experiences, renders only
+non-empty generated categories, and provides accessible disclosure, counts,
+search/filter where appropriate, and truthful lifecycle states without
+edge-touching content or overflow. Part 9 retains ownership of full operational
+execution UI.
 
 ### Part 6 — Checklists, inspections, photos, notes, and field evidence
 

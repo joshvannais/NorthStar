@@ -13,12 +13,14 @@ const env={SystemRoot:'C:\\Windows',WINDIR:'C:\\Windows',TEMP:'C:\\Users\\joshv\
  M19_PG_ADMIN_URL:'postgresql://postgres@127.0.0.1:55483/postgres',M19_EXPECTED_PG_PORT:'55483',
  M19_EXPECTED_PG_DATA_DIR:'C:/Users/joshv/AppData/Local/Temp/northstar-m23-part7-pg18-20260906',M19_TEST_RUN_ID:'m23p7-'+tag};
 let args=process.argv.slice(3);
-if(args[0]==='--available'){
+let workers='--runInBand';
+if(['--available','--available-4'].includes(args[0])){
+ if(args[0]==='--available-4')workers='--maxWorkers=4';
  const excluded=require('../m23-part5-writer/availability-exclusions.json');
  const escape=v=>v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
  args=['--testNamePattern=^(?!(?:'+excluded.map(x=>escape(x.name)).join('|')+')$)'];
  env.ACCOUNT_MIGRATION_NEGATIVE_FRESH_URL='postgresql://postgres@127.0.0.1:55483/pr71_negative_fresh';
  env.ACCOUNT_MIGRATION_NEGATIVE_UPGRADE_URL='postgresql://postgres@127.0.0.1:55483/pr71_negative_upgrade';
 }
-const result=spawnSync(process.execPath,[path.join(root,'node_modules/jest/bin/jest.js'),'--runInBand','--silent','--json','--outputFile='+output,...args],{cwd:root,stdio:'inherit',env});
+const result=spawnSync(process.execPath,[path.join(root,'node_modules/jest/bin/jest.js'),workers,'--silent','--verbose=false','--json','--outputFile='+output,...args],{cwd:root,stdio:'inherit',env});
 process.exit(result.status===null?1:result.status);

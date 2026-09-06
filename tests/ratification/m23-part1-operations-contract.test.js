@@ -66,7 +66,7 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     );
   });
 
-  test('preserves historical Part 1 truth and states truthful Part 2 through Part 4 boundaries', () => {
+  test('preserves historical Part 1 truth, supplied Part 2 through 6 releases, and Part 7 writer boundary', () => {
     expect(roadmap).toContain('**Part 1: independently accepted, merged, deployed, and production-accepted at');
     expect(roadmap).toContain('**Part 2: independently accepted, normally merged, automatically deployed,');
     expect(roadmap).toContain('`403576639ea0223a2a18340d87882a6cdfa47ca4`; the');
@@ -75,8 +75,10 @@ describe('Mission 23 Part 1 Operations root contract', () => {
     expect(roadmap).toContain('**Part 3: independently accepted, normally merged, automatically deployed,');
     expect(roadmap).toContain('Part 3\'s later-start gate is therefore achieved rather than pending.');
     expect(roadmap).toContain('**Part 4: independently approved, normally merged, deployed, and health');
-    expect(roadmap).toContain('**Part 5: implementation writer candidate; independent audit and release');
-    expect(roadmap).toContain('**Parts 6–12: not implemented.**');
+    expect(roadmap).toContain('**Part 5: independently approved, normally merged, deployed, and health');
+    expect(roadmap).toContain('**Part 6: independently approved, normally merged, deployed, and health');
+    expect(roadmap).toContain('**Part 7: implementation writer candidate; independent audit and release');
+    expect(roadmap).toContain('**Parts 8–12: not implemented.**');
     expect(roadmap).toContain(
       'There is no accepted Mission 23 migration, table, route, repository, or browser'
     );

@@ -13,6 +13,8 @@ real('Mission 23 Part 5 additive migration lifecycle', () => {
     const migrations = path.resolve(__dirname, '../../migrations');
     for (const name of fs.readdirSync(migrations).filter(name => name.endsWith('.sql') && Number(name.slice(0, 3)) < 46)) fs.copyFileSync(path.join(migrations, name), path.join(preceding, name));
     await require('../../src/db').runMigrations({ pool, migrationsDirectory: preceding });
+    // Historical lifecycle ends at its own immutable migration, even after later additive parts.
+    fs.copyFileSync(path.join(migrations, '046_m23_equipment_operations.sql'), path.join(preceding, '046_m23_equipment_operations.sql'));
   }, 120000);
   afterAll(async () => {
     if (pool) await pool.end(); if (database) await database.cleanup();
@@ -29,16 +31,16 @@ real('Mission 23 Part 5 additive migration lifecycle', () => {
         return result;
       }, release: () => client.release() };
     } };
-    await expect(require('../../src/db').runMigrations({ pool: interruptedPool })).rejects.toThrow('Deterministic interruption');
+    await expect(require('../../src/db').runMigrations({ pool: interruptedPool, migrationsDirectory: preceding })).rejects.toThrow('Deterministic interruption');
     expect(intercepted).toBe(true);
     expect((await pool.query("SELECT to_regclass('canonical_equipment_drafts') AS authority")).rows[0].authority).toBeNull();
     expect((await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows).toEqual(before);
-    await require('../../src/db').runMigrations({ pool });
+    await require('../../src/db').runMigrations({ pool, migrationsDirectory: preceding });
     const applied = (await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows;
     expect(applied).toHaveLength(before.length + 1); expect(applied.slice(0, -1)).toEqual(before);
     expect(applied.at(-1)).toMatchObject({ filename: '046_m23_equipment_operations.sql', checksum: '86284c861a014b462e3456e87ec7be703f299e19d23cc7b1650bcd87cb47513f' });
     expect(applied.some(row => row.filename === '046_reviewed_equipment_operations.sql')).toBe(false);
-    await require('../../src/db').runMigrations({ pool });
+    await require('../../src/db').runMigrations({ pool, migrationsDirectory: preceding });
     expect((await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows).toEqual(applied);
     expect((await pool.query("SELECT count(*)::int AS count FROM pg_constraint WHERE conrelid IN (SELECT oid FROM pg_class WHERE relname LIKE 'canonical_equipment_%') AND NOT convalidated")).rows[0].count).toBe(0);
     expect((await pool.query("SELECT count(*)::int AS count FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.pronamespace='public'::regnamespace AND p.proname LIKE 'equipment_%' AND a.grantee=0 AND a.privilege_type='EXECUTE'")).rows[0].count).toBe(0);

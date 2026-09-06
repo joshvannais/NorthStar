@@ -17,6 +17,10 @@ describe('Mission 23 Part 7 strict operational fact contract', () => {
   expect(result.document.reviewState).toBe('needs_review');
   expect(result.document).not.toHaveProperty('percentComplete');
  });
+ test.each(['toString','constructor','__proto__'])('rejects inherited vocabulary name %s as a typed client error',kind=>{
+  try{normalizeProgressAction(input({...progress(),kind}));throw new Error('Unexpected acceptance');}
+  catch(error){expect(error.status).toBe(400);expect(error.code).toBe('INVALID_PROGRESS_REQUEST');}
+ });
  test.each(['0', '0.000001', '2.5', '10'])('accepts bounded explicit quantity %s', completed => {
   expect(normalizeProgressAction(input({ ...progress(), quantity: { completed, total: '10', unit: 'm2' } })).document.quantity.completed).toBe(completed);
  });
@@ -59,5 +63,11 @@ describe('Mission 23 Part 7 strict operational fact contract', () => {
    expect(() => normalizeProgressRead(query)).toThrow();
   }
  });
+ test('quantity ordering property holds without floating point or inferred conversion',()=>{
+  for(let total=1;total<=25;total+=1)for(let completed=0;completed<=total+1;completed+=1){
+   const value=input({...progress(),quantity:{completed:String(completed),total:String(total),unit:'ea'}});
+   if(completed<=total)expect(normalizeProgressAction(value).document.quantity.completed).toBe(String(completed));
+   else expect(()=>normalizeProgressAction(value)).toThrow();
+  }
+ });
 });
-

@@ -1259,6 +1259,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
 
   await require('./equipment/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./fieldEvidence/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./progress/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   const wrongRelationOwners = await client.query(
     `SELECT namespace.nspname, relation.relname,
             pg_get_userbyid(relation.relowner) AS owner
@@ -1304,6 +1305,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname <> '_migrations'
            AND relation.relname NOT LIKE 'canonical_equipment_%'
            AND relation.relname NOT LIKE 'canonical_field_evidence_%'
+           AND relation.relname NOT LIKE 'canonical_progress_%'
            AND relation.relname NOT IN (
              'canonical_schedule_assignments',
              'canonical_schedule_approvals',

@@ -41,12 +41,28 @@ knowledge authorities without replacing any of them.
   exact supplied release facts, not evidence of physical Safari/devices,
   provider operation, private production data, legal review, or founder visual
   approval. No additional later-start zero-op verification is claimed here.
-- **Part 5: implementation writer candidate; independent audit and release
-  pending.** The additive reviewed equipment authority, shared reviewed draft
-  paths, private operational ledger, and catalogue are described in
-  [Equipment authority](../operations/EQUIPMENT_AUTHORITY.md). Local writer
-  evidence does not establish independent acceptance or release.
-- **Parts 6–12: not implemented.**
+- **Part 5: independently approved, normally merged, deployed, and health
+  verified.** Approved head `b41eaddae0242d0a957363454e6cf5f95319365f`
+  merged through PR #169 as `dfc769520ea56fdb7fde44dda6fe0bd65202fcdb`.
+  The supplied sealed release receipt records deployment
+  `c770c5e1-4caf-4f67-909a-336cfb97f6ac`, migration 046 applied once,
+  44/44 reconciled migrations with zero mismatch/pending, and three HTTP 200
+  health checks. [Equipment authority](../operations/EQUIPMENT_AUTHORITY.md)
+  retains the implementation contract.
+- **Part 6: independently approved, normally merged, deployed, and health
+  verified.** Approved head `516a8b79e3f39d62c308774dd2e9d832ceea9954`
+  merged through PR #170 as `6bf5b66a4be7c6e0915bb24db1cca36c3a6284e9`.
+  The supplied sealed release receipt records deployment
+  `30ae55d8-9ef0-403d-8f51-1aa7c8d7ab71`, migration 047 applied once,
+  45/45 reconciled migrations with zero mismatch/pending, three HTTP 200 health
+  checks, and passive GET-only acceptance. These are supplied release facts,
+  not new production access or proof of live storage/provider readiness.
+- **Part 7: implementation writer candidate; independent audit and release
+  pending.** [Progress and issue facts](../operations/PROGRESS_ISSUE_FACTS.md)
+  describes the bounded additive API and PostgreSQL authority. Field-change
+  facts have no commercial consequence and grant no authority to continue.
+  Writer evidence is not independent acceptance or release.
+- **Parts 8–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and

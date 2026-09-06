@@ -1,16 +1,13 @@
 'use strict';
 
 const crypto = require('crypto');
-const { Readable } = require('stream');
 const express = require('express');
 const request = require('supertest');
 const { Client, Pool } = require('pg');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
-const { mutateFieldEvidence, readFieldEvidence, authorizeFileRetrieval, authorizeFileUpload,
-  confirmFileCleanup, reconcileFileUpload } = require('../../src/fieldEvidence/repository');
-const { ingestFileEvidence } = require('../../src/fieldEvidence/fileStorage');
+const { mutateFieldEvidence } = require('../../src/fieldEvidence/repository');
 const { normalizeEvidenceAction, AD_HOC_TEMPLATE_DIGEST, AD_HOC_TEMPLATE_VERSION } = require('../../src/fieldEvidence/contract');
 
 const conditional = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -105,7 +102,7 @@ conditional('Mission 23 Part 7 mounted PostgreSQL progress and issue authority',
     }
     return {observedAt:'2026-09-01T12:00:00Z',timeZoneAuthority,evidence:[]};
   }
-  async function progress() { return {kind:'progress',workKey:'paving',description:'Measured field work.',...await observation(),
+  async function progress() { return {kind:'progress',workKey:'paving-'+crypto.randomUUID(),description:'Measured field work.',...await observation(),
     quantity:{completed:'2.5',total:'10',unit:'m2'},milestone:null,uncertainty:'measured',uncertaintyReason:null}; }
   const read = (overrides={}) => require('../../src/progress/repository').readProgress(runtimePool,{...actor,executionId:execution.id,limit:50,cursor:null,...overrides});
   const body = async (action='record_progress',document) => ({...common(action),document:document||await progress()});
@@ -128,21 +125,36 @@ conditional('Mission 23 Part 7 mounted PostgreSQL progress and issue authority',
     const counts=(await ownerPool.query('SELECT (SELECT count(*) FROM canonical_progress_records WHERE id=$1)::int records,(SELECT count(*) FROM canonical_progress_events WHERE record_id=$1)::int events,(SELECT count(*) FROM canonical_progress_audit_events WHERE record_id=$1)::int audits,(SELECT count(*) FROM canonical_progress_idempotency WHERE record_id=$1)::int receipts',[id])).rows[0];
     expect(counts).toEqual({records:1,events:1,audits:1,receipts:1});
   });
+  test('explicit full quantity and pinned checklist milestone do not infer execution completion',async()=>{
+    const checklist=(await mutateFieldEvidence(runtimePool,{...normalizeEvidenceAction({...actor,executionId:execution.id,idempotencyKey:crypto.randomUUID(),
+      body:{...common('create_checklist'),template:null,items:[{key:'prep',prompt:'Record preparation observed.',required:true}]}}),
+      csrfToken:session.csrfToken,requestCorrelationId:'p7-milestone'})).body.data;
+    expect(checklist.document).toMatchObject({adHocTemplateVersion:AD_HOC_TEMPLATE_VERSION,adHocTemplateDigest:AD_HOC_TEMPLATE_DIGEST});
+    const input=await body();input.document.quantity={completed:'10',total:'10',unit:'m2'};
+    input.document.milestone={key:'prep',state:'done',checklist:{id:checklist.id,revision:checklist.revision,digest:checklist.digest}};
+    const fact=(await mutate(input)).body.data;
+    expect(fact.authorityBoundary).toMatchObject({percentComplete:null,executionLifecycleChanged:false});
+    expect((await ownerPool.query('SELECT count(*)::int count FROM canonical_progress_evidence_links WHERE record_id=$1',[fact.id])).rows[0].count).toBe(1);
+    const corrupted=await body();corrupted.document.milestone={...input.document.milestone,checklist:{...input.document.milestone.checklist,digest:digest('f')}};
+    await expect(mutate(corrupted)).rejects.toMatchObject({status:403});
+    expect((await ownerPool.query('SELECT lifecycle_state FROM canonical_field_executions WHERE id=$1',[execution.id])).rows[0].lifecycle_state).toBe('in_progress');
+  });
   test('progress updates require exact predecessor and preserve correction history',async()=>{
     const original=(await mutate(await body())).body.data;
-    const changed={...await progress(),quantity:{completed:'5',total:'10',unit:'m2'}};
+    const changed={...await progress(),workKey:original.document.workKey,quantity:{completed:'5',total:'10',unit:'m2'}};
     const updated=(await mutate(edit(original,'update_progress',changed))).body.data;
     expect(updated).toMatchObject({rootId:original.id,previousRecordId:original.id,revision:2});
     await expect(mutate(edit(original,'update_progress',changed))).rejects.toMatchObject({status:409});
-    await expect(mutate(edit(updated,'update_progress',await progress()))).rejects.toMatchObject({status:400});
-    const correction=(await mutate(edit(updated,'correct',await progress()))).body.data;
+    const lower={...await progress(),workKey:original.document.workKey};
+    await expect(mutate(edit(updated,'update_progress',lower))).rejects.toMatchObject({status:400});
+    const correction=(await mutate(edit(updated,'correct',lower))).body.data;
     expect(correction.revision).toBe(3);
     expect((await ownerPool.query('SELECT count(*)::int count FROM canonical_progress_records WHERE root_id=$1',[original.id])).rows[0].count).toBe(3);
   });
-  test('blockers retain unresolved history and explicit resolution evidence, independent of lifecycle',async()=>{
-    const document={kind:'blocker',description:'Material delivery is missing.',...await observation(),category:'material',impact:'prevents_work',
+  test.each(['blocker','exception'])('%s retains unresolved history and explicit resolution evidence, independent of lifecycle',async(kind)=>{
+    const document={kind,description:'Material delivery is missing.',...await observation(),category:'material',impact:'prevents_work',
       severity:'moderate',followUp:{profileId:IDS.member,action:'Confirm the delivery facts.'},state:'open',resolution:null};
-    const original=(await mutate(await body('record_blocker',document))).body.data;
+    const original=(await mutate(await body('record_'+kind,document))).body.data;
     const note=(await mutateFieldEvidence(runtimePool,{...normalizeEvidenceAction({...actor,executionId:execution.id,idempotencyKey:crypto.randomUUID(),body:{...common('record_note'),note:'Delivery was observed at the staging area.',caption:null}}),csrfToken:session.csrfToken,requestCorrelationId:'p7-resolution'})).body.data;
     const resolution={description:'Delivery observed.',observedAt:'2026-09-01T12:30:00Z',evidence:[{id:note.id,revision:note.revision,digest:note.digest}]};
     const resolved=(await mutate(edit(original,'issue_state',{state:'resolved',resolution}))).body.data;
@@ -165,7 +177,7 @@ conditional('Mission 23 Part 7 mounted PostgreSQL progress and issue authority',
     expect(reviewed.authorityBoundary).toMatchObject({commercialConsequences:false,authorizationToContinue:false,percentComplete:null});
   });
   test('runtime lacks table, helper, DDL, mutation and immutable history authority',async()=>{
-    for(const table of ['records','events','audit_events','idempotency']){
+    for(const table of ['records','events','audit_events','idempotency','evidence_links']){
       await expect(runtimePool.query('SELECT * FROM canonical_progress_'+table)).rejects.toMatchObject({code:'42501'});
       await expect(ownerPool.query('UPDATE canonical_progress_'+table+' SET organization_id=organization_id')).rejects.toThrow();
       await expect(ownerPool.query('TRUNCATE canonical_progress_'+table)).rejects.toThrow();
@@ -192,16 +204,211 @@ conditional('Mission 23 Part 7 mounted PostgreSQL progress and issue authority',
     const input=await body(),key=crypto.randomUUID();await mutate(input,key);
     await expect(mutate({...input,expectedExecutionDigest:'0'.repeat(64)},key)).rejects.toMatchObject({status:409});
     await expect(read({organizationId:IDS.otherOrg})).rejects.toMatchObject({status:403});
-    await ownerPool.query("UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp() WHERE id=$1",[session.sessionId]);
+    await ownerPool.query("UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp(),revoke_reason='fixture_revocation' WHERE id=$1",[session.sessionId]);
     try{await expect(mutate(input,key)).rejects.toMatchObject({status:403});await expect(read()).rejects.toMatchObject({status:403});}
-    finally{await ownerPool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL WHERE id=$1",[session.sessionId]);}
+    finally{await ownerPool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",[session.sessionId]);}
+  });
+
+  async function direct(input, overrides={}) {
+    const n={...require('../../src/progress/contract').normalizeProgressAction({...actor,executionId:execution.id,idempotencyKey:crypto.randomUUID(),body:input}),...overrides};
+    const c=await runtimePool.connect(),identity=IDS.org+':'+execution.id;
+    try{
+      await c.query('SELECT pg_advisory_lock_shared(230004,4)');
+      await c.query('SELECT pg_advisory_lock(230007,hashtext($1))',[identity]);
+      await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const r=await c.query('SELECT canonical_progress_mutate($1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,$8::uuid,$9::uuid,$10::bigint,$11::text,$12::bigint,$13::text,$14::bigint,$15::text,$16::jsonb,$17::text,$18::text,$19::text) result',
+       [n.organizationId,n.actorUserId,n.actorAccessRole,n.authSessionId,session.csrfToken,n.executionId,n.action,n.performerProfileId,n.recordId,n.expectedRecordRevision,n.expectedRecordDigest,n.expectedExecutionRevision,n.expectedExecutionDigest,n.expectedAssignmentRevision,n.expectedAssignmentDigest,n.document,n.idempotencyKey,n.reason,'p7-direct']);
+      await c.query('COMMIT');return r.rows[0].result;
+    }finally{
+      await c.query('ROLLBACK').catch(()=>{});
+      await c.query('SELECT pg_advisory_unlock(230007,hashtext($1))',[identity]);
+      await c.query('SELECT pg_advisory_unlock_shared(230004,4)');c.release();
+    }
+  }
+  test('vanilla 18.x UTC checksums and separate nonprivileged runtime are real',async()=>{
+    const result=(await ownerPool.query("SELECT current_setting('server_version_num')::int version,current_setting('TimeZone') zone,current_setting('server_encoding') encoding,current_setting('data_checksums') checksums")).rows[0];
+    expect(result.version).toBeGreaterThanOrEqual(180000);expect(result.zone).toBe('UTC');expect(result.encoding).toBe('UTF8');expect(result.checksums).toBe('on');
+    const runtime=(await runtimePool.query('SELECT rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=current_user')).rows[0];
+    expect(Object.values(runtime).every(v=>v===false)).toBe(true);
+    await expect(runtimePool.query('CREATE TABLE public.p7_forbidden(id int)')).rejects.toMatchObject({code:'42501'});
+    await expect(runtimePool.query('SET ROLE '+roles.owner)).rejects.toMatchObject({code:'42501'});
+  });
+  test.each(['expectedExecutionRevision','expectedExecutionDigest','expectedAssignmentRevision','expectedAssignmentDigest'])('direct SQL rejects explicit NULL %s before receipt or write',async(field)=>{
+    await expect(direct(await body(),{[field]:null})).rejects.toMatchObject({code:'22023'});
+  });
+  test.each(['<img src=x>','safe\u202Etxt','x\u{e0001}','bad\u200Btext','bad\u0001text'])('database independently rejects non-inert stored text %s',async(description)=>{
+    const input=await body(),normalized=require('../../src/progress/contract').normalizeProgressAction({...actor,executionId:execution.id,idempotencyKey:crypto.randomUUID(),body:input});
+    await expect(direct(input,{document:{...normalized.document,description}})).rejects.toMatchObject({code:'22023'});
+  });
+  test.each(['ملاحظة ميدانية.','作業を記録。','Observación medida.','Café mesuré.'])('database and HTTP preserve international text %s as inert JSON',async(description)=>{
+    const input=await body();input.document.description=description;
+    const result=await request(app).post('/api/v1/field-executions/'+execution.id+'/progress-actions')
+      .set('Idempotency-Key',crypto.randomUUID()).set('X-CSRF-Token',session.csrfToken).send(input);
+    expect(result.status).toBe(201);expect(result.body.data.document.description).toBe(description);
+    expect(JSON.parse(JSON.stringify(result.body)).data.document.description).toBe(description);
+  });
+  test('lost COMMIT acknowledgement retains one effect and exact retry still reauthorizes',async()=>{
+    const input=await body(),key=crypto.randomUUID();let committed=false;
+    const n=require('../../src/progress/contract').normalizeProgressAction({...actor,executionId:execution.id,idempotencyKey:key,body:input});
+    const uncertainPool={connect:async()=>{
+      const client=await runtimePool.connect();
+      return {query:async(...args)=>{
+        const result=await client.query(...args);
+        if(args[0]==='COMMIT'&&!committed){committed=true;throw new Error('Synthetic lost COMMIT acknowledgement');}
+        return result;
+      },release:discard=>client.release(discard)};
+    }};
+    await expect(require('../../src/progress/repository').mutateProgress(uncertainPool,{...n,csrfToken:session.csrfToken,requestCorrelationId:'p7-lost-commit'})).rejects.toMatchObject({status:503});
+    expect(committed).toBe(true);
+    await ownerPool.query("UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp(),revoke_reason='fixture' WHERE id=$1",[session.sessionId]);
+    try{await expect(mutate(input,key)).rejects.toMatchObject({status:403});}
+    finally{await ownerPool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",[session.sessionId]);}
+    const result=await mutate(input,key);expect(result.replayed).toBe(true);
+    expect((await ownerPool.query('SELECT count(*)::int count FROM canonical_progress_records WHERE root_id=$1',[result.body.data.rootId])).rows[0].count).toBe(1);
+  });
+  test('concurrent different updates to the same exact predecessor have one winner',async()=>{
+    const record=(await mutate(await body())).body.data;
+    const a={...await progress(),workKey:record.document.workKey,quantity:{completed:'3',total:'10',unit:'m2'}};
+    const b={...a,quantity:{completed:'4',total:'10',unit:'m2'}};
+    const results=await Promise.allSettled([mutate(edit(record,'update_progress',a)),mutate(edit(record,'update_progress',b))]);
+    expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);
+    expect(results.find(r=>r.status==='rejected').reason.status).toBe(409);
+    expect((await ownerPool.query('SELECT count(*)::int count FROM canonical_progress_records WHERE root_id=$1',[record.id])).rows[0].count).toBe(2);
+  });
+  test('cursor excludes later inserts and cannot be used as a cross-work oracle',async()=>{
+    const first=await read({limit:2});await mutate(await body());
+    const second=await read({limit:2,cursor:first.body.nextCursorData});
+    expect(second.body.total).toBe(first.body.total);
+    await expect(read({executionId:crypto.randomUUID()})).rejects.toMatchObject({status:403});
+  });
+  test.each([
+    ['membership',"UPDATE organization_memberships SET status='suspended' WHERE user_id=$1","UPDATE organization_memberships SET status='active' WHERE user_id=$1",IDS.owner],
+    ['account',"UPDATE users SET status='suspended' WHERE id=$1","UPDATE users SET status='active' WHERE id=$1",IDS.owner],
+    ['performer',"UPDATE users SET status='suspended' WHERE id=$1","UPDATE users SET status='active' WHERE id=$1",IDS.member],
+    ['subscription',"UPDATE subscriptions SET status='canceled' WHERE organization_id=$1","UPDATE subscriptions SET status='active' WHERE organization_id=$1",IDS.org],
+    ['onboarding',"UPDATE organization_onboarding SET status='business_profile_required',completed_at=NULL WHERE organization_id=$1","UPDATE organization_onboarding SET status='complete',completed_at=clock_timestamp() WHERE organization_id=$1",IDS.org],
+    ['transcript',"UPDATE canonical_transcripts SET source=E'\\tDeMo\\t' WHERE organization_id=$1","UPDATE canonical_transcripts SET source='lead' WHERE organization_id=$1",IDS.org],
+  ])('%s revocation blocks new mutation and exact cached response disclosure',async(_name,revoke,restore,id)=>{
+    const input=await body(),key=crypto.randomUUID();await mutate(input,key);
+    await ownerPool.query(revoke,[id]);
+    try{await expect(mutate(input,key)).rejects.toMatchObject({status:403});await expect(mutate(await body())).rejects.toMatchObject({status:403});}
+    finally{await ownerPool.query(restore,[id]);}
+    expect((await mutate(input,key)).replayed).toBe(true);
+  });
+
+  async function assignmentFixture(patch){
+    const allowed=['dispatch_state','workforce_profile_id','workforce_crew_id','revision','canonical_digest'];
+    if(Object.keys(patch).some(k=>!allowed.includes(k)))throw new Error('Fixture field outside bound');
+    await ownerPool.query('ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
+    try{const keys=Object.keys(patch);await ownerPool.query('UPDATE canonical_schedule_assignments SET '+keys.map((k,i)=>k+'=$'+(i+2)).join(',')+' WHERE id=$1',[assignment.id,...Object.values(patch)]);}
+    finally{await ownerPool.query('ALTER TABLE canonical_schedule_assignments ENABLE TRIGGER USER');}
+  }
+  test('dispatch revocation, reassignment, and source revision drift block cached replay',async()=>{
+    const input=await body(),key=crypto.randomUUID();await mutate(input,key);
+    for(const patch of [{dispatch_state:'revoked'},{workforce_profile_id:IDS.owner},{revision:Number(assignment.revision)+1,canonical_digest:digest('f')}]){
+      await assignmentFixture(patch);
+      try{await expect(mutate(input,key)).rejects.toMatchObject({status:patch.revision?409:403});}
+      finally{await assignmentFixture({dispatch_state:'dispatched',workforce_profile_id:IDS.member,revision:assignment.revision,canonical_digest:assignment.digest});}
+    }
+    const record=execution,operations=require('../../src/operations/repository');
+    execution=(await operations.transitionFieldExecution(runtimePool,{...actor,executionId:record.id,expectedRevision:record.revision,expectedDigest:record.digest,
+      expectedAssignmentRevision:Number(assignment.revision),expectedAssignmentDigest:assignment.digest,action:'pause',reason:'Fixture pause.',idempotencyKey:crypto.randomUUID(),requestCorrelationId:'p7-pause'})).body.data;
+    await expect(mutate(input,key)).rejects.toMatchObject({status:409});
+    execution=(await operations.transitionFieldExecution(runtimePool,{...actor,executionId:execution.id,expectedRevision:execution.revision,expectedDigest:execution.digest,
+      expectedAssignmentRevision:Number(assignment.revision),expectedAssignmentDigest:assignment.digest,action:'resume',reason:'Fixture resume.',idempotencyKey:crypto.randomUUID(),requestCorrelationId:'p7-resume'})).body.data;
+  });
+  test('active crew membership is required on worker mutation and exact replay',async()=>{
+    const crew=crypto.randomUUID();
+    await ownerPool.query("INSERT INTO workforce_crews(id,organization_id,crew_key,name,created_by_user_id,updated_by_user_id) VALUES($1,$2,'progress-crew','Progress fixture crew',$3,$3)",[crew,IDS.org,IDS.owner]);
+    const add=()=>ownerPool.query('INSERT INTO workforce_crew_members(organization_id,crew_id,profile_id,created_by_user_id) VALUES($1,$2,$3,$4)',[IDS.org,crew,IDS.member,IDS.owner]);
+    await add();await assignmentFixture({workforce_profile_id:null,workforce_crew_id:crew});
+    const member={actorUserId:IDS.member,actorAccessRole:'member',authSessionId:memberSession.sessionId,csrfToken:memberSession.csrfToken};
+    try{
+      const input=await body(),key=crypto.randomUUID();await mutate(input,key,member);
+      await ownerPool.query('DELETE FROM workforce_crew_members WHERE organization_id=$1 AND crew_id=$2',[IDS.org,crew]);
+      await expect(mutate(input,key,member)).rejects.toMatchObject({status:403});
+      await add();expect((await mutate(input,key,member)).replayed).toBe(true);
+    }finally{
+      await assignmentFixture({workforce_profile_id:IDS.member,workforce_crew_id:null});
+      await ownerPool.query('DELETE FROM workforce_crew_members WHERE organization_id=$1 AND crew_id=$2',[IDS.org,crew]);
+      await ownerPool.query('DELETE FROM workforce_crews WHERE organization_id=$1 AND id=$2',[IDS.org,crew]);
+    }
+  });
+  test('old direct SQL snapshot cannot hide a committed supporting-authority revocation',async()=>{
+    const c=await runtimePool.connect(),identity=IDS.org+':'+execution.id;let acquired=false;
+    try{
+      await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ');await c.query('SELECT count(*) FROM pg_catalog.pg_class');
+      await ownerPool.query("UPDATE users SET status='suspended' WHERE id=$1",[IDS.owner]);
+      await c.query('SELECT pg_advisory_lock_shared(230004,4)');await c.query('SELECT pg_advisory_lock_shared(230007,hashtext($1))',[identity]);acquired=true;
+      await expect(c.query('SELECT canonical_progress_read($1,$2,$3,$4,$5,2,NULL,NULL,NULL)',[IDS.org,IDS.owner,'owner',session.sessionId,execution.id])).rejects.toMatchObject({code:'40001'});
+    }finally{
+      await c.query('ROLLBACK');if(acquired){await c.query('SELECT pg_advisory_unlock_shared(230007,hashtext($1))',[identity]);await c.query('SELECT pg_advisory_unlock_shared(230004,4)');}
+      c.release();await ownerPool.query("UPDATE users SET status='active' WHERE id=$1",[IDS.owner]);
+    }
+  });
+  test('support links and observation zone pins reject forged or shifted evidence',async()=>{
+    const input=await body();
+    await expect(mutate({...input,document:{...input.document,evidence:[{id:crypto.randomUUID(),revision:1,digest:digest('f')}]}})).rejects.toMatchObject({status:403});
+    await expect(mutate({...input,document:{...input.document,observedAt:'2026-09-01T12:00:00-04:00'}})).rejects.toMatchObject({status:403});
+    await expect(mutate({...input,document:{...input.document,timeZoneAuthority:{...input.document.timeZoneAuthority,hash:digest('f')}}})).rejects.toMatchObject({status:403});
+    const normal=require('../../src/progress/contract').normalizeProgressAction({...actor,executionId:execution.id,idempotencyKey:crypto.randomUUID(),body:input});
+    for(const key of ['price','customerAcceptance','invoice','authorizationToContinue']){
+      await expect(direct(input,{document:{...normal.document,[key]:true}})).rejects.toMatchObject({code:'22023'});
+    }
+  });
+  test('HTTP uses real signed cookies, current database authorization, CSRF and production permissions',async()=>{
+    expect(await db.initDatabase()).toBe(true);
+    const realApp=express();realApp.use(require('../../src/middleware/auditLog').correlationId);
+    realApp.use(require('../../src/operations/httpBoundary').executionBodyBoundary);realApp.use(express.json());
+    realApp.use('/api/v1/field-executions',require('../../src/routes/fieldExecutions').createFieldExecutionsRouter());
+    realApp.use(require('../../src/middleware/errorHandler').errorHandler);
+    const url='/api/v1/field-executions/'+execution.id+'/progress-actions',input=await body(),key=crypto.randomUUID();
+    expect((await request(realApp).post(url).send(input)).status).toBe(401);
+    expect((await request(realApp).post(url).set('Cookie',session.headers.Cookie).set('Idempotency-Key',key).send(input)).status).toBe(403);
+    const accepted=await request(realApp).post(url).set(session.headers).set('Idempotency-Key',key).send(input);
+    expect(accepted.status).toBe(201);
+    const replay=await request(realApp).post(url).set(session.headers).set('Idempotency-Key',key).send(input);
+    expect(replay.status).toBe(201);expect(replay.headers['idempotency-replayed']).toBe('true');
+    expect(replay.headers['x-request-id']).not.toBe(accepted.headers['x-request-id']);
+    expect(replay.body).toEqual(accepted.body);
+    const listed=await request(realApp).get('/api/v1/field-executions/'+execution.id+'/progress?limit=2').set('Cookie',session.headers.Cookie);
+    expect(listed.status).toBe(200);expect(listed.body.nextCursor).toBeTruthy();
+    expect(listed.headers['cache-control']).toContain('no-store');
+    for(const [userId,organizationId,role] of [[IDS.viewer,IDS.org,'viewer'],[IDS.otherOwner,IDS.otherOrg,'owner']]){
+      const denied=await provisionDurableSession(ownerPool,{organizationId,userId,membershipId:userId,role});
+      expect((await request(realApp).post(url).set(denied.headers).set('Idempotency-Key',key).send(input)).status).toBe(403);
+      expect((await request(realApp).get('/api/v1/field-executions/'+execution.id+'/progress').set('Cookie',denied.headers.Cookie)).status).toBe(403);
+    }
+    await ownerPool.query("UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp(),revoke_reason='fixture' WHERE id=$1",[session.sessionId]);
+    try{
+      expect((await request(realApp).post(url).set(session.headers).set('Idempotency-Key',key).send(input)).status).toBe(401);
+      expect((await request(realApp).get('/api/v1/field-executions/'+execution.id+'/progress').set('Cookie',session.headers.Cookie)).status).toBe(401);
+    }
+    finally{await ownerPool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",[session.sessionId]);}
   });
   test('mounted strict byte boundary rejects duplicate keys, compressed and forged authority',async()=>{
     const url='/api/v1/field-executions/'+execution.id+'/progress-actions';
     const duplicate=await request(app).post(url).set('Content-Type','application/json').send('{"action":"record_progress","action":"record_change"}');
     expect(duplicate.status).toBe(400);
+    expect((await request(app).post(url).set('Content-Type','application/json').set('Content-Encoding','gzip').send(require('zlib').gzipSync('{}'))).status).toBe(415);
+    expect((await request(app).post(url).set('Content-Type','application/json').send(JSON.stringify({description:'x'.repeat(33000)}))).status).toBe(413);
     const forged=await request(app).post(url).set('Idempotency-Key',crypto.randomUUID()).set('X-CSRF-Token',session.csrfToken).send({...await body(),organizationId:IDS.otherOrg});
     expect(forged.status).toBe(400);
   });
+  test('real writes stop at the explicit history bound, while exact retry and all bounded pages remain available',async()=>{
+    const before=(await ownerPool.query('SELECT count(*)::int count FROM canonical_progress_records WHERE execution_id=$1',[execution.id])).rows[0].count;
+    let last,key;
+    for(let n=before;n<2000;n+=1){last=await body();key=crypto.randomUUID();await mutate(last,key);}
+    await expect(mutate(await body())).rejects.toMatchObject({status:429});
+    expect((await mutate(last,key)).replayed).toBe(true);
+    const ids=new Set();let cursor=null;
+    do{
+      const page=(await read({limit:200,cursor})).body;
+      expect(page.returned).toBeLessThanOrEqual(200);expect(page.total).toBe(2000);
+      for(const record of page.data){expect(ids.has(record.id)).toBe(false);ids.add(record.id);}
+      cursor=page.nextCursorData;
+      expect(page.truncated).toBe(Boolean(cursor));
+    }while(cursor);
+    expect(ids.size).toBe(2000);
+  },120000);
 });
-

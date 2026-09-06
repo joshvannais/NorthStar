@@ -1,6 +1,8 @@
 'use strict';
 
 const express = require('express');
+const { normalizeProgressAction, normalizeProgressRead } = require('../progress/contract');
+const { mutateProgress, readProgress } = require('../progress/repository');
 const db = require('../db');
 const { requireOnboardedInternal, requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
@@ -266,6 +268,34 @@ function createFieldExecutionsRouter(options = {}) {
           error: { code: 'M23_FIELD_EVIDENCE_UNAVAILABLE', message: 'Field evidence is temporarily unavailable.' } });
       }
     });
+
+  router.post('/:executionId/progress-actions', requireExecutionBodyBoundary,
+    mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const normalized = normalizeProgressAction({ ...actor(req), executionId:req.params.executionId,
+          idempotencyKey:req.get('Idempotency-Key'), body:req.body });
+        const result = await mutateProgress(poolProvider(), { ...normalized, csrfToken:req.get('X-CSRF-Token'), requestCorrelationId:requestId(req) });
+        if (result.replayed) res.set('Idempotency-Replayed','true');
+        return res.status(result.status).json(result.body);
+      } catch(error) {
+        if(typedError(req,res,error))return undefined;
+        return res.status(503).json({success:false,error:{code:'PROGRESS_UNAVAILABLE',message:'Operational evidence is temporarily unavailable.'}});
+      }
+    });
+
+  router.get('/:executionId/progress', tenantAuth, throttle, permission('operations','read'), async (req,res) => {
+    res.set('Cache-Control','no-store, private');
+    try {
+      const result=await readProgress(poolProvider(),{...actor(req),executionId:normalizeExecutionId(req.params.executionId),...normalizeProgressRead(req.query)});
+      const body={...result.body,requestId:requestId(req)};
+      body.nextCursor=body.nextCursorData?Buffer.from(JSON.stringify(body.nextCursorData),'utf8').toString('base64url'):null;
+      delete body.nextCursorData;return res.status(result.status).json(body);
+    }catch(error){
+      if(typedError(req,res,error))return undefined;
+      return res.status(503).json({success:false,error:{code:'PROGRESS_UNAVAILABLE',message:'Operational evidence is temporarily unavailable.'}});
+    }
+  });
 
   router.post('/:executionId/files', mutationAuth, throttle,
     permission('operations', 'update'), async (req, res) => {

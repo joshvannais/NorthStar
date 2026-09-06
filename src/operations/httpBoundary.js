@@ -17,6 +17,7 @@ const LABOR_ACTION_PATH = /^\/api\/v1\/field-executions\/([^/]+)\/labor-actions\
 const MATERIAL_ACTION_PATH = /^\/api\/v1\/field-executions\/([^/]+)\/material-actions\/?$/i;
 const FIELD_EVIDENCE_ACTION_PATH = /^\/api\/v1\/field-executions\/([^/]+)\/field-evidence-actions\/?$/i;
 const RAW_TARGET_CANDIDATE = Symbol('m23ExecutionRawTargetCandidate');
+const PROGRESS_ACTION_PATH = /^\/api\/v1\/field-executions\/([^/]+)\/progress-actions\/?$/i;
 const BODY_VALIDATED = Symbol('m23ExecutionBodyValidated');
 const rawExecutionBody = express.raw({
   inflate: false,
@@ -37,7 +38,7 @@ function isExecutionMutationRequest(req) {
   const target = rawRequestPath(req);
   const match = INITIALIZE_PATH.exec(target) || TRANSITION_PATH.exec(target) ||
     LABOR_ACTION_PATH.exec(target) || MATERIAL_ACTION_PATH.exec(target) ||
-    FIELD_EVIDENCE_ACTION_PATH.exec(target);
+    FIELD_EVIDENCE_ACTION_PATH.exec(target) || PROGRESS_ACTION_PATH.exec(target);
   if (!match) return false;
   try {
     decodeURIComponent(match[1]);

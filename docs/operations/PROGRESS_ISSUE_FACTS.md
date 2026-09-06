@@ -135,8 +135,10 @@ limit requires a separately reviewed change, not deleting history.
 ## Migration and release evidence
 
 Migration 048 is additive. See
-[migration identity](../../outputs/m23-part7-writer/MIGRATION_IDENTITY.md) and
+[current migration identity](../../outputs/m23-part7-writer/PROFILE_ROTATION_MIGRATION.md) and
 [requirement evidence](../../outputs/m23-part7-writer/REQUIREMENT_TO_EVIDENCE.md).
+The [historical rejected migration identity](../../outputs/m23-part7-writer/MIGRATION_IDENTITY.md)
+is retained as a historical receipt, not the current candidate seal.
 Local PostgreSQL tests are writer evidence only. No production database, Railway,
 private rows, credentials, providers, or backup system was accessed in this work.
 Backup/restore and production recovery evidence remain unavailable. Only a

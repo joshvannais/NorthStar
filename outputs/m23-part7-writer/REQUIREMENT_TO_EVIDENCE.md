@@ -2,7 +2,16 @@
 
 Writer candidate on exact released Part 6 base `6bf5b66a4be7c6e0915bb24db1cca36c3a6284e9`.
 This map is implementation/test evidence, not the writer auditing or approving
-their own release. See TEST_RESULTS.md for exact runs and retained failures.
+their own release. This is the current mapping for the corrected, unreleased
+Part 7 candidate. [PROFILE_ROTATION_VERIFICATION.md](PROFILE_ROTATION_VERIFICATION.md)
+records the exact runtime verification head, runs and retained failures.
+[TEST_RESULTS.md](TEST_RESULTS.md) is the historical rejected-candidate ledger,
+not the corrected candidate's current test or migration identity.
+
+Current migration: `migrations/048_canonical_progress_issue_change_facts.sql`,
+**55,557 raw Git-blob bytes**, Git blob
+`55b527c2dc8a31514e3398489ed1bcc0811e1b47`, SHA-256
+`c87210731112f7da7df2f955eadbe7fa6e66c16d80c732441c2ee1688dbc189a`.
 
 | Requirement | Implementation | Reproducible evidence |
 | --- | --- | --- |
@@ -21,9 +30,9 @@ their own release. See TEST_RESULTS.md for exact runs and retained failures.
 | Strict HTTP and inert Unicode | Existing strict UTF-8/duplicate-key/32KiB body middleware expanded to progress-actions; mirrored JS/SQL text checks | Mounted no cookie, CSRF, permission, compressed/duplicate/oversized/forged authority denials; direct SQL hostile text; NFC international round-trip JSON |
 | Bounded pages/truncation without hidden history | 1–200 limit, exact dataset cursor, immutable time cutoff, 2,000 revision cap | Ten non-overlapping 200-row pages reach every real record; totals stable; cross-execution and fabricated cursor denial |
 | Fresh install and supported upgrade/apply once/zero op/interruption rollback | Real `src/db.js` migration runner and progress role authority | Part 7 migration lifecycle suite plus real production initialization; all prior Part 2–6 lifecycle tests retained |
-| Frozen source/runner compatibility | Migration identity, new ratification, inspector exact-source seals | Exact 55,120-byte SHA-256/Git blob; every released migration byte preserved; inspector source/reconcile tests |
+| Frozen source/runner compatibility | Current migration identity above, ratification, inspector exact-source seals | Exact 55,557-byte SHA-256/Git blob; every released migration byte preserved; inspector source/reconcile tests |
 | Tests first and no test-history erasure | Commit `b43cae0` contains only the original new tests and red evidence | RED_EVIDENCE.md and tracked red-results.json: absent module/route/authority, 10 failed mounted assertions |
-| Serialized release and explicit unavailability | This evidence directory and roadmap writer-candidate status | One writer branch; draft PR exact refs in terminal handoff; independent audit/merge/deploy not performed |
+| Serialized release and explicit unavailability | This evidence directory and roadmap writer-candidate status | One writer branch; draft PR exact refs in terminal handoff; fresh exact-head audit required; no independent acceptance, merge or deployment claimed |
 
 Retained compatibility is tested against deployed Parts 2–6, including labor,
 materials, equipment and field evidence. Their migration bytes are untouched.
@@ -34,4 +43,5 @@ excluded from this candidate's broad available inventory.
 
 Scope contract: `docs/operations/PROGRESS_ISSUE_FACTS.md`.
 Unavailable evidence: `UNAVAILABLE_EVIDENCE.md`.
-Migration/recovery: `MIGRATION_IDENTITY.md`.
+Migration/recovery: [current migration/recovery](PROFILE_ROTATION_MIGRATION.md).
+Historical rejected migration receipt: [MIGRATION_IDENTITY.md](MIGRATION_IDENTITY.md).

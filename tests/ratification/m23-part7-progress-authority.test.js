@@ -26,6 +26,30 @@ describe('Mission 23 Part 7 frozen operational facts contract',()=>{
     expect(names).toHaveLength(45);
     for(const name of names)expect(hash(fs.readFileSync(path.join(ROOT,name)))).toBe(hash(git(['cat-file','blob',BASE+':'+name])));
   });
+  test('current evidence references agree with the raw migration identity and distinguish historical receipts',()=>{
+    const bytes=git(['cat-file','blob','HEAD:'+MIGRATION]);
+    const blob=git(['rev-parse','HEAD:'+MIGRATION]).toString().trim();
+    const evidence='outputs/m23-part7-writer/';
+    for(const name of ['REQUIREMENT_TO_EVIDENCE.md','PROFILE_ROTATION_MIGRATION.md','PROFILE_ROTATION_VERIFICATION.md']){
+      const document=read(evidence+name);
+      expect(document.replace(/,/g,'')).toContain(String(bytes.length));
+      expect(document).toContain(blob);expect(document).toContain(hash(bytes));
+      expect(document).not.toMatch(/55,?120|755e689eaf84fe580de47669f20f0141c89f34dc|92dfa4c54777e0e0bde4633edbddfd046f7b3d07b27a9dbb1cc2cd0ed6ff0b84/);
+    }
+    const contract=read('docs/operations/PROGRESS_ISSUE_FACTS.md'),ledger=read(evidence+'REQUIREMENT_TO_EVIDENCE.md');
+    expect(contract).toContain('[current migration identity](../../outputs/m23-part7-writer/PROFILE_ROTATION_MIGRATION.md)');
+    expect(ledger).toContain('[current migration/recovery](PROFILE_ROTATION_MIGRATION.md)');
+    expect(read(evidence+'MIGRATION_IDENTITY.md')).toContain('Historical seal for rejected candidate');
+    for(const name of ['docs/operations/PROGRESS_ISSUE_FACTS.md',evidence+'REQUIREMENT_TO_EVIDENCE.md',evidence+'PROFILE_ROTATION_MIGRATION.md']){
+      for(const match of read(name).matchAll(/\[[^\]]+\]\(([^)]+)\)/g)){
+        expect(fs.existsSync(path.resolve(ROOT,path.dirname(name),match[1]))).toBe(true);
+      }
+    }
+    for(const name of ['MIGRATION_IDENTITY.md','PROFILE_ROTATION_MIGRATION.md','PROFILE_ROTATION_VERIFICATION.md','FINAL_CLOSEOUT.md','TEST_RESULTS.md','WRITER_LEDGER.md']){
+      expect(hash(fs.readFileSync(path.join(ROOT,evidence+name))))
+        .toBe(hash(git(['cat-file','blob','5d6db61b70c92a2cafb87a6a6afe8389bffb72e5:'+evidence+name])));
+    }
+  });
   test('retains composite relationships, current gates, complete append-only evidence and owned time',()=>{
     for(const fragment of ['FOREIGN KEY(organization_id,execution_id)','FOREIGN KEY(organization_id,assignment_id)',
       'FOREIGN KEY(organization_id,recorded_by_user_id,auth_session_id)','FOREIGN KEY(organization_id,evidence_id)',

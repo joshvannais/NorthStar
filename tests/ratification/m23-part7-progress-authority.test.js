@@ -37,7 +37,7 @@ describe('Mission 23 Part 7 frozen operational facts contract',()=>{
       expect(document).not.toMatch(/55,?120|755e689eaf84fe580de47669f20f0141c89f34dc|92dfa4c54777e0e0bde4633edbddfd046f7b3d07b27a9dbb1cc2cd0ed6ff0b84/);
     }
     const contract=read('docs/operations/PROGRESS_ISSUE_FACTS.md'),ledger=read(evidence+'REQUIREMENT_TO_EVIDENCE.md');
-    expect(contract).toContain('[current migration identity](../../outputs/m23-part7-writer/PROFILE_ROTATION_MIGRATION.md)');
+    expect(contract).toContain('[accepted migration identity](../../outputs/m23-part7-writer/PROFILE_ROTATION_MIGRATION.md)');
     expect(ledger).toContain('[current migration/recovery](PROFILE_ROTATION_MIGRATION.md)');
     expect(read(evidence+'MIGRATION_IDENTITY.md')).toContain('Historical seal for rejected candidate');
     for(const name of ['docs/operations/PROGRESS_ISSUE_FACTS.md',evidence+'REQUIREMENT_TO_EVIDENCE.md',evidence+'PROFILE_ROTATION_MIGRATION.md']){
@@ -90,7 +90,7 @@ describe('Mission 23 Part 7 frozen operational facts contract',()=>{
     const changed=git(['diff','--name-only',BASE,'--']).toString();
     expect(changed).not.toMatch(/(?:^|\n)(?:public\/|tests\/browser\/|\.github\/|package(?:-lock)?\.json|railway|Dockerfile|\.env)/);
     for(const name of ['contract.js','repository.js','databaseAuthority.js'])expect(read('src/progress/'+name)).not.toMatch(/(?:fetch\(|https?\.request|openai|retell|stripe|sendMail|sendSMS|fileStorage)/i);
-    expect(read('docs/roadmap/MISSION_23_OPERATIONS.md')).toContain('**Part 7: implementation writer candidate; independent audit and release');
-    expect(read('docs/roadmap/MISSION_23_OPERATIONS.md')).toContain('**Parts 8–12: not implemented.**');
+    expect(read('docs/roadmap/MISSION_23_OPERATIONS.md')).toContain('**Part 8: implementation writer candidate; independent audit and release');
+    expect(read('docs/roadmap/MISSION_23_OPERATIONS.md')).toContain('**Parts 9–12: not implemented.**');
   });
 });

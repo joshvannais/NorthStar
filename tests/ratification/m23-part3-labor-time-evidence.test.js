@@ -39,8 +39,8 @@ describe('Mission 23 Part 3 labor and time evidence boundary', () => {
     expect(roadmap).toContain('**Part 4: independently approved, normally merged, deployed, and health');
     expect(roadmap).toContain('**Part 5: independently approved, normally merged, deployed, and health');
     expect(roadmap).toContain('**Part 6: independently approved, normally merged, deployed, and health');
-    expect(roadmap).toContain('**Part 7: implementation writer candidate; independent audit and release');
-    expect(roadmap).toContain('**Parts 8–12: not implemented.**');
+    expect(roadmap).toContain('**Part 8: implementation writer candidate; independent audit and release');
+    expect(roadmap).toContain('**Parts 9–12: not implemented.**');
     expect(laterStartReceipt).toContain('This closes Part 3\'s separate later-start zero-op gate.');
     expect(unavailable).toContain('do not substitute for an independent audit or release decision for Part 4.');
     expect(productionApplication).toContain('Part 4 must not begin');

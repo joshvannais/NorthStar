@@ -1,8 +1,9 @@
 # Mission 23 Part 7 — Progress and issue facts
 
-Writer candidate only. Independent audit, merge, deployment, and release gates
-remain pending. The exact released base is
-`6bf5b66a4be7c6e0915bb24db1cca36c3a6284e9` (Part 6, PR #170).
+Independently accepted and normally merged through PR #171 as
+`fce4000f22c08f5f74712d37439286a4c601b1a7`. The implementation preserves the
+bounded authority below. This status reconciliation relies on the supplied
+release truth and does not claim a new production inspection.
 
 ## Meaning and boundaries
 
@@ -23,7 +24,8 @@ Nothing here creates or changes price, quotes, change-order approval, customer
 acceptance, invoices, purchases, customer contact, permissions to continue,
 scheduling, payroll, inventory balances, or downstream handoffs. There are no
 provider calls, file-storage enablement, rendered UI changes, or new dependencies.
-Parts 8–12 and all Mission 24+ authority remain reserved to their own gates.
+Part 8 is a separate writer candidate. Parts 9–12 and all Mission 24+ authority
+remain reserved to their own gates.
 
 ## Versioned document contract
 
@@ -135,12 +137,11 @@ limit requires a separately reviewed change, not deleting history.
 ## Migration and release evidence
 
 Migration 048 is additive. See
-[current migration identity](../../outputs/m23-part7-writer/PROFILE_ROTATION_MIGRATION.md) and
+[accepted migration identity](../../outputs/m23-part7-writer/PROFILE_ROTATION_MIGRATION.md) and
 [requirement evidence](../../outputs/m23-part7-writer/REQUIREMENT_TO_EVIDENCE.md).
 The [historical rejected migration identity](../../outputs/m23-part7-writer/MIGRATION_IDENTITY.md)
-is retained as a historical receipt, not the current candidate seal.
-Local PostgreSQL tests are writer evidence only. No production database, Railway,
-private rows, credentials, providers, or backup system was accessed in this work.
-Backup/restore and production recovery evidence remain unavailable. Only a
-separately reviewed forward fix is an available recovery disposition; no
-destructive down-migration or unproven application rollback is approved.
+is retained as a historical receipt, not the accepted seal. The retained local
+PostgreSQL results remain writer evidence rather than production evidence. This
+Part 8 status reconciliation did not access a production database, Railway,
+private rows, credentials, providers, or a backup system and does not extend the
+supplied Part 7 release claim. No destructive down-migration is inferred.

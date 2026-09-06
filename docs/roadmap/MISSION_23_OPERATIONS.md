@@ -57,17 +57,20 @@ knowledge authorities without replacing any of them.
   45/45 reconciled migrations with zero mismatch/pending, three HTTP 200 health
   checks, and passive GET-only acceptance. These are supplied release facts,
   not new production access or proof of live storage/provider readiness.
-- **Part 7: implementation writer candidate; independent audit and release
-  pending.** [Progress and issue facts](../operations/PROGRESS_ISSUE_FACTS.md)
-  describes the bounded additive API and PostgreSQL authority. Field-change
-  facts have no commercial consequence and grant no authority to continue.
-  Writer evidence is not independent acceptance or release.
-  Independent audit of `252b3606c67ea7434c9c8dcc67d369f6a313b252` required
-  one P2 correction for Business Profile rotation compatibility. The correction
-  remains a writer candidate on the same draft PR #171; fresh independent
-  exact-head audit is still required. Historical observation pins are retained
-  by reviews and issue transitions without weakening current actor/work gates.
-- **Parts 8–12: not implemented.**
+- **Part 7: independently accepted and normally merged through PR #171 as
+  `fce4000f22c08f5f74712d37439286a4c601b1a7`.**
+  [Progress and issue facts](../operations/PROGRESS_ISSUE_FACTS.md) describes the
+  bounded additive API and PostgreSQL authority. The accepted correction
+  retains historical Business Profile observation pins across review and issue
+  transitions without weakening current actor/work gates. Field-change facts
+  have no commercial consequence and grant no authority to continue. This
+  Part 8 writer relies on the supplied Part 7 release state and does not claim a
+  new production inspection.
+- **Part 8: implementation writer candidate; independent audit and release
+  pending.** [Completion and reopening authority](../operations/COMPLETION_REOPENING_AUTHORITY.md)
+  describes the bounded additive API and PostgreSQL authority. Writer tests are
+  not independent acceptance, merge, deployment, or release.
+- **Parts 9–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and

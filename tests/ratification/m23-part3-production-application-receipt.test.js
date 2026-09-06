@@ -102,7 +102,7 @@ describe('Mission 23 Part 3 production application receipt', () => {
     expect(roadmap).toContain('**Part 4: independently approved, normally merged, deployed, and health');
     expect(roadmap).toContain('**Part 5: independently approved, normally merged, deployed, and health');
     expect(roadmap).toContain('**Part 6: independently approved, normally merged, deployed, and health');
-    expect(roadmap).toContain('**Part 7: implementation writer candidate; independent audit and release');
-    expect(roadmap).toContain('**Parts 8–12: not implemented.**');
+    expect(roadmap).toContain('**Part 8: implementation writer candidate; independent audit and release');
+    expect(roadmap).toContain('**Parts 9–12: not implemented.**');
   });
 });

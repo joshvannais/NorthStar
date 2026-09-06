@@ -57,8 +57,8 @@ describe('Mission 23 Part 4 material and inventory-usage evidence boundary', () 
     expect(roadmap).toContain('2e682e4bc33d419c1fc357957e825c18cdec2cd6');
     expect(roadmap).toContain('eccc8e901b20ae3cc65a68c9fb2b068a4ceb9375');
     expect(roadmap).toContain('f5f6caab-08a5-490a-93c4-386e84f3b4f8');
-    expect(roadmap).toContain('**Part 7: implementation writer candidate; independent audit and release');
-    expect(roadmap).toContain('**Parts 8–12: not implemented.**');
+    expect(roadmap).toContain('**Part 8: implementation writer candidate; independent audit and release');
+    expect(roadmap).toContain('**Parts 9–12: not implemented.**');
     expect(unavailable).toContain('This is a writer candidate.');
   });
 

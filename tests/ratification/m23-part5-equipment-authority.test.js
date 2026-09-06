@@ -58,10 +58,12 @@ describe('Mission 23 Part 5 unified equipment ratification contract', () => {
     expect(browser).toContain('width === 390 ? 4 : 1');
     expect(browser).toContain('fixed-header-safe geometry must remain invariant across animation frames');
   });
-  test('keeps Part 5 a writer candidate and preserves every excluded later authority', () => {
+  test('records supplied Part 5 release facts while Part 7 remains a writer candidate and later authority stays excluded', () => {
     const roadmap = read('docs/roadmap/MISSION_23_OPERATIONS.md');
-    expect(roadmap).toContain('**Part 5: implementation writer candidate; independent audit and release');
-    expect(roadmap).toContain('**Parts 6–12: not implemented.**');
+    expect(roadmap).toContain('**Part 5: independently approved, normally merged, deployed, and health');
+    expect(roadmap).toContain('**Part 6: independently approved, normally merged, deployed, and health');
+    expect(roadmap).toContain('**Part 7: implementation writer candidate; independent audit and release');
+    expect(roadmap).toContain('**Parts 8–12: not implemented.**');
     const contract = read('docs/operations/EQUIPMENT_AUTHORITY.md');
     for (const boundary of ['No merge, deployment, live research','platform admin UI','physical Safari/devices','founder personal visual','Part 9']) expect(contract).toContain(boundary);
   });

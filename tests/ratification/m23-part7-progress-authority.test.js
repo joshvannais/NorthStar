@@ -17,9 +17,9 @@ describe('Mission 23 Part 7 frozen operational facts contract',()=>{
     expect(fs.readdirSync(path.join(ROOT,'migrations')).filter(n=>/^048_.*\.sql$/.test(n)))
       .toEqual(['048_canonical_progress_issue_change_facts.sql']);
     const bytes=fs.readFileSync(path.join(ROOT,MIGRATION));
-    expect(bytes.length).toBe(55120);
-    expect(hash(bytes)).toBe('92dfa4c54777e0e0bde4633edbddfd046f7b3d07b27a9dbb1cc2cd0ed6ff0b84');
-    expect(git(['hash-object',MIGRATION]).toString().trim()).toBe('755e689eaf84fe580de47669f20f0141c89f34dc');
+    expect(bytes.length).toBe(55557);
+    expect(hash(bytes)).toBe('c87210731112f7da7df2f955eadbe7fa6e66c16d80c732441c2ee1688dbc189a');
+    expect(git(['hash-object',MIGRATION]).toString().trim()).toBe('55b527c2dc8a31514e3398489ed1bcc0811e1b47');
   });
   test('preserves all 45 exact released migration blobs',()=>{
     const names=git(['ls-tree','-r','--name-only',BASE,'migrations']).toString().trim().split('\n').filter(n=>n.endsWith('.sql'));
@@ -36,6 +36,16 @@ describe('Mission 23 Part 7 frozen operational facts contract',()=>{
       "current_setting('transaction_isolation')<>'serializable'","current_setting('transaction_isolation')<>'repeatable read'"])
       expect(migration).toContain(fragment);
     expect(migration.indexOf('Source pins stale')).toBeLessThan(migration.indexOf('IF FOUND THEN\n  IF rtrim(receipt.request_digest)'));
+  });
+  test('historical profile mode is internal and only follows validated inherited actions',()=>{
+    expect(migration).toContain('require_current_profile BOOLEAN DEFAULT TRUE');
+    expect(migration).toContain('IF require_current_profile IS NULL THEN RETURN FALSE');
+    expect(migration).toContain('AND (b.is_active OR NOT require_current_profile)');
+    const call="canonical_progress_observation_authorized(org,execution_value,document_value,action_value NOT IN ('review','issue_state'))";
+    expect(migration).toContain(call);
+    expect(migration.indexOf('Predecessor stale')).toBeLessThan(migration.indexOf(call));
+    expect(migration.indexOf("'replayed',TRUE")).toBeLessThan(migration.indexOf('Predecessor stale'));
+    expect(read('src/progress/contract.js')).not.toMatch(/require_current_profile|requireCurrentProfile/);
   });
   test('withholds all progress tables and helpers, granting just two fixed entrypoints',()=>{
     const authority=read('src/progress/databaseAuthority.js');

@@ -62,6 +62,11 @@ knowledge authorities without replacing any of them.
   describes the bounded additive API and PostgreSQL authority. Field-change
   facts have no commercial consequence and grant no authority to continue.
   Writer evidence is not independent acceptance or release.
+  Independent audit of `252b3606c67ea7434c9c8dcc67d369f6a313b252` required
+  one P2 correction for Business Profile rotation compatibility. The correction
+  remains a writer candidate on the same draft PR #171; fresh independent
+  exact-head audit is still required. Historical observation pins are retained
+  by reviews and issue transitions without weakening current actor/work gates.
 - **Parts 8–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.

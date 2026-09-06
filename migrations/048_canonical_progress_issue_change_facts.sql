@@ -312,12 +312,14 @@ BEGIN
  AND mode=CASE WHEN write_value THEN 'ExclusiveLock' ELSE 'ShareLock' END AND granted) THEN
  RAISE EXCEPTION 'Ordered progress snapshot required' USING ERRCODE='40001',CONSTRAINT='canonical_progress_snapshot_stale'; END IF;
 END $$;
-CREATE FUNCTION public.canonical_progress_observation_authorized(org UUID,execution_value UUID,d JSONB)
+CREATE FUNCTION public.canonical_progress_observation_authorized(org UUID,execution_value UUID,d JSONB,require_current_profile BOOLEAN DEFAULT TRUE)
 RETURNS BOOLEAN LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE z JSONB:=d->'timeZoneAuthority'; p JSONB; links JSONB:=d->'evidence'; raw TEXT:=d->>'observedAt'; tz TEXT:=z->>'timeZone'; t TIMESTAMPTZ;
 BEGIN
+ IF require_current_profile IS NULL THEN RETURN FALSE; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.canonical_business_profiles b WHERE b.organization_id=org AND b.id=(z->>'businessProfileId')::uuid
- AND b.version_number=(z->>'version')::bigint AND rtrim(b.normalized_profile_hash)=z->>'hash' AND b.is_active AND b.raw_profile#>>'{company,timeZone}'=tz)
+ AND b.version_number=(z->>'version')::bigint AND rtrim(b.normalized_profile_hash)=z->>'hash'
+ AND (b.is_active OR NOT require_current_profile) AND b.raw_profile#>>'{company,timeZone}'=tz)
  OR NOT EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=tz) THEN RETURN FALSE; END IF;
  t:=raw::timestamptz;
  IF t>clock_timestamp()+INTERVAL '5 minutes' OR t AT TIME ZONE tz <> (regexp_replace(raw,'(Z|[+-][0-9]{2}:[0-9]{2})$',''))::timestamp THEN RETURN FALSE; END IF;
@@ -425,7 +427,10 @@ BEGIN
   THEN RAISE EXCEPTION 'Progress work identity already exists; update exact predecessor' USING ERRCODE='40001',CONSTRAINT='canonical_progress_work_stale'; END IF;
  END IF;
  IF NOT public.canonical_progress_full_document_valid(document_value) THEN RAISE EXCEPTION 'Invalid canonical document' USING ERRCODE='22023'; END IF;
- IF NOT public.canonical_progress_observation_authorized(org,execution_value,document_value) THEN RAISE EXCEPTION 'Observed source evidence unavailable' USING ERRCODE='42501'; END IF;
+ -- Only these exact-predecessor actions inherit historical observation provenance.
+ -- Retain its full profile pin and timezone (also for resolution instants); retirement
+ -- is not revocation of current actor/work authority, already checked above.
+ IF NOT public.canonical_progress_observation_authorized(org,execution_value,document_value,action_value NOT IN ('review','issue_state')) THEN RAISE EXCEPTION 'Observed source evidence unavailable' USING ERRCODE='42501'; END IF;
  record_digest:=encode(sha256(convert_to(jsonb_build_object('action',action_value,'assignmentDigest',expected_assignment_digest,'assignmentRevision',expected_assignment_revision,
  'document',document_value,'executionDigest',expected_execution_digest,'executionId',execution_value,'executionRevision',expected_execution_revision,
  'performedBy',performer,'previousRecordId',CASE WHEN updating THEN subject_record.id ELSE NULL END,'recordedBy',actor,'revision',before_revision+1,'rootId',root_value)::text,'UTF8')),'hex');

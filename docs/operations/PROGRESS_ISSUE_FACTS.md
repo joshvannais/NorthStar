@@ -30,10 +30,16 @@ Parts 8–12 and all Mission 24+ authority remain reserved to their own gates.
 All documents use `m23-progress-facts-v1` and begin `needs_review`. Exact keys,
 types, bounds, and vocabulary are checked independently in JavaScript and SQL.
 Every record includes a description, raw offset-bearing observed instant, exact
-current Business Profile time-zone identity/version/hash, and zero to twenty
+Business Profile time-zone identity/version/hash, and zero to twenty
 same-execution Part 6 evidence pins. Raw observations and database-owned UTC
 instants remain distinct. Future observations beyond five minutes, offset/zone
-disagreement, and stale zone authority fail closed. Evidence links are actual
+disagreement, and forged zone authority fail closed. New roots, full progress
+updates, and full corrections require the current active profile. Reviews and
+issue-state transitions instead inherit the exact predecessor's historical
+profile pin: ordinary profile rotation must not strand those actions. The
+database still validates tenant, profile ID, version, hash, and timezone against
+that historical row; it never rebinds or reinterprets the original observation.
+Evidence links are actual
 tenant-composite foreign keys with exact immutable revision/digest validation.
 
 - Progress has an explicit per-performer `workKey`, quantity and/or milestone,
@@ -78,6 +84,10 @@ Decreases, removing a measurement, or changing its basis require the explicit
 `correct` action and reason. Issues begin open; open, investigating, and awaiting
 follow-up may transition among one another or resolve. Resolution requires its
 own description, observed instant, and nonempty exact Part 6 evidence pins.
+Resolution timestamps use the issue document's retained timezone authority,
+including after the active Business Profile changes timezone. A timestamp with
+an offset inconsistent with that retained zone fails closed. A subsequent
+review retains the same resolution and timezone provenance unchanged.
 Resolved issues may reactivate only to open; this is issue state, not Part 8
 execution reopening. The original unresolved and resolved revisions remain.
 Corrections cannot silently alter issue state or resolution history.

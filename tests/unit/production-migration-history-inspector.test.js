@@ -46,8 +46,8 @@ describe('bounded read-only production migration-history inspector', () => {
     });
     expect(sources.at(-1)).toEqual({
       filename: '048_canonical_progress_issue_change_facts.sql',
-      bytes: 55120,
-      checksum: '92dfa4c54777e0e0bde4633edbddfd046f7b3d07b27a9dbb1cc2cd0ed6ff0b84',
+      bytes: 55557,
+      checksum: 'c87210731112f7da7df2f955eadbe7fa6e66c16d80c732441c2ee1688dbc189a',
     });
   });
 

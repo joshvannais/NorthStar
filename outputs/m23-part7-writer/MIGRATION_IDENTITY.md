@@ -1,5 +1,9 @@
 # Part 7 frozen migration identity
 
+Historical seal for rejected candidate `252b3606`; retained below unchanged.
+The unreleased profile-rotation correction's current seal is recorded separately
+in [PROFILE_ROTATION_MIGRATION.md](PROFILE_ROTATION_MIGRATION.md).
+
 Candidate only; no production application or independent approval is claimed.
 
 | Identity | Exact value |

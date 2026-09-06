@@ -183,6 +183,8 @@ conditional('Mission 23 Part 7 mounted PostgreSQL progress and issue authority',
       await expect(ownerPool.query('TRUNCATE canonical_progress_'+table)).rejects.toThrow();
     }
     await expect(runtimePool.query("SELECT canonical_progress_document_valid('record_progress','{}')")).rejects.toMatchObject({code:'42501'});
+    for(const mode of [false,null])await expect(runtimePool.query('SELECT canonical_progress_observation_authorized($1,$2,$3,$4)',
+      [IDS.org,execution.id,{},mode])).rejects.toMatchObject({code:'42501'});
   });
   test('audit failure rolls back all evidence and a clean exact retry succeeds',async()=>{
     const counts=()=>ownerPool.query('SELECT count(*)::int count FROM canonical_progress_records');

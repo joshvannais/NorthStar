@@ -43,8 +43,8 @@ conditional('Mission 23 Part 7 mounted PostgreSQL progress and issue authority',
       await ownerPool.query("INSERT INTO organization_memberships(id,organization_id,user_id,role,status) VALUES($1,$2,$1,$3,'active')", [id, org, role]);
     }
     const raw = { company: { name: 'Field evidence test', timeZone: 'UTC' }, headquarters: {}, services: [] };
-    const normalized = adaptBusinessProfile(raw, 'm23-p6-v1');
-    await ownerPool.query("INSERT INTO canonical_business_profiles(organization_id,version_number,version_label,raw_profile,normalized_profile,normalized_profile_hash,is_active,created_by) VALUES($1,1,'m23-p6-v1',$2,$3,$4,true,$5)", [IDS.org, raw, normalized, normalized.hash, IDS.owner]);
+    const normalized = adaptBusinessProfile(raw, 'org-profile-v1');
+    await ownerPool.query("INSERT INTO canonical_business_profiles(organization_id,version_number,version_label,raw_profile,normalized_profile,normalized_profile_hash,is_active,created_by) VALUES($1,1,'org-profile-v1',$2,$3,$4,true,$5)", [IDS.org, raw, normalized, normalized.hash, IDS.owner]);
     session = await provisionDurableSession(ownerPool, { organizationId: IDS.org, userId: IDS.owner, membershipId: IDS.owner, role: 'owner' });
     memberSession = await provisionDurableSession(ownerPool, { organizationId: IDS.org, userId: IDS.member, membershipId: IDS.member, role: 'member' });
     actor = { organizationId: IDS.org, actorUserId: IDS.owner, actorAccessRole: 'owner', authSessionId: session.sessionId, csrfToken: session.csrfToken };
@@ -395,6 +395,99 @@ conditional('Mission 23 Part 7 mounted PostgreSQL progress and issue authority',
     const forged=await request(app).post(url).set('Idempotency-Key',crypto.randomUUID()).set('X-CSRF-Token',session.csrfToken).send({...await body(),organizationId:IDS.otherOrg});
     expect(forged.status).toBe(400);
   });
+  async function rotateProfile(timeZone) {
+    const old=(await ownerPool.query('SELECT id,version_label,raw_profile FROM canonical_business_profiles WHERE organization_id=$1 AND is_active',[IDS.org])).rows[0];
+    await require('../../src/services/organizationAuthority').putBusinessProfile(runtimePool,{
+      organizationId:IDS.org,userId:IDS.owner,expectedVersion:old.version_label,
+      profile:{...old.raw_profile,company:{...old.raw_profile.company,name:'Profile rotation '+crypto.randomUUID(),timeZone}},
+    });
+    expect((await ownerPool.query('SELECT is_active FROM canonical_business_profiles WHERE id=$1',[old.id])).rows[0].is_active).toBe(false);
+    const row=(await ownerPool.query('SELECT id,version_number,normalized_profile_hash FROM canonical_business_profiles WHERE organization_id=$1 AND is_active',[IDS.org])).rows[0];
+    return {businessProfileId:row.id,version:Number(row.version_number),hash:row.normalized_profile_hash.trim(),timeZone};
+  }
+  let rotationApp;
+  async function rotationPost(input,key,headers) {
+    if(!rotationApp){
+      expect(await db.initDatabase()).toBe(true);
+      rotationApp=express();rotationApp.use(require('../../src/middleware/auditLog').correlationId);
+      rotationApp.use(require('../../src/operations/httpBoundary').executionBodyBoundary);rotationApp.use(express.json());
+      rotationApp.use('/api/v1/field-executions',require('../../src/routes/fieldExecutions').createFieldExecutionsRouter());
+      rotationApp.use(require('../../src/middleware/errorHandler').errorHandler);
+    }
+    return request(rotationApp).post('/api/v1/field-executions/'+execution.id+'/progress-actions').set(headers).set('Idempotency-Key',key).send(input);
+  }
+  const worker=()=>({actorUserId:IDS.member,actorAccessRole:'member',authSessionId:memberSession.sessionId,csrfToken:memberSession.csrfToken});
+  async function issueDocument(kind) {return {kind,description:'Access remains unavailable.',...await observation(),category:'access',impact:'prevents_work',
+    severity:'moderate',followUp:{profileId:IDS.member,action:'Confirm access facts.'},state:'open',resolution:null};}
+  test.each(['UTC','America/New_York'])('profile rotation to %s preserves owner and own-worker reviews for all fact kinds',async(timeZone)=>{
+    const documents=[await progress(),await issueDocument('blocker'),await issueDocument('exception'),
+      {kind:'field_change',description:'Observed scope difference.',...await observation(),difference:'observed',
+        initiator:{source:'worker',description:'Assigned worker observation.'},affectedWork:'Paving',scheduleImplications:'Unknown.',resourceImplications:'Unknown.'}];
+    const records=[];
+    for(const document of documents){const input=await body(document.kind==='field_change'?'record_change':'record_'+document.kind,document),key=crypto.randomUUID();
+      records.push({input,key,result:await mutate(input,key)});}
+    try{
+      const current=await rotateProfile(timeZone);
+      for(const {input,key,result} of records){
+        const original=result.body.data,reviewInput=edit(original,'review',{outcome:'owner_confirmed'}),reviewKey=crypto.randomUUID();
+        const accepted=await rotationPost(reviewInput,reviewKey,session.headers);
+        expect(accepted.status).toBe(201);
+        const reviewed=accepted.body.data;
+        expect(reviewed).toMatchObject({previousRecordId:original.id,revision:2,document:{...original.document,reviewState:'owner_confirmed'}});
+        const replay=await rotationPost(reviewInput,reviewKey,session.headers);
+        expect(replay.status).toBe(201);expect(replay.headers['idempotency-replayed']).toBe('true');expect(replay.body).toEqual(accepted.body);
+        const ack=(await mutate(edit(reviewed,'review',{outcome:'worker_acknowledged'}),crypto.randomUUID(),worker())).body.data;
+        expect(ack.document.timeZoneAuthority).toEqual(original.document.timeZoneAuthority);
+        expect(ack.authorityBoundary).toMatchObject({commercialConsequences:false,authorizationToContinue:false,executionLifecycleChanged:false});
+        expect((await mutate(input,key)).body).toEqual(result.body);
+        await expect(mutate(edit(original,'review',{outcome:'disputed'}))).rejects.toMatchObject({status:409});
+        await expect(mutate(edit(ack,'correct',input.document))).rejects.toMatchObject({status:403});
+        if(input.document.kind==='progress')await expect(mutate(edit(ack,'update_progress',input.document))).rejects.toMatchObject({status:403});
+        await expect(direct(reviewInput,{document:{outcome:'owner_confirmed',timeZoneAuthority:current}})).rejects.toMatchObject({code:'22023'});
+        expect((await ownerPool.query('SELECT document,rtrim(canonical_digest) digest FROM canonical_progress_records WHERE id=$1',[original.id])).rows[0])
+          .toEqual({document:original.document,digest:original.digest});
+      }
+      const stale=await body();await expect(mutate(stale)).rejects.toMatchObject({status:403});
+      const valid={...stale,document:{...stale.document,timeZoneAuthority:current,observedAt:timeZone==='UTC'?'2026-09-01T12:00:00Z':'2026-09-01T08:00:00-04:00'}};
+      expect((await mutate(valid)).status).toBe(201);
+    }finally{await rotateProfile('UTC');timeZoneAuthority=undefined;}
+  });
+  test.each([['blocker','UTC'],['exception','UTC'],['blocker','America/New_York'],['exception','America/New_York']])(
+    'profile rotation preserves assigned-worker %s lifecycle with %s active timezone',async(kind,timeZone)=>{
+      const original=(await mutate(await body('record_'+kind,await issueDocument(kind)))).body.data;
+      const note=(await mutateFieldEvidence(runtimePool,{...normalizeEvidenceAction({...actor,executionId:execution.id,idempotencyKey:crypto.randomUUID(),
+        body:{...common('record_note'),note:'Access was observed.',caption:null}}),csrfToken:session.csrfToken,requestCorrelationId:'p7-rotation-resolution'})).body.data;
+      const resolution={description:'Access observed.',observedAt:'2026-09-01T12:30:00Z',evidence:[{id:note.id,revision:note.revision,digest:note.digest}]};
+      try{
+        await rotateProfile(timeZone);
+        const input=edit(original,'issue_state',{state:'investigating',resolution:null}),key=crypto.randomUUID();
+        const accepted=await rotationPost(input,key,memberSession.headers);expect(accepted.status).toBe(201);
+        const investigating=accepted.body.data;
+        const waiting=(await mutate(edit(investigating,'issue_state',{state:'awaiting_follow_up',resolution:null}),crypto.randomUUID(),worker())).body.data;
+        for(const patch of [{observedAt:'2026-09-01T08:30:00-04:00'},{observedAt:'2026-09-01T11:00:00Z'},
+          {observedAt:'2099-09-01T12:30:00Z'},{evidence:[{id:note.id,revision:note.revision,digest:digest('f')}]},
+          {evidence:[{id:crypto.randomUUID(),revision:1,digest:note.digest}]}]){
+          await expect(mutate(edit(waiting,'issue_state',{state:'resolved',resolution:{...resolution,...patch}}),crypto.randomUUID(),worker())).rejects.toMatchObject({status:403});
+        }
+        const resolved=(await mutate(edit(waiting,'issue_state',{state:'resolved',resolution}),crypto.randomUUID(),worker())).body.data;
+        const reviewed=(await mutate(edit(resolved,'review',{outcome:'owner_confirmed'}))).body.data;
+        const reopened=(await mutate(edit(reviewed,'issue_state',{state:'open',resolution:null}),crypto.randomUUID(),worker())).body.data;
+        const resolvedAgain=(await mutate(edit(reopened,'issue_state',{state:'resolved',resolution}),crypto.randomUUID(),worker())).body.data;
+        expect(resolvedAgain).toMatchObject({revision:7,document:{timeZoneAuthority:original.document.timeZoneAuthority,resolution}});
+        expect((await rotationPost(input,key,memberSession.headers)).body).toEqual(accepted.body);
+        await expect(mutate({...input,expectedExecutionRevision:execution.revision+1},key,worker())).rejects.toMatchObject({status:409});
+        await expect(mutate({...input,performerProfileId:IDS.owner},crypto.randomUUID(),worker())).rejects.toMatchObject({status:403});
+        await expect(mutate(input,crypto.randomUUID(),{...worker(),organizationId:IDS.otherOrg})).rejects.toMatchObject({status:403});
+        await ownerPool.query("UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp(),revoke_reason='rotation fixture' WHERE id=$1",[memberSession.sessionId]);
+        try{expect((await rotationPost(input,key,memberSession.headers)).status).toBe(401);await expect(mutate(input,key,worker())).rejects.toMatchObject({status:403});}
+        finally{await ownerPool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",[memberSession.sessionId]);}
+        const history=(await ownerPool.query('SELECT action_code,document FROM canonical_progress_records WHERE root_id=$1 ORDER BY revision',[original.id])).rows;
+        expect(history.map(row=>row.action_code)).toEqual(['record_'+kind,'issue_state','issue_state','issue_state','review','issue_state','issue_state']);
+        expect(history[0].document).toEqual(original.document);expect(history[3].document.resolution).toEqual(resolution);
+        const counts=(await ownerPool.query('SELECT (SELECT count(*) FROM canonical_progress_events WHERE root_id=$1)::int events,(SELECT count(*) FROM canonical_progress_audit_events WHERE record_id IN (SELECT id FROM canonical_progress_records WHERE root_id=$1))::int audits,(SELECT count(*) FROM canonical_progress_idempotency WHERE record_id IN (SELECT id FROM canonical_progress_records WHERE root_id=$1))::int receipts',[original.id])).rows[0];
+        expect(counts).toEqual({events:7,audits:7,receipts:7});
+      }finally{await rotateProfile('UTC');timeZoneAuthority=undefined;}
+    });
   test('real writes stop at the explicit history bound, while exact retry and all bounded pages remain available',async()=>{
     const before=(await ownerPool.query('SELECT count(*)::int count FROM canonical_progress_records WHERE execution_id=$1',[execution.id])).rows[0].count;
     let last,key;

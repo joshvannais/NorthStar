@@ -57,6 +57,14 @@ describe('Mission 23 Part 7 strict operational fact contract', () => {
   value.body.document.resolution.evidence = [pin];
   expect(normalizeProgressAction(value).document.resolution.evidence).toEqual([pin]);
  });
+ test.each(['review','issue_state'])('%s cannot supply replacement profile authority or select historical mode',action=>{
+  const value=input(action==='review'?{outcome:'owner_confirmed'}:{state:'investigating',resolution:null});
+  Object.assign(value.body,{action,recordId:id,expectedRecordRevision:1,expectedRecordDigest:pin.digest});
+  expect(normalizeProgressAction(value).action).toBe(action);
+  for(const patch of [{timeZoneAuthority:zone},{require_current_profile:false},{requireCurrentProfile:false}]){
+   expect(()=>normalizeProgressAction({...value,body:{...value.body,document:{...value.body.document,...patch}}})).toThrow();
+  }
+ });
  test('cursor binds execution and immutable high-water identity; bounds are strict', () => {
   expect(normalizeProgressRead({})).toEqual({ limit: 50, cursor: null });
   for (const query of [{ limit: '0' }, { limit: '201' }, { limit: '01' }, { cursor: 'bad' }, { actor: id }]) {

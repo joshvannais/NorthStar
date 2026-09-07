@@ -4,18 +4,19 @@
   "currentManifest": {
     "source": "public/unlisted/investor-forecast.html",
     "baseCommit": "a5bc90ddede95d0a88e6f857f8c75c9637dd8245",
+    "priorRevisionCommit": "f5e4d52c72e52f890feda6b0640a18b48d9a909a",
     "baselineHtmlSha256": "c7207560deb15cf1c86c569187a9e0e9c0761249bd6d83b68d0fe1ee18a2c7db",
-    "engineSha256": "9cfa8b5a988274d14c91ddce7008b696217d808b5f762e3195ed9e780ab03b85",
-    "uiSha256": "5528cd0fe58360e161a1a4297be4177e59127df15da156b395cc73403fcc85a7",
-    "workerSha256": "00abd22474b70753fe5d62d85ef0f89828d72e236e66ae29a12ff049cca3209c",
-    "htmlSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
-    "bytes": 4090774
+    "engineSha256": "142c6ef9849a3cea0f354fa6935a4006fe4a63f94a4aa305d127120ae3a348f8",
+    "uiSha256": "6d89e7e39949309faf3d10d6d5c8bfd4a6e56eac1b541e46a6eb19f52aa65c6f",
+    "workerSha256": "cba2a9df10816ba50719b4d5b9a373635c9d37c2381d10e2ae0d08770386065b",
+    "htmlSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+    "bytes": 4100260
   },
   "cases": [
     {
       "id": "default",
       "input": {},
-      "why": "New ownership1%, no payout policy, no tax estimate, attorney earmark15k; corrected assisted close share and separate self-service capacity. Bank cash rises chiefly because automatic50% distributions were removed; this is not evidence of higher enterprise value or credible demand.",
+      "why": "New ownership1%, no payout policy, no tax estimate, forecast prelaunch attorney expense/payment15k leaves10k opening bank and releases legal earmark; corrected assisted close share and separate self-service capacity. Bank cash rises versus original chiefly because automatic50% distributions were removed, and falls15k versus the prior reserve-only revision. Neither validates enterprise value or credible demand.",
       "before": {
         "months": 120,
         "ownership": 0.1,
@@ -39,8 +40,8 @@
       "after": {
         "months": 120,
         "ownership": 0.01,
-        "startingCompanyCash": 25000,
-        "endingCash": 44375574.14110483,
+        "startingCompanyCash": 10000,
+        "endingCash": 44360574.14110483,
         "cumulativeInvestorDistributions": 0,
         "recoveryMonth": null,
         "fundingGapMonth": null,
@@ -48,13 +49,13 @@
           "newPayingCustomers": 1.5,
           "requiredSalesFte": 0.03125,
           "operatingProfit": 18.339,
-          "endingCash": 25018.339
+          "endingCash": 10018.339
         },
         "lastMonth": {
           "activeCustomers": 4134.761904761905,
           "employeePayroll": 81000,
           "operatingProfit": 777927.6987351073,
-          "endingCash": 44375574.14110483
+          "endingCash": 44360574.14110483
         }
       }
     },
@@ -100,8 +101,8 @@
       "after": {
         "months": 1,
         "ownership": 0.01,
-        "startingCompanyCash": 25000,
-        "endingCash": 27246.712,
+        "startingCompanyCash": 10000,
+        "endingCash": 12246.712,
         "cumulativeInvestorDistributions": 0,
         "recoveryMonth": null,
         "fundingGapMonth": null,
@@ -109,13 +110,13 @@
           "newPayingCustomers": 12,
           "requiredSalesFte": 0.25,
           "operatingProfit": 2246.712,
-          "endingCash": 27246.712
+          "endingCash": 12246.712
         },
         "lastMonth": {
           "activeCustomers": 12,
           "employeePayroll": 0,
           "operatingProfit": 2246.712,
-          "endingCash": 27246.712
+          "endingCash": 12246.712
         }
       }
     },
@@ -161,8 +162,8 @@
       "after": {
         "months": 6,
         "ownership": 0.01,
-        "startingCompanyCash": 25000,
-        "endingCash": 71719.35980319999,
+        "startingCompanyCash": 10000,
+        "endingCash": 56719.359803200015,
         "cumulativeInvestorDistributions": 0,
         "recoveryMonth": null,
         "fundingGapMonth": null,
@@ -170,13 +171,13 @@
           "newPayingCustomers": 0,
           "requiredSalesFte": 0,
           "operatingProfit": 12476.48,
-          "endingCash": 37476.479999999996
+          "endingCash": 22476.48
         },
         "lastMonth": {
           "activeCustomers": 106.28820000000003,
           "employeePayroll": 5000,
           "operatingProfit": 3709.493355200004,
-          "endingCash": 71719.35980319999
+          "endingCash": 56719.359803200015
         }
       }
     },
@@ -190,10 +191,11 @@
           }
         },
         "cash": {
-          "legalReviewReserve": 0
+          "legalReviewReserve": 0,
+          "forecastPrelaunchLegalPayment": 0
         }
       },
-      "why": "Unchanged300/month cash burn. New attorney reserve explicitly0 here isolates the original cost boundary; separate legal-underfunded test exercises new15k.",
+      "why": "Unchanged300/month cash burn. Opening attorney payment/reserve explicitly0 here isolates the original cost boundary; new default is25k investment minus15k prelaunch payment, yielding the same10k opening bank.",
       "before": {
         "months": 120,
         "ownership": 0.1,
@@ -236,5 +238,31 @@
         }
       }
     }
-  ]
+  ],
+  "priorReserveOnlyRevision": {
+    "commit": "f5e4d52c72e52f890feda6b0640a18b48d9a909a",
+    "htmlSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+    "default": {
+      "months": 120,
+      "ownership": 0.01,
+      "startingCompanyCash": 25000,
+      "endingCash": 44375574.14110483,
+      "cumulativeInvestorDistributions": 0,
+      "recoveryMonth": null,
+      "fundingGapMonth": null,
+      "firstMonth": {
+        "newPayingCustomers": 1.5,
+        "requiredSalesFte": 0.03125,
+        "operatingProfit": 18.339,
+        "endingCash": 25018.339
+      },
+      "lastMonth": {
+        "activeCustomers": 4134.761904761905,
+        "employeePayroll": 81000,
+        "operatingProfit": 777927.6987351073,
+        "endingCash": 44375574.14110483
+      }
+    },
+    "difference": "New default records15k forecast prelaunch expense/payment: opening bank25k→10k, legal hold15k→0, eligibility starts15k lower. Existing explicitly saved scenarios retain their old opening assumptions."
+  }
 }

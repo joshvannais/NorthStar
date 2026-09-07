@@ -10,9 +10,10 @@ const noChurn = { baseMonthlyVoluntaryChurn: 0, earlyTenureMultiplier: 1, mature
 const noAuto = { automaticPlan: { enabled: false } };
 const noAcq = { direct: { enabled: false } };
 function checked(id, input = {}) {
+  if (id !== 'default' && !id.startsWith('prelaunch_')) input = {...input,cash:{forecastPrelaunchLegalPayment:0,...input.cash}};
   // Isolate the original arithmetic boundaries from the new, separately tested
   // attorney earmark. The default case intentionally exercises genuine defaults.
-  if (id !== 'default' && !id.startsWith('legal_')) input = {...input, cash:{legalReviewReserve:0,...input.cash}};
+  if (id !== 'default' && !id.startsWith('legal_') && !id.startsWith('prelaunch_')) input = {...input, cash:{legalReviewReserve:0,...input.cash}};
   const result = run(input);
   const differences = { operating: 0, cash: 0, customers: 0, owners: 0, ledger: 0 };
   for (const row of result.rows) {
@@ -29,7 +30,7 @@ function checked(id, input = {}) {
     for (const entry of row.expenseLedger) assert.ok(entry.source && entry.driver && entry.accountingTreatment && entry.serviceMonth === row.month && entry.cashMonth === row.month);
   }
   receipts.push({ id, input, rows: result.rows.length, summary: result.summary, maximumIndependentDifferences: differences,
-    firstMonth: result.rows[0], lastMonth: result.rows.at(-1) });
+    openingExpenseLedger: result.openingExpenseLedger, firstMonth: result.rows[0], lastMonth: result.rows.at(-1) });
   return result;
 }
 const periodic = { distributionPolicy: 'periodic', distributionEveryMonths: 3, distributionStartMonth: 3,
@@ -216,7 +217,7 @@ test('20k tax payment consumes20k unprovided earnings, or releases prior20k prov
   }
 });
 test('actual-month financial and customer locks survive changed future target; unsupported earnings history stays unavailable', () => {
-  const original=run({forecastMonths:3,organization:noAuto});
+  const original=run({forecastMonths:3,organization:noAuto,cash:{forecastPrelaunchLegalPayment:0}});
   const actuals=original.rows.map(row=>({month:row.month,endingCustomers:row.activeCustomers,newPayingCustomers:row.newPayingCustomers,reactivations:row.reactivations,churnedCustomers:row.churnedCustomers,
     planCustomers:row.planEnding,mrr:row.mrr,revenue:row.totalRevenue,providerCost:row.directProviderCosts,opex:row.totalOperatingExpense,cashCollections:row.cashCollections,
     beginningCash:row.beginningCash,endingCash:row.endingCash,additionalFunding:0,investorDistribution:0,otherCashOutflows:0}));
@@ -233,7 +234,7 @@ test('surge9400 paying demand records purchased capacity and immediate cash assu
   const r=checked('surge9400',{forecastMonths:3,investmentAmount:10000,acquisition:{...noAcq,events:[{month:1,incrementalLeads:9400,conversionRate:1,durationMonths:1}]},organization:{capacityEnforcement:'emergency_scale'}});
   near(r.rows[0].newPayingCustomers,9400);assert.ok(r.rows[0].expenseLedger.find(e=>e.id==='surge_purchased_work').amount>0);assert.ok(r.rows[0].organization.emergencyScale);
 });
-test('new attorney planning earmark protects15k within25k bank cash without an expense', () => {
+test('explicit saved-style reserve-only scenario protects15k within25k without an expense', () => {
   const r=checked('legal_default',{forecastMonths:1,acquisition:noAcq});
   near(r.summary.startingCompanyCash,25000);near(r.summary.openingLegalEarmark,15000);near(r.summary.startingOperatingCash,10000);
   near(r.rows[0].endingCash,24700);near(r.rows[0].legalReviewEarmark,15000);near(r.rows[0].opex.legalReviewPayment,0);near(r.rows[0].unearmarkedOperatingCash,9700);
@@ -265,6 +266,35 @@ test('saved attorney values are preserved and absent legacy reserve is not silen
   const absent=Model.createDefaultConfig(realm({version:'3.3.0',cash:{distributionPayoutRatio:.5}}));near(absent.cash.legalReviewReserve,0);
   const explicit=Model.createDefaultConfig(realm({version:'3.3.0',cash:{legalReviewReserve:12500}}));near(explicit.cash.legalReviewReserve,12500);
   near(Model.createDefaultConfig().cash.legalReviewReserve,15000);
+});
+test('new forecast prelaunch15k expense leaves10k opening bank, no legal hold, then9700 at zero activity', () => {
+  const r=checked('prelaunch_default',{forecastMonths:1,acquisition:noAcq});
+  near(r.config.cash.forecastPrelaunchLegalPayment,15000);near(r.config.cash.legalReviewReserve,15000);near(r.config.actualLegalReadinessCost,0);
+  near(r.summary.startingCompanyCash,10000);near(r.summary.openingLegalEarmark,0);near(r.summary.startingOperatingCash,10000);
+  near(r.rows[0].beginningCash,10000);near(r.rows[0].endingCash,9700);near(r.rows[0].operatingProfit,-300);near(r.rows[0].earningsEligibilityBalance,-15300);
+  near(r.openingExpenseLedger.reduce((sum,e)=>sum+e.amount,0),15000);assert.equal(r.openingExpenseLedger[0].status,'FORECAST');
+  const csv=Model.exportMonthlyCsv(r);assert.ok(csv.includes('openingForecastLegalPayment'));assert.ok(csv.includes('FORECAST prelaunch payment'));
+});
+test('forecast prelaunch startup loss protects investment from later10k operating profit', () => {
+  const r=checked('prelaunch_earnings',{forecastMonths:1,startingCustomers:{starter:100},retention:noChurn,acquisition:noAcq,
+    organization:{...noAuto,founder:{compensationPolicy:'manual',manualMonthlyCompensation:0}},operatingCosts:{basePlatform:1893.6},
+    cash:{...periodic,distributionPolicy:'dated',distributionRequests:[{month:1,amount:10000}]}});
+  near(r.rows[0].operatingProfit,10000);near(r.rows[0].endingCash,20000);near(r.rows[0].earningsEligibilityBalance,-5000);near(r.rows[0].totalDistributionPool,0);
+});
+test('old frozen reserve-only and explicit actual saved scenarios never acquire a forecast opening payment', () => {
+  const old=checked('prelaunch_old',{version:'3.4.0',forecastMonths:1,acquisition:noAcq,cash:{legalReviewReserve:15000}});
+  near(old.config.cash.forecastPrelaunchLegalPayment,0);near(old.summary.startingCompanyCash,25000);near(old.summary.openingLegalEarmark,15000);
+  const actual=checked('prelaunch_actual',{version:'3.4.0',forecastMonths:1,actualLegalReadinessCost:15000,acquisition:noAcq,cash:{legalReviewReserve:15000}});
+  near(actual.config.cash.forecastPrelaunchLegalPayment,0);near(actual.config.actualLegalReadinessCost,15000);near(actual.summary.startingCompanyCash,10000);near(actual.rows[0].endingCash,9700);
+  assert.equal(actual.openingExpenseLedger[1].status,'USER_ENTERED_ACTUAL_NOT_VERIFIED_HERE');
+});
+test('locked actual history ignores even an explicit forecast opening payment without remapping actual cost', () => {
+  const actuals=[{month:1,endingCustomers:0,newPayingCustomers:0,reactivations:0,churnedCustomers:0,planCustomers:{starter:0,growth:0,complete:0},mrr:0,revenue:0,providerCost:0,opex:300,cashCollections:0,beginningCash:25000,endingCash:24700,additionalFunding:0,investorDistribution:0,otherCashOutflows:0}];
+  const input={forecastMonths:2,actuals,acquisition:noAcq,cash:{legalReviewReserve:0,forecastPrelaunchLegalPayment:15000}};
+  const r=run(input);near(r.config.actualLegalReadinessCost,0);near(r.summary.forecastOpeningLegalPayment,0);near(r.rows[0].endingCash,24700);near(r.rows[1].endingCash,24400);
+  assert.equal(r.openingExpenseLedger[0].status,'NOT_APPLIED_TO_ACTUAL_HISTORY');assert.equal(r.summary.distributionProjectionAvailable,false);
+  near(Model.createDefaultConfig(realm({actuals})).cash.forecastPrelaunchLegalPayment,0);
+  receipts.push({id:'prelaunch_actual_history',input,summary:r.summary,openingExpenseLedger:r.openingExpenseLedger});
 });
 test.after(() => {
   const out=path.resolve(__dirname,'../../outputs/investor-revision');fs.mkdirSync(out,{recursive:true});

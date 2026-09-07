@@ -1,5 +1,19 @@
 # Controlling founder addendum before freeze
 
+## Current instruction — forecast prelaunch payment (supersedes reserve-only default)
+
+Founder: “Yes. 15k as a forecast pre launch expense. 10k cash can be the company cash reserve for month 1.”
+
+New scenarios now model$25,000 investment minus an editable$15,000 FORECAST prelaunch attorney expense/payment = $10,000 opening Month1 company bank cash, before monthly revenue/expenses. Zero activity and the unchanged$300 overhead therefore end Month1 at$9,700. The$10k is remaining company cash: not another expense, a newly locked reserve, or evidence of sufficient funding. The matching$15k legal earmark is released by the forecast payment, leaving no duplicate hold.
+
+`cash.forecastPrelaunchLegalPayment` is separate from `actualLegalReadinessCost`. Forecast payment must not be described as historical, verified or already paid. Existing recorded actual payments remain actual-labeled; old saved scenarios receive no new forecast payment. Imported actual history is never rewritten by the forecast field, even if a loaded form retains an explicit forecast amount. An opening ledger records each kind of prelaunch payment separately. Startup loss affects eligible earnings once; later10k operating profit following15k startup expense still leaves a5k loss, not distributable investment principal.
+
+Retain the editable$12,500–$15,000 founder planning range, not an attorney quote. Preserve unknown tax/payout policies. Opening bridge, overview, month detail, exports, methodology and previews must reflect the same payment and cash result. No additional header changes are authorized.
+
+Founder subsequently conditionally authorized deployment to the existing `https://northstar-os.ai/investor/forecast` after the revision is accepted. This does NOT authorize this writer to push/deploy. Root owns fresh independent review, agent desktop/mobile inspection and serialized release coordination with the separate Mission23 executor. No new personal founder visual approval is required; agent inspection is not founder inspection. No provider, production-data, real payment or legal-document changes are authorized.
+
+## Prior reserve-only instruction — retained historical context, superseded above
+
 The founder asked about the planned$12,500–$15,000 attorney review budget, a stray checkbox below month navigation and raw long decimal customer values. Parent authorized this additive correction to the same writer task:
 
 1. New scenarios reserve an editable$15,000 for attorney review within total company bank cash. On$25,000 funding, this leaves$10,000 unearmarked before other commitments. Label the$12.5–15k range as founder planning, not a quote/invoice/payment. Preserve explicit saved values; do not silently impose it on old scenarios.

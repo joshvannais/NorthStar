@@ -604,9 +604,14 @@
   ],
   "addendum": [
     {
+      "id": "forecast_prelaunch_attorney_payment",
+      "source": "cash.forecastPrelaunchLegalPayment",
+      "treatment": "Editable forecast opening expense/payment15000 at Month0, not recorded actual; bank25000→10000, opening earnings loss15000, no recurring monthly charge; never applied to locked actual history"
+    },
+    {
       "id": "legalReviewEarmark",
       "source": "cash.legalReviewReserve",
-      "treatment": "Bank-owned earmark; new15000; preserved saved explicit values; not expense or payment"
+      "treatment": "Bank-owned protection before payment; new15000 budget fully released by new15000 forecast prelaunch payment; saved explicit reserve-only values preserved"
     },
     {
       "id": "attorney_review_payment",

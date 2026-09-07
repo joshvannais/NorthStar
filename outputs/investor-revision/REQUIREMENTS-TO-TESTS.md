@@ -5,7 +5,7 @@ All numerical references below are named `node:test` cases in `tests/ratificatio
 | Requirement | Executed check / receipt | Scope and qualification |
 |---|---|---|
 | Approved costs and120-month burn | `zero customers`, `two Starter full160 minutes` | Independent10,000−120×300=−26,000; Month34 negative;298−44.8−4−11.328−300=−62.128 |
-| Revenue/customer/expense/bank/owner reconciliation | Every `checked()` scenario:900 monthly rows | Five independent arithmetic identities and unique ledger metadata; no sums from rounded display |
+| Revenue/customer/expense/bank/owner reconciliation | Every `checked()` scenario:904 monthly rows | Five independent arithmetic identities and unique ledger metadata; no sums from rounded display |
 | One result in overview/monthly/annual/export | `default120`, `CSV precise fields`, seven-column route contract; selected-month browser | Annual rows sum canonical month fields; monthly export120 rows; annual export10 rows; Legacy separated |
 | New25k1%, implied valuation, invalid/zero deal | `founder-proposed25k1%`, `unauthorized/invalid ownership`; browser investment/ownership changes |2.5M post/2.475M pre;50k fixed1% gives5M; zero safely undefined; no silent clipping |
 | Saved10% and explicit old50% policy | `saved3.3 explicit10%`; browser real localStorage payload/save/reset/load | Saved terms preserved; new reset1% and unknown policy/tax |
@@ -24,15 +24,17 @@ All numerical references below are named `node:test` cases in `tests/ratificatio
 | Low cash and persistent failed financing | `low cash`, `post-gap recovery`, `unaffordable upcoming hires` | Distribution constrained by request/earnings/cash; later profits do not silently erase prior funding failure |
 | Cash recovery milestone is not repayment/end of ownership | `investor distributions continue after cash recovery` | Investor distributions continue after milestone; no debt or exit value invented |
 | Gross commitment-aware reserve tail | `month120 reserve`, `attorney commitments beyond120` | Month121+ dated advisor/legal costs remain protected; legal earmark overlap removed once |
-| New attorney budget | `new attorney planning earmark`, browser legal values |25k bank/15k legal/10k unearmarked, no expense until payment; visible12.5–15k planning range |
+| New forecast prelaunch attorney payment | `new forecast prelaunch15k`, browser opening bridge |25k investment−15k forecast legal expense/payment=10k opening bank; remaining legal hold0; zero activity ends Month1 at9,700 |
+| Forecast versus recorded actual/history | `old frozen reserve-only`, `locked actual history ignores` | Explicit old scenarios receive no new forecast payment; actual payment field unchanged; forecast cannot rewrite locked history |
+| Forecast startup earnings loss | `forecast prelaunch startup loss` |15k prelaunch loss plus10k later operating profit leaves−5k eligibility, not distributable principal |
 | Underfunded attorney reserve | `attorney earmark may exceed funding` | Reserve remains15k on10k cash, opening protection shortfall; bank still Month34 negative/end−26k |
 | Attorney opening and dated payments | `opening attorney expense`, `dated attorney invoice` | Opening15k loss followed by10k profit cannot distribute; dated5k payment hits ledger/cash once and reduces earmark15k→10k |
-| Saved attorney values | `saved attorney values`, browser old scenario | Explicit12.5k kept, absent old reserve remains0, new reset15k |
+| Saved attorney values | `saved attorney values`, browser old scenario | Explicit old reserve/payment values preserved; new reset15k forecast payment releases matching15k legal hold |
 | Revenue versus collection timing | `annual prepay` |134.1monthly revenue and1,609.2collection only Months1/13; unsupported annual billing fails closed |
 | Actual locks/recalibration | `actual-month financial and customer locks` | Three immutable actual months survive changed future milestone; missing historical earnings keeps future payouts unavailable |
 | Simulation binding and seed | `seeded simulation`, `offline worker`, real worker browser draw | Acquisition volume and active support payroll cost change results; reproducible seed; canonical engine starts worker; uncalibrated percentiles, no real-world probability claim |
-| All120 access/mobile/rounding | Four main browser cases,632 assertions each | All120 expanded/collapsed, year10jump, no primary sideways overflow, no4+decimal text; mobile cards; investor checkbox inline geometry |
-| Scalar UI parser/result bindings | `investor-control-bindings.cjs` / `control-bindings.json` |274 controls:269 accepted normalized changes,5 explicit cross-field/range rejections. Specialized arrays/combined scenarios are not exhaustive |
+| All120 access/mobile/rounding | Four main browser cases,636 assertions each | All120 expanded/collapsed, year10jump, no primary sideways overflow, no4+decimal text; mobile cards; investor checkbox inline geometry; opening/annual/simulation export distinctions |
+| Scalar UI parser/result bindings | `investor-control-bindings.cjs` / `control-bindings.json` |275 controls:270 accepted normalized changes,5 explicit cross-field/range rejections. Specialized arrays/combined scenarios are not exhaustive |
 | Named UI flows | Main browser script | Investment, ownership, month selection, save/load/reset, exports, policy/request, legal reserve/payment, worker, invalid investment; named growth fields included in scalar sweep |
 | Route and offline isolation | Preserved8 HTTP/hosting tests | Exact GET/HEAD only, noindex/CSP/noexternal assets, alternate404s, sibling/public discovery isolation; source hashes refreshed without weakening protections |
 | Header-only logo adjustment | Parent's independent prefreeze source/geometry check |1440×1000 brandname/headline/paragraph bounds unchanged; y140–471 pixel-identical. Image/shadow region changes; not whole-header pixel identity or founder approval |

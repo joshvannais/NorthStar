@@ -1,0 +1,30 @@
+[
+  {
+    "phase": "before",
+    "width": 1440,
+    "colorScheme": "light",
+    "assertions": 0,
+    "errors": []
+  },
+  {
+    "phase": "before",
+    "width": 1440,
+    "colorScheme": "dark",
+    "assertions": 0,
+    "errors": []
+  },
+  {
+    "phase": "before",
+    "width": 390,
+    "colorScheme": "light",
+    "assertions": 0,
+    "errors": []
+  },
+  {
+    "phase": "before",
+    "width": 390,
+    "colorScheme": "dark",
+    "assertions": 0,
+    "errors": []
+  }
+]

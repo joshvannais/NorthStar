@@ -18,10 +18,13 @@ const PROFILE = 'b1600000-0000-4000-8000-000000000002';
 const HOSTILE = '<img src=x onerror="globalThis.m23Part9aCompromised=true">';
 const ASSIGNMENT_DIGEST = 'a'.repeat(64);
 const EXECUTION_DIGEST = 'b'.repeat(64);
+let currentActions = ['start'];
+let currentMaterialKinds = [];
+let currentEquipmentKinds = [];
 
 function today() {
   return { success: true, requestId: 'browser-today', data: {
-    version: 'm23-part9a-today-v1', readOnly: true, mutationCapabilities: [],
+    version: 'm22-part6-today-v1', readOnly: true, mutationCapabilities: [],
     evaluatedAt: '2026-09-07T14:00:00.000Z', scopeDigest: 'c'.repeat(64),
     identity: { profileId: PROFILE, displayName: `Alex Rivera ${HOSTILE}`, operationalRole: 'technician' },
     businessProfile: { id: 'f1600000-0000-4000-8000-000000000001', version: 1,
@@ -39,6 +42,8 @@ function today() {
       crew: null, authority: { revision: 7, digest: ASSIGNMENT_DIGEST, approvedCurrent: true },
       execution: { id: EXECUTION, lifecycleState: 'not_started', revision: 3, digest: EXECUTION_DIGEST,
         sourceAssignmentRevision: 7, sourceAssignmentDigest: ASSIGNMENT_DIGEST },
+      workCapabilities: { version: 'm23-part9a-worker-actions-v1', mutable: true,
+        actions: currentActions, materialMovementKinds: currentMaterialKinds, equipmentKinds: currentEquipmentKinds },
     }],
   } };
 }
@@ -111,6 +116,12 @@ async function main() {
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/completion`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.completion) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/transitions` && request.method() === 'POST') {
             currentExecution = execution('in_progress', 4, 'f'.repeat(64));
+            currentActions = ['pause', 'start_timer', 'record_manual', 'record_material', 'record_equipment',
+              'create_checklist', 'respond_item', 'record_observation', 'record_note', 'record_progress',
+              'record_blocker', 'record_exception', 'record_change', 'propose_completion'];
+            currentMaterialKinds = ['consumed', 'returned', 'transferred', 'waste'];
+            currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+              'downtime_start', 'downtime_end', 'maintenance'];
             return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentExecution) });
           }
           return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ success: false, error: { code: 'TEST_UNINVENTORIED', message: 'Uninventoried request.' } }) });
@@ -146,6 +157,13 @@ async function main() {
           assert.match(transition.headers['idempotency-key'], /^m23-part9a-start-/);
           assert.strictEqual(transition.headers['x-csrf-token'], 'browser-csrf-token');
           assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'workLifecyclePrimary');
+          assert.strictEqual(await page.getByRole('button', { name: 'Create checklist' }).count(), 1);
+          assert.strictEqual(await page.getByRole('button', { name: 'Record equipment use' }).count(), 1);
+          await page.getByRole('button', { name: 'Record equipment use' }).click();
+          const equipmentKinds = await page.locator('#workEquipmentForm-kind option').evaluateAll(options => options.map(option => option.value));
+          assert.deepStrictEqual(equipmentKinds, currentEquipmentKinds);
+          assert.ok(equipmentKinds.includes('reading'));
+          assert.ok(equipmentKinds.includes('maintenance'));
         }
         await page.screenshot({ path: path.join(output, `${theme}-${width}.png`), fullPage: true });
         ledger.cases.push({ theme, width, geometry, ready: true, inertHostileText: true, reducedMotion: true });

@@ -315,6 +315,13 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     expect(crew).toMatchObject({ assignment: { kind: 'crew', direct: false, currentCrew: true }, dispatch: { state: 'dispatched' } });
     expect(crew.crew.teammates.map(member => member.name)).toEqual(expect.arrayContaining([expect.stringContaining('Alex Employee'), expect.stringContaining('Morgan Teammate')]));
     expect(revoked.dispatch.state).toBe('revoked');
+    expect(revoked.execution).toBeNull();
+    expect(direct.workCapabilities).toMatchObject({
+      version: 'm23-part9a-worker-actions-v1', mutable: true, actions: ['initialize'],
+      materialMovementKinds: [], equipmentKinds: [],
+    });
+    expect(crew.workCapabilities.actions).toEqual(['initialize']);
+    expect(revoked.workCapabilities.actions).toEqual([]);
     for (const record of data.records) {
       expect(record.route).toMatchObject({ providerNeutral: true, providerCalls: 0, travelDurationMinutes: null, distance: null });
       expect(record.instructions.text).toContain(HOSTILE);
@@ -365,6 +372,10 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
       sourceAssignmentRevision: assignment.revision,
       sourceAssignmentDigest: assignment.digest,
     });
+    expect(direct.workCapabilities).toEqual({
+      version: 'm23-part9a-worker-actions-v1', mutable: true, actions: ['start'],
+      materialMovementKinds: [], equipmentKinds: [],
+    });
     expect(crew.execution).toBeNull();
     expect(JSON.stringify(data)).not.toContain(sessions.employee.sessionId);
     expect(JSON.stringify(data)).not.toContain(IDS.organization);
@@ -390,8 +401,9 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     const direct = await readExecutionByAppointment(employee, IDS.direct);
     expect(direct).toMatchObject({ success: true, data: {
       appointmentId: IDS.direct, lifecycleState: 'not_started', revision: 1,
+      actions: ['start'], materialMovementKinds: [], equipmentKinds: [],
     } });
-    expect(direct.data.id).toMatch(UUID);
+    expect(direct.data.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(direct.data.digest).toMatch(/^[0-9a-f]{64}$/);
 
     expect(await readExecutionByAppointment(employee, IDS.crewWork))
@@ -422,6 +434,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
 
     await expect(readExecutionByAppointment(owner, IDS.direct)).rejects.toMatchObject({ code: 'P0002' });
     await expect(readExecutionByAppointment(other, IDS.direct)).rejects.toMatchObject({ code: 'P0002' });
+    await expect(readExecutionByAppointment(employee, IDS.revoked)).rejects.toMatchObject({ code: 'P0002' });
     await expect(readExecutionByAppointment({ ...employee, actorAccessRole: 'owner' }, IDS.direct))
       .rejects.toMatchObject({ code: '42501' });
     expect((await migrationPool.query(

@@ -163,6 +163,65 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
     expect(css).toContain('overflow-wrap: anywhere');
   });
 
+  test('projects an explicit fail-closed server-owned worker action contract', () => {
+    const { rowProjection } = require('../../src/scheduling/todayRepository');
+    const base = {
+      appointment_id: 'd1600000-0000-4000-8000-000000000001',
+      job_title: 'Current assigned work',
+      service_type: 'Service',
+      appointment_status: 'scheduled',
+      schedule_state: 'scheduled',
+      dispatch_state: 'dispatched',
+      scheduled_start: '2026-09-07T13:00:00.000Z',
+      scheduled_end: '2026-09-07T14:00:00.000Z',
+      spans_day_boundary: false,
+      needs_review: false,
+      review_reasons: [],
+      workforce_profile_id: validInput.membershipId,
+      workforce_crew_id: null,
+      actor_profile_id: validInput.membershipId,
+      actor_name: 'Worker',
+      teammates: [],
+      teammate_total: 0,
+      revision: 7,
+      canonical_digest: 'a'.repeat(64),
+      last_human_approval_id: 'e1600000-0000-4000-8000-000000000001',
+      human_applied_revision: 7,
+      human_applied_digest: 'a'.repeat(64),
+      execution_id: 'f1600000-0000-4000-8000-000000000001',
+      execution_lifecycle_state: 'in_progress',
+      execution_revision: 3,
+      execution_digest: 'b'.repeat(64),
+      execution_assignment_revision: 7,
+      execution_assignment_digest: 'a'.repeat(64),
+      execution_actions: ['pause', 'start_timer', 'record_manual', 'record_material', 'record_equipment',
+        'create_checklist', 'respond_item', 'record_observation', 'record_note', 'record_progress',
+        'record_blocker', 'record_exception', 'record_change', 'propose_completion'],
+      execution_material_kinds: ['consumed', 'returned', 'transferred', 'waste'],
+      execution_equipment_kinds: ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+        'downtime_start', 'downtime_end', 'maintenance'],
+    };
+
+    const mutable = rowProjection(base, 'America/New_York', true);
+    expect(mutable.workCapabilities).toEqual({
+      version: 'm23-part9a-worker-actions-v1',
+      mutable: true,
+      actions: base.execution_actions,
+      materialMovementKinds: base.execution_material_kinds,
+      equipmentKinds: base.execution_equipment_kinds,
+    });
+    expect(rowProjection(base, 'America/New_York', false).workCapabilities).toEqual({
+      version: 'm23-part9a-worker-actions-v1', mutable: false, actions: [],
+      materialMovementKinds: [], equipmentKinds: [],
+    });
+    expect(rowProjection({ ...base, execution_id: null, execution_actions: null,
+      execution_material_kinds: null, execution_equipment_kinds: null }, 'America/New_York', true)
+      .workCapabilities).toEqual({
+      version: 'm23-part9a-worker-actions-v1', mutable: true, actions: ['initialize'],
+      materialMovementKinds: [], equipmentKinds: [],
+    });
+  });
+
   test('keeps hostile source-to-sink proof separate from realistic employee handoff screenshots', () => {
     const browser = source('tests/browser/m22-part6-mobile-today.js');
     const hostileAggregate = source('tests/helpers/m22-part6-aggregate-hostile-evidence.js');
@@ -193,6 +252,8 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
             session_id: validInput.authSessionId, session_user_id: validInput.actorUserId,
             session_organization_id: validInput.organizationId, session_membership_id: validInput.membershipId,
             session_status: 'active', access_expires_at: '2035-01-01T00:00:00.000Z',
+            business_profile_id: 'd1600000-0000-4000-8000-000000000001', business_profile_version: 1,
+            business_profile_hash: 'a'.repeat(64),
             time_zone: 'America/New_York', evaluated_at: '2030-01-01T00:00:00.000Z',
           }],
         };
@@ -224,6 +285,8 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
             session_id: validInput.authSessionId, session_user_id: validInput.actorUserId,
             session_organization_id: validInput.organizationId, session_membership_id: validInput.membershipId,
             session_status: 'active', access_expires_at: '2035-01-01T00:00:00.000Z',
+            business_profile_id: 'd1600000-0000-4000-8000-000000000001', business_profile_version: 1,
+            business_profile_hash: 'a'.repeat(64),
             time_zone: 'America/New_York', evaluated_at: '2030-01-01T00:00:00.000Z',
           }],
         };

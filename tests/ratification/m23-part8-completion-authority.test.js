@@ -6,8 +6,8 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '../..');
-const BASE = 'fce4000f22c08f5f74712d37439286a4c601b1a7';
-const AUDITED_HEAD = '13f9348312a354835b7a56eddc133d00492b7b53';
+const BASE = 'a5bc90ddede95d0a88e6f857f8c75c9637dd8245';
+const AUDITED_HEAD = 'c96e710d60a14ba4d39ed78c854ac91e5318303e';
 const MIGRATION = 'migrations/049_canonical_completion_reopening_authority.sql';
 const MIGRATION_BYTES = 79646;
 const MIGRATION_SHA256 = '387188bf8aeaddef56f23eb7542a7a7c0efb05c55b9074cad045b0a0eecd2fdf';
@@ -20,12 +20,16 @@ const FINAL_CORRECTION = 'migrations/051_canonical_completion_type_and_provenanc
 const FINAL_BYTES = 2961;
 const FINAL_SHA256 = '2efc03578054a94ee0db22f2b603dd0d38df9584950e8cc94c5db315995c3f57';
 const FINAL_BLOB = '88cc4e6b5674259951a6fcc6232a52e7f2653682';
+const INSERT_ONLY = 'migrations/052_canonical_transcript_insert_only_authority.sql';
+const INSERT_BYTES = 1088;
+const INSERT_SHA256 = '2071b58c97a8c4fa9e2e0c7255b67f0340c4062f7477b498ef31b16aafcefb8b';
+const INSERT_BLOB = '335a51b1b278f9719e30f4dae755022bf68d46bd';
 const read = name => fs.readFileSync(path.join(ROOT, name), 'utf8');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const git = args => execFileSync('git', args, { cwd: ROOT });
 
 describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
-  test('preserves all 48 audited migration blobs through 050 and adds exact migration 051', () => {
+  test('preserves all 49 audited migration blobs through 051 and adds exact migration 052', () => {
     const names = git(['ls-tree', '-r', '--name-only', BASE, 'migrations']).toString('utf8')
       .trim().split('\n').filter(name => name.endsWith('.sql'));
     expect(names).toHaveLength(46);
@@ -39,7 +43,7 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
 
     const auditedNames = git(['ls-tree', '-r', '--name-only', AUDITED_HEAD, 'migrations'])
       .toString('utf8').trim().split('\n').filter(name => name.endsWith('.sql'));
-    expect(auditedNames).toHaveLength(48);
+    expect(auditedNames).toHaveLength(49);
     for (const name of auditedNames) {
       expect(hash(fs.readFileSync(path.join(ROOT, name)))).toBe(
         hash(git(['show', `${AUDITED_HEAD}:${name}`]))
@@ -53,6 +57,10 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
     expect(finalBytes.length).toBe(FINAL_BYTES);
     expect(hash(finalBytes)).toBe(FINAL_SHA256);
     expect(git(['hash-object', FINAL_CORRECTION]).toString('utf8').trim()).toBe(FINAL_BLOB);
+    const insertBytes = fs.readFileSync(path.join(ROOT, INSERT_ONLY));
+    expect(insertBytes.length).toBe(INSERT_BYTES);
+    expect(hash(insertBytes)).toBe(INSERT_SHA256);
+    expect(git(['hash-object', INSERT_ONLY]).toString('utf8').trim()).toBe(INSERT_BLOB);
   });
 
   test('the authority and evidence seals agree on exact base, migration, and writer-only status', () => {
@@ -61,7 +69,7 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
     const identity = read('outputs/m23-part8-writer/MIGRATION_IDENTITY.md');
     for (const value of [BASE, AUDITED_HEAD, MIGRATION_SHA256, MIGRATION_BLOB, String(MIGRATION_BYTES),
       CORRECTION_SHA256, CORRECTION_BLOB, String(CORRECTION_BYTES),
-      FINAL_SHA256, FINAL_BLOB, String(FINAL_BYTES)]) {
+      FINAL_SHA256, FINAL_BLOB, String(FINAL_BYTES), INSERT_SHA256, INSERT_BLOB, String(INSERT_BYTES)]) {
       expect(identity).toContain(value);
     }
     expect(authority).toContain('Completion is a separately authorized operational decision.');
@@ -127,7 +135,11 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
     const grants = read('src/completion/transcriptDatabaseAuthority.js');
     expect(grants).toContain('REVOKE UPDATE, DELETE ON TABLE');
     expect(grants).toContain('has_column_privilege');
-    expect(grants).toContain('GRANT UPDATE (transcript_text)');
+    expect(grants).not.toContain('GRANT UPDATE');
+    expect(grants).toContain('value.updatable.length !== 0');
+    const conflicts = read('src/scheduling/conflictRepository.js');
+    expect(conflicts).toContain('FOR SHARE OF assignment, appointment, opportunity`');
+    expect(conflicts).not.toContain('FOR SHARE OF assignment, appointment, opportunity, transcript');
     expect(read('src/db.js')).toContain("require('./completion/transcriptDatabaseAuthority').grantAndVerify");
   });
 
@@ -142,12 +154,23 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
       .toString('utf8').trim()).toBe('');
     for (const name of ['src/completion/contract.js', 'src/completion/repository.js',
       'src/completion/databaseAuthority.js', 'src/completion/transcriptDatabaseAuthority.js',
-      MIGRATION, CORRECTION, FINAL_CORRECTION,
+      MIGRATION, CORRECTION, FINAL_CORRECTION, INSERT_ONLY,
       'tests/integration/m23-part8-completion-postgres.test.js',
       'tests/integration/m23-part8-completion-migration.test.js',
       'tests/integration/m23-part8-completion-source-migration.test.js',
-      'tests/integration/m23-part8-completion-type-migration.test.js']) {
+      'tests/integration/m23-part8-completion-type-migration.test.js',
+      'tests/integration/m23-part8-transcript-insert-migration.test.js']) {
       expect(fs.existsSync(path.join(ROOT, name))).toBe(true);
     }
+  });
+
+  test('evidence preserves the current base and two-parent compatibility topology, not superseded linear history', () => {
+    const parents = git(['show', '-s', '--format=%P', AUDITED_HEAD]).toString('utf8').trim().split(' ');
+    expect(parents).toEqual(['a955ce0d5d26de95f9c165247bf0a87cc012e32a', BASE]);
+    expect(git(['merge-base', BASE, AUDITED_HEAD]).toString('utf8').trim()).toBe(BASE);
+    const ledger = read('outputs/m23-part8-writer/WRITER_LEDGER.md');
+    for (const value of [BASE, AUDITED_HEAD, ...parents, 'two-parent compatibility merge',
+      '01a079df-3659-7843-ad50-428ac05e949d']) expect(ledger).toContain(value);
+    expect(ledger).not.toMatch(/(?:4|four) linear commits/i);
   });
 });

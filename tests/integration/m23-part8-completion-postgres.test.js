@@ -334,7 +334,7 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
       'SELECT t.* FROM canonical_transcripts t JOIN canonical_field_executions e ON e.operation_id=t.operation_id AND e.organization_id=t.organization_id WHERE e.id=$1',
       [context.execution.id]
     )).rows[0];
-    for (const column of ['id', 'organization_id', 'operation_id', 'graph_id', 'customer_id',
+    for (const column of ['transcript_text', 'id', 'organization_id', 'operation_id', 'graph_id', 'customer_id',
       'source', 'source_version', 'external_call_id', 'external_transcript_id', 'normalized_fingerprint',
       'occurred_at', 'created_at']) {
       expect((await ownerPool.query(
@@ -350,9 +350,15 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
       .rejects.toMatchObject({ code: '42501' });
     expect((await ownerPool.query('SELECT * FROM canonical_transcripts WHERE id=$1', [transcript.id])).rows[0])
       .toEqual(transcript);
-    // The existing conflict/approval/overview row-lock contract remains usable.
-    expect((await runtimePool.query('SELECT id FROM canonical_transcripts WHERE id=$1 FOR SHARE', [transcript.id])).rowCount)
-      .toBe(1);
+    expect((await ownerPool.query(
+      "SELECT has_any_column_privilege($1,'canonical_transcripts','UPDATE') AS writable", [roles.runtime]
+    )).rows[0].writable).toBe(false);
+    // Ordinary reads and the complete text/fingerprint remain available and intact.
+    expect((await runtimePool.query(
+      'SELECT transcript_text,normalized_fingerprint FROM canonical_transcripts WHERE id=$1', [transcript.id]
+    )).rows[0]).toEqual({
+      transcript_text: transcript.transcript_text, normalized_fingerprint: transcript.normalized_fingerprint,
+    });
     const graphService = require('../../src/services/canonicalGraphService');
     for (const source of ['lead', 'retell', 'voice', 'demo', 'simulation']) {
       const input = {

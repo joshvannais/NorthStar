@@ -133,9 +133,10 @@ and PostgreSQL boundaries.
 
 ## Migration and release evidence
 
-Migration 049 is additive. Forward corrections 050 and 051 preserve every
-migration 001–050 byte-for-byte against audited parent
-`13f9348312a354835b7a56eddc133d00492b7b53`. Their exact Git
+Migration 049 is additive. Forward correction 052 preserves all 49 existing
+migration files 001–051 byte-for-byte against audited parent
+`c96e710d60a14ba4d39ed78c854ac91e5318303e`. Current base/merge-base is
+`a5bc90ddede95d0a88e6f857f8c75c9637dd8245`. Exact Git
 blob, byte count, and SHA-256 are sealed in
 [MIGRATION_IDENTITY.md](../../outputs/m23-part8-writer/MIGRATION_IDENTITY.md).
 The requirement map and local writer results are in the adjacent Part 8 writer
@@ -152,15 +153,25 @@ remain runtime executable; the renamed 049 implementation is private.
 
 After the runner's broad grants on every startup, transcript authority revokes
 table UPDATE/DELETE and all column UPDATE grants from PUBLIC and runtime.
-Only UPDATE(transcript_text) remains for scheduling's existing FOR SHARE row
-locks. Source, source version, fingerprints, external identity, tenant, graph,
-operation, customer and timestamps cannot be updated by runtime, and denied
-DELETE plus the unique organization/operation key prevents replacement.
+No UPDATE column remains, including transcript_text. Migration 052 revokes
+the same ACLs before startup reconciliation, using the runtime role validated
+by the migration runner in the same transaction. Source, source version,
+fingerprints, text, external identity, tenant, graph, operation, customer and
+timestamps cannot be updated by runtime; denied DELETE plus the unique
+organization/operation key prevents replacement. No transcript correction
+capability is introduced.
+
+Scheduling's shared evaluator now locks only mutable assignment, appointment
+and opportunity rows. It reads the INSERT-only transcript from its existing
+serializable/repeatable-read transaction snapshot. Current actor/session/
+tenant checks, source predicates, exact pins, organization locks, retry and
+approval behavior remain unchanged. Migration-owner repair/concurrent mutation
+is outside ordinary runtime authority and is not newly authorized here.
 SELECT and INSERT remain for existing canonical graph ingestion: its shared
 normalizer and wrappers validate the five lead/retell/voice/demo/simulation
 sources before atomic graph creation and replay. This does not claim source
 authenticity against a database owner or permission to introduce new graphs
-through arbitrary SQL; the bounded correction freezes existing provenance.
+through arbitrary SQL; the bounded correction freezes existing content and provenance.
 No ingestion API, schema vocabulary, or legacy owner data is rewritten.
 
 Disposable PostgreSQL evidence is local writer evidence only. No production

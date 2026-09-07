@@ -1612,6 +1612,12 @@ async function runMigrations(options = {}) {
     await client.query('BEGIN');
     transactionOpen = true;
     await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_KEY]);
+    // Forward ACL migrations use the already validated runtime identity, never
+    // a caller-supplied role name. Scope it to the same migration transaction.
+    if (authority) await client.query(
+      "SELECT pg_catalog.set_config('northstar.runtime_role', $1, true)",
+      [authority.runtimeRole]
+    );
     await normalizeMigrationLedger(client);
 
     const appliedResult = await client.query('SELECT filename, checksum FROM public._migrations ORDER BY filename');

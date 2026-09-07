@@ -440,6 +440,58 @@ realPostgres('Mission 22 Part 7 coherent mission-wide mounted acceptance trace',
     }
   }, 180000);
 
+  test('conflict evaluation retains mutable-authority locks and concurrent mounted reads without any transcript UPDATE', async () => {
+    expect((await migrationPool.query(
+      "SELECT has_any_column_privilege($1,'canonical_transcripts','UPDATE') AS permitted",
+      [roles.runtimeRole]
+    )).rows[0].permitted).toBe(false);
+    const before = (await runtimePool.query(
+      'SELECT * FROM canonical_transcripts WHERE id=$1', [ids.transcript]
+    )).rows[0];
+    const current = await assignment(runtimePool);
+    const body = {
+      expectedRevision: current.revision, expectedDigest: current.digest,
+      expectedTimeZone: plan.timeZone, target: { kind: 'profile', id: IDS.employee },
+      scheduledStart: instantAt(plan, 30), scheduledEnd: instantAt(plan, 50),
+    };
+    const responses = await Promise.all([1, 2].map(() => request(app)
+      .post(`/api/v1/canonical/appointments/${IDS.appointment}/conflicts`)
+      .set(sessions.owner.headers).send(body)));
+    for (const response of responses) expect(response.status).toBe(200);
+    expect(responses[0].body.data.digest).toBe(responses[1].body.data.digest);
+    const reader = await runtimePool.connect();
+    const contender = await migrationPool.connect();
+    try {
+      await reader.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const normalized = require('../../src/scheduling/conflictContract').normalizeConflictEvaluation({
+        appointmentId: IDS.appointment, body,
+      });
+      await require('../../src/scheduling/conflictRepository').evaluateInTransaction(reader, {
+        ...normalized, organizationId: IDS.organization, actorUserId: IDS.owner,
+        actorAccessRole: 'owner', authSessionId: sessions.owner.sessionId, explicitSession: null,
+      });
+      await contender.query('BEGIN');
+      await contender.query("SET LOCAL lock_timeout='150ms'");
+      // Lock contention only: no populated row is mutated by this test.
+      await expect(contender.query(
+        'SELECT id FROM canonical_schedule_assignments WHERE id=$1 FOR UPDATE', [current.id]
+      )).rejects.toMatchObject({ code: '55P03' });
+      await contender.query('ROLLBACK');
+      await contender.query('BEGIN');
+      await contender.query("SET LOCAL lock_timeout='150ms'");
+      expect((await contender.query(
+        'SELECT id FROM canonical_transcripts WHERE id=$1 FOR UPDATE', [ids.transcript]
+      )).rowCount).toBe(1);
+    } finally {
+      await contender.query('ROLLBACK');
+      await reader.query('ROLLBACK');
+      contender.release();
+      reader.release();
+    }
+    expect((await runtimePool.query('SELECT * FROM canonical_transcripts WHERE id=$1', [ids.transcript])).rows[0])
+      .toEqual(before);
+  }, 30000);
+
   test('traces one exact appointment from legacy ingress through evaluation, approval, all three surfaces, revocations, and immutable history', async () => {
     const created = await checkpoint('01-new-appointment-created-with-compatible-schedule-ingress', null, {
       appointmentId: IDS.appointment, operationId: ids.operation, graphId: ids.graph, opportunityId: ids.opportunity,

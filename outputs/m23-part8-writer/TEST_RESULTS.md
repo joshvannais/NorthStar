@@ -1,65 +1,80 @@
-# Mission 23 Part 8 second-correction writer test results
+# Mission 23 Part 8 third-correction writer tests
 
-Writer-only evidence; no result is independent audit or production acceptance.
-Audited parent: `13f9348312a354835b7a56eddc133d00492b7b53`.
-The postcommit handoff seals the new head/tree against the tested file blobs.
+Writer-only evidence from the same correction campaign, based on audited
+c96e710d60a14ba4d39ed78c854ac91e5318303e over current main/base
+a5bc90ddede95d0a88e6f857f8c75c9637dd8245. Independent Daybreak re-review remains
+required at the final published head. No old-head exploit was executed.
 
-## Current verification
+## Current gates
 
-- Focused final-schema completion and 051 lifecycle: 2/2 suites, 10/10 tests.
-- Fresh read-only writer-side candidate review: no concrete surviving bypass
-  or regression. This is not the required different independent PR auditor.
-- Complete Mission 23 matrix: 28/28 suites, 488/488 tests; zero skipped/failed.
-  Unit/ratification: 17 suites, 320 tests. Mounted/migration: 11 suites, 168 tests.
-  One combined run completed in 145.689 seconds.
-- Broader regressions: 7/7 suites, 92/92 tests; zero skipped/failed, 26.993 seconds.
-  The retained five shared-path suites contribute 62 tests; canonical graph
-  contributes 21 and canonical identity contributes 9.
-- Final diff whitespace and changed JavaScript syntax checks passed.
+- Red tests-first: 3 suites, 4 expected failures, 11 intentionally filtered
+  skips. Old startup accepted a surviving text grant/rejected zero grants;
+  mounted has_column/has_any_column checks observed true before any mutation.
+- Focused green: 4/4 suites, 16/16 tests; no failures/skips, 16.799 seconds.
+- Complete Mission 23: 30/30 suites, 492/492 tests, zero failed/skipped/todo,
+  138.309 seconds. Unit/ratification: 18 suites/323 tests; integration/migration:
+  12 suites/169 tests.
+- Broader seven-suite set: 7/7 suites, 93/93 tests, zero failed/skipped/todo,
+  20.927 seconds. The added scheduling concurrency assertion accounts for the
+  increase from the previous 92-test baseline.
+- Scheduling-focused unit/Part 8 ratification: 4/4 suites, 46/46 tests,
+  6.188 seconds; zero failures/skips.
+- Every completed test invocation reported externalAttempts=0 through the
+  test-only transport boundary. Zero provider calls were made.
+- Diff whitespace and changed runtime JavaScript syntax checks passed.
+- Separate local candidate-review pass found no concrete regression in the
+  bounded correction; not independent audit.
 
-The new mounted assertions cover no-op runtime UPDATE rejection for every
-provenance/binding column, DELETE denial, unchanged stored row, scheduling
-FOR SHARE, all five valid source ingestion/replay controls and invalid source
-rejection by the shared ingestion normalizer. SQL tests reject false/true,
-numbers, objects, arrays and missing values for all three textual fields;
-JSON null is rejected for note and reopening, but retained for annotation
-nextAction. Every rejection compares current execution and eight evidence/
-receipt table counts. Valid strings commit and replay, including reopening.
+## Meaningful coverage
 
-## Reproducible commands and environment
+Unit authority tests require zero UPDATE columns and fail closed if text
+privilege survives. Mounted completion asserts every column UPDATE denied
+without changing data, exact text/fingerprint/row equality, valid shared
+ingestion/replay for lead/retell/voice/demo/simulation and invalid-source denial.
+Existing typed completion mutation, source gates, replay, concurrency and
+tenant/session/assignment denials remain.
 
-From the repository root:
-`node_modules/.bin/jest.cmd --config jest.config.js --runInBand --silent --runTestsByPath <enumerated files>`
+Mounted production scheduling tests send simultaneous authenticated conflict
+requests and compare canonical evidence digests. A held production evaluation
+continues to exclude an assignment FOR UPDATE contender, while an owner
+transcript lock contender succeeds without changing any populated row.
+Ordinary conflict/approval/Calendar/Command Center/Today flows remain covered.
 
-Mission 23 inventory is every tracked tests/unit/m23-part*.test.js,
-tests/ratification/m23-part*.test.js and tests/integration/m23-part*.test.js,
-plus the new 051 lifecycle test. Broader files are the five previously required
-shared-path regressions plus canonical graph and identity PostgreSQL suites.
+Migration 052 tests initial pre-reconciler revocation, rollback/restored stale
+ACL, exact retry/checksum, and stale PUBLIC/runtime removal on zero-op startup.
+Previous migration lifecycles remain independently checked. Ratification pins
+all 001–051 bytes, 052 identity, current base and the compatibility merge's two
+parents; final PR-body equality is checked after publication, not inferred.
 
-Exact broader files: tests/unit/m19-part3-tenant-audit.test.js,
-tests/unit/m20-phase7-lane5-observability.test.js,
-tests/unit/pre-m23-p2-support-repository.test.js,
-tests/unit/protected-migration-checksum.test.js,
-tests/integration/m22-part7-mission-wide-postgres.test.js,
-tests/integration/m19-part3-canonical-graph-postgres.test.js,
-tests/integration/m19-part3-canonical-identity-postgres.test.js.
+## Commands and environment
 
-- Node.js 24.18.1.
-- Disposable PostgreSQL 18.4; UTF8, UTC, locale C, checksums enabled.
-- Loopback admin URL: postgresql://postgres@127.0.0.1:55523/postgres.
-- M19_EXPECTED_PG_PORT=55523.
-- M19_EXPECTED_PG_DATA_DIR=C:/Users/joshv/Documents/Codex/2026-09-06/northstar-m23-part8-correction/work/pg18-writer/data.
-- Unique M19_TEST_RUN_ID per run; inherited DATABASE_URL/MIGRATION_DATABASE_URL
-  are removed before the required matrix.
-- Mounted suites create and clean synthetic databases/roles. No provider access.
+From the existing checkout:
+node_modules/.bin/jest.cmd --config jest.config.js --runInBand --silent
+--json --outputFile <same-campaign evidence file> --runTestsByPath <exact files>.
 
-## Earlier observations, not current acceptance evidence
+Complete Mission 23 enumerates every tests/unit/m23-part*.test.js,
+tests/ratification/m23-part*.test.js and tests/integration/m23-part*.test.js.
+The seven broader files are:
+- tests/unit/m19-part3-tenant-audit.test.js
+- tests/unit/m20-phase7-lane5-observability.test.js
+- tests/unit/pre-m23-p2-support-repository.test.js
+- tests/unit/protected-migration-checksum.test.js
+- tests/integration/m22-part7-mission-wide-postgres.test.js
+- tests/integration/m19-part3-canonical-graph-postgres.test.js
+- tests/integration/m19-part3-canonical-identity-postgres.test.js
 
-The original candidate was 26/481; corrected parent 13f9348 was 27/484.
-Those counts describe historical heads, not this correction.
-An earlier Windows LF checkout failure belongs to the prior correction.
-During this stage, starting pg_ctl without the retained loopback/UTC options
-failed; using port 55523 and UTC succeeded. Two focused red runs caught an
-unparsed PostgreSQL name[] assertion and the old blanket table-DML verifier.
-The authority projection now uses text[] and transcripts are checked by the
-narrow authority verifier. Both focused suites then passed in full.
+Focused scheduling unit suites: m22-part2-conflict-authority,
+m22-part4-human-approval and m22-part5-owner-dispatcher-ux, plus Part 8 ratification.
+
+Node 24.18.1. Fresh PostgreSQL 18.4, UTF8, locale C, UTC, checksums on, separate owner/runtime
+roles per suite, loopback 127.0.0.1:55583 only. Data:
+C:/Users/joshv/Documents/Codex/2026-09-06/northstar-m23-part8-correction/work/pg18-third-correction/data.
+M19_PG_ADMIN_URL=postgresql://postgres@127.0.0.1:55583/postgres;
+M19_EXPECTED_PG_PORT=55583; expected data directory as above; unique run IDs.
+Inherited DATABASE_URL/MIGRATION_DATABASE_URL removed before invocations.
+NODE_OPTIONS preloads the same-campaign loopback-only transport guard for
+Jest and child processes. Red and focused green report externalAttempts=0.
+No dependency or production/test configuration was changed for the guard.
+
+Historical 26/481, 27/484 and 28/488 results belong to earlier heads.
+They are not represented as results for this correction.

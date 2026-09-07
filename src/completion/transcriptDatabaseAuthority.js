@@ -13,10 +13,8 @@ async function grantAndVerify(client, runtimeRole) {
   const role = quote(runtimeRole);
   await client.query(`REVOKE UPDATE, DELETE ON TABLE public.canonical_transcripts FROM PUBLIC, ${role}`);
   await client.query(`REVOKE UPDATE (${columns.map(quote).join(',')}) ON TABLE public.canonical_transcripts FROM PUBLIC, ${role}`);
-  // Existing scheduling FOR SHARE needs an UPDATE column privilege. Text is
-  // not provenance: all identity, source, version, external and fingerprint
-  // columns remain unwritable. No production transcript UPDATE is introduced.
-  await client.query(`GRANT UPDATE (transcript_text) ON TABLE public.canonical_transcripts TO ${role}`);
+  // Transcript creation is INSERT-only. Scheduling reads this immutable input
+  // in its transaction snapshot and locks only mutable scheduling authority.
   const privileges = await client.query(
     `SELECT has_table_privilege($1,'public.canonical_transcripts','SELECT') AS readable,
       has_table_privilege($1,'public.canonical_transcripts','INSERT') AS insertable,
@@ -28,8 +26,8 @@ async function grantAndVerify(client, runtimeRole) {
   );
   const value = privileges.rows[0];
   if (!value.readable || !value.insertable || value.writable ||
-      value.updatable.length !== 1 || value.updatable[0] !== 'transcript_text') {
-    throw new Error('Transcript provenance authority was not withheld');
+      value.updatable.length !== 0) {
+    throw new Error('Transcript content and provenance authority was not withheld');
   }
 }
 

@@ -309,6 +309,61 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     expect(serialized).not.toContain(IDS.otherTenant);
   });
 
+  test('adds only the current in-scope execution pointer and opaque worker draft scope to Today', async () => {
+    const assignment = await pins(runtimePool, IDS.organization, IDS.direct);
+    const created = await request(app)
+      .post(`/api/v1/field-executions/appointments/${IDS.direct}`)
+      .set(sessions.employee.headers)
+      .set('Idempotency-Key', 'm23-part9a-today-pointer-0001')
+      .send({
+        expectedAssignmentRevision: assignment.revision,
+        expectedAssignmentDigest: assignment.digest,
+        reason: 'Open the current assigned work detail.',
+      })
+      .expect(201);
+
+    const response = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+    const data = response.body.data;
+    const direct = data.records.find(record => record.appointmentId === IDS.direct);
+    const crew = data.records.find(record => record.appointmentId === IDS.crewWork);
+    expect(data).toMatchObject({
+      readOnly: true,
+      mutationCapabilities: [],
+      identity: { profileId: IDS.employee },
+      businessProfile: { timeZone: 'America/New_York' },
+    });
+    expect(data.scopeDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(data.businessProfile.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(data.businessProfile.version).toBe(1);
+    expect(data.businessProfile.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(direct.execution).toMatchObject({
+      id: created.body.data.id,
+      lifecycleState: 'not_started',
+      revision: 1,
+      digest: created.body.data.digest,
+      sourceAssignmentRevision: assignment.revision,
+      sourceAssignmentDigest: assignment.digest,
+    });
+    expect(crew.execution).toBeNull();
+    expect(JSON.stringify(data)).not.toContain(sessions.employee.sessionId);
+    expect(JSON.stringify(data)).not.toContain(IDS.organization);
+  });
+
+  test('serves the mounted worker detail bundle without broad account bootstrap', async () => {
+    const shell = await request(app)
+      .get(`/dashboard/work?appointmentId=${IDS.direct}`)
+      .set(sessions.employee.headers)
+      .expect(200);
+    const scriptPaths = [...shell.text.matchAll(/<script[^>]+src="([^"]+)"/g)].map(match => match[1]);
+    expect(scriptPaths).toEqual(expect.arrayContaining([
+      '/js/theme.js', '/js/display-projection.js', '/js/today-shell.js',
+      '/js/field-execution-client.js', '/js/work-page.js',
+    ]));
+    expect(scriptPaths).not.toContain('/js/auth-session.js');
+    expect(scriptPaths).not.toContain('/js/nav-component.js');
+    expect(shell.text).toContain('aria-labelledby="workTitle"');
+  });
+
   test('serves an employee-minimal Today bootstrap and static bundle through a real mounted cookie session', async () => {
     const shell = await request(app).get('/dashboard/today').set(sessions.employee.headers).expect(200);
     const scriptPaths = [...shell.text.matchAll(/<script[^>]+src="([^"]+)"/g)].map(match => match[1]);

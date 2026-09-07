@@ -1,0 +1,11 @@
+{
+  "browser": "chrome",
+  "cases": [],
+  "externalBlocked": [],
+  "providerCalls": 0,
+  "pageErrors": [],
+  "requests": [],
+  "version": "152.0.7977.82",
+  "result": "failed",
+  "error": "page.waitForFunction: Timeout 30000ms exceeded."
+}

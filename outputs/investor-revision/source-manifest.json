@@ -1,11 +1,11 @@
 {
   "source": "public/unlisted/investor-forecast.html",
   "baseCommit": "a5bc90ddede95d0a88e6f857f8c75c9637dd8245",
-  "priorRevisionCommit": "f14906687b2c45398073e5c195d90fd0569f4b22",
+  "priorRevisionCommit": "90bd1de43c139e6fc903843726a17ce459b68fba",
   "baselineHtmlSha256": "c7207560deb15cf1c86c569187a9e0e9c0761249bd6d83b68d0fe1ee18a2c7db",
-  "engineSha256": "de2b415006b0f2c9cd4066657ce408c3226176807f440485f06f798037e32084",
+  "engineSha256": "0654814a92fd9d1a53937c26664c47869c3d7a6f59d70431891eeabceb78b2ff",
   "uiSha256": "6b56b8ad9dbe7d5f04692c87683b1953c795de24f82c6773cb1d8b66895aed1d",
-  "workerSha256": "6c502d27e311f61d2c3c2cab5b5445e42c5ab94f8c2b8948adc3821f8ccee971",
-  "htmlSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
-  "bytes": 4123403
+  "workerSha256": "237128f89f2dccdcaeff7a2d276b0960dfb275b98c43044aa118fbdf71344e5e",
+  "htmlSha256": "4603c93fb9cd624bf7ca3748fe2d064f30104cc57fca4548ccd741250b3b266e",
+  "bytes": 4122876
 }

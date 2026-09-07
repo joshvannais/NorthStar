@@ -1,5 +1,7 @@
 # Acceptance requirement → executable evidence
 
+Latest P3 notice requirement: regenerate from current basis/offset in both directions, irrespective of saved prose. Three added numerical regressions bring the focused suite to 17; seven additional rendered checks per viewport bring the actual-history browser suite to 58. See `p3-notice/README.md` for current-source verification and explicit separation from earlier broad checks at 90bd1de.
+
 ## September 7 fresh-review corrections
 
 Final focused suite:14 tests total, including stale migration-notice replacement when a user explicitly revises the cash basis.

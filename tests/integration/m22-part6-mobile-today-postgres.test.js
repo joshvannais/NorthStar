@@ -382,6 +382,33 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     expect(JSON.stringify(data)).not.toContain(IDS.organization);
   });
 
+  test('rotates the browser draft scope when the current access role changes', async () => {
+    const { loadToday } = require('../../src/scheduling/todayRepository');
+    const input = {
+      organizationId: IDS.organization,
+      actorUserId: IDS.employee,
+      actorAccessRole: 'member',
+      membershipId: IDS.employee,
+      authSessionId: sessions.employee.sessionId,
+      onboardingComplete: true,
+      subscriptionMutable: true,
+    };
+    const memberProjection = await loadToday(runtimePool, input);
+    await runtimePool.query(
+      "UPDATE public.organization_memberships SET role='admin' WHERE organization_id=$1 AND id=$2 AND user_id=$3",
+      [IDS.organization, IDS.employee, IDS.employee]
+    );
+    try {
+      const adminProjection = await loadToday(runtimePool, { ...input, actorAccessRole: 'admin' });
+      expect(adminProjection.scopeDigest).not.toBe(memberProjection.scopeDigest);
+    } finally {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='member' WHERE organization_id=$1 AND id=$2 AND user_id=$3",
+        [IDS.organization, IDS.employee, IDS.employee]
+      );
+    }
+  });
+
   test('projects existing execution identity only through current worker, tenant and session authority', async () => {
     const employee = {
       organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',

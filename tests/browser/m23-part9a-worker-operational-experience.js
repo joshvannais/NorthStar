@@ -388,6 +388,12 @@ async function main() {
           assert.strictEqual(await page.locator('#workMaterialForm-locationKey').getAttribute('required'), '');
           assert.strictEqual(await page.locator('#workMaterialForm-destinationLocationKey').getAttribute('required'), '');
           assert.strictEqual(await page.locator('#workMaterialForm-adjustmentDirection').isHidden(), true);
+          await page.locator('#workMaterialForm').getByRole('button', { name: 'Discard draft' }).click();
+          assert.strictEqual(await page.locator('#workMaterialForm-movementKind').inputValue(), 'consumed');
+          assert.strictEqual(await page.locator('#workMaterialForm-locationKey').getAttribute('required'), null);
+          assert.strictEqual(await page.locator('#workMaterialForm-destinationLocationKey').getAttribute('required'), null);
+          assert.strictEqual(await page.locator('#workMaterialForm-destinationLocationKey').isHidden(), true);
+          await page.locator('#workMaterialForm-movementKind').selectOption('transferred');
           await page.locator('#workMaterialForm-itemKey').fill('copper.pipe');
           await page.locator('#workMaterialForm-description').fill('Transferred copper pipe to the current work location.');
           await page.locator('#workMaterialForm-quantity').fill('2');
@@ -401,6 +407,11 @@ async function main() {
           await page.getByRole('button', { name: 'Record equipment use' }).click();
           await page.locator('#workEquipmentForm-kind').selectOption('reading');
           assert.strictEqual(await page.locator('#workEquipmentForm-meterKey').getAttribute('required'), '');
+          await page.locator('#workEquipmentForm').getByRole('button', { name: 'Discard draft' }).click();
+          assert.strictEqual(await page.locator('#workEquipmentForm-kind').inputValue(), 'check_out');
+          assert.strictEqual(await page.locator('#workEquipmentForm-meterKey').getAttribute('required'), null);
+          assert.strictEqual(await page.locator('#workEquipmentForm-meterKey').isHidden(), true);
+          await page.locator('#workEquipmentForm-kind').selectOption('reading');
           await page.locator('#workEquipmentForm-observedAt').fill('2026-09-07T09:35');
           await page.locator('#workEquipmentForm-meterKey').fill('engine.hours');
           await page.locator('#workEquipmentForm-reading').fill('128.5');
@@ -520,6 +531,51 @@ async function main() {
     assert.strictEqual(await stalePage.locator('#workSections:not([hidden])').count(), 0);
     ledger.cases.push({ staleMixedSnapshot: true, mutationCapabilityExposed: false });
     await staleContext.close();
+
+    currentExecution = execution('in_progress', 4, 'f'.repeat(64));
+    currentActions = inProgressActions(false);
+    currentMaterialKinds = ['consumed', 'returned', 'transferred', 'waste'];
+    currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+      'downtime_start', 'downtime_end', 'maintenance'];
+    const draftContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await draftContext.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== origin) return route.fulfill({ status: 204, body: '' });
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      if (url.pathname === '/api/v1/today') return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(today(currentExecution.data)),
+      });
+      const reads = emptyReads(currentExecution.data, []);
+      const mapping = new Map([
+        [`/api/v1/field-executions/${EXECUTION}`, currentExecution],
+        [`/api/v1/field-executions/${EXECUTION}/labor`, reads.labor],
+        [`/api/v1/field-executions/${EXECUTION}/materials`, reads.materials],
+        [`/api/equipment/executions/${EXECUTION}`, reads.equipment],
+        ['/api/equipment/catalogue', reads.catalogue],
+        [`/api/v1/field-executions/${EXECUTION}/field-evidence`, reads.evidence],
+        [`/api/v1/field-executions/${EXECUTION}/progress`, reads.progress],
+        [`/api/v1/field-executions/${EXECUTION}/completion`, reads.completion],
+      ]);
+      if (mapping.has(url.pathname)) return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(mapping.get(url.pathname)),
+      });
+      return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+        success: false, error: { code: 'TEST_UNINVENTORIED', message: 'Uninventoried request.' },
+      }) });
+    });
+    const draftPage = await draftContext.newPage();
+    const draftUrl = `${origin}/dashboard/work?appointmentId=${APPOINTMENT}&executionId=${EXECUTION}`;
+    await draftPage.goto(draftUrl, { waitUntil: 'domcontentloaded' });
+    await draftPage.waitForFunction(() => document.body.dataset.workState === 'ready');
+    await draftPage.getByRole('button', { name: 'Add note' }).click();
+    await draftPage.locator('#workEvidenceNote-note').fill('Unsaved note for the prior execution revision.');
+    currentExecution = execution('in_progress', 5, '2'.repeat(64));
+    await draftPage.reload({ waitUntil: 'domcontentloaded' });
+    await draftPage.waitForFunction(() => document.body.dataset.workState === 'ready');
+    await draftPage.getByRole('button', { name: 'Add note' }).click();
+    assert.strictEqual(await draftPage.locator('#workEvidenceNote-note').inputValue(), '');
+    ledger.cases.push({ executionRevisionChanged: true, staleDraftRestored: false });
+    await draftContext.close();
 
     assert.strictEqual(ledger.externalBlocked.length, 0, JSON.stringify(ledger.externalBlocked));
     assert.strictEqual(ledger.pageErrors.length, 0, JSON.stringify(ledger.pageErrors));

@@ -1,0 +1,15 @@
+✔ financial engine, worker, header and exports remain byte-identical (4.0006ms)
+✔ default monthly/annual investor authority and collapsed withdrawal status (295.6706ms)
+✔ taxUnavailable monthly/annual investor authority and collapsed withdrawal status (52.2048ms)
+✔ configuredZero monthly/annual investor authority and collapsed withdrawal status (70.1924ms)
+✔ payout monthly/annual investor authority and collapsed withdrawal status (53.7644ms)
+✔ actual monthly/annual investor authority and collapsed withdrawal status (113.5451ms)
+✔ actualYear monthly/annual investor authority and collapsed withdrawal status (94.6281ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 871.0305

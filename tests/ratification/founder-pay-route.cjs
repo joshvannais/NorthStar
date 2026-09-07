@@ -1,0 +1,5 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const root=path.resolve(__dirname,'../..'),modules=process.env.INVESTOR_TEST_MODULES||'C:/Users/joshv/OneDrive/Documents/NorthStar Comprehensive Package/NorthStar-M23-Part4-Release-Evidence-eccc8e9-20260905/independent-final-audit/runtime/node_modules';
+const env={};for(const key of ['SystemRoot','WINDIR','TEMP','TMP','PATH','USERPROFILE','LOCALAPPDATA','APPDATA'])if(process.env[key])env[key]=process.env[key];Object.assign(env,{NODE_ENV:'test',NODE_PATH:modules});
+const r=cp.spawnSync(process.execPath,[path.join(modules,'jest/bin/jest.js'),'--config',path.join(root,'jest.config.js'),'--runInBand','--modulePaths',modules,'--runTestsByPath',path.join(root,'tests/ratification/unlisted-investor-forecast.test.js')],{cwd:root,env,encoding:'utf8',timeout:180000,maxBuffer:10e6});const output=(r.stdout||'')+(r.stderr||'');fs.writeFileSync(path.join(root,'outputs/founder-pay-display/route-tests.log'),output);console.log(output);process.exitCode=r.status??1;

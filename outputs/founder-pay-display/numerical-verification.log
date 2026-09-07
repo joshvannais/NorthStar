@@ -1,0 +1,24 @@
+✔ unknown overhead contract version fails clearly without rewriting inputs (11.7721ms)
+✔ new all-in overhead is400; zero activity ends Month1 at9600 (98.2544ms)
+✔ saved and explicit300 budgets keep original meanings (133.8395ms)
+✔ default Month13 remains400 business +3500 founder, no initial tier duplication (288.2984ms)
+✔ anchored coverage survives customer tier exit, escalation and saved reloads (521.0233ms)
+✔ explicit infrastructure amounts remain additional, not silently netted (66.091ms)
+✔ new reset baseline effects are quantified separately from preserved saved inputs (638.0214ms)
+✔ default: all existing 120-row, annual, summary and CSV values invariant (1294.7482ms)
+✔ manual-zero: all existing 120-row, annual, summary and CSV values invariant (1153.7423ms)
+✔ manual-3500: all existing 120-row, annual, summary and CSV values invariant (1118.7414ms)
+✔ milestone-6000: all existing 120-row, annual, summary and CSV values invariant (282.0536ms)
+✔ persistent-escalation: all existing 120-row, annual, summary and CSV values invariant (270.2249ms)
+✔ owner-distribution: all existing 120-row, annual, summary and CSV values invariant (279.4275ms)
+✔ actual-unknown: all existing 120-row, annual, summary and CSV values invariant (499.5848ms)
+✔ saved-explicit-10pct: all existing 120-row, annual, summary and CSV values invariant (1197.1984ms)
+✔ worker source and seeded 120-month samples retain all prior values (2729.0071ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9693.9873

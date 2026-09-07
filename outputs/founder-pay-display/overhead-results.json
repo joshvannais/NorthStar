@@ -1,0 +1,55 @@
+{
+  "config": {
+    "version": 1,
+    "mode": "all_in_starting",
+    "initialInfrastructureReference": 100
+  },
+  "notice": "Starting overhead budget v1: $400 combined conservative planning amount includes Codex, another subscription, website and database; not verified recurring invoices. The first $100 infrastructure tier reference is treated as covered; only higher automatic tier increments are additional. This fixed scenario reference is provisional overlap treatment, not invoice allocation. Explicit manual and dated infrastructure amounts are additional; if intended as replacements, reconcile the baseline before entering them.",
+  "selected": [
+    {
+      "month": 1,
+      "revenue": 396,
+      "business": 400,
+      "founder": 0,
+      "infrastructure": 0,
+      "profit": -81.661,
+      "cash": 9918.339
+    },
+    {
+      "month": 12,
+      "revenue": 20072.708876244862,
+      "business": 400,
+      "founder": 0,
+      "infrastructure": 0,
+      "profit": 15736.176946855841,
+      "cash": 88798.62704493615
+    },
+    {
+      "month": 13,
+      "revenue": 22614.25132291385,
+      "business": 400,
+      "founder": 3500,
+      "infrastructure": 0,
+      "profit": 14279.288262336042,
+      "cash": 103077.91530727218
+    },
+    {
+      "month": 24,
+      "revenue": 64938.431720918496,
+      "business": 12232,
+      "founder": 3500,
+      "infrastructure": 400,
+      "profit": 36471.119736377455,
+      "cash": 372143.58801582013
+    },
+    {
+      "month": 120,
+      "revenue": 1091547.2303035776,
+      "business": 93552,
+      "founder": 6000,
+      "infrastructure": 7400,
+      "profit": 777927.6987351073,
+      "cash": 44359974.14110483
+    }
+  ]
+}

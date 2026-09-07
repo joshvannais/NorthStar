@@ -233,6 +233,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     await previewAndApprove(IDS.direct, 'assign', { kind: 'profile', id: IDS.employee }, slots.s1, slots.e1, 'direct-assign');
     await previewAndApprove(IDS.direct, 'dispatch', { kind: 'profile', id: IDS.employee }, slots.s1, slots.e1, 'direct-dispatch');
     await previewAndApprove(IDS.crewWork, 'assign', { kind: 'crew', id: IDS.crew }, slots.s2, slots.e2, 'crew-assign');
+    await previewAndApprove(IDS.crewWork, 'dispatch', { kind: 'crew', id: IDS.crew }, slots.s2, slots.e2, 'crew-dispatch');
     await previewAndApprove(IDS.revoked, 'assign', { kind: 'profile', id: IDS.employee }, slots.s3, slots.e3, 'revoked-assign');
     await previewAndApprove(IDS.revoked, 'dispatch', { kind: 'profile', id: IDS.employee }, slots.s3, slots.e3, 'revoked-dispatch');
     await previewAndApprove(IDS.revoked, 'reschedule', { kind: 'profile', id: IDS.employee },
@@ -258,6 +259,26 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
         acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests, reason,
       });
     if (approval.status !== 200) throw new Error(`Approval ${key} failed ${approval.status}: ${JSON.stringify(approval.body)}`);
+  }
+
+  async function readExecutionByAppointment(actor, appointmentId) {
+    const client = await runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const result = await client.query(
+        `SELECT public.canonical_field_execution_read_by_appointment(
+           $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid
+         ) AS result`,
+        [actor.organizationId, actor.actorUserId, actor.actorAccessRole, actor.authSessionId, appointmentId]
+      );
+      await client.query('COMMIT');
+      return result.rows[0].result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   afterAll(async () => {
@@ -291,7 +312,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     const crew = data.records.find(record => record.appointmentId === IDS.crewWork);
     const revoked = data.records.find(record => record.appointmentId === IDS.revoked);
     expect(direct).toMatchObject({ assignment: { kind: 'worker', direct: true, currentCrew: false }, dispatch: { state: 'dispatched' } });
-    expect(crew).toMatchObject({ assignment: { kind: 'crew', direct: false, currentCrew: true }, dispatch: { state: 'not_dispatched' } });
+    expect(crew).toMatchObject({ assignment: { kind: 'crew', direct: false, currentCrew: true }, dispatch: { state: 'dispatched' } });
     expect(crew.crew.teammates.map(member => member.name)).toEqual(expect.arrayContaining([expect.stringContaining('Alex Employee'), expect.stringContaining('Morgan Teammate')]));
     expect(revoked.dispatch.state).toBe('revoked');
     for (const record of data.records) {
@@ -349,6 +370,68 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     expect(JSON.stringify(data)).not.toContain(IDS.organization);
   });
 
+  test('projects existing execution identity only through current worker, tenant and session authority', async () => {
+    const employee = {
+      organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
+      authSessionId: sessions.employee.sessionId,
+    };
+    const teammate = {
+      organizationId: IDS.organization, actorUserId: IDS.teammate, actorAccessRole: 'member',
+      authSessionId: sessions.teammate.sessionId,
+    };
+    const owner = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      authSessionId: sessions.owner.sessionId,
+    };
+    const other = {
+      organizationId: IDS.otherOrganization, actorUserId: IDS.otherOwner, actorAccessRole: 'owner',
+      authSessionId: sessions.other.sessionId,
+    };
+    const direct = await readExecutionByAppointment(employee, IDS.direct);
+    expect(direct).toMatchObject({ success: true, data: {
+      appointmentId: IDS.direct, lifecycleState: 'not_started', revision: 1,
+    } });
+    expect(direct.data.id).toMatch(UUID);
+    expect(direct.data.digest).toMatch(/^[0-9a-f]{64}$/);
+
+    expect(await readExecutionByAppointment(employee, IDS.crewWork))
+      .toEqual({ success: true, data: null });
+    const assignment = await pins(runtimePool, IDS.organization, IDS.crewWork);
+    const created = await request(app)
+      .post(`/api/v1/field-executions/appointments/${IDS.crewWork}`)
+      .set(sessions.employee.headers)
+      .set('Idempotency-Key', 'm23-part9a-crew-pointer-0001')
+      .send({
+        expectedAssignmentRevision: assignment.revision,
+        expectedAssignmentDigest: assignment.digest,
+        reason: 'Open the current crew work detail.',
+      })
+      .expect(201);
+    for (const actor of [employee, teammate]) {
+      expect(await readExecutionByAppointment(actor, IDS.crewWork)).toMatchObject({
+        success: true,
+        data: {
+          id: created.body.data.id,
+          appointmentId: IDS.crewWork,
+          lifecycleState: 'not_started',
+          sourceAssignmentRevision: assignment.revision,
+          sourceAssignmentDigest: assignment.digest,
+        },
+      });
+    }
+
+    await expect(readExecutionByAppointment(owner, IDS.direct)).rejects.toMatchObject({ code: 'P0002' });
+    await expect(readExecutionByAppointment(other, IDS.direct)).rejects.toMatchObject({ code: 'P0002' });
+    await expect(readExecutionByAppointment({ ...employee, actorAccessRole: 'owner' }, IDS.direct))
+      .rejects.toMatchObject({ code: '42501' });
+    expect((await migrationPool.query(
+      "SELECT has_table_privilege($1,'public.canonical_field_executions','SELECT') AS table_read, " +
+      "has_function_privilege($1,'public.canonical_field_execution_read_by_appointment(uuid,uuid,text,uuid,uuid)','EXECUTE') AS entry_read, " +
+      "has_function_privilege($1,'public.canonical_field_execution_projection(public.canonical_field_executions)','EXECUTE') AS helper_read",
+      [roles.runtimeRole]
+    )).rows[0]).toEqual({ table_read: false, entry_read: true, helper_read: false });
+  });
+
   test('serves the mounted worker detail bundle without broad account bootstrap', async () => {
     const shell = await request(app)
       .get(`/dashboard/work?appointmentId=${IDS.direct}`)
@@ -390,7 +473,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
 
     const today = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
     expect(today.body.data.identity).toEqual(expect.objectContaining({ displayName: expect.any(String) }));
-    expect(Object.keys(today.body.data.identity).sort()).toEqual(['displayName', 'operationalRole']);
+    expect(Object.keys(today.body.data.identity).sort()).toEqual(['displayName', 'operationalRole', 'profileId']);
   });
 
   test('rejects forged scope, exposes no mutation method, and keeps owner access personal', async () => {
@@ -417,6 +500,14 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     try {
       const removed = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
       expect(removed.body.data.records.map(record => record.appointmentId)).toEqual([IDS.direct, IDS.revoked]);
+      await expect(readExecutionByAppointment({
+        organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
+        authSessionId: sessions.employee.sessionId,
+      }, IDS.crewWork)).rejects.toMatchObject({ code: 'P0002' });
+      expect(await readExecutionByAppointment({
+        organizationId: IDS.organization, actorUserId: IDS.teammate, actorAccessRole: 'member',
+        authSessionId: sessions.teammate.sessionId,
+      }, IDS.crewWork)).toMatchObject({ success: true, data: { appointmentId: IDS.crewWork } });
     } finally {
       await runtimePool.query(
         `INSERT INTO public.workforce_crew_members(organization_id,crew_id,profile_id,crew_role,created_by_user_id)
@@ -425,7 +516,13 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     }
 
     await runtimePool.query("UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='part6_test' WHERE id=$1", [sessions.employee.sessionId]);
-    try { await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(401); }
+    try {
+      await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(401);
+      await expect(readExecutionByAppointment({
+        organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
+        authSessionId: sessions.employee.sessionId,
+      }, IDS.direct)).rejects.toMatchObject({ code: '42501' });
+    }
     finally { await runtimePool.query("UPDATE public.auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1", [sessions.employee.sessionId]); }
 
     const accessExpiry = (await runtimePool.query(

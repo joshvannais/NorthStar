@@ -30,8 +30,14 @@ describe('Mission 23 Part 9 Slice A worker operational experience', () => {
 
   test('keeps Today read-only while adding a server-scoped execution pointer and one inert Open work control', () => {
     const repository = source('src/scheduling/todayRepository.js');
+    const database = source('src/db.js');
     const page = source('public/js/today-page.js');
-    expect(repository).toContain('public.canonical_field_executions');
+    expect(exists('migrations/053_current_worker_execution_projection.sql')).toBe(true);
+    expect(repository).toContain('canonical_field_execution_read_by_appointment');
+    expect(repository).not.toContain('LEFT JOIN public.canonical_field_executions execution');
+    expect(database).toContain(
+      'GRANT EXECUTE ON FUNCTION public.canonical_field_execution_read_by_appointment(uuid,uuid,text,uuid,uuid)'
+    );
     expect(repository).toContain('executionId');
     expect(repository).toContain('scopeDigest');
     expect(repository).toContain('businessProfile');

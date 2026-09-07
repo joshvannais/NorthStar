@@ -385,6 +385,9 @@ async function replaceAvailability(pool, input) {
 }
 
 async function assignmentEvidence(client, input) {
+  // Runtime cannot UPDATE or DELETE transcripts; the unique tenant/operation
+  // row is read from this transaction's snapshot. Keep locks on the mutable
+  // assignment, appointment and opportunity without granting transcript writes.
   const result = await client.query(
     `SELECT assignment.*, opportunity.service_type, opportunity.job_scope,
             opportunity.updated_at AS opportunity_updated_at, transcript.source,
@@ -402,7 +405,7 @@ async function assignmentEvidence(client, input) {
       WHERE assignment.organization_id = $1 AND assignment.appointment_id = $2
         AND (transcript.source NOT IN ('simulation', 'demo')
           OR ($3::text IS NOT NULL AND transcript.external_call_id = $3 || ':call'))
-      FOR SHARE OF assignment, appointment, opportunity, transcript`,
+      FOR SHARE OF assignment, appointment, opportunity`,
     [input.organizationId, input.appointmentId, input.explicitSession]
   );
   const row = result.rows[0];

@@ -1,6 +1,8 @@
 'use strict';
 
 const express = require('express');
+const { normalizeCompletionAction, normalizeCompletionRead } = require('../completion/contract');
+const { mutateCompletion, readCompletion } = require('../completion/repository');
 const { normalizeProgressAction, normalizeProgressRead } = require('../progress/contract');
 const { mutateProgress, readProgress } = require('../progress/repository');
 const db = require('../db');
@@ -92,6 +94,10 @@ function createFieldExecutionsRouter(options = {}) {
     ? options.evidenceMutate : mutateFieldEvidence;
   const evidenceRead = typeof options.evidenceRead === 'function'
     ? options.evidenceRead : readFieldEvidence;
+  const completionMutate = typeof options.completionMutate === 'function'
+    ? options.completionMutate : mutateCompletion;
+  const completionRead = typeof options.completionRead === 'function'
+    ? options.completionRead : readCompletion;
   const fileAuthorize = typeof options.fileAuthorize === 'function'
     ? options.fileAuthorize : authorizeFileRetrieval;
   const fileIngest = typeof options.fileIngest === 'function' ? options.fileIngest : ingestFileEvidence;
@@ -281,6 +287,43 @@ function createFieldExecutionsRouter(options = {}) {
       } catch(error) {
         if(typedError(req,res,error))return undefined;
         return res.status(503).json({success:false,error:{code:'PROGRESS_UNAVAILABLE',message:'Operational evidence is temporarily unavailable.'}});
+      }
+  });
+
+  router.post('/:executionId/completion-actions', requireExecutionBodyBoundary,
+    mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const normalized = normalizeCompletionAction({
+          ...actor(req), executionId: req.params.executionId,
+          idempotencyKey: req.get('Idempotency-Key'), body: req.body,
+        });
+        const result = await completionMutate(poolProvider(), {
+          ...normalized, csrfToken: req.get('X-CSRF-Token'),
+          requestCorrelationId: requestId(req),
+        });
+        if (result.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(result.status).json(result.body);
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({ success: false, requestId: requestId(req),
+          error: { code: 'COMPLETION_UNAVAILABLE',
+            message: 'Completion authority is temporarily unavailable.' } });
+      }
+    });
+
+  router.get('/:executionId/completion', tenantAuth, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      res.set('Cache-Control', 'no-store, private');
+      try {
+        const executionId = normalizeCompletionRead(req.params.executionId, req.query);
+        const result = await completionRead(poolProvider(), { ...actor(req), executionId });
+        return res.status(result.status).json({ ...result.body, requestId: requestId(req) });
+      } catch (error) {
+        if (typedError(req, res, error)) return undefined;
+        return res.status(503).json({ success: false, requestId: requestId(req),
+          error: { code: 'COMPLETION_UNAVAILABLE',
+            message: 'Completion authority is temporarily unavailable.' } });
       }
     });
 

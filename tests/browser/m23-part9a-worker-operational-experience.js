@@ -4,6 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { normalizeEvidenceAction } = require('../../src/fieldEvidence/contract');
 
 process.chdir(path.resolve(__dirname, '../..'));
 process.env.NODE_ENV = 'test';
@@ -15,6 +16,9 @@ for (const key of ['OPENAI_API_KEY', 'POLARIS_OPENAI_ENABLED', 'RETELL_API_KEY',
 const APPOINTMENT = 'd1600000-0000-4000-8000-000000000001';
 const EXECUTION = 'e1600000-0000-4000-8000-000000000001';
 const PROFILE = 'b1600000-0000-4000-8000-000000000002';
+const ORGANIZATION = 'a1600000-0000-4000-8000-000000000001';
+const AUTH_SESSION = 'c1600000-0000-4000-8000-000000000002';
+const CHECKLIST = 'c1600000-0000-4000-8000-000000000003';
 const HOSTILE = '<img src=x onerror="globalThis.m23Part9aCompromised=true">';
 const ASSIGNMENT_DIGEST = 'a'.repeat(64);
 const EXECUTION_DIGEST = 'b'.repeat(64);
@@ -22,7 +26,7 @@ let currentActions = ['start'];
 let currentMaterialKinds = [];
 let currentEquipmentKinds = [];
 
-function today() {
+function today(executionPointer = execution().data) {
   return { success: true, requestId: 'browser-today', data: {
     version: 'm22-part6-today-v1', readOnly: true, mutationCapabilities: [],
     evaluatedAt: '2026-09-07T14:00:00.000Z', scopeDigest: 'c'.repeat(64),
@@ -40,8 +44,10 @@ function today() {
       instructions: { status: 'available', text: `Use the side entrance. ${HOSTILE}`, truncated: false },
       customer: { name: `Jamie Carter ${HOSTILE}`, phone: '+1 555 010 1234', serviceLocation: { street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110' } },
       crew: null, authority: { revision: 7, digest: ASSIGNMENT_DIGEST, approvedCurrent: true },
-      execution: { id: EXECUTION, lifecycleState: 'not_started', revision: 3, digest: EXECUTION_DIGEST,
-        sourceAssignmentRevision: 7, sourceAssignmentDigest: ASSIGNMENT_DIGEST },
+      execution: { id: executionPointer.id, lifecycleState: executionPointer.lifecycleState,
+        revision: executionPointer.revision, digest: executionPointer.digest,
+        sourceAssignmentRevision: executionPointer.sourceAssignmentRevision,
+        sourceAssignmentDigest: executionPointer.sourceAssignmentDigest },
       workCapabilities: { version: 'm23-part9a-worker-actions-v1', mutable: true,
         actions: currentActions, materialMovementKinds: currentMaterialKinds, equipmentKinds: currentEquipmentKinds },
     }],
@@ -58,7 +64,7 @@ function execution(state = 'not_started', revision = 3, digest = EXECUTION_DIGES
     createdAt: '2026-09-07T13:00:00.000000Z', updatedAt: '2026-09-07T13:10:00.000000Z' } };
 }
 
-function emptyReads() {
+function emptyReads(executionPointer = execution().data, evidenceRecords = []) {
   return {
     labor: { success: true, data: { executionId: EXECUTION, intervals: [], summaries: [], totalIntervalCount: 0,
       truncated: false, categoryContract: { version: 'm23-labor-category-v1', digest: '2'.repeat(64), categories: ['break', 'cleanup', 'other', 'production', 'setup', 'travel'] }, interpretation: 'Operational time evidence only; not payroll.' } },
@@ -66,10 +72,16 @@ function emptyReads() {
       truncated: false, balanceScope: 'visible execution evidence only', stockKnown: false,
       unitContract: { version: 'm23-material-unit-v1', digest: '8'.repeat(64), quantity: 'positive decimal string', conversionPolicy: 'none' }, interpretation: 'Recorded movement evidence only.' } },
     equipment: { success: true, data: { events: [], total: 0, returned: 0, truncated: false } },
-    catalogue: { success: true, data: { assets: [], total: 0, returned: 0, truncated: false, canManage: false, authority: 'postgresql' } },
-    evidence: { success: true, data: { executionId: EXECUTION, checklists: [], evidence: [], files: [], total: 0, returned: 0, truncated: false }, nextCursor: null },
+    catalogue: { success: true, data: { assets: [{
+      id: 'a1600000-0000-4000-8000-000000000006', name: `Service van ${HOSTILE}`,
+      categoryLabel: 'Vehicle', reviewState: 'reviewed', version: 2, assetDigest: '3'.repeat(64),
+      knowledgeVersionId: 'a1600000-0000-4000-8000-000000000007', knowledgeDigest: '4'.repeat(64),
+      operationRevision: 0, operationDigest: null,
+    }], total: 1, returned: 1, truncated: false, canManage: false, authority: 'postgresql' } },
+    evidence: { success: true, data: evidenceRecords, total: evidenceRecords.length,
+      returned: evidenceRecords.length, truncated: false, nextCursor: null },
     progress: { success: true, data: { executionId: EXECUTION, records: [], total: 0, returned: 0, truncated: false }, nextCursor: null },
-    completion: { success: true, data: { execution: execution().data, activeProposal: null, records: [], totalRecordCount: 0,
+    completion: { success: true, data: { execution: executionPointer, activeProposal: null, records: [], totalRecordCount: 0,
       truncated: false, authority: 'postgresql', completionInferred: false, interpretation: 'Explicit completion authority only.' } },
   };
 }
@@ -91,6 +103,12 @@ async function main() {
   try {
     for (const theme of ['light', 'dark']) {
       for (const width of [1440, 390, 320]) {
+        currentExecution = execution();
+        currentActions = ['start'];
+        currentMaterialKinds = [];
+        currentEquipmentKinds = [];
+        let evidenceRecords = [];
+        let checklistAttempts = 0;
         const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', hasTouch: width <= 390 });
         await context.addInitScript(value => { sessionStorage.setItem('northstar-theme', value); window.m23Part9aCompromised = false; }, theme);
         await context.addCookies([{ name: 'northstar_csrf', value: 'browser-csrf-token', url: origin, sameSite: 'Lax' }]);
@@ -103,9 +121,9 @@ async function main() {
             headers: request.headers(), body: request.postDataJSON ? request.postDataJSON() : null });
           if (url.pathname === '/api/v1/today') {
             if (failToday) return route.abort('internetdisconnected');
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(today()) });
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(today(currentExecution.data)) });
           }
-          const reads = emptyReads();
+          const reads = emptyReads(currentExecution.data, evidenceRecords);
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}` && request.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentExecution) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/labor`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.labor) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/materials`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.materials) });
@@ -114,6 +132,43 @@ async function main() {
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/field-evidence`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.evidence) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/progress`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.progress) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/completion`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.completion) });
+          if (url.pathname === `/api/v1/field-executions/${EXECUTION}/field-evidence-actions` && request.method() === 'POST') {
+            const normalized = normalizeEvidenceAction({
+              organizationId: ORGANIZATION,
+              actorUserId: PROFILE,
+              actorAccessRole: 'member',
+              authSessionId: AUTH_SESSION,
+              executionId: EXECUTION,
+              idempotencyKey: request.headers()['idempotency-key'],
+              body: request.postDataJSON(),
+            });
+            checklistAttempts += 1;
+            ledger.cases.push({ contract: 'create_checklist', attempt: checklistAttempts,
+              action: normalized.action, valid: true });
+            if (checklistAttempts === 1) {
+              return route.fulfill({
+                status: 503,
+                headers: { 'Retry-After': '1' },
+                contentType: 'application/json',
+                body: JSON.stringify({ success: false, error: {
+                  code: 'M23_FIELD_EVIDENCE_UNAVAILABLE', message: 'Field evidence is temporarily unavailable.',
+                } }),
+              });
+            }
+            evidenceRecords = [{
+              id: CHECKLIST, rootId: CHECKLIST, previousRecordId: null, type: 'checklist',
+              revision: 1, document: normalized.document, digest: '7'.repeat(64),
+              executionId: EXECUTION, assignmentId: 'a1600000-0000-4000-8000-000000000005',
+              recordedByUserId: PROFILE, performedByProfileId: PROFILE,
+              sourceExecutionRevision: currentExecution.data.revision,
+              sourceExecutionDigest: currentExecution.data.digest,
+              sourceAssignmentRevision: 7, sourceAssignmentDigest: ASSIGNMENT_DIGEST,
+              reason: normalized.reason, decidedAt: '2026-09-07T13:12:00.000000Z',
+            }];
+            return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
+              success: true, data: evidenceRecords[0],
+            }) });
+          }
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/transitions` && request.method() === 'POST') {
             currentExecution = execution('in_progress', 4, 'f'.repeat(64));
             currentActions = ['pause', 'start_timer', 'record_manual', 'record_material', 'record_equipment',
@@ -164,6 +219,28 @@ async function main() {
           assert.deepStrictEqual(equipmentKinds, currentEquipmentKinds);
           assert.ok(equipmentKinds.includes('reading'));
           assert.ok(equipmentKinds.includes('maintenance'));
+
+          await page.getByRole('button', { name: 'Create checklist', exact: true }).first().click();
+          await page.locator('#workEvidenceChecklist-prompt').fill('Confirm the shutoff is accessible.');
+          await page.locator('#workEvidenceChecklist').getByRole('button', { name: 'Create checklist', exact: true }).click();
+          const checklistDialog = page.getByRole('dialog', { name: 'Confirm Create checklist' });
+          await checklistDialog.waitFor();
+          await checklistDialog.getByRole('button', { name: 'Confirm Create checklist' }).click();
+          await page.waitForFunction(() => document.body.dataset.workState === 'retry');
+          assert.match(await page.locator('#workStateCopy').textContent(), /after 1/);
+          assert.strictEqual(await page.getByRole('button', { name: 'Retry same request' }).count(), 1);
+          await page.getByRole('button', { name: 'Retry same request' }).click();
+          await page.waitForFunction(() => document.body.dataset.workState === 'success');
+          const checklistRequests = ledger.requests.filter(item =>
+            item.method === 'POST' && item.path.endsWith('/field-evidence-actions'));
+          assert.strictEqual(checklistRequests.length, 2);
+          assert.deepStrictEqual(checklistRequests[0].body, checklistRequests[1].body);
+          assert.strictEqual(checklistRequests[0].headers['idempotency-key'], checklistRequests[1].headers['idempotency-key']);
+          assert.match(checklistRequests[0].headers['idempotency-key'], /^m23-part9a-create_checklist-/);
+          assert.strictEqual(await page.getByRole('button', { name: 'Respond to checklist' }).count(), 1);
+          assert.strictEqual(await page.locator('#workEvidenceContent .work-record-list li').count(), 1);
+          assert.match(await page.locator('#workStatus').textContent(), /recorded and refreshed/);
+          assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'workMain');
         }
         await page.screenshot({ path: path.join(output, `${theme}-${width}.png`), fullPage: true });
         ledger.cases.push({ theme, width, geometry, ready: true, inertHostileText: true, reducedMotion: true });
@@ -185,6 +262,45 @@ async function main() {
     assert.match(await page.locator('#workStateCopy').textContent(), /Reconnect/);
     ledger.cases.push({ offline: true, durableSuccessClaimed: false });
     await context.close();
+
+    const staleContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const todayExecution = execution();
+    const newerExecution = execution('in_progress', 4, 'f'.repeat(64));
+    await staleContext.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== origin) return route.fulfill({ status: 204, body: '' });
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      if (url.pathname === '/api/v1/today') return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(today(todayExecution.data)),
+      });
+      const reads = emptyReads(newerExecution.data, []);
+      if (url.pathname === `/api/v1/field-executions/${EXECUTION}`) return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(newerExecution),
+      });
+      const mapping = new Map([
+        [`/api/v1/field-executions/${EXECUTION}/labor`, reads.labor],
+        [`/api/v1/field-executions/${EXECUTION}/materials`, reads.materials],
+        [`/api/equipment/executions/${EXECUTION}`, reads.equipment],
+        ['/api/equipment/catalogue', reads.catalogue],
+        [`/api/v1/field-executions/${EXECUTION}/field-evidence`, reads.evidence],
+        [`/api/v1/field-executions/${EXECUTION}/progress`, reads.progress],
+        [`/api/v1/field-executions/${EXECUTION}/completion`, reads.completion],
+      ]);
+      if (mapping.has(url.pathname)) return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(mapping.get(url.pathname)),
+      });
+      return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+        success: false, error: { code: 'TEST_UNINVENTORIED', message: 'Uninventoried request.' },
+      }) });
+    });
+    const stalePage = await staleContext.newPage();
+    await stalePage.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}&executionId=${EXECUTION}`, { waitUntil: 'domcontentloaded' });
+    await stalePage.waitForFunction(() => document.body.dataset.workState !== 'loading');
+    assert.strictEqual(await stalePage.locator('body').getAttribute('data-work-state'), 'stale');
+    assert.match(await stalePage.locator('#workStateCopy').textContent(), /Reload/);
+    assert.strictEqual(await stalePage.locator('#workSections:not([hidden])').count(), 0);
+    ledger.cases.push({ staleMixedSnapshot: true, mutationCapabilityExposed: false });
+    await staleContext.close();
 
     assert.strictEqual(ledger.externalBlocked.length, 0, JSON.stringify(ledger.externalBlocked));
     assert.strictEqual(ledger.pageErrors.length, 0, JSON.stringify(ledger.pageErrors));

@@ -5,6 +5,18 @@ const fs = require('fs');
 const path = require('path');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { normalizeEvidenceAction } = require('../../src/fieldEvidence/contract');
+const {
+  LABOR_CATEGORY_CONTRACT_DIGEST,
+  LABOR_CATEGORY_CONTRACT_VERSION,
+  MATERIAL_UNIT_CONTRACT_DIGEST,
+  MATERIAL_UNIT_CONTRACT_VERSION,
+  normalizeLaborAction,
+  normalizeMaterialAction,
+  normalizeTransition,
+} = require('../../src/operations/contract');
+const { normalizeOperation } = require('../../src/equipment/contract');
+const { normalizeProgressAction } = require('../../src/progress/contract');
+const { normalizeCompletionAction } = require('../../src/completion/contract');
 
 process.chdir(path.resolve(__dirname, '../..'));
 process.env.NODE_ENV = 'test';
@@ -19,12 +31,21 @@ const PROFILE = 'b1600000-0000-4000-8000-000000000002';
 const ORGANIZATION = 'a1600000-0000-4000-8000-000000000001';
 const AUTH_SESSION = 'c1600000-0000-4000-8000-000000000002';
 const CHECKLIST = 'c1600000-0000-4000-8000-000000000003';
+const CHECKLIST_RESPONSE = 'c1600000-0000-4000-8000-000000000004';
+const LABOR_INTERVAL = 'c1600000-0000-4000-8000-000000000005';
+const COMPLETION_PROPOSAL = 'c1600000-0000-4000-8000-000000000006';
 const HOSTILE = '<img src=x onerror="globalThis.m23Part9aCompromised=true">';
 const ASSIGNMENT_DIGEST = 'a'.repeat(64);
 const EXECUTION_DIGEST = 'b'.repeat(64);
 let currentActions = ['start'];
 let currentMaterialKinds = [];
 let currentEquipmentKinds = [];
+
+function inProgressActions(timerOpen = false) {
+  return ['pause', timerOpen ? 'stop_timer' : 'start_timer', 'record_manual', 'record_material', 'record_equipment',
+    'create_checklist', 'respond_item', 'record_observation', 'record_note', 'record_progress',
+    'record_blocker', 'record_exception', 'record_change', 'propose_completion'];
+}
 
 function today(executionPointer = execution().data) {
   return { success: true, requestId: 'browser-today', data: {
@@ -64,13 +85,18 @@ function execution(state = 'not_started', revision = 3, digest = EXECUTION_DIGES
     createdAt: '2026-09-07T13:00:00.000000Z', updatedAt: '2026-09-07T13:10:00.000000Z' } };
 }
 
-function emptyReads(executionPointer = execution().data, evidenceRecords = []) {
+function emptyReads(executionPointer = execution().data, evidenceRecords = [], laborIntervals = [],
+  completionRecords = [], activeProposal = null) {
   return {
-    labor: { success: true, data: { executionId: EXECUTION, intervals: [], summaries: [], totalIntervalCount: 0,
-      truncated: false, categoryContract: { version: 'm23-labor-category-v1', digest: '2'.repeat(64), categories: ['break', 'cleanup', 'other', 'production', 'setup', 'travel'] }, interpretation: 'Operational time evidence only; not payroll.' } },
+    labor: { success: true, data: { executionId: EXECUTION, intervals: laborIntervals, summaries: [],
+      totalIntervalCount: laborIntervals.length, truncated: false,
+      categoryContract: { version: LABOR_CATEGORY_CONTRACT_VERSION, digest: LABOR_CATEGORY_CONTRACT_DIGEST,
+        categories: ['break', 'cleanup', 'other', 'production', 'setup', 'travel'] },
+      interpretation: 'Operational time evidence only; not payroll.' } },
     materials: { success: true, data: { executionId: EXECUTION, movements: [], balances: [], totalMovementCount: 0,
       truncated: false, balanceScope: 'visible execution evidence only', stockKnown: false,
-      unitContract: { version: 'm23-material-unit-v1', digest: '8'.repeat(64), quantity: 'positive decimal string', conversionPolicy: 'none' }, interpretation: 'Recorded movement evidence only.' } },
+      unitContract: { version: MATERIAL_UNIT_CONTRACT_VERSION, digest: MATERIAL_UNIT_CONTRACT_DIGEST,
+        quantity: 'positive decimal string', conversionPolicy: 'none' }, interpretation: 'Recorded movement evidence only.' } },
     equipment: { success: true, data: { events: [], total: 0, returned: 0, truncated: false } },
     catalogue: { success: true, data: { assets: [{
       id: 'a1600000-0000-4000-8000-000000000006', name: `Service van ${HOSTILE}`,
@@ -81,7 +107,8 @@ function emptyReads(executionPointer = execution().data, evidenceRecords = []) {
     evidence: { success: true, data: evidenceRecords, total: evidenceRecords.length,
       returned: evidenceRecords.length, truncated: false, nextCursor: null },
     progress: { success: true, data: { executionId: EXECUTION, records: [], total: 0, returned: 0, truncated: false }, nextCursor: null },
-    completion: { success: true, data: { execution: executionPointer, activeProposal: null, records: [], totalRecordCount: 0,
+    completion: { success: true, data: { execution: executionPointer, activeProposal,
+      records: completionRecords, totalRecordCount: completionRecords.length,
       truncated: false, authority: 'postgresql', completionInferred: false, interpretation: 'Explicit completion authority only.' } },
   };
 }
@@ -109,6 +136,9 @@ async function main() {
         currentEquipmentKinds = [];
         let evidenceRecords = [];
         let checklistAttempts = 0;
+        let laborIntervals = [];
+        let completionRecords = [];
+        let activeProposal = null;
         const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', hasTouch: width <= 390 });
         await context.addInitScript(value => { sessionStorage.setItem('northstar-theme', value); window.m23Part9aCompromised = false; }, theme);
         await context.addCookies([{ name: 'northstar_csrf', value: 'browser-csrf-token', url: origin, sameSite: 'Lax' }]);
@@ -123,7 +153,8 @@ async function main() {
             if (failToday) return route.abort('internetdisconnected');
             return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(today(currentExecution.data)) });
           }
-          const reads = emptyReads(currentExecution.data, evidenceRecords);
+          const reads = emptyReads(currentExecution.data, evidenceRecords, laborIntervals,
+            completionRecords, activeProposal);
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}` && request.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(currentExecution) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/labor`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.labor) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/materials`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.materials) });
@@ -143,9 +174,9 @@ async function main() {
               body: request.postDataJSON(),
             });
             checklistAttempts += 1;
-            ledger.cases.push({ contract: 'create_checklist', attempt: checklistAttempts,
+            ledger.cases.push({ contract: 'field_evidence', attempt: checklistAttempts,
               action: normalized.action, valid: true });
-            if (checklistAttempts === 1) {
+            if (normalized.action === 'create_checklist' && checklistAttempts === 1) {
               return route.fulfill({
                 status: 503,
                 headers: { 'Retry-After': '1' },
@@ -155,25 +186,109 @@ async function main() {
                 } }),
               });
             }
-            evidenceRecords = [{
-              id: CHECKLIST, rootId: CHECKLIST, previousRecordId: null, type: 'checklist',
-              revision: 1, document: normalized.document, digest: '7'.repeat(64),
+            const evidenceId = normalized.action === 'create_checklist' ? CHECKLIST : CHECKLIST_RESPONSE;
+            const evidenceDigest = normalized.action === 'create_checklist' ? '7'.repeat(64) : '6'.repeat(64);
+            const evidenceRecord = {
+              id: evidenceId, rootId: evidenceId, previousRecordId: null,
+              type: normalized.document.kind, revision: 1, document: normalized.document,
+              digest: evidenceDigest,
               executionId: EXECUTION, assignmentId: 'a1600000-0000-4000-8000-000000000005',
               recordedByUserId: PROFILE, performedByProfileId: PROFILE,
               sourceExecutionRevision: currentExecution.data.revision,
               sourceExecutionDigest: currentExecution.data.digest,
               sourceAssignmentRevision: 7, sourceAssignmentDigest: ASSIGNMENT_DIGEST,
               reason: normalized.reason, decidedAt: '2026-09-07T13:12:00.000000Z',
-            }];
+            };
+            if (normalized.action === 'create_checklist') evidenceRecords = [evidenceRecord];
+            else evidenceRecords = evidenceRecords.concat(evidenceRecord);
             return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
-              success: true, data: evidenceRecords[0],
+              success: true, data: evidenceRecord,
             }) });
           }
+          if (url.pathname === `/api/v1/field-executions/${EXECUTION}/labor-actions` && request.method() === 'POST') {
+            const normalized = normalizeLaborAction({
+              organizationId: ORGANIZATION, actorUserId: PROFILE, actorAccessRole: 'member',
+              authSessionId: AUTH_SESSION, executionId: EXECUTION,
+              idempotencyKey: request.headers()['idempotency-key'], body: request.postDataJSON(),
+            });
+            ledger.cases.push({ contract: 'labor', action: normalized.action, valid: true });
+            if (normalized.action === 'start_timer') {
+              laborIntervals = [{ id: LABOR_INTERVAL, category: normalized.category,
+                observedStart: '2026-09-07T13:13:00.000000Z', observedEnd: null,
+                reviewState: 'unreviewed', revision: 1, digest: '5'.repeat(64) }];
+              currentActions = inProgressActions(true);
+            } else if (normalized.action === 'stop_timer') {
+              laborIntervals = [];
+              currentActions = inProgressActions(false);
+            }
+            return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: {} }) });
+          }
+          if (url.pathname === `/api/v1/field-executions/${EXECUTION}/material-actions` && request.method() === 'POST') {
+            const normalized = normalizeMaterialAction({
+              organizationId: ORGANIZATION, actorUserId: PROFILE, actorAccessRole: 'member',
+              authSessionId: AUTH_SESSION, executionId: EXECUTION,
+              idempotencyKey: request.headers()['idempotency-key'], body: request.postDataJSON(),
+            });
+            ledger.cases.push({ contract: 'material', action: normalized.action,
+              movementKind: normalized.movementKind, valid: true });
+            return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: {} }) });
+          }
+          if (url.pathname === `/api/equipment/executions/${EXECUTION}/actions` && request.method() === 'POST') {
+            const normalized = normalizeOperation(request.postDataJSON());
+            ledger.cases.push({ contract: 'equipment', action: normalized.action,
+              kind: normalized.kind, valid: true });
+            return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: {} }) });
+          }
+          if (url.pathname === `/api/v1/field-executions/${EXECUTION}/progress-actions` && request.method() === 'POST') {
+            const normalized = normalizeProgressAction({
+              organizationId: ORGANIZATION, actorUserId: PROFILE, actorAccessRole: 'member',
+              authSessionId: AUTH_SESSION, executionId: EXECUTION,
+              idempotencyKey: request.headers()['idempotency-key'], body: request.postDataJSON(),
+            });
+            ledger.cases.push({ contract: 'progress', action: normalized.action,
+              kind: normalized.document.kind, valid: true });
+            return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: {} }) });
+          }
+          if (url.pathname === `/api/v1/field-executions/${EXECUTION}/completion-actions` && request.method() === 'POST') {
+            const normalized = normalizeCompletionAction({
+              organizationId: ORGANIZATION, actorUserId: PROFILE, actorAccessRole: 'member',
+              authSessionId: AUTH_SESSION, executionId: EXECUTION,
+              idempotencyKey: request.headers()['idempotency-key'], body: request.postDataJSON(),
+            });
+            ledger.cases.push({ contract: 'completion', action: normalized.action, valid: true });
+            if (normalized.action === 'propose_completion') {
+              currentExecution = execution('completion_pending', 5, '9'.repeat(64));
+              activeProposal = { id: COMPLETION_PROPOSAL, revision: 1, digest: '8'.repeat(64),
+                recordKind: 'proposal', lifecycleAfter: 'completion_pending',
+                decidedAt: '2026-09-07T13:14:00.000000Z' };
+              completionRecords = [activeProposal];
+              currentActions = ['withdraw_completion'];
+              currentMaterialKinds = [];
+              currentEquipmentKinds = [];
+            } else if (normalized.action === 'withdraw_completion') {
+              currentExecution = execution('in_progress', 6, '1'.repeat(64));
+              activeProposal = null;
+              completionRecords = completionRecords.concat({
+                id: 'c1600000-0000-4000-8000-000000000007', revision: 1, digest: '0'.repeat(64),
+                recordKind: 'withdrawal', lifecycleAfter: 'in_progress',
+                decidedAt: '2026-09-07T13:15:00.000000Z',
+              });
+              currentActions = inProgressActions(false);
+              currentMaterialKinds = ['consumed', 'returned', 'transferred', 'waste'];
+              currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+                'downtime_start', 'downtime_end', 'maintenance'];
+            }
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: currentExecution.data }) });
+          }
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/transitions` && request.method() === 'POST') {
+            const normalized = normalizeTransition({
+              organizationId: ORGANIZATION, actorUserId: PROFILE, actorAccessRole: 'member',
+              authSessionId: AUTH_SESSION, executionId: EXECUTION,
+              idempotencyKey: request.headers()['idempotency-key'], body: request.postDataJSON(),
+            });
+            ledger.cases.push({ contract: 'lifecycle', action: normalized.action, valid: true });
             currentExecution = execution('in_progress', 4, 'f'.repeat(64));
-            currentActions = ['pause', 'start_timer', 'record_manual', 'record_material', 'record_equipment',
-              'create_checklist', 'respond_item', 'record_observation', 'record_note', 'record_progress',
-              'record_blocker', 'record_exception', 'record_change', 'propose_completion'];
+            currentActions = inProgressActions(false);
             currentMaterialKinds = ['consumed', 'returned', 'transferred', 'waste'];
             currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
               'downtime_start', 'downtime_end', 'maintenance'];
@@ -241,6 +356,110 @@ async function main() {
           assert.strictEqual(await page.locator('#workEvidenceContent .work-record-list li').count(), 1);
           assert.match(await page.locator('#workStatus').textContent(), /recorded and refreshed/);
           assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'workMain');
+
+          await page.getByRole('button', { name: 'Respond to checklist' }).click();
+          await page.locator('#workEvidenceResponse-observation').fill('The shutoff is accessible and labeled.');
+          await page.locator('#workEvidenceResponse').getByRole('button', { name: 'Record checklist response' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Record checklist response' })
+            .getByRole('button', { name: 'Confirm Record checklist response' }).click();
+          await page.waitForFunction(() => document.querySelectorAll('#workEvidenceContent .work-record-list li').length === 2);
+          assert.strictEqual(await page.getByRole('button', { name: 'Respond to checklist' }).count(), 0);
+
+          await page.getByRole('button', { name: 'Start timer' }).click();
+          await page.locator('#workLaborStart').getByRole('button', { name: 'Record timer start' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Record timer start' })
+            .getByRole('button', { name: 'Confirm Record timer start' }).click();
+          await page.getByRole('button', { name: 'Stop timer' }).waitFor();
+          await page.getByRole('button', { name: 'Stop timer' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Stop timer' })
+            .getByRole('button', { name: 'Confirm Stop timer' }).click();
+          await page.getByRole('button', { name: 'Start timer' }).waitFor();
+
+          await page.getByRole('button', { name: 'Add manual time' }).click();
+          await page.locator('#workLaborManual-observedStart').fill('2026-09-07T09:00');
+          await page.locator('#workLaborManual-observedEnd').fill('2026-09-07T09:30');
+          await page.locator('#workLaborManual').getByRole('button', { name: 'Record manual time' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Record manual time' })
+            .getByRole('button', { name: 'Confirm Record manual time' }).click();
+          await page.waitForFunction(() => document.getElementById('workStatus').textContent.includes('Record manual time was recorded'));
+
+          await page.getByRole('button', { name: 'Record material' }).click();
+          await page.locator('#workMaterialForm-movementKind').selectOption('transferred');
+          assert.strictEqual(await page.locator('#workMaterialForm-locationKey').getAttribute('required'), '');
+          assert.strictEqual(await page.locator('#workMaterialForm-destinationLocationKey').getAttribute('required'), '');
+          assert.strictEqual(await page.locator('#workMaterialForm-adjustmentDirection').isHidden(), true);
+          await page.locator('#workMaterialForm-itemKey').fill('copper.pipe');
+          await page.locator('#workMaterialForm-description').fill('Transferred copper pipe to the current work location.');
+          await page.locator('#workMaterialForm-quantity').fill('2');
+          await page.locator('#workMaterialForm-locationKey').fill('truck.stock');
+          await page.locator('#workMaterialForm-destinationLocationKey').fill('job.site');
+          await page.locator('#workMaterialForm').getByRole('button', { name: 'Record material evidence' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Record material evidence' })
+            .getByRole('button', { name: 'Confirm Record material evidence' }).click();
+          await page.waitForFunction(() => document.getElementById('workStatus').textContent.includes('Record material evidence was recorded'));
+
+          await page.getByRole('button', { name: 'Record equipment use' }).click();
+          await page.locator('#workEquipmentForm-kind').selectOption('reading');
+          assert.strictEqual(await page.locator('#workEquipmentForm-meterKey').getAttribute('required'), '');
+          await page.locator('#workEquipmentForm-observedAt').fill('2026-09-07T09:35');
+          await page.locator('#workEquipmentForm-meterKey').fill('engine.hours');
+          await page.locator('#workEquipmentForm-reading').fill('128.5');
+          await page.locator('#workEquipmentForm-unit').selectOption('hours');
+          await page.locator('#workEquipmentForm-description').fill('Observed the service van engine-hour reading.');
+          await page.locator('#workEquipmentForm').getByRole('button', { name: 'Record equipment evidence' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Record equipment evidence' })
+            .getByRole('button', { name: 'Confirm Record equipment evidence' }).click();
+          await page.waitForFunction(() => document.getElementById('workStatus').textContent.includes('Record equipment evidence was recorded'));
+
+          await page.getByRole('button', { name: 'Record progress' }).click();
+          await page.locator('#workProgressForm-description').fill('Completed one of two planned fixture replacements.');
+          await page.locator('#workProgressForm-completed').fill('1');
+          await page.locator('#workProgressForm-total').fill('2');
+          await page.locator('#workProgressForm').getByRole('button', { name: 'Record progress' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Record progress' })
+            .getByRole('button', { name: 'Confirm Record progress' }).click();
+          await page.waitForFunction(() => document.getElementById('workStatus').textContent.includes('Record progress was recorded'));
+
+          for (const issue of ['blocker', 'exception']) {
+            const labelName = `Record ${issue}`;
+            const formId = issue === 'blocker' ? '#workBlockerForm' : '#workExceptionForm';
+            await page.getByRole('button', { name: labelName }).click();
+            await page.locator(`${formId}-description`).fill(`Observed ${issue} requiring bounded follow-up.`);
+            await page.locator(`${formId}-followUp`).fill(`Review the recorded ${issue} with the owner.`);
+            await page.locator(formId).getByRole('button', { name: labelName }).click();
+            await page.getByRole('dialog', { name: `Confirm ${labelName}` })
+              .getByRole('button', { name: `Confirm ${labelName}` }).click();
+            await page.waitForFunction(expected => document.getElementById('workStatus').textContent.includes(expected),
+              `${labelName} was recorded`);
+          }
+
+          await page.getByRole('button', { name: 'Record field change' }).click();
+          await page.locator('#workChangeForm-description').fill('The accessible shutoff location differs from the original note.');
+          await page.locator('#workChangeForm-initiator').fill('Observed by the assigned worker.');
+          await page.locator('#workChangeForm-affectedWork').fill('Fixture replacement sequencing.');
+          await page.locator('#workChangeForm-scheduleImplications').fill('No schedule change observed.');
+          await page.locator('#workChangeForm-resourceImplications').fill('No additional resource required.');
+          await page.locator('#workChangeForm').getByRole('button', { name: 'Record field change' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Record field change' })
+            .getByRole('button', { name: 'Confirm Record field change' }).click();
+          await page.waitForFunction(() => document.getElementById('workStatus').textContent.includes('Record field change was recorded'));
+
+          await page.getByRole('button', { name: 'Propose completion' }).click();
+          await page.locator('#workCompletionForm').getByRole('button', { name: 'Propose completion' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Propose completion' })
+            .getByRole('button', { name: 'Confirm Propose completion' }).click();
+          await page.getByRole('button', { name: 'Withdraw completion proposal' }).waitFor();
+          await page.getByRole('button', { name: 'Withdraw completion proposal' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Withdraw completion proposal' })
+            .getByRole('button', { name: 'Confirm Withdraw completion proposal' }).click();
+          await page.waitForFunction(() => document.querySelector('#workStateBadge').textContent.includes('In progress'));
+
+          const validatedActions = ledger.cases.filter(item => item.valid).map(item => item.action);
+          for (const action of ['start', 'start_timer', 'stop_timer', 'record_manual', 'record',
+            'create_checklist', 'respond_item', 'record_progress', 'record_blocker',
+            'record_exception', 'record_change', 'propose_completion', 'withdraw_completion']) {
+            assert.ok(validatedActions.includes(action), `missing mounted contract exercise for ${action}`);
+          }
         }
         await page.screenshot({ path: path.join(output, `${theme}-${width}.png`), fullPage: true });
         ledger.cases.push({ theme, width, geometry, ready: true, inertHostileText: true, reducedMotion: true });

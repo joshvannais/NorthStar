@@ -14,7 +14,7 @@ const { mutateCompletion, readCompletion } = require('../../src/completion/repos
 
 const conditional = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const quote = value => '"' + String(value).replace(/"/g, '""') + '"';
-const digest = character => character.repeat(64);
+const digest = value => crypto.createHash('sha256').update(String(value)).digest('hex');
 const IDS = Object.freeze({
   org: 'f1000000-0000-4000-8000-000000000001',
   otherOrg: 'f1000000-0000-4000-8000-000000000002',
@@ -23,6 +23,22 @@ const IDS = Object.freeze({
   viewer: 'f2000000-0000-4000-8000-000000000003',
   otherOwner: 'f2000000-0000-4000-8000-000000000004',
 });
+const UNICODE_WHITE_SPACE = Object.freeze([
+  ['U+0009 TAB', 0x0009], ['U+000A LINE FEED', 0x000A],
+  ['U+000B VERTICAL TAB', 0x000B], ['U+000C FORM FEED', 0x000C],
+  ['U+000D CARRIAGE RETURN', 0x000D], ['U+0020 SPACE', 0x0020],
+  ['U+0085 NEXT LINE', 0x0085], ['U+00A0 NO-BREAK SPACE', 0x00A0],
+  ['U+1680 OGHAM SPACE MARK', 0x1680], ['U+2000 EN QUAD', 0x2000],
+  ['U+2001 EM QUAD', 0x2001], ['U+2002 EN SPACE', 0x2002],
+  ['U+2003 EM SPACE', 0x2003], ['U+2004 THREE-PER-EM SPACE', 0x2004],
+  ['U+2005 FOUR-PER-EM SPACE', 0x2005], ['U+2006 SIX-PER-EM SPACE', 0x2006],
+  ['U+2007 FIGURE SPACE', 0x2007], ['U+2008 PUNCTUATION SPACE', 0x2008],
+  ['U+2009 THIN SPACE', 0x2009], ['U+200A HAIR SPACE', 0x200A],
+  ['U+2028 LINE SEPARATOR', 0x2028], ['U+2029 PARAGRAPH SEPARATOR', 0x2029],
+  ['U+202F NARROW NO-BREAK SPACE', 0x202F],
+  ['U+205F MEDIUM MATHEMATICAL SPACE', 0x205F],
+  ['U+3000 IDEOGRAPHIC SPACE', 0x3000],
+]);
 
 conditional('Mission 23 Part 8 mounted completion and reopening authority', () => {
   let database;
@@ -155,7 +171,7 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     const appointment = crypto.randomUUID();
     await ownerPool.query(
       "INSERT INTO canonical_operations(id,organization_id,graph_id,idempotency_key_hash,payload_fingerprint,state,lease_owner,lease_expires_at,result_status,result_body,completed_at) VALUES($1,$2,$3,$4,$4,'completed',$1,NOW()+INTERVAL '1 hour',200,'{}',NOW())",
-      [operation, IDS.org, graph, digest(String(sequence % 9 || 9))]
+      [operation, IDS.org, graph, digest(`operation:${sequence}`)]
     );
     await ownerPool.query(
       "INSERT INTO canonical_customers(id,organization_id,operation_id,graph_id,name) VALUES($1,$2,$3,$4,'Completion fixture customer')",
@@ -163,7 +179,7 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     );
     await ownerPool.query(
       "INSERT INTO canonical_transcripts(id,organization_id,operation_id,graph_id,customer_id,source,source_version,transcript_text,normalized_fingerprint) VALUES($1,$2,$3,$4,$5,'lead','fixture','Completion evidence request',$6)",
-      [transcript, IDS.org, operation, graph, customer, digest(String((sequence + 1) % 9 || 9))]
+      [transcript, IDS.org, operation, graph, customer, digest(`transcript:${sequence}`)]
     );
     await ownerPool.query(
       "INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,customer_id,status,job_scope) VALUES($1,$2,$3,$4,$5,'qualified','{}')",
@@ -200,6 +216,20 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
       requestCorrelationId: `m23p8-start-${sequence}`,
     })).body.data;
     return { execution, assignment };
+  }
+
+  async function setTranscriptSource(context, source) {
+    const result = await ownerPool.query(
+      `UPDATE canonical_transcripts transcript
+          SET source=$2
+         FROM canonical_field_executions execution
+        WHERE execution.organization_id=transcript.organization_id
+          AND execution.operation_id=transcript.operation_id
+          AND execution.graph_id=transcript.graph_id
+          AND execution.id=$1`,
+      [context.execution.id, source]
+    );
+    expect(result.rowCount).toBe(1);
   }
 
   function completionInput(context, action, extra = {}, actor = ownerActor, key = crypto.randomUUID()) {
@@ -342,6 +372,99 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     expect(replay.body).toEqual(proposed.body);
   }, 120000);
 
+  test('completion reads and exact replays fail closed for every padded demo source and unknown provenance', async () => {
+    const context = await createExecution();
+    const key = crypto.randomUUID();
+    const body = {
+      action: 'propose_completion',
+      expectedExecutionRevision: Number(context.execution.revision),
+      expectedExecutionDigest: context.execution.digest,
+      expectedAssignmentRevision: Number(context.assignment.revision),
+      expectedAssignmentDigest: context.assignment.digest,
+      reason: 'Create one completion record for source-boundary replay checks.',
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+      gateRequirements: emptyRequirements(),
+    };
+    const replayInput = normalizeCompletionAction({
+      ...ownerActor, executionId: context.execution.id, idempotencyKey: key, body,
+    });
+    const original = await mutateCompletion(runtimePool, {
+      ...replayInput, csrfToken: ownerSession.csrfToken,
+      requestCorrelationId: 'm23p8-source-boundary',
+    });
+    expect(original.replayed).toBe(false);
+
+    const deniedSources = [
+      ...UNICODE_WHITE_SPACE.flatMap(([label, codePoint]) => {
+        const whitespace = String.fromCodePoint(codePoint);
+        return [
+          [`${label} padded demo`, `${whitespace}DeMo${whitespace}`],
+          [`${label} padded simulation`, `${whitespace}SiMuLaTiOn${whitespace}`],
+        ];
+      }),
+      ['empty', ''], ['whitespace only', '\u00A0'], ['unknown manual', 'manual'],
+      ['unknown customer', 'customer'], ['unknown provider', 'twilio'],
+      ['embedded TAB', 'de\u0009mo'], ['embedded C0 control', 'de\u0001mo'],
+      ['embedded DELETE', 'de\u007Fmo'], ['embedded C1 control', 'de\u009Fmo'],
+      ['embedded zero-width space', 'de\u200Bmo'], ['leading byte-order mark', '\uFEFFdemo'],
+      ['punctuation', 'demo!'], ['Cyrillic confusable', 'd\u0435mo'],
+    ];
+    for (const [, source] of deniedSources) {
+      await setTranscriptSource(context, source);
+      await expect(readCompletion(runtimePool, {
+        ...ownerActor, executionId: context.execution.id,
+      })).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+
+      const read = await request(app)
+        .get(`/api/v1/field-executions/${context.execution.id}/completion`);
+      expect(read.status).toBe(404);
+      expect(read.headers['cache-control']).toBe('no-store, private');
+
+      await expect(mutateCompletion(runtimePool, {
+        ...replayInput, csrfToken: ownerSession.csrfToken,
+        requestCorrelationId: 'm23p8-source-boundary',
+      })).rejects.toMatchObject({ status: 403 });
+
+      const replay = await request(app)
+        .post(`/api/v1/field-executions/${context.execution.id}/completion-actions`)
+        .set('Idempotency-Key', key)
+        .set('X-CSRF-Token', ownerSession.csrfToken)
+        .send(body);
+      expect(replay.status).toBe(403);
+      expect(replay.headers['cache-control']).toBe('no-store, private');
+    }
+
+    const productionSources = [
+      ['lead', 'lead'], ['mixed-case retell', 'ReTeLl'], ['mixed-case voice', 'VoIcE'],
+      ...UNICODE_WHITE_SPACE.map(([label, codePoint]) => {
+        const whitespace = String.fromCodePoint(codePoint);
+        return [`${label} padded production source`, `${whitespace}VoIcE${whitespace}`];
+      }),
+    ];
+    for (const [, source] of productionSources) {
+      await setTranscriptSource(context, source);
+      const read = await readCompletion(runtimePool, {
+        ...ownerActor, executionId: context.execution.id,
+      });
+      expect(read.body.data.records).toHaveLength(1);
+
+      const mountedRead = await request(app)
+        .get(`/api/v1/field-executions/${context.execution.id}/completion`);
+      expect(mountedRead.status).toBe(200);
+      expect(mountedRead.headers['cache-control']).toBe('no-store, private');
+
+      const replay = await mutateCompletion(runtimePool, {
+        ...replayInput, csrfToken: ownerSession.csrfToken,
+        requestCorrelationId: 'm23p8-source-boundary',
+      });
+      expect(replay.replayed).toBe(true);
+    }
+    expect((await ownerPool.query(
+      'SELECT count(*)::int AS count FROM canonical_completion_records WHERE execution_id=$1',
+      [context.execution.id]
+    )).rows[0].count).toBe(1);
+  }, 240000);
+
   test('one concurrent approval wins, completion is immutable, and reopening requires an explicit resume', async () => {
     const context = await createExecution();
     const proposed = await proposal(context);
@@ -451,6 +574,41 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
         [ownerSession.sessionId]
       );
     }
+
+    const assignmentContext = await createExecution();
+    const assignmentReplayKey = crypto.randomUUID();
+    const assignmentReplayInput = completionInput(assignmentContext, 'propose_completion', {
+      expiresAt: new Date(Date.now() + 60000).toISOString(), gateRequirements: emptyRequirements(),
+    }, ownerActor, assignmentReplayKey);
+    await mutateCompletion(runtimePool, {
+      ...assignmentReplayInput, csrfToken: ownerSession.csrfToken,
+      requestCorrelationId: 'm23p8-assignment-revocation',
+    });
+    await ownerPool.query('ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
+    try {
+      await ownerPool.query(
+        `UPDATE canonical_schedule_assignments
+            SET dispatch_state='revoked',revision=revision+1,
+                canonical_digest=canonical_schedule_assignment_digest(
+                  target_state,workforce_profile_id,workforce_crew_id,schedule_state,'revoked',
+                  scheduled_start,scheduled_end,appointment_status,needs_review,review_reasons),
+                last_action_code='test_authority_change',last_reason='Revoke the assignment authority fixture.'
+          WHERE id=$1`,
+        [assignmentContext.assignment.id]
+      );
+    } finally {
+      await ownerPool.query('ALTER TABLE canonical_schedule_assignments ENABLE TRIGGER USER');
+    }
+    await expect(mutateCompletion(runtimePool, {
+      ...assignmentReplayInput, csrfToken: ownerSession.csrfToken,
+      requestCorrelationId: 'm23p8-assignment-revocation',
+    })).rejects.toMatchObject({ status: 403 });
+    await expect(readCompletion(runtimePool, {
+      ...ownerActor, executionId: assignmentContext.execution.id,
+    })).rejects.toMatchObject({ status: 404 });
+    expect(await request(app)
+      .get(`/api/v1/field-executions/${assignmentContext.execution.id}/completion`))
+      .toMatchObject({ status: 404 });
   }, 120000);
 
   test('a lost commit acknowledgement retains one effect and exact retry recovers the response', async () => {

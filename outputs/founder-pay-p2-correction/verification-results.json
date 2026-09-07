@@ -1,0 +1,18 @@
+{
+  "base": "2f0fa29da1bd5f35670448054cf9e047b7f047ba",
+  "sourceSha256": "85311027a281dd4c20612ad643f3e73dfc7c361b7f715ccbd9e1026e1e23d5e2",
+  "checks": [
+    {
+      "name": "focused",
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "route",
+      "exitCode": 0,
+      "error": null
+    }
+  ],
+  "browserReceipt": "browser-results.json; run node tests/browser/founder-pay-p2.cjs separately",
+  "scope": "Two P2 presentation corrections only. Prior broad numerical/worker/binding campaigns are historical, not rerun; engine and worker byte identity are required."
+}

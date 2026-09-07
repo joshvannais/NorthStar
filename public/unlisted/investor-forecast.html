@@ -6,9 +6,9 @@
   <meta name="color-scheme" content="light">
   <meta name="northstar-v33-engine-sha256" content="2a8724be48bf1ae40ac62c295f2220e5980237c823f386992d489fdb2b42c40c">
   <meta name="northstar-v33-legacy-core-sha256" content="bf30de1c032ab3ea7e91ee6fe920989807828843afefb6c75e2539349e81c0f7">
-  <meta name="northstar-v33-ui-sha256" content="016ae12f93a3a960680e6f09270e0875255d496efe6f80f8102b52fea2b53090">
+  <meta name="northstar-v33-ui-sha256" content="5771653d58590e1b3efe176529edcbdaaf2875ae6646a1a4cf7d07f3d4035146">
   <meta name="northstar-v33-registry-sha256" content="9a009dd49dfd7d1667d0c95619e80ecd25d3df607ac181c26214a3ccf0393248">
-  <meta name="northstar-v33-css-sha256" content="cf46f8943b812e0eed6d0034f281fa5e723db032ccf5e6fbb0ae6580c338034e">
+  <meta name="northstar-v33-css-sha256" content="54bd3c0e12ebbe44590a3447f80aa7862a4c138afd0159dbe727a5fe9f1ad6d5">
   <meta name="northstar-v33-logo-sha256" content="796f1cb903ee6ccbbf49e0fe8c87eaa5e9d10759e81877dde1a0ca49b04e6411">
   <title>Northstar Investment Calculator</title>
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -310,11 +310,16 @@ footer { padding: 26px 18px 40px; text-align: center; color: var(--muted); font-
 .cost-split > span { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 6px; font-size: 11px; line-height: 1.25; }
 .cost-split strong { font-size: 13px; color: var(--ink); }
 .cost-split strong, .cost-split b { white-space: nowrap; flex-shrink: 0; }
+.withdrawal-summary { display: grid; gap: 3px; margin-top: 7px; padding-top: 5px; border-top: 1px solid var(--line); white-space: normal; font-size: 10px; line-height: 1.35; }
+.withdrawal-summary strong { font-size: 12px; }
+.withdrawal-summary .withdrawal-amount { white-space: nowrap; }
 .cost-split > small { display: flex; justify-content: space-between; gap: 5px; border-top: 1px solid var(--line); padding-top: 5px; font-size: 10px; }
 .owner-money-lines { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px 16px; }
 .owner-money-lines p { margin: 5px 0; }
 #annualRows details { min-width: 90px; }
-#annualRows details[open] { min-width: 260px; }
+#annualRows details[open] { min-width: 260px; width: 260px; white-space: normal; }
+#annualRows .owner-money-lines { grid-template-columns: 1fr; }
+#annualRows td { vertical-align: top; }
 @media (max-width: 700px) {
   .monthly-table td[data-label="Fixed/committed costs"] { grid-column: 1 / -1; }
   .cost-split > span { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; }
@@ -9021,10 +9026,25 @@ globalThis.NorthStarBenchmarkRegistry = {"registryVersion":"2026-09-02-v5","offl
 
   function ownerMoney(row) {
     const annual = row.year != null;
-    const investor = annual ? row.investorDistributions : row.investorDistribution;
+    const periods = annual ? state.driver.rows.filter(entry => Math.ceil(entry.month / 12) === row.year) : [row];
+    const actual = periods.filter(entry => entry.status === 'ACTUAL');
+    const forecast = periods.filter(entry => entry.status !== 'ACTUAL');
+    const projected = forecast.filter(entry => entry.distributionProjectionAvailable);
+    const forecastAvailable = forecast.length > 0 && projected.length === forecast.length;
+    const totalInvestor = entries => entries.reduce((total, entry) => total + entry.investorDistribution, 0);
+    const investorLines = [];
+    if (actual.length) investorLines.push(`<p>Recorded ACTUAL investor receipts: <b>${money(totalInvestor(actual))}</b></p>`);
+    if (forecast.length) investorLines.push(`<p>FORECAST investor receipts: <b>${forecastAvailable ? money(totalInvestor(forecast)) : 'Unavailable / unconfigured'}</b>${!forecastAvailable && projected.length ? `; configured forecast subtotal ${money(totalInvestor(projected))}, remaining forecast unavailable` : ''}</p>`);
+    if (actual.length && forecast.length) investorLines.push(`<p>${forecastAvailable ? `Combined recorded + forecast investor receipts: ${money(totalInvestor(periods))}` : 'Combined investor total unavailable; recorded ACTUAL receipts above remain known.'}</p>`);
     const pool = annual ? row.companyDistributionPool : row.totalDistributionPool;
     const amount = value => value == null ? 'unknown / unconfigured' : money(value);
-    return `<strong>${annual ? `Year ${row.year}` : `Month ${row.month}`} — founder and owner money</strong><div class="owner-money-lines"><p>Founder pay: <b>${amount(row.founderPay)}</b></p><p>Additional founder/other-owner profit withdrawals: <b>${amount(row.founderAssumedProfitWithdrawals)}</b></p><p>Combined assumed founder receipts: <b>${amount(row.founderAssumedTotalReceiptsBeforePersonalTax)}</b></p><p>Investor receipts: <b>${amount(investor)}</b> · company-wide distribution pool: <b>${row.founderAssumedProfitWithdrawals == null ? 'unknown / unconfigured' : amount(pool)}</b></p></div><small>Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.</small>`;
+    return `<strong>${annual ? `Year ${row.year}` : `Month ${row.month}`} — founder and owner money</strong><div class="owner-money-lines"><p>Founder pay: <b>${amount(row.founderPay)}</b></p><p>Additional assumed founder/other-owner profit withdrawals: <b>${amount(row.founderAssumedProfitWithdrawals)}</b></p><p>Combined assumed founder receipts: <b>${amount(row.founderAssumedTotalReceiptsBeforePersonalTax)}</b></p>${investorLines.join('')}<p>Company-wide distribution pool: <b>${actual.length ? 'Unknown actual total / split' : forecastAvailable ? amount(pool) : 'Unavailable / unconfigured'}</b></p></div>${forecast.length && !forecastAvailable ? '<p>For unavailable forecast periods, the cash scenario assumes no additional owner withdrawals; this is not a configured investor-return projection.</p>' : ''}<small>Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.</small>`;
+  }
+
+  function collapsedWithdrawals(row) {
+    const known = row.status !== 'ACTUAL' && row.distributionProjectionAvailable;
+    const status = row.status === 'ACTUAL' ? 'Unknown actual total' : 'Unavailable / unconfigured';
+    return `<div class="withdrawal-summary"><span>Additional withdrawals (company-wide)</span><strong${known ? ' class="withdrawal-amount"' : ''}>${known ? money(row.totalDistributionPool) : status}</strong></div>`;
   }
 
   function renderAnnualAndMonthly() {
@@ -9040,7 +9060,7 @@ globalThis.NorthStarBenchmarkRegistry = {"registryVersion":"2026-09-02-v5","offl
       <td data-label="Variable costs">${row.status === 'ACTUAL' ? 'Split unknown' : money(row.variableOperatingCosts, row.month)}</td>
       <td data-label="Fixed/committed costs">${fixedCostCell(row)}</td>
       <td data-label="Operating result">${money(row.operatingProfit, row.month)}<small>${row.status === 'ACTUAL' ? 'Actual costs included; founder split unknown' : 'After founder pay'}</small></td>
-      <td data-label="Company cash">${money(row.endingCash, row.month)}</td>
+      <td data-label="Company cash">${money(row.endingCash, row.month)}${collapsedWithdrawals(row)}</td>
       </tr><tr class="month-detail-row" id="month-detail-${row.month}" hidden><td colspan="7">${monthlyDetail(row)}</td></tr>`).join('');
     renderWorkforceTimeline();
   }

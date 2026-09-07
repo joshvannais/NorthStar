@@ -1,0 +1,16 @@
+PASS tests/ratification/unlisted-investor-forecast.test.js
+  unlisted investor forecast hosting contract
+    √ frozen revision fingerprints cover canonical engine, UI and offline worker (22 ms)
+    √ historical evidence is retained and new revision explicitly requires independent review (1 ms)
+    √ seven-column120-month ledger precedes Advanced with accessible month expansion (13 ms)
+    √ the self-contained document has no browser network or external asset dependency (23 ms)
+    √ exact GET and HEAD are public but receive a route-specific noindex and deny-by-default policy (80 ms)
+    √ no-transform is isolated to the exact calculator route (10 ms)
+    √ the exact route is not broadened into a directory or alternate URL (18 ms)
+    √ public discovery surfaces do not advertise or disallow the direct-link route (46 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+Snapshots:   0 total
+Time:        2.359 s
+Ran all test suites within paths "C:\Users\joshv\Documents\Codex\2026-09-06\northstar-investor-revision-astra\tests\ratification\unlisted-investor-forecast.test.js".

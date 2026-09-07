@@ -1,0 +1,2474 @@
+{
+  "qualification": "All generated scalar controls perturbed individually through production DOM/recalculate. Cross-field-invalid settings must reject visibly; rejection is not proof of economic effect. Array editors and named primary controls have separate interaction/numerical coverage.",
+  "count": 274,
+  "bound": 269,
+  "rejected": 5,
+  "controls": [
+    {
+      "path": "acquisition.direct.milestone.first90DayCustomers",
+      "kind": "number",
+      "entered": "9.09",
+      "expected": 9.09,
+      "normalized": 9.09,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.milestone.peakMonthlyAdds",
+      "kind": "number",
+      "entered": "121.2",
+      "expected": 121.2,
+      "normalized": 121.2,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.milestone.peakMonth",
+      "kind": "integer",
+      "entered": "61",
+      "expected": 61,
+      "normalized": 61,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.milestone.month12Target",
+      "kind": "number",
+      "entered": "12.12",
+      "expected": 12.12,
+      "normalized": 12.12,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.enabled",
+      "kind": "boolean",
+      "entered": false,
+      "expected": false,
+      "normalized": false,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.legalReviewReserve",
+      "kind": "money",
+      "entered": "15150",
+      "expected": 15150,
+      "normalized": 15150,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.distributionPolicy",
+      "kind": "select",
+      "entered": "periodic",
+      "expected": "periodic",
+      "normalized": "periodic",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.distributionEveryMonths",
+      "kind": "integer",
+      "entered": "4",
+      "expected": 4,
+      "normalized": 4,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.provisionalDistributionsWithoutTaxEstimate",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.contingencyProtection",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.initialTaxEarmark",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.minimumCashReserve",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.reserveWindowMonths",
+      "kind": "integer",
+      "entered": "4",
+      "expected": 4,
+      "normalized": 4,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.distributionPayoutRatio",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.distributionStartMonth",
+      "kind": "integer",
+      "entered": "2",
+      "expected": 2,
+      "normalized": 2,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.additionalFundingAmount",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 0,
+      "status": "explicit validation rejection",
+      "validation": "Results were not updated: Additional funding amount and month must either both be entered or both be zero."
+    },
+    {
+      "path": "cash.additionalFundingMonth",
+      "kind": "integer",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 0,
+      "status": "explicit validation rejection",
+      "validation": "Results were not updated: Additional funding amount and month must either both be entered or both be zero."
+    },
+    {
+      "path": "legacy.growthScenario",
+      "kind": "select",
+      "entered": "conservative",
+      "expected": "conservative",
+      "normalized": "conservative",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "legacy.monthlyAddsGrowth",
+      "kind": "percent",
+      "entered": "7.070000000000001",
+      "expected": 0.07070000000000001,
+      "normalized": 0.07070000000000001,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "legacy.monthlyChurn",
+      "kind": "percent",
+      "entered": "2.02",
+      "expected": 0.0202,
+      "normalized": 0.0202,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "legacy.firstMonthAdds.starter",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "legacy.firstMonthAdds.growth",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "legacy.firstMonthAdds.complete",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "legacy.fixedMonthlyOpex",
+      "kind": "money",
+      "entered": "303",
+      "expected": 303,
+      "normalized": 303,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "legacy.cacPerNewPayingCustomer",
+      "kind": "money",
+      "entered": "20.2",
+      "expected": 20.2,
+      "normalized": 20.2,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.planningMode",
+      "kind": "select",
+      "entered": "channels",
+      "expected": "channels",
+      "normalized": "channels",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.enabled",
+      "kind": "boolean",
+      "entered": false,
+      "expected": false,
+      "normalized": false,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.method",
+      "kind": "select",
+      "entered": "funnel",
+      "expected": "funnel",
+      "normalized": "funnel",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.payingCustomersPerMonth",
+      "kind": "number",
+      "entered": "3.03",
+      "expected": 3.03,
+      "normalized": 3.03,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.milestone.humanAssistedShare",
+      "kind": "percent",
+      "entered": "25.25",
+      "expected": 0.2525,
+      "normalized": 0.2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.prospectsPerMonth",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.responseRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.qualificationRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.demoRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.closeRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.capacity",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.cashSpend",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.laborAllocationMonthly",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.planMix.starter",
+      "kind": "percent",
+      "entered": "50.5",
+      "expected": 0.5024875621890548,
+      "normalized": 0.5024875621890548,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.planMix.growth",
+      "kind": "percent",
+      "entered": "30.3",
+      "expected": 0.30209371884346964,
+      "normalized": 0.30209371884346964,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.direct.planMix.complete",
+      "kind": "percent",
+      "entered": "20.2",
+      "expected": 0.20159680638722555,
+      "normalized": 0.20159680638722555,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.startMonth",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.enabled",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.method",
+      "kind": "select",
+      "entered": "funnel",
+      "expected": "funnel",
+      "normalized": "funnel",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.spendPerMonth",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.cac",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.costPerLead",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.qualifiedRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.demoRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.closeRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.salesAssistRate",
+      "kind": "percent",
+      "entered": "101",
+      "expected": 1.01,
+      "normalized": 1,
+      "status": "explicit validation rejection",
+      "validation": "Results were not updated: Forecast input must be from 0 through 1."
+    },
+    {
+      "path": "acquisition.paid.capacity",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.planMix.starter",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40239043824701193,
+      "normalized": 0.40239043824701193,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.planMix.growth",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40239043824701193,
+      "normalized": 0.40239043824701193,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.paid.planMix.complete",
+      "kind": "percent",
+      "entered": "20.2",
+      "expected": 0.20159680638722555,
+      "normalized": 0.20159680638722555,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.enabled",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.qualifiedLeadsMonth1",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.leadToPaidRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.firstYearAnnualGrowth",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.growthEndurance",
+      "kind": "percent",
+      "entered": "70.7",
+      "expected": 0.7070000000000001,
+      "normalized": 0.7070000000000001,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.terminalAnnualGrowth",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.capacity",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.cashSpendPerMonth",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.planMix.starter",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40239043824701193,
+      "normalized": 0.40239043824701193,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.planMix.growth",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40239043824701193,
+      "normalized": 0.40239043824701193,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.organic.planMix.complete",
+      "kind": "percent",
+      "entered": "20.2",
+      "expected": 0.20159680638722555,
+      "normalized": 0.20159680638722555,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.enabled",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.advocateRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.referralsPerAdvocate",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.qualifiedRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.paidConversionRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.delayMonths",
+      "kind": "integer",
+      "entered": "2",
+      "expected": 2,
+      "normalized": 2,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.incentiveCostPerPaid",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.saturationCustomers",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.processingCapacity",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.reactivation.enabled",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.reactivation.monthlyRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.reactivation.capacity",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.reactivation.costPerReactivation",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.planMix.starter",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40239043824701193,
+      "normalized": 0.40239043824701193,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.planMix.growth",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40239043824701193,
+      "normalized": 0.40239043824701193,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.referral.planMix.complete",
+      "kind": "percent",
+      "entered": "20.2",
+      "expected": 0.20159680638722555,
+      "normalized": 0.20159680638722555,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.enabled",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.activePartners",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.opportunitiesPerPartner",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.conversionRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.commissionPerCustomer",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.rampMonths",
+      "kind": "integer",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.capacity",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.planMix.starter",
+      "kind": "percent",
+      "entered": "20.2",
+      "expected": 0.20159680638722555,
+      "normalized": 0.20159680638722555,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.planMix.growth",
+      "kind": "percent",
+      "entered": "50.5",
+      "expected": 0.5024875621890547,
+      "normalized": 0.5024875621890548,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "acquisition.partnerships.planMix.complete",
+      "kind": "percent",
+      "entered": "30.3",
+      "expected": 0.30209371884346964,
+      "normalized": 0.30209371884346964,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.baseMonthlyVoluntaryChurn",
+      "kind": "percent",
+      "entered": "3.03",
+      "expected": 0.030299999999999997,
+      "normalized": 0.030299999999999997,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.earlyTenureMultiplier",
+      "kind": "number",
+      "entered": "1.3635000000000002",
+      "expected": 1.3635000000000002,
+      "normalized": 1.3635000000000002,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.matureMultiplier",
+      "kind": "number",
+      "entered": "0.76",
+      "expected": 0.76,
+      "normalized": 0.76,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.paymentFailureRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.dunningRecoveryRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.migration.starterToGrowth",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.migration.starterToComplete",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.migration.growthToComplete",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.migration.completeToGrowth",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "retention.migration.growthToStarter",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "market.serviceableObtainableMarket",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "market.maximumPenetration",
+      "kind": "percent",
+      "entered": "101",
+      "expected": 1.01,
+      "normalized": 1,
+      "status": "explicit validation rejection",
+      "validation": "Results were not updated: Forecast input must be from 0 through 1."
+    },
+    {
+      "path": "market.saturationElasticity",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "market.reactivationEligibleFormerCustomers",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.annualPrepaidRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0,
+      "status": "explicit validation rejection",
+      "validation": "Results were not updated: Annual billing or an exact annual active actual cohort requires an explicit service-through-term cancellation, recognition, and renewal-price policy."
+    },
+    {
+      "path": "billing.annualDiscountRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.overagePricePerBilledMinute",
+      "kind": "money3",
+      "entered": "0.5",
+      "expected": 0.5,
+      "normalized": 0.5,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.annualCancellationPolicy",
+      "kind": "select",
+      "entered": "service_through_term",
+      "expected": "service_through_term",
+      "normalized": "service_through_term",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.startingCustomerBillingPolicy",
+      "kind": "select",
+      "entered": "monthly_existing_contracts",
+      "expected": "monthly_existing_contracts",
+      "normalized": "monthly_existing_contracts",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.processingRevenueRate",
+      "kind": "percent",
+      "entered": "2.9290000000000003",
+      "expected": 0.029290000000000004,
+      "normalized": 0.029290000000000004,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.stripeBillingRevenueRate",
+      "kind": "percent",
+      "entered": "0.7100000000000001",
+      "expected": 0.0071,
+      "normalized": 0.0071,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.processingFeePerPayment",
+      "kind": "money",
+      "entered": "0.31",
+      "expected": 0.31,
+      "normalized": 0.31,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "billing.refundsChargebacksRevenueRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "providerCosts.retellPerBilledMinute",
+      "kind": "money3",
+      "entered": "0.15000000000000002",
+      "expected": 0.15000000000000002,
+      "normalized": 0.15000000000000002,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "providerCosts.aiPerCustomer",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "providerCosts.phonePerCustomer",
+      "kind": "money",
+      "entered": "2.02",
+      "expected": 2.02,
+      "normalized": 2.02,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "providerCosts.storageBandwidthPerCustomer",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "providerCosts.messagingEmailPerCustomer",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "providerCosts.otherPerCustomer",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.planPrice",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.retellProvider",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.ai",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.hostingStorage",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.payrollWages",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.insurance",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.softwareTools",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "escalation.otherFixed",
+      "kind": "signedPercent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.contractorBridgeMonths",
+      "kind": "integer",
+      "entered": "4",
+      "expected": 4,
+      "normalized": 4,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.contractorBridgeMonthlyRetainer",
+      "kind": "money",
+      "entered": "2525",
+      "expected": 2525,
+      "normalized": 2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.contractorBridgeHoursPerMonth",
+      "kind": "number",
+      "entered": "40.4",
+      "expected": 40.4,
+      "normalized": 40.4,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.infrastructureBandPoint",
+      "kind": "select",
+      "entered": "midpoint",
+      "expected": "midpoint",
+      "normalized": "midpoint",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.infrastructureOnlyWhenUnspecified",
+      "kind": "boolean",
+      "entered": false,
+      "expected": false,
+      "normalized": false,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.professionalSupportMonthly.bookkeeping",
+      "kind": "money",
+      "entered": "303",
+      "expected": 303,
+      "normalized": 303,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.professionalSupportMonthly.legal",
+      "kind": "money",
+      "entered": "505",
+      "expected": 505,
+      "normalized": 505,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.professionalSupportMonthly.fractionalFinance",
+      "kind": "money",
+      "entered": "2525",
+      "expected": 2525,
+      "normalized": 2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.professionalSupportMonthly.securityPrivacy",
+      "kind": "money",
+      "entered": "2525",
+      "expected": 2525,
+      "normalized": 2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automaticPlan.professionalSupportMonthly.boardGovernance",
+      "kind": "money",
+      "entered": "1010",
+      "expected": 1010,
+      "normalized": 1010,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.newHireProductivityRampMonths",
+      "kind": "integer",
+      "entered": "4",
+      "expected": 4,
+      "normalized": 4,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.newHireInitialProductivity",
+      "kind": "percent",
+      "entered": "50.5",
+      "expected": 0.505,
+      "normalized": 0.505,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.staffingPolicy",
+      "kind": "select",
+      "entered": "manual",
+      "expected": "manual",
+      "normalized": "manual",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.capacityEnforcement",
+      "kind": "select",
+      "entered": "warning_only",
+      "expected": "warning_only",
+      "normalized": "warning_only",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.sustainableHoursPerWeek",
+      "kind": "number",
+      "entered": "50.5",
+      "expected": 50.5,
+      "normalized": 50.5,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.developmentProductHoursPerWeek",
+      "kind": "number",
+      "entered": "20.2",
+      "expected": 20.2,
+      "normalized": 20.2,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.administrativeHoursPerWeek",
+      "kind": "number",
+      "entered": "5.05",
+      "expected": 5.05,
+      "normalized": 5.05,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.salesHoursPerWeek",
+      "kind": "number",
+      "entered": "8.08",
+      "expected": 8.08,
+      "normalized": 8.08,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.supportHoursPerWeek",
+      "kind": "number",
+      "entered": "5.05",
+      "expected": 5.05,
+      "normalized": 5.05,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.onboardingHoursPerWeek",
+      "kind": "number",
+      "entered": "5.05",
+      "expected": 5.05,
+      "normalized": 5.05,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.investorFundraisingHoursPerWeek",
+      "kind": "number",
+      "entered": "2.02",
+      "expected": 2.02,
+      "normalized": 2.02,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.legalComplianceHoursPerWeek",
+      "kind": "number",
+      "entered": "2.02",
+      "expected": 2.02,
+      "normalized": 2.02,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.marketingHoursPerWeek",
+      "kind": "number",
+      "entered": "3.03",
+      "expected": 3.03,
+      "normalized": 3.03,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.managementHoursPerWeek",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.compensationPolicy",
+      "kind": "select",
+      "entered": "sweat_equity",
+      "expected": "sweat_equity",
+      "normalized": "sweat_equity",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.founder.manualMonthlyCompensation",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.efficiencyPolicy",
+      "kind": "select",
+      "entered": "high",
+      "expected": "high",
+      "normalized": "high",
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.customArrPerFte",
+      "kind": "nullable",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.nonExecutiveRecruitingLeadMonths",
+      "kind": "integer",
+      "entered": "3",
+      "expected": 3,
+      "normalized": 3,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.executiveRecruitingLeadMonths",
+      "kind": "integer",
+      "entered": "5",
+      "expected": 5,
+      "normalized": 5,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.support.contactsPerCustomerMonth",
+      "kind": "number",
+      "entered": "0.36",
+      "expected": 0.36,
+      "normalized": 0.36,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.support.averageHandlingHours",
+      "kind": "number",
+      "entered": "0.51",
+      "expected": 0.51,
+      "normalized": 0.51,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.support.escalationRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.support.productiveHoursPerFteMonth",
+      "kind": "number",
+      "entered": "111.1",
+      "expected": 111.1,
+      "normalized": 111.1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.onboarding.hoursByPlan.starter",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.onboarding.hoursByPlan.growth",
+      "kind": "number",
+      "entered": "1.515",
+      "expected": 1.515,
+      "normalized": 1.515,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.onboarding.hoursByPlan.complete",
+      "kind": "number",
+      "entered": "3.03",
+      "expected": 3.03,
+      "normalized": 3.03,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.onboarding.productiveHoursPerFteMonth",
+      "kind": "number",
+      "entered": "111.1",
+      "expected": 111.1,
+      "normalized": 111.1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.selfServiceOnboardingByPlan.starter",
+      "kind": "percent",
+      "entered": "80.8",
+      "expected": 0.8079999999999999,
+      "normalized": 0.8079999999999999,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.selfServiceOnboardingByPlan.growth",
+      "kind": "percent",
+      "entered": "60.6",
+      "expected": 0.606,
+      "normalized": 0.606,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.selfServiceOnboardingByPlan.complete",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40399999999999997,
+      "normalized": 0.40399999999999997,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.aiResolvedSupportRate",
+      "kind": "percent",
+      "entered": "40.4",
+      "expected": 0.40399999999999997,
+      "normalized": 0.40399999999999997,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.automatedBillingRate",
+      "kind": "percent",
+      "entered": "90.9",
+      "expected": 0.909,
+      "normalized": 0.909,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.automatedAccountAdministrationRate",
+      "kind": "percent",
+      "entered": "70.7",
+      "expected": 0.7070000000000001,
+      "normalized": 0.7070000000000001,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.automatedCustomerCommunicationsRate",
+      "kind": "percent",
+      "entered": "70.7",
+      "expected": 0.7070000000000001,
+      "normalized": 0.7070000000000001,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.automation.internalAiProductivityMultiplier",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.sales.opportunitiesPerRepMonth",
+      "kind": "number",
+      "entered": "80.8",
+      "expected": 80.8,
+      "normalized": 80.8,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.sales.demosPerRepMonth",
+      "kind": "number",
+      "entered": "30.3",
+      "expected": 30.3,
+      "normalized": 30.3,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.sales.closesPerRepMonth",
+      "kind": "number",
+      "entered": "12.12",
+      "expected": 12.12,
+      "normalized": 12.12,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.sales.productiveHoursPerFteMonth",
+      "kind": "number",
+      "entered": "111.1",
+      "expected": 111.1,
+      "normalized": 111.1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.sales.hoursPerOpportunity",
+      "kind": "number",
+      "entered": "0.76",
+      "expected": 0.76,
+      "normalized": 0.76,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.customerSuccess.managedAccountRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.customerSuccess.accountsPerCsm",
+      "kind": "number",
+      "entered": "353.5",
+      "expected": 353.5,
+      "normalized": 353.5,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.customerSuccess.enterpriseManagedAccountRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.customerSuccess.enterpriseAccountsPerCsm",
+      "kind": "number",
+      "entered": "40.4",
+      "expected": 40.4,
+      "normalized": 40.4,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.customerSuccess.productiveHoursPerFteMonth",
+      "kind": "number",
+      "entered": "111.1",
+      "expected": 111.1,
+      "normalized": 111.1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.financeAdmin.transactionsPerFteMonth",
+      "kind": "number",
+      "entered": "2525",
+      "expected": 2525,
+      "normalized": 2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.financeAdmin.productiveHoursPerFteMonth",
+      "kind": "number",
+      "entered": "111.1",
+      "expected": 111.1,
+      "normalized": 111.1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.financeAdmin.billingTransactionsPerCustomerMonth",
+      "kind": "number",
+      "entered": "0.51",
+      "expected": 0.51,
+      "normalized": 0.51,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.financeAdmin.accountAdministrationTransactionsPerCustomerMonth",
+      "kind": "number",
+      "entered": "0.51",
+      "expected": 0.51,
+      "normalized": 0.51,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.engineeringProduct.manualRequiredFte",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.engineeringProduct.productiveHoursPerFteMonth",
+      "kind": "number",
+      "entered": "111.1",
+      "expected": 111.1,
+      "normalized": 111.1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.targetDirectReportsPerManager",
+      "kind": "number",
+      "entered": "7.07",
+      "expected": 7.07,
+      "normalized": 7.07,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.toolCostPerFteMonth",
+      "kind": "money",
+      "entered": "126.25",
+      "expected": 126.25,
+      "normalized": 126.25,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.workspaceCostPerSeatMonth",
+      "kind": "money",
+      "entered": "7.07",
+      "expected": 7.07,
+      "normalized": 7.07,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.equipmentCostPerNewFte",
+      "kind": "money",
+      "entered": "2020",
+      "expected": 2020,
+      "normalized": 2020,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recruitingCostPerNonExecutiveHire",
+      "kind": "money",
+      "entered": "2525",
+      "expected": 2525,
+      "normalized": 2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.defaultPayrollBurdenRate",
+      "kind": "percent",
+      "entered": "25.25",
+      "expected": 0.2525,
+      "normalized": 0.2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.support",
+      "kind": "money",
+      "entered": "5555",
+      "expected": 5555,
+      "normalized": 5555,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.onboarding",
+      "kind": "money",
+      "entered": "5555",
+      "expected": 5555,
+      "normalized": 5555,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.sales",
+      "kind": "money",
+      "entered": "8080",
+      "expected": 8080,
+      "normalized": 8080,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.customerSuccess",
+      "kind": "money",
+      "entered": "6565",
+      "expected": 6565,
+      "normalized": 6565,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.financeAdmin",
+      "kind": "money",
+      "entered": "6565",
+      "expected": 6565,
+      "normalized": 6565,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.engineeringProduct",
+      "kind": "money",
+      "entered": "13130",
+      "expected": 13130,
+      "normalized": 13130,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.management",
+      "kind": "money",
+      "entered": "12120",
+      "expected": 12120,
+      "normalized": 12120,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.recommendationLoadedCostPerFteMonth.other",
+      "kind": "money",
+      "entered": "6565",
+      "expected": 6565,
+      "normalized": 6565,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.emergencyScale.contractorHourlyRate",
+      "kind": "money",
+      "entered": "75.75",
+      "expected": 75.75,
+      "normalized": 75.75,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.emergencyScale.supportContractorHourlyRate",
+      "kind": "money",
+      "entered": "75.75",
+      "expected": 75.75,
+      "normalized": 75.75,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.emergencyScale.overtimePremiumRate",
+      "kind": "percent",
+      "entered": "50.5",
+      "expected": 0.505,
+      "normalized": 0.505,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.emergencyScale.maximumFounderOvertimeHoursMonth",
+      "kind": "number",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.emergencyScale.expeditedRecruitingCostPerFte",
+      "kind": "money",
+      "entered": "2525",
+      "expected": 2525,
+      "normalized": 2525,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.emergencyScale.equipmentCostPerFte",
+      "kind": "money",
+      "entered": "2020",
+      "expected": 2020,
+      "normalized": 2020,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "organization.emergencyScale.managementProductiveHoursPerFteMonth",
+      "kind": "number",
+      "entered": "111.1",
+      "expected": 111.1,
+      "normalized": 111.1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.basePlatform",
+      "kind": "money",
+      "entered": "303",
+      "expected": 303,
+      "normalized": 303,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.sharedInfrastructure",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.contractorBase",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.salesMarketingProgram",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.salesMarketingProgramIsIncrementalToChannelSpend",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.legal",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.accountingBookkeeping",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.securityCompliance",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.softwareToolsBase",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.customerSuccessSupportCash",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.officeAdmin",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.travelEvents",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.otherShared",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.capitalExpenditures",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.domainRegistrationDns",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.taxReserveEnabled",
+      "kind": "boolean",
+      "entered": true,
+      "expected": true,
+      "normalized": true,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.taxReserveRate",
+      "kind": "percent",
+      "entered": "1",
+      "expected": 0.01,
+      "normalized": 0.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.insurance.generalLiability",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.insurance.technologyEo",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.insurance.cyberLiability",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.insurance.directorsOfficers",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.insurance.workersCompensation",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.insurance.employmentPractices",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "operatingCosts.insurance.other",
+      "kind": "money",
+      "entered": "1",
+      "expected": 1,
+      "normalized": 1,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.seed",
+      "kind": "integer",
+      "entered": "32027",
+      "expected": 32027,
+      "normalized": 32027,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.iterations",
+      "kind": "integer",
+      "entered": "5001",
+      "expected": 5001,
+      "normalized": 5001,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.churnMultiplier.low",
+      "kind": "number",
+      "entered": "0.81",
+      "expected": 0.81,
+      "normalized": 0.81,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.churnMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.churnMultiplier.high",
+      "kind": "number",
+      "entered": "1.2625",
+      "expected": 1.2625,
+      "normalized": 1.2625,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.conversionMultiplier.low",
+      "kind": "number",
+      "entered": "0.76",
+      "expected": 0.76,
+      "normalized": 0.76,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.conversionMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.conversionMultiplier.high",
+      "kind": "number",
+      "entered": "1.2625",
+      "expected": 1.2625,
+      "normalized": 1.2625,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.cacMultiplier.low",
+      "kind": "number",
+      "entered": "0.81",
+      "expected": 0.81,
+      "normalized": 0.81,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.cacMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.cacMultiplier.high",
+      "kind": "number",
+      "entered": "1.313",
+      "expected": 1.313,
+      "normalized": 1.313,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.referralMultiplier.low",
+      "kind": "number",
+      "entered": "0.51",
+      "expected": 0.51,
+      "normalized": 0.51,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.referralMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.referralMultiplier.high",
+      "kind": "number",
+      "entered": "1.515",
+      "expected": 1.515,
+      "normalized": 1.515,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.acquisitionVolumeMultiplier.low",
+      "kind": "number",
+      "entered": "0.76",
+      "expected": 0.76,
+      "normalized": 0.76,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.acquisitionVolumeMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.acquisitionVolumeMultiplier.high",
+      "kind": "number",
+      "entered": "1.313",
+      "expected": 1.313,
+      "normalized": 1.313,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.providerCostMultiplier.low",
+      "kind": "number",
+      "entered": "0.86",
+      "expected": 0.86,
+      "normalized": 0.86,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.providerCostMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.providerCostMultiplier.high",
+      "kind": "number",
+      "entered": "1.313",
+      "expected": 1.313,
+      "normalized": 1.313,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.usageMultiplier.low",
+      "kind": "number",
+      "entered": "0.81",
+      "expected": 0.81,
+      "normalized": 0.81,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.usageMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.usageMultiplier.high",
+      "kind": "number",
+      "entered": "1.2625",
+      "expected": 1.2625,
+      "normalized": 1.2625,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.supportCostMultiplier.low",
+      "kind": "number",
+      "entered": "0.81",
+      "expected": 0.81,
+      "normalized": 0.81,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.supportCostMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.supportCostMultiplier.high",
+      "kind": "number",
+      "entered": "1.313",
+      "expected": 1.313,
+      "normalized": 1.313,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.marketMultiplier.low",
+      "kind": "number",
+      "entered": "0.81",
+      "expected": 0.81,
+      "normalized": 0.81,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.marketMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.marketMultiplier.high",
+      "kind": "number",
+      "entered": "1.212",
+      "expected": 1.212,
+      "normalized": 1.212,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.saturationElasticityMultiplier.low",
+      "kind": "number",
+      "entered": "0.81",
+      "expected": 0.81,
+      "normalized": 0.81,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.saturationElasticityMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.saturationElasticityMultiplier.high",
+      "kind": "number",
+      "entered": "1.2625",
+      "expected": 1.2625,
+      "normalized": 1.2625,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.expenseMultiplier.low",
+      "kind": "number",
+      "entered": "0.91",
+      "expected": 0.91,
+      "normalized": 0.91,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.expenseMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.expenseMultiplier.high",
+      "kind": "number",
+      "entered": "1.212",
+      "expected": 1.212,
+      "normalized": 1.212,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.expenseGrowthMultiplier.low",
+      "kind": "number",
+      "entered": "0.76",
+      "expected": 0.76,
+      "normalized": 0.76,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.expenseGrowthMultiplier.base",
+      "kind": "number",
+      "entered": "1.01",
+      "expected": 1.01,
+      "normalized": 1.01,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "uncertainty.assumptions.expenseGrowthMultiplier.high",
+      "kind": "number",
+      "entered": "1.2625",
+      "expected": 1.2625,
+      "normalized": 1.2625,
+      "status": "bound",
+      "validation": null
+    }
+  ]
+}

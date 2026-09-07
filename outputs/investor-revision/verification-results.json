@@ -1,0 +1,36 @@
+{
+  "sourceSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+  "completed": true,
+  "checks": [
+    {
+      "name": "numerical",
+      "exitCode": 0,
+      "sourceSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+      "error": null
+    },
+    {
+      "name": "before-after",
+      "exitCode": 0,
+      "sourceSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+      "error": null
+    },
+    {
+      "name": "route",
+      "exitCode": 0,
+      "sourceSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+      "error": null
+    },
+    {
+      "name": "bindings",
+      "exitCode": 0,
+      "sourceSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+      "error": null
+    },
+    {
+      "name": "browser",
+      "exitCode": 0,
+      "sourceSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+      "error": null
+    }
+  ]
+}

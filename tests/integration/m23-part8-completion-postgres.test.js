@@ -605,7 +605,21 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
   test('one concurrent approval wins, completion is immutable, and reopening requires an explicit resume', async () => {
     const context = await createExecution();
     expect(await readExecutionByAppointment(memberActor, context.execution.appointmentId))
-      .toMatchObject({ success: true, data: { id: context.execution.id, lifecycleState: 'in_progress' } });
+      .toMatchObject({ success: true, data: {
+        id: context.execution.id,
+        lifecycleState: 'in_progress',
+        actions: [
+          'pause', 'start_timer', 'record_manual', 'record_material', 'record_equipment',
+          'create_checklist', 'respond_item', 'record_observation', 'record_note',
+          'record_progress', 'record_blocker', 'record_exception', 'record_change',
+          'propose_completion',
+        ],
+        materialMovementKinds: ['consumed', 'returned', 'transferred', 'waste'],
+        equipmentKinds: [
+          'check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+          'downtime_start', 'downtime_end', 'maintenance',
+        ],
+      } });
     await expect(readExecutionByAppointment(ownerActor, context.execution.appointmentId))
       .rejects.toMatchObject({ code: 'P0002' });
     const proposed = await proposal(context);

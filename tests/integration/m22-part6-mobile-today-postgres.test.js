@@ -298,6 +298,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     const directProjection = await require('../../src/scheduling/todayRepository').loadToday(runtimePool, {
       organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
       membershipId: IDS.employee, authSessionId: sessions.employee.sessionId,
+      onboardingComplete: true, subscriptionMutable: true,
     });
     expect(directProjection.count).toBe(3);
     const response = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
@@ -405,6 +406,93 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     } });
     expect(direct.data.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(direct.data.digest).toMatch(/^[0-9a-f]{64}$/);
+
+    const assignmentBeforeReview = (await migrationPool.query(
+      `SELECT revision,rtrim(canonical_digest) AS digest,needs_review,review_reasons,updated_at
+         FROM public.canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`,
+      [IDS.organization, IDS.direct]
+    )).rows[0];
+    const transcriptBeforeReview = (await migrationPool.query(
+      `SELECT transcript.id,transcript.source
+         FROM public.canonical_transcripts transcript
+         JOIN public.canonical_appointments appointment
+           ON appointment.organization_id=transcript.organization_id
+          AND appointment.operation_id=transcript.operation_id
+          AND appointment.graph_id=transcript.graph_id
+        WHERE appointment.organization_id=$1 AND appointment.id=$2`,
+      [IDS.organization, IDS.direct]
+    )).rows[0];
+    const started = await request(app)
+      .post(`/api/v1/field-executions/${direct.data.id}/transitions`)
+      .set(sessions.employee.headers)
+      .set('Idempotency-Key', 'm23-part9a-review-capability-start-0001')
+      .send({
+        expectedRevision: direct.data.revision,
+        expectedDigest: direct.data.digest,
+        expectedAssignmentRevision: Number(assignmentBeforeReview.revision),
+        expectedAssignmentDigest: assignmentBeforeReview.digest,
+        action: 'start',
+        reason: 'Start the exact current worker execution for capability proof.',
+      })
+      .expect(200);
+    expect(started.body.data.lifecycleState).toBe('in_progress');
+
+    await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments DISABLE TRIGGER USER');
+    try {
+      await migrationPool.query(
+        'UPDATE public.canonical_transcripts SET source=$2 WHERE organization_id=$1 AND id=$3',
+        [IDS.organization, 'lead', transcriptBeforeReview.id]
+      );
+      await migrationPool.query(
+        `UPDATE public.canonical_schedule_assignments
+            SET needs_review=TRUE,
+                review_reasons='[{"code":"part9a_capability_review"}]'::jsonb,
+                revision=revision+1,
+                canonical_digest=public.canonical_schedule_assignment_digest(
+                  target_state,workforce_profile_id,workforce_crew_id,schedule_state,dispatch_state,
+                  scheduled_start,scheduled_end,appointment_status,TRUE,
+                  '[{"code":"part9a_capability_review"}]'::jsonb
+                ),
+                updated_at=transaction_timestamp()
+          WHERE organization_id=$1 AND appointment_id=$2`,
+        [IDS.organization, IDS.direct]
+      );
+    } finally {
+      await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments ENABLE TRIGGER USER');
+    }
+    try {
+      const reviewLimited = await readExecutionByAppointment(employee, IDS.direct);
+      expect(reviewLimited.data.actions).toEqual([
+        'pause', 'start_timer', 'record_manual', 'record_material',
+        'create_checklist', 'respond_item', 'record_observation', 'record_note',
+        'propose_completion',
+      ]);
+      expect(reviewLimited.data.materialMovementKinds).toEqual(['consumed', 'returned', 'transferred', 'waste']);
+      expect(reviewLimited.data.equipmentKinds).toEqual([]);
+      expect(reviewLimited.data.actions).not.toEqual(expect.arrayContaining([
+        'record_equipment', 'record_progress', 'record_blocker', 'record_exception', 'record_change',
+      ]));
+    } finally {
+      await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments DISABLE TRIGGER USER');
+      try {
+        await migrationPool.query(
+          'UPDATE public.canonical_transcripts SET source=$2 WHERE organization_id=$1 AND id=$3',
+          [IDS.organization, transcriptBeforeReview.source, transcriptBeforeReview.id]
+        );
+        await migrationPool.query(
+          `UPDATE public.canonical_schedule_assignments
+              SET needs_review=$3,review_reasons=$4::jsonb,revision=$5,
+                  canonical_digest=$6,updated_at=$7
+            WHERE organization_id=$1 AND appointment_id=$2`,
+          [IDS.organization, IDS.direct, assignmentBeforeReview.needs_review,
+            JSON.stringify(assignmentBeforeReview.review_reasons), Number(assignmentBeforeReview.revision),
+            assignmentBeforeReview.digest, assignmentBeforeReview.updated_at]
+        );
+      } finally {
+        await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments ENABLE TRIGGER USER');
+      }
+    }
 
     expect(await readExecutionByAppointment(employee, IDS.crewWork))
       .toEqual({ success: true, data: null });

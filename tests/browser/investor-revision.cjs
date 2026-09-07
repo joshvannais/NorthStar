@@ -64,6 +64,7 @@ const selected=process.argv[2]||'chrome';
       await page.screenshot({path:path.join(screenshotDir,setting.name+'-month120-detail.png')});
       await page.locator('#investmentAmount').fill('50000');await page.locator('#recalculate').click();
       check(await page.evaluate(()=>window.currentNorthStarInvestorResult.config.deal.impliedPostMoney===5000000),'investment changes fixed-ownership valuation');
+      await page.locator('#dealSummary details > summary').click();
       check(await page.locator('#dealSummary').innerText().then(t=>t.includes('5,000,000')),'valuation label follows result');
       await page.locator('#selectedMonth').fill('1');await page.locator('#selectedMonth').dispatchEvent('change');
       check(await page.locator('#primaryMetrics').innerText().then(t=>t.includes('Month 1; not collections')),'selected-month overview follows month1');

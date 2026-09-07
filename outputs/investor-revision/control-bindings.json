@@ -1,7 +1,7 @@
 {
   "qualification": "All generated scalar controls perturbed individually through production DOM/recalculate. Cross-field-invalid settings must reject visibly; rejection is not proof of economic effect. Array editors and named primary controls have separate interaction/numerical coverage.",
-  "count": 275,
-  "bound": 270,
+  "count": 276,
+  "bound": 271,
   "rejected": 5,
   "controls": [
     {
@@ -55,6 +55,15 @@
       "entered": "15150",
       "expected": 15150,
       "normalized": 15150,
+      "status": "bound",
+      "validation": null
+    },
+    {
+      "path": "cash.actualHistoryCashBasis",
+      "kind": "select",
+      "entered": "legacy_usable_excluding_restricted",
+      "expected": "legacy_usable_excluding_restricted",
+      "normalized": "legacy_usable_excluding_restricted",
       "status": "bound",
       "validation": null
     },

@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_pro
 const root=path.resolve(__dirname,'..'),out=path.join(root,'outputs/investor-revision');
 const hash=()=>crypto.createHash('sha256').update(fs.readFileSync(path.join(root,'public/unlisted/investor-forecast.html'),'utf8').replace(/\r\n/g,'\n')).digest('hex');
 const initial=hash(),receipts=[];
-const jobs=[['numerical',['--test','tests/ratification/investor-revision.numerical.cjs']],['before-after',['scripts/investor-before-after.cjs']],['route',['scripts/run-investor-route-tests.cjs']],['bindings',['tests/browser/investor-control-bindings.cjs']],['browser',['tests/browser/unlisted-investor-forecast.js','chrome']]];
+const jobs=[['actual-history',['--test','tests/ratification/investor-actual-history.cjs']],['numerical',['--test','tests/ratification/investor-revision.numerical.cjs']],['before-after',['scripts/investor-before-after.cjs']],['route',['scripts/run-investor-route-tests.cjs']],['bindings',['tests/browser/investor-control-bindings.cjs']],['browser',['tests/browser/unlisted-investor-forecast.js','chrome']],['actual-browser',['tests/browser/investor-actual-history.cjs']]];
 for(const [name,args] of jobs){
   if(hash()!==initial)throw new Error('Source changed during verification; start a fresh immutable run.');
   console.log('Starting '+name);

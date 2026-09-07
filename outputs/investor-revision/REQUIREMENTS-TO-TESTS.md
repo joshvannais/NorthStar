@@ -1,5 +1,11 @@
 # Acceptance requirement → executable evidence
 
+## September 7 fresh-review corrections
+
+Final focused suite:14 tests total, including stale migration-notice replacement when a user explicitly revises the cash basis.
+
+The separate `tests/ratification/investor-actual-history.cjs` has14 focused tests. Total-bank25k→24.7k and legacyusable24k→23.7k both normalize to24.7k bank/23.7k unearmarked with1k restriction; subsequent forecast24.4k/23.4k. Tests preserve raw input values, versioned save/reload, explicit unknown-basis failure, multi-month derived collections, nonreconciling-history rejection, tax/legal protection/payment carry, actual payroll/receipts/known unclassified costs, and unchanged startup bank/loss. `tests/browser/investor-actual-history.cjs` adds44 rendered-meaning assertions at1440/390px: known300total andcashbridge, unknownsplit/staffing, known5kpayroll,100lockedinvestorreceipts, migrationnotice/rawfacts, annualmixedtotal600, exportprovenance andthree-lineopeningbridge. `actual-before-after.json` recomputes oldf149066/current cases. These complement, rather than replace, every original requirement below. Full scalar binding count is now276 (271accepted,5expected visible rejects).
+
 All numerical references below are named `node:test` cases in `tests/ratification/investor-revision.numerical.cjs`; receipts use shorter IDs in `numerical-results.json`. They execute the page's production inline engine in an isolated JavaScript realm, not a rewritten mock model. Browser references are actual installed Chrome interactions, not physical-device approval.
 
 | Requirement | Executed check / receipt | Scope and qualification |

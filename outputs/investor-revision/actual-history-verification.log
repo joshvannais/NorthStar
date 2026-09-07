@@ -1,0 +1,22 @@
+✔ total-bank actual cash excludes no earmarks, protections deducted once (31.3017ms)
+✔ explicit legacy usable basis normalizes balances, preserves original facts, no fake flow (13.0245ms)
+✔ versioned legacy migration is visible and survives save/reload without double adjustment (28.7996ms)
+✔ unversioned ambiguous cash basis fails clearly (8.9426ms)
+✔ unrecognized explicit basis fails, not silently coerced (1.389ms)
+✔ known actual expense total and unknown classification reconcile annual result (9.5383ms)
+✔ known payroll does not invent headcount; locked receipts stay known (9.346ms)
+✔ tax/legal planning protections remain inside actual bank and carry to forecast (19.0612ms)
+✔ multi-month legacy beginning balance and derived collections normalize once (10.1964ms)
+✔ startup default and eligibility retain founder decision (4.0715ms)
+✔ recorded opening legal loss releases protection without changing historical labels (9.3351ms)
+✔ dated forecast tax and legal payments after actuals release matching planning protection once (8.6297ms)
+✔ legacy nonreconciling or varying restriction histories fail without invented adjustment flows (8.3592ms)
+✔ explicitly revised cash basis cannot retain a stale legacy conversion notice (9.6682ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 276.4996

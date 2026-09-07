@@ -1,5 +1,9 @@
 # Controlling founder addendum before freeze
 
+## Review correction authority — September 7
+
+The terminal fresh review of f149066 returned NEEDS REVISION. Parent authorized the same isolated sole writer to correct actual-history cash-basis migration and known actual cost/payroll/receipt presentation, plus a scannable three-line default opening bridge and warning summaries with full disclosures. Preserve original imported facts and independent-review artifacts, require explicit authority for ambiguous bases, label unclassified costs and missing staffing honestly, and retain the approved $25k − $15k = $10k opening decision. No additional header change. The same reviewer must verify the new exact frozen head before root's conditional release. No writer push/deployment/provider/payment/legal-document authority is added.
+
 ## Current instruction — forecast prelaunch payment (supersedes reserve-only default)
 
 Founder: “Yes. 15k as a forecast pre launch expense. 10k cash can be the company cash reserve for month 1.”

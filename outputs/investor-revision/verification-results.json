@@ -1,35 +1,47 @@
 {
-  "sourceSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+  "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
   "completed": true,
   "checks": [
     {
+      "name": "actual-history",
+      "exitCode": 0,
+      "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
+      "error": null
+    },
+    {
       "name": "numerical",
       "exitCode": 0,
-      "sourceSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+      "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
       "error": null
     },
     {
       "name": "before-after",
       "exitCode": 0,
-      "sourceSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+      "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
       "error": null
     },
     {
       "name": "route",
       "exitCode": 0,
-      "sourceSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+      "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
       "error": null
     },
     {
       "name": "bindings",
       "exitCode": 0,
-      "sourceSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+      "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
       "error": null
     },
     {
       "name": "browser",
       "exitCode": 0,
-      "sourceSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+      "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
+      "error": null
+    },
+    {
+      "name": "actual-browser",
+      "exitCode": 0,
+      "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
       "error": null
     }
   ]

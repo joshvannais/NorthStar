@@ -20,7 +20,7 @@ for (const [key, value] of Object.entries({ engine: scripts[0], ui: scripts[1], 
 }
 fs.writeFileSync(file, html);
 const manifest = { source: 'public/unlisted/investor-forecast.html', baseCommit: 'a5bc90ddede95d0a88e6f857f8c75c9637dd8245',
-  priorRevisionCommit: 'f5e4d52c72e52f890feda6b0640a18b48d9a909a',
+  priorRevisionCommit: 'f14906687b2c45398073e5c195d90fd0569f4b22',
   baselineHtmlSha256: 'c7207560deb15cf1c86c569187a9e0e9c0761249bd6d83b68d0fe1ee18a2c7db',
   engineSha256: sha(scripts[0]), uiSha256: sha(scripts[1]), workerSha256: sha(worker), htmlSha256: sha(html), bytes: Buffer.byteLength(html) };
 const out = path.resolve(__dirname,'../outputs/investor-revision');

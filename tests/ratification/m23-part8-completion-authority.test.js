@@ -7,7 +7,7 @@ const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '../..');
 const BASE = 'fce4000f22c08f5f74712d37439286a4c601b1a7';
-const AUDITED_HEAD = 'b0de1aa61696b0d8d3509d6c3e283c020306084f';
+const AUDITED_HEAD = '13f9348312a354835b7a56eddc133d00492b7b53';
 const MIGRATION = 'migrations/049_canonical_completion_reopening_authority.sql';
 const MIGRATION_BYTES = 79646;
 const MIGRATION_SHA256 = '387188bf8aeaddef56f23eb7542a7a7c0efb05c55b9074cad045b0a0eecd2fdf';
@@ -16,12 +16,16 @@ const CORRECTION = 'migrations/050_canonical_completion_source_read_authority.sq
 const CORRECTION_BYTES = 4226;
 const CORRECTION_SHA256 = '34c3765845fde3d57cb95a09f4bdd6e71f5e3e27ba09f1822438db8ac9dcb22e';
 const CORRECTION_BLOB = '8775249791e51758998dc94b002970788d30d8a7';
+const FINAL_CORRECTION = 'migrations/051_canonical_completion_type_and_provenance_authority.sql';
+const FINAL_BYTES = 2961;
+const FINAL_SHA256 = '2efc03578054a94ee0db22f2b603dd0d38df9584950e8cc94c5db315995c3f57';
+const FINAL_BLOB = '88cc4e6b5674259951a6fcc6232a52e7f2653682';
 const read = name => fs.readFileSync(path.join(ROOT, name), 'utf8');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const git = args => execFileSync('git', args, { cwd: ROOT });
 
 describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
-  test('preserves all 46 released migration blobs and the audited 049, then adds only exact migration 050', () => {
+  test('preserves all 48 audited migration blobs through 050 and adds exact migration 051', () => {
     const names = git(['ls-tree', '-r', '--name-only', BASE, 'migrations']).toString('utf8')
       .trim().split('\n').filter(name => name.endsWith('.sql'));
     expect(names).toHaveLength(46);
@@ -35,7 +39,7 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
 
     const auditedNames = git(['ls-tree', '-r', '--name-only', AUDITED_HEAD, 'migrations'])
       .toString('utf8').trim().split('\n').filter(name => name.endsWith('.sql'));
-    expect(auditedNames).toHaveLength(47);
+    expect(auditedNames).toHaveLength(48);
     for (const name of auditedNames) {
       expect(hash(fs.readFileSync(path.join(ROOT, name)))).toBe(
         hash(git(['show', `${AUDITED_HEAD}:${name}`]))
@@ -45,13 +49,19 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
     expect(correctionBytes.length).toBe(CORRECTION_BYTES);
     expect(hash(correctionBytes)).toBe(CORRECTION_SHA256);
     expect(git(['hash-object', CORRECTION]).toString('utf8').trim()).toBe(CORRECTION_BLOB);
+    const finalBytes = fs.readFileSync(path.join(ROOT, FINAL_CORRECTION));
+    expect(finalBytes.length).toBe(FINAL_BYTES);
+    expect(hash(finalBytes)).toBe(FINAL_SHA256);
+    expect(git(['hash-object', FINAL_CORRECTION]).toString('utf8').trim()).toBe(FINAL_BLOB);
   });
 
   test('the authority and evidence seals agree on exact base, migration, and writer-only status', () => {
     const authority = read('docs/operations/COMPLETION_REOPENING_AUTHORITY.md');
     const roadmap = read('docs/roadmap/MISSION_23_OPERATIONS.md');
     const identity = read('outputs/m23-part8-writer/MIGRATION_IDENTITY.md');
-    for (const value of [BASE, MIGRATION_SHA256, MIGRATION_BLOB, String(MIGRATION_BYTES)]) {
+    for (const value of [BASE, AUDITED_HEAD, MIGRATION_SHA256, MIGRATION_BLOB, String(MIGRATION_BYTES),
+      CORRECTION_SHA256, CORRECTION_BLOB, String(CORRECTION_BYTES),
+      FINAL_SHA256, FINAL_BLOB, String(FINAL_BYTES)]) {
       expect(identity).toContain(value);
     }
     expect(authority).toContain('Completion is a separately authorized operational decision.');
@@ -106,6 +116,21 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
     expect(sql).not.toMatch(/(?:INSERT INTO|UPDATE|DELETE FROM|TRUNCATE)\s+public\./i);
   });
 
+  test('the type wrapper precedes the private implementation and startup narrows transcript provenance privileges', () => {
+    const sql = read(FINAL_CORRECTION);
+    expect(sql).toContain('RENAME TO canonical_completion_mutate_v049');
+    expect(sql).toContain("jsonb_typeof(input_value->'nextAction') IS DISTINCT FROM 'string'");
+    expect(sql).toContain("jsonb_typeof(input_value->'annotation'->'note') IS DISTINCT FROM 'string'");
+    expect(sql).toContain("jsonb_typeof(input_value->'annotation'->'nextAction') IS DISTINCT FROM 'null'");
+    expect(sql.indexOf('RAISE EXCEPTION')).toBeLessThan(sql.indexOf('RETURN public.canonical_completion_mutate_v049'));
+    expect(sql).toContain('canonical_completion_input_invalid');
+    const grants = read('src/completion/transcriptDatabaseAuthority.js');
+    expect(grants).toContain('REVOKE UPDATE, DELETE ON TABLE');
+    expect(grants).toContain('has_column_privilege');
+    expect(grants).toContain('GRANT UPDATE (transcript_text)');
+    expect(read('src/db.js')).toContain("require('./completion/transcriptDatabaseAuthority').grantAndVerify");
+  });
+
   test('the candidate changes only the bounded backend, tests, authority docs, and writer evidence', () => {
     for (const name of ['package.json', 'package-lock.json']) {
       expect(git(['hash-object', name]).toString('utf8').trim())
@@ -116,10 +141,12 @@ describe('Mission 23 Part 8 frozen completion and reopening contract', () => {
     expect(git(['ls-files', '--others', '--exclude-standard', '--', 'public', 'views', 'client', 'frontend', '.github'])
       .toString('utf8').trim()).toBe('');
     for (const name of ['src/completion/contract.js', 'src/completion/repository.js',
-      'src/completion/databaseAuthority.js', MIGRATION, CORRECTION,
+      'src/completion/databaseAuthority.js', 'src/completion/transcriptDatabaseAuthority.js',
+      MIGRATION, CORRECTION, FINAL_CORRECTION,
       'tests/integration/m23-part8-completion-postgres.test.js',
       'tests/integration/m23-part8-completion-migration.test.js',
-      'tests/integration/m23-part8-completion-source-migration.test.js']) {
+      'tests/integration/m23-part8-completion-source-migration.test.js',
+      'tests/integration/m23-part8-completion-type-migration.test.js']) {
       expect(fs.existsSync(path.join(ROOT, name))).toBe(true);
     }
   });

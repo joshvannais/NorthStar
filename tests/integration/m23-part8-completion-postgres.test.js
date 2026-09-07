@@ -288,7 +288,7 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     })).body.data;
   }
 
-  async function directCompletion(input, overrides = {}) {
+  async function directCompletion(input, overrides = {}, commit = false) {
     const value = { ...input, ...overrides };
     const document = {
       contractVersion: value.contractVersion,
@@ -307,7 +307,7 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
       await client.query('SELECT pg_advisory_lock_shared(230004,4)');
       await client.query('SELECT pg_advisory_lock(230007,hashtext($1))', [identity]);
       await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      return await client.query(
+      const result = await client.query(
         `SELECT canonical_completion_mutate(
            $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,
            $8::bigint,$9::text,$10::bigint,$11::text,$12::jsonb,$13::text,$14::text,$15::text
@@ -318,6 +318,8 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
           value.expectedAssignmentDigest, document, value.idempotencyKey, value.reason,
           'm23p8-direct']
       );
+      if (commit) await client.query('COMMIT');
+      return result;
     } finally {
       await client.query('ROLLBACK').catch(() => {});
       await client.query('SELECT pg_advisory_unlock(230007,hashtext($1))', [identity]).catch(() => {});
@@ -325,6 +327,115 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
       client.release();
     }
   }
+
+  test('final runtime ACLs freeze provenance and replacement while retaining validated ingestion and scheduling locks', async () => {
+    const context = await createExecution();
+    const transcript = (await ownerPool.query(
+      'SELECT t.* FROM canonical_transcripts t JOIN canonical_field_executions e ON e.operation_id=t.operation_id AND e.organization_id=t.organization_id WHERE e.id=$1',
+      [context.execution.id]
+    )).rows[0];
+    for (const column of ['id', 'organization_id', 'operation_id', 'graph_id', 'customer_id',
+      'source', 'source_version', 'external_call_id', 'external_transcript_id', 'normalized_fingerprint',
+      'occurred_at', 'created_at']) {
+      expect((await ownerPool.query(
+        "SELECT has_column_privilege($1,'canonical_transcripts',$2,'UPDATE') AS permitted",
+        [roles.runtime, column]
+      )).rows[0].permitted).toBe(false);
+      // A no-op assignment is enough to prove denial, without relabeling data.
+      await expect(runtimePool.query(
+        `UPDATE canonical_transcripts SET ${quote(column)}=${quote(column)} WHERE id=$1`, [transcript.id]
+      )).rejects.toMatchObject({ code: '42501' });
+    }
+    await expect(runtimePool.query('DELETE FROM canonical_transcripts WHERE id=$1', [transcript.id]))
+      .rejects.toMatchObject({ code: '42501' });
+    expect((await ownerPool.query('SELECT * FROM canonical_transcripts WHERE id=$1', [transcript.id])).rows[0])
+      .toEqual(transcript);
+    // The existing conflict/approval/overview row-lock contract remains usable.
+    expect((await runtimePool.query('SELECT id FROM canonical_transcripts WHERE id=$1 FOR SHARE', [transcript.id])).rowCount)
+      .toBe(1);
+    const graphService = require('../../src/services/canonicalGraphService');
+    for (const source of ['lead', 'retell', 'voice', 'demo', 'simulation']) {
+      const input = {
+        tenantContext: { organizationId: IDS.org }, idempotencyKey: crypto.randomUUID(),
+        source, customer: { name: 'Provenance ingestion control' },
+        transcript: [{ speaker: 'customer', text: 'Please record the requested service.' }],
+        service: { key: 'general', scope: {} }, facts: [],
+      };
+      const result = await graphService.executeCanonicalGraph(runtimePool, input, {});
+      expect(result.status).toBe(201);
+      const replay = await graphService.executeCanonicalGraph(runtimePool, input, {});
+      expect(replay.replayed).toBe(true);
+      expect(replay.body).toEqual(result.body);
+    }
+    const count = (await ownerPool.query('SELECT count(*)::int AS count FROM canonical_transcripts')).rows[0].count;
+    expect((await graphService.executeCanonicalGraph(runtimePool, {
+      tenantContext: { organizationId: IDS.org }, idempotencyKey: crypto.randomUUID(), source: 'unknown',
+    }, {})).status).toBe(400);
+    expect((await ownerPool.query('SELECT count(*)::int AS count FROM canonical_transcripts')).rows[0].count).toBe(count);
+  }, 120000);
+
+  test('direct mutation rejects non-string JSON before writes and commits valid strings and exact replay', async () => {
+    const context = await createExecution();
+    const proposed = await proposal(context);
+    const approved = await mutate(context, 'approve_completion', { proposal: pin(proposed.body.completionRecord) });
+    const approval = approved.body.completionRecord;
+    const snapshot = async () => {
+      const counts = {};
+      for (const table of ['canonical_completion_records', 'canonical_completion_events',
+        'canonical_completion_audit_events', 'canonical_completion_idempotency',
+        'canonical_field_execution_events', 'canonical_field_execution_revisions',
+        'canonical_field_execution_audit_events', 'canonical_field_execution_idempotency']) {
+        counts[table] = (await ownerPool.query(
+          `SELECT count(*)::int AS count FROM ${table} WHERE execution_id=$1`, [context.execution.id]
+        )).rows[0].count;
+      }
+      counts.execution = (await ownerPool.query(
+        'SELECT * FROM canonical_field_executions WHERE id=$1', [context.execution.id]
+      )).rows[0];
+      return counts;
+    };
+    const before = await snapshot();
+    for (const field of ['note', 'annotationNextAction', 'reopeningNextAction']) {
+      for (const value of [false, true, 0, 42, {}, [], ['Valid text'], null, undefined]) {
+        if (field === 'annotationNextAction' && value === null) continue;
+        const action = field === 'reopeningNextAction' ? 'reopen_execution' : 'correct_completion';
+        const input = completionInput(context, action, action === 'reopen_execution'
+          ? { completion: pin(approval), nextAction: 'Return and record the observed condition.' }
+          : { record: pin(approval), annotation: { note: 'Clarify the recorded condition.', nextAction: null } });
+        if (field === 'reopeningNextAction') input.nextAction = value;
+        else input.annotation[field === 'note' ? 'note' : 'nextAction'] = value;
+        await expect(directCompletion(input, {}, true)).rejects.toMatchObject({
+          code: '22023', constraint: 'canonical_completion_input_invalid',
+        });
+        expect(await snapshot()).toEqual(before);
+      }
+    }
+    let record = approval;
+    for (const nextAction of [null, 'Review the clarified observation.']) {
+      const input = completionInput(context, 'correct_completion', {
+        record: pin(record), annotation: { note: 'Clarified observation remains a string.', nextAction },
+      });
+      const result = (await directCompletion(input, {}, true)).rows[0].result;
+      expect(result.status).toBe(200);
+      const replay = (await directCompletion(input, {}, true)).rows[0].result;
+      expect(replay.replayed).toBe(true);
+      expect(replay.body).toEqual(result.body);
+      record = result.body.completionRecord;
+      const stored = (await ownerPool.query(
+        "SELECT jsonb_typeof(document->'annotation'->'note') AS note_type FROM canonical_completion_records WHERE id=$1",
+        [record.id]
+      )).rows[0];
+      expect(stored.note_type).toBe('string');
+    }
+    const input = completionInput(context, 'reopen_execution', {
+      completion: pin(approval), nextAction: 'Return and record the observed condition.',
+    });
+    const reopened = (await directCompletion(input, {}, true)).rows[0].result;
+    expect(reopened.body.data.lifecycleState).toBe('reopened');
+    const replay = (await directCompletion(input, {}, true)).rows[0].result;
+    expect(replay.replayed).toBe(true);
+    expect(replay.body).toEqual(reopened.body);
+  }, 120000);
 
   test('completion is never inferred; real pinned checklist gates must pass before an explicit proposal', async () => {
     const context = await createExecution();

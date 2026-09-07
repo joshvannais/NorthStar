@@ -1261,6 +1261,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   await require('./fieldEvidence/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./progress/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./completion/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./completion/transcriptDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   const wrongRelationOwners = await client.query(
     `SELECT namespace.nspname, relation.relname,
             pg_get_userbyid(relation.relowner) AS owner
@@ -1304,6 +1305,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          WHERE namespace.nspname = 'public'
            AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
            AND relation.relname <> '_migrations'
+           AND (relation.relname <> 'canonical_transcripts'
+             OR to_regprocedure('public.canonical_completion_mutate_v049(uuid,uuid,text,uuid,text,uuid,text,bigint,text,bigint,text,jsonb,text,text,text)') IS NULL)
            AND relation.relname NOT LIKE 'canonical_equipment_%'
            AND relation.relname NOT LIKE 'canonical_field_evidence_%'
            AND relation.relname NOT LIKE 'canonical_progress_%'

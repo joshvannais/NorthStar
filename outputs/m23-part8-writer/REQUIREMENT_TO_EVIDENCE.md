@@ -1,6 +1,7 @@
 # Mission 23 Part 8 requirement-to-evidence map
 
-Writer evidence only; independent exact-head audit remains required.
+Writer evidence only, corrected from audited parent
+`13f9348312a354835b7a56eddc133d00492b7b53`; independent new-head audit remains required.
 
 | Requirement | Implementation evidence | Verification evidence |
 | --- | --- | --- |
@@ -16,5 +17,9 @@ Writer evidence only; independent exact-head audit remains required.
 | Tenant, actor, role and revocation isolation | Existing field-execution actor/scope authority is reloaded before mutation/read/replay | Member proposal/self-withdrawal, member approval denial, cross-tenant 404, revoked-session replay/read denial |
 | Atomic audit and least privilege | Same-transaction completion and lifecycle evidence, deferred completeness; runtime gets exactly mutate/read | Synthetic audit trigger rolls back all rows/current state; runtime table/helper/DDL/role access denied; migration grant verification |
 | Strict mounted HTTP boundary | Completion action path added to raw-body owner; closed contract and queryless read | Production router accepts exact request, returns private/no-store, rejects query authority and duplicate JSON keys |
-| Migration safety | One additive 049; no released migration edits; runtime grants verified after migration | Interruption rollback, retry once, zero-op restart, valid constraints, no PUBLIC helper execution on PostgreSQL 18.4 |
+| Completion provenance reads/replay | Migration 050 positive canonical source classifier before history projection; 049 mutation source gate retained through private wrapper | Full Unicode White_Space demo/simulation matrix, malformed/unknown denials, valid lead/retell/voice and mounted/private read plus replay |
+| Existing transcript provenance cannot be relabeled/replaced | Migration 051 and transcriptDatabaseAuthority after every broad startup grant; table/column UPDATE revoked except non-provenance text; DELETE denied; unique operation identity | Final-schema effective ACL and no-op denied UPDATE for all twelve provenance/binding columns, DELETE denial, row unchanged; stale grants removed on zero-op startup |
+| Legitimate ingestion and scheduling locks | Unchanged canonicalGraphService validation/atomic INSERT and all five source wrappers; retained text column UPDATE for FOR SHARE | Runtime ingestion and replay for all five valid sources, normalizer invalid-source rejection, direct FOR SHARE, retained scheduling-wide regression |
+| JSON string types at SQL entry | Migration 051 wrapper before private 049 implementation; nullable annotation nextAction only | Direct-entry Boolean/number/object/array/missing/invalid-null rejection with execution plus eight evidence/receipt counts unchanged; string/null correction and string reopening commit/replay |
+| Migration safety | Additive 049, 050 and 051; all 001–050 byte-identical to audited parent; final grants verified after migration | Separate 049/050/051 interruption rollback/retry/zero-op lifecycle tests; exact 49-file final ledger; original helper private, only two completion runtime entries |
 | Scope containment | Authority doc and route/source diff contain no UI, provider, pricing, customer, schedule or downstream mutation | Protected-path/diff ratification and no dependency/lockfile change |

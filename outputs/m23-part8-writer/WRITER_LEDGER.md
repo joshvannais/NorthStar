@@ -1,65 +1,58 @@
-# Mission 23 Part 8 writer ledger
+# Mission 23 Part 8 second-correction writer ledger
 
-Status: implementation writer candidate only. Stop after one exact draft-PR
-handoff for a different fresh independent read-only auditor.
+Status: writer candidate only. A different fresh immutable-head independent
+audit is required after publication. No merge, deployment or next part.
 
-## Preflight and provenance
+## Provenance and one-writer boundary
 
-The canonical executor task was confirmed readable before action. The complete
-Mission 23 roadmap, Parts 1–7 authority/source/migrations/tests, supplied Part 7
-release state, and applicable workspace instructions were read. No repository
-or WSL ancestor `AGENTS.md` was present.
+Canonical executor was confirmed readable before edits; task inventory and
+child-agent inventory showed no other active correction writer. The complete
+terminal re-audit report for 13f9348 was reread. It reports two P3 findings:
+runtime transcript provenance UPDATE and coerced non-string completion text.
+No applicable AGENTS.md or SECURITY.md was found in the checkout/ancestors.
 
-Remote `main`, local base, and the requested immutable base all matched
-`fce4000f22c08f5f74712d37439286a4c601b1a7`, the normal merge of PR #171.
-Full-history object verification passed. No Part 8 branch, pull request,
-migration 049, competing visible writer, or duplicate task existed at preflight.
-The saved `C:\Dev\NorthStar` checkout was not edited.
+Terminal re-audit report SHA-256:
+c4bf267b2fe695a32dcaf7f948dc10477d7270d6e8917c45a1ab1341e1b2166a.
 
-One isolated full-history WSL checkout:
-`/tmp/northstar-m23p8-01a077a6`. One branch:
-`review/m23-part8-completion-reopening`. No amend, rebase, reset, force-push,
-squash, merge, deployment, branch deletion, or history rewrite is authorized.
+- Repository/PR: joshvannais/NorthStar #172, same open draft, unmerged.
+- Branch: review/m23-part8-completion-reopening.
+- Base: fce4000f22c08f5f74712d37439286a4c601b1a7.
+- Audited parent: 13f9348312a354835b7a56eddc133d00492b7b53.
+- Parent tree: 21cf2d47b3403eaa351db3d57f78fa0484f3b9f3.
+- Clean full-history writer checkout:
+  C:/Users/joshv/Documents/Codex/2026-09-06/northstar-m23-part8-correction/work/writer-pr172-final.
 
-## Bounded implementation
+This stage uses one ordinary additive commit on the same branch. No amend,
+rebase, reset, force push, history rewrite, branch deletion, merge or deploy.
+The old head was already pushed; it is not the new corrected deliverable.
+Exact new commit/tree and remote readback belong to the postcommit handoff.
 
-Allowed scope is one additive migration, a completion contract/repository/grant
-module, two mounted field-execution routes, the existing raw-body matcher and
-startup runtime-grant extension, focused/mounted/migration/ratification tests,
-Mission 23 status reconciliation, and non-overwriting writer evidence.
+## Correction and review
 
-Implemented actions are proposal, approval, withdrawal, explicit cancellation,
-reopening, explicit resume-after-reopen, and append-only annotation correction.
-The gate snapshot covers exact required checklist/inspection/file pins and
-deterministic labor/material/progress/field-evidence/equipment commitments. The
-authority preserves exact actor, session, tenant, assignment, execution, audit,
-idempotency, serializable concurrency, and immutable-history boundaries.
+Migration 051 privately retains the 049 implementation and inserts strict JSON
+type checks before its textual validation, authorization, replay and writes.
+Startup removes table/column UPDATE and DELETE on transcripts; only the
+non-provenance transcript_text UPDATE privilege remains for scheduling locks.
+The original validated atomic ingestion and its five sources remain unchanged.
+Unique tenant/operation identity plus denied deletion/identity UPDATE freezes
+existing provenance without changing legacy owner fixtures or ingestion APIs.
 
-Unchanged: every released migration 001–048; rendered UI/browser assets and
-design system; provider integrations/configuration; dependency/lock manifests;
-CI/deployment workflows; scheduling, quote, invoice, payment, customer contact,
-and Mission 24+ authority. Part 9 retains all operational presentation work.
+The fix-finding workflow supplied one fresh read-only prepatch compatibility
+investigator and one fresh read-only candidate reviewer. The parent traced the
+boundary independently. Candidate review found no concrete surviving bypass
+or regression; neither review is the required independent PR audit. No old-head
+exploit was reproduced in this stage; defensive final-schema denial checks are
+the focused substitute. Rejected audit hypotheses and Windows-invalid filename
+cleanup remain outside scope.
 
-## Reproduction environment
+## Evidence and limits
 
-- Node.js 24.19.0 from the bundled Codex runtime.
-- Existing dependency inventory from the saved NorthStar package; nothing was
-  downloaded and no manifest or lockfile changed.
-- Disposable PostgreSQL 18.4, UTF8, UTC, locale `C`, checksums enabled,
-  loopback-only port 55499, with distinct non-superuser owner/runtime roles.
-- Data directory:
-  `C:/Users/joshv/.codex/visualizations/2026/09/06/01a077a6-2efb-7453-ad53-7b1a52051db5/pg18-m23p8`.
-
-An initial provisional PostgreSQL 17 cluster showed the released migration
-runner's unsupported restart behavior and, at deferred commit, the reason that
-the repository's mounted suites require 18.x. An existing local PostgreSQL 18.4
-distribution was then used. No software or provider access was downloaded.
-Only results from the required 18.4 runtime are acceptance evidence.
-
-## Evidence boundary
-
-All tests and migration lifecycle runs are local writer evidence. They do not
-approve this implementation or prove production state. The exact migration
-identity is in `MIGRATION_IDENTITY.md`, requirements in
-`REQUIREMENT_TO_EVIDENCE.md`, results in `TEST_RESULTS.md`, and exclusions in
-`UNAVAILABLE_EVIDENCE.md`.
+All migrations 001–050 are byte-identical. Migration identity, requirement
+mapping, tests and unavailable evidence are reconciled in the adjacent files.
+Local Node 24.18.1 and disposable PostgreSQL 18.4 supply writer evidence only.
+No package/lock, UI, provider or deployment workflow changes are introduced.
+Final cleanup and tested-blob/commit readback are sealed after the final run.
+The complete Mission 23 matrix passed 28/488 and the broader matrix passed
+7/92. No runtime/test file changed between those runs and commit freeze;
+only writer result metadata was finalized afterward. No repeated full suite
+is used as a substitute for the required independent audit.

@@ -133,11 +133,35 @@ and PostgreSQL boundaries.
 
 ## Migration and release evidence
 
-Migration 049 is additive; migrations 001–048 remain unchanged. Its exact Git
+Migration 049 is additive. Forward corrections 050 and 051 preserve every
+migration 001–050 byte-for-byte against audited parent
+`13f9348312a354835b7a56eddc133d00492b7b53`. Their exact Git
 blob, byte count, and SHA-256 are sealed in
 [MIGRATION_IDENTITY.md](../../outputs/m23-part8-writer/MIGRATION_IDENTITY.md).
 The requirement map and local writer results are in the adjacent Part 8 writer
 evidence directory.
+
+Migration 050 gates completion reads with the canonical positive production
+source classifier before history projection; mutation and replay retain that
+gate. Migration 051 wraps the private unchanged 049 mutation implementation:
+correction annotation.note and reopening nextAction must be JSON strings;
+annotation.nextAction may be JSON null or a string, never a coerced scalar,
+object, array, or missing property. Existing textual validation and error
+semantics follow before any writes. Only the two public completion entries
+remain runtime executable; the renamed 049 implementation is private.
+
+After the runner's broad grants on every startup, transcript authority revokes
+table UPDATE/DELETE and all column UPDATE grants from PUBLIC and runtime.
+Only UPDATE(transcript_text) remains for scheduling's existing FOR SHARE row
+locks. Source, source version, fingerprints, external identity, tenant, graph,
+operation, customer and timestamps cannot be updated by runtime, and denied
+DELETE plus the unique organization/operation key prevents replacement.
+SELECT and INSERT remain for existing canonical graph ingestion: its shared
+normalizer and wrappers validate the five lead/retell/voice/demo/simulation
+sources before atomic graph creation and replay. This does not claim source
+authenticity against a database owner or permission to introduce new graphs
+through arbitrary SQL; the bounded correction freezes existing provenance.
+No ingestion API, schema vocabulary, or legacy owner data is rewritten.
 
 Disposable PostgreSQL evidence is local writer evidence only. No production
 database, Railway service, provider, private tenant rows, credentials, hosted

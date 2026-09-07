@@ -1,0 +1,50 @@
+{
+  "sourceSha256": "4603c93fb9cd624bf7ca3748fe2d064f30104cc57fca4548ccd741250b3b266e",
+  "priorHead": "90bd1de43c139e6fc903843726a17ce459b68fba",
+  "priorHtmlSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
+  "scopeChecks": {
+    "engineOutsideCreateDefaultConfigIdentical": true,
+    "uiIdentical": true,
+    "cssIdentical": true,
+    "headerIdentical": true
+  },
+  "retainedBroadChecks": {
+    "head": "90bd1de43c139e6fc903843726a17ce459b68fba",
+    "sourceSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
+    "bindingCount": 276,
+    "originalBrowserAssertions": 2544,
+    "rerunOnThisRevision": false
+  },
+  "testFirst": {
+    "passed": 14,
+    "failed": 3,
+    "sourceHead": "90bd1de43c139e6fc903843726a17ce459b68fba"
+  },
+  "completed": true,
+  "checks": [
+    {
+      "name": "actual-history",
+      "exitCode": 0,
+      "sourceSha256": "4603c93fb9cd624bf7ca3748fe2d064f30104cc57fca4548ccd741250b3b266e",
+      "error": null
+    },
+    {
+      "name": "numerical",
+      "exitCode": 0,
+      "sourceSha256": "4603c93fb9cd624bf7ca3748fe2d064f30104cc57fca4548ccd741250b3b266e",
+      "error": null
+    },
+    {
+      "name": "route",
+      "exitCode": 0,
+      "sourceSha256": "4603c93fb9cd624bf7ca3748fe2d064f30104cc57fca4548ccd741250b3b266e",
+      "error": null
+    },
+    {
+      "name": "actual-browser",
+      "exitCode": 0,
+      "sourceSha256": "4603c93fb9cd624bf7ca3748fe2d064f30104cc57fca4548ccd741250b3b266e",
+      "error": null
+    }
+  ]
+}

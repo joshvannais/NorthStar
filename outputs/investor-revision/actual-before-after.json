@@ -1,0 +1,513 @@
+{
+  "reviewedHead": "f14906687b2c45398073e5c195d90fd0569f4b22",
+  "reviewedHtmlSha256": "d4010b01bf1757154536cb2d190da6de09ef2744efa2b27ba6fa2f7a27e1c727",
+  "revisedHtmlSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
+  "testFirstReceipt": "Nine focused assertions failed on f149 before implementation; startup cash/loss control passed. Corrected test uses signed earningsEligibilityBalance, not its zero-clamped available-for-distribution counterpart.",
+  "cases": [
+    {
+      "name": "explicit total bank",
+      "input": {
+        "forecastMonths": 2,
+        "restrictedFunds": 1000,
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "founder": {
+            "compensationPolicy": "manual",
+            "manualMonthlyCompensation": 0
+          }
+        },
+        "cash": {
+          "forecastPrelaunchLegalPayment": 0,
+          "legalReviewReserve": 0,
+          "actualHistoryCashBasis": "total_bank"
+        },
+        "actuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 300,
+            "cashCollections": 0,
+            "beginningCash": 25000,
+            "endingCash": 24700,
+            "additionalFunding": 0,
+            "investorDistribution": 0,
+            "otherCashOutflows": 0
+          }
+        ]
+      },
+      "before": {
+        "error": "Actual Month 1 beginning cash must reconcile to configured investment, verified existing cash, legal/readiness cost, and restricted funds."
+      },
+      "after": {
+        "openingBank": 25000,
+        "rawActuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 300,
+            "cashCollections": 0,
+            "beginningCash": 25000,
+            "endingCash": 24700,
+            "additionalFunding": 0,
+            "investorDistribution": 0,
+            "otherCashOutflows": 0
+          }
+        ],
+        "migration": "Explicit total-bank cash basis v1: no balance offset. Original actual inputs remain unchanged; protections affect availability, not bank balances.",
+        "rows": [
+          {
+            "month": 1,
+            "status": "ACTUAL",
+            "locked": true,
+            "beginningCash": 25000,
+            "endingCash": 24700,
+            "unearmarkedOperatingCash": 23700,
+            "originalBeginningCash": 25000,
+            "originalEndingCash": 24700,
+            "cashBasisAdjustment": 0,
+            "actualCashBasis": "total_bank",
+            "totalModeledOperatingCosts": 300,
+            "unclassifiedOperatingCosts": 300,
+            "variableOperatingCosts": null,
+            "fixedCommittedOperatingCosts": null,
+            "monthlyPayroll": null,
+            "staffingEvidenceStatus": "NOT_PROVIDED",
+            "investorDistribution": 0,
+            "cashReconciliationDifference": 0
+          },
+          {
+            "month": 2,
+            "status": "FORECAST",
+            "locked": false,
+            "beginningCash": 24700,
+            "endingCash": 24400,
+            "unearmarkedOperatingCash": 23400,
+            "totalModeledOperatingCosts": 300,
+            "variableOperatingCosts": 0,
+            "fixedCommittedOperatingCosts": 300,
+            "monthlyPayroll": 0,
+            "investorDistribution": 0,
+            "cashReconciliationDifference": 0
+          }
+        ],
+        "annual": [
+          {
+            "status": "MIXED ACTUAL / FORECAST",
+            "totalCosts": 600,
+            "unclassified": 300,
+            "operatingProfit": -600,
+            "endingCash": 24400
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy usable versioned",
+      "input": {
+        "forecastMonths": 2,
+        "restrictedFunds": 1000,
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "founder": {
+            "compensationPolicy": "manual",
+            "manualMonthlyCompensation": 0
+          }
+        },
+        "cash": {
+          "forecastPrelaunchLegalPayment": 0,
+          "legalReviewReserve": 0
+        },
+        "actuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 300,
+            "cashCollections": 0,
+            "beginningCash": 24000,
+            "endingCash": 23700,
+            "additionalFunding": 0,
+            "investorDistribution": 0,
+            "otherCashOutflows": 0
+          }
+        ],
+        "version": "3.4.1"
+      },
+      "before": {
+        "openingBank": 24000,
+        "rawActuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 300,
+            "cashCollections": 0,
+            "beginningCash": 24000,
+            "endingCash": 23700,
+            "additionalFunding": 0,
+            "investorDistribution": 0,
+            "otherCashOutflows": 0
+          }
+        ],
+        "rows": [
+          {
+            "month": 1,
+            "status": "ACTUAL",
+            "locked": true,
+            "beginningCash": 24000,
+            "endingCash": 23700,
+            "monthlyPayroll": null,
+            "investorDistribution": 0
+          },
+          {
+            "month": 2,
+            "status": "FORECAST",
+            "locked": false,
+            "beginningCash": 23700,
+            "endingCash": 23400,
+            "unearmarkedOperatingCash": 22400,
+            "totalModeledOperatingCosts": 300,
+            "variableOperatingCosts": 0,
+            "fixedCommittedOperatingCosts": 300,
+            "monthlyPayroll": 0,
+            "investorDistribution": 0,
+            "cashReconciliationDifference": 0
+          }
+        ],
+        "annual": [
+          {
+            "totalCosts": null,
+            "operatingProfit": -600,
+            "endingCash": 23400
+          }
+        ]
+      },
+      "after": {
+        "openingBank": 25000,
+        "rawActuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 300,
+            "cashCollections": 0,
+            "beginningCash": 24000,
+            "endingCash": 23700,
+            "additionalFunding": 0,
+            "investorDistribution": 0,
+            "otherCashOutflows": 0
+          }
+        ],
+        "migration": "Versioned legacy cash-basis normalization v1: original actual balances remain unchanged in saved inputs. Result bank balances add back only configured restricted funds (1000); this is not financing or a payment. Confirm the legacy restriction was constant throughout history.",
+        "rows": [
+          {
+            "month": 1,
+            "status": "ACTUAL",
+            "locked": true,
+            "beginningCash": 25000,
+            "endingCash": 24700,
+            "unearmarkedOperatingCash": 23700,
+            "originalBeginningCash": 24000,
+            "originalEndingCash": 23700,
+            "cashBasisAdjustment": 1000,
+            "actualCashBasis": "legacy_usable_excluding_restricted",
+            "totalModeledOperatingCosts": 300,
+            "unclassifiedOperatingCosts": 300,
+            "variableOperatingCosts": null,
+            "fixedCommittedOperatingCosts": null,
+            "monthlyPayroll": null,
+            "staffingEvidenceStatus": "NOT_PROVIDED",
+            "investorDistribution": 0,
+            "cashReconciliationDifference": 0
+          },
+          {
+            "month": 2,
+            "status": "FORECAST",
+            "locked": false,
+            "beginningCash": 24700,
+            "endingCash": 24400,
+            "unearmarkedOperatingCash": 23400,
+            "totalModeledOperatingCosts": 300,
+            "variableOperatingCosts": 0,
+            "fixedCommittedOperatingCosts": 300,
+            "monthlyPayroll": 0,
+            "investorDistribution": 0,
+            "cashReconciliationDifference": 0
+          }
+        ],
+        "annual": [
+          {
+            "status": "MIXED ACTUAL / FORECAST",
+            "totalCosts": 600,
+            "unclassified": 300,
+            "operatingProfit": -600,
+            "endingCash": 24400
+          }
+        ]
+      }
+    },
+    {
+      "name": "known payroll and investor receipt",
+      "input": {
+        "forecastMonths": 2,
+        "restrictedFunds": 0,
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "founder": {
+            "compensationPolicy": "manual",
+            "manualMonthlyCompensation": 0
+          }
+        },
+        "cash": {
+          "forecastPrelaunchLegalPayment": 0,
+          "legalReviewReserve": 0,
+          "actualHistoryCashBasis": "total_bank"
+        },
+        "actuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 5300,
+            "cashCollections": 0,
+            "beginningCash": 25000,
+            "endingCash": 19600,
+            "additionalFunding": 0,
+            "investorDistribution": 100,
+            "otherCashOutflows": 0,
+            "payroll": 5000,
+            "salesMarketing": 0,
+            "customerSupport": 0,
+            "professionalServices": 0,
+            "otherOpex": 300
+          }
+        ]
+      },
+      "before": {
+        "openingBank": 25000,
+        "rawActuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 5300,
+            "cashCollections": 0,
+            "beginningCash": 25000,
+            "endingCash": 19600,
+            "additionalFunding": 0,
+            "investorDistribution": 100,
+            "otherCashOutflows": 0,
+            "payroll": 5000,
+            "salesMarketing": 0,
+            "customerSupport": 0,
+            "professionalServices": 0,
+            "otherOpex": 300
+          }
+        ],
+        "rows": [
+          {
+            "month": 1,
+            "status": "ACTUAL",
+            "locked": true,
+            "beginningCash": 25000,
+            "endingCash": 19600,
+            "monthlyPayroll": 5000,
+            "investorDistribution": 100
+          },
+          {
+            "month": 2,
+            "status": "FORECAST",
+            "locked": false,
+            "beginningCash": 19600,
+            "endingCash": 19300,
+            "unearmarkedOperatingCash": 19300,
+            "totalModeledOperatingCosts": 300,
+            "variableOperatingCosts": 0,
+            "fixedCommittedOperatingCosts": 300,
+            "monthlyPayroll": 0,
+            "investorDistribution": 0,
+            "cashReconciliationDifference": 0
+          }
+        ],
+        "annual": [
+          {
+            "totalCosts": null,
+            "operatingProfit": -5600,
+            "endingCash": 19300
+          }
+        ]
+      },
+      "after": {
+        "openingBank": 25000,
+        "rawActuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 5300,
+            "cashCollections": 0,
+            "beginningCash": 25000,
+            "endingCash": 19600,
+            "additionalFunding": 0,
+            "investorDistribution": 100,
+            "otherCashOutflows": 0,
+            "payroll": 5000,
+            "salesMarketing": 0,
+            "customerSupport": 0,
+            "professionalServices": 0,
+            "otherOpex": 300
+          }
+        ],
+        "migration": "Explicit total-bank cash basis v1: no balance offset. Original actual inputs remain unchanged; protections affect availability, not bank balances.",
+        "rows": [
+          {
+            "month": 1,
+            "status": "ACTUAL",
+            "locked": true,
+            "beginningCash": 25000,
+            "endingCash": 19600,
+            "unearmarkedOperatingCash": 19600,
+            "originalBeginningCash": 25000,
+            "originalEndingCash": 19600,
+            "cashBasisAdjustment": 0,
+            "actualCashBasis": "total_bank",
+            "totalModeledOperatingCosts": 5300,
+            "unclassifiedOperatingCosts": 5300,
+            "variableOperatingCosts": null,
+            "fixedCommittedOperatingCosts": null,
+            "monthlyPayroll": 5000,
+            "staffingEvidenceStatus": "NOT_PROVIDED",
+            "investorDistribution": 100,
+            "cashReconciliationDifference": 0
+          },
+          {
+            "month": 2,
+            "status": "FORECAST",
+            "locked": false,
+            "beginningCash": 19600,
+            "endingCash": 19300,
+            "unearmarkedOperatingCash": 19300,
+            "totalModeledOperatingCosts": 300,
+            "variableOperatingCosts": 0,
+            "fixedCommittedOperatingCosts": 300,
+            "monthlyPayroll": 0,
+            "investorDistribution": 0,
+            "cashReconciliationDifference": 0
+          }
+        ],
+        "annual": [
+          {
+            "status": "MIXED ACTUAL / FORECAST",
+            "totalCosts": 5600,
+            "unclassified": 5300,
+            "operatingProfit": -5600,
+            "endingCash": 19300
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,268 @@
+{
+  "baseCommit": "a5bc90ddede95d0a88e6f857f8c75c9637dd8245",
+  "baselineHtmlSha256": "c7207560deb15cf1c86c569187a9e0e9c0761249bd6d83b68d0fe1ee18a2c7db",
+  "currentManifest": {
+    "source": "public/unlisted/investor-forecast.html",
+    "baseCommit": "a5bc90ddede95d0a88e6f857f8c75c9637dd8245",
+    "priorRevisionCommit": "f14906687b2c45398073e5c195d90fd0569f4b22",
+    "baselineHtmlSha256": "c7207560deb15cf1c86c569187a9e0e9c0761249bd6d83b68d0fe1ee18a2c7db",
+    "engineSha256": "de2b415006b0f2c9cd4066657ce408c3226176807f440485f06f798037e32084",
+    "uiSha256": "6b56b8ad9dbe7d5f04692c87683b1953c795de24f82c6773cb1d8b66895aed1d",
+    "workerSha256": "6c502d27e311f61d2c3c2cab5b5445e42c5ab94f8c2b8948adc3821f8ccee971",
+    "htmlSha256": "ced7943c914c1f4c28f4c21d2bb27fd1d464047012866df7bf2ff74bbd96477b",
+    "bytes": 4123403
+  },
+  "cases": [
+    {
+      "id": "default",
+      "input": {},
+      "why": "New ownership1%, no payout policy, no tax estimate, forecast prelaunch attorney expense/payment15k leaves10k opening bank and releases legal earmark; corrected assisted close share and separate self-service capacity. Bank cash rises versus original chiefly because automatic50% distributions were removed, and falls15k versus the prior reserve-only revision. Neither validates enterprise value or credible demand.",
+      "before": {
+        "months": 120,
+        "ownership": 0.1,
+        "endingCash": 18999135.90949049,
+        "cumulativeInvestorDistributions": 1897413.59094905,
+        "recoveryMonth": 31,
+        "fundingGapMonth": null,
+        "firstMonth": {
+          "newPayingCustomers": 1.5,
+          "requiredSalesFte": 0.125,
+          "operatingProfit": 18.339,
+          "endingCash": 25009.1695
+        },
+        "lastMonth": {
+          "activeCustomers": 4134.761904761905,
+          "employeePayroll": 149000,
+          "operatingProfit": 708895.9799999996,
+          "endingCash": 18999135.90949049
+        }
+      },
+      "after": {
+        "months": 120,
+        "ownership": 0.01,
+        "startingCompanyCash": 10000,
+        "endingCash": 44360574.14110483,
+        "cumulativeInvestorDistributions": 0,
+        "recoveryMonth": null,
+        "fundingGapMonth": null,
+        "firstMonth": {
+          "newPayingCustomers": 1.5,
+          "requiredSalesFte": 0.03125,
+          "operatingProfit": 18.339,
+          "endingCash": 10018.339
+        },
+        "lastMonth": {
+          "activeCustomers": 4134.761904761905,
+          "employeePayroll": 81000,
+          "operatingProfit": 777927.6987351073,
+          "endingCash": 44360574.14110483
+        }
+      }
+    },
+    {
+      "id": "quarter_assisted",
+      "input": {
+        "forecastMonths": 1,
+        "acquisition": {
+          "direct": {
+            "milestone": {
+              "first90DayCustomers": 72,
+              "humanAssistedShare": 0.25
+            }
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          }
+        }
+      },
+      "why": "Preserve25% of12 closes instead of overwriting with all12 closes.",
+      "before": {
+        "months": 1,
+        "ownership": 0.1,
+        "endingCash": 25905.26484509091,
+        "cumulativeInvestorDistributions": 90.52648450909092,
+        "recoveryMonth": null,
+        "fundingGapMonth": null,
+        "firstMonth": {
+          "newPayingCustomers": 9.944727272727274,
+          "requiredSalesFte": 1,
+          "operatingProfit": 1810.5296901818183,
+          "endingCash": 25905.26484509091
+        },
+        "lastMonth": {
+          "activeCustomers": 9.944727272727274,
+          "employeePayroll": 0,
+          "operatingProfit": 1810.5296901818183,
+          "endingCash": 25905.26484509091
+        }
+      },
+      "after": {
+        "months": 1,
+        "ownership": 0.01,
+        "startingCompanyCash": 10000,
+        "endingCash": 12246.712,
+        "cumulativeInvestorDistributions": 0,
+        "recoveryMonth": null,
+        "fundingGapMonth": null,
+        "firstMonth": {
+          "newPayingCustomers": 12,
+          "requiredSalesFte": 0.25,
+          "operatingProfit": 2246.712,
+          "endingCash": 12246.712
+        },
+        "lastMonth": {
+          "activeCustomers": 12,
+          "employeePayroll": 0,
+          "operatingProfit": 2246.712,
+          "endingCash": 12246.712
+        }
+      }
+    },
+    {
+      "id": "ongoing_payroll",
+      "input": {
+        "forecastMonths": 6,
+        "startingCustomers": {
+          "starter": 200
+        },
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "retention": {
+          "baseMonthlyVoluntaryChurn": 0.1,
+          "earlyTenureMultiplier": 1,
+          "matureMultiplier": 1
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "headcountSchedule": [
+            {
+              "role": "Support",
+              "approvalMonth": 1,
+              "recruitingLeadMonths": 0,
+              "startMonth": 1,
+              "fteCount": 1,
+              "monthlyBaseCompensation": 4000,
+              "payrollBenefitsBurdenRate": 0.25,
+              "oneTimeHiringEquipmentCost": 0
+            }
+          ]
+        }
+      },
+      "why": "150 is first-employment eligibility, not a recurring payroll ban.",
+      "before": {
+        "error": "Employee payroll is not permitted before 150 active paying customers. Month 3 has 145.8 active customers."
+      },
+      "after": {
+        "months": 6,
+        "ownership": 0.01,
+        "startingCompanyCash": 10000,
+        "endingCash": 56719.359803200015,
+        "cumulativeInvestorDistributions": 0,
+        "recoveryMonth": null,
+        "fundingGapMonth": null,
+        "firstMonth": {
+          "newPayingCustomers": 0,
+          "requiredSalesFte": 0,
+          "operatingProfit": 12476.48,
+          "endingCash": 22476.48
+        },
+        "lastMonth": {
+          "activeCustomers": 106.28820000000003,
+          "employeePayroll": 5000,
+          "operatingProfit": 3709.493355200004,
+          "endingCash": 56719.359803200015
+        }
+      }
+    },
+    {
+      "id": "zero10k",
+      "input": {
+        "investmentAmount": 10000,
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "cash": {
+          "legalReviewReserve": 0,
+          "forecastPrelaunchLegalPayment": 0
+        }
+      },
+      "why": "Unchanged300/month cash burn. Opening attorney payment/reserve explicitly0 here isolates the original cost boundary; new default is25k investment minus15k prelaunch payment, yielding the same10k opening bank.",
+      "before": {
+        "months": 120,
+        "ownership": 0.1,
+        "endingCash": -26000,
+        "cumulativeInvestorDistributions": 0,
+        "recoveryMonth": null,
+        "fundingGapMonth": 34,
+        "firstMonth": {
+          "newPayingCustomers": 0,
+          "requiredSalesFte": 0,
+          "operatingProfit": -300,
+          "endingCash": 9700
+        },
+        "lastMonth": {
+          "activeCustomers": 0,
+          "employeePayroll": 0,
+          "operatingProfit": -300,
+          "endingCash": -26000
+        }
+      },
+      "after": {
+        "months": 120,
+        "ownership": 0.01,
+        "startingCompanyCash": 10000,
+        "endingCash": -26000,
+        "cumulativeInvestorDistributions": 0,
+        "recoveryMonth": null,
+        "fundingGapMonth": 34,
+        "firstMonth": {
+          "newPayingCustomers": 0,
+          "requiredSalesFte": 0,
+          "operatingProfit": -300,
+          "endingCash": 9700
+        },
+        "lastMonth": {
+          "activeCustomers": 0,
+          "employeePayroll": 0,
+          "operatingProfit": -300,
+          "endingCash": -26000
+        }
+      }
+    }
+  ],
+  "priorReserveOnlyRevision": {
+    "commit": "f5e4d52c72e52f890feda6b0640a18b48d9a909a",
+    "htmlSha256": "56efc04d0e0802911a3cd6cbcacf81cdfab6a6bef2d3ad866f1263f55c95629f",
+    "default": {
+      "months": 120,
+      "ownership": 0.01,
+      "startingCompanyCash": 25000,
+      "endingCash": 44375574.14110483,
+      "cumulativeInvestorDistributions": 0,
+      "recoveryMonth": null,
+      "fundingGapMonth": null,
+      "firstMonth": {
+        "newPayingCustomers": 1.5,
+        "requiredSalesFte": 0.03125,
+        "operatingProfit": 18.339,
+        "endingCash": 25018.339
+      },
+      "lastMonth": {
+        "activeCustomers": 4134.761904761905,
+        "employeePayroll": 81000,
+        "operatingProfit": 777927.6987351073,
+        "endingCash": 44375574.14110483
+      }
+    },
+    "difference": "New default records15k forecast prelaunch expense/payment: opening bank25k→10k, legal hold15k→0, eligibility starts15k lower. Existing explicitly saved scenarios retain their old opening assumptions."
+  }
+}

@@ -1,0 +1,12 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const root=path.resolve(__dirname,'..');
+const modules=process.env.INVESTOR_TEST_MODULES || 'C:/Users/joshv/OneDrive/Documents/NorthStar Comprehensive Package/NorthStar-M23-Part4-Release-Evidence-eccc8e9-20260905/independent-final-audit/runtime/node_modules';
+const jest=path.join(modules,'jest/bin/jest.js');
+if(!fs.existsSync(jest)) throw new Error('Set INVESTOR_TEST_MODULES to an existing Jest/supertest runtime; no installation is performed.');
+const env={};for(const key of ['SystemRoot','WINDIR','TEMP','TMP','PATH','USERPROFILE','LOCALAPPDATA','APPDATA']) if(process.env[key])env[key]=process.env[key];
+Object.assign(env,{NODE_ENV:'test',NODE_PATH:modules});
+const result=cp.spawnSync(process.execPath,[jest,'--config',path.join(root,'jest.config.js'),'--runInBand','--modulePaths',modules,'--runTestsByPath',path.join(root,'tests/ratification/unlisted-investor-forecast.test.js')],{cwd:root,env,encoding:'utf8',timeout:180000,maxBuffer:10*1024*1024});
+const output=(result.stdout||'')+(result.stderr||'');
+fs.writeFileSync(path.join(root,'outputs/investor-revision/route-tests.log'),output);
+console.log(output);if(result.error)console.error(result.error.message);process.exitCode=result.status ?? 1;

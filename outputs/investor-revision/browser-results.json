@@ -1,0 +1,58 @@
+{
+  "browser": "chrome",
+  "cases": [
+    {
+      "case": "desktop-light",
+      "assertions": 636,
+      "monthsOpened": 120,
+      "errors": [],
+      "externalRequests": [],
+      "screenshots": [
+        "desktop-light-initial.png",
+        "desktop-light-opening-bridge.png",
+        "desktop-light-months.png",
+        "desktop-light-month120-detail.png"
+      ]
+    },
+    {
+      "case": "desktop-dark-preference",
+      "assertions": 636,
+      "monthsOpened": 120,
+      "errors": [],
+      "externalRequests": [],
+      "screenshots": [
+        "desktop-dark-preference-initial.png",
+        "desktop-dark-preference-opening-bridge.png",
+        "desktop-dark-preference-months.png",
+        "desktop-dark-preference-month120-detail.png"
+      ]
+    },
+    {
+      "case": "mobile-light",
+      "assertions": 636,
+      "monthsOpened": 120,
+      "errors": [],
+      "externalRequests": [],
+      "screenshots": [
+        "mobile-light-initial.png",
+        "mobile-light-opening-bridge.png",
+        "mobile-light-months.png",
+        "mobile-light-month120-detail.png"
+      ]
+    },
+    {
+      "case": "mobile-dark-preference",
+      "assertions": 636,
+      "monthsOpened": 120,
+      "errors": [],
+      "externalRequests": [],
+      "screenshots": [
+        "mobile-dark-preference-initial.png",
+        "mobile-dark-preference-opening-bridge.png",
+        "mobile-dark-preference-months.png",
+        "mobile-dark-preference-month120-detail.png"
+      ]
+    }
+  ],
+  "qualification": "Automated installed-browser evidence, not physical-device/Safari or founder visual approval."
+}

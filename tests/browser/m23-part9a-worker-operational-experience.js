@@ -128,8 +128,16 @@ async function main() {
   let currentExecution = execution();
   let failToday = false;
   try {
+    const browserProfiles = [
+      { name: '1440', width: 1440, height: 900, deviceScaleFactor: 1, hasTouch: false, zoomPercent: null },
+      { name: 'zoom-200', width: 720, height: 450, deviceScaleFactor: 2, hasTouch: false, zoomPercent: 200 },
+      { name: '390', width: 390, height: 844, deviceScaleFactor: 1, hasTouch: true, zoomPercent: null },
+      { name: 'zoom-400', width: 360, height: 225, deviceScaleFactor: 4, hasTouch: false, zoomPercent: 400 },
+      { name: '320', width: 320, height: 700, deviceScaleFactor: 1, hasTouch: true, zoomPercent: null },
+    ];
     for (const theme of ['light', 'dark']) {
-      for (const width of [1440, 390, 320]) {
+      for (const profile of browserProfiles) {
+        const width = profile.width;
         currentExecution = execution();
         currentActions = ['start'];
         currentMaterialKinds = [];
@@ -139,7 +147,12 @@ async function main() {
         let laborIntervals = [];
         let completionRecords = [];
         let activeProposal = null;
-        const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', hasTouch: width <= 390 });
+        const context = await browser.newContext({
+          viewport: { width, height: profile.height },
+          deviceScaleFactor: profile.deviceScaleFactor,
+          reducedMotion: 'reduce',
+          hasTouch: profile.hasTouch,
+        });
         await context.addInitScript(value => { localStorage.setItem('northstar-theme', value); window.m23Part9aCompromised = false; }, theme);
         await context.addCookies([{ name: 'northstar_csrf', value: 'browser-csrf-token', url: origin, sameSite: 'Lax' }]);
         await context.route('**/*', async route => {
@@ -311,6 +324,7 @@ async function main() {
           const overview = document.querySelector('.work-overview-grid').getBoundingClientRect();
           return { viewport: innerWidth, document: document.documentElement.scrollWidth,
             main: document.getElementById('workMain').scrollWidth,
+            devicePixelRatio,
             badge: { width: badge.width, height: badge.height },
             overviewBelowHeading: overview.top >= Math.max(title.bottom, badge.bottom) - 1,
             focusable: [...document.querySelectorAll('#workMain button,#workMain input,#workMain select,#workMain textarea,#workMain a')]
@@ -318,6 +332,7 @@ async function main() {
         });
         assert.ok(geometry.document <= geometry.viewport + 1, JSON.stringify(geometry));
         assert.ok(geometry.main <= geometry.viewport + 1, JSON.stringify(geometry));
+        assert.strictEqual(geometry.devicePixelRatio, profile.deviceScaleFactor, JSON.stringify(geometry));
         assert.ok(geometry.badge.width >= 72 && geometry.badge.height <= 54, JSON.stringify(geometry));
         assert.strictEqual(geometry.overviewBelowHeading, true, JSON.stringify(geometry));
         assert.strictEqual(geometry.focusable, true, JSON.stringify(geometry));
@@ -490,8 +505,10 @@ async function main() {
             assert.ok(validatedActions.includes(action), `missing mounted contract exercise for ${action}`);
           }
         }
-        await page.screenshot({ path: path.join(output, `${theme}-${width}.png`), fullPage: true });
-        ledger.cases.push({ theme, width, geometry, ready: true, inertHostileText: true, reducedMotion: true });
+        await page.screenshot({ path: path.join(output, `${theme}-${profile.name}.png`), fullPage: true });
+        ledger.cases.push({ theme, profile: profile.name, width, deviceScaleFactor: profile.deviceScaleFactor,
+          zoomPercent: profile.zoomPercent, zoomEvidence: profile.zoomPercent ? 'device-metrics-equivalent' : null,
+          geometry, ready: true, inertHostileText: true, reducedMotion: true });
         await context.close();
       }
     }

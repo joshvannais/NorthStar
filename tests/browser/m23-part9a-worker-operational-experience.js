@@ -140,7 +140,7 @@ async function main() {
         let completionRecords = [];
         let activeProposal = null;
         const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', hasTouch: width <= 390 });
-        await context.addInitScript(value => { sessionStorage.setItem('northstar-theme', value); window.m23Part9aCompromised = false; }, theme);
+        await context.addInitScript(value => { localStorage.setItem('northstar-theme', value); window.m23Part9aCompromised = false; }, theme);
         await context.addCookies([{ name: 'northstar_csrf', value: 'browser-csrf-token', url: origin, sameSite: 'Lax' }]);
         await context.route('**/*', async route => {
           const request = route.request();
@@ -300,6 +300,7 @@ async function main() {
         page.on('pageerror', error => ledger.pageErrors.push(error.message));
         await page.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}&executionId=${EXECUTION}`, { waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => document.body.dataset.workState === 'ready');
+        assert.strictEqual(await page.locator('html').getAttribute('data-theme'), theme);
         assert.match(await page.locator('#workTitle').textContent(), /Kitchen sink repair/);
         assert.match(await page.locator('#workCustomer').textContent(), /Jamie Carter/);
         assert.strictEqual(await page.locator('#workMain img:not(.logo-img):not(.mobile-logo), #workMain script').count(), 0);

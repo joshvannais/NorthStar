@@ -25,7 +25,8 @@ describe('Mission 23 Part 9 Slice A worker operational experience', () => {
     expect(html).toContain('/js/work-page.js');
     expect(html).not.toContain('/js/auth-session.js');
     expect(html).not.toContain('/js/nav-component.js');
-    expect(server).not.toContain("'/dashboard/operations'");
+    // Part 9B now owns the separate read-only operations route. All worker
+    // page, load-order and behavior assertions above remain unchanged.
   });
 
   test('keeps Today read-only while adding a server-scoped execution pointer and one inert Open work control', () => {

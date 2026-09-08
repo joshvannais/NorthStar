@@ -44,6 +44,7 @@ const { createTodayRouter } = require('./routes/today');
 const { createKnowledgeManagementRouter } = require('./routes/knowledgeManagement');
 const { createSupportRouter } = require('./routes/support');
 const { createFieldExecutionsRouter } = require('./routes/fieldExecutions');
+const { createOperationalOverviewRouter } = require('./routes/operationalOverview');
 const { mountInvestorForecast } = require('./routes/investorForecast');
 const { SupportCaseOutboxWorker } = require('./support/outbox');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
@@ -116,6 +117,7 @@ const pages = {
   '/dashboard': 'public/demo-dashboard.html',
   '/dashboard/today': 'public/dashboard/today.html',
   '/dashboard/work': 'public/dashboard/work.html',
+  '/dashboard/operations': 'public/dashboard/operations.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',
@@ -248,6 +250,7 @@ app.all('/api/admin/users', legacyAdminDisabled);
 const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1/command-center', createCommandCenterRouter());
 app.use('/api/v1/today', createTodayRouter());
+app.use('/api/v1/operational-overview', createOperationalOverviewRouter());
 app.use('/api/v1', simulationsRoutes);
 app.use('/api/v1/canonical', createCanonicalRouter({
   assistantRuntime: productionPolarisRuntime,

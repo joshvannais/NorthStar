@@ -24,7 +24,7 @@ function mounted(role = 'owner', data = overview()) {
     readOverview: read,
     tenantAuth: (req, res, next) => {
       if (role === null) return res.status(401).json({ success: false, code: 'UNAUTHENTICATED' });
-      req.user = { id: USER }; req.userRole = role;
+      req.user = { id: USER }; req.userRole = role; req.orgId = ORG;
       req.tenantContext = { organizationId: ORG, userId: USER };
       req.authSession = { id: SESSION }; req.requestId = 'part9b-unit';
       next();
@@ -90,6 +90,18 @@ describe('Mission 23 Part 9B read-only operational overview', () => {
     expect(clientContract().validate(value).records[0].title).toBe('<strong>Service label</strong>');
     value.records[0].customer = { address: 'Not in the overview contract' };
     expect(() => clientContract().validate(value)).toThrow('OPERATIONS_OVERVIEW_INVALID');
+  });
+
+  test('response cannot contradict its work-state filter or the requested snapshot page', () => {
+    const pending = overview('owner_admin', { filter: 'completion_pending' });
+    expect(() => clientContract().validate(pending)).toThrow('OPERATIONS_OVERVIEW_INVALID');
+    const expected = { state: 'active', limit: 25, cursor: null };
+    expect(() => contract().validateOverviewResponse(overview('owner_admin', { filter: 'all' }), 'owner', expected)).toThrow();
+    expect(() => contract().validateOverviewResponse(overview('owner_admin', {
+      pagination: { limit: 50, offset: 0, returned: 1, total: 1, nextCursor: null },
+    }), 'owner', expected)).toThrow();
+    const next = { ...expected, cursor: contract().normalizeOverviewRead({ cursor: cursor() }).cursor };
+    expect(() => contract().validateOverviewResponse(overview('owner_admin', { dataDigest: 'c'.repeat(64) }), 'owner', next)).toThrow();
   });
 
   test('mounts the authenticated owner read with server-derived identity and no-store response', async () => {

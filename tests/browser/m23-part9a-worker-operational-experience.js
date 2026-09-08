@@ -586,6 +586,20 @@ async function main() {
     await draftPage.waitForFunction(() => document.body.dataset.workState === 'ready');
     await draftPage.getByRole('button', { name: 'Add note' }).click();
     await draftPage.locator('#workEvidenceNote-note').fill('Unsaved note for the prior execution revision.');
+
+    const parallelPage = await draftContext.newPage();
+    await parallelPage.goto(draftUrl, { waitUntil: 'domcontentloaded' });
+    await parallelPage.waitForFunction(() => document.body.dataset.workState === 'ready');
+    await parallelPage.getByRole('button', { name: 'Add note' }).click();
+    assert.strictEqual(await parallelPage.locator('#workEvidenceNote-note').inputValue(), '');
+    await parallelPage.goto(`${origin}/dashboard/today`, { waitUntil: 'domcontentloaded' });
+    await parallelPage.waitForFunction(() => document.body.dataset.todayState === 'ready');
+    await parallelPage.goBack({ waitUntil: 'domcontentloaded' });
+    await parallelPage.waitForFunction(() => document.body.dataset.workState === 'ready');
+    assert.match(await parallelPage.locator('#workTitle').textContent(), /Kitchen sink repair/);
+    ledger.cases.push({ multipleTabs: true, draftSharedAcrossTabs: false, backForwardAuthorityReloaded: true });
+    await parallelPage.close();
+
     currentExecution = execution('in_progress', 5, '2'.repeat(64));
     await draftPage.reload({ waitUntil: 'domcontentloaded' });
     await draftPage.waitForFunction(() => document.body.dataset.workState === 'ready');
@@ -595,6 +609,68 @@ async function main() {
       .filter(key => key.startsWith('northstar-work-draft:'))), []);
     ledger.cases.push({ executionRevisionChanged: true, staleDraftRestored: false });
     await draftContext.close();
+
+    currentExecution = execution('in_progress', 4, 'f'.repeat(64));
+    currentActions = inProgressActions(false);
+    currentMaterialKinds = ['consumed', 'returned', 'transferred', 'waste'];
+    currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+      'downtime_start', 'downtime_end', 'maintenance'];
+    const expiredContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await expiredContext.addInitScript(() => { window.m23Part9aCompromised = false; });
+    let sessionExpired = false;
+    await expiredContext.route('**/*', route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (url.origin !== origin) return route.fulfill({ status: 204, body: '' });
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      if (request.method() === 'POST' && sessionExpired) return route.fulfill({
+        status: 401, contentType: 'application/json', body: JSON.stringify({
+          success: false, error: { code: 'SESSION_NOT_CURRENT', message: `Session expired ${HOSTILE}` },
+        }),
+      });
+      if (url.pathname === '/api/v1/today') return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(today(currentExecution.data)),
+      });
+      const reads = emptyReads(currentExecution.data, []);
+      const mapping = new Map([
+        [`/api/v1/field-executions/${EXECUTION}`, currentExecution],
+        [`/api/v1/field-executions/${EXECUTION}/labor`, reads.labor],
+        [`/api/v1/field-executions/${EXECUTION}/materials`, reads.materials],
+        [`/api/equipment/executions/${EXECUTION}`, reads.equipment],
+        ['/api/equipment/catalogue', reads.catalogue],
+        [`/api/v1/field-executions/${EXECUTION}/field-evidence`, reads.evidence],
+        [`/api/v1/field-executions/${EXECUTION}/progress`, reads.progress],
+        [`/api/v1/field-executions/${EXECUTION}/completion`, reads.completion],
+      ]);
+      if (mapping.has(url.pathname)) return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(mapping.get(url.pathname)),
+      });
+      return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+        success: false, error: { code: 'TEST_UNINVENTORIED', message: 'Uninventoried request.' },
+      }) });
+    });
+    const expiredPage = await expiredContext.newPage();
+    await expiredPage.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}&executionId=${EXECUTION}`,
+      { waitUntil: 'domcontentloaded' });
+    await expiredPage.waitForFunction(() => document.body.dataset.workState === 'ready');
+    await expiredPage.getByRole('button', { name: 'Add note' }).click();
+    await expiredPage.locator('#workEvidenceNote-note').fill('Device-local draft before session rotation.');
+    sessionExpired = true;
+    await expiredPage.getByRole('button', { name: 'Pause work' }).click();
+    await expiredPage.getByRole('dialog', { name: 'Confirm Pause work' })
+      .getByRole('button', { name: 'Confirm Pause work' }).click();
+    await expiredPage.waitForFunction(() => document.body.dataset.workState === 'restricted');
+    const restrictedText = await expiredPage.locator('#workMain').textContent();
+    for (const priorTenantText of ['Kitchen sink repair', 'Jamie Carter', 'Alex Rivera', HOSTILE]) {
+      assert.ok(!restrictedText.includes(priorTenantText), `restricted view retained ${priorTenantText}`);
+    }
+    assert.strictEqual(await expiredPage.evaluate(() => window.m23Part9aCompromised), false);
+    assert.strictEqual(await expiredPage.locator('#workSections').isHidden(), true);
+    assert.deepStrictEqual(await expiredPage.evaluate(() => Object.keys(sessionStorage)
+      .filter(key => key.startsWith('northstar-work-draft:'))), []);
+    ledger.cases.push({ sessionRotation: true, staleTenantPresentationRemoved: true,
+      staleDraftRemoved: true, mutationCapabilityExposed: false });
+    await expiredContext.close();
 
     assert.strictEqual(ledger.externalBlocked.length, 0, JSON.stringify(ledger.externalBlocked));
     assert.strictEqual(ledger.pageErrors.length, 0, JSON.stringify(ledger.pageErrors));

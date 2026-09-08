@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { benignFixture } = require('./m23-part9a-worker-operational-experience');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { normalizeCompletionAction } = require('../../src/completion/contract');
@@ -17,10 +18,18 @@ async function main() {
   const outputArgument = process.argv.find(v => v.startsWith('--output=')); assert(outputArgument, 'Explicit non-overwriting output directory required');
   const output = path.resolve(outputArgument.slice(9)); fs.mkdirSync(output, { recursive: true });
   assert(!fs.existsSync(path.join(output, 'results.json')), 'Evidence already exists');
+  const baseline = process.argv.includes('--baseline');
+  const baselineHead = 'c22de9d053b65814fd59ae471e97d9eea01e3da3';
+  const baselineFiles = {};
+  if (baseline) {
+    const git = 'C:/Users/joshv/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd/git.exe';
+    for (const name of ['field-execution-client.js', 'work-page.js']) baselineFiles['/js/' + name] =
+      execFileSync(git, ['show', baselineHead + ':public/js/' + name], { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8' });
+  }
   const { app } = require('../../src/server'); const server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const runtime = resolveBrowserRuntime(selected); const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
-  const report = { browser: selected, version: browser.version(), cases: [], tabCopies: [], externalRequests: [], pageErrors: [], posts: [] };
+  const report = { browser: selected, version: browser.version(), source: baseline ? baselineHead : 'current correction working tree', fixture: 'Ordinary synthetic field text only; all legacy markup fragments replaced before rendering.', cases: [], tabCopies: [], externalRequests: [], pageErrors: [], posts: [] };
   let scenario = 'empty'; let records = []; let evidenceCalls = 0;
   async function context(width = 1440, theme = 'light') {
     const ctx = await browser.newContext({ viewport: { width, height: width === 1440 ? 900 : 844 }, reducedMotion: 'reduce' });
@@ -30,6 +39,7 @@ async function main() {
     await ctx.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin !== origin) { report.externalRequests.push(url.origin); return route.abort(); }
+      if (baselineFiles[url.pathname]) return route.fulfill({ contentType: 'application/javascript', body: baselineFiles[url.pathname] });
       if (!url.pathname.startsWith('/api/')) return route.continue();
       const respond = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
       if (request.method() === 'POST') {
@@ -41,6 +51,7 @@ async function main() {
         return respond({ success: false, error: { code: 'TEMPORARY_TEST_UNAVAILABLE', message: 'This local check leaves the request unconfirmed.' } }, 503);
       }
       const fixture = benignFixture(records);
+      assert(!/[<>]/.test(JSON.stringify(fixture)), 'Only ordinary benign fixture text is permitted');
       if (url.pathname === '/api/v1/today') return respond(fixture.today);
       if (url.pathname.endsWith('/field-evidence')) {
         evidenceCalls++;
@@ -77,11 +88,15 @@ async function main() {
     });
     await check('F1 evidence changed since presentation requires another review', async () => {
       scenario = 'normal'; records = [observation(1)]; const ctx = await context();
-      try { const p = await open(ctx); records = [observation(2), observation(1)]; const before = report.posts.length; await propose(p); await p.waitForTimeout(150); assert.equal(await p.getByRole('dialog').isVisible(), false); assert.equal(report.posts.length, before); assert.match(await p.locator('#workCompletionContent').innerText(), /changed|review/i); } finally { await ctx.close(); }
+      try { const p = await open(ctx); records = [observation(2), observation(1)]; const before = report.posts.length; await propose(p); await p.waitForTimeout(150); assert.equal(await p.getByRole('dialog').isVisible(), false); assert.equal(report.posts.length, before); assert.match(await p.locator('#workCompletionContent').innerText(), /changed|review/i); assert.match(await p.locator('#workStatus').innerText(), /changed|review/i); assert.equal(await p.evaluate(() => document.activeElement.id), 'workCompletionContent'); } finally { await ctx.close(); }
     });
     await check('F3 same-tab reload retains draft and persisted retry identity', async () => {
       scenario = 'empty'; records = []; const ctx = await context();
       try { const p = await open(ctx); await note(p, 'Same-tab unsaved note.'); const key = await sendNote(p); await p.reload(); await loaded(p); await note(p); assert.equal(await p.locator('#workEvidenceNote-note').inputValue(), 'Same-tab unsaved note.'); assert.equal(await sendNote(p), key); } finally { await ctx.close(); }
+    });
+    await check('F3 same-tab back-forward retains draft and retry identity after reacquiring ownership', async () => {
+      scenario = 'empty'; records = []; const ctx = await context();
+      try { const p = await open(ctx); await note(p, 'Return to this same-tab draft.'); const key = await sendNote(p); await p.goto(origin + '/dashboard/today'); await p.goBack(); await loaded(p); await note(p); assert.equal(await p.locator('#workEvidenceNote-note').inputValue(), 'Return to this same-tab draft.'); assert.equal(await sendNote(p), key); } finally { await ctx.close(); }
     });
     for (const copy of ['opener', 'copied-sessionStorage']) await check(`F3 ${copy} owns separate drafts and retry identities`, async () => {
       scenario = 'empty'; records = []; const ctx = await context();

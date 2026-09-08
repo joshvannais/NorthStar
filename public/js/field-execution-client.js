@@ -105,6 +105,126 @@
     return '';
   }
 
+  async function collectEvidence(firstPage, nextPage, executionId) {
+    var snapshot = { data: [], total: null, returned: 0, truncated: true, nextCursor: null, pages: [], complete: false };
+    var current = firstPage;
+    var ids = new Set();
+    var cursors = new Set();
+    for (var pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+      if (!current || current.success !== true || !Array.isArray(current.data) ||
+          !Number.isSafeInteger(current.total) || current.total < 0 ||
+          current.returned !== current.data.length || current.returned > 200 ||
+          typeof current.truncated !== 'boolean' ||
+          (current.truncated ? typeof current.nextCursor !== 'string' || !current.nextCursor || current.nextCursor.length > 8192 : current.nextCursor !== null) ||
+          (snapshot.total !== null && snapshot.total !== current.total)) return snapshot;
+      snapshot.total = current.total;
+      snapshot.truncated = current.truncated;
+      snapshot.nextCursor = current.nextCursor;
+      snapshot.pages.push({ total: current.total, returned: current.returned,
+        truncated: current.truncated, nextCursor: current.nextCursor });
+      for (var index = 0; index < current.data.length; index += 1) {
+        var record = current.data[index];
+        if (!record || !UUID.test(record.id || '') || record.executionId !== executionId || ids.has(record.id)) return snapshot;
+        ids.add(record.id);
+        snapshot.data.push(record);
+      }
+      snapshot.returned = snapshot.data.length;
+      if (snapshot.returned > snapshot.total || snapshot.returned > 1000) return snapshot;
+      if (!current.truncated) {
+        snapshot.complete = snapshot.returned === snapshot.total;
+        return snapshot;
+      }
+      if (!current.returned || snapshot.returned >= snapshot.total || snapshot.returned >= 1000 ||
+          cursors.has(current.nextCursor) || pageNumber === 9) return snapshot;
+      cursors.add(current.nextCursor);
+      try { current = await nextPage(current.nextCursor); }
+      catch (error) {
+        if (error && (error.status === 401 || error.status === 403)) throw error;
+        return snapshot;
+      }
+    }
+    return snapshot;
+  }
+
+  function completionRequirements(snapshot) {
+    if (!snapshot || snapshot.complete !== true || snapshot.truncated !== false || snapshot.nextCursor !== null ||
+        !Array.isArray(snapshot.data) || snapshot.data.length !== snapshot.total) fail('WORK_EVIDENCE_INCOMPLETE');
+    var records = new Map();
+    var superseded = new Set();
+    snapshot.data.forEach(function(record) {
+      if (!record || !UUID.test(record.id || '') || !UUID.test(record.rootId || '') ||
+          !Number.isSafeInteger(record.revision) || record.revision < 1 || !DIGEST.test(record.digest || '') ||
+          !record.document || !['checklist', 'checklist_response', 'observation', 'note', 'file'].includes(record.document.kind) ||
+          records.has(record.id)) fail('WORK_EVIDENCE_CURRENTNESS_UNAVAILABLE');
+      records.set(record.id, record);
+    });
+    records.forEach(function(record) {
+      if (record.previousRecordId === null) {
+        if (record.rootId !== record.id || record.revision !== 1) fail('WORK_EVIDENCE_CURRENTNESS_UNAVAILABLE');
+      } else {
+        var previous = records.get(record.previousRecordId);
+        if (!previous || previous.rootId !== record.rootId || previous.revision + 1 !== record.revision ||
+            previous.document.kind !== record.document.kind || superseded.has(previous.id)) fail('WORK_EVIDENCE_CURRENTNESS_UNAVAILABLE');
+        superseded.add(previous.id);
+      }
+    });
+    var result = { checklists: [], inspections: [], files: [] };
+    records.forEach(function(record) {
+      if (superseded.has(record.id)) return;
+      var kind = record.document.kind;
+      var selected = kind === 'checklist' ? result.checklists : kind === 'file' ? result.files :
+        kind === 'observation' && record.document.observationClass === 'inspection' ? result.inspections : null;
+      if (selected) selected.push({ id: record.id, revision: record.revision, digest: record.digest });
+    });
+    Object.keys(result).forEach(function(kind) {
+      if (result[kind].length > 20) fail('WORK_EVIDENCE_SELECTION_LIMIT');
+      result[kind].sort(function(left, right) { return left.id.localeCompare(right.id); });
+    });
+    return result;
+  }
+
+  async function claimTabStorage(context, resume) {
+    var metadataKey = 'northstar-work-tab-owner';
+    var prefix = 'northstar-work-draft:';
+    var stored = '';
+    var persistent = true;
+    try { stored = context.sessionStorage.getItem(metadataKey) || ''; }
+    catch (_error) { persistent = false; }
+    var navigation = context.performance && context.performance.getEntriesByType('navigation')[0];
+    var restoring = resume === true || navigation && ['reload', 'back_forward'].includes(navigation.type);
+    var owner = restoring && UUID.test(stored) ? stored : context.crypto.randomUUID();
+    var release = function() {};
+    var manager = context.navigator && context.navigator.locks;
+    async function acquire(value) {
+      if (!manager || typeof manager.request !== 'function') return false;
+      return new Promise(function(resolve) {
+        try {
+          manager.request('northstar-work-tab:' + value, { mode: 'exclusive', ifAvailable: true }, function(lock) {
+            if (!lock) { resolve(false); return; }
+            return new Promise(function(done) { release = done; resolve(true); });
+          }).catch(function() { resolve(false); });
+        } catch (_error) { resolve(false); }
+      });
+    }
+    if (!persistent || !await acquire(owner)) {
+      owner = context.crypto.randomUUID();
+      persistent = persistent && await acquire(owner);
+    }
+    if (owner !== stored || !persistent) {
+      try {
+        for (var index = context.sessionStorage.length - 1; index >= 0; index -= 1) {
+          var key = context.sessionStorage.key(index);
+          if (key && key.indexOf(prefix) === 0) context.sessionStorage.removeItem(key);
+        }
+      } catch (_error) { persistent = false; }
+    }
+    try {
+      if (persistent) context.sessionStorage.setItem(metadataKey, owner);
+      else context.sessionStorage.removeItem(metadataKey);
+    } catch (_error) { persistent = false; }
+    return { owner: owner, persistent: persistent, release: release };
+  }
+
   return Object.freeze({
     parseSelector: parseSelector,
     pins: pins,
@@ -114,5 +234,8 @@
     uuid: uuid,
     digest: digest,
     revision: revision,
+    collectEvidence: collectEvidence,
+    completionRequirements: completionRequirements,
+    claimTabStorage: claimTabStorage,
   });
 });

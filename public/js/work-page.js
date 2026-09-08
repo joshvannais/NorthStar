@@ -16,6 +16,9 @@
   var pending = false;
   var confirmation = null;
   var volatileIdempotency = Object.create(null);
+  var tabStorage = null;
+  var tabReady = false;
+  var tabClaimGeneration = 0;
   var model = {
     today: null,
     record: null,
@@ -248,16 +251,19 @@
     append(actions, submit, discard);
     form.appendChild(actions);
     setFormHidden(form, true);
-    form.addEventListener('submit', function(event) {
+    form.addEventListener('submit', async function(event) {
       event.preventDefault();
       if (!form.reportValidity() || pending) return;
+      if (actionName === 'propose_completion' && !await refreshCompletionSelection()) return;
       confirmAction({
         action: actionName,
         label: submitLabel,
-        copy: 'Review this field evidence, then confirm it should be recorded against the current execution.',
+        copy: actionName === 'propose_completion' ? completionSelectionCopy() :
+          'Review this field evidence, then confirm it should be recorded against the current execution.',
         body: builder(new FormData(form)),
         path: mutationPath(actionName),
         form: form,
+        evidenceSignature: actionName === 'propose_completion' ? completionSignature() : null,
       }, submit);
     });
     return form;
@@ -269,7 +275,7 @@
     var executionScope = execution
       ? [execution.id, execution.revision, execution.digest].join(':')
       : 'uninitialized';
-    return DRAFT_PREFIX + [model.today.scopeDigest, selector.appointmentId,
+    return DRAFT_PREFIX + [tabStorage.owner, model.today.scopeDigest, selector.appointmentId,
       authority.revision, authority.digest, executionScope].join(':') + ':';
   }
   function draftKey(action) {
@@ -308,6 +314,7 @@
       .forEach(function(id) { byId(id).replaceChildren(); });
   }
   function saveDraft(form, action) {
+    if (!tabReady || !tabStorage || !tabStorage.persistent) return;
     try {
       var fields = {};
       new FormData(form).forEach(function(value, key) {
@@ -317,6 +324,7 @@
     } catch (_error) {}
   }
   function restoreDraft(form, action) {
+    if (!tabStorage || !tabStorage.persistent) return;
     try {
       var saved = JSON.parse(root.sessionStorage.getItem(draftKey(action)) || 'null');
       if (!saved || saved.version !== 1 || !saved.fields || typeof saved.fields !== 'object') return;
@@ -333,12 +341,12 @@
   function idempotencyFor(action) {
     var storageKey = idempotencyStorageKey(action);
     var key = '';
-    try { key = root.sessionStorage.getItem(storageKey) || ''; } catch (_error) {}
+    try { if (tabStorage.persistent) key = root.sessionStorage.getItem(storageKey) || ''; } catch (_error) {}
     if (!key) key = volatileIdempotency[storageKey] || '';
     if (key.indexOf('m23-part9a-' + action + '-') !== 0) {
       var seed = root.crypto && typeof root.crypto.randomUUID === 'function' ? root.crypto.randomUUID() : '';
       key = api.idempotencyKey(action, seed);
-      try { root.sessionStorage.setItem(storageKey, key); } catch (_error) {}
+      try { if (tabStorage.persistent) root.sessionStorage.setItem(storageKey, key); } catch (_error) {}
     }
     volatileIdempotency[storageKey] = key;
     return key;
@@ -676,9 +684,7 @@
   }
 
   function evidenceRecords() {
-    if (!model.reads.evidence) return [];
-    if (Array.isArray(model.reads.evidence)) return model.reads.evidence;
-    return safeArray(model.reads.evidence.evidence).concat(safeArray(model.reads.evidence.checklists), safeArray(model.reads.evidence.files));
+    return model.reads.evidence ? safeArray(model.reads.evidence.data) : [];
   }
   function openChecklistItems(records) {
     var answered = new Set(records.filter(function(record) {
@@ -698,7 +704,8 @@
     content.replaceChildren();
     var records = evidenceRecords();
     if (!model.reads.evidence) { content.appendChild(unavailableNote('Field evidence could not be loaded. No evidence is inferred.')); return; }
-    if (!records.length) content.appendChild(emptyNote('No checklist, observation, note, or file evidence is recorded for this work.'));
+    if (!model.reads.evidence.complete) content.appendChild(unavailableNote('The evidence history is incomplete. Completion proposals are unavailable until the current evidence can be reviewed.'));
+    if (!records.length && model.reads.evidence.complete) content.appendChild(emptyNote('No checklist, observation, note, or file evidence is recorded for this work.'));
     else {
       var list = node('ul', 'work-record-list');
       records.slice(0, 10).forEach(function(record) {
@@ -855,15 +862,67 @@
     ], 'Record field change', function(values) { return progressBody('record_change', progressDocument('field_change', values)); }, 'record_change'));
   }
 
-  function evidencePins(kind) {
-    return evidenceRecords().filter(function(record) {
-      var recordKind = record.document && record.document.kind || record.kind;
-      if (kind === 'checklists') return recordKind === 'checklist';
-      if (kind === 'inspections') return recordKind === 'observation' && record.document && record.document.observationClass === 'inspection';
-      return recordKind === 'file';
-    }).filter(function(record) {
-      return typeof record.id === 'string' && Number.isSafeInteger(record.revision) && /^[0-9a-f]{64}$/.test(record.digest || '');
-    }).slice(0, 20).map(function(record) { return { id: record.id, revision: record.revision, digest: record.digest }; });
+  function completionSignature() {
+    return JSON.stringify({ total: model.reads.evidence.total, requirements: api.completionRequirements(model.reads.evidence) });
+  }
+  function completionSelectionCopy() {
+    var selected = api.completionRequirements(model.reads.evidence);
+    return 'This proposal includes all ' + selected.checklists.length + ' current checklists, ' +
+      selected.inspections.length + ' current inspections and ' + selected.files.length +
+      ' current files from the complete evidence history. Other completion checks and owner or administrator approval still apply.';
+  }
+  async function collectEvidenceResponse(first, signal) {
+    var location = api.paths(selector).evidence;
+    return api.collectEvidence(first, function(cursor) {
+      return responseJson(location + '?cursor=' + encodeURIComponent(cursor), null, signal);
+    }, selector.executionId);
+  }
+  async function refreshCompletionSelection(expectedSignature) {
+    var previous;
+    try { previous = expectedSignature || completionSignature(); }
+    catch (_error) { renderCompletion(); return false; }
+    var generation = loadController;
+    var today = model.today;
+    var execution = model.execution;
+    var owner = tabStorage;
+    function currentContext() {
+      return tabReady && owner === tabStorage && generation === loadController &&
+        today === model.today && execution === model.execution;
+    }
+    function focusSelection() {
+      byId('workCompletionContent').tabIndex = -1;
+      byId('workCompletionContent').focus({ preventScroll: true });
+    }
+    setPending(true);
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 12000);
+    try {
+      var first = await responseJson(api.paths(selector).evidence, null, controller.signal);
+      var snapshot = await collectEvidenceResponse(first, controller.signal);
+      if (!currentContext()) return false;
+      model.reads.evidence = snapshot;
+      var current = completionSignature();
+      if (current !== previous) {
+        renderCompletion();
+        var changed = 'The evidence changed. Review the current selection before proposing completion.';
+        byId('workCompletionContent').prepend(unavailableNote(changed));
+        byId('workStatus').textContent = changed;
+        focusSelection();
+        return false;
+      }
+      return true;
+    } catch (error) {
+      if (!currentContext()) return false;
+      if (error.status === 401 || error.status === 403) {
+        pruneDrafts(true); clearRestrictedPresentation(); setState('restricted');
+      } else {
+        if (!error.code || !error.code.startsWith('WORK_EVIDENCE_')) model.reads.evidence = null;
+        renderCompletion();
+        byId('workStatus').textContent = 'Current evidence could not be confirmed. No completion proposal was sent.';
+        focusSelection();
+      }
+      return false;
+    } finally { clearTimeout(timeout); setPending(false); }
   }
   function renderCompletion() {
     var content = byId('workCompletionContent');
@@ -893,6 +952,15 @@
           path: mutationPath('withdraw_completion'), body: body }, event.currentTarget);
       }));
     } else if (allows('propose_completion')) {
+      try { api.completionRequirements(model.reads.evidence); }
+      catch (error) {
+        content.appendChild(unavailableNote(error.code === 'WORK_EVIDENCE_SELECTION_LIMIT'
+          ? 'The current evidence exceeds the 20-per-kind selection limit for this view. No records have been omitted; a completion proposal cannot be prepared here.'
+          : 'The complete, current evidence selection could not be confirmed. Reload current work before proposing completion.'));
+        content.appendChild(actionButton('Reload current work', '', function() { load(); }));
+        return;
+      }
+      content.appendChild(node('p', '', completionSelectionCopy()));
       content.appendChild(actionButton('Propose completion', '', function() { toggleForm('workCompletionForm'); }, 'btn btn-primary'));
       var tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
       var localDefault = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -902,7 +970,7 @@
       ], 'Propose completion', function(values) {
         return Object.assign(executionPins(), { action: 'propose_completion',
           reason: 'Propose explicit completion for authorized review.', expiresAt: new Date(values.get('expiresAt')).toISOString(),
-          gateRequirements: { checklists: evidencePins('checklists'), inspections: evidencePins('inspections'), files: evidencePins('files') },
+          gateRequirements: api.completionRequirements(model.reads.evidence),
         });
       }, 'propose_completion'));
     } else {
@@ -941,17 +1009,23 @@
       !model.execution ? 'empty' : model.record.workCapabilities.mutable ? 'ready' : 'read-only';
     setState(pageState, '', announcement || (model.partial.length ? STATE_COPY['partial-file'][1] :
       pageState === 'ready' ? 'Current server-owned work detail is ready.' : ''));
+    if (tabStorage && !tabStorage.persistent) {
+      byId('workStatus').textContent += ' Draft and retry storage is unavailable in this tab. Reloading removes unconfirmed local state.';
+    }
   }
 
   async function load(options) {
+    if (!tabReady) return false;
     options = options || {};
     if (loadController) loadController.abort();
-    loadController = new AbortController();
-    var timeout = setTimeout(function() { loadController.abort(); }, 12000);
+    var controller = new AbortController();
+    loadController = controller;
+    var timeout = setTimeout(function() { controller.abort(); }, 12000);
     if (!options.preserveApplied) setState('loading');
     model.partial = [];
     try {
-      var todayPayload = await responseJson('/api/v1/today', null, loadController.signal);
+      var todayPayload = await responseJson('/api/v1/today', null, controller.signal);
+      if (loadController !== controller) return false;
       model.today = validateToday(todayPayload.data);
       var selected = model.today.records.find(function(record) { return record.appointmentId === selector.appointmentId; });
       if (!selected) {
@@ -975,21 +1049,25 @@
       var names = ['execution','labor','materials','equipment','catalogue','evidence','progress','completion'];
       var locations = [paths.execution,paths.labor,paths.materials,paths.equipment,paths.equipmentCatalogue,
         paths.evidence,paths.progress,paths.completion];
-      var settled = await Promise.allSettled(locations.map(function(path) { return responseJson(path, null, loadController.signal); }));
+      var settled = await Promise.allSettled(locations.map(function(path) { return responseJson(path, null, controller.signal); }));
       if (settled[0].status !== 'fulfilled') throw settled[0].reason;
       var authorityFailure = settled.slice(1).find(function(result) {
         return result.status === 'rejected' && result.reason &&
           (result.reason.status === 401 || result.reason.status === 403);
       });
       if (authorityFailure) throw authorityFailure.reason;
+      if (settled[5].status === 'fulfilled') {
+        settled[5].value = { data: await collectEvidenceResponse(settled[5].value, controller.signal) };
+      }
+      if (loadController !== controller) return false;
       model.execution = validateExecution(settled[0].value.data);
       pruneDrafts(false);
       model.reads = {};
       settled.slice(1).forEach(function(result, index) {
         var name = names[index + 1];
         if (result.status === 'fulfilled') {
-          if (name === 'evidence' && Array.isArray(result.value.data)) model.reads[name] = result.value.data;
-          else model.reads[name] = result.value.data;
+          model.reads[name] = result.value.data;
+          if (name === 'evidence' && !result.value.data.complete) model.partial.push(name);
         } else model.partial.push(name);
       });
       renderReady(options.announcement);
@@ -999,6 +1077,7 @@
       }
       return true;
     } catch (error) {
+      if (loadController !== controller) return false;
       var offline = root.navigator && root.navigator.onLine === false;
       if (offline || error.name === 'AbortError' && root.navigator && root.navigator.onLine === false) setState('offline');
       else if (error.status === 401 || error.status === 403) {
@@ -1023,12 +1102,14 @@
   }
 
   function setPending(value) {
-    pending = value;
-    document.querySelectorAll('#workMain button, #workConfirmDialog button').forEach(function(button) { button.disabled = value; });
+    pending = value || !tabReady;
+    document.querySelectorAll('#workMain button, #workConfirmDialog button').forEach(function(button) { button.disabled = pending; });
   }
 
   async function sendMutation(descriptor, trigger) {
     if (pending) return;
+    if (descriptor.action === 'propose_completion' && !model.retryMutation &&
+        !await refreshCompletionSelection(descriptor.evidenceSignature)) return;
     var focusId = trigger && trigger.id || 'workMain';
     setPending(true);
     var key = idempotencyFor(descriptor.action);
@@ -1094,5 +1175,29 @@
     setState('restricted', 'Work link is invalid', 'Return to Today and open one current assigned appointment.', false);
     return;
   }
-  load();
+  function activateTab(resume) {
+    var generation = ++tabClaimGeneration;
+    setPending(true);
+    setState('loading');
+    api.claimTabStorage(root, resume).then(function(claim) {
+      if (generation !== tabClaimGeneration) { claim.release(); return; }
+      tabStorage = claim;
+      tabReady = true;
+      setPending(false);
+      load();
+    }).catch(function() {
+      if (generation === tabClaimGeneration) {
+        setState('restricted', 'Work could not be opened', 'Reload this tab before recording any field activity.');
+      }
+    });
+  }
+  root.addEventListener('pagehide', function() {
+    tabClaimGeneration += 1;
+    tabReady = false;
+    setPending(true);
+    if (loadController) loadController.abort();
+    if (tabStorage) tabStorage.release();
+  });
+  root.addEventListener('pageshow', function(event) { if (event.persisted) activateTab(true); });
+  activateTab(false);
 })(window);

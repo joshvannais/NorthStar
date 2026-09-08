@@ -206,7 +206,8 @@ async function main() {
                 } }),
               });
             }
-            const evidenceId = normalized.action === 'create_checklist' ? CHECKLIST : CHECKLIST_RESPONSE;
+            const evidenceId = normalized.action === 'create_checklist' ? CHECKLIST :
+              normalized.action === 'respond_item' ? CHECKLIST_RESPONSE : require('node:crypto').randomUUID();
             const evidenceDigest = normalized.action === 'create_checklist' ? '7'.repeat(64) : '6'.repeat(64);
             const evidenceRecord = {
               id: evidenceId, rootId: evidenceId, previousRecordId: null,
@@ -923,6 +924,8 @@ module.exports.benignFixture = function(records) {
   currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault', 'downtime_start', 'downtime_end', 'maintenance'];
   const current = execution('in_progress', 4, 'f'.repeat(64));
   return JSON.parse(JSON.stringify({ today: today(current.data), execution: current,
-    reads: emptyReads(current.data, records || []) }).split(HOSTILE).join('Routine job detail.'));
+    reads: emptyReads(current.data, records || []) }), function(_key, value) {
+    return typeof value === 'string' && /[<>]/.test(value) ? 'Routine job detail.' : value;
+  });
 };
 if (require.main === module) main().catch(error => { console.error(error && error.stack || error); process.exitCode = 1; });

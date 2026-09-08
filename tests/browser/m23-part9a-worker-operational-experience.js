@@ -304,11 +304,21 @@ async function main() {
         assert.match(await page.locator('#workCustomer').textContent(), /Jamie Carter/);
         assert.strictEqual(await page.locator('#workMain img:not(.logo-img):not(.mobile-logo), #workMain script').count(), 0);
         assert.strictEqual(await page.evaluate(() => window.m23Part9aCompromised), false);
-        const geometry = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth,
-          main: document.getElementById('workMain').scrollWidth, focusable: [...document.querySelectorAll('#workMain button,#workMain input,#workMain select,#workMain textarea,#workMain a')]
-            .filter(node => !node.disabled && !node.hidden).every(node => node.getBoundingClientRect().height >= 44) }));
+        const geometry = await page.evaluate(() => {
+          const title = document.getElementById('workTitle').getBoundingClientRect();
+          const badge = document.getElementById('workStateBadge').getBoundingClientRect();
+          const overview = document.querySelector('.work-overview-grid').getBoundingClientRect();
+          return { viewport: innerWidth, document: document.documentElement.scrollWidth,
+            main: document.getElementById('workMain').scrollWidth,
+            badge: { width: badge.width, height: badge.height },
+            overviewBelowHeading: overview.top >= Math.max(title.bottom, badge.bottom) - 1,
+            focusable: [...document.querySelectorAll('#workMain button,#workMain input,#workMain select,#workMain textarea,#workMain a')]
+              .filter(node => !node.disabled && !node.hidden).every(node => node.getBoundingClientRect().height >= 44) };
+        });
         assert.ok(geometry.document <= geometry.viewport + 1, JSON.stringify(geometry));
         assert.ok(geometry.main <= geometry.viewport + 1, JSON.stringify(geometry));
+        assert.ok(geometry.badge.width >= 72 && geometry.badge.height <= 54, JSON.stringify(geometry));
+        assert.strictEqual(geometry.overviewBelowHeading, true, JSON.stringify(geometry));
         assert.strictEqual(geometry.focusable, true, JSON.stringify(geometry));
         const snapshot = await page.locator('#workMain').ariaSnapshot();
         for (const name of ['Work status', 'Time', 'Materials', 'Equipment', 'Evidence', 'Progress and issues', 'Completion']) assert.match(snapshot, new RegExp(name));
@@ -399,6 +409,13 @@ async function main() {
           await page.locator('#workMaterialForm-quantity').fill('2');
           await page.locator('#workMaterialForm-locationKey').fill('truck.stock');
           await page.locator('#workMaterialForm-destinationLocationKey').fill('job.site');
+          const materialValidity = await page.locator('#workMaterialForm').evaluate(form => ({
+            valid: form.checkValidity(),
+            controls: [...form.elements].filter(control => !control.checkValidity()).map(control => ({
+              name: control.name, value: control.value, message: control.validationMessage,
+            })),
+          }));
+          assert.strictEqual(materialValidity.valid, true, JSON.stringify(materialValidity));
           await page.locator('#workMaterialForm').getByRole('button', { name: 'Record material evidence' }).click();
           await page.getByRole('dialog', { name: 'Confirm Record material evidence' })
             .getByRole('button', { name: 'Confirm Record material evidence' }).click();

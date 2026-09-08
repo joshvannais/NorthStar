@@ -672,6 +672,61 @@ async function main() {
     ledger.cases.push({ readOnly: true, terminalHistoryVisible: true, mutationCapabilityExposed: false });
     await readOnlyContext.close();
 
+    currentExecution = execution('in_progress', 4, 'f'.repeat(64));
+    currentActions = inProgressActions(false);
+    currentMaterialKinds = ['consumed', 'returned', 'transferred', 'waste'];
+    currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+      'downtime_start', 'downtime_end', 'maintenance'];
+    const secondarySessionContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await secondarySessionContext.addInitScript(() => { window.m23Part9aCompromised = false; });
+    await secondarySessionContext.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== origin) return route.fulfill({ status: 204, body: '' });
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      if (url.pathname === '/api/v1/today') return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(today(currentExecution.data)),
+      });
+      if (url.pathname === `/api/v1/field-executions/${EXECUTION}`) return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(currentExecution),
+      });
+      if (url.pathname === `/api/v1/field-executions/${EXECUTION}/labor`) return route.fulfill({
+        status: 401, contentType: 'application/json', body: JSON.stringify({
+          success: false, error: { code: 'SESSION_NOT_CURRENT', message: `Session expired ${HOSTILE}` },
+        }),
+      });
+      const reads = emptyReads(currentExecution.data, []);
+      const mapping = new Map([
+        [`/api/v1/field-executions/${EXECUTION}/materials`, reads.materials],
+        [`/api/equipment/executions/${EXECUTION}`, reads.equipment],
+        ['/api/equipment/catalogue', reads.catalogue],
+        [`/api/v1/field-executions/${EXECUTION}/field-evidence`, reads.evidence],
+        [`/api/v1/field-executions/${EXECUTION}/progress`, reads.progress],
+        [`/api/v1/field-executions/${EXECUTION}/completion`, reads.completion],
+      ]);
+      if (mapping.has(url.pathname)) return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(mapping.get(url.pathname)),
+      });
+      return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+        success: false, error: { code: 'TEST_UNINVENTORIED', message: 'Uninventoried request.' },
+      }) });
+    });
+    const secondarySessionPage = await secondarySessionContext.newPage();
+    await secondarySessionPage.goto(
+      `${origin}/dashboard/work?appointmentId=${APPOINTMENT}&executionId=${EXECUTION}`,
+      { waitUntil: 'domcontentloaded' }
+    );
+    await secondarySessionPage.waitForFunction(() => document.body.dataset.workState !== 'loading');
+    assert.strictEqual(await secondarySessionPage.locator('body').getAttribute('data-work-state'), 'restricted');
+    const secondaryRestrictedText = await secondarySessionPage.locator('#workMain').textContent();
+    for (const priorTenantText of ['Kitchen sink repair', 'Jamie Carter', 'Alex Rivera', HOSTILE]) {
+      assert.ok(!secondaryRestrictedText.includes(priorTenantText), `secondary auth loss retained ${priorTenantText}`);
+    }
+    assert.strictEqual(await secondarySessionPage.evaluate(() => window.m23Part9aCompromised), false);
+    assert.strictEqual(await secondarySessionPage.locator('#workSections').isHidden(), true);
+    ledger.cases.push({ secondaryReadSessionExpiry: true, staleTenantPresentationRemoved: true,
+      mutationCapabilityExposed: false });
+    await secondarySessionContext.close();
+
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await context.addInitScript(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); });
     await context.route('**/*', route => {

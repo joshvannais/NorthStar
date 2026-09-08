@@ -115,6 +115,7 @@ const pages = {
   '/account/pending': 'public/account/pending.html',
   '/dashboard': 'public/demo-dashboard.html',
   '/dashboard/today': 'public/dashboard/today.html',
+  '/dashboard/work': 'public/dashboard/work.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',

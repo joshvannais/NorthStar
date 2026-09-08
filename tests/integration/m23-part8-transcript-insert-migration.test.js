@@ -127,8 +127,9 @@ real('Mission 23 Part 8 completion insert-only transcript correction migration l
     )).rows[0].count).toBe(0);
     const inspected = await require('../../scripts/inspect-production-migration-history').inspect(database.connectionString);
     expect(inspected).toMatchObject({
-      sourceMigrationCount: 50, appliedMigrationCount: 50, timezone: 'UTC', encoding: 'UTF8',
-      appliedWithoutSource: [], duplicateApplied: [], mismatches: [], pendingMigrations: [],
+      sourceMigrationCount: 51, appliedMigrationCount: 50, timezone: 'UTC', encoding: 'UTF8',
+      appliedWithoutSource: [], duplicateApplied: [], mismatches: [],
+      pendingMigrations: [{ filename: '053_current_worker_execution_projection.sql' }],
     });
   }, 120000);
 });

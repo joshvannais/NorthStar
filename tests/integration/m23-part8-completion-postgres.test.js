@@ -8,7 +8,7 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
 const { normalizeEvidenceAction } = require('../../src/fieldEvidence/contract');
-const { mutateFieldEvidence } = require('../../src/fieldEvidence/repository');
+const { mutateFieldEvidence, readFieldEvidence } = require('../../src/fieldEvidence/repository');
 const { normalizeCompletionAction } = require('../../src/completion/contract');
 const { mutateCompletion, readCompletion } = require('../../src/completion/repository');
 
@@ -261,6 +261,26 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     return result;
   }
 
+  async function readExecutionByAppointment(actor, appointmentId) {
+    const client = await runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const result = await client.query(
+        `SELECT public.canonical_field_execution_read_by_appointment(
+           $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid
+         ) AS result`,
+        [actor.organizationId, actor.actorUserId, actor.actorAccessRole, actor.authSessionId, appointmentId]
+      );
+      await client.query('COMMIT');
+      return result.rows[0].result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   const pin = record => ({ id: record.id, revision: Number(record.revision), digest: record.digest });
   const emptyRequirements = () => ({ checklists: [], inspections: [], files: [] });
   const proposal = (context, requirements = emptyRequirements(), expiresInMs = 60000, options = {}) => mutate(
@@ -489,6 +509,27 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     expect(replay.body).toEqual(proposed.body);
   }, 120000);
 
+  test('Part 9A current inspection selection survives an authorized observation correction', async () => {
+    const context = await createExecution();
+    const first = await evidence(context, { action: 'record_observation', observationClass: 'inspection',
+      resultType: 'pass', observation: 'Routine inspection complete.', measurement: null, exception: null, supportingEvidenceIds: [] });
+    const corrected = await evidence(context, { action: 'correct', evidenceId: first.id,
+      expectedEvidenceRevision: first.revision, expectedEvidenceDigest: first.digest,
+      replacement: { kind: 'observation', observationClass: 'inspection', resultType: 'pass',
+        observation: 'Routine inspection detail corrected after review.', measurement: null, exception: null, supportingEvidenceIds: [] } });
+    const response = await readFieldEvidence(runtimePool, { ...ownerActor, executionId: context.execution.id, limit: 100, cursor: null });
+    const client = require('../../public/js/field-execution-client');
+    const snapshot = await client.collectEvidence({ ...response.body, nextCursor: null }, () => { throw new Error('Unexpected pagination'); }, context.execution.id);
+    const requirements = client.completionRequirements(snapshot);
+    expect(requirements.inspections).toEqual([pin(corrected)]);
+    expect(response.body.data).toHaveLength(2);
+    const result = await proposal(context, requirements);
+    expect(result.body.data.lifecycleState).toBe('completion_pending');
+    expect(result.body.completionRecord.gateSnapshot.inspections).toEqual([
+      expect.objectContaining({ id: corrected.id, matched: true, passed: true })
+    ]);
+  }, 120000);
+
   test('completion reads and exact replays fail closed for every padded demo source and unknown provenance', async () => {
     const context = await createExecution();
     const key = crypto.randomUUID();
@@ -584,6 +625,24 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
 
   test('one concurrent approval wins, completion is immutable, and reopening requires an explicit resume', async () => {
     const context = await createExecution();
+    expect(await readExecutionByAppointment(memberActor, context.execution.appointmentId))
+      .toMatchObject({ success: true, data: {
+        id: context.execution.id,
+        lifecycleState: 'in_progress',
+        actions: [
+          'pause', 'start_timer', 'record_manual', 'record_material', 'record_equipment',
+          'create_checklist', 'respond_item', 'record_observation', 'record_note',
+          'record_progress', 'record_blocker', 'record_exception', 'record_change',
+          'propose_completion',
+        ],
+        materialMovementKinds: ['consumed', 'returned', 'transferred', 'waste'],
+        equipmentKinds: [
+          'check_out', 'use', 'check_in', 'reading', 'condition', 'fault',
+          'downtime_start', 'downtime_end', 'maintenance',
+        ],
+      } });
+    await expect(readExecutionByAppointment(ownerActor, context.execution.appointmentId))
+      .rejects.toMatchObject({ code: 'P0002' });
     const proposed = await proposal(context);
     const proposalPin = pin(proposed.body.completionRecord);
     const first = completionInput(context, 'approve_completion', { proposal: proposalPin }, ownerActor, crypto.randomUUID());
@@ -598,6 +657,8 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     context.execution = approved.body.data;
     const approval = approved.body.completionRecord;
     expect(context.execution.lifecycleState).toBe('completed');
+    expect(await readExecutionByAppointment(memberActor, context.execution.appointmentId))
+      .toMatchObject({ success: true, data: { id: context.execution.id, lifecycleState: 'completed' } });
     expect((await ownerPool.query(
       "SELECT count(*)::int AS count FROM canonical_completion_records WHERE execution_id=$1 AND record_kind='approval'",
       [context.execution.id]
@@ -623,6 +684,8 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
       completion: pin(approval), nextAction: 'Return to the site and record the newly observed work.',
     });
     expect(reopened.body.data.lifecycleState).toBe('reopened');
+    expect(await readExecutionByAppointment(memberActor, context.execution.appointmentId))
+      .toMatchObject({ success: true, data: { id: context.execution.id, lifecycleState: 'reopened' } });
     const reopening = reopened.body.completionRecord;
     await expect(require('../../src/operations/repository').transitionFieldExecution(runtimePool, {
       ...ownerActor, executionId: context.execution.id,

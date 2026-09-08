@@ -233,6 +233,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     await previewAndApprove(IDS.direct, 'assign', { kind: 'profile', id: IDS.employee }, slots.s1, slots.e1, 'direct-assign');
     await previewAndApprove(IDS.direct, 'dispatch', { kind: 'profile', id: IDS.employee }, slots.s1, slots.e1, 'direct-dispatch');
     await previewAndApprove(IDS.crewWork, 'assign', { kind: 'crew', id: IDS.crew }, slots.s2, slots.e2, 'crew-assign');
+    await previewAndApprove(IDS.crewWork, 'dispatch', { kind: 'crew', id: IDS.crew }, slots.s2, slots.e2, 'crew-dispatch');
     await previewAndApprove(IDS.revoked, 'assign', { kind: 'profile', id: IDS.employee }, slots.s3, slots.e3, 'revoked-assign');
     await previewAndApprove(IDS.revoked, 'dispatch', { kind: 'profile', id: IDS.employee }, slots.s3, slots.e3, 'revoked-dispatch');
     await previewAndApprove(IDS.revoked, 'reschedule', { kind: 'profile', id: IDS.employee },
@@ -260,6 +261,26 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     if (approval.status !== 200) throw new Error(`Approval ${key} failed ${approval.status}: ${JSON.stringify(approval.body)}`);
   }
 
+  async function readExecutionByAppointment(actor, appointmentId) {
+    const client = await runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const result = await client.query(
+        `SELECT public.canonical_field_execution_read_by_appointment(
+           $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid
+         ) AS result`,
+        [actor.organizationId, actor.actorUserId, actor.actorAccessRole, actor.authSessionId, appointmentId]
+      );
+      await client.query('COMMIT');
+      return result.rows[0].result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   afterAll(async () => {
     try {
       if (db) await db.close().catch(() => {});
@@ -277,6 +298,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     const directProjection = await require('../../src/scheduling/todayRepository').loadToday(runtimePool, {
       organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
       membershipId: IDS.employee, authSessionId: sessions.employee.sessionId,
+      onboardingComplete: true, subscriptionMutable: true,
     });
     expect(directProjection.count).toBe(3);
     const response = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
@@ -291,9 +313,16 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     const crew = data.records.find(record => record.appointmentId === IDS.crewWork);
     const revoked = data.records.find(record => record.appointmentId === IDS.revoked);
     expect(direct).toMatchObject({ assignment: { kind: 'worker', direct: true, currentCrew: false }, dispatch: { state: 'dispatched' } });
-    expect(crew).toMatchObject({ assignment: { kind: 'crew', direct: false, currentCrew: true }, dispatch: { state: 'not_dispatched' } });
+    expect(crew).toMatchObject({ assignment: { kind: 'crew', direct: false, currentCrew: true }, dispatch: { state: 'dispatched' } });
     expect(crew.crew.teammates.map(member => member.name)).toEqual(expect.arrayContaining([expect.stringContaining('Alex Employee'), expect.stringContaining('Morgan Teammate')]));
     expect(revoked.dispatch.state).toBe('revoked');
+    expect(revoked.execution).toBeNull();
+    expect(direct.workCapabilities).toMatchObject({
+      version: 'm23-part9a-worker-actions-v1', mutable: true, actions: ['initialize'],
+      materialMovementKinds: [], equipmentKinds: [],
+    });
+    expect(crew.workCapabilities.actions).toEqual(['initialize']);
+    expect(revoked.workCapabilities.actions).toEqual([]);
     for (const record of data.records) {
       expect(record.route).toMatchObject({ providerNeutral: true, providerCalls: 0, travelDurationMinutes: null, distance: null });
       expect(record.instructions.text).toContain(HOSTILE);
@@ -307,6 +336,272 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     expect(serialized).not.toContain(IDS.otherWorker);
     expect(serialized).not.toContain(IDS.unassigned);
     expect(serialized).not.toContain(IDS.otherTenant);
+  });
+
+  test('adds only the current in-scope execution pointer and opaque worker draft scope to Today', async () => {
+    const assignment = await pins(runtimePool, IDS.organization, IDS.direct);
+    const created = await request(app)
+      .post(`/api/v1/field-executions/appointments/${IDS.direct}`)
+      .set(sessions.employee.headers)
+      .set('Idempotency-Key', 'm23-part9a-today-pointer-0001')
+      .send({
+        expectedAssignmentRevision: assignment.revision,
+        expectedAssignmentDigest: assignment.digest,
+        reason: 'Open the current assigned work detail.',
+      })
+      .expect(201);
+
+    const response = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+    const data = response.body.data;
+    const direct = data.records.find(record => record.appointmentId === IDS.direct);
+    const crew = data.records.find(record => record.appointmentId === IDS.crewWork);
+    expect(data).toMatchObject({
+      readOnly: true,
+      mutationCapabilities: [],
+      identity: { profileId: IDS.employee },
+      businessProfile: { timeZone: 'America/New_York' },
+    });
+    expect(data.scopeDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(data.businessProfile.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(data.businessProfile.version).toBe(1);
+    expect(data.businessProfile.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(direct.execution).toMatchObject({
+      id: created.body.data.id,
+      lifecycleState: 'not_started',
+      revision: 1,
+      digest: created.body.data.digest,
+      sourceAssignmentRevision: assignment.revision,
+      sourceAssignmentDigest: assignment.digest,
+    });
+    expect(direct.workCapabilities).toEqual({
+      version: 'm23-part9a-worker-actions-v1', mutable: true, actions: ['start'],
+      materialMovementKinds: [], equipmentKinds: [],
+    });
+    expect(crew.execution).toBeNull();
+    expect(JSON.stringify(data)).not.toContain(sessions.employee.sessionId);
+    expect(JSON.stringify(data)).not.toContain(IDS.organization);
+  });
+
+  test('rotates the browser draft scope when the current access role changes', async () => {
+    const { loadToday } = require('../../src/scheduling/todayRepository');
+    const input = {
+      organizationId: IDS.organization,
+      actorUserId: IDS.employee,
+      actorAccessRole: 'member',
+      membershipId: IDS.employee,
+      authSessionId: sessions.employee.sessionId,
+      onboardingComplete: true,
+      subscriptionMutable: true,
+    };
+    const memberProjection = await loadToday(runtimePool, input);
+    await runtimePool.query(
+      "UPDATE public.organization_memberships SET role='admin' WHERE organization_id=$1 AND id=$2 AND user_id=$3",
+      [IDS.organization, IDS.employee, IDS.employee]
+    );
+    try {
+      const adminProjection = await loadToday(runtimePool, { ...input, actorAccessRole: 'admin' });
+      expect(adminProjection.scopeDigest).not.toBe(memberProjection.scopeDigest);
+    } finally {
+      await runtimePool.query(
+        "UPDATE public.organization_memberships SET role='member' WHERE organization_id=$1 AND id=$2 AND user_id=$3",
+        [IDS.organization, IDS.employee, IDS.employee]
+      );
+    }
+  });
+
+  test('projects existing execution identity only through current worker, tenant and session authority', async () => {
+    const employee = {
+      organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
+      authSessionId: sessions.employee.sessionId,
+    };
+    const teammate = {
+      organizationId: IDS.organization, actorUserId: IDS.teammate, actorAccessRole: 'member',
+      authSessionId: sessions.teammate.sessionId,
+    };
+    const owner = {
+      organizationId: IDS.organization, actorUserId: IDS.owner, actorAccessRole: 'owner',
+      authSessionId: sessions.owner.sessionId,
+    };
+    const other = {
+      organizationId: IDS.otherOrganization, actorUserId: IDS.otherOwner, actorAccessRole: 'owner',
+      authSessionId: sessions.other.sessionId,
+    };
+    const direct = await readExecutionByAppointment(employee, IDS.direct);
+    expect(direct).toMatchObject({ success: true, data: {
+      appointmentId: IDS.direct, lifecycleState: 'not_started', revision: 1,
+      actions: ['start'], materialMovementKinds: [], equipmentKinds: [],
+    } });
+    expect(direct.data.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(direct.data.digest).toMatch(/^[0-9a-f]{64}$/);
+
+    const assignmentBeforeReview = (await migrationPool.query(
+      `SELECT revision,rtrim(canonical_digest) AS digest,needs_review,review_reasons,updated_at
+         FROM public.canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`,
+      [IDS.organization, IDS.direct]
+    )).rows[0];
+    const transcriptBeforeReview = (await migrationPool.query(
+      `SELECT transcript.id,transcript.source
+         FROM public.canonical_transcripts transcript
+         JOIN public.canonical_appointments appointment
+           ON appointment.organization_id=transcript.organization_id
+          AND appointment.operation_id=transcript.operation_id
+          AND appointment.graph_id=transcript.graph_id
+        WHERE appointment.organization_id=$1 AND appointment.id=$2`,
+      [IDS.organization, IDS.direct]
+    )).rows[0];
+    const started = await request(app)
+      .post(`/api/v1/field-executions/${direct.data.id}/transitions`)
+      .set(sessions.employee.headers)
+      .set('Idempotency-Key', 'm23-part9a-review-capability-start-0001')
+      .send({
+        expectedRevision: direct.data.revision,
+        expectedDigest: direct.data.digest,
+        expectedAssignmentRevision: Number(assignmentBeforeReview.revision),
+        expectedAssignmentDigest: assignmentBeforeReview.digest,
+        action: 'start',
+        reason: 'Start the exact current worker execution for capability proof.',
+      })
+      .expect(200);
+    expect(started.body.data.lifecycleState).toBe('in_progress');
+
+    await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments DISABLE TRIGGER USER');
+    try {
+      await migrationPool.query(
+        'UPDATE public.canonical_transcripts SET source=$2 WHERE organization_id=$1 AND id=$3',
+        [IDS.organization, 'lead', transcriptBeforeReview.id]
+      );
+      await migrationPool.query(
+        `UPDATE public.canonical_schedule_assignments
+            SET needs_review=TRUE,
+                review_reasons='[{"code":"part9a_capability_review"}]'::jsonb,
+                revision=revision+1,
+                canonical_digest=public.canonical_schedule_assignment_digest(
+                  target_state,workforce_profile_id,workforce_crew_id,schedule_state,dispatch_state,
+                  scheduled_start,scheduled_end,appointment_status,TRUE,
+                  '[{"code":"part9a_capability_review"}]'::jsonb
+                ),
+                updated_at=transaction_timestamp()
+          WHERE organization_id=$1 AND appointment_id=$2`,
+        [IDS.organization, IDS.direct]
+      );
+    } finally {
+      await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments ENABLE TRIGGER USER');
+    }
+    try {
+      const reviewLimited = await readExecutionByAppointment(employee, IDS.direct);
+      expect(reviewLimited.data.actions).toEqual([
+        'pause', 'start_timer', 'record_manual', 'record_material',
+        'create_checklist', 'respond_item', 'record_observation', 'record_note',
+        'propose_completion',
+      ]);
+      expect(reviewLimited.data.materialMovementKinds).toEqual(['consumed', 'returned', 'transferred', 'waste']);
+      expect(reviewLimited.data.equipmentKinds).toEqual([]);
+      expect(reviewLimited.data.actions).not.toEqual(expect.arrayContaining([
+        'record_equipment', 'record_progress', 'record_blocker', 'record_exception', 'record_change',
+      ]));
+    } finally {
+      await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments DISABLE TRIGGER USER');
+      try {
+        await migrationPool.query(
+          'UPDATE public.canonical_transcripts SET source=$2 WHERE organization_id=$1 AND id=$3',
+          [IDS.organization, transcriptBeforeReview.source, transcriptBeforeReview.id]
+        );
+        await migrationPool.query(
+          `UPDATE public.canonical_schedule_assignments
+              SET needs_review=$3,review_reasons=$4::jsonb,revision=$5,
+                  canonical_digest=$6,updated_at=$7
+            WHERE organization_id=$1 AND appointment_id=$2`,
+          [IDS.organization, IDS.direct, assignmentBeforeReview.needs_review,
+            JSON.stringify(assignmentBeforeReview.review_reasons), Number(assignmentBeforeReview.revision),
+            assignmentBeforeReview.digest, assignmentBeforeReview.updated_at]
+        );
+      } finally {
+        await migrationPool.query('ALTER TABLE public.canonical_schedule_assignments ENABLE TRIGGER USER');
+      }
+    }
+
+    expect(await readExecutionByAppointment(employee, IDS.crewWork))
+      .toEqual({ success: true, data: null });
+    const assignment = await pins(runtimePool, IDS.organization, IDS.crewWork);
+    const created = await request(app)
+      .post(`/api/v1/field-executions/appointments/${IDS.crewWork}`)
+      .set(sessions.employee.headers)
+      .set('Idempotency-Key', 'm23-part9a-crew-pointer-0001')
+      .send({
+        expectedAssignmentRevision: assignment.revision,
+        expectedAssignmentDigest: assignment.digest,
+        reason: 'Open the current crew work detail.',
+      })
+      .expect(201);
+    for (const actor of [employee, teammate]) {
+      expect(await readExecutionByAppointment(actor, IDS.crewWork)).toMatchObject({
+        success: true,
+        data: {
+          id: created.body.data.id,
+          appointmentId: IDS.crewWork,
+          lifecycleState: 'not_started',
+          sourceAssignmentRevision: assignment.revision,
+          sourceAssignmentDigest: assignment.digest,
+        },
+      });
+    }
+
+    await expect(readExecutionByAppointment(owner, IDS.direct)).rejects.toMatchObject({ code: 'P0002' });
+    await expect(readExecutionByAppointment(other, IDS.direct)).rejects.toMatchObject({ code: 'P0002' });
+    await expect(readExecutionByAppointment(employee, IDS.revoked)).rejects.toMatchObject({ code: 'P0002' });
+    await expect(readExecutionByAppointment({ ...employee, actorAccessRole: 'owner' }, IDS.direct))
+      .rejects.toMatchObject({ code: '42501' });
+    expect((await migrationPool.query(
+      "SELECT has_table_privilege($1,'public.canonical_field_executions','SELECT') AS table_read, " +
+      "has_function_privilege($1,'public.canonical_field_execution_read_by_appointment(uuid,uuid,text,uuid,uuid)','EXECUTE') AS entry_read, " +
+      "has_function_privilege($1,'public.canonical_field_execution_projection(public.canonical_field_executions)','EXECUTE') AS helper_read",
+      [roles.runtimeRole]
+    )).rows[0]).toEqual({ table_read: false, entry_read: true, helper_read: false });
+  });
+
+  test('preserves completed appointments in Today as current read-only execution history', async () => {
+    const before = (await migrationPool.query(
+      'SELECT status FROM public.canonical_appointments WHERE organization_id=$1 AND id=$2',
+      [IDS.organization, IDS.direct]
+    )).rows[0];
+    expect(before).toBeDefined();
+    await migrationPool.query('ALTER TABLE public.canonical_appointments DISABLE TRIGGER USER');
+    try {
+      await migrationPool.query(
+        "UPDATE public.canonical_appointments SET status='completed' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.direct]
+      );
+      const response = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+      const completed = response.body.data.records.find(record => record.appointmentId === IDS.direct);
+      expect(completed).toBeDefined();
+      expect(completed.execution).toMatchObject({ lifecycleState: 'in_progress' });
+      expect(completed.workCapabilities).toEqual({
+        version: 'm23-part9a-worker-actions-v1', mutable: false, actions: [],
+        materialMovementKinds: [], equipmentKinds: [],
+      });
+    } finally {
+      await migrationPool.query(
+        'UPDATE public.canonical_appointments SET status=$3 WHERE organization_id=$1 AND id=$2',
+        [IDS.organization, IDS.direct, before.status]
+      );
+      await migrationPool.query('ALTER TABLE public.canonical_appointments ENABLE TRIGGER USER');
+    }
+  });
+
+  test('serves the mounted worker detail bundle without broad account bootstrap', async () => {
+    const shell = await request(app)
+      .get(`/dashboard/work?appointmentId=${IDS.direct}`)
+      .set(sessions.employee.headers)
+      .expect(200);
+    const scriptPaths = [...shell.text.matchAll(/<script[^>]+src="([^"]+)"/g)].map(match => match[1]);
+    expect(scriptPaths).toEqual(expect.arrayContaining([
+      '/js/theme.js', '/js/display-projection.js', '/js/today-shell.js',
+      '/js/field-execution-client.js', '/js/work-page.js',
+    ]));
+    expect(scriptPaths).not.toContain('/js/auth-session.js');
+    expect(scriptPaths).not.toContain('/js/nav-component.js');
+    expect(shell.text).toContain('aria-labelledby="workTitle"');
   });
 
   test('serves an employee-minimal Today bootstrap and static bundle through a real mounted cookie session', async () => {
@@ -335,7 +630,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
 
     const today = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
     expect(today.body.data.identity).toEqual(expect.objectContaining({ displayName: expect.any(String) }));
-    expect(Object.keys(today.body.data.identity).sort()).toEqual(['displayName', 'operationalRole']);
+    expect(Object.keys(today.body.data.identity).sort()).toEqual(['displayName', 'operationalRole', 'profileId']);
   });
 
   test('rejects forged scope, exposes no mutation method, and keeps owner access personal', async () => {
@@ -358,19 +653,37 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
       membershipId: IDS.employee, authSessionId: sessions.employee.sessionId,
     })).rejects.toMatchObject({ code: 'M22_TODAY_WORKFORCE_RESTRICTED', status: 403 });
 
+    const beforeCrewChange = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
     await runtimePool.query('DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2 AND profile_id=$3', [IDS.organization, IDS.crew, IDS.employee]);
     try {
       const removed = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+      expect(removed.body.data.scopeDigest).not.toBe(beforeCrewChange.body.data.scopeDigest);
       expect(removed.body.data.records.map(record => record.appointmentId)).toEqual([IDS.direct, IDS.revoked]);
+      await expect(readExecutionByAppointment({
+        organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
+        authSessionId: sessions.employee.sessionId,
+      }, IDS.crewWork)).rejects.toMatchObject({ code: 'P0002' });
+      expect(await readExecutionByAppointment({
+        organizationId: IDS.organization, actorUserId: IDS.teammate, actorAccessRole: 'member',
+        authSessionId: sessions.teammate.sessionId,
+      }, IDS.crewWork)).toMatchObject({ success: true, data: { appointmentId: IDS.crewWork } });
     } finally {
       await runtimePool.query(
         `INSERT INTO public.workforce_crew_members(organization_id,crew_id,profile_id,crew_role,created_by_user_id)
          VALUES ($1,$2,$3,'lead',$4)`, [IDS.organization, IDS.crew, IDS.employee, IDS.teammate]
       );
     }
+    const afterCrewReadded = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+    expect(afterCrewReadded.body.data.scopeDigest).not.toBe(beforeCrewChange.body.data.scopeDigest);
 
     await runtimePool.query("UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='part6_test' WHERE id=$1", [sessions.employee.sessionId]);
-    try { await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(401); }
+    try {
+      await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(401);
+      await expect(readExecutionByAppointment({
+        organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
+        authSessionId: sessions.employee.sessionId,
+      }, IDS.direct)).rejects.toMatchObject({ code: '42501' });
+    }
     finally { await runtimePool.query("UPDATE public.auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1", [sessions.employee.sessionId]); }
 
     const accessExpiry = (await runtimePool.query(

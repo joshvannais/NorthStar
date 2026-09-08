@@ -11,7 +11,10 @@ const { readOperationalOverview } = require('../operations/overviewRepository');
 function createOperationalOverviewRouter(options = {}) {
   const router = express.Router();
   const tenantAuth = options.tenantAuth || requireTenantAccess;
-  const throttle = options.throttle || rateLimit('internal-api');
+  const throttle = options.throttle || rateLimit(
+    'internal-api',
+    req => `operational-overview:${req.tenantContext.organizationId}:${req.tenantContext.userId}`
+  );
   const poolProvider = options.poolProvider || (() => db.getPool());
   const read = options.readOverview || readOperationalOverview;
   router.get('/', (_req, res, next) => {

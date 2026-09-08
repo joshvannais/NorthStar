@@ -22,6 +22,8 @@ Command:
 
 Result: failed at the new material-form reset control because `locationKey` remained required after `Discard draft` reset the movement kind from `transferred` to `consumed` (`'' !== null`). The companion equipment reset and execution-revision draft controls are in the same tests-first change and remain required after this first failure is corrected.
 
+The execution-revision control also requires stale draft and idempotency storage keys to be removed, rather than merely becoming unreachable, so repeated authoritative changes remain bounded within the tab.
+
 Failure evidence JSON SHA-256: `8bde4575cdc459a1914a20c488e285ccf791a7ce76b7049b481a772b59eb84db`.
 
 No production implementation was changed for either red run. No provider or external call was made.

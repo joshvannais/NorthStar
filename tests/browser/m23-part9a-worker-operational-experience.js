@@ -574,6 +574,8 @@ async function main() {
     await draftPage.waitForFunction(() => document.body.dataset.workState === 'ready');
     await draftPage.getByRole('button', { name: 'Add note' }).click();
     assert.strictEqual(await draftPage.locator('#workEvidenceNote-note').inputValue(), '');
+    assert.deepStrictEqual(await draftPage.evaluate(() => Object.keys(sessionStorage)
+      .filter(key => key.startsWith('northstar-work-draft:'))), []);
     ledger.cases.push({ executionRevisionChanged: true, staleDraftRestored: false });
     await draftContext.close();
 

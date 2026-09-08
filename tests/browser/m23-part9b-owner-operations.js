@@ -14,6 +14,7 @@ for (const key of ['DATABASE_URL', 'MIGRATION_DATABASE_URL', 'OPENAI_API_KEY', '
 
 async function main() {
   const selected = (process.argv.find(arg => arg.startsWith('--browser=')) || '--browser=chrome').slice(10);
+  const profileArgument = process.argv.find(arg => arg.startsWith('--profile='));
   const outputArgument = process.argv.find(arg => arg.startsWith('--output='));
   assert.ok(outputArgument, 'provide a non-overwriting evidence output directory');
   const output = path.resolve(outputArgument.slice(9));
@@ -37,7 +38,9 @@ async function main() {
       { name: '320', width: 320, height: 700, hasTouch: true },
       { name: 'reflow-200', width: 720, height: 500 },
       { name: 'reflow-400', width: 360, height: 250 },
-    ];
+    ].filter(profile => !profileArgument || profile.name === profileArgument.slice(10));
+    assert.ok(profiles.length > 0, 'requested browser profile exists');
+    ledger.profiles = profiles.map(profile => profile.name);
     for (const scope of ['owner_admin', 'dispatcher_coordination']) {
       for (const theme of ['light', 'dark']) {
         for (const profile of profiles) {
@@ -72,7 +75,16 @@ async function main() {
               data.pagination = { limit: 25, offset: 1, returned: 1, total: 2, nextCursor: null };
             } else data.pagination = { limit: 25, offset: 0, returned: 1, total: 2, nextCursor: 'c2Vjb25kLXBhZ2U' };
             if (state === 'completion_pending' || state === 'completed') {
-              data.records.forEach(item => { item.lifecycleState = state; });
+              data.records.forEach(item => {
+                item.lifecycleState = state;
+                if (state === 'completion_pending') {
+                  item.approval.state = 'changed'; item.evidence.state = 'changed';
+                  if (item.ownerDetails) item.ownerDetails.pendingProposal = {
+                    id: 'f1900000-0000-4000-8000-000000000001', revision: 1, digest: 'd'.repeat(64),
+                    decidedAt: '2026-09-08T11:50:00.000000Z', expiresAt: '2026-09-08T12:50:00.000000Z',
+                  };
+                }
+              });
             }
             return route.fulfill({ status: 200, json: { success: true, data } });
           });

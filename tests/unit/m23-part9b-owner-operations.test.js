@@ -104,6 +104,13 @@ describe('Mission 23 Part 9B read-only operational overview', () => {
     expect(() => contract().validateOverviewResponse(overview('owner_admin', { dataDigest: 'c'.repeat(64) }), 'owner', next)).toThrow();
   });
 
+  test('completion-pending cannot be rendered as having no proposal authority', () => {
+    for (const scope of ['owner_admin', 'dispatcher_coordination']) {
+      const inconsistent = overview(scope, { records: [record(scope, { lifecycleState: 'completion_pending' })] });
+      expect(() => clientContract().validate(inconsistent)).toThrow('OPERATIONS_OVERVIEW_INVALID');
+    }
+  });
+
   test('mounts the authenticated owner read with server-derived identity and no-store response', async () => {
     const { app, read, pool } = mounted();
     const response = await request(app).get('/api/v1/operational-overview?limit=25');

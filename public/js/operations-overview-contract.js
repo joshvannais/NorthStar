@@ -90,6 +90,7 @@
     if (value.progress.needsReview > value.progress.recorded || value.progress.uncertain > value.progress.recorded) invalid();
     countObject(value.blockers, ['open']); countObject(value.exceptions, ['open']);
     exact(value.approval, ['state']); one(value.approval.state, ['none', 'pending', 'expired', 'changed']);
+    if ((value.lifecycleState === 'completion_pending') !== (value.approval.state !== 'none')) invalid();
     exact(value.evidence, ['state', 'recorded']); number(value.evidence.recorded);
     one(value.evidence.state, ['not_evaluated', 'ready_for_review', 'changed', 'incomplete']);
     if (value.evidence.state === 'ready_for_review' && (value.approval.state !== 'pending' || !value.assignment.current)) invalid();

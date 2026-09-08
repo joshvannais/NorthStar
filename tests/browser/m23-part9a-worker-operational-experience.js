@@ -116,7 +116,8 @@ function emptyReads(executionPointer = execution().data, evidenceRecords = [], l
 
 async function main() {
   const selected = (process.argv.find(value => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
-  const output = path.resolve(__dirname, '../../outputs/m23-part9a-worker', selected);
+  const outputArgument = process.argv.find(value => value.startsWith('--output='));
+  const output = outputArgument ? path.resolve(outputArgument.slice(9)) : path.resolve(__dirname, '../../outputs/m23-part9a-worker', selected);
   fs.mkdirSync(output, { recursive: true });
   const ledger = { browser: selected, cases: [], externalBlocked: [], providerCalls: 0, pageErrors: [], requests: [] };
   const { app } = require('../../src/server');
@@ -916,4 +917,12 @@ async function main() {
   }
 }
 
-main().catch(error => { console.error(error && error.stack || error); process.exitCode = 1; });
+module.exports.benignFixture = function(records) {
+  currentActions = inProgressActions(false);
+  currentMaterialKinds = ['consumed', 'returned', 'transferred', 'waste'];
+  currentEquipmentKinds = ['check_out', 'use', 'check_in', 'reading', 'condition', 'fault', 'downtime_start', 'downtime_end', 'maintenance'];
+  const current = execution('in_progress', 4, 'f'.repeat(64));
+  return JSON.parse(JSON.stringify({ today: today(current.data), execution: current,
+    reads: emptyReads(current.data, records || []) }).split(HOSTILE).join('Routine job detail.'));
+};
+if (require.main === module) main().catch(error => { console.error(error && error.stack || error); process.exitCode = 1; });

@@ -8,7 +8,7 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
 const { normalizeEvidenceAction } = require('../../src/fieldEvidence/contract');
-const { mutateFieldEvidence } = require('../../src/fieldEvidence/repository');
+const { mutateFieldEvidence, readFieldEvidence } = require('../../src/fieldEvidence/repository');
 const { normalizeCompletionAction } = require('../../src/completion/contract');
 const { mutateCompletion, readCompletion } = require('../../src/completion/repository');
 
@@ -507,6 +507,27 @@ conditional('Mission 23 Part 8 mounted completion and reopening authority', () =
     });
     expect(replay.replayed).toBe(true);
     expect(replay.body).toEqual(proposed.body);
+  }, 120000);
+
+  test('Part 9A current inspection selection survives an authorized observation correction', async () => {
+    const context = await createExecution();
+    const first = await evidence(context, { action: 'record_observation', observationClass: 'inspection',
+      resultType: 'pass', observation: 'Routine inspection complete.', measurement: null, exception: null, supportingEvidenceIds: [] });
+    const corrected = await evidence(context, { action: 'correct', evidenceId: first.id,
+      expectedEvidenceRevision: first.revision, expectedEvidenceDigest: first.digest,
+      replacement: { kind: 'observation', observationClass: 'inspection', resultType: 'pass',
+        observation: 'Routine inspection detail corrected after review.', measurement: null, exception: null, supportingEvidenceIds: [] } });
+    const response = await readFieldEvidence(runtimePool, { ...ownerActor, executionId: context.execution.id, limit: 100, cursor: null });
+    const client = require('../../public/js/field-execution-client');
+    const snapshot = await client.collectEvidence({ ...response.body, nextCursor: null }, () => { throw new Error('Unexpected pagination'); }, context.execution.id);
+    const requirements = client.completionRequirements(snapshot);
+    expect(requirements.inspections).toEqual([pin(corrected)]);
+    expect(response.body.data).toHaveLength(2);
+    const result = await proposal(context, requirements);
+    expect(result.body.data.lifecycleState).toBe('completion_pending');
+    expect(result.body.completionRecord.gateSnapshot.inspections).toEqual([
+      expect.objectContaining({ id: corrected.id, matched: true, passed: true })
+    ]);
   }, 120000);
 
   test('completion reads and exact replays fail closed for every padded demo source and unknown provenance', async () => {

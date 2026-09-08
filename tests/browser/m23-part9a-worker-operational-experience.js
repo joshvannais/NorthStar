@@ -70,7 +70,7 @@ function today(executionPointer = execution().data) {
         revision: executionPointer.revision, digest: executionPointer.digest,
         sourceAssignmentRevision: executionPointer.sourceAssignmentRevision,
         sourceAssignmentDigest: executionPointer.sourceAssignmentDigest } : null,
-      workCapabilities: { version: 'm23-part9a-worker-actions-v1', mutable: true,
+      workCapabilities: { version: 'm23-part9a-worker-actions-v1', mutable: currentActions.length > 0,
         actions: currentActions, materialMovementKinds: currentMaterialKinds, equipmentKinds: currentEquipmentKinds },
     }],
   } };
@@ -418,6 +418,7 @@ async function main() {
           await page.locator('#workEvidenceResponse').getByRole('button', { name: 'Record checklist response' }).click();
           await page.getByRole('dialog', { name: 'Confirm Record checklist response' })
             .getByRole('button', { name: 'Confirm Record checklist response' }).click();
+          await page.waitForFunction(() => document.body.dataset.workState === 'success');
           await page.waitForFunction(() => document.querySelectorAll('#workEvidenceContent .work-record-list li').length === 2);
           assert.strictEqual(await page.getByRole('button', { name: 'Respond to checklist' }).count(), 0);
 
@@ -666,7 +667,7 @@ async function main() {
     await readOnlyPage.waitForFunction(() => document.body.dataset.workState === 'read-only', null, { timeout: 5000 });
     assert.strictEqual(await readOnlyPage.locator('#workSections').isVisible(), true);
     assert.match(await readOnlyPage.locator('#workStateBadge').textContent(), /Completed/);
-    assert.match(await readOnlyPage.locator('#workStatus').textContent(), /read-only/);
+    assert.match(await readOnlyPage.locator('#workStatus').textContent(), /reviewed.*does not permit worker changes/);
     assert.strictEqual(await readOnlyPage.locator('#workSections button').count(), 0);
     ledger.cases.push({ readOnly: true, terminalHistoryVisible: true, mutationCapabilityExposed: false });
     await readOnlyContext.close();

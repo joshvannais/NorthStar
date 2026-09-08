@@ -55,6 +55,11 @@
   function validate(data) {
     if (!data || data.version !== 'm22-part6-today-v1' || data.readOnly !== true ||
         !Array.isArray(data.mutationCapabilities) || data.mutationCapabilities.length !== 0 ||
+        !data.identity || typeof data.identity.profileId !== 'string' ||
+        !data.businessProfile || typeof data.businessProfile.id !== 'string' ||
+        !Number.isSafeInteger(data.businessProfile.version) || data.businessProfile.version < 1 ||
+        typeof data.businessProfile.hash !== 'string' || !/^[0-9a-f]{64}$/.test(data.businessProfile.hash) ||
+        typeof data.scopeDigest !== 'string' || !/^[0-9a-f]{64}$/.test(data.scopeDigest) ||
         !data.day || typeof data.day.timeZone !== 'string' || !Array.isArray(data.records) ||
         data.count !== data.records.length || data.shown !== data.records.length || data.truncated !== false ||
         typeof data.digest !== 'string' || !/^[0-9a-f]{64}$/.test(data.digest)) {
@@ -66,6 +71,14 @@
           !record.authority || !Number.isSafeInteger(record.authority.revision) ||
           typeof record.authority.digest !== 'string' || !/^[0-9a-f]{64}$/.test(record.authority.digest)) {
         throw new Error('TODAY_RECORD_INVALID');
+      }
+      if (record.execution && (typeof record.execution.id !== 'string' ||
+          !Number.isSafeInteger(record.execution.revision) || record.execution.revision < 1 ||
+          typeof record.execution.digest !== 'string' || !/^[0-9a-f]{64}$/.test(record.execution.digest) ||
+          !Number.isSafeInteger(record.execution.sourceAssignmentRevision) ||
+          typeof record.execution.sourceAssignmentDigest !== 'string' ||
+          !/^[0-9a-f]{64}$/.test(record.execution.sourceAssignmentDigest))) {
+        throw new Error('TODAY_EXECUTION_INVALID');
       }
     });
     return data;
@@ -168,6 +181,11 @@
     } else {
       append(body, heading, grid, instructions.node, route.node);
     }
+    var workLink = element('a', 'btn btn-primary today-open-work', 'Open work');
+    workLink.href = '/dashboard/work?appointmentId=' + encodeURIComponent(record.appointmentId) +
+      (record.execution ? '&executionId=' + encodeURIComponent(record.execution.id) : '');
+    workLink.setAttribute('aria-label', 'Open work for ' + presentationText(record.title, 'this appointment'));
+    body.appendChild(workLink);
     append(item, accent, body);
     return item;
   }

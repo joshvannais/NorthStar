@@ -83,7 +83,7 @@ real('Mission 23 Part 9A additive current-worker projection migration', () => {
     const before = (await ownerPool.query(
       'SELECT filename,checksum,applied_at FROM public._migrations ORDER BY filename'
     )).rows;
-    expect(before).toHaveLength(52);
+    expect(before).toHaveLength(db.loadMigrations(preceding).length - 1);
     expect(before.at(-1).filename).toBe('052_canonical_transcript_insert_only_authority.sql');
 
     let intercepted = false;
@@ -124,7 +124,7 @@ real('Mission 23 Part 9A additive current-worker projection migration', () => {
     const applied = (await ownerPool.query(
       'SELECT filename,checksum,applied_at FROM public._migrations ORDER BY filename'
     )).rows;
-    expect(applied).toHaveLength(53);
+    expect(applied).toHaveLength(before.length + 1);
     expect(applied.slice(0, -1)).toEqual(before);
     expect(applied.at(-1)).toMatchObject({ filename: MIGRATION, checksum });
     await db.runMigrations({ pool: ownerPool, runtimePool, migrationsDirectory: preceding });

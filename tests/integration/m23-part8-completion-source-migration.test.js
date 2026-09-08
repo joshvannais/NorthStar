@@ -137,11 +137,12 @@ real('Mission 23 Part 8 completion source correction migration lifecycle', () =>
     const inspected = await require('../../scripts/inspect-production-migration-history')
       .inspect(database.connectionString);
     expect(inspected).toMatchObject({
-      sourceMigrationCount: 50, appliedMigrationCount: 48, timezone: 'UTC', encoding: 'UTF8',
+      sourceMigrationCount: 51, appliedMigrationCount: 48, timezone: 'UTC', encoding: 'UTF8',
       appliedWithoutSource: [], duplicateApplied: [], mismatches: [],
       pendingMigrations: [
         { filename: '051_canonical_completion_type_and_provenance_authority.sql' },
         { filename: '052_canonical_transcript_insert_only_authority.sql' },
+        { filename: '053_current_worker_execution_projection.sql' },
       ],
     });
     const executable = await ownerPool.query(

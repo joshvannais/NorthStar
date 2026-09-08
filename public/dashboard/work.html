@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Record work against one current NorthStar field assignment.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101217" media="(prefers-color-scheme: dark)">
+  <title>Work detail — NorthStar</title>
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/homepage-refresh.css">
+  <link rel="stylesheet" href="/css/demo-dashboard.css">
+  <link rel="stylesheet" href="/css/today.css">
+  <link rel="stylesheet" href="/css/work.css">
+  <link rel="icon" href="/assets/logo.png">
+  <link rel="stylesheet" href="/css/site-professionalism.css">
+</head>
+<body class="demo-dashboard-page command-center-blueprint-page today-page work-page" data-work-state="loading">
+  <a class="skip-link" href="#workMain">Skip to work detail</a>
+
+  <div class="app-layout">
+    <main class="main-content command-center-blueprint-shell" id="workMain" tabindex="-1" aria-labelledby="workTitle">
+      <header class="demo-dashboard-header command-center-blueprint-header today-header">
+        <div class="demo-dashboard-header-inner">
+          <a class="demo-dashboard-brand northstar-lockup" href="/dashboard/today" aria-label="NorthStar Today" hidden>
+            <img class="logo-img" src="/assets/logo.png" alt=""><span>NorthStar</span>
+          </a>
+          <div class="demo-dashboard-header-actions">
+            <span class="demo-data-pill" id="workAuthority" aria-label="Assigned work only">Assigned work only</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="demo-dashboard-main command-center-blueprint-main work-main">
+        <nav class="work-breadcrumb" aria-label="Work detail breadcrumb">
+          <a href="/dashboard/today">← Back to Today</a>
+        </nav>
+
+        <section class="work-hero" id="workOverview" aria-labelledby="workTitle">
+          <div>
+            <p class="demo-panel-kicker">Current assigned work</p>
+            <h1 id="workTitle">Loading work detail…</h1>
+            <p id="workCustomer">Checking the server-owned assignment.</p>
+          </div>
+          <span class="work-state-badge" id="workStateBadge">Loading</span>
+        </section>
+
+        <p class="work-live-state" id="workStatus" role="status" aria-live="polite" aria-atomic="true">Loading current work authority…</p>
+
+        <section class="work-state-panel" id="workStatePanel" aria-labelledby="workStateTitle">
+          <div>
+            <p class="demo-panel-kicker">Work detail</p>
+            <h2 id="workStateTitle">Loading current work</h2>
+            <p id="workStateCopy">NorthStar is checking the current assignment and execution.</p>
+          </div>
+          <button class="btn btn-secondary" id="workReload" type="button">Reload work</button>
+        </section>
+
+        <div class="work-sections" id="workSections" hidden>
+          <section class="work-card" id="workLifecycle" aria-labelledby="workLifecycleTitle">
+            <header><div><p class="demo-panel-kicker">Execution</p><h2 id="workLifecycleTitle">Work status</h2></div></header>
+            <div class="work-card-content" id="workLifecycleContent"></div>
+          </section>
+
+          <section class="work-card" id="workLabor" aria-labelledby="workLaborTitle">
+            <header><div><p class="demo-panel-kicker">Labor evidence</p><h2 id="workLaborTitle">Time</h2></div></header>
+            <div class="work-card-content" id="workLaborContent"></div>
+          </section>
+
+          <section class="work-card" id="workMaterials" aria-labelledby="workMaterialsTitle">
+            <header><div><p class="demo-panel-kicker">Job inputs</p><h2 id="workMaterialsTitle">Materials</h2></div></header>
+            <div class="work-card-content" id="workMaterialsContent"></div>
+          </section>
+
+          <section class="work-card" id="workEquipment" aria-labelledby="workEquipmentTitle">
+            <header><div><p class="demo-panel-kicker">Tenant catalogue</p><h2 id="workEquipmentTitle">Equipment</h2></div></header>
+            <div class="work-card-content" id="workEquipmentContent"></div>
+          </section>
+
+          <section class="work-card" id="workEvidence" aria-labelledby="workEvidenceTitle">
+            <header><div><p class="demo-panel-kicker">Job record</p><h2 id="workEvidenceTitle">Evidence</h2></div></header>
+            <div class="work-card-content" id="workEvidenceContent"></div>
+          </section>
+
+          <section class="work-card" id="workProgress" aria-labelledby="workProgressTitle">
+            <header><div><p class="demo-panel-kicker">Field facts</p><h2 id="workProgressTitle">Progress and issues</h2></div></header>
+            <div class="work-card-content" id="workProgressContent"></div>
+          </section>
+
+          <section class="work-card" id="workCompletion" aria-labelledby="workCompletionTitle">
+            <header><div><p class="demo-panel-kicker">Explicit authority</p><h2 id="workCompletionTitle">Completion</h2></div></header>
+            <div class="work-card-content" id="workCompletionContent"></div>
+          </section>
+        </div>
+      </div>
+
+      <footer class="footer northstar-site-footer demo-dashboard-footer" data-northstar-site-footer>
+        <nav class="footer-links" aria-label="NorthStar information">
+          <a href="/">Home</a><a href="/#how-it-works">How It Works</a><a href="/#pricing">Pricing</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/refund">Refunds</a><a href="/legal">Legal</a>
+        </nav>
+        <p>© 2026 NorthStar Solutions LLC. All rights reserved.</p>
+      </footer>
+    </main>
+  </div>
+
+  <dialog class="work-confirm-dialog" id="workConfirmDialog" aria-labelledby="workConfirmTitle" aria-describedby="workConfirmCopy">
+    <form method="dialog">
+      <p class="demo-panel-kicker">Review before recording</p>
+      <h2 id="workConfirmTitle">Confirm action</h2>
+      <p id="workConfirmCopy">Confirm the current work evidence before NorthStar records it.</p>
+      <div class="work-dialog-actions">
+        <button class="btn btn-secondary" id="workConfirmCancel" value="cancel">Go back</button>
+        <button class="btn btn-primary" id="workConfirmAction" value="default">Confirm action</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/js/display-projection.js"></script>
+  <script src="/js/today-shell.js"></script>
+  <script src="/js/field-execution-client.js"></script>
+  <script src="/js/work-page.js"></script>
+</body>
+</html>

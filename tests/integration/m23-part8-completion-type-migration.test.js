@@ -147,9 +147,12 @@ real('Mission 23 Part 8 completion type and provenance correction migration life
     const inspected = await require('../../scripts/inspect-production-migration-history')
       .inspect(database.connectionString);
     expect(inspected).toMatchObject({
-      sourceMigrationCount: 50, appliedMigrationCount: 49, timezone: 'UTC', encoding: 'UTF8',
+      sourceMigrationCount: 51, appliedMigrationCount: 49, timezone: 'UTC', encoding: 'UTF8',
       appliedWithoutSource: [], duplicateApplied: [], mismatches: [],
-      pendingMigrations: [{ filename: '052_canonical_transcript_insert_only_authority.sql' }],
+      pendingMigrations: [
+        { filename: '052_canonical_transcript_insert_only_authority.sql' },
+        { filename: '053_current_worker_execution_projection.sql' },
+      ],
     });
     const executable = await ownerPool.query(
       "SELECT proname,has_function_privilege($1,oid,'EXECUTE') AS executable FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE 'canonical_completion_%' ORDER BY proname",

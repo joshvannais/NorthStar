@@ -66,21 +66,24 @@ real('Mission 23 Part 7 additive migration lifecycle', () => {
     expect((await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows).toEqual(before);
     await require('../../src/db').runMigrations({ pool, runtimePool });
     const applied = (await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows;
-    expect(applied).toHaveLength(before.length + 5);
-    expect(applied.slice(0, -5)).toEqual(before);
-    expect(applied.at(-5)).toMatchObject({ filename: '048_canonical_progress_issue_change_facts.sql', checksum });
-    expect(applied.at(-4)).toMatchObject({ filename: '049_canonical_completion_reopening_authority.sql', checksum: tailChecksum });
-    expect(applied.at(-3)).toMatchObject({ filename: '050_canonical_completion_source_read_authority.sql', checksum: correctionChecksum });
+    expect(applied).toHaveLength(before.length + 6);
+    expect(applied.slice(0, -6)).toEqual(before);
+    expect(applied.at(-6)).toMatchObject({ filename: '048_canonical_progress_issue_change_facts.sql', checksum });
+    expect(applied.at(-5)).toMatchObject({ filename: '049_canonical_completion_reopening_authority.sql', checksum: tailChecksum });
+    expect(applied.at(-4)).toMatchObject({ filename: '050_canonical_completion_source_read_authority.sql', checksum: correctionChecksum });
     const finalName = '051_canonical_completion_type_and_provenance_authority.sql';
-    expect(applied.at(-2)).toMatchObject({ filename: finalName, checksum: crypto.createHash('sha256')
+    expect(applied.at(-3)).toMatchObject({ filename: finalName, checksum: crypto.createHash('sha256')
       .update(fs.readFileSync(path.resolve(__dirname, '../../migrations', finalName))).digest('hex') });
     const insertOnlyName = '052_canonical_transcript_insert_only_authority.sql';
-    expect(applied.at(-1)).toMatchObject({ filename: insertOnlyName, checksum: crypto.createHash('sha256')
+    expect(applied.at(-2)).toMatchObject({ filename: insertOnlyName, checksum: crypto.createHash('sha256')
       .update(fs.readFileSync(path.resolve(__dirname, '../../migrations', insertOnlyName))).digest('hex') });
+    const workerProjectionName = '053_current_worker_execution_projection.sql';
+    expect(applied.at(-1)).toMatchObject({ filename: workerProjectionName, checksum: crypto.createHash('sha256')
+      .update(fs.readFileSync(path.resolve(__dirname, '../../migrations', workerProjectionName))).digest('hex') });
     await require('../../src/db').runMigrations({ pool, runtimePool });
     expect((await pool.query('SELECT filename,checksum,applied_at FROM _migrations ORDER BY filename')).rows).toEqual(applied);
     const inspected=await require('../../scripts/inspect-production-migration-history').inspect(database.connectionString);
-    expect(inspected).toMatchObject({sourceMigrationCount:50,appliedMigrationCount:50,timezone:'UTC',encoding:'UTF8',
+    expect(inspected).toMatchObject({sourceMigrationCount:51,appliedMigrationCount:51,timezone:'UTC',encoding:'UTF8',
       appliedWithoutSource:[],duplicateApplied:[],mismatches:[],pendingMigrations:[]});
     expect((await pool.query("SELECT count(*)::int AS count FROM pg_constraint WHERE conrelid IN (SELECT oid FROM pg_class WHERE relname LIKE 'canonical_progress_%') AND NOT convalidated")).rows[0].count).toBe(0);
     expect((await pool.query("SELECT count(*)::int AS count FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.pronamespace='public'::regnamespace AND (p.proname LIKE 'canonical_progress_%' ) AND a.grantee=0 AND a.privilege_type='EXECUTE'")).rows[0].count).toBe(0);

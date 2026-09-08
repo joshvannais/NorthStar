@@ -7,6 +7,18 @@ const MAXIMUM_TEAMMATES = 50;
 const MAXIMUM_RESPONSE_BYTES = 131072;
 const MAXIMUM_INSTRUCTION_BYTES = 4096;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const WORK_CAPABILITY_VERSION = 'm23-part9a-worker-actions-v1';
+const WORK_ACTIONS = Object.freeze([
+  'initialize', 'start', 'pause', 'resume', 'start_timer', 'stop_timer', 'record_manual',
+  'record_material', 'record_equipment', 'create_checklist', 'respond_item',
+  'record_observation', 'record_note', 'record_progress', 'record_blocker',
+  'record_exception', 'record_change', 'propose_completion', 'withdraw_completion',
+]);
+const MATERIAL_MOVEMENT_KINDS = Object.freeze(['consumed', 'returned', 'transferred', 'waste', 'adjustment']);
+const EQUIPMENT_KINDS = Object.freeze([
+  'check_out', 'use', 'check_in', 'reading', 'condition', 'fault', 'downtime_start',
+  'downtime_end', 'maintenance', 'meter_reset',
+]);
 
 function typed(message, code, status) {
   const error = new Error(message);
@@ -97,8 +109,9 @@ function routeProjection(row) {
   };
 }
 
-function rowProjection(row, timeZone) {
+function rowProjection(row, timeZone, mutationAllowed = false) {
   const approval = currentApproval(row);
+  const executionId = row.execution_id || null;
   const instructions = boundedText(row.instructions);
   const teammates = (Array.isArray(row.teammates) ? row.teammates : []).slice(0, MAXIMUM_TEAMMATES).map(member => ({
     name: plainText(member && member.name, 'Teammate'),
@@ -108,6 +121,13 @@ function rowProjection(row, timeZone) {
   const teammateTotal = Number(row.teammate_total || 0);
   const direct = row.workforce_profile_id === row.actor_profile_id;
   const assignmentKind = direct ? 'worker' : 'crew';
+  const projectedActions = exactList(row.execution_actions, WORK_ACTIONS, 'action');
+  const projectedMaterialKinds = exactList(row.execution_material_kinds, MATERIAL_MOVEMENT_KINDS, 'material kind');
+  const projectedEquipmentKinds = exactList(row.execution_equipment_kinds, EQUIPMENT_KINDS, 'equipment kind');
+  const canInitialize = !executionId && row.dispatch_state === 'dispatched' &&
+    !['cancelled', 'completed'].includes(plainText(row.appointment_status).trim().toLowerCase());
+  const actions = mutationAllowed === true ? (executionId ? projectedActions : canInitialize ? ['initialize'] : []) : [];
+  const mutable = actions.length > 0;
   return stableValue({
     appointmentId: row.appointment_id,
     title: plainText(row.job_title, plainText(row.service_type, 'Service appointment')),
@@ -151,7 +171,31 @@ function rowProjection(row, timeZone) {
       digest: plainText(row.canonical_digest).trim(),
       approvedCurrent: approval.current,
     },
+    execution: executionId ? {
+      id: executionId,
+      lifecycleState: plainText(row.execution_lifecycle_state),
+      revision: Number(row.execution_revision),
+      digest: plainText(row.execution_digest).trim(),
+      sourceAssignmentRevision: Number(row.execution_assignment_revision),
+      sourceAssignmentDigest: plainText(row.execution_assignment_digest).trim(),
+    } : null,
+    workCapabilities: {
+      version: WORK_CAPABILITY_VERSION,
+      mutable,
+      actions,
+      materialMovementKinds: mutable && actions.includes('record_material') ? projectedMaterialKinds : [],
+      equipmentKinds: mutable && actions.includes('record_equipment') ? projectedEquipmentKinds : [],
+    },
   });
+}
+
+function exactList(value, allowed, field) {
+  if (value === null || value === undefined) return [];
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !allowed.includes(item)) ||
+      new Set(value).size !== value.length) {
+    throw typed(`The current worker ${field} projection is invalid.`, 'M23_WORK_CAPABILITIES_INVALID', 503);
+  }
+  return value.slice();
 }
 
 async function currentAuthority(client, input) {
@@ -162,7 +206,11 @@ async function currentAuthority(client, input) {
             session.id AS session_id,session.user_id AS session_user_id,
             session.organization_id AS session_organization_id,session.membership_id AS session_membership_id,
             session.status AS session_status,session.access_expires_at,
+            active_profile.id AS business_profile_id,
+            active_profile.version_number AS business_profile_version,
+            rtrim(active_profile.normalized_profile_hash) AS business_profile_hash,
             active_profile.raw_profile #>> '{company,timeZone}' AS time_zone,
+            COALESCE(current_crews.scope,'[]'::jsonb) AS crew_scope,
             transaction_timestamp() AS evaluated_at
        FROM public.organization_memberships membership
        JOIN public.users account
@@ -171,12 +219,22 @@ async function currentAuthority(client, input) {
          ON profile.organization_id=membership.organization_id AND profile.membership_id=membership.id
        LEFT JOIN public.auth_sessions session ON session.id=$4::uuid
        LEFT JOIN LATERAL (
-         SELECT profile_authority.raw_profile
+         SELECT profile_authority.id,profile_authority.version_number,
+                profile_authority.normalized_profile_hash,profile_authority.raw_profile
            FROM public.canonical_business_profiles profile_authority
           WHERE profile_authority.organization_id=membership.organization_id AND profile_authority.is_active=TRUE
           ORDER BY profile_authority.version_number DESC,profile_authority.id
           LIMIT 1
        ) active_profile ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT jsonb_agg(
+                  jsonb_build_array(crew_member.crew_id,crew_member.crew_role,crew_member.created_at)
+                  ORDER BY crew_member.crew_id
+                ) AS scope
+           FROM public.workforce_crew_members crew_member
+          WHERE crew_member.organization_id=membership.organization_id
+            AND crew_member.profile_id=profile.id
+       ) current_crews ON TRUE
       WHERE membership.organization_id=$1::uuid AND membership.user_id=$2::uuid AND membership.id=$3::uuid`,
     [input.organizationId, input.actorUserId, input.membershipId, input.authSessionId]
   );
@@ -192,7 +250,9 @@ async function currentAuthority(client, input) {
     'The signed-in Today session is no longer current.', 'M22_TODAY_SESSION_NOT_CURRENT', 401
   );
   if (row.membership_status !== 'active' || row.user_status !== 'active' || !row.profile_id ||
-      !row.operational_role || row.access_role !== input.actorAccessRole || !row.time_zone) {
+      !row.operational_role || row.access_role !== input.actorAccessRole || !row.business_profile_id ||
+      !Number.isSafeInteger(Number(row.business_profile_version)) || Number(row.business_profile_version) < 1 ||
+      !/^[0-9a-f]{64}$/.test(plainText(row.business_profile_hash).trim()) || !row.time_zone) {
     throw typed('Today is limited to a current active workforce identity.', 'M22_TODAY_WORKFORCE_RESTRICTED', 403);
   }
   return row;
@@ -236,6 +296,15 @@ async function todayRows(client, input, authority) {
             human_approval.applied_digest AS human_applied_digest,
             legacy_approval.applied_revision AS legacy_applied_revision,
             legacy_approval.applied_digest AS legacy_applied_digest,
+            (execution_projection.result#>>'{data,id}')::uuid AS execution_id,
+            execution_projection.result#>>'{data,lifecycleState}' AS execution_lifecycle_state,
+            (execution_projection.result#>>'{data,revision}')::bigint AS execution_revision,
+            execution_projection.result#>>'{data,digest}' AS execution_digest,
+             (execution_projection.result#>>'{data,sourceAssignmentRevision}')::bigint AS execution_assignment_revision,
+             execution_projection.result#>>'{data,sourceAssignmentDigest}' AS execution_assignment_digest,
+             execution_projection.result#>'{data,actions}' AS execution_actions,
+             execution_projection.result#>'{data,materialMovementKinds}' AS execution_material_kinds,
+             execution_projection.result#>'{data,equipmentKinds}' AS execution_equipment_kinds,
             (assignment.scheduled_start AT TIME ZONE authority.time_zone)::date <>
               (assignment.scheduled_end AT TIME ZONE authority.time_zone)::date AS spans_day_boundary,
             bounds.local_day,bounds.day_start,bounds.day_end
@@ -258,6 +327,21 @@ async function todayRows(client, input, authority) {
          ON human_approval.organization_id=assignment.organization_id AND human_approval.id=assignment.last_human_approval_id
        LEFT JOIN public.canonical_schedule_approvals legacy_approval
          ON legacy_approval.organization_id=assignment.organization_id AND legacy_approval.id=assignment.last_approval_id
+       LEFT JOIN LATERAL (
+         SELECT CASE WHEN assignment.target_state='assigned'
+            AND assignment.schedule_state='scheduled'
+            AND assignment.dispatch_state='dispatched'
+            AND lower(btrim(assignment.appointment_status))<>'cancelled'
+            AND lower(btrim(appointment.status))<>'cancelled'
+            AND (assignment.workforce_profile_id=authority.profile_id OR EXISTS (
+              SELECT 1 FROM public.workforce_crew_members execution_scope
+               WHERE execution_scope.organization_id=assignment.organization_id
+                 AND execution_scope.crew_id=assignment.workforce_crew_id
+                 AND execution_scope.profile_id=authority.profile_id
+            )) THEN public.canonical_field_execution_read_by_appointment(
+              assignment.organization_id,$4::uuid,$5::text,$6::uuid,assignment.appointment_id
+            ) ELSE jsonb_build_object('success',TRUE,'data','null'::jsonb) END AS result
+       ) execution_projection ON TRUE
        LEFT JOIN LATERAL (
          SELECT jsonb_agg(jsonb_build_object('profileId',team_row.profile_id,'name',team_row.name,'crewRole',team_row.crew_role)
                   ORDER BY team_row.name COLLATE "C",team_row.profile_id) AS members,
@@ -287,7 +371,15 @@ async function todayRows(client, input, authority) {
           SELECT 1 FROM public.canonical_transcripts transcript
            WHERE transcript.organization_id=assignment.organization_id
              AND transcript.operation_id=assignment.operation_id
-             AND transcript.source NOT IN ('simulation','demo')
+             AND translate(
+               btrim(transcript.source,
+                 chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || chr(32) ||
+                 chr(133) || chr(160) || chr(5760) ||
+                 chr(8192) || chr(8193) || chr(8194) || chr(8195) || chr(8196) ||
+                 chr(8197) || chr(8198) || chr(8199) || chr(8200) || chr(8201) || chr(8202) ||
+                 chr(8232) || chr(8233) || chr(8239) || chr(8287) || chr(12288)),
+               'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'
+             ) NOT IN ('demo','simulation')
         )
         AND (assignment.workforce_profile_id=authority.profile_id OR EXISTS (
           SELECT 1 FROM public.workforce_crew_members current_crew
@@ -297,7 +389,8 @@ async function todayRows(client, input, authority) {
         ))
       ORDER BY assignment.scheduled_start,assignment.scheduled_end,assignment.appointment_id
       LIMIT 101`,
-    [input.organizationId, authority.profile_id, authority.time_zone]
+    [input.organizationId, authority.profile_id, authority.time_zone,
+      input.actorUserId, input.actorAccessRole, input.authSessionId]
   );
 }
 
@@ -320,16 +413,44 @@ async function loadToday(pool, input) {
       'Today encountered work without a current approved scheduling record.', 'M22_TODAY_APPROVAL_UNAVAILABLE', 503
     );
     const first = selected.rows[0];
-    const records = selected.rows.map(row => rowProjection({ ...row, actor_profile_id: authority.profile_id }, authority.time_zone));
+    const mutationAllowed = input.onboardingComplete === true && input.subscriptionMutable === true &&
+      input.actorAccessRole !== 'viewer';
+    const records = selected.rows.map(row => rowProjection(
+      { ...row, actor_profile_id: authority.profile_id }, authority.time_zone, mutationAllowed
+    ));
     const data = stableValue({
       version: 'm22-part6-today-v1',
       readOnly: true,
       mutationCapabilities: [],
       evaluatedAt: iso(authority.evaluated_at),
       identity: {
+        profileId: authority.profile_id,
         displayName: plainText(authority.actor_name, 'Workforce member'),
         operationalRole: plainText(authority.operational_role),
       },
+      businessProfile: {
+        id: authority.business_profile_id,
+        version: Number(authority.business_profile_version),
+        hash: plainText(authority.business_profile_hash).trim(),
+        timeZone: authority.time_zone,
+      },
+      scopeDigest: sha256(stableValue({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        actorAccessRole: input.actorAccessRole,
+        membershipId: input.membershipId,
+        authSessionId: input.authSessionId,
+        profileId: authority.profile_id,
+        operationalRole: authority.operational_role,
+        onboardingComplete: input.onboardingComplete === true,
+        subscriptionMutable: input.subscriptionMutable === true,
+        businessProfile: {
+          id: authority.business_profile_id,
+          version: Number(authority.business_profile_version),
+          hash: plainText(authority.business_profile_hash).trim(),
+        },
+        crewMemberships: authority.crew_scope,
+      })),
       day: {
         date: first ? String(first.local_day).slice(0, 10) : null,
         start: first ? iso(first.day_start) : null,
@@ -377,6 +498,7 @@ module.exports = {
   MAXIMUM_TODAY_RECORDS,
   MAXIMUM_TEAMMATES,
   MAXIMUM_RESPONSE_BYTES,
+  WORK_CAPABILITY_VERSION,
   loadToday,
   rowProjection,
 };

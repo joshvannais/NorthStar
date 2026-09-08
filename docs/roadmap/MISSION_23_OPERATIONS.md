@@ -66,11 +66,16 @@ knowledge authorities without replacing any of them.
   have no commercial consequence and grant no authority to continue. This
   Part 8 writer relies on the supplied Part 7 release state and does not claim a
   new production inspection.
-- **Part 8: implementation writer candidate; independent audit and release
-  pending.** [Completion and reopening authority](../operations/COMPLETION_REOPENING_AUTHORITY.md)
-  describes the bounded additive API and PostgreSQL authority. Writer tests are
-  not independent acceptance, merge, deployment, or release.
-- **Parts 9–12: not implemented.**
+- **Part 8: independently accepted, normally merged, automatically deployed,
+  and health verified through PR #172 as
+  `aa728e2631650ffe65340c0332ba94106397eac2`.**
+  [Completion and reopening authority](../operations/COMPLETION_REOPENING_AUTHORITY.md)
+  describes the bounded additive API and PostgreSQL authority.
+- **Part 9: Slice A implementation writer in progress; independent audit and
+  release pending.** This narrow slice mounts the current worker operational
+  experience over accepted Parts 2–8 authority. Writer evidence is not
+  independent acceptance, merge, deployment, or release.
+- **Parts 10–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and

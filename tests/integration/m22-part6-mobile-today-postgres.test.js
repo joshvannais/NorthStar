@@ -560,6 +560,35 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     )).rows[0]).toEqual({ table_read: false, entry_read: true, helper_read: false });
   });
 
+  test('preserves completed appointments in Today as current read-only execution history', async () => {
+    const before = (await migrationPool.query(
+      'SELECT status FROM public.canonical_appointments WHERE organization_id=$1 AND id=$2',
+      [IDS.organization, IDS.direct]
+    )).rows[0];
+    expect(before).toBeDefined();
+    await migrationPool.query('ALTER TABLE public.canonical_appointments DISABLE TRIGGER USER');
+    try {
+      await migrationPool.query(
+        "UPDATE public.canonical_appointments SET status='completed' WHERE organization_id=$1 AND id=$2",
+        [IDS.organization, IDS.direct]
+      );
+      const response = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+      const completed = response.body.data.records.find(record => record.appointmentId === IDS.direct);
+      expect(completed).toBeDefined();
+      expect(completed.execution).toMatchObject({ lifecycleState: 'in_progress' });
+      expect(completed.workCapabilities).toEqual({
+        version: 'm23-part9a-worker-actions-v1', mutable: false, actions: [],
+        materialMovementKinds: [], equipmentKinds: [],
+      });
+    } finally {
+      await migrationPool.query(
+        'UPDATE public.canonical_appointments SET status=$3 WHERE organization_id=$1 AND id=$2',
+        [IDS.organization, IDS.direct, before.status]
+      );
+      await migrationPool.query('ALTER TABLE public.canonical_appointments ENABLE TRIGGER USER');
+    }
+  });
+
   test('serves the mounted worker detail bundle without broad account bootstrap', async () => {
     const shell = await request(app)
       .get(`/dashboard/work?appointmentId=${IDS.direct}`)

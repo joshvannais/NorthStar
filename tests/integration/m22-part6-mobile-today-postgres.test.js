@@ -624,9 +624,11 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
       membershipId: IDS.employee, authSessionId: sessions.employee.sessionId,
     })).rejects.toMatchObject({ code: 'M22_TODAY_WORKFORCE_RESTRICTED', status: 403 });
 
+    const beforeCrewChange = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
     await runtimePool.query('DELETE FROM public.workforce_crew_members WHERE organization_id=$1 AND crew_id=$2 AND profile_id=$3', [IDS.organization, IDS.crew, IDS.employee]);
     try {
       const removed = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+      expect(removed.body.data.scopeDigest).not.toBe(beforeCrewChange.body.data.scopeDigest);
       expect(removed.body.data.records.map(record => record.appointmentId)).toEqual([IDS.direct, IDS.revoked]);
       await expect(readExecutionByAppointment({
         organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
@@ -642,6 +644,8 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
          VALUES ($1,$2,$3,'lead',$4)`, [IDS.organization, IDS.crew, IDS.employee, IDS.teammate]
       );
     }
+    const afterCrewReadded = await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200);
+    expect(afterCrewReadded.body.data.scopeDigest).not.toBe(beforeCrewChange.body.data.scopeDigest);
 
     await runtimePool.query("UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='part6_test' WHERE id=$1", [sessions.employee.sessionId]);
     try {

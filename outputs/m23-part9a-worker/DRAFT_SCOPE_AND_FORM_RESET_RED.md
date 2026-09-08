@@ -12,6 +12,8 @@ Disposable authority: PostgreSQL 18.4 on loopback port `55629`, expected data di
 
 Result: `1` suite ran; `8` tests passed and the new role-rotation test failed. The same active membership, user, session, workforce profile, and tenant produced the identical `scopeDigest` before and after a durable `member` to `admin` role change. This reproduced the missing role dimension in device-local draft isolation. The test restored the membership to `member` in `finally`.
 
+A focused rerun of the existing crew-revocation case also failed at the new scope assertion: removing the worker's durable crew membership changed mounted records but left the `scopeDigest` identical. The control additionally requires a remove-and-readd cycle to produce a new scope so a previously invalidated draft cannot silently reappear.
+
 ## Conditional form reset
 
 Command:

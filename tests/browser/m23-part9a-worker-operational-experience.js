@@ -148,6 +148,8 @@ async function main() {
         let laborIntervals = [];
         let completionRecords = [];
         let activeProposal = null;
+        let conflictTransition = false;
+        const partialEvidence = theme === 'dark' && profile.name === '1440';
         const context = await browser.newContext({
           viewport: { width, height: profile.height },
           deviceScaleFactor: profile.deviceScaleFactor,
@@ -174,7 +176,10 @@ async function main() {
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/materials`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.materials) });
           if (url.pathname === `/api/equipment/executions/${EXECUTION}`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.equipment) });
           if (url.pathname === '/api/equipment/catalogue') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.catalogue) });
-          if (url.pathname === `/api/v1/field-executions/${EXECUTION}/field-evidence`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.evidence) });
+          if (url.pathname === `/api/v1/field-executions/${EXECUTION}/field-evidence`) return route.fulfill(partialEvidence
+            ? { status: 503, contentType: 'application/json', body: JSON.stringify({ success: false,
+              error: { code: 'M23_FIELD_STORAGE_UNAVAILABLE', message: 'Durable field-file storage is unavailable.' } }) }
+            : { status: 200, contentType: 'application/json', body: JSON.stringify(reads.evidence) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/progress`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.progress) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/completion`) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reads.completion) });
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/field-evidence-actions` && request.method() === 'POST') {
@@ -295,6 +300,12 @@ async function main() {
             return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: currentExecution.data }) });
           }
           if (url.pathname === `/api/v1/field-executions/${EXECUTION}/transitions` && request.method() === 'POST') {
+            if (conflictTransition) {
+              conflictTransition = false;
+              return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({
+                success: false, error: { code: 'M23_EXECUTION_STALE', message: `Execution changed ${HOSTILE}` },
+              }) });
+            }
             const normalized = normalizeTransition({
               organizationId: ORGANIZATION, actorUserId: PROFILE, actorAccessRole: 'member',
               authSessionId: AUTH_SESSION, executionId: EXECUTION,
@@ -313,7 +324,8 @@ async function main() {
         const page = await context.newPage();
         page.on('pageerror', error => ledger.pageErrors.push(error.message));
         await page.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}&executionId=${EXECUTION}`, { waitUntil: 'domcontentloaded' });
-        await page.waitForFunction(() => document.body.dataset.workState === 'ready');
+        await page.waitForFunction(expected => document.body.dataset.workState === expected,
+          partialEvidence ? 'partial-file' : 'ready');
         assert.strictEqual(await page.locator('html').getAttribute('data-theme'), theme);
         assert.match(await page.locator('#workTitle').textContent(), /Kitchen sink repair/);
         assert.match(await page.locator('#workCustomer').textContent(), /Jamie Carter/);
@@ -337,6 +349,11 @@ async function main() {
         assert.ok(geometry.badge.width >= 72 && geometry.badge.height <= 54, JSON.stringify(geometry));
         assert.strictEqual(geometry.overviewBelowHeading, true, JSON.stringify(geometry));
         assert.strictEqual(geometry.focusable, true, JSON.stringify(geometry));
+        if (partialEvidence) {
+          assert.match(await page.locator('#workStatus').textContent(), /evidence source is unavailable/);
+          assert.match(await page.locator('#workEvidenceContent').textContent(), /could not be loaded/);
+          ledger.cases.push({ partialFile: true, missingEvidenceClaimedAsSuccess: false });
+        }
         const snapshot = await page.locator('#workMain').ariaSnapshot();
         for (const name of ['Work status', 'Time', 'Materials', 'Equipment', 'Evidence', 'Progress and issues', 'Completion']) assert.match(snapshot, new RegExp(name));
         if (theme === 'light' && width === 1440) {
@@ -354,6 +371,18 @@ async function main() {
           assert.match(transition.headers['idempotency-key'], /^m23-part9a-start-/);
           assert.strictEqual(transition.headers['x-csrf-token'], 'browser-csrf-token');
           assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'workLifecyclePrimary');
+
+          conflictTransition = true;
+          await page.getByRole('button', { name: 'Pause work' }).click();
+          await page.getByRole('dialog', { name: 'Confirm Pause work' })
+            .getByRole('button', { name: 'Confirm Pause work' }).click();
+          await page.waitForFunction(() => document.body.dataset.workState === 'conflict');
+          assert.match(await page.locator('#workStateCopy').textContent(), /Reload/);
+          assert.strictEqual(await page.evaluate(() => window.m23Part9aCompromised), false);
+          await page.getByRole('button', { name: 'Reload current work' }).click();
+          await page.waitForFunction(() => document.body.dataset.workState === 'ready');
+          ledger.cases.push({ conflict: true, staleMutationClaimedAsSuccess: false, reloaded: true });
+
           assert.strictEqual(await page.getByRole('button', { name: 'Create checklist' }).count(), 1);
           assert.strictEqual(await page.getByRole('button', { name: 'Record equipment use' }).count(), 1);
           await page.getByRole('button', { name: 'Record equipment use' }).click();
@@ -391,6 +420,19 @@ async function main() {
             .getByRole('button', { name: 'Confirm Record checklist response' }).click();
           await page.waitForFunction(() => document.querySelectorAll('#workEvidenceContent .work-record-list li').length === 2);
           assert.strictEqual(await page.getByRole('button', { name: 'Respond to checklist' }).count(), 0);
+
+          await page.getByRole('button', { name: 'Add note' }).click();
+          await page.locator('#workEvidenceNote-note').fill('Server-confirmed worker note.');
+          await page.locator('#workEvidenceNote').getByRole('button', { name: 'Record field note' }).click();
+          failToday = true;
+          await page.getByRole('dialog', { name: 'Confirm Record field note' })
+            .getByRole('button', { name: 'Confirm Record field note' }).click();
+          await page.waitForFunction(() => document.body.dataset.workState === 'applied-but-refresh-failed');
+          assert.match(await page.locator('#workStateCopy').textContent(), /acknowledged/);
+          failToday = false;
+          await page.getByRole('button', { name: 'Reload current work' }).click();
+          await page.waitForFunction(() => document.body.dataset.workState === 'ready');
+          ledger.cases.push({ appliedButRefreshFailed: true, falseFailureClaimed: false, recoveredByFreshRead: true });
 
           await page.getByRole('button', { name: 'Start timer' }).click();
           await page.locator('#workLaborStart').getByRole('button', { name: 'Record timer start' }).click();
@@ -568,7 +610,8 @@ async function main() {
     });
     const initializePage = await initializeContext.newPage();
     await initializePage.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}`, { waitUntil: 'domcontentloaded' });
-    await initializePage.waitForFunction(() => document.body.dataset.workState === 'ready');
+    await initializePage.waitForFunction(() => document.body.dataset.workState === 'empty', null, { timeout: 5000 });
+    assert.match(await initializePage.locator('#workStateCopy').textContent(), /server-owned work record/);
     await initializePage.getByRole('button', { name: 'Open work record' }).click();
     const initializeConfirm = initializePage.getByRole('dialog', { name: 'Confirm Open work record' })
       .getByRole('button', { name: 'Confirm Open work record' });
@@ -586,6 +629,47 @@ async function main() {
     ledger.cases.push({ initializeFromEmpty: true, doubleSubmitSuppressed: true,
       currentExecutionReloaded: true });
     await initializeContext.close();
+
+    currentExecution = execution('completed', 7, '6'.repeat(64));
+    currentActions = [];
+    currentMaterialKinds = [];
+    currentEquipmentKinds = [];
+    const readOnlyContext = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    await readOnlyContext.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== origin) return route.fulfill({ status: 204, body: '' });
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      if (url.pathname === '/api/v1/today') return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(today(currentExecution.data)),
+      });
+      const reads = emptyReads(currentExecution.data, []);
+      const mapping = new Map([
+        [`/api/v1/field-executions/${EXECUTION}`, currentExecution],
+        [`/api/v1/field-executions/${EXECUTION}/labor`, reads.labor],
+        [`/api/v1/field-executions/${EXECUTION}/materials`, reads.materials],
+        [`/api/equipment/executions/${EXECUTION}`, reads.equipment],
+        ['/api/equipment/catalogue', reads.catalogue],
+        [`/api/v1/field-executions/${EXECUTION}/field-evidence`, reads.evidence],
+        [`/api/v1/field-executions/${EXECUTION}/progress`, reads.progress],
+        [`/api/v1/field-executions/${EXECUTION}/completion`, reads.completion],
+      ]);
+      if (mapping.has(url.pathname)) return route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify(mapping.get(url.pathname)),
+      });
+      return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+        success: false, error: { code: 'TEST_UNINVENTORIED', message: 'Uninventoried request.' },
+      }) });
+    });
+    const readOnlyPage = await readOnlyContext.newPage();
+    await readOnlyPage.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}&executionId=${EXECUTION}`,
+      { waitUntil: 'domcontentloaded' });
+    await readOnlyPage.waitForFunction(() => document.body.dataset.workState === 'read-only', null, { timeout: 5000 });
+    assert.strictEqual(await readOnlyPage.locator('#workSections').isVisible(), true);
+    assert.match(await readOnlyPage.locator('#workStateBadge').textContent(), /Completed/);
+    assert.match(await readOnlyPage.locator('#workStatus').textContent(), /read-only/);
+    assert.strictEqual(await readOnlyPage.locator('#workSections button').count(), 0);
+    ledger.cases.push({ readOnly: true, terminalHistoryVisible: true, mutationCapabilityExposed: false });
+    await readOnlyContext.close();
 
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await context.addInitScript(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); });

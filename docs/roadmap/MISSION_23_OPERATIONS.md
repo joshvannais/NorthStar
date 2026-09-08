@@ -76,8 +76,10 @@ knowledge authorities without replacing any of them.
   and bounded release acceptance are recorded.** Slice B is the bounded
   read-only owner/admin operational overview and minimized dispatcher
   coordination view; its implementation is in progress, not independently
-  accepted or released. Its proposed additive read routine remains explicitly
-  migration-gated until separately authorized. Existing worker execution,
+  accepted or released. The founder authorized routine-only migration 054,
+  its entry-only runtime grant and focused local PostgreSQL/browser verification
+  on 2026-09-08. Independent audit and production migration/release gates remain
+  separate and unconsumed. Existing worker execution,
   evidence-completeness/current-leaf and tab-ownership behavior is preserved.
   Cross-page integration remains a later Part 9 slice. The mounted owner
   review/approval/cancellation/reopening workflow must also be reconciled before

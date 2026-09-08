@@ -147,6 +147,18 @@ async function createDatabaseFixture() {
         ...input, csrfToken: context.actor.csrfToken, requestCorrelationId: 'p9b-progress',
       })).body.data;
     },
+    async fieldEvidence(context, action, extra) {
+      const input = require('../../src/fieldEvidence/contract').normalizeEvidenceAction({ ...context.actor,
+        executionId: context.execution.id, idempotencyKey: crypto.randomUUID(), body: {
+          action, performerProfileId: actors.member.actorUserId,
+          expectedExecutionRevision: context.execution.revision, expectedExecutionDigest: context.execution.digest,
+          expectedAssignmentRevision: Number(context.assignment.revision), expectedAssignmentDigest: context.assignment.digest,
+          reason: 'Attributable synthetic field evidence', ...extra,
+        } });
+      return (await require('../../src/fieldEvidence/repository').mutateFieldEvidence(runtimePool, {
+        ...input, csrfToken: context.actor.csrfToken, requestCorrelationId: 'p9b-field-evidence',
+      })).body.data;
+    },
     async completion(context, action = 'propose_completion', extra = {}) {
       const input = require('../../src/completion/contract').normalizeCompletionAction({ ...context.actor,
         executionId: context.execution.id, idempotencyKey: crypto.randomUUID(), body: {

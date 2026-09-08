@@ -1152,6 +1152,18 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             runtime_role
           );
         END IF;
+        IF pg_catalog.to_regprocedure(
+          'public.canonical_operational_overview_read(uuid,uuid,text,uuid,text,integer,jsonb)'
+        ) IS NOT NULL THEN
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL ON FUNCTION public.canonical_operational_overview_read(uuid,uuid,text,uuid,text,integer,jsonb) FROM %I',
+            runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_operational_overview_read(uuid,uuid,text,uuid,text,integer,jsonb) TO %I',
+            runtime_role
+          );
+        END IF;
       END IF;
       IF pg_catalog.to_regclass('public.canonical_labor_intervals') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
@@ -1435,6 +1447,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          has_function_privilege($1,'public.canonical_field_execution_read(uuid,uuid,text,uuid,uuid)','EXECUTE'))
          AND (to_regprocedure('public.canonical_field_execution_read_by_appointment(uuid,uuid,text,uuid,uuid)') IS NULL OR
          has_function_privilege($1,'public.canonical_field_execution_read_by_appointment(uuid,uuid,text,uuid,uuid)','EXECUTE'))
+         AND (to_regprocedure('public.canonical_operational_overview_read(uuid,uuid,text,uuid,text,integer,jsonb)') IS NULL OR
+         has_function_privilege($1,'public.canonical_operational_overview_read(uuid,uuid,text,uuid,text,integer,jsonb)','EXECUTE'))
          AS field_execution_entry_execute,
        (to_regclass('public.canonical_field_executions') IS NULL OR (
          NOT has_function_privilege($1,'public.canonical_field_execution_reason_valid(text)','EXECUTE')

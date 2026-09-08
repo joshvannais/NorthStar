@@ -125,9 +125,9 @@ real('Part 9B mounted operational overview on durable runtime authority', () => 
     await fixture.ownerPool.query("UPDATE workforce_profiles SET operational_role='technician' WHERE id=$1", [actor.actorUserId]);
     try { expect((await get('dispatcher')).status).toBe(403); await expect(read('dispatcher')).rejects.toMatchObject({ status: 403 }); }
     finally { await fixture.ownerPool.query("UPDATE workforce_profiles SET operational_role='dispatcher' WHERE id=$1", [actor.actorUserId]); }
-    await fixture.ownerPool.query("UPDATE auth_sessions SET status='revoked',revoked_at=NOW() WHERE id=$1", [actor.authSessionId]);
+    await fixture.ownerPool.query("UPDATE auth_sessions SET status='revoked',revoked_at=NOW(),revoke_reason='synthetic-test' WHERE id=$1", [actor.authSessionId]);
     try { expect((await get('dispatcher')).status).toBe(401); await expect(read('dispatcher')).rejects.toMatchObject({ status: 403 }); }
-    finally { await fixture.ownerPool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL WHERE id=$1", [actor.authSessionId]); }
+    finally { await fixture.ownerPool.query("UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1", [actor.authSessionId]); }
   });
   test('runtime has entry-only read and 053 still refuses an owner not personally assigned', async () => {
     await expect(fixture.runtimePool.query('SELECT id FROM public.canonical_field_executions LIMIT 1')).rejects.toMatchObject({ code: '42501' });
@@ -140,5 +140,76 @@ real('Part 9B mounted operational overview on durable runtime authority', () => 
       await expect(client.query('SELECT public.canonical_field_execution_read_by_appointment($1,$2,$3,$4,$5)',
         [actor.organizationId, actor.actorUserId, actor.actorAccessRole, actor.authSessionId, first.appointment])).rejects.toMatchObject({ code: 'P0002' });
     } finally { await client.query('ROLLBACK'); client.release(); }
+    const assignedClient = await fixture.runtimePool.connect();
+    try {
+      await assignedClient.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const actor = fixture.actors.member;
+      const found = (await assignedClient.query('SELECT public.canonical_field_execution_read_by_appointment($1,$2,$3,$4,$5) AS result',
+        [actor.organizationId, actor.actorUserId, actor.actorAccessRole, actor.authSessionId, first.appointment])).rows[0].result;
+      expect(found.data.id).toBe(first.execution.id);
+      await assignedClient.query('COMMIT');
+    } finally { await assignedClient.query('ROLLBACK'); assignedClient.release(); }
+  });
+  test('current unresolved issues and note corrections are counted once and never imply capacity or readiness', async () => {
+    const context = await fixture.createExecution();
+    const note = await fixture.fieldEvidence(context, 'record_note', { note: 'Synthetic delivery observed', caption: null });
+    const correction = await fixture.fieldEvidence(context, 'correct', { evidenceId: note.id,
+      expectedEvidenceRevision: note.revision, expectedEvidenceDigest: note.digest,
+      replacement: { kind: 'note', note: 'Synthetic delivery confirmed at staging', caption: null } });
+    const issue = await fixture.progress(context, 'record_blocker', {
+      kind: 'blocker', description: 'Material delivery needs confirmation', observedAt: new Date().toISOString(),
+      timeZoneAuthority: fixture.profiles[fixture.org], evidence: [], category: 'material', impact: 'prevents_work',
+      severity: 'moderate', followUp: { profileId: fixture.actors.member.actorUserId, action: 'Confirm recorded delivery' },
+      state: 'open', resolution: null,
+    });
+    let row = (await read()).records.find(value => value.executionId === context.execution.id);
+    expect(row).toMatchObject({ blockers: { open: 1 }, exceptions: { open: 0 },
+      capacity: { status: 'unknown', recordedConstraints: 1 }, evidence: { state: 'not_evaluated', recorded: 1 },
+      ownerDetails: { evidenceCounts: { notes: 1 } } });
+    await fixture.progress(context, 'issue_state', { state: 'resolved', resolution: {
+      description: 'Recorded delivery confirmed', observedAt: new Date().toISOString(),
+      evidence: [{ id: correction.id, revision: correction.revision, digest: correction.digest }],
+    } }, issue);
+    row = (await read()).records.find(value => value.executionId === context.execution.id);
+    expect(row.blockers.open).toBe(0); expect(row.capacity).toEqual({ status: 'unknown', recordedConstraints: 0 });
+    expect(row.evidence.state).toBe('not_evaluated'); expect(row.lifecycleState).toBe('in_progress');
+    const dispatch = (await read('dispatcher')).records.find(value => value.executionId === context.execution.id);
+    expect(dispatch).not.toHaveProperty('ownerDetails'); expect(JSON.stringify(dispatch)).not.toContain('staging');
+  });
+  test('current evidence changes invalidate proposal readiness using the accepted gate snapshot', async () => {
+    const context = await fixture.createExecution();
+    await fixture.completion(context);
+    let row = (await read('owner', { state: 'completion_pending' })).records.find(value => value.executionId === context.execution.id);
+    expect(row.evidence.state).toBe('ready_for_review');
+    await fixture.fieldEvidence(context, 'record_note', { note: 'Additional recorded observation', caption: null });
+    row = (await read('owner', { state: 'completion_pending' })).records.find(value => value.executionId === context.execution.id);
+    expect(row.approval.state).toBe('changed'); expect(row.evidence.state).toBe('changed');
+  });
+  test('explicit production completion appears only in completed/all filters with no fabricated pending proposal', async () => {
+    const context = await fixture.createExecution(); await fixture.completion(context);
+    const pending = (await read('owner', { state: 'completion_pending' })).records.find(value => value.executionId === context.execution.id).ownerDetails.pendingProposal;
+    await fixture.completion(context, 'approve_completion', { proposal: { id: pending.id, revision: pending.revision, digest: pending.digest } });
+    const completed = await read('owner', { state: 'completed' });
+    expect(completed.records.find(value => value.executionId === context.execution.id)).toMatchObject({
+      lifecycleState: 'completed', approval: { state: 'none' }, ownerDetails: { pendingProposal: null },
+    });
+    expect((await read()).records.some(value => value.executionId === context.execution.id)).toBe(false);
+    expect((await read('owner', { state: 'all' })).records.some(value => value.executionId === context.execution.id)).toBe(true);
+  });
+  test('worker inactivity changes assignment readiness while the owner read remains visible and read-only', async () => {
+    const context = await fixture.createExecution(); await fixture.completion(context);
+    await fixture.ownerPool.query("UPDATE users SET status='suspended' WHERE id=$1", [fixture.actors.member.actorUserId]);
+    try {
+      const row = (await read('owner', { state: 'completion_pending' })).records.find(value => value.executionId === context.execution.id);
+      expect(row.assignment.current).toBe(false); expect(row.approval.state).toBe('changed');
+      expect(row.evidence.state).toBe('changed');
+    } finally { await fixture.ownerPool.query("UPDATE users SET status='active' WHERE id=$1", [fixture.actors.member.actorUserId]); }
+  });
+  test('ordinary invalid page sizes and a missing read-only snapshot are rejected before data is returned', async () => {
+    for (const limit of ['0', '101', '1.5', '-1']) expect((await get('owner', { limit })).status).toBe(400);
+    const actor = fixture.actors.owner;
+    await expect(fixture.runtimePool.query('SELECT public.canonical_operational_overview_read($1,$2,$3,$4,$5,$6,$7)',
+      [actor.organizationId, actor.actorUserId, actor.actorAccessRole, actor.authSessionId, 'active', 25, null]))
+      .rejects.toMatchObject({ code: '25000' });
   });
 });

@@ -171,8 +171,11 @@
       if (body.success !== true || !contract) throw new Error('OPERATIONS_RESPONSE_INVALID');
       var data = contract.validate(body.data);
       if (data.filter !== selectedState || data.pagination.limit !== 25) throw new Error('OPERATIONS_RESPONSE_INVALID');
+      // Returning to page one has no cursor and therefore re-evaluates at a
+      // fresh database timestamp. Its complete dataset/scope digest must still
+      // match; cursor-bearing pages must additionally preserve their cutoff.
       if (action !== 'refresh' && expectedSnapshot && (data.dataDigest !== expectedSnapshot.dataDigest ||
-          data.scope !== expectedSnapshot.scope || data.evaluatedAt !== expectedSnapshot.evaluatedAt)) {
+          data.scope !== expectedSnapshot.scope || nextCursor && data.evaluatedAt !== expectedSnapshot.evaluatedAt)) {
         var changed = new Error('OPERATIONS_SNAPSHOT_CHANGED'); changed.status = 409; throw changed;
       }
       if (requestGeneration !== generation) return;

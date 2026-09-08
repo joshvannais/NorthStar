@@ -10,6 +10,7 @@ const {
   LABOR_CATEGORY_CONTRACT_VERSION,
   MATERIAL_UNIT_CONTRACT_DIGEST,
   MATERIAL_UNIT_CONTRACT_VERSION,
+  normalizeInitialization,
   normalizeLaborAction,
   normalizeMaterialAction,
   normalizeTransition,
@@ -65,10 +66,10 @@ function today(executionPointer = execution().data) {
       instructions: { status: 'available', text: `Use the side entrance. ${HOSTILE}`, truncated: false },
       customer: { name: `Jamie Carter ${HOSTILE}`, phone: '+1 555 010 1234', serviceLocation: { street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110' } },
       crew: null, authority: { revision: 7, digest: ASSIGNMENT_DIGEST, approvedCurrent: true },
-      execution: { id: executionPointer.id, lifecycleState: executionPointer.lifecycleState,
+      execution: executionPointer ? { id: executionPointer.id, lifecycleState: executionPointer.lifecycleState,
         revision: executionPointer.revision, digest: executionPointer.digest,
         sourceAssignmentRevision: executionPointer.sourceAssignmentRevision,
-        sourceAssignmentDigest: executionPointer.sourceAssignmentDigest },
+        sourceAssignmentDigest: executionPointer.sourceAssignmentDigest } : null,
       workCapabilities: { version: 'm23-part9a-worker-actions-v1', mutable: true,
         actions: currentActions, materialMovementKinds: currentMaterialKinds, equipmentKinds: currentEquipmentKinds },
     }],
@@ -512,6 +513,79 @@ async function main() {
         await context.close();
       }
     }
+
+    currentExecution = execution('not_started', 1, '7'.repeat(64));
+    currentActions = ['initialize'];
+    currentMaterialKinds = [];
+    currentEquipmentKinds = [];
+    const initializeContext = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    await initializeContext.addCookies([{ name: 'northstar_csrf', value: 'browser-csrf-token', url: origin, sameSite: 'Lax' }]);
+    let initialized = false;
+    let initializationAttempts = 0;
+    await initializeContext.route('**/*', route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (url.origin !== origin) return route.fulfill({ status: 204, body: '' });
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      ledger.requests.push({ method: request.method(), path: url.pathname,
+        headers: request.headers(), body: request.postDataJSON ? request.postDataJSON() : null });
+      if (url.pathname === '/api/v1/today') return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(today(initialized ? currentExecution.data : null)),
+      });
+      if (url.pathname === `/api/v1/field-executions/appointments/${APPOINTMENT}` && request.method() === 'POST') {
+        const normalized = normalizeInitialization({
+          organizationId: ORGANIZATION, actorUserId: PROFILE, actorAccessRole: 'member',
+          authSessionId: AUTH_SESSION, appointmentId: APPOINTMENT,
+          idempotencyKey: request.headers()['idempotency-key'], body: request.postDataJSON(),
+        });
+        initializationAttempts += 1;
+        initialized = true;
+        currentActions = ['start'];
+        ledger.cases.push({ contract: 'initialization', action: 'initialize', valid: true,
+          expectedAssignmentRevision: normalized.expectedAssignmentRevision });
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(currentExecution) });
+      }
+      if (initialized) {
+        const reads = emptyReads(currentExecution.data, []);
+        const mapping = new Map([
+          [`/api/v1/field-executions/${EXECUTION}`, currentExecution],
+          [`/api/v1/field-executions/${EXECUTION}/labor`, reads.labor],
+          [`/api/v1/field-executions/${EXECUTION}/materials`, reads.materials],
+          [`/api/equipment/executions/${EXECUTION}`, reads.equipment],
+          ['/api/equipment/catalogue', reads.catalogue],
+          [`/api/v1/field-executions/${EXECUTION}/field-evidence`, reads.evidence],
+          [`/api/v1/field-executions/${EXECUTION}/progress`, reads.progress],
+          [`/api/v1/field-executions/${EXECUTION}/completion`, reads.completion],
+        ]);
+        if (mapping.has(url.pathname)) return route.fulfill({
+          status: 200, contentType: 'application/json', body: JSON.stringify(mapping.get(url.pathname)),
+        });
+      }
+      return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+        success: false, error: { code: 'TEST_UNINVENTORIED', message: 'Uninventoried request.' },
+      }) });
+    });
+    const initializePage = await initializeContext.newPage();
+    await initializePage.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}`, { waitUntil: 'domcontentloaded' });
+    await initializePage.waitForFunction(() => document.body.dataset.workState === 'ready');
+    await initializePage.getByRole('button', { name: 'Open work record' }).click();
+    const initializeConfirm = initializePage.getByRole('dialog', { name: 'Confirm Open work record' })
+      .getByRole('button', { name: 'Confirm Open work record' });
+    await initializeConfirm.evaluate(button => { button.click(); button.click(); });
+    await initializePage.getByRole('button', { name: 'Start work' }).waitFor();
+    assert.strictEqual(initializationAttempts, 1);
+    const initializationRequest = ledger.requests.find(item =>
+      item.method === 'POST' && item.path.endsWith(`/appointments/${APPOINTMENT}`));
+    assert.deepStrictEqual(initializationRequest.body, {
+      expectedAssignmentRevision: 7, expectedAssignmentDigest: ASSIGNMENT_DIGEST,
+      reason: 'Open the current assigned work detail.',
+    });
+    assert.match(initializationRequest.headers['idempotency-key'], /^m23-part9a-initialize-/);
+    assert.strictEqual(initializationRequest.headers['x-csrf-token'], 'browser-csrf-token');
+    ledger.cases.push({ initializeFromEmpty: true, doubleSubmitSuppressed: true,
+      currentExecutionReloaded: true });
+    await initializeContext.close();
 
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await context.addInitScript(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); });

@@ -1,0 +1,30 @@
+[
+  {
+    phase: 'after',
+    width: 1440,
+    colorScheme: 'light',
+    assertions: 26,
+    errors: []
+  },
+  {
+    phase: 'after',
+    width: 1440,
+    colorScheme: 'dark',
+    assertions: 26,
+    errors: []
+  },
+  {
+    phase: 'after',
+    width: 390,
+    colorScheme: 'light',
+    assertions: 26,
+    errors: []
+  },
+  {
+    phase: 'after',
+    width: 390,
+    colorScheme: 'dark',
+    assertions: 26,
+    errors: []
+  }
+]

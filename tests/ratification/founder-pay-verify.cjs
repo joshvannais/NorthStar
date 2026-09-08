@@ -1,0 +1,6 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto');
+const root=path.resolve(__dirname,'../..'),out=path.join(root,'outputs/founder-pay-display'),source=fs.readFileSync(path.join(root,'public/unlisted/investor-forecast.html'),'utf8').replace(/\r\n/g,'\n');
+const checks=[['numerical',['--test','tests/ratification/founder-pay-display.cjs','tests/ratification/founder-overhead.cjs']],['route',['tests/ratification/founder-pay-route.cjs']],['browser',['tests/browser/founder-pay-display.cjs']]],results=[];
+for(const [name,args]of checks){const r=cp.spawnSync(process.execPath,args,{cwd:root,encoding:'utf8',timeout:600000,maxBuffer:8e6}),output=(r.stdout||'')+(r.stderr||'');fs.writeFileSync(path.join(out,name+'-verification.log'),output.trimEnd()+'\n');console.log(name, r.status, output);results.push({name,args,exitCode:r.status,error:r.error?.message||null});if(r.status!==0){process.exitCode=1;break;}}
+fs.writeFileSync(path.join(out,'verification-results.json'),JSON.stringify({base:'fc2251d5e5b1118fa7fa94f740158328f1bdf243',sourceSha256:crypto.createHash('sha256').update(source).digest('hex'),checks:results,scope:'Local self-contained calculator and scoped tests only. No production operations. Earlier sealed evidence is historical and not overwritten.'},null,2)+'\n');

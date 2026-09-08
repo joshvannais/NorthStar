@@ -13,7 +13,7 @@ const EVIDENCE_PATH = path.join(
   ROOT,
   'outputs/unlisted-investor-forecast-monthly-layout-writer/IMPLEMENTATION_EVIDENCE.md'
 );
-const REVISION_MANIFEST = JSON.parse(fs.readFileSync(path.join(ROOT, 'outputs/investor-revision/source-manifest.json'), 'utf8'));
+const REVISION_MANIFEST = JSON.parse(fs.readFileSync(path.join(ROOT, 'outputs/founder-pay-p2-correction/source-manifest.json'), 'utf8'));
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');

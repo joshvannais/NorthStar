@@ -1,0 +1,513 @@
+{
+  "base": "fc2251d5e5b1118fa7fa94f740158328f1bdf243",
+  "sourceSha256": "3f32de0776c1b23e1216cc4843fc73c54d81c29f51da6d16ba55e1b097eb5725",
+  "cases": [
+    {
+      "name": "default",
+      "input": {},
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 400,
+          "founderPay": 0,
+          "combinedFixed": 400,
+          "revenue": 20072.708876244862,
+          "operatingProfit": 15736.176946855841,
+          "cash": 89398.62704493615
+        },
+        {
+          "month": 13,
+          "businessFixed": 400,
+          "founderPay": 3500,
+          "combinedFixed": 3900,
+          "revenue": 22614.25132291385,
+          "operatingProfit": 14279.288262336042,
+          "cash": 103677.91530727218
+        },
+        {
+          "month": 24,
+          "businessFixed": 12232,
+          "founderPay": 3500,
+          "combinedFixed": 15732,
+          "revenue": 64938.431720918496,
+          "operatingProfit": 36471.119736377455,
+          "cash": 372743.58801582013
+        },
+        {
+          "month": 120,
+          "businessFixed": 93552,
+          "founderPay": 6000,
+          "combinedFixed": 99552,
+          "revenue": 1091547.2303035776,
+          "operatingProfit": 777927.6987351073,
+          "cash": 44360574.14110483
+        }
+      ]
+    },
+    {
+      "name": "manual-zero",
+      "input": {
+        "organization": {
+          "founder": {
+            "compensationPolicy": "manual",
+            "manualMonthlyCompensation": 0
+          }
+        }
+      },
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 400,
+          "founderPay": 0,
+          "combinedFixed": 400,
+          "revenue": 20072.708876244862,
+          "operatingProfit": 15736.176946855841,
+          "cash": 89398.62704493615
+        },
+        {
+          "month": 13,
+          "businessFixed": 400,
+          "founderPay": 0,
+          "combinedFixed": 400,
+          "revenue": 22614.25132291385,
+          "operatingProfit": 17779.288262336042,
+          "cash": 107177.9153072722
+        },
+        {
+          "month": 24,
+          "businessFixed": 12232,
+          "founderPay": 0,
+          "combinedFixed": 12232,
+          "revenue": 64938.431720918496,
+          "operatingProfit": 39971.119736377455,
+          "cash": 414743.58801582013
+        },
+        {
+          "month": 120,
+          "businessFixed": 93552,
+          "founderPay": 0,
+          "combinedFixed": 93552,
+          "revenue": 1091547.2303035776,
+          "operatingProfit": 783927.6987351073,
+          "cash": 44973574.14110484
+        }
+      ]
+    },
+    {
+      "name": "manual-3500",
+      "input": {
+        "organization": {
+          "founder": {
+            "compensationPolicy": "manual",
+            "manualMonthlyCompensation": 3500
+          }
+        }
+      },
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 400,
+          "founderPay": 3500,
+          "combinedFixed": 3900,
+          "revenue": 20072.708876244862,
+          "operatingProfit": 12236.176946855841,
+          "cash": 47398.62704493616
+        },
+        {
+          "month": 13,
+          "businessFixed": 400,
+          "founderPay": 3500,
+          "combinedFixed": 3900,
+          "revenue": 22614.25132291385,
+          "operatingProfit": 14279.288262336042,
+          "cash": 61677.915307272204
+        },
+        {
+          "month": 24,
+          "businessFixed": 12232,
+          "founderPay": 3500,
+          "combinedFixed": 15732,
+          "revenue": 64938.431720918496,
+          "operatingProfit": 36471.119736377455,
+          "cash": 330743.58801582013
+        },
+        {
+          "month": 120,
+          "businessFixed": 93552,
+          "founderPay": 3500,
+          "combinedFixed": 97052,
+          "revenue": 1091547.2303035776,
+          "operatingProfit": 780427.6987351073,
+          "cash": 44553574.14110483
+        }
+      ]
+    },
+    {
+      "name": "milestone-6000",
+      "input": {
+        "startingCustomers": {
+          "starter": 600
+        },
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "capacityEnforcement": "warning_only"
+        },
+        "retention": {
+          "baseMonthlyVoluntaryChurn": 0,
+          "earlyTenureMultiplier": 1,
+          "matureMultiplier": 1
+        }
+      },
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 300,
+          "founderPay": 6000,
+          "combinedFixed": 6300,
+          "revenue": 89400,
+          "operatingProfit": 65061.600000000006,
+          "cash": 790739.1999999998
+        },
+        {
+          "month": 13,
+          "businessFixed": 300,
+          "founderPay": 6000,
+          "combinedFixed": 6300,
+          "revenue": 89400,
+          "operatingProfit": 65061.600000000006,
+          "cash": 855800.7999999998
+        },
+        {
+          "month": 24,
+          "businessFixed": 300,
+          "founderPay": 6000,
+          "combinedFixed": 6300,
+          "revenue": 89400,
+          "operatingProfit": 65061.600000000006,
+          "cash": 1571478.4000000006
+        },
+        {
+          "month": 120,
+          "businessFixed": 300,
+          "founderPay": 6000,
+          "combinedFixed": 6300,
+          "revenue": 89400,
+          "operatingProfit": 65061.600000000006,
+          "cash": 7817391.999999983
+        }
+      ]
+    },
+    {
+      "name": "persistent-escalation",
+      "input": {
+        "startingCustomers": {
+          "starter": 200
+        },
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "capacityEnforcement": "warning_only"
+        },
+        "retention": {
+          "baseMonthlyVoluntaryChurn": 0.1,
+          "earlyTenureMultiplier": 1,
+          "matureMultiplier": 1
+        },
+        "escalation": {
+          "payrollWages": 0.03
+        }
+      },
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 8416.400187133804,
+          "operatingProfit": 2918.207870180846,
+          "cash": 118020.92916837244
+        },
+        {
+          "month": 13,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 7574.760168420423,
+          "operatingProfit": 2246.387083162761,
+          "cash": 120267.3162515352
+        },
+        {
+          "month": 24,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 2377.0400036908018,
+          "operatingProfit": -1902.5796652418176,
+          "cash": 115808.01698717642
+        },
+        {
+          "month": 120,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 0.09623153133635713,
+          "operatingProfit": -3799.923185279121,
+          "cash": -231915.8913324878
+        }
+      ]
+    },
+    {
+      "name": "owner-distribution",
+      "input": {
+        "investmentAmount": 1000000,
+        "startingCustomers": {
+          "starter": 2000
+        },
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "capacityEnforcement": "warning_only",
+          "founder": {
+            "compensationPolicy": "manual",
+            "manualMonthlyCompensation": 3500
+          }
+        },
+        "retention": {
+          "baseMonthlyVoluntaryChurn": 0,
+          "earlyTenureMultiplier": 1,
+          "matureMultiplier": 1
+        },
+        "cash": {
+          "distributionPolicy": "dated",
+          "distributionRequests": [
+            {
+              "month": 1,
+              "amount": 10000
+            }
+          ],
+          "provisionalDistributionsWithoutTaxEstimate": true
+        }
+      },
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 298000,
+          "operatingProfit": 234072,
+          "cash": 3783864
+        },
+        {
+          "month": 13,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 298000,
+          "operatingProfit": 234072,
+          "cash": 4017936
+        },
+        {
+          "month": 24,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 298000,
+          "operatingProfit": 234072,
+          "cash": 6592728
+        },
+        {
+          "month": 120,
+          "businessFixed": 300,
+          "founderPay": 3500,
+          "combinedFixed": 3800,
+          "revenue": 298000,
+          "operatingProfit": 234072,
+          "cash": 29063640
+        }
+      ]
+    },
+    {
+      "name": "actual-unknown",
+      "input": {
+        "actuals": [
+          {
+            "month": 1,
+            "endingCustomers": 0,
+            "newPayingCustomers": 0,
+            "reactivations": 0,
+            "churnedCustomers": 0,
+            "planCustomers": {
+              "starter": 0,
+              "growth": 0,
+              "complete": 0
+            },
+            "mrr": 0,
+            "revenue": 0,
+            "providerCost": 0,
+            "opex": 5300,
+            "payroll": 5000,
+            "salesMarketing": 0,
+            "customerSupport": 0,
+            "professionalServices": 0,
+            "otherOpex": 300,
+            "cashCollections": 0,
+            "beginningCash": 25000,
+            "endingCash": 19600,
+            "additionalFunding": 0,
+            "investorDistribution": 100,
+            "otherCashOutflows": 0
+          }
+        ],
+        "acquisition": {
+          "direct": {
+            "enabled": false
+          }
+        },
+        "organization": {
+          "automaticPlan": {
+            "enabled": false
+          },
+          "capacityEnforcement": "warning_only"
+        },
+        "cash": {
+          "forecastPrelaunchLegalPayment": 0,
+          "legalReviewReserve": 0,
+          "actualHistoryCashBasis": "total_bank"
+        }
+      },
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 300,
+          "founderPay": 0,
+          "combinedFixed": 300,
+          "revenue": 0,
+          "operatingProfit": -300,
+          "cash": 16300
+        },
+        {
+          "month": 13,
+          "businessFixed": 300,
+          "founderPay": 0,
+          "combinedFixed": 300,
+          "revenue": 0,
+          "operatingProfit": -300,
+          "cash": 16000
+        },
+        {
+          "month": 24,
+          "businessFixed": 300,
+          "founderPay": 0,
+          "combinedFixed": 300,
+          "revenue": 0,
+          "operatingProfit": -300,
+          "cash": 12700
+        },
+        {
+          "month": 120,
+          "businessFixed": 300,
+          "founderPay": 0,
+          "combinedFixed": 300,
+          "revenue": 0,
+          "operatingProfit": -300,
+          "cash": -16100
+        }
+      ]
+    },
+    {
+      "name": "saved-explicit-10pct",
+      "input": {
+        "version": "3.3.0",
+        "investorOwnership": 0.1,
+        "cash": {
+          "distributionPayoutRatio": 0.5,
+          "distributionStartMonth": 1
+        }
+      },
+      "rows": 120,
+      "annualRows": 10,
+      "monetaryDifferences": 0,
+      "selected": [
+        {
+          "month": 12,
+          "businessFixed": 400,
+          "founderPay": 0,
+          "combinedFixed": 400,
+          "revenue": 20072.708876244862,
+          "operatingProfit": 15736.176946855841,
+          "cash": 38777.97593144646
+        },
+        {
+          "month": 13,
+          "businessFixed": 400,
+          "founderPay": 3500,
+          "combinedFixed": 3900,
+          "revenue": 22614.25132291385,
+          "operatingProfit": 14279.288262336042,
+          "cash": 39028.632096891255
+        },
+        {
+          "month": 24,
+          "businessFixed": 12232,
+          "founderPay": 3500,
+          "combinedFixed": 15732,
+          "revenue": 64938.431720918496,
+          "operatingProfit": 36471.119736377455,
+          "cash": 95776.33433469321
+        },
+        {
+          "month": 120,
+          "businessFixed": 93552,
+          "founderPay": 6000,
+          "combinedFixed": 99552,
+          "revenue": 1091547.2303035776,
+          "operatingProfit": 777927.6987351073,
+          "cash": 959122.5947054108
+        }
+      ]
+    }
+  ],
+  "comparedLeaves": 5280112,
+  "qualification": "Exact equality of every prior result leaf and CSV cell; additive display fields only. Every case reruns the complete prior resolved config, preserving saved/explicit assumptions. The authorized new400 reset baseline is separately quantified in new-default-before-after.json; not real-world forecast validation."
+}

@@ -1,0 +1,4048 @@
+{
+  "base": "fc2251d5e5b1118fa7fa94f740158328f1bdf243",
+  "qualification": "Authorized new400 combined starting overhead changes reset outputs only; founder compensation policy and default withdrawals unchanged. No forecast credibility claim.",
+  "months": [
+    {
+      "month": 1,
+      "before": {
+        "totalRevenue": 396,
+        "operatingProfit": 18.339,
+        "endingCash": 10018.339,
+        "fixedCommittedOperatingCosts": 300,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 396,
+        "operatingProfit": -81.661,
+        "endingCash": 9918.339,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": -100,
+        "endingCash": -100,
+        "fixedCommittedOperatingCosts": 100,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 2,
+      "before": {
+        "totalRevenue": 1171.962,
+        "operatingProfit": 642.1242705,
+        "endingCash": 10660.4632705,
+        "fixedCommittedOperatingCosts": 300,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1171.962,
+        "operatingProfit": 542.1242705,
+        "endingCash": 10460.4632705,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": -100,
+        "endingCash": -200,
+        "fixedCommittedOperatingCosts": 100,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 3,
+      "before": {
+        "totalRevenue": 2312.497539,
+        "operatingProfit": 1558.98523754475,
+        "endingCash": 12219.44850804475,
+        "fixedCommittedOperatingCosts": 300,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 2312.497539,
+        "operatingProfit": 1458.98523754475,
+        "endingCash": 11919.44850804475,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": -100,
+        "endingCash": -300,
+        "fixedCommittedOperatingCosts": 100,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 4,
+      "before": {
+        "totalRevenue": 3630.66941083,
+        "operatingProfit": 2618.6456302379074,
+        "endingCash": 14838.094138282657,
+        "fixedCommittedOperatingCosts": 300,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 3630.66941083,
+        "operatingProfit": 2518.6456302379074,
+        "endingCash": 14438.094138282657,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": -100,
+        "endingCash": -400,
+        "fixedCommittedOperatingCosts": 100,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 5,
+      "before": {
+        "totalRevenue": 5122.9965255051,
+        "operatingProfit": 3818.30704781002,
+        "endingCash": 18656.401186092677,
+        "fixedCommittedOperatingCosts": 300,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 5122.9965255051,
+        "operatingProfit": 3718.30704781002,
+        "endingCash": 18156.401186092677,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": -100,
+        "endingCash": -500,
+        "fixedCommittedOperatingCosts": 100,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 6,
+      "before": {
+        "totalRevenue": 6786.027381739948,
+        "operatingProfit": 5155.194875443721,
+        "endingCash": 23811.596061536395,
+        "fixedCommittedOperatingCosts": 300,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 6786.027381739948,
+        "operatingProfit": 5055.194875443721,
+        "endingCash": 23211.596061536395,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": -100,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 100,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 7,
+      "before": {
+        "totalRevenue": 8614.640867287748,
+        "operatingProfit": 6525.192320837157,
+        "endingCash": 30336.788382373554,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 8614.640867287748,
+        "operatingProfit": 6525.192320837157,
+        "endingCash": 29736.788382373554,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 8,
+      "before": {
+        "totalRevenue": 10603.869503269118,
+        "operatingProfit": 8124.306095457545,
+        "endingCash": 38461.094477831095,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 10603.869503269118,
+        "operatingProfit": 8124.306095457545,
+        "endingCash": 37861.094477831095,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 9,
+      "before": {
+        "totalRevenue": 12748.894835171042,
+        "operatingProfit": 9848.662709428067,
+        "endingCash": 48309.757187259165,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 12748.894835171042,
+        "operatingProfit": 9848.662709428067,
+        "endingCash": 47709.757187259165,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 10,
+      "before": {
+        "totalRevenue": 15045.04296211591,
+        "operatingProfit": 11694.504877568223,
+        "endingCash": 60004.26206482739,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 15045.04296211591,
+        "operatingProfit": 11694.504877568223,
+        "endingCash": 59404.26206482739,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 11,
+      "before": {
+        "totalRevenue": 17487.780200252433,
+        "operatingProfit": 13658.188033252927,
+        "endingCash": 73662.45009808031,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 17487.780200252433,
+        "operatingProfit": 13658.188033252927,
+        "endingCash": 73062.45009808031,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 12,
+      "before": {
+        "totalRevenue": 20072.708876244862,
+        "operatingProfit": 15736.176946855841,
+        "endingCash": 89398.62704493615,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 20072.708876244862,
+        "operatingProfit": 15736.176946855841,
+        "endingCash": 88798.62704493615,
+        "fixedCommittedOperatingCosts": 400,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 13,
+      "before": {
+        "totalRevenue": 22614.25132291385,
+        "operatingProfit": 14279.288262336042,
+        "endingCash": 103677.91530727218,
+        "fixedCommittedOperatingCosts": 3900,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 22614.25132291385,
+        "operatingProfit": 14279.288262336042,
+        "endingCash": 103077.91530727218,
+        "fixedCommittedOperatingCosts": 3900,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 14,
+      "before": {
+        "totalRevenue": 25188.822908886425,
+        "operatingProfit": 16348.951252505038,
+        "endingCash": 120026.86655977722,
+        "fixedCommittedOperatingCosts": 3900,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 25188.822908886425,
+        "operatingProfit": 16348.951252505038,
+        "endingCash": 119426.86655977722,
+        "fixedCommittedOperatingCosts": 3900,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 15,
+      "before": {
+        "totalRevenue": 27866.581945813352,
+        "operatingProfit": 18501.565227394636,
+        "endingCash": 138528.43178717187,
+        "fixedCommittedOperatingCosts": 3900,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 27866.581945813352,
+        "operatingProfit": 18501.565227394636,
+        "endingCash": 137928.43178717187,
+        "fixedCommittedOperatingCosts": 3900,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 16,
+      "before": {
+        "totalRevenue": 30708.98767738577,
+        "operatingProfit": 19586.536434927544,
+        "endingCash": 158114.96822209941,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 30708.98767738577,
+        "operatingProfit": 19586.536434927544,
+        "endingCash": 157514.96822209941,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 17,
+      "before": {
+        "totalRevenue": 33762.31660713165,
+        "operatingProfit": 22041.065925246672,
+        "endingCash": 180156.0341473461,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 33762.31660713165,
+        "operatingProfit": 22041.065925246672,
+        "endingCash": 179556.0341473461,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 18,
+      "before": {
+        "totalRevenue": 36998.72112348037,
+        "operatingProfit": 24642.767383150545,
+        "endingCash": 204798.80153049665,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 36998.72112348037,
+        "operatingProfit": 24642.767383150545,
+        "endingCash": 204198.80153049665,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 19,
+      "before": {
+        "totalRevenue": 40455.12894306291,
+        "operatingProfit": 27421.32649647905,
+        "endingCash": 232220.12802697573,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 40455.12894306291,
+        "operatingProfit": 27421.32649647905,
+        "endingCash": 231620.12802697573,
+        "fixedCommittedOperatingCosts": 5100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 20,
+      "before": {
+        "totalRevenue": 44487.4584037046,
+        "operatingProfit": 25662.861163578076,
+        "endingCash": 257882.98919055378,
+        "fixedCommittedOperatingCosts": 10100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 44487.4584037046,
+        "operatingProfit": 25662.861163578076,
+        "endingCash": 257282.98919055378,
+        "fixedCommittedOperatingCosts": 10100,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 21,
+      "before": {
+        "totalRevenue": 48919.68583789407,
+        "operatingProfit": 19093.868358457978,
+        "endingCash": 276976.85754901177,
+        "fixedCommittedOperatingCosts": 20232,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 48919.68583789407,
+        "operatingProfit": 19093.868358457978,
+        "endingCash": 276376.85754901177,
+        "fixedCommittedOperatingCosts": 20232,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 22,
+      "before": {
+        "totalRevenue": 53785.09521036796,
+        "operatingProfit": 27505.104606498295,
+        "endingCash": 304481.9621555101,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 53785.09521036796,
+        "operatingProfit": 27505.104606498295,
+        "endingCash": 303881.9621555101,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 23,
+      "before": {
+        "totalRevenue": 59115.95005662932,
+        "operatingProfit": 31790.50612393263,
+        "endingCash": 336272.4682794427,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 59115.95005662932,
+        "operatingProfit": 31790.50612393263,
+        "endingCash": 335672.4682794427,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 24,
+      "before": {
+        "totalRevenue": 64938.431720918496,
+        "operatingProfit": 36471.119736377455,
+        "endingCash": 372743.58801582013,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 64938.431720918496,
+        "operatingProfit": 36471.119736377455,
+        "endingCash": 372143.58801582013,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 25,
+      "before": {
+        "totalRevenue": 71273.92426189044,
+        "operatingProfit": 41564.135796984694,
+        "endingCash": 414307.72381280485,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 71273.92426189044,
+        "operatingProfit": 41564.135796984694,
+        "endingCash": 413707.72381280485,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 26,
+      "before": {
+        "totalRevenue": 78140.51663939116,
+        "operatingProfit": 47084.09577390693,
+        "endingCash": 461391.81958671176,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 78140.51663939116,
+        "operatingProfit": 47084.09577390693,
+        "endingCash": 460791.81958671176,
+        "fixedCommittedOperatingCosts": 15732,
+        "founderCompensation": 3500,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 27,
+      "before": {
+        "totalRevenue": 85553.07685587465,
+        "operatingProfit": 50542.951851571415,
+        "endingCash": 511934.77143828315,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 85553.07685587465,
+        "operatingProfit": 50542.951851571415,
+        "endingCash": 511334.77143828315,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 28,
+      "before": {
+        "totalRevenue": 93523.32442958749,
+        "operatingProfit": 56950.12519088498,
+        "endingCash": 568884.8966291682,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 93523.32442958749,
+        "operatingProfit": 56950.12519088498,
+        "endingCash": 568284.8966291682,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 29,
+      "before": {
+        "totalRevenue": 94662.85714285713,
+        "operatingProfit": 57866.17999999999,
+        "endingCash": 626751.0766291681,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 94662.85714285713,
+        "operatingProfit": 57866.17999999999,
+        "endingCash": 626151.0766291681,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 30,
+      "before": {
+        "totalRevenue": 102704.43589999079,
+        "operatingProfit": 64328.66896981135,
+        "endingCash": 691079.7455989795,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 102704.43589999079,
+        "operatingProfit": 64328.66896981135,
+        "endingCash": 690479.7455989795,
+        "fixedCommittedOperatingCosts": 18232,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 31,
+      "before": {
+        "totalRevenue": 112728.77268012936,
+        "operatingProfit": 62255.17868653702,
+        "endingCash": 753334.9242855166,
+        "fixedCommittedOperatingCosts": 28364,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 112728.77268012936,
+        "operatingProfit": 62255.17868653702,
+        "endingCash": 752734.9242855166,
+        "fixedCommittedOperatingCosts": 28364,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 32,
+      "before": {
+        "totalRevenue": 123242.28223473937,
+        "operatingProfit": 67574.92440209817,
+        "endingCash": 820909.8486876148,
+        "fixedCommittedOperatingCosts": 31496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 123242.28223473937,
+        "operatingProfit": 67574.92440209817,
+        "endingCash": 820309.8486876148,
+        "fixedCommittedOperatingCosts": 31496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 33,
+      "before": {
+        "totalRevenue": 134305.8731493485,
+        "operatingProfit": 80968.8502424986,
+        "endingCash": 901878.6989301133,
+        "fixedCommittedOperatingCosts": 26996,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 134305.8731493485,
+        "operatingProfit": 80968.8502424986,
+        "endingCash": 901278.6989301133,
+        "fixedCommittedOperatingCosts": 26996,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 34,
+      "before": {
+        "totalRevenue": 145928.21008645734,
+        "operatingProfit": 88811.94271198375,
+        "endingCash": 990690.641642097,
+        "fixedCommittedOperatingCosts": 28496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 145928.21008645734,
+        "operatingProfit": 88811.94271198375,
+        "endingCash": 990090.641642097,
+        "fixedCommittedOperatingCosts": 28496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 35,
+      "before": {
+        "totalRevenue": 158101.07910698198,
+        "operatingProfit": 98597.5987873065,
+        "endingCash": 1089288.2404294035,
+        "fixedCommittedOperatingCosts": 28496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 158101.07910698198,
+        "operatingProfit": 98597.5987873065,
+        "endingCash": 1088688.2404294035,
+        "fixedCommittedOperatingCosts": 28496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 36,
+      "before": {
+        "totalRevenue": 170623.26759214047,
+        "operatingProfit": 108664.06643689942,
+        "endingCash": 1197952.3068663029,
+        "fixedCommittedOperatingCosts": 28496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 170623.26759214047,
+        "operatingProfit": 108664.06643689942,
+        "endingCash": 1197352.3068663029,
+        "fixedCommittedOperatingCosts": 28496,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 37,
+      "before": {
+        "totalRevenue": 183869.8053855151,
+        "operatingProfit": 116812.827085372,
+        "endingCash": 1314765.133951675,
+        "fixedCommittedOperatingCosts": 30996,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 183869.8053855151,
+        "operatingProfit": 116812.827085372,
+        "endingCash": 1314165.133951675,
+        "fixedCommittedOperatingCosts": 30996,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 38,
+      "before": {
+        "totalRevenue": 197626.372733713,
+        "operatingProfit": 117739.59205148905,
+        "endingCash": 1432504.726003164,
+        "fixedCommittedOperatingCosts": 41128,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 197626.372733713,
+        "operatingProfit": 117739.59205148905,
+        "endingCash": 1431904.726003164,
+        "fixedCommittedOperatingCosts": 41128,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 39,
+      "before": {
+        "totalRevenue": 211872.75551165573,
+        "operatingProfit": 133692.11152034294,
+        "endingCash": 1566196.837523507,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 211872.75551165573,
+        "operatingProfit": 133692.11152034294,
+        "endingCash": 1565596.837523507,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 40,
+      "before": {
+        "totalRevenue": 226590.14767433776,
+        "operatingProfit": 145523.26761205785,
+        "endingCash": 1711720.1051355647,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 226590.14767433776,
+        "operatingProfit": 145523.26761205785,
+        "endingCash": 1711120.1051355647,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 41,
+      "before": {
+        "totalRevenue": 241716.58965646836,
+        "operatingProfit": 157683.25191896004,
+        "endingCash": 1869403.3570545246,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 241716.58965646836,
+        "operatingProfit": 157683.25191896004,
+        "endingCash": 1868803.3570545246,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 42,
+      "before": {
+        "totalRevenue": 257260.35254750395,
+        "operatingProfit": 170178.7028599981,
+        "endingCash": 2039582.0599145226,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 257260.35254750395,
+        "operatingProfit": 170178.7028599981,
+        "endingCash": 2038982.0599145226,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 43,
+      "before": {
+        "totalRevenue": 261690.32798514617,
+        "operatingProfit": 173739.93090085025,
+        "endingCash": 2213321.9908153727,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 261690.32798514617,
+        "operatingProfit": 173739.93090085025,
+        "endingCash": 2212721.9908153727,
+        "fixedCommittedOperatingCosts": 36628,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 44,
+      "before": {
+        "totalRevenue": 278464.5638873437,
+        "operatingProfit": 184724.54089643992,
+        "endingCash": 2398046.5317118126,
+        "fixedCommittedOperatingCosts": 39128,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 278464.5638873437,
+        "operatingProfit": 184724.54089643992,
+        "endingCash": 2397446.5317118126,
+        "fixedCommittedOperatingCosts": 39128,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 45,
+      "before": {
+        "totalRevenue": 295554.98812232906,
+        "operatingProfit": 190831.3296949973,
+        "endingCash": 2588877.86140681,
+        "fixedCommittedOperatingCosts": 46760,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 295554.98812232906,
+        "operatingProfit": 190831.3296949973,
+        "endingCash": 2588277.86140681,
+        "fixedCommittedOperatingCosts": 46760,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 46,
+      "before": {
+        "totalRevenue": 312816.9064516054,
+        "operatingProfit": 209207.97958673525,
+        "endingCash": 2798085.8409935455,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 312816.9064516054,
+        "operatingProfit": 209207.97958673525,
+        "endingCash": 2797485.8409935455,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 47,
+      "before": {
+        "totalRevenue": 330333.93911047286,
+        "operatingProfit": 223289.71175362566,
+        "endingCash": 3021375.5527471714,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 330333.93911047286,
+        "operatingProfit": 223289.71175362566,
+        "endingCash": 3020775.5527471714,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 48,
+      "before": {
+        "totalRevenue": 348067.143282929,
+        "operatingProfit": 237545.22061167296,
+        "endingCash": 3258920.773358844,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 348067.143282929,
+        "operatingProfit": 237545.22061167296,
+        "endingCash": 3258320.773358844,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 49,
+      "before": {
+        "totalRevenue": 365977.6648457878,
+        "operatingProfit": 251943.27187549527,
+        "endingCash": 3510864.0452343393,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 365977.6648457878,
+        "operatingProfit": 251943.27187549527,
+        "endingCash": 3510264.0452343393,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 50,
+      "before": {
+        "totalRevenue": 384023.67771695193,
+        "operatingProfit": 266450.2421421445,
+        "endingCash": 3777314.287376484,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 384023.67771695193,
+        "operatingProfit": 266450.2421421445,
+        "endingCash": 3776714.287376484,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 51,
+      "before": {
+        "totalRevenue": 402161.480981,
+        "operatingProfit": 281031.00085541175,
+        "endingCash": 4058345.288231896,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 402161.480981,
+        "operatingProfit": 281031.00085541175,
+        "endingCash": 4057745.288231896,
+        "fixedCommittedOperatingCosts": 42260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 52,
+      "before": {
+        "totalRevenue": 420287.17313351075,
+        "operatingProfit": 293102.02302619873,
+        "endingCash": 4351447.311258094,
+        "fixedCommittedOperatingCosts": 44760,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 420287.17313351075,
+        "operatingProfit": 293102.02302619873,
+        "endingCash": 4350847.311258094,
+        "fixedCommittedOperatingCosts": 44760,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 53,
+      "before": {
+        "totalRevenue": 438472.5292770723,
+        "operatingProfit": 305221.00769388856,
+        "endingCash": 4656668.318951983,
+        "fixedCommittedOperatingCosts": 47260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 438472.5292770723,
+        "operatingProfit": 305221.00769388856,
+        "endingCash": 4656068.318951983,
+        "fixedCommittedOperatingCosts": 47260,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 54,
+      "before": {
+        "totalRevenue": 456607.6460323472,
+        "operatingProfit": 309667.6050433821,
+        "endingCash": 4966335.923995365,
+        "fixedCommittedOperatingCosts": 57392,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 456607.6460323472,
+        "operatingProfit": 309667.6050433821,
+        "endingCash": 4965735.923995365,
+        "fixedCommittedOperatingCosts": 57392,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 55,
+      "before": {
+        "totalRevenue": 469160.12888318487,
+        "operatingProfit": 324258.3985774674,
+        "endingCash": 5290594.322572833,
+        "fixedCommittedOperatingCosts": 52892,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 469160.12888318487,
+        "operatingProfit": 324258.3985774674,
+        "endingCash": 5289994.322572833,
+        "fixedCommittedOperatingCosts": 52892,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 56,
+      "before": {
+        "totalRevenue": 487202.5032238178,
+        "operatingProfit": 336262.44048388104,
+        "endingCash": 5626856.763056714,
+        "fixedCommittedOperatingCosts": 55392,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 487202.5032238178,
+        "operatingProfit": 336262.44048388104,
+        "endingCash": 5626256.763056714,
+        "fixedCommittedOperatingCosts": 55392,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 57,
+      "before": {
+        "totalRevenue": 505031.4995660268,
+        "operatingProfit": 342962.9502049185,
+        "endingCash": 5969819.713261632,
+        "fixedCommittedOperatingCosts": 63024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 505031.4995660268,
+        "operatingProfit": 342962.9502049185,
+        "endingCash": 5969219.713261632,
+        "fixedCommittedOperatingCosts": 63024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 58,
+      "before": {
+        "totalRevenue": 522539.26469119,
+        "operatingProfit": 361537.22602060373,
+        "endingCash": 6331356.939282236,
+        "fixedCommittedOperatingCosts": 58524,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 522539.26469119,
+        "operatingProfit": 361537.22602060373,
+        "endingCash": 6330756.939282236,
+        "fixedCommittedOperatingCosts": 58524,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 59,
+      "before": {
+        "totalRevenue": 539724.866194085,
+        "operatingProfit": 375352.51839457697,
+        "endingCash": 6706709.457676813,
+        "fixedCommittedOperatingCosts": 58524,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 539724.866194085,
+        "operatingProfit": 375352.51839457697,
+        "endingCash": 6706109.457676813,
+        "fixedCommittedOperatingCosts": 58524,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 60,
+      "before": {
+        "totalRevenue": 556529.5440167958,
+        "operatingProfit": 383361.59092877863,
+        "endingCash": 7090071.048605592,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 556529.5440167958,
+        "operatingProfit": 383361.59092877863,
+        "endingCash": 7089471.048605592,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 61,
+      "before": {
+        "totalRevenue": 572930.6859061886,
+        "operatingProfit": 396546.2659522361,
+        "endingCash": 7486617.314557827,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 572930.6859061886,
+        "operatingProfit": 396546.2659522361,
+        "endingCash": 7486017.314557827,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 62,
+      "before": {
+        "totalRevenue": 588942.3990876691,
+        "operatingProfit": 409417.8840818078,
+        "endingCash": 7896035.198639635,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 588942.3990876691,
+        "operatingProfit": 409417.8840818078,
+        "endingCash": 7895435.198639635,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 63,
+      "before": {
+        "totalRevenue": 604577.3875153784,
+        "operatingProfit": 421986.6578634769,
+        "endingCash": 8318021.856503112,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 604577.3875153784,
+        "operatingProfit": 421986.6578634769,
+        "endingCash": 8317421.856503112,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 64,
+      "before": {
+        "totalRevenue": 619847.0405329324,
+        "operatingProfit": 434261.7430455156,
+        "endingCash": 8752283.599548629,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 619847.0405329324,
+        "operatingProfit": 434261.7430455156,
+        "endingCash": 8751683.599548629,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 65,
+      "before": {
+        "totalRevenue": 634762.7567708422,
+        "operatingProfit": 446252.30284157436,
+        "endingCash": 9198535.902390203,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 634762.7567708422,
+        "operatingProfit": 446252.30284157436,
+        "endingCash": 9197935.902390203,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 66,
+      "before": {
+        "totalRevenue": 649335.0005675252,
+        "operatingProfit": 457966.7494004038,
+        "endingCash": 9656502.651790606,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 649335.0005675252,
+        "operatingProfit": 457966.7494004038,
+        "endingCash": 9655902.651790606,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 67,
+      "before": {
+        "totalRevenue": 663545.1792943113,
+        "operatingProfit": 469390.13637092465,
+        "endingCash": 10125892.788161531,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 663545.1792943113,
+        "operatingProfit": 469390.13637092465,
+        "endingCash": 10125292.788161531,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 68,
+      "before": {
+        "totalRevenue": 676622.3253972054,
+        "operatingProfit": 479902.69345903106,
+        "endingCash": 10605795.481620561,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 676622.3253972054,
+        "operatingProfit": 479902.69345903106,
+        "endingCash": 10605195.481620561,
+        "fixedCommittedOperatingCosts": 64024,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 69,
+      "before": {
+        "totalRevenue": 690228.2383952796,
+        "operatingProfit": 483340.318646349,
+        "endingCash": 11089135.80026691,
+        "fixedCommittedOperatingCosts": 71524,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 690228.2383952796,
+        "operatingProfit": 483340.318646349,
+        "endingCash": 11088535.80026691,
+        "fixedCommittedOperatingCosts": 71524,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 70,
+      "before": {
+        "totalRevenue": 703526.6403017679,
+        "operatingProfit": 458134.73947204906,
+        "endingCash": 11547270.539738959,
+        "fixedCommittedOperatingCosts": 107420,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 703526.6403017679,
+        "operatingProfit": 458134.73947204906,
+        "endingCash": 11546670.539738959,
+        "fixedCommittedOperatingCosts": 107420,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 71,
+      "before": {
+        "totalRevenue": 716517.2315361197,
+        "operatingProfit": 482077.71511615114,
+        "endingCash": 12029348.25485511,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 716517.2315361197,
+        "operatingProfit": 482077.71511615114,
+        "endingCash": 12028748.25485511,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 72,
+      "before": {
+        "totalRevenue": 729215.3666431715,
+        "operatingProfit": 492285.58889641205,
+        "endingCash": 12521633.843751522,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 729215.3666431715,
+        "operatingProfit": 492285.58889641205,
+        "endingCash": 12521033.843751522,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 73,
+      "before": {
+        "totalRevenue": 741627.6309205228,
+        "operatingProfit": 502263.65465212334,
+        "endingCash": 13023897.498403646,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 741627.6309205228,
+        "operatingProfit": 502263.65465212334,
+        "endingCash": 13023297.498403646,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 74,
+      "before": {
+        "totalRevenue": 753760.461345536,
+        "operatingProfit": 512017.0869897725,
+        "endingCash": 13535914.585393418,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 753760.461345536,
+        "operatingProfit": 512017.0869897725,
+        "endingCash": 13535314.585393418,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 75,
+      "before": {
+        "totalRevenue": 765620.1499170716,
+        "operatingProfit": 521550.9439694225,
+        "endingCash": 14057465.52936284,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 765620.1499170716,
+        "operatingProfit": 521550.9439694225,
+        "endingCash": 14056865.52936284,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 76,
+      "before": {
+        "totalRevenue": 777212.8469219,
+        "operatingProfit": 530870.1697305404,
+        "endingCash": 14588335.699093381,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 777212.8469219,
+        "operatingProfit": 530870.1697305404,
+        "endingCash": 14587735.699093381,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 77,
+      "before": {
+        "totalRevenue": 788544.5641274878,
+        "operatingProfit": 539979.5970586378,
+        "endingCash": 15128315.296152018,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 788544.5641274878,
+        "operatingProfit": 539979.5970586378,
+        "endingCash": 15127715.296152018,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 78,
+      "before": {
+        "totalRevenue": 799621.1779028169,
+        "operatingProfit": 548883.9498940597,
+        "endingCash": 15677199.246046077,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 799621.1779028169,
+        "operatingProfit": 548883.9498940597,
+        "endingCash": 15676599.246046077,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 79,
+      "before": {
+        "totalRevenue": 810448.4322688619,
+        "operatingProfit": 557587.8457842249,
+        "endingCash": 16234787.091830302,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 810448.4322688619,
+        "operatingProfit": 557587.8457842249,
+        "endingCash": 16234187.091830302,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 80,
+      "before": {
+        "totalRevenue": 821027.6890330408,
+        "operatingProfit": 566092.3794746676,
+        "endingCash": 16800879.471304968,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 821027.6890330408,
+        "operatingProfit": 566092.3794746676,
+        "endingCash": 16800279.471304968,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 81,
+      "before": {
+        "totalRevenue": 831368.9125200255,
+        "operatingProfit": 574405.5611570753,
+        "endingCash": 17375285.03246204,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 831368.9125200255,
+        "operatingProfit": 574405.5611570753,
+        "endingCash": 17374685.03246204,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 82,
+      "before": {
+        "totalRevenue": 841477.4584785532,
+        "operatingProfit": 582531.696251629,
+        "endingCash": 17957816.728713673,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 841477.4584785532,
+        "operatingProfit": 582531.696251629,
+        "endingCash": 17957216.728713673,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 83,
+      "before": {
+        "totalRevenue": 851358.5621530141,
+        "operatingProfit": 590474.9933065553,
+        "endingCash": 18548291.722020227,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 851358.5621530141,
+        "operatingProfit": 590474.9933065553,
+        "endingCash": 18547691.722020227,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 84,
+      "before": {
+        "totalRevenue": 861017.3409947995,
+        "operatingProfit": 598239.5661777456,
+        "endingCash": 19146531.288197972,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 861017.3409947995,
+        "operatingProfit": 598239.5661777456,
+        "endingCash": 19145931.288197972,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 85,
+      "before": {
+        "totalRevenue": 870458.7973126448,
+        "operatingProfit": 605829.4361593341,
+        "endingCash": 19752360.724357307,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 870458.7973126448,
+        "operatingProfit": 605829.4361593341,
+        "endingCash": 19751760.724357307,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 86,
+      "before": {
+        "totalRevenue": 879687.8208633384,
+        "operatingProfit": 613248.5340663367,
+        "endingCash": 20365609.258423645,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 879687.8208633384,
+        "operatingProfit": 613248.5340663367,
+        "endingCash": 20365009.258423645,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 87,
+      "before": {
+        "totalRevenue": 884085.1844269297,
+        "operatingProfit": 616783.5261321698,
+        "endingCash": 20982392.784555815,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 884085.1844269297,
+        "operatingProfit": 616783.5261321698,
+        "endingCash": 20981792.784555815,
+        "fixedCommittedOperatingCosts": 93920,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 88,
+      "before": {
+        "totalRevenue": 893090.8463927818,
+        "operatingProfit": 621523.0661852724,
+        "endingCash": 21603915.85074109,
+        "fixedCommittedOperatingCosts": 96420,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 893090.8463927818,
+        "operatingProfit": 621523.0661852724,
+        "endingCash": 21603315.85074109,
+        "fixedCommittedOperatingCosts": 96420,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 89,
+      "before": {
+        "totalRevenue": 901890.5100633304,
+        "operatingProfit": 620965.0067657754,
+        "endingCash": 22224880.857506864,
+        "fixedCommittedOperatingCosts": 104052,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 901890.5100633304,
+        "operatingProfit": 620965.0067657754,
+        "endingCash": 22224280.857506864,
+        "fixedCommittedOperatingCosts": 104052,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 90,
+      "before": {
+        "totalRevenue": 910444.247929042,
+        "operatingProfit": 632341.2506989025,
+        "endingCash": 22857222.108205765,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 910444.247929042,
+        "operatingProfit": 632341.2506989025,
+        "endingCash": 22856622.108205765,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 91,
+      "before": {
+        "totalRevenue": 918804.5688572177,
+        "operatingProfit": 639062.0091525911,
+        "endingCash": 23496284.117358357,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 918804.5688572177,
+        "operatingProfit": 639062.0091525911,
+        "endingCash": 23495684.117358357,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 92,
+      "before": {
+        "totalRevenue": 926975.853464019,
+        "operatingProfit": 645630.803649857,
+        "endingCash": 24141914.921008214,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 926975.853464019,
+        "operatingProfit": 645630.803649857,
+        "endingCash": 24141314.921008214,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 93,
+      "before": {
+        "totalRevenue": 934962.3829396914,
+        "operatingProfit": 652051.075786456,
+        "endingCash": 24793965.99679467,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 934962.3829396914,
+        "operatingProfit": 652051.075786456,
+        "endingCash": 24793365.99679467,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 94,
+      "before": {
+        "totalRevenue": 942768.3413115095,
+        "operatingProfit": 658326.1890500374,
+        "endingCash": 25452292.18584471,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 942768.3413115095,
+        "operatingProfit": 658326.1890500374,
+        "endingCash": 25451692.18584471,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 95,
+      "before": {
+        "totalRevenue": 950397.8176550298,
+        "operatingProfit": 664459.4305977427,
+        "endingCash": 26116751.61644245,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 950397.8176550298,
+        "operatingProfit": 664459.4305977427,
+        "endingCash": 26116151.61644245,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 96,
+      "before": {
+        "totalRevenue": 957854.808254837,
+        "operatingProfit": 670454.0129932023,
+        "endingCash": 26787205.62943565,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 957854.808254837,
+        "operatingProfit": 670454.0129932023,
+        "endingCash": 26786605.62943565,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 97,
+      "before": {
+        "totalRevenue": 965143.2187159439,
+        "operatingProfit": 676313.0759038645,
+        "endingCash": 27463518.705339514,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 965143.2187159439,
+        "operatingProfit": 676313.0759038645,
+        "endingCash": 27462918.705339514,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 98,
+      "before": {
+        "totalRevenue": 972266.8660269775,
+        "operatingProfit": 682039.6877595641,
+        "endingCash": 28145558.393099077,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 972266.8660269775,
+        "operatingProfit": 682039.6877595641,
+        "endingCash": 28144958.393099077,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 99,
+      "before": {
+        "totalRevenue": 979205.2080315987,
+        "operatingProfit": 687617.3350055616,
+        "endingCash": 28833175.72810464,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 979205.2080315987,
+        "operatingProfit": 687617.3350055616,
+        "endingCash": 28832575.72810464,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 100,
+      "before": {
+        "totalRevenue": 985987.4373411159,
+        "operatingProfit": 693069.4851885242,
+        "endingCash": 29526245.213293165,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 985987.4373411159,
+        "operatingProfit": 693069.4851885242,
+        "endingCash": 29525645.213293165,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 101,
+      "before": {
+        "totalRevenue": 992617.0664911692,
+        "operatingProfit": 698398.9619923703,
+        "endingCash": 30224644.175285537,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 992617.0664911692,
+        "operatingProfit": 698398.9619923703,
+        "endingCash": 30224044.175285537,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 102,
+      "before": {
+        "totalRevenue": 999097.528985346,
+        "operatingProfit": 703608.5255681296,
+        "endingCash": 30928252.700853664,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 999097.528985346,
+        "operatingProfit": 703608.5255681296,
+        "endingCash": 30927652.700853664,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 103,
+      "before": {
+        "totalRevenue": 1005432.1810734039,
+        "operatingProfit": 708700.8739634346,
+        "endingCash": 31636953.5748171,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1005432.1810734039,
+        "operatingProfit": 708700.8739634346,
+        "endingCash": 31636353.5748171,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 104,
+      "before": {
+        "totalRevenue": 1011624.3034894806,
+        "operatingProfit": 713678.6445198451,
+        "endingCash": 32350632.21933694,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1011624.3034894806,
+        "operatingProfit": 713678.6445198451,
+        "endingCash": 32350032.21933694,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 105,
+      "before": {
+        "totalRevenue": 1017677.1031511956,
+        "operatingProfit": 718544.4152387364,
+        "endingCash": 33069176.634575676,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1017677.1031511956,
+        "operatingProfit": 718544.4152387364,
+        "endingCash": 33068576.634575676,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 106,
+      "before": {
+        "totalRevenue": 1023593.7148205221,
+        "operatingProfit": 723300.7061164528,
+        "endingCash": 33792477.340692125,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1023593.7148205221,
+        "operatingProfit": 723300.7061164528,
+        "endingCash": 33791877.340692125,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 107,
+      "before": {
+        "totalRevenue": 1029377.2027272885,
+        "operatingProfit": 727949.9804494204,
+        "endingCash": 34520427.32114155,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1029377.2027272885,
+        "operatingProfit": 727949.9804494204,
+        "endingCash": 34519827.32114155,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 108,
+      "before": {
+        "totalRevenue": 1035030.5621561527,
+        "operatingProfit": 732494.6461098961,
+        "endingCash": 35252921.96725144,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1035030.5621561527,
+        "operatingProfit": 732494.6461098961,
+        "endingCash": 35252321.96725144,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 109,
+      "before": {
+        "totalRevenue": 1040556.7209978675,
+        "operatingProfit": 736937.0567930113,
+        "endingCash": 35989859.024044454,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1040556.7209978675,
+        "operatingProfit": 736937.0567930113,
+        "endingCash": 35989259.024044454,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 110,
+      "before": {
+        "totalRevenue": 1045958.5412656437,
+        "operatingProfit": 741279.5132357562,
+        "endingCash": 36731138.53728021,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1045958.5412656437,
+        "operatingProfit": 741279.5132357562,
+        "endingCash": 36730538.53728021,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 111,
+      "before": {
+        "totalRevenue": 1051238.8205773951,
+        "operatingProfit": 745524.2644085397,
+        "endingCash": 37476662.801688746,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1051238.8205773951,
+        "operatingProfit": 745524.2644085397,
+        "endingCash": 37476062.801688746,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 112,
+      "before": {
+        "totalRevenue": 1056400.293604632,
+        "operatingProfit": 749673.5086799352,
+        "endingCash": 38226336.31036868,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1056400.293604632,
+        "operatingProfit": 749673.5086799352,
+        "endingCash": 38225736.31036868,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 113,
+      "before": {
+        "totalRevenue": 1061445.6334887561,
+        "operatingProfit": 753729.3949552248,
+        "endingCash": 38980065.705323905,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1061445.6334887561,
+        "operatingProfit": 753729.3949552248,
+        "endingCash": 38979465.705323905,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 114,
+      "before": {
+        "totalRevenue": 1066377.4532254871,
+        "operatingProfit": 757694.0237893198,
+        "endingCash": 39737759.72911322,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1066377.4532254871,
+        "operatingProfit": 757694.0237893198,
+        "endingCash": 39737159.72911322,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 115,
+      "before": {
+        "totalRevenue": 1071198.307018142,
+        "operatingProfit": 761569.448474648,
+        "endingCash": 40499329.17758787,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1071198.307018142,
+        "operatingProfit": 761569.448474648,
+        "endingCash": 40498729.17758787,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 116,
+      "before": {
+        "totalRevenue": 1075910.691600462,
+        "operatingProfit": 765357.6761045561,
+        "endingCash": 41264686.85369242,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1075910.691600462,
+        "operatingProfit": 765357.6761045561,
+        "endingCash": 41264086.85369242,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 117,
+      "before": {
+        "totalRevenue": 1080517.0475296797,
+        "operatingProfit": 769060.6686127912,
+        "endingCash": 42033747.52230521,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1080517.0475296797,
+        "operatingProfit": 769060.6686127912,
+        "endingCash": 42033147.52230521,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 118,
+      "before": {
+        "totalRevenue": 1085019.76045049,
+        "operatingProfit": 772680.3437895911,
+        "endingCash": 42806427.866094805,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1085019.76045049,
+        "operatingProfit": 772680.3437895911,
+        "endingCash": 42805827.866094805,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 119,
+      "before": {
+        "totalRevenue": 1089421.1623305825,
+        "operatingProfit": 776218.5762749134,
+        "endingCash": 43582646.44236972,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1089421.1623305825,
+        "operatingProfit": 776218.5762749134,
+        "endingCash": 43582046.44236972,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    },
+    {
+      "month": 120,
+      "before": {
+        "totalRevenue": 1091547.2303035776,
+        "operatingProfit": 777927.6987351073,
+        "endingCash": 44360574.14110483,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "after": {
+        "totalRevenue": 1091547.2303035776,
+        "operatingProfit": 777927.6987351073,
+        "endingCash": 44359974.14110483,
+        "fixedCommittedOperatingCosts": 99552,
+        "founderCompensation": 6000,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      },
+      "delta": {
+        "totalRevenue": 0,
+        "operatingProfit": 0,
+        "endingCash": -600,
+        "fixedCommittedOperatingCosts": 0,
+        "founderCompensation": 0,
+        "totalDistributionPool": 0,
+        "investorDistribution": 0,
+        "otherOwnerDistributions": 0
+      }
+    }
+  ],
+  "annual": [
+    {
+      "year": 1,
+      "beforeProfit": 79398.62704493615,
+      "afterProfit": 78798.62704493615,
+      "deltaProfit": -600,
+      "beforeCash": 89398.62704493615,
+      "afterCash": 88798.62704493615
+    },
+    {
+      "year": 2,
+      "beforeProfit": 283344.96097088396,
+      "afterProfit": 283344.96097088396,
+      "deltaProfit": 0,
+      "beforeCash": 372743.58801582013,
+      "afterCash": 372143.58801582013
+    },
+    {
+      "year": 3,
+      "beforeProfit": 825208.718850483,
+      "afterProfit": 825208.718850483,
+      "deltaProfit": 0,
+      "beforeCash": 1197952.3068663029,
+      "afterCash": 1197352.3068663029
+    },
+    {
+      "year": 4,
+      "beforeProfit": 2060968.4664925411,
+      "afterProfit": 2060968.4664925411,
+      "deltaProfit": 0,
+      "beforeCash": 3258920.773358844,
+      "afterCash": 3258320.773358844
+    },
+    {
+      "year": 5,
+      "beforeProfit": 3831150.2752467473,
+      "afterProfit": 3831150.2752467473,
+      "deltaProfit": 0,
+      "beforeCash": 7090071.048605592,
+      "afterCash": 7089471.048605592
+    },
+    {
+      "year": 6,
+      "beforeProfit": 5431562.795145933,
+      "afterProfit": 5431562.795145933,
+      "deltaProfit": 0,
+      "beforeCash": 12521633.843751522,
+      "afterCash": 12521033.843751522
+    },
+    {
+      "year": 7,
+      "beforeProfit": 6624897.444446453,
+      "afterProfit": 6624897.444446453,
+      "deltaProfit": 0,
+      "beforeCash": 19146531.288197972,
+      "afterCash": 19145931.288197972
+    },
+    {
+      "year": 8,
+      "beforeProfit": 7640674.341237678,
+      "afterProfit": 7640674.341237678,
+      "deltaProfit": 0,
+      "beforeCash": 26787205.62943565,
+      "afterCash": 26786605.62943565
+    },
+    {
+      "year": 9,
+      "beforeProfit": 8465716.337815799,
+      "afterProfit": 8465716.337815799,
+      "deltaProfit": 0,
+      "beforeCash": 35252921.96725144,
+      "afterCash": 35252321.96725144
+    },
+    {
+      "year": 10,
+      "beforeProfit": 9107652.173853396,
+      "afterProfit": 9107652.173853396,
+      "deltaProfit": 0,
+      "beforeCash": 44360574.14110483,
+      "afterCash": 44359974.14110483
+    }
+  ]
+}

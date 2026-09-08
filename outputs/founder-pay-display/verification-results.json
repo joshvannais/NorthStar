@@ -1,0 +1,33 @@
+{
+  "base": "fc2251d5e5b1118fa7fa94f740158328f1bdf243",
+  "sourceSha256": "3f32de0776c1b23e1216cc4843fc73c54d81c29f51da6d16ba55e1b097eb5725",
+  "checks": [
+    {
+      "name": "numerical",
+      "args": [
+        "--test",
+        "tests/ratification/founder-pay-display.cjs",
+        "tests/ratification/founder-overhead.cjs"
+      ],
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "route",
+      "args": [
+        "tests/ratification/founder-pay-route.cjs"
+      ],
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "browser",
+      "args": [
+        "tests/browser/founder-pay-display.cjs"
+      ],
+      "exitCode": 0,
+      "error": null
+    }
+  ],
+  "scope": "Local self-contained calculator and scoped tests only. No production operations. Earlier sealed evidence is historical and not overwritten."
+}

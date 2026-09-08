@@ -1,0 +1,66 @@
+{
+  "base": "2f0fa29da1bd5f35670448054cf9e047b7f047ba",
+  "sourceSha256": "85311027a281dd4c20612ad643f3e73dfc7c361b7f715ccbd9e1026e1e23d5e2",
+  "cases": [
+    {
+      "name": "default",
+      "monthly": "Month 13 — founder and owner money Founder pay: $3,500 Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured FORECAST investor receipts: Unavailable / unconfigured Company-wide distribution pool: Unavailable / unconfigured For unavailable forecast periods, the cash scenario assumes no additional owner withdrawals; this is not a configured investor-return projection. Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "annual": "Year 1 — founder and owner money Founder pay: $0 Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured FORECAST investor receipts: Unavailable / unconfigured Company-wide distribution pool: Unavailable / unconfigured For unavailable forecast periods, the cash scenario assumes no additional owner withdrawals; this is not a configured investor-return projection. Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "collapsed": "Additional withdrawals (company-wide) Unavailable / unconfigured",
+      "endingCash": 103077.91530727218,
+      "operatingProfit": 14279.288262336042,
+      "founderPay": 3500,
+      "investorDistribution": 0
+    },
+    {
+      "name": "taxUnavailable",
+      "monthly": "Month 1 — founder and owner money Founder pay: $3,500 Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured FORECAST investor receipts: Unavailable / unconfigured Company-wide distribution pool: Unavailable / unconfigured For unavailable forecast periods, the cash scenario assumes no additional owner withdrawals; this is not a configured investor-return projection. Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "annual": "Year 1 — founder and owner money Founder pay: $42,000 Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured FORECAST investor receipts: Unavailable / unconfigured Company-wide distribution pool: Unavailable / unconfigured For unavailable forecast periods, the cash scenario assumes no additional owner withdrawals; this is not a configured investor-return projection. Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "collapsed": "Additional withdrawals (company-wide) Unavailable / unconfigured",
+      "endingCash": 1218972,
+      "operatingProfit": 233972,
+      "founderPay": 3500,
+      "investorDistribution": 0
+    },
+    {
+      "name": "configuredZero",
+      "monthly": "Month 1 — founder and owner money Founder pay: $3,500 Additional assumed founder/other-owner profit withdrawals: $0 Combined assumed founder receipts: $3,500 FORECAST investor receipts: $0 Company-wide distribution pool: $0 Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "annual": "Year 1 — founder and owner money Founder pay: $42,000 Additional assumed founder/other-owner profit withdrawals: $0 Combined assumed founder receipts: $42,000 FORECAST investor receipts: $0 Company-wide distribution pool: $0 Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "collapsed": "Additional withdrawals (company-wide) $0",
+      "endingCash": 1218972,
+      "operatingProfit": 233972,
+      "founderPay": 3500,
+      "investorDistribution": 0
+    },
+    {
+      "name": "payout",
+      "monthly": "Month 1 — founder and owner money Founder pay: $3,500 Additional assumed founder/other-owner profit withdrawals: $9,900 Combined assumed founder receipts: $13,400 FORECAST investor receipts: $100 Company-wide distribution pool: $10,000 Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "annual": "Year 1 — founder and owner money Founder pay: $42,000 Additional assumed founder/other-owner profit withdrawals: $9,900 Combined assumed founder receipts: $51,900 FORECAST investor receipts: $100 Company-wide distribution pool: $10,000 Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "collapsed": "Additional withdrawals (company-wide) $10,000",
+      "endingCash": 1208972,
+      "operatingProfit": 233972,
+      "founderPay": 3500,
+      "investorDistribution": 100
+    },
+    {
+      "name": "actual",
+      "monthly": "Month 1 — founder and owner money Founder pay: unknown / unconfigured Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured Recorded ACTUAL investor receipts: $100 Company-wide distribution pool: Unknown actual total / split Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "annual": "Year 1 — founder and owner money Founder pay: unknown / unconfigured Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured Recorded ACTUAL investor receipts: $100 FORECAST investor receipts: Unavailable / unconfigured Combined investor total unavailable; recorded ACTUAL receipts above remain known. Company-wide distribution pool: Unknown actual total / split For unavailable forecast periods, the cash scenario assumes no additional owner withdrawals; this is not a configured investor-return projection. Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "collapsed": "Additional withdrawals (company-wide) Unknown actual total",
+      "endingCash": 19600,
+      "operatingProfit": -5300,
+      "founderPay": null,
+      "investorDistribution": 100
+    },
+    {
+      "name": "actualYear",
+      "monthly": "Month 1 — founder and owner money Founder pay: unknown / unconfigured Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured Recorded ACTUAL investor receipts: $100 Company-wide distribution pool: Unknown actual total / split Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "annual": "Year 1 — founder and owner money Founder pay: unknown / unconfigured Additional assumed founder/other-owner profit withdrawals: unknown / unconfigured Combined assumed founder receipts: unknown / unconfigured Recorded ACTUAL investor receipts: $100 Company-wide distribution pool: Unknown actual total / split Before personal taxes; not guaranteed take-home. The combined founder illustration assumes the founder owns all non-investor equity and equal pro-rata economic rights; agreements control. Compensation is already an operating cost. Additional profit withdrawals are below operating result, subject to earnings, cash protections and configured policy. Company cash is not personal cash. Unknown actual splits are not allocated.",
+      "collapsed": "Additional withdrawals (company-wide) Unknown actual total",
+      "endingCash": 24600,
+      "operatingProfit": -300,
+      "founderPay": null,
+      "investorDistribution": 100
+    }
+  ]
+}

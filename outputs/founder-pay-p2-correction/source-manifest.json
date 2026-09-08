@@ -1,0 +1,10 @@
+{
+  "source": "public/unlisted/investor-forecast.html",
+  "baseCommit": "2f0fa29da1bd5f35670448054cf9e047b7f047ba",
+  "engineSha256": "2a8724be48bf1ae40ac62c295f2220e5980237c823f386992d489fdb2b42c40c",
+  "uiSha256": "5771653d58590e1b3efe176529edcbdaaf2875ae6646a1a4cf7d07f3d4035146",
+  "workerSha256": "a48ebb5542442b4ba4d71dfbfe44e0bc4987fdde80deda74e39b1df97635fc8b",
+  "htmlSha256": "85311027a281dd4c20612ad643f3e73dfc7c361b7f715ccbd9e1026e1e23d5e2",
+  "bytes": 4145935,
+  "engineWorkerUnchanged": true
+}

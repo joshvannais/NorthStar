@@ -71,3 +71,20 @@ test.each([
   data => { data.execute = true; }, data => { data.execution.id = id(20); },
   data => { data.expiresAt = '2099-01-01'; }, data => { data.recommendations[0].href = 'https://example.test'; },
 ])('browser refuses capability or authority smuggling', change => { const data = build(fixture()); change(data); expect(() => validate(data, id(1))).toThrow(); });
+
+test('incomplete histories explain every domain with business labels while keeping internal codes', () => {
+  const f = fixture();
+  Object.assign(f.sources.completion.data, { totalRecordCount: 1, truncated: true });
+  Object.assign(f.sources.labor.data, { totalIntervalCount: 1, truncated: true });
+  Object.assign(f.sources.materials.data, { totalMovementCount: 1, truncated: true });
+  Object.assign(f.sources.progress.body, { total: 1, truncated: true });
+  Object.assign(f.sources.fieldEvidence.body, { total: 1, truncated: true });
+  Object.assign(f.sources.equipment, { total: 1, truncated: true });
+  const value = build(f);
+  const limits = value.missingInputs.filter(item => item.code.endsWith('_bounded'));
+  expect(limits).toHaveLength(6);
+  expect(limits.find(item => item.code === 'fieldEvidence_bounded').text).toContain('field evidence history');
+  for (const item of limits) expect(item.text).not.toMatch(/fieldEvidence|current-leaf|snapshot|bound|digest|revision/);
+  expect(value.comparisons[0].reviewedLaborSeconds).toBeNull();
+  expect(value.evidence.every(domain => domain.complete === false)).toBe(true);
+});

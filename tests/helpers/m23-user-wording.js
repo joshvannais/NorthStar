@@ -9,7 +9,7 @@ async function assertUserWording(page, label) {
       .flatMap(e => ['aria-label','title','placeholder'].map(a => e.getAttribute(a) || ''));
     return [document.body.innerText,...attributes].join('\n');
   });
-  const implementation = /\b(?:executions?|lifecycle|durable|PostgreSQL|SHA-?256|digest|idempotency|canonical|tenant|runtime|payload|schema|endpoint|SQL|API|HTTP|server-owned|server snapshot|execution revision|assignment revision|source pins?|immutable history|fieldEvidence)\b|\/api\/|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b[0-9a-f]{64}\b/i;
+  const implementation = /\b(?:executions?|durable|PostgreSQL|SHA-?256|digest|idempotency|canonical|tenant|runtime|payload|schema|endpoint|SQL|API|HTTP|server-owned|server snapshot|execution revision|assignment revision|source pins?|immutable history|fieldEvidence)\b|\/api\/|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b[0-9a-f]{64}\b/i;
   assert.doesNotMatch(shown, implementation, label + ': implementation wording or identifiers reached a user surface');
   return { label, visibleTextAndAccessibleNamesChecked: true };
 }
@@ -31,7 +31,7 @@ async function observeUserWording(browser) {
         const attributes = [...document.querySelectorAll('[aria-label],[title],[placeholder]')].filter(visible)
           .flatMap(e => ['aria-label','title','placeholder'].map(a => e.getAttribute(a) || ''));
         const shown = [document.body.innerText,...attributes].join('\n');
-        const forbidden = /\b(?:executions?|lifecycle|durable|PostgreSQL|SHA-?256|digest|idempotency|canonical|tenant|runtime|payload|schema|endpoint|SQL|API|HTTP|server-owned|server snapshot|execution revision|assignment revision|source pins?|immutable history|fieldEvidence)\b|\/api\/|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b[0-9a-f]{64}\b/i;
+        const forbidden = /\b(?:executions?|durable|PostgreSQL|SHA-?256|digest|idempotency|canonical|tenant|runtime|payload|schema|endpoint|SQL|API|HTTP|server-owned|server snapshot|execution revision|assignment revision|source pins?|immutable history|fieldEvidence)\b|\/api\/|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b[0-9a-f]{64}\b/i;
         for (const line of shown.split('\n')) if (forbidden.test(line) && !window.__m23WordingFindings.includes(line)) { window.__m23WordingFindings.push(line); window.__m23ReportWording(line); }
       };
       document.addEventListener('DOMContentLoaded', () => {

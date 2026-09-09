@@ -352,7 +352,7 @@
             <div class="bp-repeat-header">
               <div>
                 <h3>Vehicles &amp; Equipment</h3>
-                <div class="bp-section-desc">Your exact vehicles and equipment, with reviewed source versions kept separate from your private asset details. Review and confirm each asset before saving.</div>
+                <div class="bp-section-desc">Your vehicles and equipment, with reviewed reference information kept separate from your private equipment details. Review and confirm each item before saving.</div>
               </div>
               <button id="addAssetButton" class="equipment-button equipment-button-primary" type="button" hidden>Add equipment</button>
             </div>
@@ -362,8 +362,8 @@
           </div>
           <details class="bp-card equipment-planning">
             <summary>Fleet planning assumptions</summary>
-            <div class="bp-section-desc">Fleet counts, efficiency, and transport capacity are planning assumptions only. The Asset &amp; Equipment Catalogue owns normalized individual equipment and vehicle identities.</div>
-            <div class="bp-authority-note">Fuel, vehicle-cost, and maintenance assumptions are managed in Financial Configuration. This surface retains only fleet planning policies.</div>
+            <div class="bp-section-desc">Fleet counts, efficiency, and transport capacity are planning assumptions only. Manage each vehicle and piece of equipment in the catalogue above.</div>
+            <div class="bp-authority-note">Manage fuel, vehicle-cost, and maintenance assumptions in Financial Configuration. Use this section for fleet planning.</div>
             <div class="bp-grid">
               <div class="bp-field"><label>Truck Count</label><input id="veh-truckCount" data-operational-control data-operational-section="vehicles" data-operational-field="truckCount" type="number" min="0"></div>
               <div class="bp-field"><label>Trailer Count</label><input id="veh-trailerCount" data-operational-control data-operational-section="vehicles" data-operational-field="trailerCount" type="number" min="0"></div>
@@ -1190,7 +1190,7 @@
             setProfileReadinessState('error', 'Profile Readiness is unavailable. Actions remain disabled.');
             showProfileReadinessError('Profile Readiness could not be loaded. Please try again.', false);
           }
-          showToast('Could not connect to server', 'error');
+          showToast('Could not load your Business Profile. Please try again.', 'error');
         });
     }
 

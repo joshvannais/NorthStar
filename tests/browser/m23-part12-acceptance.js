@@ -134,7 +134,11 @@ async function main() {
     await worker.page.getByRole('dialog',{name:'Confirm Record field note',exact:true}).getByRole('button',{name:'Confirm Record field note',exact:true}).click();
     await worker.page.getByText('Assigned worker performed the requested follow-up observation.',{exact:true}).waitFor();
     assert.equal(await worker.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-    await worker.page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});
+    // Worker shell permits smooth scrolling. Wait for its real top-of-page
+    // position before full-page capture so WebKit's fixed header is not captured
+    // midway through the document while the scroll animation is still running.
+    await worker.page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);});
+    await worker.page.waitForFunction(()=>window.scrollY===0);
     await worker.page.screenshot({path:path.join(output,'dark-390-worker-follow-up.png'),fullPage:true});
     await worker.context.close();activePage=null;
     ledger.cases.push('assigned mobile worker records actual follow-up note after explicit resumption');

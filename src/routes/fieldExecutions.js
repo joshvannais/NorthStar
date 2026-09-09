@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { readOperationalIntelligence } = require('../operations/intelligenceRepository');
 const { normalizeLinkRead, readExecutionLink } = require('../operations/executionLinks');
 const { normalizeCompletionAction, normalizeCompletionRead } = require('../completion/contract');
 const { mutateCompletion, readCompletion, readOwnerCompletionReview } = require('../completion/repository');
@@ -106,6 +107,20 @@ function createFieldExecutionsRouter(options = {}) {
   const fileIngest = typeof options.fileIngest === 'function' ? options.fileIngest : ingestFileEvidence;
   const storage = options.fileStorage || createUnavailableStorage();
   const executionLinkRead = typeof options.executionLinkRead === 'function' ? options.executionLinkRead : readExecutionLink;
+  router.get('/:executionId/intelligence', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next();
+  }, tenantAuth, throttle, permission('operations', 'read'), async (req, res) => {
+    try {
+      const executionId = normalizeCompletionRead(req.params.executionId, req.query);
+      if (!['owner', 'admin', 'member'].includes(req.userRole)) return res.status(404).json({ success: false,
+        error: { code: 'OPERATIONAL_INTELLIGENCE_UNAVAILABLE', message: 'Operational intelligence is unavailable for this work.' } });
+      const data = await readOperationalIntelligence(poolProvider(), { ...actor(req), executionId });
+      return res.json({ success: true, data, requestId: requestId(req) });
+    } catch (error) {
+      if (typedError(req, res, error)) return undefined;
+      return res.status(503).json({ success: false, error: { code: 'OPERATIONAL_INTELLIGENCE_UNAVAILABLE', message: 'Operational intelligence is temporarily unavailable.' } });
+    }
+  });
   router.get('/links/appointments/:appointmentId', (_req, res, next) => {
     res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next();
   }, tenantAuth, (req, res, next) => {

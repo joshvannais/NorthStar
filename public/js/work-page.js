@@ -297,6 +297,7 @@
   }
 
   function clearRestrictedPresentation() {
+    if (window.NorthStarOperationalIntelligence) window.NorthStarOperationalIntelligence.clear();
     model.today = null;
     model.record = null;
     model.execution = null;
@@ -997,6 +998,7 @@
   }
 
   function renderReady(announcement) {
+    if (window.NorthStarOperationalIntelligence) window.NorthStarOperationalIntelligence.mount(byId('workIntelligenceHost'), model.execution && model.execution.id);
     renderOverview();
     renderLifecycle();
     if (model.execution) {

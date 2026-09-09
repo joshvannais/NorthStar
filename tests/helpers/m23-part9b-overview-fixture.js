@@ -45,7 +45,7 @@ module.exports = { EXECUTION, APPOINTMENT, INSTANT, record, overview };
 
 // Lazy, disposable PostgreSQL fixture: browser-only contract fixtures above
 // never open a database. All identities below are synthetic example.test data.
-async function createDatabaseFixture() {
+async function createDatabaseFixture(options = {}) {
   const crypto = require('crypto');
   const { Client, Pool } = require('pg');
   const { createSuiteDatabase } = require('./m19-part3-postgres-database');
@@ -101,19 +101,39 @@ async function createDatabaseFixture() {
       await ownerPool.query(
         "INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,customer_id,status,service_type,job_scope) VALUES($1,$2,$3,$4,$5,'qualified','Plumbing',$6)",
         [opportunity, tenant, operation, graph, customer, { jobTitle: options.title || `Recorded work ${sequence}` }]);
-      const start = new Date(Date.UTC(2027, 8, sequence, 13));
+      const start = options.start ? new Date(options.start) : new Date(Date.UTC(2027, 8, sequence, 13));
       await ownerPool.query(
         "INSERT INTO canonical_appointments(id,organization_id,operation_id,graph_id,opportunity_id,scheduled_start,scheduled_end,status) VALUES($1,$2,$3,$4,$5,$6,$7,'scheduled')",
         [appointment, tenant, operation, graph, opportunity, start, new Date(start.getTime() + 3600000)]);
       // Synthetic accepted-M22 scheduling baseline only, following the retained
       // Part 8 fixture. Execution and evidence mutations use production entries.
-      await ownerPool.query('ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
       let assignment;
+      if (options.approvedScheduling) {
+        const request = require('supertest');
+        for (const action of ['assign', 'dispatch']) {
+          const before = (await ownerPool.query('SELECT revision,rtrim(canonical_digest) AS digest,appointment_status FROM canonical_schedule_assignments WHERE appointment_id=$1', [appointment])).rows[0];
+          const preview = await request(fixture.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-previews`)
+            .set(actor.session.headers).send({ expectedRevision: Number(before.revision), expectedDigest: before.digest,
+              expectedTimeZone: 'UTC', action, target: { kind: 'profile', id: actors.member.actorUserId },
+              scheduledStart: start.toISOString(), scheduledEnd: new Date(start.getTime() + 3600000).toISOString(),
+              appointmentStatus: before.appointment_status, reason: 'Explicit synthetic scheduling approval' });
+          if (preview.status !== 201) throw new Error('Synthetic scheduling preview failed: ' + JSON.stringify(preview.body));
+          const approval = await request(fixture.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-approvals`)
+            .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+            .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
+              acknowledgedWarningDigests: preview.body.data.warningDigests,
+              acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests, reason: 'Explicit synthetic scheduling approval' });
+          if (approval.status !== 200) throw new Error('Synthetic scheduling approval failed: ' + JSON.stringify(approval.body));
+        }
+        assignment = (await ownerPool.query('SELECT id,revision,rtrim(canonical_digest) AS digest FROM canonical_schedule_assignments WHERE appointment_id=$1', [appointment])).rows[0];
+      } else {
+      await ownerPool.query('ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
       try {
         assignment = (await ownerPool.query(
           "UPDATE canonical_schedule_assignments SET target_state='assigned',workforce_profile_id=$2,schedule_state='scheduled',dispatch_state='dispatched',needs_review=false,review_reasons='[]',revision=4,canonical_digest=canonical_schedule_assignment_digest('assigned',$2,NULL,'scheduled','dispatched',scheduled_start,scheduled_end,appointment_status,false,'[]'),last_action_code='dispatch',last_reason='Accepted synthetic scheduling baseline',updated_at=transaction_timestamp() WHERE appointment_id=$1 RETURNING id,revision,rtrim(canonical_digest) AS digest",
           [appointment, tenant === org ? actors.member.actorUserId : actors.otherOwner.actorUserId])).rows[0];
       } finally { await ownerPool.query('ALTER TABLE canonical_schedule_assignments ENABLE TRIGGER USER'); }
+      }
       const repository = require('../../src/operations/repository');
       let execution = (await repository.initializeFieldExecution(runtimePool, {
         ...actor, appointmentId: appointment, expectedAssignmentRevision: Number(assignment.revision),
@@ -192,7 +212,14 @@ async function createDatabaseFixture() {
       actors[name] = { organizationId: tenant, actorUserId: id, actorAccessRole: role };
     }
     for (const [tenant, creator] of [[org, actors.owner], [otherOrg, actors.otherOwner]]) {
-      const raw = { company: { name: 'Synthetic owner operations', timeZone: 'UTC' }, headquarters: {}, services: [] };
+      const raw = options.operationalSchedule ? {
+        industry: 'plumbing', businessDescription: 'Disposable operational scheduling fixture.',
+        company: { name: 'Synthetic owner operations', email: 'tenant@example.test', phone: '+15550106000', timeZone: 'UTC', currency: 'USD' },
+        headquarters: { street: '1 Test Way', city: 'Boston', state: 'MA', country: 'US', latitude: 42.36, longitude: -71.06, additionalOffices: [] },
+        hours: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day, { open: '00:00', close: '23:59', lunch: '', emergency: false, afterHours: false, holiday: false }])),
+        scheduling: { maxJobsPerDay: 100, workDayLength: 24, appointmentBuffer: 0, travelBuffer: 0 }, crew: { defaultCrewSize: 2, maxCrewSize: 50 },
+        services: [{ id: 'plumbing', name: 'Plumbing', description: 'Plumbing', active: true }],
+      } : { company: { name: 'Synthetic owner operations', timeZone: 'UTC' }, headquarters: {}, services: [] };
       const normalized = adaptBusinessProfile(raw, 'org-profile-v1');
       const row = (await ownerPool.query(
         "INSERT INTO canonical_business_profiles(organization_id,version_number,version_label,raw_profile,normalized_profile,normalized_profile_hash,is_active,created_by) VALUES($1,1,'org-profile-v1',$2,$3,$4,true,$5) RETURNING id",

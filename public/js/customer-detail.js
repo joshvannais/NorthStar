@@ -14,6 +14,7 @@
  */
 window.CustomerDetail = (function() {
   var _currentData = null;
+  var _openSequence = 0;
   var _overlayEl = null;
   var _drawerEl = null;
   var _injected = false;
@@ -204,6 +205,7 @@ window.CustomerDetail = (function() {
     html += '      </div>';
 
     // POLARIS\u2122 Intelligence
+    html += '      <div class="drawer-section" id="cdExecutionSection"><h3>Work execution</h3><p>Exact work records in this loaded customer view. Other work may be outside this page.</p><div id="cdExecutionRecords"></div></div>';
     html += '      <div class="drawer-section">';
     html += '        <h3>POLARIS\u2122 Intelligence</h3>';
     html += '        <div class="drawer-polaris-insight" id="cdPolarisInsight">';
@@ -407,6 +409,7 @@ window.CustomerDetail = (function() {
         estimate: results[2].records[0] || null,
         communications: results[3].records || [],
         canonical: results[0].items[0] || null,
+        canonicalRecords: results[0].items || [],
         digest: digest
       };
     });
@@ -436,6 +439,7 @@ window.CustomerDetail = (function() {
     var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(raw.canonical);
     var values = presentation && presentation.values;
     data.canonical = raw.canonical;
+    data.canonicalRecords = raw.canonicalRecords || [];
     data.intelligence = values || null;
     data.service = presentation ? presentation.serviceText : '';
     data.description = presentation && presentation.service ? presentation.service.scope : null;
@@ -662,6 +666,8 @@ window.CustomerDetail = (function() {
 
   function open(customerId, options) {
     if (!customerId) return;
+    var generation = ++_openSequence;
+    if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear($('cdExecutionRecords'));
     options = options || {};
     _sourceContext = {
       source: options.source === 'leads' || options.source === 'communications' ? options.source : 'customer',
@@ -689,10 +695,12 @@ window.CustomerDetail = (function() {
 
     // Fetch all data
     fetchAll(customerId).then(function(raw) {
+      if (generation !== _openSequence || !_drawerEl || _drawerEl.hidden) return;
       var data = normalizeData(raw);
       _currentData = data;
       populateDrawer(data);
     }).catch(function(err) {
+      if (generation !== _openSequence || !_drawerEl || _drawerEl.hidden) return;
       console.error('[CustomerDetail] Fetch error:', err);
       _drawerEl.setAttribute('aria-busy', 'false');
       var loading = $('cdDrawerLoading');
@@ -706,6 +714,20 @@ window.CustomerDetail = (function() {
   }
 
   function populateDrawer(data) {
+    var executionRecords = $('cdExecutionRecords');
+    if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear(executionRecords);
+    executionRecords.replaceChildren();
+    (data.canonicalRecords || []).forEach(function(record) {
+      var ids = record && record.ids || {};
+      var group = document.createElement('div');
+      var title = document.createElement('h4');
+      title.textContent = record && record.values && record.values.service && record.values.service.label || 'Recorded work';
+      group.appendChild(title); executionRecords.appendChild(group);
+      if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.mount(group, {
+        appointmentId:ids.appointment, graphId:ids.graph, customerId:ids.customer
+      });
+    });
+    if (!executionRecords.children.length) executionRecords.textContent = 'No exact work records are available in this loaded customer view.';
     $('cdDrawerLoading').style.display = 'none';
     $('cdDrawerContent').style.display = '';
     $('cdDrawerTitle').textContent = data.name || 'Customer Details';
@@ -821,6 +843,9 @@ window.CustomerDetail = (function() {
   }
 
   function close() {
+    _openSequence += 1;
+    if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear($('cdExecutionRecords'));
+    if ($('cdExecutionRecords')) $('cdExecutionRecords').replaceChildren();
     if (_overlayEl) _overlayEl.classList.remove('open');
     if (_drawerEl) _drawerEl.classList.remove('open');
     if (_overlayEl) _overlayEl.hidden = true;

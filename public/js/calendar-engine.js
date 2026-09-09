@@ -699,6 +699,7 @@ class CalendarRenderer {
 
   renderAuthorityBoard() {
     if (!this.authorityBoard) return;
+    if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear(this.authorityBoard);
     this.authorityBoard.replaceChildren();
     var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
     var operator = projection && projection.schedulingOperator;
@@ -795,6 +796,9 @@ class CalendarRenderer {
         actions.appendChild(readOnly);
       }
       item.append(recordTitle, states, actions); list.appendChild(item);
+      if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.mount(item, {
+        appointmentId:record.appointmentId, graphId:record.graphId, customerId:record.customer && record.customer.id
+      });
     });
     if (!list.children.length) list.appendChild(Object.assign(document.createElement('li'), { className:'m22-overview-empty', textContent:'No appointments are available.' }));
     this.authorityBoard.appendChild(list);

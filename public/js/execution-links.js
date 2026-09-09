@@ -1,0 +1,64 @@
+(function(root,factory){
+  'use strict';
+  if(typeof module==='object' && module.exports) module.exports=factory();
+  else root.NorthStarExecutionLinks=factory();
+})(typeof window==='undefined'?globalThis:window,function(){
+  'use strict';
+  var UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  function identity(value){return Boolean(value && ['appointmentId','graphId','customerId'].every(function(key){return typeof value[key]==='string' && UUID.test(value[key]);}));}
+  function validate(value,expected){
+    if(!identity(expected) || !value || value.version!=='m23-part9-execution-link-v1' ||
+      Object.keys(value).sort().join(',')!=='appointmentId,customerId,executionId,graphId,href,state,version' ||
+      ['appointmentId','graphId','customerId'].some(function(key){return value[key]!==expected[key];})) throw new Error('Execution association changed.');
+    if(value.state==='unavailable' && value.executionId===null && value.href===null)return value;
+    if(value.state!=='available' || typeof value.executionId!=='string' || !UUID.test(value.executionId) ||
+      value.href!=='/dashboard/completion-review?executionId='+value.executionId)throw new Error('Execution destination unavailable.');
+    return value;
+  }
+  function clear(container){
+    if(!container)return;
+    Array.prototype.forEach.call(container.querySelectorAll('.execution-link'),function(node){if(node.executionLinkDispose)node.executionLinkDispose();});
+  }
+  function mount(container,expected,options){
+    options=options||{};
+    var details=document.createElement('details');details.className='execution-link';
+    var summary=document.createElement('summary');summary.textContent='Work execution';
+    var body=document.createElement('div');body.className='execution-link-content';
+    var status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+    body.appendChild(status);details.append(summary,body);container.appendChild(details);
+    var serial=0,controller=null,timer=null,disposed=false;
+    var demo=options.demo===true || /^\/demo(?:\/|$|-)/.test(window.location.pathname);
+    var initial=demo?'Demo work is read-only. Live execution records are not opened from this fictional workspace.':
+      identity(expected)?'Open to check the current execution link for this exact work record.':'No exact work association is available for this record.';
+    status.textContent=initial;
+    function reset(){serial+=1;if(controller)controller.abort();controller=null;if(timer)clearTimeout(timer);timer=null;body.replaceChildren(status);status.textContent=initial;body.removeAttribute('aria-busy');}
+    function invalidate(){reset();details.open=false;}
+    function dispose(){invalidate();disposed=true;window.removeEventListener('pagehide',invalidate);window.removeEventListener('northstar:auth-generation',invalidate);}
+    details.executionLinkDispose=dispose;window.addEventListener('pagehide',invalidate);window.addEventListener('northstar:auth-generation',invalidate);
+    async function load(){
+      reset();if(disposed || demo || !identity(expected))return;
+      var generation=serial;controller=new AbortController();timer=setTimeout(function(){if(controller)controller.abort();},12000);
+      status.textContent='Checking current execution access…';body.setAttribute('aria-busy','true');
+      try {
+        if(!window.NorthStarAccountSession || typeof window.NorthStarAccountSession.fetch!=='function')throw new Error('Session unavailable');
+        var response=await window.NorthStarAccountSession.fetch('/api/v1/field-executions/links/appointments/'+expected.appointmentId+
+          '?graphId='+expected.graphId+'&customerId='+expected.customerId,{method:'GET',cache:'no-store',signal:controller.signal});
+        if(disposed || generation!==serial || !details.isConnected || !details.open)return;
+        if(response.status===401 || response.status===403){status.textContent='Execution review is available only to a current owner or administrator. No review controls are available here.';return;}
+        if(!response.ok)throw new Error('Read unavailable');
+        var envelope=await response.json();var value=validate(envelope && envelope.success===true && envelope.data,expected);
+        if(disposed || generation!==serial || !details.isConnected || !details.open)return;
+        if(value.state!=='available'){status.textContent='An exact execution link is unavailable. The record may be uninitialized, changed, removed, or outside this bounded lookup. Refresh the source or review Operational Overview.';return;}
+        status.textContent='Open this work’s execution record. Current access and decision availability are checked again there.';
+        var link=document.createElement('a');link.className='btn btn-secondary btn-sm';link.textContent='Review execution';link.href=value.href;body.appendChild(link);
+      }catch(_error){
+        if(disposed || generation!==serial || !details.isConnected || !details.open)return;
+        status.textContent='Execution access could not be checked. No destination has been assumed.';
+        var retry=document.createElement('button');retry.type='button';retry.className='btn btn-secondary btn-sm';retry.textContent='Retry execution lookup';retry.addEventListener('click',load);body.appendChild(retry);
+      }finally{if(generation===serial){if(timer)clearTimeout(timer);timer=null;controller=null;body.removeAttribute('aria-busy');}}
+    }
+    details.addEventListener('toggle',function(){if(details.open)load();else reset();});
+    return details;
+  }
+  return Object.freeze({mount:mount,clear:clear,validate:validate});
+});

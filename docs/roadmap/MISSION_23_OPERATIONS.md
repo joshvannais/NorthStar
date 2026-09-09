@@ -78,13 +78,25 @@ knowledge authorities without replacing any of them.
   PR #177, normally merged as `d0f8c6cbe551d7b17282eeccdbcb3a137802f544`, and
   accepted after its sole automatic deployment on 2026-09-09 UTC. The authorized
   routine-only migration 054 and entry-only grant are retained unchanged.
-  The next bounded implementation is the owner completion-review destination,
-  using existing Part 8 approval/cancellation/reopening/resumption/correction
-  authority; its writer tests are not independent approval or release evidence.
-  No new migration, grant or provider behavior is included. Personal/current-crew
-  Today, worker execution, evidence completeness/current-leaf and tab ownership
-  remain unchanged. Calendar/Command Center/customer execution links follow this
-  owner destination. My Work Profile remains an explicit later reconciliation.
+  Slice 3 owner completion review was independently reviewed, normally merged
+  through PR #178 as `49638af463f1e679193998b3b99bbf49560e7573`, and accepted
+  after sole automatic deployment `65d54101-22cb-4806-9019-28bb67c75a3f` on
+  2026-09-09. It mounts existing Part 8 approval/cancellation/reopening/
+  resumption/correction authority; its consumed release operations are not rerun.
+  The next writer candidate adds on-demand Calendar/Command Center/customer
+  execution links through exact tenant appointment/graph/customer associations
+  and the existing bounded 054 read entry. Only current owner/admin authority
+  receives the same completion-review destination. Missing, stale, denied,
+  deleted, unknown-source and bounded-lookup misses remain explicitly
+  unavailable; a miss is not proof that no execution exists. Demo stays isolated
+  read-only. No new migration, grant, auth model or provider behavior is included.
+  Personal/current-crew Today, worker execution, evidence completeness/current-
+  leaf, tab ownership and the accepted completion-review UI remain unchanged.
+  Candidate writer tests are not independent approval or release evidence.
+  My Work Profile remains an explicit later reconciliation under `M23-01`:
+  existing workforce role/location/skill editors do not establish employee
+  self-assertions, owner categories, certification verification/expiry,
+  availability, owner review or audit/history for that proposed experience.
   These residuals prevent a Part 9 completeness claim; backend endpoints alone
   do not close a mounted user-workflow gate.
 - **Parts 10–12: not implemented.**

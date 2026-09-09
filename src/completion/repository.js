@@ -139,8 +139,7 @@ async function mutateCompletion(pool, input) {
   });
 }
 
-async function readCompletion(pool, input) {
-  return transaction(pool, false, `${input.organizationId}:${input.executionId}`, async client => {
+async function completionBody(client, input) {
     const query = await client.query(
       `SELECT public.canonical_completion_read(
          $1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid
@@ -152,7 +151,47 @@ async function readCompletion(pool, input) {
     if (!body || typeof body !== 'object' || Buffer.byteLength(JSON.stringify(body), 'utf8') > 3000000) {
       throw mapped();
     }
-    return { status: 200, body, replayed: false };
+    return body;
+}
+
+async function readCompletion(pool, input) {
+  return transaction(pool, false, `${input.organizationId}:${input.executionId}`, async client => {
+    return { status: 200, body: await completionBody(client, input), replayed: false };
+  });
+}
+
+async function readOwnerCompletionReview(pool, input) {
+  if (!input || !['owner', 'admin'].includes(input.actorAccessRole)) {
+    throw new CompletionRepositoryError(403, 'COMPLETION_FORBIDDEN', 'Owner completion review is restricted.');
+  }
+  return transaction(pool, false, `${input.organizationId}:${input.executionId}`, async client => {
+    // The existing canonical entry rechecks live actor/session/tenant/source
+    // authority before this minimal context read. No private completion table
+    // or helper grant is needed, and both projections share one snapshot.
+    const body = await completionBody(client, input);
+    const execution = body && body.data && body.data.execution;
+    if (!execution || execution.id !== input.executionId) throw mapped();
+    const context = await client.query(
+      `SELECT assignment.id AS assignment_id,assignment.appointment_id,assignment.revision,
+        rtrim(assignment.canonical_digest) AS digest,
+        left(COALESCE(NULLIF(opportunity.job_scope->>'jobTitle',''),NULLIF(opportunity.service_type,''),'Service appointment'),500) AS title,
+        onboarding.status AS onboarding_status,subscription.status AS subscription_status,
+        subscription.trial_started_at,subscription.trial_ends_at,clock_timestamp() AS server_now
+       FROM public.canonical_schedule_assignments assignment
+       JOIN public.canonical_appointments appointment ON appointment.organization_id=assignment.organization_id
+        AND appointment.id=assignment.appointment_id AND appointment.operation_id=assignment.operation_id
+        AND appointment.graph_id=assignment.graph_id AND appointment.opportunity_id=assignment.opportunity_id
+       JOIN public.canonical_opportunities opportunity ON opportunity.organization_id=appointment.organization_id
+        AND opportunity.id=appointment.opportunity_id AND opportunity.operation_id=appointment.operation_id
+        AND opportunity.graph_id=appointment.graph_id
+       JOIN public.organization_onboarding onboarding ON onboarding.organization_id=assignment.organization_id
+       LEFT JOIN public.subscriptions subscription ON subscription.organization_id=assignment.organization_id
+       WHERE assignment.organization_id=$1::uuid AND assignment.id=$2::uuid AND appointment.id=$3::uuid`,
+      [input.organizationId, execution.assignmentId, execution.appointmentId]
+    );
+    if (context.rowCount !== 1) throw mapped();
+    const data = require('./ownerReview').projectOwnerReview(body, context.rows[0], input);
+    return { status: 200, body: { success: true, data }, replayed: false };
   });
 }
 
@@ -160,4 +199,5 @@ module.exports = {
   CompletionRepositoryError,
   mutateCompletion,
   readCompletion,
+  readOwnerCompletionReview,
 };

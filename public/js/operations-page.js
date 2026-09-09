@@ -115,7 +115,13 @@
     article.appendChild(metrics);
     if (record.progress.uncertain > 0) article.appendChild(node('p', 'operations-coordination-note',
       record.progress.uncertain + ' progress facts are estimated or unknown. No overall percentage is inferred.'));
-    if (scope === 'owner_admin') article.appendChild(ownerDetails(record));
+    if (scope === 'owner_admin') {
+      article.appendChild(ownerDetails(record));
+      var reviewLink = node('a', 'operations-back', 'Review completion');
+      reviewLink.href = '/dashboard/completion-review?executionId=' + encodeURIComponent(record.executionId);
+      reviewLink.setAttribute('aria-label', 'Review completion for ' + record.title);
+      article.appendChild(reviewLink);
+    }
     else article.appendChild(node('p', 'operations-coordination-note', 'Coordination summary only. Detailed evidence and owner decisions are not exposed in this view.'));
     return article;
   }

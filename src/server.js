@@ -118,6 +118,7 @@ const pages = {
   '/dashboard/today': 'public/dashboard/today.html',
   '/dashboard/work': 'public/dashboard/work.html',
   '/dashboard/operations': 'public/dashboard/operations.html',
+  '/dashboard/completion-review': 'public/dashboard/completion-review.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
   '/dashboard/leads': 'public/dashboard/leads.html',
   '/dashboard/communications': 'public/dashboard/communications.html',

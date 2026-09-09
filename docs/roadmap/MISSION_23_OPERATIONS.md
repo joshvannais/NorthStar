@@ -73,17 +73,20 @@ knowledge authorities without replacing any of them.
   describes the bounded additive API and PostgreSQL authority.
 - **Part 9: Slice A independently accepted and normally merged through PR #176
   at `4315a9871ff078a7578a3dc1e64c0e47c61f1a5b`; its sole automatic deployment
-  and bounded release acceptance are recorded.** Slice B is the bounded
-  read-only owner/admin operational overview and minimized dispatcher
-  coordination view; its implementation is in progress, not independently
-  accepted or released. The founder authorized routine-only migration 054,
-  its entry-only runtime grant and focused local PostgreSQL/browser verification
-  on 2026-09-08. Independent audit and production migration/release gates remain
-  separate and unconsumed. Existing worker execution,
-  evidence-completeness/current-leaf and tab-ownership behavior is preserved.
-  Cross-page integration remains a later Part 9 slice. The mounted owner
-  review/approval/cancellation/reopening workflow must also be reconciled before
-  Part 9 can be complete; backend entry points alone do not close that UI gate.
+  and bounded release acceptance are recorded.** Slice B's read-only owner/admin
+  overview and minimized dispatcher view were independently accepted through
+  PR #177, normally merged as `d0f8c6cbe551d7b17282eeccdbcb3a137802f544`, and
+  accepted after its sole automatic deployment on 2026-09-09 UTC. The authorized
+  routine-only migration 054 and entry-only grant are retained unchanged.
+  The next bounded implementation is the owner completion-review destination,
+  using existing Part 8 approval/cancellation/reopening/resumption/correction
+  authority; its writer tests are not independent approval or release evidence.
+  No new migration, grant or provider behavior is included. Personal/current-crew
+  Today, worker execution, evidence completeness/current-leaf and tab ownership
+  remain unchanged. Calendar/Command Center/customer execution links follow this
+  owner destination. My Work Profile remains an explicit later reconciliation.
+  These residuals prevent a Part 9 completeness claim; backend endpoints alone
+  do not close a mounted user-workflow gate.
 - **Parts 10–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.

@@ -454,7 +454,7 @@
     byId('workStateBadge').textContent = label(state);
     byId('workStateBadge').dataset.state = state;
     var grid = node('div', 'work-summary-grid');
-    append(grid, summary('Current state', label(state)), summary('Last action', label(model.execution.lastAction)));
+    append(grid, summary('Current state', label(state)), summary('Last action', ({ initialize: 'Job opened', start: 'Work started', pause: 'Work paused', resume: 'Work resumed' })[model.execution.lastAction] || label(model.execution.lastAction)));
     content.appendChild(grid);
     var actions = node('div', 'work-actions');
     var nextAction = ['start', 'pause', 'resume'].find(allows);

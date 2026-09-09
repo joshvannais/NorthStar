@@ -47,6 +47,12 @@
       return 'Time unavailable';
     }
   }
+  function timeZoneName(value, timeZone) {
+    try {
+      var part = new Intl.DateTimeFormat(undefined, { timeZone: timeZone, timeZoneName: 'long' }).formatToParts(new Date(value)).find(function(item) { return item.type === 'timeZoneName'; });
+      return part ? part.value : 'Local job time';
+    } catch (_error) { return 'Local job time'; }
+  }
   function label(value) {
     return presentationText(value, 'Unavailable').replace(/[_-]+/g, ' ').replace(/\b\w/g, function(letter) {
       return letter.toUpperCase();
@@ -151,7 +157,7 @@
     append(heading, title, badges);
     var grid = element('div', 'today-detail-grid');
     append(grid,
-      detail('Schedule', scheduleText(record, timeZone), record.schedule.spansDayBoundary ? 'Continues across a calendar day' : timeZone),
+      detail('Schedule', scheduleText(record, timeZone), record.schedule.spansDayBoundary ? 'Continues across a calendar day' : timeZoneName(record.schedule.start, timeZone)),
       detail('Assignment', presentationText(record.assignment.label, record.assignment.direct ? 'Employee name unavailable' : 'Crew name unavailable'), record.assignment.direct ? 'Direct assignment' : 'Current active crew'),
       detail('Customer', presentationText(record.customer && record.customer.name, 'Customer name unavailable'), presentationText(record.customer && record.customer.phone, 'Phone unavailable')),
       detail('Service location', serviceLocation(record.customer && record.customer.serviceLocation), 'Use the current job location shown here')
@@ -198,7 +204,7 @@
     authority.textContent = authorityText;
     authority.title = authorityText;
     authority.setAttribute('aria-label', authorityText);
-    byId('todayDate').textContent = formatInstant(data.day.start, timeZone, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + ' · ' + timeZone;
+    byId('todayDate').textContent = formatInstant(data.day.start, timeZone, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + ' · ' + timeZoneName(data.day.start, timeZone);
     byId('todayCount').textContent = data.records.length + (data.records.length === 1 ? ' Appointment' : ' Appointments');
     var records = byId('todayRecords');
     records.replaceChildren();

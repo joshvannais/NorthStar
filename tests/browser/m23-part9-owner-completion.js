@@ -19,7 +19,7 @@ async function main() {
   const ledger = { browser: selected, version: null, authority: durable ? 'mounted PostgreSQL runtime authority' : 'intercepted synthetic presentation responses',
     hostile, cases: [], externalBlocked: [], providerCalls: 0, serverExternalAttempts: 0, pageErrors: [], mutationCount: 0,
     limits: 'Playwright WebKit is not physical Safari; reflow viewports are not native browser zoom or manual assistive-technology approval' };
-  let fixture, server, browser;
+  let fixture, server, browser, activePage;
   const https = require('node:https'), oldRequest = https.request, oldGet = https.get, oldFetch = globalThis.fetch;
   const denyServerExternal = () => { ledger.serverExternalAttempts += 1; throw new Error('Server external transport forbidden in this local browser test'); };
   https.request = denyServerExternal; https.get = denyServerExternal; globalThis.fetch = denyServerExternal;
@@ -46,7 +46,26 @@ async function main() {
       await context.addCookies(fixture ? Object.entries(fixture.actors.owner.session.cookies).map(([name, value]) => ({
         name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf',
       })) : [{ name: 'northstar_csrf', value: 'local-browser-test-csrf-000000000000000000000000', url: origin }]);
-      const page = await context.newPage();
+      const page = await context.newPage(); activePage = page;
+      if (process.argv.includes('--diagnostic')) {
+        await page.addInitScript(() => {
+          window.completionDiagnostic = [];
+          const capture = (event, action) => {
+            const byId = id => document.getElementById(id);
+            window.completionDiagnostic.push({ time: performance.now(), event, action: action || null,
+              status: byId('completionStatus') && byId('completionStatus').dataset.state,
+              formHidden: byId('completionForm') && byId('completionForm').hidden,
+              dialogOpen: byId('completionConfirm') && byId('completionConfirm').open,
+              focused: document.activeElement && document.activeElement.id });
+          };
+          document.addEventListener('click', event => capture('click', event.target.dataset.action || event.target.id), true);
+          document.addEventListener('DOMContentLoaded', () => {
+            const status = byId => document.getElementById(byId);
+            if (status('completionStatus')) new MutationObserver(() => capture('status')).observe(status('completionStatus'), { attributes: true, childList: true });
+            if (status('completionForm')) new MutationObserver(() => capture('form')).observe(status('completionForm'), { attributes: true, attributeFilter: ['hidden'] });
+          });
+        });
+      }
       page.on('pageerror', error => ledger.pageErrors.push({ label, message: error.message }));
       await page.route('**/*', async route => {
         const req = route.request(), url = new URL(req.url());
@@ -100,6 +119,11 @@ async function main() {
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: path.join(output, label + '-proposal.png'), fullPage: true });
       const act = async action => {
+        if (process.argv.includes('--diagnostic')) await page.evaluate(value => {
+          window.completionDiagnostic.push({ time: performance.now(), event: 'begin-action', action: value,
+            status: document.getElementById('completionStatus').dataset.state,
+            formHidden: document.getElementById('completionForm').hidden });
+        }, action);
         await page.locator(`[data-action="${action}"]`).first().click();
         await page.locator('#completionReason').fill('Reviewed the explicit recorded work');
         if (await page.locator('#completionNextAction').isVisible()) await page.locator('#completionNextAction').fill('Recheck the completed seal');
@@ -185,12 +209,27 @@ async function main() {
         ledger.cases.push({ label: label + '-failure-controls', appliedRefreshFailure: true, exactRetry: true,
           revoked: true, ownerKeyboardLink: true, dispatcherOwnerLinkAbsent: true });
       }
+      if (process.argv.includes('--diagnostic')) {
+        if (!ledger.diagnostics) ledger.diagnostics = [];
+        ledger.diagnostics.push({ label, events: await page.evaluate(() => window.completionDiagnostic || []) });
+      }
       await context.close();
       process.stdout.write(JSON.stringify({ completed: label, durable, hostile }) + '\n');
     }
     assert.deepEqual(ledger.pageErrors, []); assert.deepEqual(ledger.externalBlocked, []); assert.equal(ledger.serverExternalAttempts, 0);
     ledger.passed = true;
-  } catch (error) { ledger.passed = false; ledger.error = { name: error.name, message: error.message }; throw error; }
+  } catch (error) {
+    ledger.passed = false; ledger.error = { name: error.name, message: error.message };
+    if (activePage && !activePage.isClosed()) {
+      ledger.failureState = await activePage.evaluate(() => ({ events: window.completionDiagnostic || [],
+        status: document.getElementById('completionStatus') && document.getElementById('completionStatus').dataset.state,
+        statusText: document.getElementById('completionStatus') && document.getElementById('completionStatus').textContent,
+        formHidden: document.getElementById('completionForm') && document.getElementById('completionForm').hidden,
+        buttons: Array.from(document.querySelectorAll('[data-action]')).map(button => ({ action: button.dataset.action, disabled: button.disabled })) }));
+      await activePage.screenshot({ path: path.join(output, 'failure-viewport.png') });
+    }
+    throw error;
+  }
   finally {
     if (browser) await browser.close();
     if (server) await new Promise(resolve => server.close(resolve));

@@ -918,6 +918,11 @@ evidence seal.
 
 ### Accessibility and visual acceptance
 
+- The wording gate covers every Mission 23 implementation in Parts 1–12,
+  including earlier backend authority subsequently rendered by another part.
+  The [implementation-to-surface inventory](../operations/MISSION_23_WORDING_INVENTORY.md)
+  maps all parts to their pages, components, roles and states. A backend-only
+  label does not exempt its later display sinks.
 - After every implementation or correction, and before advancing to the next
   step, review all affected user-facing wording. Pages, cards, forms, dialogs,
   errors, empty/loading/denied states, labels, hints, tooltips and accessibility

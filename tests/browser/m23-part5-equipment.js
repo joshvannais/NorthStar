@@ -19,6 +19,7 @@ async function main() {
     server = fixture.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const origin = `http://127.0.0.1:${server.address().port}`;
     const runtime = resolveBrowserRuntime(selected); browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+    await require('../helpers/m23-user-wording').observeUserWording(browser);
     ledger.version = browser.version();
     async function contextFor(width, theme, session = fixture.session, extra = {}) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', ...extra });

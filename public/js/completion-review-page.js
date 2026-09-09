@@ -86,7 +86,7 @@
     }
     byId('completionHistory').hidden = false;
     byId('completionHistorySummary').textContent = value.history.records.length + ' of ' + value.history.total + ' recorded decisions shown.' +
-      (value.history.truncated ? ' This bounded history is incomplete. Correction targets are withheld; no older records have been deleted.' : ' Original decisions are preserved; corrections are separate annotations.');
+      (value.history.truncated ? ' Only part of the history is shown. Load the complete history before selecting a decision to correct. Older records are kept.' : ' Original decisions are preserved; corrections are separate annotations.');
     var history = byId('completionHistoryRecords'); history.replaceChildren();
     value.history.records.forEach(function(record) {
       var article = node('article', 'completion-record');
@@ -181,7 +181,7 @@
         if (body.annotation.nextAction) details.appendChild(node('p', '', 'Next action: ' + body.annotation.nextAction));
       }
       byId('completionConfirm').showModal(); byId('completionCancelButton').focus();
-    } catch (_error) { byId('completionFormError').textContent = 'Enter bounded plain-text details without links, markup or control characters before reviewing this decision.'; byId('completionReason').focus(); }
+    } catch (_error) { byId('completionFormError').textContent = 'Enter a short explanation using ordinary text, without links or formatting, before reviewing this decision.'; byId('completionReason').focus(); }
   });
   byId('completionConfirmButton').addEventListener('click', function() { var descriptor = confirmation; submit(descriptor); });
   byId('completionCancelButton').addEventListener('click', function() { confirmation = null; byId('completionConfirm').close(); byId('completionPrepare').focus(); });

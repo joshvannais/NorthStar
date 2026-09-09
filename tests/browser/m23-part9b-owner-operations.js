@@ -1,4 +1,5 @@
 'use strict';
+const { observeUserWording } = require('../helpers/m23-user-wording');
 
 const assert = require('assert');
 const fs = require('fs');
@@ -32,6 +33,7 @@ async function main() {
   try {
     const runtime = resolveBrowserRuntime(selected);
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+  await observeUserWording(browser);
     ledger.version = browser.version();
     const profiles = [
       { name: '1440', width: 1440, height: 1000 },
@@ -208,6 +210,7 @@ async function durableMain() {
     const origin = `http://127.0.0.1:${server.address().port}`;
     const runtime = resolveBrowserRuntime(selected);
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+  await observeUserWording(browser);
     ledger.version = browser.version();
     const profileArgument = process.argv.find(arg => arg.startsWith('--profile='));
     const actorArgument = process.argv.find(arg => arg.startsWith('--actor='));

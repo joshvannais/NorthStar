@@ -33,6 +33,7 @@ async function main(){
     server=fixture.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
     const origin='http://127.0.0.1:'+server.address().port,runtime=resolveBrowserRuntime(selected);
     browser=await runtime.browserType.launch({headless:true,executablePath:runtime.executablePath});ledger.version=browser.version();
+    await require('../helpers/m23-user-wording').observeUserWording(browser);
     const profiles=[{name:'1440',width:1440,height:1000},{name:'1280',width:1280,height:720},{name:'1920',width:1920,height:1080},
       {name:'768',width:768,height:1024},{name:'430',width:430,height:932},{name:'390',width:390,height:844},{name:'375',width:375,height:812},
       {name:'320',width:320,height:760},{name:'reflow200',width:720,height:500},{name:'reflow400',width:360,height:350}]

@@ -29,7 +29,7 @@
     var serial=0,controller=null,timer=null,disposed=false;
     var demo=options.demo===true || /^\/demo(?:\/|$|-)/.test(window.location.pathname);
     var initial=demo?'Demo work is read-only. Live execution records are not opened from this fictional workspace.':
-      identity(expected)?'Open to check the current execution link for this exact work record.':'No exact work association is available for this record.';
+      identity(expected)?'Open to check the work details available for this job.':'Work details could not be linked to this job. Review the job in Operations.';
     status.textContent=initial;
     function reset(){serial+=1;if(controller)controller.abort();controller=null;if(timer)clearTimeout(timer);timer=null;body.replaceChildren(status);status.textContent=initial;body.removeAttribute('aria-busy');}
     function invalidate(){reset();details.open=false;}
@@ -48,13 +48,13 @@
         if(!response.ok)throw new Error('Read unavailable');
         var envelope=await response.json();var value=validate(envelope && envelope.success===true && envelope.data,expected);
         if(disposed || generation!==serial || !details.isConnected || !details.open)return;
-        if(value.state!=='available'){status.textContent='An exact execution link is unavailable. The record may be uninitialized, changed, removed, or outside this bounded lookup. Refresh the source or review Operational Overview.';return;}
+        if(value.state!=='available'){status.textContent='Work details could not be found or confirmed. The work may not have been opened yet, or its details may have changed. Refresh this page or review Operations.';return;}
         status.textContent='Open this work’s execution record. Current access and decision availability are checked again there.';
         var link=document.createElement('a');link.className='btn btn-secondary btn-sm';link.textContent='Review execution';link.href=value.href;body.appendChild(link);
       }catch(_error){
         if(disposed || generation!==serial || !details.isConnected || !details.open)return;
-        status.textContent='Execution access could not be checked. No destination has been assumed.';
-        var retry=document.createElement('button');retry.type='button';retry.className='btn btn-secondary btn-sm';retry.textContent='Retry execution lookup';retry.addEventListener('click',load);body.appendChild(retry);
+        status.textContent='Work details could not be checked. Try again.';
+        var retry=document.createElement('button');retry.type='button';retry.className='btn btn-secondary btn-sm';retry.textContent='Try again';retry.addEventListener('click',load);body.appendChild(retry);
       }finally{if(generation===serial){if(timer)clearTimeout(timer);timer=null;controller=null;body.removeAttribute('aria-busy');}}
     }
     details.addEventListener('toggle',function(){if(details.open)load();else reset();});

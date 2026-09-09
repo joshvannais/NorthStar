@@ -1,4 +1,5 @@
 'use strict';
+const { observeUserWording } = require('../helpers/m23-user-wording');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -31,6 +32,7 @@ async function main() {
     const origin = `http://127.0.0.1:${server.address().port}`;
     const runtime = resolveBrowserRuntime(selected);
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+  await observeUserWording(browser);
     ledger.version = browser.version();
     const profiles = [ { name: '1440', width: 1440, height: 1000 }, { name: '390', width: 390, height: 844 },
       { name: '320', width: 320, height: 700 }, { name: 'reflow-200', width: 720, height: 500 }, { name: 'reflow-400', width: 360, height: 250 } ]

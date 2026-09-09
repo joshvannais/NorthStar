@@ -29,14 +29,14 @@
   };
 
   var STATE_COPY = Object.freeze({
-    loading: ['Loading current work', 'NorthStar is checking the current assignment and execution.'],
+    loading: ['Loading current work', 'NorthStar is checking your assignment and work status.'],
     empty: ['Work has not been opened yet', 'Open this job before recording field activity.'],
     offline: ['You appear to be offline', 'Reconnect, then reload. NorthStar has not confirmed or recorded any new work.'],
-    restricted: ['Work access changed', 'This appointment is not in your current direct or crew assignment scope.'],
-    'read-only': ['Work is read-only', 'This execution can be reviewed, but its current lifecycle does not permit worker changes.'],
+    restricted: ['Work access changed', 'You are not currently assigned to this job, either directly or through your crew.'],
+    'read-only': ['Work is read-only', 'You can review this work, but changes are not available in its current state.'],
     stale: ['Your work details or access changed', 'Reload to check the latest work details and your access before recording anything.'],
     conflict: ['Work changed before your action', 'Reload the latest work details, review them, and try again if the action is still appropriate.'],
-    'partial-file': ['Some evidence is unavailable', 'Current work loaded, but one bounded evidence source is unavailable. No missing evidence is treated as success.'],
+    'partial-file': ['Some evidence is unavailable', 'Your work loaded, but some supporting records could not be checked. Reload before relying on the evidence summary.'],
     retry: ['NorthStar could not confirm the action', 'Retry to check whether this action was saved. NorthStar will avoid recording it twice.'],
     'applied-but-refresh-failed': ['Recorded; current view not confirmed', 'Your action was saved, but the latest work details could not be loaded. Reload before doing anything else.'],
     success: ['Work updated', 'Your action was saved and the work details are up to date.'],
@@ -930,7 +930,7 @@
     content.replaceChildren();
     var data = model.reads.completion;
     if (!data) { content.appendChild(unavailableNote('Completion details could not be loaded. Reload to check whether this work is complete.')); return; }
-    content.appendChild(node('p', '', clean(data.interpretation, 'Completion requires an explicit proposal and authorized approval.')));
+    content.appendChild(node('p', '', 'Completion needs a proposal and approval from an owner or administrator. Completing or reopening work does not change the schedule, accept work for the customer, or create an invoice.'));
     var records = safeArray(data.records);
     if (records.length) {
       var list = node('ul', 'work-record-list');
@@ -949,14 +949,14 @@
           id: data.activeProposal.id, revision: data.activeProposal.revision, digest: data.activeProposal.digest,
         } });
         confirmAction({ action: 'withdraw_completion', label: 'Withdraw completion proposal',
-          copy: 'This returns the execution to its explicit pre-proposal state. It does not delete completion history.',
+          copy: 'This withdraws the proposal and returns the work to its previous status. The completion history is kept.',
           path: mutationPath('withdraw_completion'), body: body }, event.currentTarget);
       }));
     } else if (allows('propose_completion')) {
       try { api.completionRequirements(model.reads.evidence); }
       catch (error) {
         content.appendChild(unavailableNote(error.code === 'WORK_EVIDENCE_SELECTION_LIMIT'
-          ? 'The current evidence exceeds the 20-per-kind selection limit for this view. No records have been omitted; a completion proposal cannot be prepared here.'
+          ? 'This work has more than 20 checklists, inspections, or files. This page cannot prepare a complete proposal for that amount of evidence. No proposal has been sent.'
           : 'The complete, current evidence selection could not be confirmed. Reload current work before proposing completion.'));
         content.appendChild(actionButton('Reload current work', '', function() { load(); }));
         return;
@@ -1012,7 +1012,7 @@
     setState(pageState, '', announcement || (model.partial.length ? STATE_COPY['partial-file'][1] :
       pageState === 'ready' ? 'Your current work details are ready.' : ''));
     if (tabStorage && !tabStorage.persistent) {
-      byId('workStatus').textContent += ' Draft and retry storage is unavailable in this tab. Reloading removes unconfirmed local state.';
+      byId('workStatus').textContent += ' This tab cannot keep unsaved drafts or remember an interrupted request. Reloading removes unsaved work. Check your saved records before trying an interrupted action again.';
     }
   }
 

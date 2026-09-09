@@ -102,3 +102,11 @@ Development attempts remain separate from the final immutable-head runs.
   all remaining ordinary ready/merge, sole automatic deployment, exact revision,
   applicable migration verification, health, passive acceptance and final seal.
   The writer performs none of those production actions.
+
+## Mission-wide wording coverage
+
+The [Parts 1–12 wording inventory](MISSION_23_WORDING_INVENTORY.md) maps every
+implementation to its downstream rendered surfaces, roles and states. The gate
+applies to all implementations, not just this diff or the integrated journey.
+The final evidence packet must distinguish static copy review, real browser
+presentation checks, durable workflow proof and specifically unavailable states.

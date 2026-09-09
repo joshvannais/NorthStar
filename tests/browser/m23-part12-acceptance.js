@@ -40,6 +40,7 @@ async function main() {
     server = f.app.listen(0,'127.0.0.1'); await new Promise(resolve => server.once('listening',resolve));
     const origin = 'http://127.0.0.1:' + server.address().port, runtime = resolveBrowserRuntime(selected);
     browser = await runtime.browserType.launch({headless:true,executablePath:runtime.executablePath}); ledger.version = browser.version();
+    await require('../helpers/m23-user-wording').observeUserWording(browser);
     const open = async (theme,width,height,actor='owner') => {
       const context = await browser.newContext({viewport:{width,height},hasTouch:width<=430,reducedMotion:'reduce'});
       await context.addInitScript(value=>localStorage.setItem('northstar-theme',value),theme);

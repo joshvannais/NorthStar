@@ -1,0 +1,38 @@
+'use strict';
+const { normalizeLinkRead, readExecutionLink } = require('../../src/operations/executionLinks');
+const { overview, record } = require('../helpers/m23-part9b-overview-fixture');
+const id = n => `e4900000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const input = { organizationId:id(1), actorUserId:id(2), actorAccessRole:'owner', authSessionId:id(3), appointmentId:id(4), graphId:id(5), customerId:id(6) };
+function poolFor(options = {}) {
+  const calls = [];
+  const client = { query:jest.fn(async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.includes('canonical_operational_overview_read')) {
+      if (options.error) throw options.error;
+      return { rows:[{ result:overview('owner_admin', { filter:'all', pagination:{limit:100,offset:0,returned:1,total:1,nextCursor:null}, records:[record('owner_admin',{ appointmentId:input.appointmentId, executionId:id(7) })] }) }] };
+    }
+    if (sql.includes('canonical_appointments')) return { rowCount:options.missing ? 0 : 1, rows:options.missing ? [] : [{ appointment_id:id(4),graph_id:id(5),customer_id:id(6) }] };
+    return { rows:[],rowCount:0 };
+  }), release:jest.fn() };
+  return { connect:jest.fn(async()=>client),client,calls };
+}
+test('normalizes only exact UUID selectors without user supplied authority', () => {
+  expect(normalizeLinkRead(id(4),{graphId:id(5),customerId:id(6)})).toEqual({appointmentId:id(4),graphId:id(5),customerId:id(6)});
+  for (const query of [{},{graphId:id(5),customerId:id(6),role:'owner'},{graphId:[id(5)],customerId:id(6)},{graphId:id(5),customerId:'same-name'}]) expect(()=>normalizeLinkRead(id(4),query)).toThrow();
+});
+test('resolves exact server-backed association to fixed owner destination in read-only snapshot', async()=>{
+  const pool = poolFor(); const value = await readExecutionLink(pool,input);
+  expect(value).toMatchObject({version:'m23-part9-execution-link-v1',state:'available',appointmentId:id(4),graphId:id(5),customerId:id(6),executionId:id(7),href:`/dashboard/completion-review?executionId=${id(7)}`});
+  expect(pool.calls[0].sql).toBe('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  expect(pool.calls.some(call=>/INSERT|UPDATE|DELETE|canonical_field_executions/.test(call.sql))).toBe(false);
+  expect(pool.calls.at(-1).sql).toBe('COMMIT'); expect(pool.client.release).toHaveBeenCalledTimes(1);
+});
+test.each(['member','viewer','dispatcher'])('withholds owner destination for %s before pool access',async role=>{
+  const pool=poolFor(); await expect(readExecutionLink(pool,{...input,actorAccessRole:role})).rejects.toMatchObject({status:403}); expect(pool.connect).not.toHaveBeenCalled();
+});
+test('missing exact association returns unavailable, not a name match or unrelated record',async()=>{
+  const pool=poolFor({missing:true}); const value=await readExecutionLink(pool,input); expect(value.state).toBe('unavailable'); expect(value.executionId).toBeNull();expect(value.href).toBeNull();
+});
+test('current authority failure rolls back and releases without disclosure',async()=>{
+  const pool=poolFor({error:{code:'42501'}}); await expect(readExecutionLink(pool,input)).rejects.toMatchObject({status:403});expect(pool.calls.at(-1).sql).toBe('ROLLBACK');expect(pool.client.release).toHaveBeenCalledTimes(1);
+});

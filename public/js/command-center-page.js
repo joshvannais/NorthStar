@@ -438,6 +438,7 @@
         .sort(function (left, right) { return new Date(left.work.scheduledStart) - new Date(right.work.scheduledStart); });
     byId('commandCenterScheduleCount').textContent = scheduled.length + ' scheduled shown';
     var list = byId('commandCenterSchedule');
+    if (global.NorthStarExecutionLinks) global.NorthStarExecutionLinks.clear(list);
     list.replaceChildren();
     if (!scheduled.length) {
       var empty = element('li');
@@ -465,6 +466,11 @@
       time.title = fullDate || date;
       time.setAttribute('aria-label', fullDate || date);
       item.append(time, copy);
+      if (global.NorthStarExecutionLinks) global.NorthStarExecutionLinks.mount(copy, {
+        appointmentId:isCanonical ? graph.appointmentId : graph.ids && graph.ids.appointment,
+        graphId:isCanonical ? graph.graphId : graph.ids && graph.ids.graph,
+        customerId:graph.customer && graph.customer.id
+      }, {demo:mode === 'demo'});
       list.appendChild(item);
     });
   }
@@ -489,6 +495,7 @@
     var definition = byId('commandCenterSchedulingDefinition');
     section.setAttribute('aria-busy', 'false');
     categories.replaceChildren();
+    if (global.NorthStarExecutionLinks) global.NorthStarExecutionLinks.clear(records);
     records.replaceChildren();
     if (mode === 'demo') {
       definition.textContent = 'This demo is read-only.';
@@ -570,6 +577,9 @@
       if (!operator.canMutate) actions.appendChild(element('p', 'm22-overview-read-only',
         'Read-only: ' + titleCase(operator.reason) + '. Preview and approval controls are unavailable.'));
       item.appendChild(actions); records.appendChild(item);
+      if (global.NorthStarExecutionLinks) global.NorthStarExecutionLinks.mount(item, {
+        appointmentId:record.appointmentId, graphId:record.graphId, customerId:record.customer && record.customer.id
+      });
     });
     if (!selected.length) records.appendChild(element('li', 'm22-overview-empty',
       'No appointments from this bounded page are in the server-defined category; the complete category count remains shown above.'));

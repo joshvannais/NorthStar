@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { normalizeLinkRead, readExecutionLink } = require('../operations/executionLinks');
 const { normalizeCompletionAction, normalizeCompletionRead } = require('../completion/contract');
 const { mutateCompletion, readCompletion, readOwnerCompletionReview } = require('../completion/repository');
 const { normalizeProgressAction, normalizeProgressRead } = require('../progress/contract');
@@ -104,6 +105,23 @@ function createFieldExecutionsRouter(options = {}) {
     ? options.fileAuthorize : authorizeFileRetrieval;
   const fileIngest = typeof options.fileIngest === 'function' ? options.fileIngest : ingestFileEvidence;
   const storage = options.fileStorage || createUnavailableStorage();
+  const executionLinkRead = typeof options.executionLinkRead === 'function' ? options.executionLinkRead : readExecutionLink;
+  router.get('/links/appointments/:appointmentId', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next();
+  }, tenantAuth, (req, res, next) => {
+    if (!['owner', 'admin'].includes(req.userRole)) return res.status(403).json({ success:false,
+      error:{code:'EXECUTION_LINK_RESTRICTED',message:'Execution review is restricted to current owners and administrators.'} });
+    return next();
+  }, throttle, permission('operations', 'read'), async (req, res) => {
+    try {
+      const selectors=normalizeLinkRead(req.params.appointmentId,req.query);
+      const data=await executionLinkRead(poolProvider(),{...actor(req),...selectors});
+      return res.status(200).json({success:true,data,requestId:requestId(req)});
+    } catch(error) {
+      if(typedError(req,res,error))return undefined;
+      return res.status(503).json({success:false,error:{code:'EXECUTION_LINK_UNAVAILABLE',message:'Execution lookup is temporarily unavailable.'}});
+    }
+  });
 
   router.get('/:executionId/completion-review', (_req, res, next) => {
     res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next();

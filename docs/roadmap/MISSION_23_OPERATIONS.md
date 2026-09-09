@@ -99,7 +99,18 @@ knowledge authorities without replacing any of them.
   availability, owner review or audit/history for that proposed experience.
   These residuals prevent a Part 9 completeness claim; backend endpoints alone
   do not close a mounted user-workflow gate.
-- **Parts 10–12: not implemented.**
+- **Part 10: independently accepted and normally merged through PR #181 as
+  `202190bc4198352b33438ec39c05ffe225b8fcb7`.** The coordinator's supplied
+  September 9, 2026 release receipt records approved head
+  `9d35ab971128c965a79ee22f280abd830b175932`, sole automatic deployment
+  `a60e47e4-0ed9-42a6-8dee-6ae9a2e9edbd`, exact revision and bounded public
+  acceptance. This is the Part 11 base, not a new production inspection.
+- **Part 11: writer candidate only; not independently accepted or released.**
+  [Downstream reference handoffs](../operations/DOWNSTREAM_HANDOFFS.md) defines
+  the consent-confirmed owner/admin reference receipts and append-only revocation
+  authority. Delivery/consumption remain unavailable; Mission 31 remains
+  synthetic-only. The additive 056 migration requires its own production gate.
+- **Part 12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and

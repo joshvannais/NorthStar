@@ -9,10 +9,10 @@
   <link rel="stylesheet" href="/css/completion-review.css">
 </head>
 <body class="completion-page">
-  <a class="completion-skip" href="#completionMain">Skip to completion review</a>
+  <a class="btn btn-secondary completion-skip" href="#completionMain" tabindex="0">Skip to completion review</a>
   <header class="completion-header">
     <a class="completion-brand" href="/dashboard">NorthStar</a>
-    <a href="/dashboard/operations">Back to Operational Overview</a>
+    <a class="btn btn-secondary completion-back" href="/dashboard/operations" tabindex="0">Back to Operational Overview</a>
     <div class="northstar-theme-slot" data-northstar-theme-slot></div>
   </header>
   <main id="completionMain" class="completion-main" tabindex="-1">
@@ -28,6 +28,7 @@
     <p id="completionSnapshot" class="completion-muted"></p>
     <p id="completionAssignment" class="completion-notice" hidden></p>
     <div id="completionIntelligenceHost"></div>
+    <div id="completionHandoffsHost"></div>
     <section id="completionProposal" class="completion-panel" aria-labelledby="completionProposalTitle" hidden>
       <h2 id="completionProposalTitle">Completion proposal</h2>
       <div id="completionProposalBody"></div>
@@ -77,6 +78,8 @@
   <script src="/js/completion-review-contract.js"></script>
   <link rel="stylesheet" href="/css/operational-intelligence.css">
   <script src="/js/operational-intelligence.js"></script>
+  <link rel="stylesheet" href="/css/downstream-handoffs.css">
+  <script src="/js/downstream-handoffs.js"></script>
   <script src="/js/completion-review-page.js"></script>
 </body>
 </html>

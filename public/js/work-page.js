@@ -465,11 +465,13 @@
       }, 'btn btn-primary');
       actions.appendChild(button);
     } else {
-      actions.appendChild(unavailableNote(['completed', 'cancelled'].includes(state)
-        ? 'This work is read-only. An owner or administrator must reopen it before work can resume.'
+      actions.appendChild(unavailableNote(state === 'completed'
+        ? 'This work is complete. An owner or administrator must reopen it before work can resume.'
+        : state === 'cancelled'
+          ? 'This recorded work was cancelled and cannot be resumed. Contact an owner or administrator if more work is needed.'
         : state === 'completion_pending'
           ? 'Completion is awaiting explicit review. You may withdraw your active proposal below.'
-          : 'This lifecycle is read-only from the worker experience.'));
+          : 'You can review this work, but no work actions are available to you. Contact an owner or administrator if you need to make changes.'));
     }
     content.appendChild(actions);
   }

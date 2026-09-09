@@ -75,7 +75,24 @@ async function main(){
       await page.waitForFunction(()=>document.getElementById('profileStatus').textContent==='Saved to your organization’s profile history.'
         && document.getElementById('profileStatus').dataset.state==='success');
     }
-    for(const theme of ['light','dark'])for(const p of profiles){
+    if(process.argv.includes('--onboarding-readonly')){
+      await fixture.ownerPool.query("UPDATE organization_onboarding SET status='business_profile_required',completed_at=NULL WHERE organization_id=$1",[fixture.org]);
+      for(const theme of ['light','dark'])for(const p of profiles.filter(p=>['1440','390'].includes(p.name)))for(const actor of ['member','owner']){
+        const {context,page}=await contextFor(actor,p,theme);
+        const posts=[];page.on('request',request=>{if(request.method()==='POST' && request.url().includes('/api/work-profiles/'))posts.push(request.url());});
+        await page.goto(origin+(actor==='member'?'/dashboard/my-work-profile':'/dashboard/work-profile-reviews'));
+        if(actor==='owner')await page.getByRole('button',{name:'Review Jordan Ellis',exact:true}).click();
+        await page.getByRole('heading',{name:'Read-only profile',exact:true}).waitFor();
+        assert.equal(await page.locator('#profileEditor').isVisible(),false);
+        assert.equal(await page.locator('#profileEditor input,#profileEditor textarea').count(),0,'No draft editor is offered from a false capability');
+        for(const name of ['Build my profile','Edit my profile','Update availability','Review & approve','Request changes','Revoke approval']){
+          assert.equal(await page.getByRole('button',{name,exact:true}).count(),0,'No false mutation affordance: '+name);
+        }
+        await check(page,'onboarding-readonly-'+theme+'-'+p.name+'-'+actor);
+        assert.deepEqual(posts,[],'No false-affordance POST can erase a draft/editor');
+        await context.close();
+      }
+    }else for(const theme of ['light','dark'])for(const p of profiles){
       const label=(hostile?'hostile-':'ordinary-')+theme+'-'+p.name;
       const {context,page}=await contextFor('member',p,theme);
       await page.goto(origin+'/dashboard/my-work-profile');await page.getByRole('button',{name:'Edit my profile',exact:true}).waitFor();

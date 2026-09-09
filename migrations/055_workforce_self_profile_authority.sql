@@ -179,7 +179,7 @@ BEGIN
       WHERE e.organization_id=org AND e.profile_id=target ORDER BY e.created_at DESC,e.id DESC LIMIT 25 OFFSET history_offset
     ) event;
   SELECT count(*) INTO total FROM public.canonical_work_profile_events WHERE organization_id=org AND profile_id=target;
-  SELECT COALESCE((onboarding.status='complete' OR EXISTS(SELECT 1 FROM public.canonical_business_profiles b WHERE b.organization_id=org AND b.is_active))
+  SELECT COALESCE(onboarding.status='complete'
     AND (subscription.status='active' OR (subscription.status='trialing' AND subscription.trial_ends_at=subscription.trial_started_at+INTERVAL '14 days' AND subscription.trial_ends_at>clock_timestamp())),FALSE)
     INTO mutable FROM public.organization_onboarding onboarding LEFT JOIN public.subscriptions subscription ON subscription.organization_id=onboarding.organization_id
     WHERE onboarding.organization_id=org LIMIT 1;

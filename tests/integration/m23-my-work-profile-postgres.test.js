@@ -103,6 +103,24 @@ real('My Work Profile mounted PostgreSQL authority', () => {
     try { expect((await get()).status).toBe(403); expect((await get('owner','member')).body.data.permissions.canReview).toBe(false); }
     finally { await fixture.ownerPool.query("UPDATE organization_memberships SET status='active' WHERE id=$1",[target('member')]); }
   });
+  test('incomplete onboarding with an active business profile never advertises mutation capability', async () => {
+    expect((await fixture.ownerPool.query('SELECT count(*)::int AS count FROM canonical_business_profiles WHERE organization_id=$1 AND is_active',[fixture.org])).rows[0].count).toBeGreaterThan(0);
+    const completedAt=(await fixture.ownerPool.query('SELECT completed_at FROM organization_onboarding WHERE organization_id=$1',[fixture.org])).rows[0].completed_at;
+    await fixture.ownerPool.query("UPDATE organization_onboarding SET status='business_profile_required',completed_at=NULL WHERE organization_id=$1",[fixture.org]);
+    try {
+      const employee=await current();
+      const owner=await get('owner','member');
+      expect(owner.status).toBe(200);
+      for(const data of [employee,owner.body.data]){
+        expect(data.permissions.canSubmit).toBe(false);
+        expect(data.permissions.canReview).toBe(false);
+        expect(data.permissions.readOnlyReason).toBe('subscription_or_onboarding_read_only');
+      }
+      expect((await send({action:'submit',expectedRevision:employee.profile.revision,profile:profile()})).status).toBe(403);
+      expect((await send({action:'approve',expectedRevision:employee.profile.revision,reason:'Read-only onboarding',verifiedCertificationIds:[]},'owner','member')).status).toBe(403);
+      expect((await current()).profile).toEqual(employee.profile);
+    } finally { await fixture.ownerPool.query("UPDATE organization_onboarding SET status='complete',completed_at=$2 WHERE organization_id=$1",[fixture.org,completedAt]); }
+  });
   test('runtime cannot read/change ledger directly; stored history rejects destructive mutation', async () => {
     for (const sql of ['SELECT * FROM canonical_work_profile_events','DELETE FROM canonical_work_profile_events','UPDATE canonical_work_profile_events SET reason=reason']) {
       await expect(fixture.runtimePool.query(sql)).rejects.toHaveProperty('code','42501');

@@ -33,6 +33,7 @@
     if (byId('completionConfirm').open) byId('completionConfirm').close();
   }
   function clear() {
+    if (window.NorthStarOperationalIntelligence) window.NorthStarOperationalIntelligence.clear();
     model = null; restoreFocus = null; closeForm(); byId('completionTitle').textContent = 'Completion review';
     byId('completionLifecycle').textContent = 'Not loaded'; byId('completionLifecycle').dataset.state = 'unavailable';
     byId('completionSnapshot').textContent = ''; byId('completionAssignment').hidden = true;
@@ -58,6 +59,7 @@
     return button;
   }
   function render(value) {
+    if (window.NorthStarOperationalIntelligence) window.NorthStarOperationalIntelligence.mount(byId('completionIntelligenceHost'), value.execution.id);
     model = value; closeForm(); byId('completionTitle').textContent = value.title;
     byId('completionLifecycle').textContent = STATES[value.execution.lifecycleState]; byId('completionLifecycle').dataset.state = value.execution.lifecycleState;
     byId('completionSnapshot').textContent = 'PostgreSQL review snapshot · ' + date(value.evaluatedAt) + ' · execution revision ' + value.execution.revision;

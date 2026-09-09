@@ -45,10 +45,34 @@
     var link = node('a');
     link.href = TODAY_PATH;
     link.dataset.navId = 'today';
-    link.className = 'active';
-    link.setAttribute('aria-current', 'page');
+    if (global.location.pathname !== '/dashboard/my-work-profile') {
+      link.className = 'active';
+      link.setAttribute('aria-current', 'page');
+    }
     link.appendChild(calendarIcon());
     link.appendChild(node('span', '', 'Today'));
+    return link;
+  }
+
+  function profileLink() {
+    var link = node('a');
+    link.href = '/dashboard/my-work-profile';
+    link.dataset.navId = 'my-work-profile';
+    if (global.location.pathname === link.getAttribute('href')) {
+      link.className = 'active';
+      link.setAttribute('aria-current', 'page');
+    }
+    var icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('fill', 'none');
+    icon.setAttribute('stroke', 'currentColor');
+    icon.setAttribute('stroke-width', '1.8');
+    icon.setAttribute('aria-hidden', 'true');
+    var outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    outline.setAttribute('d', 'M20 21v-2a7 7 0 0 0-14 0v2M17 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z');
+    icon.appendChild(outline);
+    link.appendChild(icon);
+    link.appendChild(node('span', '', 'My Work Profile'));
     return link;
   }
 
@@ -137,6 +161,7 @@
     var navigation = node('nav', 'sidebar-nav');
     navigation.setAttribute('aria-label', 'Today navigation');
     navigation.appendChild(todayLink());
+    navigation.appendChild(profileLink());
     var footer = node('div', 'sidebar-footer');
     footer.appendChild(supportLink());
     footer.appendChild(signOutButton());
@@ -190,6 +215,7 @@
     var navigation = node('nav', 'mobile-menu-nav');
     navigation.setAttribute('aria-label', 'Today navigation');
     navigation.appendChild(todayLink());
+    navigation.appendChild(profileLink());
     var footer = node('div', 'mobile-menu-footer');
     footer.appendChild(supportLink());
     footer.appendChild(signOutButton());

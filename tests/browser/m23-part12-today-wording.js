@@ -26,14 +26,15 @@ async function main() {
         if(mode==='offline')return route.abort();
         if(['restricted','stale','error'].includes(mode))return route.fulfill({status:{restricted:403,stale:409,error:503}[mode],json:{success:false,error:{code:'UNAVAILABLE',message:'PostgreSQL internal route diagnostics'}}});
         const value=benignFixture().today;if(mode==='empty'){value.data.records=[];value.data.count=0;value.data.shown=0;value.data.total=0;}
+        if(mode==='crew'){value.data.records[0].assignment={kind:'crew',label:'Service team',direct:false,currentCrew:true};value.data.records[0].crew={name:'Service team',teammates:[{name:'Alex Rivera',self:true,role:'technician'},{name:'Jordan Ellis',self:false,role:'technician'}]};}
         return route.fulfill({json:value});
       });
       const page=await context.newPage();page.on('pageerror',e=>ledger.errors.push(e.message));await page.goto(origin+'/dashboard/today');
       await page.locator('body[data-today-state="loading"]').waitFor();await assertUserWording(page,'Today loading');mode='ready';release();
-      for(const state of ['ready','empty','restricted','stale','error','offline']) {
+      for(const state of ['ready','crew','empty','restricted','stale','error','offline']) {
         mode=state;if(state==='offline'){await page.evaluate(()=>Object.defineProperty(navigator,'onLine',{get:()=>false,configurable:true}));await page.locator('#todayStateAction').click();}else if(state!=='ready')await page.reload();
-        const expected=state;await page.locator('body[data-today-state="'+expected+'"]').waitFor();
-        if(state==='ready') for(const disclosure of await page.locator('details').all())await disclosure.evaluate(e=>{e.open=true;});
+        const expected=state==='crew'?'ready':state;await page.locator('body[data-today-state="'+expected+'"]').waitFor();
+        if(state==='ready'||state==='crew') for(const disclosure of await page.locator('details').all())await disclosure.evaluate(e=>{e.open=true;});
         await assertUserWording(page,'Today '+state);await page.screenshot({path:path.join(output,theme+'-'+width+'-'+state+'.png'),fullPage:true});
         ledger.cases.push({state,renderedState:expected,width,theme});
       }

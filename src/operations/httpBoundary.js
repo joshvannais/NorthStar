@@ -40,7 +40,7 @@ function isExecutionMutationRequest(req) {
   const match = INITIALIZE_PATH.exec(target) || TRANSITION_PATH.exec(target) ||
     LABOR_ACTION_PATH.exec(target) || MATERIAL_ACTION_PATH.exec(target) ||
     FIELD_EVIDENCE_ACTION_PATH.exec(target) || PROGRESS_ACTION_PATH.exec(target) ||
-    COMPLETION_ACTION_PATH.exec(target);
+    COMPLETION_ACTION_PATH.exec(target) || /^\/api\/v1\/field-executions\/([^/]+)\/handoff-actions\/?$/i.exec(target);
   if (!match) return false;
   try {
     decodeURIComponent(match[1]);

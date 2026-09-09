@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { handoff } = require('../operations/handoffRepository');
 const { readOperationalIntelligence } = require('../operations/intelligenceRepository');
 const { normalizeLinkRead, readExecutionLink } = require('../operations/executionLinks');
 const { normalizeCompletionAction, normalizeCompletionRead } = require('../completion/contract');
@@ -107,6 +108,24 @@ function createFieldExecutionsRouter(options = {}) {
   const fileIngest = typeof options.fileIngest === 'function' ? options.fileIngest : ingestFileEvidence;
   const storage = options.fileStorage || createUnavailableStorage();
   const executionLinkRead = typeof options.executionLinkRead === 'function' ? options.executionLinkRead : readExecutionLink;
+  const handoffHeaders = (_req, res, next) => { res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next(); };
+  const handoffHandler = write => async (req, res) => {
+    try {
+      const executionId = normalizeCompletionRead(req.params.executionId, req.query);
+      if (!['owner','admin'].includes(req.userRole)) return res.status(404).json({ success: false,
+        error: { code: 'HANDOFF_UNAVAILABLE', message: 'Handoff review is unavailable or access has changed.' } });
+      const data = await handoff(poolProvider(), { ...actor(req), executionId,
+        csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') }, write ? req.body : undefined);
+      if (data.replayed) res.set('Idempotency-Replayed','true');
+      return res.status(write ? 201 : 200).json({ success: true, data });
+    } catch (error) {
+      if (typedError(req,res,error)) return undefined;
+      return res.status(503).json({ success:false,error:{code:'HANDOFF_UNAVAILABLE',message:'Handoff review is temporarily unavailable.'} });
+    }
+  };
+  router.get('/:executionId/handoffs', handoffHeaders, tenantAuth, throttle, permission('operations','read'), handoffHandler(false));
+  router.post('/:executionId/handoff-actions', handoffHeaders, requireExecutionBodyBoundary, mutationAuth, throttle,
+    permission('operations','update'), handoffHandler(true));
   router.get('/:executionId/intelligence', (_req, res, next) => {
     res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next();
   }, tenantAuth, throttle, permission('operations', 'read'), async (req, res) => {

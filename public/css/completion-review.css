@@ -1,3 +1,6 @@
+/* Focus and dialog transitions must not animate the document under a pointer
+   gesture. Keep the shared site's smooth scrolling unchanged on other pages. */
+html.completion-document { scroll-behavior: auto; }
 .completion-page {
   --review-bg: #f6f8fc; --review-panel: #fff; --review-text: #17243a;
   --review-muted: #526078; --review-border: #c8d2e2; --review-accent: #1e4fbf;

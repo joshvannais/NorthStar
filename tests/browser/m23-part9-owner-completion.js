@@ -51,6 +51,12 @@ async function main() {
       await page.route('**/*', async route => {
         const req = route.request(), url = new URL(req.url());
         if (url.origin !== origin) { ledger.externalBlocked.push(url.origin); return route.abort(); }
+        if (!fixture && url.pathname === '/api/v1/operational-overview') {
+          const overview = require('../helpers/m23-part9b-overview-fixture').overview(
+            mode === 'dispatcher-overview' ? 'dispatcher_coordination' : 'owner_admin');
+          overview.records[0].executionId = executionId;
+          return route.fulfill({ status: 200, json: { success: true, data: overview } });
+        }
         if (url.pathname.endsWith('/completion-actions')) {
           ledger.mutationCount += 1; posts.push({ key: req.headers()['idempotency-key'], body: req.postDataJSON() });
           if (fixture) return route.continue();
@@ -75,8 +81,14 @@ async function main() {
         return route.continue();
       });
       const url = `${origin}/dashboard/completion-review?executionId=${executionId}`;
-      const navigation = await page.goto(url, { waitUntil: 'networkidle' });
-      assert.equal(navigation.status(), 200, 'mounted owner completion page exists');
+      const overviewNavigation = await page.goto(`${origin}/dashboard/operations`, { waitUntil: 'networkidle' });
+      assert.equal(overviewNavigation.status(), 200, 'mounted operational overview exists');
+      const reviewLink = page.locator(`[data-execution-id="${executionId}"]`).getByRole('link', { name: /^Review completion for / });
+      await reviewLink.waitFor();
+      assert.equal(await reviewLink.getAttribute('href'), `/dashboard/completion-review?executionId=${executionId}`);
+      assert.ok((await reviewLink.boundingBox()).height >= 44, 'owner destination keeps a usable touch target');
+      await reviewLink.focus();
+      await Promise.all([page.waitForURL(url), page.keyboard.press('Enter')]);
       await page.locator('[data-action="approve_completion"]').waitFor();
       assert.equal(await page.locator('#completionStatus').getAttribute('role'), 'status');
       assert.equal(await page.locator('#completionStatus').getAttribute('aria-live'), 'polite');
@@ -85,6 +97,8 @@ async function main() {
       await page.locator('#completionRefresh').focus();
       assert.equal(await page.evaluate(() => document.activeElement.id), 'completionRefresh');
       assert.notEqual(await page.locator('#completionRefresh').evaluate(element => getComputedStyle(element).outlineStyle), 'none');
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: path.join(output, label + '-proposal.png'), fullPage: true });
       const act = async action => {
         await page.locator(`[data-action="${action}"]`).first().click();
         await page.locator('#completionReason').fill('Reviewed the explicit recorded work');
@@ -96,6 +110,9 @@ async function main() {
         if (action === 'reopen_execution' || action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Recheck the completed seal/);
         if (action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Clarified the recorded observation/);
         assert.equal(await page.evaluate(() => document.activeElement.id), 'completionCancelButton', 'confirmation starts on safe cancel choice');
+        if (action === 'approve_completion' && posts.length === 0) {
+          await page.screenshot({ path: path.join(output, label + '-confirmation.png'), fullPage: true });
+        }
         if (hostile) await page.locator('#completionConfirmButton').evaluate(button => { button.click(); button.click(); });
         else await page.locator('#completionConfirmButton').click();
       };
@@ -160,7 +177,13 @@ async function main() {
         await page.waitForFunction(() => document.querySelector('#completionStatus').dataset.state === 'restricted');
         await page.goBack({ waitUntil: 'networkidle' });
         await page.locator('[data-action="approve_completion"]').waitFor();
-        ledger.cases.push({ label: label + '-failure-controls', appliedRefreshFailure: true, exactRetry: true, revoked: true });
+        mode = 'dispatcher-overview';
+        await page.goto(`${origin}/dashboard/operations`, { waitUntil: 'networkidle' });
+        await page.locator('[data-execution-id]').waitFor();
+        assert.equal(await page.getByRole('link', { name: /^Review completion for / }).count(), 0,
+          'dispatcher coordination does not expose an owner decision destination');
+        ledger.cases.push({ label: label + '-failure-controls', appliedRefreshFailure: true, exactRetry: true,
+          revoked: true, ownerKeyboardLink: true, dispatcherOwnerLinkAbsent: true });
       }
       await context.close();
       process.stdout.write(JSON.stringify({ completed: label, durable, hostile }) + '\n');

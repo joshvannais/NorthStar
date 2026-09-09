@@ -36,3 +36,26 @@ test('missing exact association returns unavailable, not a name match or unrelat
 test('current authority failure rolls back and releases without disclosure',async()=>{
   const pool=poolFor({error:{code:'42501'}}); await expect(readExecutionLink(pool,input)).rejects.toMatchObject({status:403});expect(pool.calls.at(-1).sql).toBe('ROLLBACK');expect(pool.client.release).toHaveBeenCalledTimes(1);
 });
+test('client requires exact association and fixed same-origin destination',()=>{
+  const {validate}=require('../../public/js/execution-links');
+  const value={version:'m23-part9-execution-link-v1',state:'available',appointmentId:id(4),graphId:id(5),customerId:id(6),executionId:id(7),href:`/dashboard/completion-review?executionId=${id(7)}`};
+  expect(validate(value,input)).toBe(value);
+  for(const changed of [{...value,href:'https://example.test/'},{...value,customerId:id(8)},{...value,href:'/dashboard/work?appointmentId='+id(4)},{...value,role:'owner'},{...value,state:'unavailable'}])expect(()=>validate(changed,input)).toThrow();
+});
+test('malformed database response does not create a destination',async()=>{
+  const pool=poolFor();pool.client.query.mockImplementation(async sql=>sql.includes('canonical_operational_overview_read')?{rows:[{result:{scope:'owner_admin',records:[]}}]}:{rows:[]});await expect(readExecutionLink(pool,input)).rejects.toMatchObject({status:503});expect(pool.client.release).toHaveBeenCalledTimes(1);
+});
+test.each([3,12])('bounded existing-entry pagination resolves only a proved match (target page %i)',async targetPage=>{
+  const pool=poolFor();let pages=0;
+  const original=pool.client.query.getMockImplementation();
+  pool.client.query.mockImplementation(async(sql,params)=>{
+    if(!sql.includes('canonical_operational_overview_read'))return original(sql,params);
+    pages+=1;const recordId=id(30+pages),appointmentId=pages===targetPage?id(4):id(60+pages);
+    const cursor={version:'m23-part9b-cursor-v1',state:'all',scopeDigest:'a'.repeat(64),dataDigest:'a'.repeat(64),cutoff:'2026-09-08T12:00:00.000000Z',lastCreatedAt:'2026-09-08T12:00:00.000000Z',lastId:recordId};
+    return {rows:[{result:overview('owner_admin',{filter:'all',pagination:{limit:100,offset:pages-1,returned:1,total:12,nextCursor:pages<12?Buffer.from(JSON.stringify(cursor)).toString('base64url'):null},records:[record('owner_admin',{executionId:recordId,appointmentId})]})}]};
+  });
+  const value=await readExecutionLink(pool,input);expect(pages).toBe(Math.min(10,targetPage));expect(value.state).toBe(targetPage<=10?'available':'unavailable');expect(value.href).toBe(targetPage<=10?'/dashboard/completion-review?executionId='+id(30+targetPage):null);
+});
+test('stale current assignment does not produce a link',async()=>{
+  const pool=poolFor();const original=pool.client.query.getMockImplementation();pool.client.query.mockImplementation(async(sql,params)=>{const result=await original(sql,params);if(sql.includes('canonical_operational_overview_read'))result.rows[0].result.records[0].assignment.current=false;return result;});expect((await readExecutionLink(pool,input)).state).toBe('unavailable');
+});

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operations - NorthStar</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/operations.css">
+</head>
+<body class="operations-page">
+  <a class="operations-skip" href="#operationsMain">Skip to operational overview</a>
+  <header class="operations-header">
+    <a class="operations-brand" href="/dashboard/command-center" aria-label="NorthStar Command Center">
+      <img src="/assets/logo.png" alt="" width="36" height="36"><span>NorthStar</span>
+    </a>
+    <div class="operations-header-actions">
+      <a class="operations-back" href="/dashboard/command-center">Command Center</a>
+      <span data-northstar-theme-slot data-northstar-theme-location="desktop" aria-label="Theme controls"></span>
+    </div>
+  </header>
+  <main id="operationsMain" class="operations-main" tabindex="-1">
+    <div class="operations-intro">
+      <div>
+        <p class="operations-eyebrow">Work execution</p>
+        <h1>Operations</h1>
+        <p class="operations-description">A clear view of recorded work, open issues and readiness for review.</p>
+      </div>
+      <span class="operations-read-only">Read-only overview</span>
+    </div>
+    <div class="operations-authority">
+      <p id="operationsScope">Checking access to your operational view.</p>
+      <p id="operationsSnapshot">No operational records loaded.</p>
+    </div>
+    <section class="operations-toolbar" aria-label="Overview controls">
+      <div class="operations-field">
+        <label for="operationsFilter">Work state</label>
+        <select id="operationsFilter">
+          <option value="active">Active work</option>
+          <option value="completion_pending">Completion pending</option>
+          <option value="completed">Completed work</option>
+          <option value="all">All recorded executions</option>
+        </select>
+      </div>
+      <button id="operationsRefresh" class="operations-button operations-button-primary" type="button">Refresh overview</button>
+    </section>
+    <div id="operationsStatus" class="operations-status" role="status" aria-live="polite" aria-atomic="true" data-state="loading">
+      Loading the current operational view.
+    </div>
+    <section id="operationsSummary" class="operations-summary" aria-label="On this page" hidden>
+      <div><span class="operations-stat-label">Executions on this page</span><strong id="operationsShown">0</strong></div>
+      <div><span class="operations-stat-label">Pending review on this page</span><strong id="operationsPending">0</strong></div>
+      <div><span class="operations-stat-label">Recorded work constraints</span><strong id="operationsConstraints">0</strong></div>
+      <div><span class="operations-stat-label">Capacity</span><strong id="operationsCapacity">Unknown</strong><span class="operations-stat-note">Availability is not assessed here.</span></div>
+    </section>
+    <section id="operationsRecords" class="operations-records" aria-label="Recorded executions" aria-busy="true"></section>
+    <nav class="operations-pagination" aria-label="Execution pages">
+      <p id="operationsPageDescription">No page loaded.</p>
+      <div>
+        <button id="operationsPrevious" class="operations-button" type="button" disabled>Previous page</button>
+        <button id="operationsNext" class="operations-button" type="button" disabled>Next page</button>
+      </div>
+    </nav>
+    <aside class="operations-boundary" aria-label="What this view means">
+      <h2>Recorded evidence, not inferred outcomes</h2>
+      <p>Progress and activity do not approve completion. Capacity remains unknown unless a separate authorized assessment establishes it. This view does not change schedules, approve work or make financial decisions.</p>
+    </aside>
+  </main>
+  <script src="/js/operations-overview-contract.js"></script>
+  <script src="/js/operations-page.js"></script>
+</body>
+</html>

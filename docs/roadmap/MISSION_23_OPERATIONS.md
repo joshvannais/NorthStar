@@ -71,10 +71,19 @@ knowledge authorities without replacing any of them.
   `aa728e2631650ffe65340c0332ba94106397eac2`.**
   [Completion and reopening authority](../operations/COMPLETION_REOPENING_AUTHORITY.md)
   describes the bounded additive API and PostgreSQL authority.
-- **Part 9: Slice A implementation writer in progress; independent audit and
-  release pending.** This narrow slice mounts the current worker operational
-  experience over accepted Parts 2–8 authority. Writer evidence is not
-  independent acceptance, merge, deployment, or release.
+- **Part 9: Slice A independently accepted and normally merged through PR #176
+  at `4315a9871ff078a7578a3dc1e64c0e47c61f1a5b`; its sole automatic deployment
+  and bounded release acceptance are recorded.** Slice B is the bounded
+  read-only owner/admin operational overview and minimized dispatcher
+  coordination view; its implementation is in progress, not independently
+  accepted or released. The founder authorized routine-only migration 054,
+  its entry-only runtime grant and focused local PostgreSQL/browser verification
+  on 2026-09-08. Independent audit and production migration/release gates remain
+  separate and unconsumed. Existing worker execution,
+  evidence-completeness/current-leaf and tab-ownership behavior is preserved.
+  Cross-page integration remains a later Part 9 slice. The mounted owner
+  review/approval/cancellation/reopening workflow must also be reconciled before
+  Part 9 can be complete; backend entry points alone do not close that UI gate.
 - **Parts 10–12: not implemented.**
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.

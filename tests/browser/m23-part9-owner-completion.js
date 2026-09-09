@@ -109,6 +109,8 @@ async function main() {
       await reviewLink.focus();
       await Promise.all([page.waitForURL(url), page.keyboard.press('Enter')]);
       await page.locator('[data-action="approve_completion"]').waitFor();
+      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior), 'auto',
+        'decision controls must not move through animated document scrolling during a pointer gesture');
       assert.equal(await page.locator('#completionStatus').getAttribute('role'), 'status');
       assert.equal(await page.locator('#completionStatus').getAttribute('aria-live'), 'polite');
       assert.equal(await page.locator('#completionTitle strong').count(), 0, 'dynamic labels stay literal text');

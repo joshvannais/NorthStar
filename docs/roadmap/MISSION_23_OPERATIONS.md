@@ -93,12 +93,16 @@ knowledge authorities without replacing any of them.
   Personal/current-crew Today, worker execution, evidence completeness/current-
   leaf, tab ownership and the accepted completion-review UI remain unchanged.
   Candidate writer tests are not independent approval or release evidence.
-  My Work Profile remains an explicit later reconciliation under `M23-01`:
-  existing workforce role/location/skill editors do not establish employee
-  self-assertions, owner categories, certification verification/expiry,
-  availability, owner review or audit/history for that proposed experience.
-  These residuals prevent a Part 9 completeness claim; backend endpoints alone
-  do not close a mounted user-workflow gate.
+  My Work Profile (`M23-01`) subsequently completed Part 9 through PR #180:
+  approved head `619a4d7cc989f4fa480ef44efe6f1b2ead6a2b29`, normal merge
+  `6b48d375c58f2bfd44bed83bdf5e920c89c9edf5`, and sole automatic deployment
+  `36582c99-7fab-45d1-8a50-b877516caf98`. The retained September 9 release
+  acceptance records independent approval and bounded production acceptance.
+  [My Work Profile](../M23_MY_WORK_PROFILE.md) and migration 055 implement
+  employee claims, owner/admin reviews, certification-reference decisions,
+  expiry, self-declared availability and retained history. This historical
+  release evidence closes the earlier residual; Part 12 does not rerun or
+  re-award that acceptance through its same-job journey.
 - **Part 10: independently accepted and normally merged through PR #181 as
   `202190bc4198352b33438ec39c05ffe225b8fcb7`.** The coordinator's supplied
   September 9, 2026 release receipt records approved head
@@ -118,8 +122,8 @@ knowledge authorities without replacing any of them.
   synthetic-only. Migration 056 remains frozen without a destructive rollback.
 - **Part 12: same-job acceptance writer candidate; not independently accepted
   or released.** [Acceptance map](../operations/MISSION_23_ACCEPTANCE.md)
-  traces mounted PostgreSQL/HTTP/browser authority and preserves the Part 9
-  My Work Profile residual and all unavailable evidence. Candidate tests do not
+  traces mounted PostgreSQL/HTTP/browser authority, distinguishes Part 9's
+  historical My Work Profile acceptance, and preserves unavailable evidence. Candidate tests do not
   establish entire-mission completeness or authorize Mission 24 implementation.
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.

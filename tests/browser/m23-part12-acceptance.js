@@ -20,7 +20,8 @@ async function main() {
       status: execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim() },
     limits: ['Synthetic upstream and equipment research; no provider or private production data', 'Files/storage are unavailable; no file success inferred',
       'Actual WebKit is not physical Safari; no physical devices or manual assistive technology', 'No founder personal visual verdict',
-      'Part9 My Work Profile residual is not implemented', 'Inherited 15 wider-corpus failures not rerun or relabelled passing'] };
+      'Part9 My Work Profile was separately released through PR180; this same-job journey does not rerun its acceptance',
+      'Inherited 15 wider-corpus failures not rerun or relabelled passing'] };
   const https = require('node:https'), previous = { request: https.request, get: https.get, fetch: globalThis.fetch };
   const deny = () => { ledger.providerAttempts++; throw new Error('External provider transport prohibited'); };
   https.request = deny; https.get = deny; globalThis.fetch = deny;

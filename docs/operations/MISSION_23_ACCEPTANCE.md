@@ -66,11 +66,18 @@ Development attempts remain separate from the final immutable-head runs.
 
 ## Residuals and release gates
 
-- My Work Profile is still the explicit Part 9/M23-01 reconciliation residual:
-  employee self-assertions, owner categories, verification/expiry, availability,
-  owner review and audit/history for that proposed experience are not supplied
-  by existing workforce editors. This prevents an unqualified Part 9 or entire
-  Mission 23 completeness claim. It is not silently moved to Mission 24.
+- My Work Profile (`M23-01`) is historically released and production-accepted,
+  not a missing Part 9 feature. The retained September 9 release acceptance
+  records PR #180, approved head `619a4d7cc989f4fa480ef44efe6f1b2ead6a2b29`,
+  merge `6b48d375c58f2bfd44bed83bdf5e920c89c9edf5`, and deployment
+  `36582c99-7fab-45d1-8a50-b877516caf98`, and declares Part 9 complete.
+  Current [My Work Profile](../M23_MY_WORK_PROFILE.md), migration 055 and mounted
+  `/api/work-profiles` authority implement employee claims, owner/admin reviews,
+  certification-reference decisions/expiry, self-declared availability and
+  retained history. The frozen release receipt is copied into the corrected
+  Part 12 evidence packet. These are historical source/release facts; this
+  Part 12 same-job journey does not exercise the profile workflow or manufacture
+  a new profile acceptance verdict. Final Part 12 release gates remain pending.
 - Live file storage/scanning, provider activation, real research, private production
   rows, legal/professional approval, external delivery/consumption, physical
   Safari/devices and manual assistive technology remain unverified/unavailable.

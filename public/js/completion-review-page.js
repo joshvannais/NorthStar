@@ -5,11 +5,11 @@
   var controllers = new Set(), restoreFocus = null;
   var LABELS = { approve_completion: 'Approve completion', cancel_execution: 'Cancel execution', reopen_execution: 'Reopen completed work',
     resume_reopened: 'Resume reopened work', correct_completion: 'Add correction note' };
-  var COPY = { approve_completion: 'Approve this exact proposal and record the execution as completed only if its current evidence and expiry checks pass.',
-    cancel_execution: 'Record this execution as cancelled. This does not cancel its appointment or delete recorded history.',
-    reopen_execution: 'Reopen this exact completed execution and record the next action. This does not resume work automatically.',
-    resume_reopened: 'Resume this exact reopened execution as in progress. This does not change its schedule.',
-    correct_completion: 'Append a correction annotation to the selected record. The original decision and execution lifecycle remain unchanged.' };
+  var COPY = { approve_completion: 'Approve this proposal and mark the work complete if its evidence is still current and its approval deadline has not passed.',
+    cancel_execution: 'Mark this work as cancelled. This does not cancel its appointment or delete its history.',
+    reopen_execution: 'Reopen this completed work and record the next action. Work does not resume automatically.',
+    resume_reopened: 'Resume this reopened work. Its schedule stays the same.',
+    correct_completion: 'Add a correction note to the selected record. The original decision and work status stay the same.' };
   var STATES = { not_started: 'Not started', in_progress: 'In progress', paused: 'Paused', completion_pending: 'Completion pending', completed: 'Completed', reopened: 'Reopened', cancelled: 'Cancelled' };
   var GATES = { required_checklists: 'Required checklists', required_inspections: 'Required inspections', required_files: 'Required files',
     unresolved_blockers_or_exceptions: 'Unresolved blockers or exceptions', progress_review: 'Progress review', open_labor_timers: 'Open labor timers',
@@ -40,7 +40,7 @@
     byId('completionSnapshot').textContent = ''; byId('completionAssignment').hidden = true;
     byId('completionProposal').hidden = true; byId('completionProposalBody').replaceChildren();
     byId('completionHistory').hidden = true; byId('completionHistorySummary').textContent = ''; byId('completionHistoryRecords').replaceChildren();
-    byId('completionActions').replaceChildren(); byId('completionAvailability').textContent = 'Current authority must be loaded before any decision.';
+    byId('completionActions').replaceChildren(); byId('completionAvailability').textContent = 'Load the latest work details before making a decision.';
   }
   function actionButton(command, target) {
     var button = node('button', '', LABELS[command.action]); button.type = 'button'; button.dataset.action = command.action;
@@ -64,14 +64,14 @@
     if (window.NorthStarOperationalIntelligence) window.NorthStarOperationalIntelligence.mount(byId('completionIntelligenceHost'), value.execution.id);
     model = value; closeForm(); byId('completionTitle').textContent = value.title;
     byId('completionLifecycle').textContent = STATES[value.execution.lifecycleState]; byId('completionLifecycle').dataset.state = value.execution.lifecycleState;
-    byId('completionSnapshot').textContent = 'PostgreSQL review snapshot · ' + date(value.evaluatedAt) + ' · execution revision ' + value.execution.revision;
+    byId('completionSnapshot').textContent = 'Last checked · ' + date(value.evaluatedAt);
     byId('completionAssignment').hidden = !value.execution.assignment.changed;
-    byId('completionAssignment').textContent = 'The assignment changed since this execution revision. This review uses the current assignment pins. Approval still rechecks all proposal evidence.';
+    byId('completionAssignment').textContent = 'The assignment has changed. Review the latest assignment and completion evidence before approving.';
     byId('completionAvailability').textContent = value.readOnlyReason === 'onboarding_incomplete' ? 'Account onboarding is incomplete. Recorded decisions remain read-only.' :
       value.readOnlyReason === 'subscription_read_only' ? 'Current account access is read-only. No decision can be submitted.' :
         value.commands.some(function(command) { return command.action !== 'correct_completion'; })
-          ? 'Choose a decision to review its effect and provide a reason. Current server authority is rechecked on submission.'
-          : 'No lifecycle decision is available in this review. Any available correction annotations are attached to the recorded decisions below.';
+          ? 'Choose a decision and provide a reason. NorthStar checks your access and the latest work details before saving.'
+          : 'No work-status changes are available here. You can add correction notes to the recorded decisions below when your access allows it.';
     byId('completionActions').replaceChildren();
     value.commands.filter(function(command) { return command.action !== 'correct_completion'; }).forEach(function(command) { byId('completionActions').appendChild(actionButton(command)); });
     byId('completionProposal').hidden = !value.proposal; byId('completionProposalBody').replaceChildren();
@@ -79,10 +79,10 @@
       var proposal = value.proposal, content = byId('completionProposalBody');
       content.appendChild(node('p', '', proposal.reason));
       content.appendChild(node('p', '', 'Proposed ' + date(proposal.decidedAt) + '; expires ' + date(proposal.expiresAt) + '. ' + (proposal.expired ? 'Expired — approval is unavailable.' : 'Expiry is rechecked when approving.')));
-      content.appendChild(node('p', 'completion-muted', 'Evidence below is the pinned snapshot at proposal time, not a current approval. Any changed evidence causes the server to reject approval.'));
+      content.appendChild(node('p', 'completion-muted', 'These details were recorded when completion was proposed. If the work or evidence changes, review a new proposal before approving.'));
       var list = node('ul'); proposal.gates.forEach(function(gate) { list.appendChild(node('li', '', GATES[gate.code] + ': ' + (gate.passed ? 'Passed at proposal' : 'Not passed at proposal') + (gate.count === null ? '' : ' · ' + gate.count + ' recorded'))); }); content.appendChild(list);
       var counts = proposal.evidenceCounts;
-      content.appendChild(node('p', 'completion-muted', 'Pinned requirements: ' + counts.checklists + ' checklists, ' + counts.inspections + ' inspections, ' + counts.files + ' files. Recorded snapshot: ' + counts.labor + ' labor, ' + counts.materials + ' material, ' + counts.progress + ' progress, ' + counts.fieldEvidence + ' field-evidence and ' + counts.equipment + ' equipment records. Counts do not establish customer acceptance or financial results.'));
+      content.appendChild(node('p', 'completion-muted', 'Required evidence: ' + counts.checklists + ' checklists, ' + counts.inspections + ' inspections, ' + counts.files + ' files. Recorded work: ' + counts.labor + ' labor, ' + counts.materials + ' material, ' + counts.progress + ' progress, ' + counts.fieldEvidence + ' field-evidence and ' + counts.equipment + ' equipment records. Counts do not establish customer acceptance or financial results.'));
     }
     byId('completionHistory').hidden = false;
     byId('completionHistorySummary').textContent = value.history.records.length + ' of ' + value.history.total + ' recorded decisions shown.' +
@@ -90,7 +90,7 @@
     var history = byId('completionHistoryRecords'); history.replaceChildren();
     value.history.records.forEach(function(record) {
       var article = node('article', 'completion-record');
-      article.appendChild(node('h3', '', KINDS[record.kind] + ' · revision ' + record.revision));
+      article.appendChild(node('h3', '', KINDS[record.kind]));
       article.appendChild(node('p', 'completion-muted', date(record.decidedAt) + ' · ' + STATES[record.lifecycleBefore] + ' → ' + STATES[record.lifecycleAfter]));
       article.appendChild(node('p', '', record.reason));
       if (record.note) article.appendChild(node('p', '', 'Correction note: ' + record.note));
@@ -133,7 +133,7 @@
   async function submit(descriptor) {
     if (pending || !descriptor || descriptor.scope !== (model && model.scopeDigest)) return;
     var retrying = Boolean(outcome && outcome.kind === 'uncertain');
-    var token = generation; pending = true; closeForm(); lock(); status('pending', 'Submitting the reviewed decision. No state is changed on this page until the server responds.');
+    var token = generation; pending = true; closeForm(); lock(); status('pending', 'Saving your reviewed decision. Wait for confirmation before continuing.');
     var headers = { 'Content-Type': 'application/json', 'Idempotency-Key': descriptor.key };
     var csrf = client.cookie(document.cookie, 'northstar_csrf'); if (csrf) headers['X-CSRF-Token'] = csrf;
     try {
@@ -144,7 +144,7 @@
         if ([401, 403, 404].includes(response.status)) {
           outcome = null; clear(); status('restricted', retrying
             ? 'Current access cannot resolve the earlier decision. Its outcome is not confirmed. Reopen the review with authorized access before continuing.'
-            : 'Current authority does not allow this decision. Reload the review before continuing.', true); lock(); return;
+            : 'Your access no longer allows this decision. Reload the review before continuing.', true); lock(); return;
         }
         // A refusal of a retry says nothing conclusive about the original
         // uncertain request. Keep its exact key/body and suppress other work.
@@ -153,11 +153,11 @@
           status('uncertain', 'The earlier decision outcome is still not confirmed. Retry this same decision when service is available; other decisions remain unavailable.', true); lock(); return;
         }
         outcome = null;
-        await load(response.status === 409 ? 'The decision was not applied because recorded authority, evidence or expiry changed. Review the current state before a new decision.' : 'The decision was not accepted. Current recorded work has been reloaded.'); return;
+        await load(response.status === 409 ? 'The decision was not saved because access, evidence or the approval deadline changed. Review the latest details before trying again.' : 'The decision was not accepted. Current recorded work has been reloaded.'); return;
       }
       if (!response.body || response.body.success !== true || !response.body.data || response.body.data.id !== selectedId) throw new Error('RESULT_UNCONFIRMED');
       outcome = { kind: 'applied', scope: descriptor.scope }; pending = false;
-      await load('Decision recorded. Current state reloaded from PostgreSQL.'); byId('completionStatus').focus();
+      await load('Decision saved. The latest work details are shown.'); byId('completionStatus').focus();
     } catch (_error) {
       if (token !== generation) return;
       outcome = { kind: 'uncertain', scope: descriptor.scope, request: descriptor };
@@ -172,9 +172,9 @@
       byId('completionConfirmTitle').textContent = LABELS[selection.action]; byId('completionConfirmDescription').textContent = COPY[selection.action];
       byId('completionConfirmReason').textContent = 'Reason: ' + body.reason;
       var details = byId('completionConfirmDetails'); details.replaceChildren();
-      details.appendChild(node('p', 'completion-muted', 'Execution revision ' + body.expectedExecutionRevision + ' · current assignment revision ' + body.expectedAssignmentRevision));
+      details.appendChild(node('p', 'completion-muted', 'NorthStar will check the latest work and assignment before saving this decision.'));
       var target = body.proposal || body.completion || body.reopening || body.record;
-      if (target) details.appendChild(node('p', 'completion-muted', 'Selected record ' + target.id + ' · revision ' + target.revision));
+      if (target) details.appendChild(node('p', 'completion-muted', 'This decision applies to the work record you selected.'));
       if (body.nextAction) details.appendChild(node('p', '', 'Next action: ' + body.nextAction));
       if (body.annotation) {
         details.appendChild(node('p', '', 'Correction note: ' + body.annotation.note));

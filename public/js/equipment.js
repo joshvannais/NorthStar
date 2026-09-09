@@ -16,11 +16,11 @@
   function button(label, action, primary) { var value = node('button', 'equipment-button' + (primary ? ' equipment-button-primary' : ''), label); value.type = 'button'; value.addEventListener('click', function () { value.focus(); action(); }); return value; }
   function key() { return global.crypto.randomUUID(); }
   async function request(url, body, idempotency) {
-    if (!global.NorthStarAccountSession) throw new Error('Account authority is unavailable. Reload this page.');
+    if (!global.NorthStarAccountSession) throw new Error('Your account could not be checked. Reload this page.');
     var options = body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotency }, body: JSON.stringify(body) } : {};
     var response = await global.NorthStarAccountSession.fetch(url, options);
     var result = await response.json();
-    if (!response.ok || !result.success) { var failure = new Error(response.status === 409 ? 'This draft, asset, or research changed. Reload and review again.' : response.status === 403 ? 'Your current account cannot perform this equipment action.' : response.status === 400 ? 'This value was not accepted. Check the requested identifier; enter unknown when it cannot be verified.' : 'Equipment authority is unavailable. No save is confirmed.'); failure.status = response.status; throw failure; }
+    if (!response.ok || !result.success) { var failure = new Error(response.status === 409 ? 'This draft, asset, or research changed. Reload and review again.' : response.status === 403 ? 'Your current account cannot perform this equipment action.' : response.status === 400 ? 'This value was not accepted. Check the requested identifier; enter unknown when it cannot be verified.' : 'Equipment could not be loaded or saved. Reload to check before trying again.'); failure.status = response.status; throw failure; }
     return result.data;
   }
   function pairs(values) {
@@ -36,7 +36,7 @@
       box.append(node('p', '', 'Research confidence: ' + research.confidence + '. Fresh through ' + String(research.freshUntil).slice(0, 10) + '.'));
       var list = node('ul');
       research.sources.forEach(function (source) {
-        var item = node('li'); var citation = node('a', '', source.publisher + ' — ' + source.title + ' (' + source.sourceVersion + ')');
+        var item = node('li'); var citation = node('a', '', source.publisher + ' — ' + source.title);
         if (/^https:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\//.test(source.url)) { citation.href = source.url; citation.rel = 'noopener noreferrer'; citation.target = '_blank'; }
         item.append(citation); list.append(item);
       });
@@ -95,7 +95,7 @@
       if (requestSerial !== serial) return null;
       renderCatalogue(); if (add) { add.textContent = 'Add equipment'; add.hidden = !result.canManage; }
       var authority = document.getElementById('assetCatalogueAuthority');
-      if (authority) authority.textContent = 'Your tenant-private catalogue. Reviewed research is separate from actual condition, access, attachments, and use.';
+      if (authority) authority.textContent = 'Your company’s equipment. Published specifications do not confirm its actual condition, availability, attachments or use.';
       document.documentElement.dataset.assetCatalogueState = 'ready'; return result;
     } catch (_) {
       if (requestSerial !== serial) return null;
@@ -124,7 +124,7 @@
         pending = false; render();
         if (draft.document.state === 'saved') { global.dispatchEvent(new CustomEvent('northstar:equipment-saved')); if (document.getElementById('assetCatalogueContainer')) await loadCatalogue(); }
       } catch (failure) {
-        pending = false; status.textContent = failure.message;
+        pending = false; status.textContent = failure.status === 409 ? 'Equipment details changed. Reload and review them before trying again.' : failure.status === 400 ? 'Check the equipment details. Enter unknown when a requested detail cannot be verified.' : failure.status === 403 ? 'Your account cannot make this equipment change. Ask your administrator for help.' : 'Equipment could not be saved. Reload to check its current status before trying again.';
         if (failure.status === 400) { lastRequest = null; actions.replaceChildren(button('Correct this answer', render, true), button('Close', close)); }
         else if (failure.status === 409) { lastRequest = null; actions.replaceChildren(button('Close and start a new review', close)); }
         else actions.replaceChildren(button('Retry the same request', function () { send(lastRequest.url, lastRequest.body, lastRequest.key); }, true), button('Close', close));

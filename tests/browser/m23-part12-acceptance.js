@@ -5,6 +5,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { createJourney } = require('../helpers/m23-part12-journey');
+const { assertUserWording } = require('../helpers/m23-user-wording');
 const option = (key, fallback) => (process.argv.find(v => v.startsWith('--' + key + '=')) || '--' + key + '=' + fallback).split('=').slice(1).join('=');
 process.chdir(path.resolve(__dirname, '../..'));
 process.env.NODE_ENV = 'test';
@@ -15,7 +16,7 @@ async function main() {
   const output = path.resolve(option('output', '')), selected = option('browser', 'chrome');
   assert.ok(process.argv.some(v => v.startsWith('--output=')) && !fs.existsSync(output), 'new evidence directory required');
   fs.mkdirSync(output, { recursive: true });
-  const ledger = { browser: selected, cases: [], browserMutations: [], pageErrors: [], externalBlocked: [], providerAttempts: 0,
+  const ledger = { browser: selected, cases: [], wording: [], browserMutations: [], pageErrors: [], externalBlocked: [], providerAttempts: 0,
     source: { head: execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
       status: execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim() },
     limits: ['Synthetic upstream and equipment research; no provider or private production data', 'Files/storage are unavailable; no file success inferred',
@@ -53,12 +54,14 @@ async function main() {
     const first = await open('light',1440,1000), page=first.page;
     await page.goto(origin+'/dashboard/operations');
     const link=page.locator('[data-execution-id="'+work.execution.id+'"]').getByRole('link',{name:/^Review completion for /});
+    await link.waitFor();ledger.wording.push(await assertUserWording(page,'owner overview'));
     await link.focus();await page.keyboard.press('Enter');await page.waitForURL('**/dashboard/completion-review?executionId='+work.execution.id);
     const act=async action=>{
       await page.locator('[data-action="'+action+'"]').first().click();
       await page.locator('#completionReason').fill('Reviewed exact synthetic evidence for this job');
       if(await page.locator('#completionNextAction').isVisible())await page.locator('#completionNextAction').fill('Recheck the recorded seal after follow-up');
       await page.locator('#completionPrepare').click();await page.locator('#completionConfirm[open]').waitFor();
+      ledger.wording.push(await assertUserWording(page,action+' confirmation'));
       assert.equal(await page.evaluate(()=>document.activeElement.id),'completionCancelButton');
       await page.locator('#completionConfirmButton').click();
     };
@@ -74,9 +77,9 @@ async function main() {
       assert.ok(source && source.pins.length>0,'nonempty exact source domain '+domain);
     }
     const handoff=page.locator('#downstreamHandoffs');await handoff.locator('summary').first().click();
-    await handoff.getByText('Current references are ready for review.',{exact:true}).waitFor();
-    await handoff.locator('#handoffConsent').check();await handoff.getByRole('button',{name:'Save internal handoff',exact:true}).click();
-    await handoff.getByText('Internal handoff recorded. Delivery and downstream use remain unavailable.',{exact:true}).waitFor();
+    await handoff.getByText('Current work records are ready for review.',{exact:true}).waitFor();
+    await handoff.locator('#handoffConsent').check();await handoff.getByRole('button',{name:'Save handoff',exact:true}).click();
+    await handoff.getByText('Handoff saved for company review. Nothing has been sent or used by another task.',{exact:true}).waitFor();
     const prepared=(await call('get',base+'/handoffs')).data;
     ledger.preparedSnapshot=prepared;
     assert.equal(prepared.sourceSnapshot.execution.id,work.execution.id);assert.equal(prepared.sourceSnapshot.execution.digest,completed.execution.digest);
@@ -100,8 +103,13 @@ async function main() {
       const view=await open(theme,width,width===1440?1000:844);const p=view.page;
       await p.goto(origin+'/dashboard/completion-review?executionId='+work.execution.id);
       await p.locator('#completionLifecycle[data-state="completed"]').waitFor();
+      await p.locator('#operationalIntelligence > summary').click();
+      await p.locator('.oi-status').filter({hasText:'Summary ready'}).waitFor();
+      await p.locator('.oi-evidence > summary').click();
       await p.locator('#downstreamHandoffs > summary').click();
-      await p.locator('#downstreamHandoffs').getByText('Current references are ready for review.',{exact:true}).waitFor();
+      await p.locator('#downstreamHandoffs').getByText('Current work records are ready for review.',{exact:true}).waitFor();
+      await p.locator('.handoff-history > summary').click();
+      ledger.wording.push(await assertUserWording(p,theme+' '+width+' completed with advice sources and handoff history'));
       assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
       assert.equal(await p.evaluate(()=>document.documentElement.dataset.theme),theme);
       await p.keyboard.press('Tab');
@@ -129,9 +137,11 @@ async function main() {
     const worker=await open('dark',390,844,'member');activePage=worker.page;
     await worker.page.goto(origin+'/dashboard/work?appointmentId='+work.appointment+'&executionId='+work.execution.id);
     await worker.page.waitForFunction(()=>['ready','partial-file'].includes(document.body.dataset.workState));
+    ledger.wording.push(await assertUserWording(worker.page,'assigned worker ready'));
     await worker.page.getByRole('button',{name:'Add note',exact:true}).click();
     await worker.page.locator('#workEvidenceNote-note').fill('Assigned worker performed the requested follow-up observation.');
     await worker.page.locator('#workEvidenceNote').getByRole('button',{name:'Record field note',exact:true}).click();
+    ledger.wording.push(await assertUserWording(worker.page,'worker field note confirmation'));
     await worker.page.getByRole('dialog',{name:'Confirm Record field note',exact:true}).getByRole('button',{name:'Confirm Record field note',exact:true}).click();
     await worker.page.getByText('Assigned worker performed the requested follow-up observation.',{exact:true}).waitFor();
     assert.equal(await worker.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
@@ -143,6 +153,15 @@ async function main() {
     await worker.page.screenshot({path:path.join(output,'dark-390-worker-follow-up.png'),fullPage:true});
     await worker.context.close();activePage=null;
     ledger.cases.push('assigned mobile worker records actual follow-up note after explicit resumption');
+    const failed=await open('light',390,844);activePage=failed.page;
+    await failed.page.route('**/completion-review',route=>new URL(route.request().url()).pathname.startsWith('/api/')
+      ? route.fulfill({status:503,json:{success:false,error:{message:'PostgreSQL stack trace: internal_schema routine /api/private'}}}) : route.continue());
+    await failed.page.goto(origin+'/dashboard/completion-review?executionId='+work.execution.id);
+    await failed.page.locator('#completionStatus[data-state="error"]').waitFor();
+    ledger.wording.push(await assertUserWording(failed.page,'intercepted service error keeps implementation diagnostics out of product copy'));
+    await failed.page.screenshot({path:path.join(output,'light-390-service-error.png'),fullPage:true});
+    await failed.context.close();activePage=null;
+    ledger.cases.push('explicit intercepted failure uses actionable public wording without displaying backend diagnostics');
     const final=(await call('get',base+'/completion')).data;
     ledger.finalSnapshot=final;
     for(const role of ['dispatcher','viewer','otherOwner'])await call('get',base+'/handoffs',null,role,404);

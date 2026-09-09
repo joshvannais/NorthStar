@@ -918,6 +918,16 @@ evidence seal.
 
 ### Accessibility and visual acceptance
 
+- After every implementation or correction, and before advancing to the next
+  step, review all affected user-facing wording. Pages, cards, forms, dialogs,
+  errors, empty/loading/denied states, labels, hints, tooltips and accessibility
+  names must use clear business language in desktop/mobile and light/dark views.
+  Correct exposed backend wording, raw internal IDs/digests, database/route names,
+  stack traces and code-like implementation explanations immediately. Keep
+  meaningful consent, permissions, accuracy and action consequences clear.
+  Engineering detail belongs in internal diagnostics and evidence, not product
+  copy. This wording gate is mandatory for the writer and independent auditor;
+  passing functional checks alone does not satisfy it.
 - Semantic headings/landmarks, labels/instructions, programmatic names and
   states, error association, keyboard order, visible focus, modal containment,
   Escape/restoration, announcements, touch targets, non-color status, contrast,

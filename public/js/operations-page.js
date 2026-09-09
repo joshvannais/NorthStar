@@ -88,7 +88,7 @@
       details.appendChild(node('p', '', APPROVAL[record.approval.state] + '. Proposed ' + date(data.pendingProposal.decidedAt) +
         '; expires ' + date(data.pendingProposal.expiresAt) + '.'));
     }
-    details.appendChild(node('p', '', 'This overview does not approve, cancel or reopen work. Completion remains an explicit, evidence-pinned decision.'));
+    details.appendChild(node('p', '', 'To approve, cancel or reopen work, open its completion review and confirm your decision.'));
     return details;
   }
   function renderRecord(record, scope) {
@@ -105,7 +105,7 @@
     var metrics = node('dl', 'operations-metrics');
     metric(metrics, 'Recorded schedule', record.schedule.start === null ? 'No current time recorded' :
       date(record.schedule.start, record.schedule.timeZone));
-    metric(metrics, 'Assignment authority', record.assignment.current ? 'Current recorded assignment' : 'Assignment changed; review needed');
+    metric(metrics, 'Assignment', record.assignment.current ? 'Current recorded assignment' : 'Assignment changed; review needed');
     metric(metrics, 'Progress facts', record.progress.recorded + ' recorded · ' + record.progress.needsReview + ' need review');
     metric(metrics, 'Open issues', record.blockers.open + ' blockers · ' + record.exceptions.open + ' exceptions');
     metric(metrics, 'Completion review', APPROVAL[record.approval.state]);
@@ -127,9 +127,9 @@
   }
   function render(data) {
     currentData = data;
-    element('operationsScope').textContent = data.scope === 'owner_admin' ? 'Owner and admin · tenant-wide operational view' :
+    element('operationsScope').textContent = data.scope === 'owner_admin' ? 'Owner and administrator · Company operations' :
       'Dispatcher · limited coordination view';
-    element('operationsSnapshot').textContent = 'PostgreSQL snapshot · ' + date(data.evaluatedAt);
+    element('operationsSnapshot').textContent = 'Last checked · ' + date(data.evaluatedAt);
     var fragment = document.createDocumentFragment();
     data.records.forEach(function(record) { fragment.appendChild(renderRecord(record, data.scope)); });
     element('operationsRecords').replaceChildren(fragment);

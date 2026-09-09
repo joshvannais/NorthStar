@@ -8,7 +8,7 @@ const STATES = { not_started: 'Not started', in_progress: 'In progress', paused:
 
 function intelligenceError(status = 503) {
   return Object.assign(new Error(status === 404 ? 'Operational intelligence is unavailable for this work.' : status === 409 ?
-    'Work authority changed. Reload before reviewing intelligence.' : 'Operational intelligence is temporarily unavailable.'),
+    'Your work details or access changed. Reload before reviewing intelligence.' : 'Operational intelligence is temporarily unavailable.'),
   { status, statusCode: status, code: 'OPERATIONAL_INTELLIGENCE_UNAVAILABLE' });
 }
 function requireValue(test) { if (!test) throw intelligenceError(); }
@@ -140,9 +140,9 @@ function buildIntelligence(sources, context, input) {
     audienceDigest: digest([input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId]),
     execution: { ...pin(execution), lifecycleState: execution.lifecycleState }, assignment,
     summary: `${STATES[execution.lifecycleState]}. ${conflicts.length ? 'Source records need human review.' : 'No supported conflict was detected in the complete visible records.'} Missing inputs remain explicit.`,
-    scope: input.actorAccessRole === 'member' ? 'Current assigned work; personal labor and material evidence only. Other workers’ private actuals are not included.' : 'Current owner/admin work scope. Counts describe recorded evidence, not physical or professional verification.',
-    confidence: { level: 'limited', basis: 'Exact PostgreSQL revision/digest pins and versioned deterministic rules; source review status, missing inputs and bounded history limit conclusions. No model certainty score is used.' },
-    uncertainty: 'Current only as of the server snapshot; refresh after any source change and before a human decision. No specialist, safety, legal, pricing, financial or predictive conclusion is made.',
+    scope: input.actorAccessRole === 'member' ? 'Your current assignment, including your recorded time and material use. Other workers’ private details are not included.' : 'Work records available to company owners and administrators. Record counts do not verify physical conditions or professional qualifications.',
+    confidence: { level: 'limited', basis: 'Based on the recorded work shown below. Missing information, unreviewed entries and incomplete history limit what can be concluded.' },
+    uncertainty: 'This summary reflects the records available when it was prepared. Refresh before making a decision. It does not establish safety, legal compliance, a price or a financial result.',
     missingInputs, conflicts, comparisons, recommendations, evidence,
   };
   projection.snapshotDigest = digest(projection);

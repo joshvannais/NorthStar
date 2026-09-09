@@ -1,8 +1,10 @@
 # Mission 23 Part 12 — same-job acceptance candidate
 
 This package adds a reproducible acceptance journey over the existing deployed
-Mission 23 authorities. It adds no production runtime, page, dependency, grant,
-migration, provider action, or Mission 24 implementation. Writer evidence is not
+Mission 23 authorities. The founder subsequently required a wording review
+between every step. This package therefore also corrects Mission 23 presentation
+copy and rendered advice/handoff explanations. It adds no backend capability,
+dependency, grant, migration, provider action, or Mission 24 implementation. Writer evidence is not
 independent approval, release, or a claim that every roadmap residual is closed.
 
 The starting release is `c7e011517f0a48c0d1fda0ba32d72871bbc7cc26` (Part 11,
@@ -66,6 +68,14 @@ Development attempts remain separate from the final immutable-head runs.
 
 ## Residuals and release gates
 
+- The mandatory wording gate applies after every implementation/correction and
+  before the next step. Review visible pages/cards/forms/dialogs, loading/empty/
+  denied/error states, hints/tooltips and accessibility names across themes and
+  device sizes. Replace engineering identifiers and implementation language with
+  actionable business wording; preserve consent, permissions and consequences.
+  The rendered wording assertion complements direct visual review; it does not
+  claim exhaustive understanding of all business text. Internal diagnostic data,
+  immutable source pins and backend validation remain intact.
 - My Work Profile (`M23-01`) is historically released and production-accepted,
   not a missing Part 9 feature. The retained September 9 release acceptance
   records PR #180, approved head `619a4d7cc989f4fa480ef44efe6f1b2ead6a2b29`,

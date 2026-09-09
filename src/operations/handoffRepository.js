@@ -2,14 +2,14 @@
 const VERSION = 'm23-downstream-handoffs-v1';
 const MISSIONS = Object.freeze([
   { mission: 24, label: 'Estimating', boundary: 'Human-reviewed estimate inputs; no price or quote approval.' },
-  { mission: 25, label: 'Private learning', boundary: 'Permitted tenant source references only; no learning or aggregation is enabled.' },
-  { mission: 26, label: 'Business intelligence', boundary: 'Evidence references for future metrics; predictions remain separate from facts.' },
-  { mission: 27, label: 'Customer lifecycle', boundary: 'Internal review only; no customer message, acceptance, invoice or payment.' },
-  { mission: 28, label: 'Business automation', boundary: 'Future owner-controlled review; no trigger or action is enabled.' },
-  { mission: 29, label: 'Enterprise governance', boundary: 'Individual attribution and tenant isolation remain required.' },
-  { mission: 30, label: 'NorthStar OS', boundary: 'Compose accepted authorities without changing their source records.' },
-  { mission: 31, label: 'Interactive experience', boundary: 'Synthetic data only. Real operational references cannot enter the public simulation.', available: false },
-  { mission: 32, label: 'Estimate Studio', boundary: 'Future non-binding draft inputs; conversion requires separate human approval.' },
+  { mission: 25, label: 'Private learning', boundary: 'Save the selected company records for review. No learning or combined analysis starts.' },
+  { mission: 26, label: 'Business intelligence', boundary: 'Prepare records for future business reports. Predictions will remain separate from recorded facts.' },
+  { mission: 27, label: 'Customer lifecycle', boundary: 'Company review only. No customer message, acceptance, invoice or payment is created.' },
+  { mission: 28, label: 'Business automation', boundary: 'Owner review for a future task. No automatic action starts.' },
+  { mission: 29, label: 'Enterprise governance', boundary: 'Each decision remains linked to the person who made it and private to your company.' },
+  { mission: 30, label: 'NorthStar OS', boundary: 'Bring approved work information together without changing the original records.' },
+  { mission: 31, label: 'Interactive experience', boundary: 'Practice work only. Real company records cannot be used in the public demo.', available: false },
+  { mission: 32, label: 'Estimate Studio', boundary: 'Prepare a future draft. It will require separate review and approval before use.' },
 ]);
 function error(cause) {
   const status = ['42501','P0002'].includes(cause?.code) ? 404 : ['40001','40P01','23505'].includes(cause?.code) ? 409 :

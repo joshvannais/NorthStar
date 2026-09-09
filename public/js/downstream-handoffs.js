@@ -39,10 +39,10 @@
     if (unresolved && unresolved.id !== id) unresolved = null;
     var scope = ++generation, model = null, pending = false;
     var details = element('details',undefined,'handoff-panel completion-panel'); details.id = 'downstreamHandoffs';
-    var summary = element('summary','Downstream handoffs'); details.append(summary);
-    var intro = element('p','Prepare an internal reference receipt for a later workflow. Current owners and administrators in your company can review it. Delivery and downstream use are unavailable.','completion-muted');
-    var notice = element('p','References stay private. This does not approve a price, send a message, run learning or automation, create an invoice, or make a payment.','handoff-notice');
-    var status = element('p','Open to review current source references.','handoff-status'); status.setAttribute('role','status'); status.setAttribute('aria-live','polite'); status.tabIndex=-1;
+    var summary = element('summary','Handoffs for later work'); details.append(summary);
+    var intro = element('p','Save a record of this work for a later task. Only company owners and administrators can review it. Nothing is sent or used by another task yet.','completion-muted');
+    var notice = element('p','This stays private to your company. Saving it does not approve a price, send a message, start an automatic task, create an invoice or make a payment.','handoff-notice');
+    var status = element('p','Open to review the latest work records.','handoff-status'); status.setAttribute('role','status'); status.setAttribute('aria-live','polite'); status.tabIndex=-1;
     var content = element('div',undefined,'handoff-content'), controls = element('div',undefined,'completion-actions');
     var refresh = element('button','Reload handoff review'); refresh.type='button';
     var retry = element('button','Retry this same handoff'); retry.type='button'; retry.hidden=!unresolved;
@@ -51,11 +51,11 @@
     function lock() { details.querySelectorAll('button,select,input').forEach(function(e) { e.disabled=pending || Boolean(unresolved); }); retry.disabled=pending; retry.hidden=!unresolved; }
     function clearContent() { model=null; content.replaceChildren(); }
     async function load(message) {
-      clearContent(); pending=true; lock(); setStatus('Loading current handoff references…');
+      clearContent(); pending=true; lock(); setStatus('Loading work records…');
       try {
         var result=await request('/api/v1/field-executions/'+id+'/handoffs'); if(scope!==generation)return;
         if(!result.ok) { if([401,403,404].includes(result.status))unresolved=null; throw new Error('Read unavailable'); }
-        model=validate(result.body.data,id); render(); setStatus(message || (unresolved ? 'The earlier result is uncertain. Retry the same handoff to confirm its recorded outcome.' : model.sourceAvailable ? 'Current references are ready for review.' : 'Current references exceed this review limit. Existing consent can still be revoked.'));
+        model=validate(result.body.data,id); render(); setStatus(message || (unresolved ? 'The earlier result is uncertain. Retry the same handoff to confirm its recorded outcome.' : model.sourceAvailable ? 'Current work records are ready for review.' : 'There are too many records to prepare a new handoff here. You can still revoke earlier consent.'));
       } catch(e) { if(scope!==generation)return; clearContent(); setStatus(message ? message+' Current review could not reload.' : navigator.onLine===false ? 'Offline. Reconnect and reload current handoff review.' : 'Handoff review is unavailable or access has changed.'); }
       finally { if(scope===generation){pending=false;lock();} }
     }
@@ -75,23 +75,23 @@
         if(result.body?.success!==true || !UUID.test(result.body.data?.receipt?.id || '') || result.body.data.receipt.executionId!==id ||
           result.body.data.receipt.delivery!=='unavailable' || result.body.data.receipt.consumptionAuthorized!==false)throw new Error('Uncertain');
         unresolved=null;pending=false;
-        await load(value.body.action==='prepare' ? 'Internal handoff recorded. Delivery and downstream use remain unavailable.' : 'Consent revoked. The original receipt remains in history.');
+        await load(value.body.action==='prepare' ? 'Handoff saved for company review. Nothing has been sent or used by another task.' : 'Consent revoked. The original decision stays in history.');
       } catch(e) { if(scope===generation){clearContent();setStatus('The outcome is uncertain. Retry this same handoff to confirm one recorded result.',true);} }
       finally {if(scope===generation){pending=false;lock();}}
     }
     function render() {
       content.replaceChildren();
       if(model.sourceAvailable){
-      var source=element('div',undefined,'handoff-source'); source.append(element('h3','Source references'));
-      source.append(element('p','Execution revision '+model.sourceSnapshot.execution.revision+' · '+model.sourceSnapshot.execution.lifecycleState.replace(/_/g,' '),'completion-muted'));
+      var source=element('div',undefined,'handoff-source'); source.append(element('h3','Work records'));
+      source.append(element('p','Work status: '+model.sourceSnapshot.execution.lifecycleState.replace(/_/g,' '),'completion-muted'));
       var counts=element('dl',undefined,'handoff-counts'); Object.keys(DOMAINS).forEach(function(domain){counts.append(element('dt',DOMAINS[domain]),element('dd',String(model.sourceSnapshot[domain].count)));}); source.append(counts);
-      source.append(element('p','This receipt pins the current versions for later review. Raw evidence and file contents are not copied.','completion-muted')); content.append(source);
+      source.append(element('p','This saves which work records you reviewed. It does not copy notes, photos or files.','completion-muted')); content.append(source);
       var form=element('form'), label=element('label','Purpose for later review'); label.htmlFor='handoffMission';
-      var select=element('select');select.id='handoffMission'; model.missions.forEach(function(m){var option=element('option',m.label+(m.available===false?' — synthetic data only':''));option.value=String(m.mission);option.disabled=m.available===false;select.append(option);});
+      var select=element('select');select.id='handoffMission'; model.missions.forEach(function(m){var option=element('option',m.label+(m.available===false?' — practice work only':''));option.value=String(m.mission);option.disabled=m.available===false;select.append(option);});
       var boundary=element('p',model.missions[0].boundary,'completion-muted');boundary.id='handoffPurpose';select.setAttribute('aria-describedby','handoffPurpose');
       var consentLabel=element('label',undefined,'handoff-consent'), consent=element('input');consent.type='checkbox';consent.id='handoffConsent';consent.required=true;
-      consentLabel.append(consent,element('span','I approve saving these source references for this purpose, visible only to current owners and administrators in my company. This consent does not enable downstream use.'));
-      var save=element('button','Save internal handoff','completion-primary');save.type='submit';
+      consentLabel.append(consent,element('span','I approve saving this handoff for the selected purpose. Only company owners and administrators may review it. I understand that it does not yet allow another task to use these records.'));
+      var save=element('button','Save handoff','completion-primary');save.type='submit';
       form.append(label,select,boundary,consentLabel,save); select.addEventListener('change',function(){consent.checked=false;boundary.textContent=model.missions.find(function(m){return m.mission===Number(select.value);}).boundary;});
       form.addEventListener('submit',function(event){event.preventDefault();if(!pending&&!unresolved&&consent.checked)submit(descriptor('prepare',Number(select.value),model.sourceDigest));}); content.append(form);
       }
@@ -100,13 +100,13 @@
       if(!preparations.length)history.append(element('p','No handoffs have been recorded for this work.','completion-muted'));
       preparations.forEach(function(r){
         var item=element('article',undefined,'handoff-receipt'), mission=model.missions.find(function(m){return m.mission===r.mission;});
-        item.append(element('h4',mission.label),element('p',r.status==='revoked'?'Consent revoked':r.status==='source_changed'?'Source changed — prepare a new reference after review':r.status==='source_unavailable'?'Current source references unavailable':'Prepared for internal review', 'handoff-receipt-state'));
-        item.append(element('p',new Date(r.createdAt).toLocaleString()+' · Delivery unavailable','completion-muted'));
+        item.append(element('h4',mission.label),element('p',r.status==='revoked'?'Consent revoked':r.status==='source_changed'?'Work changed — review it before preparing a new handoff':r.status==='source_unavailable'?'Current work records are unavailable':'Saved for company review', 'handoff-receipt-state'));
+        item.append(element('p',new Date(r.createdAt).toLocaleString()+' · Not sent','completion-muted'));
         if(r.status!=='revoked'){
           var revoke=element('button','Revoke consent');revoke.type='button';
           revoke.addEventListener('click',function(){
             if(pending||unresolved)return;
-            var confirmation=element('div',undefined,'handoff-revoke-confirm');confirmation.append(element('p','Revoke consent for this '+mission.label.toLowerCase()+' reference? The receipt remains in immutable history.'));
+            var confirmation=element('div',undefined,'handoff-revoke-confirm');confirmation.append(element('p','Revoke consent for this '+mission.label.toLowerCase()+' handoff? Your original decision will stay in history.'));
             var yes=element('button','Confirm revocation'),no=element('button','Keep consent');yes.type=no.type='button';
             yes.addEventListener('click',function(){submit(descriptor('revoke',r.mission,r.sourceDigest,r.id));});
             no.addEventListener('click',function(){confirmation.remove();revoke.hidden=false;revoke.focus();});

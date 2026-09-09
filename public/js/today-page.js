@@ -204,7 +204,7 @@
     records.replaceChildren();
     data.records.forEach(function(record) { records.appendChild(renderRecord(record, timeZone)); });
     if (data.records.length === 0) {
-      setState('empty', 'No work assigned for today', 'No direct or current-crew appointments are assigned to you for this tenant day.', false);
+      setState('empty', 'No work assigned for today', 'No appointments are assigned to you or your current crew today.', false);
     } else {
       setState('ready', '', 'Showing current read-only schedule, dispatch, route, and job essentials.');
     }

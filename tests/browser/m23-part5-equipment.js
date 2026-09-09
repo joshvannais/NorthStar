@@ -8,7 +8,10 @@ for (const key of ['OPENAI_API_KEY','POLARIS_OPENAI_ENABLED','RETELL_API_KEY','R
 process.env.NODE_ENV = 'test';
 async function main() {
   const selected = (process.argv.find(value => value.startsWith('--browser=')) || '--browser=chrome').split('=')[1];
-  const output = path.resolve(__dirname, '../../outputs/m23-part5-writer', selected); fs.mkdirSync(output, { recursive: true });
+  const outputArgument = process.argv.find(value => value.startsWith('--output='));
+  const output = outputArgument ? path.resolve(outputArgument.slice('--output='.length)) : path.resolve(__dirname, '../../outputs/m23-part5-writer', selected);
+  if (outputArgument) assert.ok(!fs.existsSync(output), 'new evidence directory required');
+  fs.mkdirSync(output, { recursive: true });
   const fixture = await require('../helpers/m23-equipment-browser-fixture').createFixture('m23p5-browser-' + selected);
   let server, browser;
   const ledger = { browser: selected, cases: [], externalBlocked: [], pageErrors: [], httpFailures: [], providerCalls: 0, physicalSafari: 'unavailable', founderVisualApproval: 'unavailable' };
@@ -154,6 +157,7 @@ async function main() {
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
       const captureStability = await assertStableSafeArea(page, true, 8, width === 390 ? 4 : 1);
       const captureBefore = captureStability[0];
+      await require('../helpers/m23-user-wording').assertUserWording(page,theme+' equipment '+width);
       await page.screenshot({ path: path.join(output, `${theme}-${width}.png`) });
       const captureAfter = await safeArea(page, true); assertSafeArea(captureAfter, 8); assert.deepStrictEqual(captureAfter, captureBefore, 'capture must not change the tested scroll/focus/geometry state');
       ledger.cases.push({ theme, width, geometry, focusReturnGeometry, rootScrollBehavior, captureBefore, captureStability, captureAfter, collapsedByDefault: true, keyboardDisclosure: true, focusReturn: true, touch: width <= 390, reducedMotion: true });

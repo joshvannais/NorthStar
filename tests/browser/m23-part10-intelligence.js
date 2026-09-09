@@ -39,7 +39,7 @@ async function main() {
       const toggle = page.locator('#operationalIntelligence > summary'); await toggle.waitFor();
       assert.equal(await page.locator('#operationalIntelligence').count(), 1, 'one coherent intelligence surface');
       await toggle.focus(); await page.keyboard.press('Enter');
-      await page.locator('.oi-status').filter({ hasText: 'Evidence snapshot ready' }).waitFor();
+      await page.locator('.oi-status').filter({ hasText: 'Summary ready' }).waitFor();
       assert.equal(await page.getByRole('heading', { name: 'Plan and actual evidence', exact: true }).count(), 1);
       const missing = page.locator('.oi-missing>summary');
       if (await missing.count()) { await missing.focus(); await page.keyboard.press('Enter'); assert.equal(await page.locator('.oi-missing').getAttribute('open'), ''); await missing.click(); }
@@ -47,7 +47,7 @@ async function main() {
       assert.equal(await page.locator('.oi-evidence').getAttribute('open'), '');
       await page.getByText('Sources, freshness and confidence', { exact: true }).click();
       await page.getByRole('button', { name: 'Refresh intelligence', exact: true }).click();
-      await page.locator('.oi-status').filter({ hasText: 'Evidence snapshot ready' }).waitFor();
+      await page.locator('.oi-status').filter({ hasText: 'Summary ready' }).waitFor();
       const result = await page.evaluate(() => {
         const host = document.getElementById('operationalIntelligence');
         const visible = e => e.getClientRects().length > 0;
@@ -70,21 +70,23 @@ async function main() {
         return { headingTop: document.querySelector('h1').getBoundingClientRect().top, headerBottom: Math.max(0, ...headers.map(e => e.getBoundingClientRect().bottom)) };
       });
       assert.ok(headingGeometry.headingTop >= headingGeometry.headerBottom, label + ' header overlaps title ' + JSON.stringify(headingGeometry));
+      await require('../helpers/m23-user-wording').assertUserWording(page,label);
       await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true }); ledger.cases.push({ label, ...result, passed: true });
       await page.locator('#operationalIntelligence').screenshot({ path: path.join(output, label + '-intelligence.png') });
       if (profile.name === '390' || option('profile', 'all') !== 'all') {
         // Explicit intercepted failure fixture after a genuine mounted success.
         await page.route('**/intelligence', route => route.fulfill({ status: 403, json: { success: false } }));
         await page.getByRole('button', { name: 'Refresh intelligence', exact: true }).click();
-        await page.locator('.oi-status').filter({ hasText: 'unavailable or access has changed' }).waitFor();
+        await page.locator('.oi-status').filter({ hasText: 'could not be loaded' }).waitFor();
         assert.equal(await page.locator('.oi-body').textContent(), '');
+        await require('../helpers/m23-user-wording').assertUserWording(page,label+' denied');
         await page.screenshot({ path: path.join(output, label + '-denied.png'), fullPage: true });
         ledger.cases.push({ label: label + '-denied-clears-advice', interceptedFailure: true, passed: true });
         await page.unroute('**/intelligence');
         await page.getByRole('button', { name: 'Refresh intelligence', exact: true }).click();
-        await page.locator('.oi-status').filter({ hasText: 'Evidence snapshot ready' }).waitFor();
+        await page.locator('.oi-status').filter({ hasText: 'Summary ready' }).waitFor();
         await context.setOffline(true); await page.getByRole('button', { name: 'Refresh intelligence', exact: true }).click();
-        await page.locator('.oi-status').filter({ hasText: 'Offline' }).waitFor(); assert.equal(await page.locator('.oi-body').textContent(), '');
+        await page.locator('.oi-status').filter({ hasText: 'offline' }).waitFor(); assert.equal(await page.locator('.oi-body').textContent(), '');
         await context.setOffline(false); ledger.cases.push({ label: label + '-offline-clears-advice', passed: true });
       }
       await context.close(); activePage = null;

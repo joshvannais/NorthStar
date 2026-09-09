@@ -46,6 +46,7 @@ async function main(){
       const page=await context.newPage();page.on('pageerror',error=>ledger.pageErrors.push(error.message));return {context,page};
     }
     async function check(page,label){
+      await require('../helpers/m23-user-wording').assertUserWording(page,label);
       // Keyboard and review interactions scroll focused controls into view.
       // Reset before a full-page capture so fixed headers stay at page origin.
       await page.evaluate(async()=>{

@@ -13,12 +13,13 @@ html.completion-document { scroll-behavior: auto; }
 }
 .completion-page *, .completion-page *::before, .completion-page *::after { box-sizing: border-box; }
 .completion-page [hidden] { display: none !important; }
-.completion-page a { color: var(--review-accent); text-decoration: underline; text-underline-offset: .2em; }
+.completion-page a:not(.btn) { color: var(--review-accent); text-decoration: underline; text-underline-offset: .2em; }
 .completion-header, .completion-main { width: min(100% - 2rem, 68rem); margin-inline: auto; }
 .completion-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 2rem; padding-block: 1rem; border-bottom: 1px solid var(--review-border); }
 .completion-header a { display: inline-flex; align-items: center; min-height: 44px; overflow-wrap: anywhere; }
 .completion-brand { font-size: 1.25rem; font-weight: 750; text-decoration: none !important; }
 .completion-header .northstar-theme-slot { margin-inline-start: auto; }
+.completion-header .completion-back { max-width: 100%; white-space: normal; text-align: center; }
 .completion-main { padding-block: 2rem max(3rem, env(safe-area-inset-bottom)); }
 .completion-page h1 { font-size: clamp(1.7rem, 4vw, 2.5rem); line-height: 1.2; margin: .4rem 0 1rem; }
 .completion-page h2 { font-size: 1.25rem; margin: 0 0 .8rem; }
@@ -48,6 +49,10 @@ html.completion-document { scroll-behavior: auto; }
 .completion-page dialog { margin: auto; inset: 0; max-width: min(34rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow-y: auto;
   border: 1px solid var(--review-border); border-radius: .8rem; padding: 1.5rem; background: var(--review-panel); color: var(--review-text); }
 .completion-page dialog::backdrop { background: rgb(4 12 25 / 65%); }
-.completion-skip { position: fixed; top: .5rem; left: .5rem; z-index: 100; transform: translateY(-200%); padding: .7rem; background: var(--review-panel); }
-.completion-skip:focus { transform: none; }
+/* Keep the unfocused link clipped, rather than painting it outside the viewport.
+   Keyboard focus reveals a stable control at the safe top edge at any scroll. */
+.completion-skip { position: fixed; top: max(.5rem, env(safe-area-inset-top)); left: max(.5rem, env(safe-area-inset-left));
+  z-index: 100; max-width: calc(100% - 1rem); white-space: normal; transition: none; }
+.completion-skip:not(:focus) { width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+.completion-skip:focus { min-height: 44px; clip-path: none; box-shadow: var(--shadow-md); }
 @media (max-width: 390px) { .completion-main { padding-top: 1.2rem; } .completion-actions button { flex: 1 1 100%; } .completion-page dialog { padding: 1rem; } }

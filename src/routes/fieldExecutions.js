@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { normalizeCompletionAction, normalizeCompletionRead } = require('../completion/contract');
-const { mutateCompletion, readCompletion } = require('../completion/repository');
+const { mutateCompletion, readCompletion, readOwnerCompletionReview } = require('../completion/repository');
 const { normalizeProgressAction, normalizeProgressRead } = require('../progress/contract');
 const { mutateProgress, readProgress } = require('../progress/repository');
 const db = require('../db');
@@ -98,10 +98,32 @@ function createFieldExecutionsRouter(options = {}) {
     ? options.completionMutate : mutateCompletion;
   const completionRead = typeof options.completionRead === 'function'
     ? options.completionRead : readCompletion;
+  const ownerCompletionRead = typeof options.ownerCompletionRead === 'function'
+    ? options.ownerCompletionRead : readOwnerCompletionReview;
   const fileAuthorize = typeof options.fileAuthorize === 'function'
     ? options.fileAuthorize : authorizeFileRetrieval;
   const fileIngest = typeof options.fileIngest === 'function' ? options.fileIngest : ingestFileEvidence;
   const storage = options.fileStorage || createUnavailableStorage();
+
+  router.get('/:executionId/completion-review', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next();
+  }, tenantAuth, (req, res, next) => {
+    if (!['owner', 'admin'].includes(req.userRole)) {
+      return res.status(403).json({ success: false, requestId: requestId(req),
+        error: { code: 'COMPLETION_FORBIDDEN', message: 'Owner completion review is restricted.' } });
+    }
+    return next();
+  }, throttle, permission('operations', 'read'), async (req, res) => {
+    try {
+      const normalized = normalizeCompletionRead(req.params.executionId, req.query);
+      const result = await ownerCompletionRead(poolProvider(), { ...actor(req), executionId: normalized });
+      return res.status(result.status).json({ ...result.body, requestId: requestId(req) });
+    } catch (error) {
+      if (typedError(req, res, error)) return undefined;
+      return res.status(503).json({ success: false, requestId: requestId(req),
+        error: { code: 'COMPLETION_UNAVAILABLE', message: 'Completion review is temporarily unavailable.' } });
+    }
+  });
 
   router.post('/appointments/:appointmentId', requireExecutionBodyBoundary,
     mutationAuth, throttle, permission('operations', 'update'), async (req, res) => {

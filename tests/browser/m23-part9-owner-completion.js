@@ -17,9 +17,12 @@ async function main() {
   assert.ok(process.argv.some(value => value.startsWith('--output=')) && !fs.existsSync(output), 'new evidence directory required');
   fs.mkdirSync(output, { recursive: true });
   const ledger = { browser: selected, version: null, authority: durable ? 'mounted PostgreSQL runtime authority' : 'intercepted synthetic presentation responses',
-    hostile, cases: [], externalBlocked: [], providerCalls: 0, pageErrors: [], mutationCount: 0,
+    hostile, cases: [], externalBlocked: [], providerCalls: 0, serverExternalAttempts: 0, pageErrors: [], mutationCount: 0,
     limits: 'Playwright WebKit is not physical Safari; reflow viewports are not native browser zoom or manual assistive-technology approval' };
   let fixture, server, browser;
+  const https = require('node:https'), oldRequest = https.request, oldGet = https.get, oldFetch = globalThis.fetch;
+  const denyServerExternal = () => { ledger.serverExternalAttempts += 1; throw new Error('Server external transport forbidden in this local browser test'); };
+  https.request = denyServerExternal; https.get = denyServerExternal; globalThis.fetch = denyServerExternal;
   try {
     if (durable) fixture = await fixtureData.createDatabaseFixture();
     const app = fixture ? fixture.app : require('../../src/server').app;
@@ -52,6 +55,7 @@ async function main() {
           ledger.mutationCount += 1; posts.push({ key: req.headers()['idempotency-key'], body: req.postDataJSON() });
           if (fixture) return route.continue();
           require('../../src/completion/contract').normalizeCompletionAction({ ...fixtureData.input, executionId, idempotencyKey: posts.at(-1).key, body: posts.at(-1).body });
+          if (mode === 'retry-limited') return route.fulfill({ status: 429, json: { success: false, error: { code: 'RATE_LIMITED' } } });
           if (mode === 'uncertain' && posts.length === 1) return route.abort();
           const action = posts.at(-1).body.action;
           const state = { approve_completion: 'completed', reopen_execution: 'reopened', resume_reopened: 'in_progress', cancel_execution: 'cancelled' }[action];
@@ -88,8 +92,12 @@ async function main() {
         if (await page.locator('#completionNote').isVisible()) await page.locator('#completionNote').fill('Clarified the recorded observation');
         await page.locator('#completionPrepare').click();
         await page.locator('#completionConfirm[open]').waitFor();
+        assert.match(await page.locator('#completionConfirmDetails').innerText(), /Execution revision/);
+        if (action === 'reopen_execution' || action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Recheck the completed seal/);
+        if (action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Clarified the recorded observation/);
         assert.equal(await page.evaluate(() => document.activeElement.id), 'completionCancelButton', 'confirmation starts on safe cancel choice');
-        await page.locator('#completionConfirmButton').click();
+        if (hostile) await page.locator('#completionConfirmButton').evaluate(button => { button.click(); button.click(); });
+        else await page.locator('#completionConfirmButton').click();
       };
       if (hostile) {
         await page.locator('[data-action="approve_completion"]').click();
@@ -113,6 +121,7 @@ async function main() {
         const record = (await fixture.ownerPool.query('SELECT lifecycle_state FROM canonical_field_executions WHERE organization_id=$1 AND id=$2', [fixture.org, executionId])).rows[0];
         assert.equal(record.lifecycle_state, 'cancelled');
       }
+      await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
       ledger.cases.push({ label, actionCount: posts.length, state: 'cancelled', noOverflow: true });
       if (!fixture) {
@@ -126,24 +135,44 @@ async function main() {
         body = fixtureData.raw(); mode = 'uncertain'; posts = [];
         await page.reload({ waitUntil: 'networkidle' }); await act('approve_completion');
         await page.waitForFunction(() => document.querySelector('#completionStatus').dataset.state === 'uncertain');
+        mode = 'retry-limited';
+        await page.locator('#completionRetry').click();
+        await page.waitForFunction(() => document.querySelector('#completionStatus').dataset.state === 'uncertain' && !document.querySelector('#completionRetry').disabled);
+        assert.equal(posts.length, 2, 'a rate-limited retry does not falsely resolve the original uncertain decision');
+        assert.equal(await page.locator('[data-action]:not(:disabled)').count(), 0);
+        mode = 'uncertain';
         await page.locator('#completionRetry').click();
         await page.waitForFunction(() => document.querySelector('#completionLifecycle').dataset.state === 'completed');
-        assert.equal(posts.length, 2); assert.deepEqual(posts[0], posts[1], 'uncertain retry preserves exact idempotency key/body');
+        assert.equal(posts.length, 3); assert.deepEqual(posts[0], posts[1], 'uncertain retry preserves exact idempotency key/body');
+        assert.deepEqual(posts[1], posts[2]);
         mode = 'restricted'; await page.reload({ waitUntil: 'networkidle' });
         await page.waitForFunction(() => document.querySelector('#completionStatus').dataset.state === 'restricted');
         assert.equal(await page.locator('[data-action]').count(), 0);
         assert.equal(await page.locator('#completionTitle').innerText(), 'Completion review');
+        assert.equal(await page.locator('#completionHistorySummary').innerText(), '');
+        assert.equal(await page.locator('#completionConfirmReason').innerText(), '');
+        assert.equal(await page.locator('#completionConfirmDetails').innerText(), '');
+        mode = 'invalid'; await page.reload({ waitUntil: 'networkidle' });
+        await page.waitForFunction(() => document.querySelector('#completionStatus').dataset.state === 'unavailable');
+        assert.equal(await page.locator('[data-action]').count(), 0);
+        mode = 'normal'; body = fixtureData.raw();
+        await page.goto(`${origin}/dashboard/completion-review?executionId=invalid`, { waitUntil: 'networkidle' });
+        await page.waitForFunction(() => document.querySelector('#completionStatus').dataset.state === 'restricted');
+        await page.goBack({ waitUntil: 'networkidle' });
+        await page.locator('[data-action="approve_completion"]').waitFor();
         ledger.cases.push({ label: label + '-failure-controls', appliedRefreshFailure: true, exactRetry: true, revoked: true });
       }
       await context.close();
+      process.stdout.write(JSON.stringify({ completed: label, durable, hostile }) + '\n');
     }
-    assert.deepEqual(ledger.pageErrors, []); assert.deepEqual(ledger.externalBlocked, []);
+    assert.deepEqual(ledger.pageErrors, []); assert.deepEqual(ledger.externalBlocked, []); assert.equal(ledger.serverExternalAttempts, 0);
     ledger.passed = true;
   } catch (error) { ledger.passed = false; ledger.error = { name: error.name, message: error.message }; throw error; }
   finally {
     if (browser) await browser.close();
     if (server) await new Promise(resolve => server.close(resolve));
     if (fixture) await fixture.cleanup();
+    https.request = oldRequest; https.get = oldGet; globalThis.fetch = oldFetch;
     fs.writeFileSync(path.join(output, 'RESULT.json'), JSON.stringify(ledger, null, 2) + '\n', { flag: 'wx' });
     process.stdout.write(JSON.stringify({ browser: selected, hostile, durable, passed: ledger.passed, cases: ledger.cases.length, output }) + '\n');
   }

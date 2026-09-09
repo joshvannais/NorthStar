@@ -12,7 +12,7 @@ function rawRecord(kind = 'proposal', overrides = {}) {
     lifecycleBefore: 'in_progress', lifecycleAfter: 'completion_pending',
     decidedAt: NOW, expiresAt: '2026-09-09T13:00:00.000Z', reason: 'Recorded completion decision',
     relatedProposalId: null, relatedCompletionId: null,
-    document: { kind, contractVersion: 'm23-completion-authority-v1' },
+    document: { kind, contractVersion: 'm23-completion-authority-v1', ...(kind === 'reopening' ? { nextAction: 'Recheck the completed seal' } : {}) },
     gateSnapshot: {
       contractVersion: 'm23-completion-gates-v1', executionId: id(4),
       requirements: { checklists: [], inspections: [], files: [] },

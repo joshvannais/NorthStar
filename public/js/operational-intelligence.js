@@ -76,19 +76,19 @@
       body.replaceChildren();
       body.append(node('p', 'oi-summary', value.summary), node('p', 'oi-muted', value.scope));
       var sections = node('div', 'oi-grid');
-      sections.append(list('Needs human review', value.conflicts), list('Missing inputs', value.missingInputs)); body.append(sections);
+      sections.append(list('Needs review', value.conflicts), list('Missing inputs', value.missingInputs)); body.append(sections);
       var compare = node('section', 'oi-section'); compare.append(node('h3', '', 'Plan and actual evidence'));
       value.comparisons.forEach(function(item) {
         var card = node('div', 'oi-comparison'); card.append(node('h4', '', item.title));
         if (item.code === 'schedule_and_labor') {
           var values = node('dl', 'oi-values');
           values.append(node('dt', '', 'Scheduled window'), node('dd', '', item.plannedWindowSeconds === null ? 'Unavailable' : (item.plannedWindowSeconds / 60).toLocaleString() + ' minutes'),
-            node('dt', '', 'Reviewed visible labor'), node('dd', '', item.reviewedLaborSeconds === null ? 'Unavailable' : (item.reviewedLaborSeconds / 60).toLocaleString() + ' person-minutes'));
+            node('dt', '', 'Reviewed work time'), node('dd', '', item.reviewedLaborSeconds === null ? 'Unavailable' : (item.reviewedLaborSeconds / 60).toLocaleString() + ' person-minutes'));
           card.append(values);
         } else card.append(node('p', 'oi-quantity', item.completed + ' of ' + item.total + ' ' + item.unit));
         card.append(node('p', 'oi-muted', item.explanation)); compare.append(card);
       });
-      body.append(compare, list('Suggested human next steps', value.recommendations));
+      body.append(compare, list('Suggested next steps', value.recommendations));
       var evidence = node('details', 'oi-evidence'); evidence.append(node('summary', '', 'Sources, freshness and confidence'));
       evidence.append(node('p', '', 'Confidence: limited. ' + value.confidence.basis), node('p', '', value.uncertainty),
         node('p', '', 'Prepared ' + new Date(value.generatedAt).toLocaleString() + ' · Refresh after ' + new Date(value.expiresAt).toLocaleTimeString()));

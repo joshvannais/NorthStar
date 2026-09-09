@@ -94,7 +94,7 @@
         node('p', '', 'Prepared ' + new Date(value.generatedAt).toLocaleString() + ' · Refresh after ' + new Date(value.expiresAt).toLocaleTimeString()));
       var domainNames = { labor: 'Time', materials: 'Materials', equipment: 'Equipment', fieldEvidence: 'Field evidence', progress: 'Progress and changes', completion: 'Completion decisions' };
       value.evidence.forEach(function(item) {
-        evidence.append(node('p', '', domainNames[item.domain] + ' · ' + item.returned + ' of ' + item.visibleTotal + ' records reviewed' + (item.complete ? '' : ' · some records are unavailable')));
+        evidence.append(node('p', '', domainNames[item.domain] + ' · ' + item.returned + ' of ' + item.visibleTotal + ' records included' + (item.complete ? '' : ' · some records are unavailable')));
       });
       body.append(evidence);
       body.append(node('p', 'oi-boundary', 'Advice only. You decide whether to act. Reviewing this summary does not change work, schedules or prices, approve completion, create invoices or contact customers.'));

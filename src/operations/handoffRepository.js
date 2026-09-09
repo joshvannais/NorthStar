@@ -2,7 +2,7 @@
 const VERSION = 'm23-downstream-handoffs-v1';
 const MISSIONS = Object.freeze([
   { mission: 24, label: 'Estimating', boundary: 'Human-reviewed estimate inputs; no price or quote approval.' },
-  { mission: 25, label: 'Private learning', boundary: 'Save the selected company records for review. No learning or combined analysis starts.' },
+  { mission: 25, label: 'Private learning', boundary: 'Save which company records you reviewed, without copying their contents. No learning or combined analysis starts.' },
   { mission: 26, label: 'Business intelligence', boundary: 'Prepare records for future business reports. Predictions will remain separate from recorded facts.' },
   { mission: 27, label: 'Customer lifecycle', boundary: 'Company review only. No customer message, acceptance, invoice or payment is created.' },
   { mission: 28, label: 'Business automation', boundary: 'Owner review for a future task. No automatic action starts.' },

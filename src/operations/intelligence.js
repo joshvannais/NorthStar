@@ -139,7 +139,7 @@ function buildIntelligence(sources, context, input) {
     audience: input.actorAccessRole === 'member' ? 'current_assigned_worker' : 'owner_admin',
     audienceDigest: digest([input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId]),
     execution: { ...pin(execution), lifecycleState: execution.lifecycleState }, assignment,
-    summary: `${STATES[execution.lifecycleState]}. ${conflicts.length ? 'Work records need review.' : 'No conflict was detected in the available work records.'} Review any missing information below.`,
+    summary: `${STATES[execution.lifecycleState]}. ${conflicts.length ? 'Work records need review.' : 'No conflict was detected in the records checked. Incomplete or unreviewed records may still contain conflicts.'} Review any missing information below.`,
     scope: input.actorAccessRole === 'member' ? 'Your current assignment, including your recorded time and material use. Other workers’ private details are not included.' : 'Work records available to company owners and administrators. Record counts do not verify physical conditions or professional qualifications.',
     confidence: { level: 'limited', basis: 'Based on the recorded work shown below. Missing information, unreviewed entries and incomplete history limit what can be concluded.' },
     uncertainty: 'This summary reflects the records available when it was prepared. Refresh before making a decision. It does not establish safety, legal compliance, a price or a financial result.',

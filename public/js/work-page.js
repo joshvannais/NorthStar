@@ -259,7 +259,7 @@
         action: actionName,
         label: submitLabel,
         copy: actionName === 'propose_completion' ? completionSelectionCopy() :
-          'Review this field evidence, then confirm it should be recorded against the current execution.',
+          'Review these work details, then confirm they should be saved for this job.',
         body: builder(new FormData(form)),
         path: mutationPath(actionName),
         form: form,
@@ -393,7 +393,7 @@
     var pins = executionPins();
     confirmAction({
       action: action, label: names[action],
-      copy: 'NorthStar will record this lifecycle change against the exact execution and assignment versions shown now.',
+      copy: 'NorthStar will check the latest job details and your assignment before saving this work-status change.',
       path: mutationPath(action),
       body: {
         action: action,
@@ -433,7 +433,7 @@
     if (!model.execution) {
       byId('workStateBadge').textContent = 'Not opened';
       byId('workStateBadge').dataset.state = 'empty';
-      content.appendChild(emptyNote('No field execution exists for this current approved assignment.'));
+      content.appendChild(emptyNote('This assigned job has not been opened for recording work yet.'));
       if (allows('initialize')) {
         content.appendChild(actionButton('Open work record', 'workLifecyclePrimary', function(event) {
           var recordPins = model.record.authority;
@@ -466,7 +466,7 @@
       actions.appendChild(button);
     } else {
       actions.appendChild(unavailableNote(['completed', 'cancelled'].includes(state)
-        ? 'This durable execution is read-only. An owner or administrator controls reopening.'
+        ? 'This work is read-only. An owner or administrator must reopen it before work can resume.'
         : state === 'completion_pending'
           ? 'Completion is awaiting explicit review. You may withdraw your active proposal below.'
           : 'This lifecycle is read-only from the worker experience.'));
@@ -976,7 +976,7 @@
       }, 'propose_completion'));
     } else {
       content.appendChild(unavailableNote(['completed', 'cancelled'].includes(model.execution.lifecycleState)
-        ? 'This execution has a durable terminal state. Only authorized owner or administrator actions can change it.'
+        ? 'This work is completed or cancelled. Only an owner or administrator can change that status.'
         : 'Start or resume work before proposing completion.'));
     }
   }
@@ -1038,7 +1038,7 @@
       model.record = validateRecord(selected);
       if (selector.executionId && (!selected.execution || selected.execution.id !== selector.executionId)) {
         pruneDrafts(true);
-        setState('stale', '', 'The selected execution is no longer the current execution for this assigned appointment.', true);
+        setState('stale', '', 'These work details are no longer current for your assigned job. Return to Today and open the job again.', true);
         return false;
       }
       if (!selected.execution) {
@@ -1145,7 +1145,7 @@
       } else {
         model.retryMutation = { descriptor: descriptor, trigger: trigger };
         var retryCopy = error.retryAfter
-          ? 'Retry the same request after ' + clean(error.retryAfter, 'the server delay') + '. No success is claimed yet.'
+          ? 'NorthStar is busy. Wait a moment, then use Retry to check whether your action was saved. Retrying will not record it twice.'
           : STATE_COPY.retry[1];
         setState(root.navigator && root.navigator.onLine === false ? 'offline' : 'retry', '', retryCopy);
       }

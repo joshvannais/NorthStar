@@ -22,13 +22,13 @@
   function mount(container,expected,options){
     options=options||{};
     var details=document.createElement('details');details.className='execution-link';
-    var summary=document.createElement('summary');summary.textContent='Work execution';
+    var summary=document.createElement('summary');summary.textContent='Work details';
     var body=document.createElement('div');body.className='execution-link-content';
     var status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     body.appendChild(status);details.append(summary,body);container.appendChild(details);
     var serial=0,controller=null,timer=null,disposed=false;
     var demo=options.demo===true || /^\/demo(?:\/|$|-)/.test(window.location.pathname);
-    var initial=demo?'Demo work is read-only. Live execution records are not opened from this fictional workspace.':
+    var initial=demo?'Demo work is read-only. Real company work cannot be opened from this practice workspace.':
       identity(expected)?'Open to check the work details available for this job.':'Work details could not be linked to this job. Review the job in Operations.';
     status.textContent=initial;
     function reset(){serial+=1;if(controller)controller.abort();controller=null;if(timer)clearTimeout(timer);timer=null;body.replaceChildren(status);status.textContent=initial;body.removeAttribute('aria-busy');}
@@ -38,19 +38,19 @@
     async function load(){
       reset();if(disposed || demo || !identity(expected))return;
       var generation=serial;controller=new AbortController();timer=setTimeout(function(){if(controller)controller.abort();},12000);
-      status.textContent='Checking current execution access…';body.setAttribute('aria-busy','true');
+      status.textContent='Checking access to this job’s work details…';body.setAttribute('aria-busy','true');
       try {
         if(!window.NorthStarAccountSession || typeof window.NorthStarAccountSession.fetch!=='function')throw new Error('Session unavailable');
         var response=await window.NorthStarAccountSession.fetch('/api/v1/field-executions/links/appointments/'+expected.appointmentId+
           '?graphId='+expected.graphId+'&customerId='+expected.customerId,{method:'GET',cache:'no-store',signal:controller.signal});
         if(disposed || generation!==serial || !details.isConnected || !details.open)return;
-        if(response.status===401 || response.status===403){status.textContent='Execution review is available only to a current owner or administrator. No review controls are available here.';return;}
+        if(response.status===401 || response.status===403){status.textContent='Completion review is available only to an owner or administrator. Your account cannot review completion here.';return;}
         if(!response.ok)throw new Error('Read unavailable');
         var envelope=await response.json();var value=validate(envelope && envelope.success===true && envelope.data,expected);
         if(disposed || generation!==serial || !details.isConnected || !details.open)return;
         if(value.state!=='available'){status.textContent='Work details could not be found or confirmed. The work may not have been opened yet, or its details may have changed. Refresh this page or review Operations.';return;}
-        status.textContent='Open this work’s execution record. Current access and decision availability are checked again there.';
-        var link=document.createElement('a');link.className='btn btn-secondary btn-sm';link.textContent='Review execution';link.href=value.href;body.appendChild(link);
+        status.textContent='Open this job’s completion review. NorthStar will check your current access and which decisions are available.';
+        var link=document.createElement('a');link.className='btn btn-secondary btn-sm';link.textContent='Review completion';link.href=value.href;body.appendChild(link);
       }catch(_error){
         if(disposed || generation!==serial || !details.isConnected || !details.open)return;
         status.textContent='Work details could not be checked. Try again.';

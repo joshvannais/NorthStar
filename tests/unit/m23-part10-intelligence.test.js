@@ -87,4 +87,5 @@ test('incomplete histories explain every domain with business labels while keepi
   for (const item of limits) expect(item.text).not.toMatch(/fieldEvidence|current-leaf|snapshot|bound|digest|revision/);
   expect(value.comparisons[0].reviewedLaborSeconds).toBeNull();
   expect(value.evidence.every(domain => domain.complete === false)).toBe(true);
+  expect(value.summary).toContain('Incomplete or unreviewed records may still contain conflicts.');
 });

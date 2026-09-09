@@ -402,7 +402,8 @@ async function main() {
           await checklistDialog.waitFor();
           await checklistDialog.getByRole('button', { name: 'Confirm Create checklist' }).click();
           await page.waitForFunction(() => document.body.dataset.workState === 'retry');
-          assert.match(await page.locator('#workStateCopy').textContent(), /after 1/);
+          assert.match(await page.locator('#workStateCopy').textContent(), /NorthStar is busy.*Retry.*not record it twice/);
+          assert.doesNotMatch(await page.locator('#workStateCopy').textContent(), /after 1|server delay|Retry-After/);
           assert.strictEqual(await page.getByRole('button', { name: 'Retry same request' }).count(), 1);
           await page.getByRole('button', { name: 'Retry same request' }).click();
           await page.waitForFunction(() => document.body.dataset.workState === 'success');

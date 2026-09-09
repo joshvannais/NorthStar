@@ -3,7 +3,7 @@
   var contract = window.NorthStarCompletionReview, client = window.NorthStarFieldExecutionClient;
   var selectedId, model = null, selection = null, confirmation = null, outcome = null, pending = false, generation = 0;
   var controllers = new Set(), restoreFocus = null;
-  var LABELS = { approve_completion: 'Approve completion', cancel_execution: 'Cancel execution', reopen_execution: 'Reopen completed work',
+  var LABELS = { approve_completion: 'Approve completion', cancel_execution: 'Cancel recorded work', reopen_execution: 'Reopen completed work',
     resume_reopened: 'Resume reopened work', correct_completion: 'Add correction note' };
   var COPY = { approve_completion: 'Approve this proposal and mark the work complete if its evidence is still current and its approval deadline has not passed.',
     cancel_execution: 'Mark this work as cancelled. This does not cancel its appointment or delete its history.',
@@ -198,5 +198,5 @@
   window.addEventListener('pagehide', function() { generation += 1; controllers.forEach(function(controller) { controller.abort(); }); controllers.clear(); pending = false; outcome = null; clear(); lock(); });
   window.addEventListener('pageshow', function(event) { if (event.persisted && selectedId) load(); });
   try { selectedId = contract.parseSelector(location.search); load(); }
-  catch (_error) { clear(); status('restricted', 'Choose one recorded execution from Operational Overview to review completion.'); lock(); }
+  catch (_error) { clear(); status('restricted', 'Choose a job from Operations to review its completion.'); lock(); }
 })();

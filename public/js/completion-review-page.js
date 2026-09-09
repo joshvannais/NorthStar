@@ -14,7 +14,7 @@
   var GATES = { required_checklists: 'Required checklists', required_inspections: 'Required inspections', required_files: 'Required files',
     unresolved_blockers_or_exceptions: 'Unresolved blockers or exceptions', progress_review: 'Progress review', open_labor_timers: 'Open labor timers',
     labor_review: 'Labor review', material_review: 'Material review', equipment_checkout: 'Equipment checkout', equipment_downtime: 'Equipment downtime', field_evidence_review: 'Field evidence review' };
-  var KINDS = { proposal: 'Proposal', approval: 'Approval', withdrawal: 'Withdrawal', cancellation: 'Cancellation', reopening: 'Reopening', resumption: 'Resumption', correction: 'Correction annotation' };
+  var KINDS = { proposal: 'Proposal', approval: 'Approval', withdrawal: 'Withdrawal', cancellation: 'Cancellation', reopening: 'Reopening', resumption: 'Resumption', correction: 'Correction note' };
   function byId(id) { return document.getElementById(id); }
   function node(tag, className, text) { var element = document.createElement(tag); if (className) element.className = className; if (text !== undefined) element.textContent = text; return element; }
   function date(value) { return new Date(value).toLocaleString('en-US', { timeZone: 'UTC' }) + ' UTC'; }
@@ -86,7 +86,7 @@
     }
     byId('completionHistory').hidden = false;
     byId('completionHistorySummary').textContent = value.history.records.length + ' of ' + value.history.total + ' recorded decisions shown.' +
-      (value.history.truncated ? ' Only part of the history is shown. Load the complete history before selecting a decision to correct. Older records are kept.' : ' Original decisions are preserved; corrections are separate annotations.');
+      (value.history.truncated ? ' Only part of the history is shown. Corrections are unavailable while this history is incomplete. Older records are kept.' : ' Original decisions are kept; corrections are separate notes.');
     var history = byId('completionHistoryRecords'); history.replaceChildren();
     value.history.records.forEach(function(record) {
       var article = node('article', 'completion-record');

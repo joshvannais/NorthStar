@@ -155,7 +155,7 @@
           <div>
             <h1 class="bp-title">Business Profile</h1>
             <p id="polarisProfileGuidance" class="bp-subtitle">Keep the business details NorthStar uses for customer service, planning, and provider-neutral AI guidance in one place.</p>
-            <p id="businessProfileStatus" role="status" aria-live="polite" aria-atomic="true">Loading your durable Business Profile authority. Editing remains disabled.</p>
+            <p id="businessProfileStatus" role="status" aria-live="polite" aria-atomic="true">Loading your Business Profile. Please wait before making changes.</p>
           </div>
           <div class="bp-header-actions">
             <span class="bp-role-badge" id="businessProfileRole">Loading access…</span>
@@ -356,7 +356,7 @@
               </div>
               <button id="addAssetButton" class="equipment-button equipment-button-primary" type="button" hidden>Add equipment</button>
             </div>
-            <div id="assetCatalogueAuthority" class="bp-authority-note" role="status">Loading PostgreSQL asset authority…</div>
+            <div id="assetCatalogueAuthority" class="bp-authority-note" role="status">Loading your equipment catalogue…</div>
             <div id="assetCatalogueError" class="bp-validation-error" role="alert"></div>
             <div id="assetCatalogueContainer" class="bp-repeat-list" aria-live="polite"></div>
           </div>
@@ -1161,7 +1161,7 @@
     }
 
     function loadProfile() {
-      setProfileInteractionState('loading', 'Loading your durable Business Profile authority. Editing remains disabled.');
+      setProfileInteractionState('loading', 'Loading your Business Profile. Please wait before making changes.');
       NorthStarAccountSession.load()
         .then(function(account) {
           applyProfileAccess(account);
@@ -1175,20 +1175,20 @@
             renderProfile(profileData);
             associateProfileLabels(document);
             setProfileInteractionState('ready', profileCanEdit
-              ? 'Changes are saved to your versioned Business Profile.'
+              ? 'Changes are saved to your Business Profile.'
               : 'Read-only access. An owner or admin can make changes.');
             activateRequestedProfileSection();
           } else {
-            setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
+            setProfileInteractionState('error', 'Your Business Profile could not be loaded. Reload the page to try again; changes are unavailable until it loads.');
             showToast('Failed to load profile', 'error');
           }
         })
         .catch(function() {
-          setProfileInteractionState('error', 'Business Profile authority is unavailable. Editing remains disabled.');
+          setProfileInteractionState('error', 'Your Business Profile could not be loaded. Reload the page to try again; changes are unavailable until it loads.');
           var readiness = document.getElementById('profileReadiness');
           if (readiness && readiness.dataset.state === 'loading' && !profileReadinessData) {
             setProfileReadinessState('error', 'Profile Readiness is unavailable. Actions remain disabled.');
-            showProfileReadinessError('Profile Readiness authority is unavailable.', false);
+            showProfileReadinessError('Profile Readiness could not be loaded. Please try again.', false);
           }
           showToast('Could not connect to server', 'error');
         });
@@ -1416,7 +1416,7 @@
       assetCatalogueData = data;
       var authority = document.getElementById('assetCatalogueAuthority');
       if (authority) {
-        authority.textContent = 'The tenant asset catalogue is authoritative. Business Profile displays it without copying it into profile JSON.';
+        authority.textContent = 'Equipment listed here is shared with your company equipment catalogue. Changes update the same equipment records.';
       }
       var add = document.getElementById('addAssetButton');
       if (add) add.hidden = !data.canManage;
@@ -1480,8 +1480,8 @@
         showToast('✅ Asset catalogue updated', 'success');
         return true;
       } catch (_error) {
-        showAssetCatalogueError('Could not connect to the PostgreSQL asset authority.');
-        showToast('❌ Could not connect to asset authority', 'error');
+        showAssetCatalogueError('Your equipment catalogue could not be loaded. Please try again.');
+        showToast('❌ Could not load your equipment catalogue', 'error');
         assetCatalogueState('error');
         return false;
       }
@@ -3457,7 +3457,7 @@
     // ====================================================================
     document.addEventListener('DOMContentLoaded', function() {
       initializeProfileAccessibility();
-      setProfileInteractionState('loading', 'Loading your durable Business Profile authority. Editing remains disabled.');
+      setProfileInteractionState('loading', 'Loading your Business Profile. Please wait before making changes.');
       setProfileReadinessState('loading', 'Loading Profile Readiness. Actions remain disabled.');
       document.getElementById('saveProfileReadinessBtn').addEventListener('click', saveProfileReadiness);
       document.getElementById('reloadProfileReadinessBtn').addEventListener('click', reloadProfileReadiness);

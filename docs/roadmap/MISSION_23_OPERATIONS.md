@@ -105,12 +105,22 @@ knowledge authorities without replacing any of them.
   `9d35ab971128c965a79ee22f280abd830b175932`, sole automatic deployment
   `a60e47e4-0ed9-42a6-8dee-6ae9a2e9edbd`, exact revision and bounded public
   acceptance. This is the Part 11 base, not a new production inspection.
-- **Part 11: writer candidate only; not independently accepted or released.**
+- **Part 11: independently accepted and normally merged through PR #182 as
+  `c7e011517f0a48c0d1fda0ba32d72871bbc7cc26`.** The coordinator's supplied
+  release receipt records sole automatic deployment
+  `12231628-9dd6-4eb1-9f0e-f006787e80f8`, healthy bounded public acceptance and
+  54 matching applied migrations. Untested restoration and the forward-fix-only
+  recovery limitation remain disclosed; founder continuation was explicit.
+  The prior premature-merge gate error is preserved, not retroactively erased.
   [Downstream reference handoffs](../operations/DOWNSTREAM_HANDOFFS.md) defines
   the consent-confirmed owner/admin reference receipts and append-only revocation
   authority. Delivery/consumption remain unavailable; Mission 31 remains
-  synthetic-only. The additive 056 migration requires its own production gate.
-- **Part 12: not implemented.**
+  synthetic-only. Migration 056 remains frozen without a destructive rollback.
+- **Part 12: same-job acceptance writer candidate; not independently accepted
+  or released.** [Acceptance map](../operations/MISSION_23_ACCEPTANCE.md)
+  traces mounted PostgreSQL/HTTP/browser authority and preserves the Part 9
+  My Work Profile residual and all unavailable evidence. Candidate tests do not
+  establish entire-mission completeness or authorize Mission 24 implementation.
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and

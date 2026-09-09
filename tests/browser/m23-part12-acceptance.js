@@ -157,7 +157,7 @@ async function main() {
     await failed.page.route('**/completion-review',route=>new URL(route.request().url()).pathname.startsWith('/api/')
       ? route.fulfill({status:503,json:{success:false,error:{message:'PostgreSQL stack trace: internal_schema routine /api/private'}}}) : route.continue());
     await failed.page.goto(origin+'/dashboard/completion-review?executionId='+work.execution.id);
-    await failed.page.locator('#completionStatus[data-state="error"]').waitFor();
+    await failed.page.locator('#completionStatus[data-state="unavailable"]').waitFor();
     ledger.wording.push(await assertUserWording(failed.page,'intercepted service error keeps implementation diagnostics out of product copy'));
     await failed.page.screenshot({path:path.join(output,'light-390-service-error.png'),fullPage:true});
     await failed.context.close();activePage=null;

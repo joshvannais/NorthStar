@@ -110,8 +110,8 @@ async function main() {
         if (action === 'reopen_execution' || action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Recheck the completed seal/);
         if (action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Clarified the recorded observation/);
         assert.equal(await page.evaluate(() => document.activeElement.id), 'completionCancelButton', 'confirmation starts on safe cancel choice');
-        if (action === 'approve_completion' && posts.length === 0) {
-          await page.screenshot({ path: path.join(output, label + '-confirmation.png'), fullPage: true });
+        if (action === 'approve_completion' && mode === 'normal' && posts.length === 0) {
+          await page.screenshot({ path: path.join(output, label + '-confirmation-viewport.png'), fullPage: false });
         }
         if (hostile) await page.locator('#completionConfirmButton').evaluate(button => { button.click(); button.click(); });
         else await page.locator('#completionConfirmButton').click();

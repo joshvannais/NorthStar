@@ -36,6 +36,7 @@ const accountRoutes = require('./routes/account');
 const { createMapPreferencesRouter } = require('./routes/mapPreferences');
 const { WorkforceService } = require('./workforce/service');
 const { createWorkforceRouter } = require('./routes/workforce');
+const { createWorkProfileRouter } = require('./routes/workProfile');
 const { AssetCatalogueService } = require('./assets/service');
 const { createAssetCatalogueRouter } = require('./routes/assets');
 const { createIntegrationStatusRouter } = require('./routes/integrationStatus');
@@ -116,6 +117,8 @@ const pages = {
   '/account/pending': 'public/account/pending.html',
   '/dashboard': 'public/demo-dashboard.html',
   '/dashboard/today': 'public/dashboard/today.html',
+  '/dashboard/my-work-profile': 'public/dashboard/my-work-profile.html',
+  '/dashboard/work-profile-reviews': 'public/dashboard/work-profile-reviews.html',
   '/dashboard/work': 'public/dashboard/work.html',
   '/dashboard/operations': 'public/dashboard/operations.html',
   '/dashboard/completion-review': 'public/dashboard/completion-review.html',
@@ -226,6 +229,7 @@ app.use('/api/auth', createAuthRouter({
 app.use('/api/account/map-preferences', createMapPreferencesRouter());
 app.use('/api/account', accountRoutes);
 app.use('/api/workforce', createWorkforceRouter());
+app.use('/api/work-profiles', createWorkProfileRouter());
 // The normalized catalogue owns only /api/assets. It must precede the broad
 // legacy retirement router; /api/v1/assets remains retired.
 app.use('/api/assets', createAssetCatalogueRouter());

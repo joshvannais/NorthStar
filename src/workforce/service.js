@@ -129,7 +129,8 @@ class WorkforceService {
   }
 
   async snapshot(organizationId, role) {
-    return this.repository.snapshot(organizationId, role === 'owner');
+    const snapshot = await this.repository.snapshot(organizationId, role === 'owner');
+    return { ...snapshot, workProfileReviewHref: ['owner','admin'].includes(role) ? '/dashboard/work-profile-reviews' : null };
   }
 
   parseInvitation(input) {

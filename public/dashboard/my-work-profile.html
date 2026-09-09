@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Work Profile — NorthStar</title>
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/homepage-refresh.css">
+  <link rel="stylesheet" href="/css/demo-dashboard.css">
+  <link rel="stylesheet" href="/css/today.css">
+  <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/work-profile.css">
+  <link rel="icon" href="/assets/logo.png">
+</head>
+<body class="demo-dashboard-page command-center-blueprint-page today-page work-profile-page" data-profile-mode="self">
+  <a class="skip-link" href="#profileMain">Skip to My Work Profile</a>
+  <div class="app-layout">
+    <main class="main-content command-center-blueprint-shell" id="profileMain" tabindex="-1" aria-labelledby="profileTitle">
+      <header class="demo-dashboard-header command-center-blueprint-header today-header"><div class="demo-dashboard-header-inner"><a class="demo-dashboard-brand northstar-lockup" href="/dashboard/today" aria-label="NorthStar Today"><img src="/assets/logo.png" alt=""><span>NorthStar</span></a><div class="demo-dashboard-header-actions"><span class="demo-data-pill">Your professional profile</span></div></div></header>
+      <div class="demo-dashboard-main command-center-blueprint-main today-main wp-main">
+        <div class="page-header"><div><p class="demo-panel-kicker">Your work · Your experience</p><h1 id="profileTitle">My Work Profile</h1><p>Bring your skills and experience into view. Keep your team informed.</p></div></div>
+        <div class="wp-toolbar"><p id="profileStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Loading current profile…</p><button id="profileReload" class="btn btn-secondary" type="button">Reload profile</button><button id="profileRetry" class="btn btn-secondary" type="button" hidden>Retry same request</button></div>
+        <div id="profileDirectory" hidden></div>
+        <div id="profileContent" aria-busy="true"></div>
+        <section id="profileEditor" class="wp-panel" hidden aria-labelledby="profileEditorTitle"></section>
+        <dialog id="profileConfirm" aria-labelledby="profileConfirmTitle" aria-describedby="profileConfirmCopy"><h2 id="profileConfirmTitle">Confirm profile decision</h2><p id="profileConfirmCopy"></p><p class="wp-muted">Only this exact version is reviewed. Roles, access and schedules do not change.</p><div class="wp-actions"><button id="profileConfirmCancel" class="btn btn-secondary" type="button" autofocus>Keep reviewing</button><button id="profileConfirmAccept" class="btn btn-primary" type="button">Confirm decision</button></div></dialog>
+      </div>
+      <footer class="footer northstar-site-footer demo-dashboard-footer" data-northstar-site-footer><nav class="footer-links" aria-label="NorthStar information"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/legal">Legal</a><a href="/contact">Contact</a></nav><p>© 2026 NorthStar Solutions LLC. All rights reserved.</p></footer>
+    </main>
+  </div>
+  <script src="/js/today-shell.js"></script>
+  <script src="/js/work-profile-page.js"></script>
+</body>
+</html>

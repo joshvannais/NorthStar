@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Work Profile Reviews — NorthStar</title>
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/homepage-refresh.css">
+  <link rel="stylesheet" href="/css/demo-dashboard.css">
+  <link rel="stylesheet" href="/css/today.css">
+  <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/work-profile.css">
+  <link rel="icon" href="/assets/logo.png">
+</head>
+<body class="work-profile-page" data-profile-mode="review">
+  <a class="skip-link" href="#profileMain">Skip to work profile reviews</a>
+  <div class="dashboard-layout"><main class="main-content wp-review-main" id="profileMain" tabindex="-1" aria-labelledby="profileTitle">
+    <div class="page-header"><div><p class="wp-kicker">Team · Professional experience</p><h1 id="profileTitle">Work Profile Reviews</h1><p>Review employee-submitted experience and evidence, with every decision retained.</p></div><a class="btn btn-secondary" href="/dashboard/team">Back to Team</a></div>
+        <div class="wp-toolbar"><p id="profileStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Loading current profile…</p><button id="profileReload" class="btn btn-secondary" type="button">Reload profile</button><button id="profileRetry" class="btn btn-secondary" type="button" hidden>Retry same request</button></div>
+        <div id="profileDirectory" hidden></div>
+        <div id="profileContent" aria-busy="true"></div>
+        <section id="profileEditor" class="wp-panel" hidden aria-labelledby="profileEditorTitle"></section>
+        <dialog id="profileConfirm" aria-labelledby="profileConfirmTitle" aria-describedby="profileConfirmCopy"><h2 id="profileConfirmTitle">Confirm profile decision</h2><p id="profileConfirmCopy"></p><p class="wp-muted">Only this exact version is reviewed. Roles, access and schedules do not change.</p><div class="wp-actions"><button id="profileConfirmCancel" class="btn btn-secondary" type="button" autofocus>Keep reviewing</button><button id="profileConfirmAccept" class="btn btn-primary" type="button">Confirm decision</button></div></dialog>
+      <footer class="footer northstar-site-footer demo-dashboard-footer" data-northstar-site-footer><nav class="footer-links" aria-label="NorthStar information"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/legal">Legal</a><a href="/contact">Contact</a></nav><p>© 2026 NorthStar Solutions LLC. All rights reserved.</p></footer>
+  </main></div>
+  <script src="/js/auth-session.js"></script>
+  <script src="/js/command-center-contract.js"></script>
+  <script src="/js/nav-component.js"></script>
+  <script src="/js/work-profile-page.js"></script>
+  <script>NavComponent.init('team');</script>
+</body></html>

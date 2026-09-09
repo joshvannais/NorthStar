@@ -36,7 +36,7 @@
     <main class="main-content" id="mainContent" tabindex="-1">
       <div class="page-header">
         <div><h1>Team</h1><p>Individual access, job roles, skills, crews, locations, and workforce policies.</p></div>
-        <span class="wf-badge" id="workforceAuthority">Role-authorized workspace</span>
+        <div class="wf-actions"><a class="btn btn-secondary" href="/dashboard/work-profile-reviews" id="workProfileReviewLink" hidden>Review work profiles</a><span class="wf-badge" id="workforceAuthority">Role-authorized workspace</span></div>
       </div>
       <div class="ds-widget ds-widget-full">
         <div class="northstar-search">
@@ -573,6 +573,7 @@
         if (initial || !state.account) state.account = await window.NorthStarAccountSession.load();
         var response = await api('/api/workforce', { method: 'GET' });
         state.data = response.data;
+        document.getElementById('workProfileReviewLink').hidden = state.data.workProfileReviewHref !== '/dashboard/work-profile-reviews';
         render();
       } catch (error) {
         renderWorkforceError(error && error.message ? error.message : 'Workforce authority is unavailable.');

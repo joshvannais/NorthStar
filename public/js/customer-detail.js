@@ -580,7 +580,7 @@ window.CustomerDetail = (function() {
     return {
       summary: presentation.serviceText || 'Recorded service',
       price: presentation.customerPriceRoundedText,
-      confidenceLabel: 'Server confidence',
+      confidenceLabel: 'Confidence',
       confidenceClass: '',
       confidencePct: presentation.confidenceText,
       revenue: fmtCurrency(canon.estimatedRevenue),
@@ -809,7 +809,7 @@ window.CustomerDetail = (function() {
     $('cdStage').textContent = stageLabel(data.stage);
     $('cdProb').textContent = data.closeProbability != null
       ? data.closeProbability + '%'
-      : 'Unavailable — no role-authorized probability is recorded.';
+      : 'Unavailable — no probability is available to this account.';
 
     // POLARIS Intelligence
     var intel = generatePolarisIntel(data);

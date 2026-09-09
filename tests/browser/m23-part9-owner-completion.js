@@ -114,6 +114,10 @@ async function main() {
       assert.equal(await page.locator('#completionStatus').getAttribute('role'), 'status');
       assert.equal(await page.locator('#completionStatus').getAttribute('aria-live'), 'polite');
       assert.equal(await page.locator('#completionTitle strong').count(), 0, 'dynamic labels stay literal text');
+      assert.equal(await page.locator('.completion-header [data-northstar-theme-control]').count(), 1,
+        'theme control stays in the header rather than covering recorded work');
+      assert.ok(await page.locator('#completionProposalBody ul').evaluate(element =>
+        parseFloat(getComputedStyle(element).paddingInlineStart) >= 16), 'proposal list markers stay inside the card');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'no page horizontal overflow');
       await page.locator('#completionRefresh').focus();
       assert.equal(await page.evaluate(() => document.activeElement.id), 'completionRefresh');
@@ -132,6 +136,14 @@ async function main() {
         if (await page.locator('#completionNote').isVisible()) await page.locator('#completionNote').fill('Clarified the recorded observation');
         await page.locator('#completionPrepare').click();
         await page.locator('#completionConfirm[open]').waitFor();
+        const dialogBounds = await page.locator('#completionConfirm').boundingBox();
+        assert.ok(dialogBounds.x >= 15 && dialogBounds.y >= 15 &&
+          dialogBounds.x + dialogBounds.width <= profile.width - 15 &&
+          dialogBounds.y + dialogBounds.height <= profile.height - 15,
+        'confirmation stays inset from every viewport edge');
+        assert.ok(Math.abs(dialogBounds.x + dialogBounds.width / 2 - profile.width / 2) <= 1 &&
+          Math.abs(dialogBounds.y + dialogBounds.height / 2 - profile.height / 2) <= 1,
+        'confirmation is centered in both axes');
         assert.match(await page.locator('#completionConfirmDetails').innerText(), /Execution revision/);
         if (action === 'reopen_execution' || action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Recheck the completed seal/);
         if (action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Clarified the recorded observation/);

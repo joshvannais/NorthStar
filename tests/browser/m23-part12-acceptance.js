@@ -104,7 +104,7 @@ async function main() {
       assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
       assert.equal(await p.evaluate(()=>document.documentElement.dataset.theme),theme);
       await p.keyboard.press('Tab');
-      await p.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);});
+      await p.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});
       await p.screenshot({path:path.join(output,theme+'-'+width+'-completed.png'),fullPage:true});
       await p.reload();await p.locator('#completionLifecycle[data-state="completed"]').waitFor();
       ledger.cases.push(theme+' '+width+' same-job deep link reload theme reflow');
@@ -134,7 +134,7 @@ async function main() {
     await worker.page.getByRole('dialog',{name:'Confirm Record field note',exact:true}).getByRole('button',{name:'Confirm Record field note',exact:true}).click();
     await worker.page.getByText('Assigned worker performed the requested follow-up observation.',{exact:true}).waitFor();
     assert.equal(await worker.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-    await worker.page.evaluate(()=>window.scrollTo(0,0));
+    await worker.page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});
     await worker.page.screenshot({path:path.join(output,'dark-390-worker-follow-up.png'),fullPage:true});
     await worker.context.close();activePage=null;
     ledger.cases.push('assigned mobile worker records actual follow-up note after explicit resumption');

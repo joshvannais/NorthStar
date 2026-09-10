@@ -262,6 +262,19 @@ async function main() {
       await material.getByLabel('Internal cost', {exact:true}).fill('0');
       assert.deepStrictEqual((await read()).material, {'fence:cedar':0});
       ledger.cases.push({width,newMaterialKeyMatchesCalculationCaseRules:true});
+      const legacyCosts = {'fence:':0, 'Legacy material reference':12, ':legacy':5};
+      await page.evaluate(v => document.getElementById('material')._profileFields.load(v), legacyCosts);
+      assert.deepStrictEqual((await read()).material, legacyCosts);
+      await material.getByLabel('Saved material pricing reference', {exact:true}).first().fill('Retained legacy material');
+      await material.getByLabel('Internal cost', {exact:true}).nth(1).fill('17');
+      await material.getByLabel('Material', {exact:true}).fill('cedar');
+      await material.getByLabel('Material', {exact:true}).fill('');
+      assert.deepStrictEqual((await read()).material, {'fence:':0, 'Retained legacy material':17, ':legacy':5});
+      await material.getByRole('button', {name:'Add cost',exact:true}).click();
+      assert.deepStrictEqual((await read()).material, {'fence:':0, 'Retained legacy material':17, ':legacy':5});
+      ledger.cases.push({width,unspecifiedMaterialAndArbitraryReferencesRetained:true,duplicateAddCannotOverwrite:true});
+      await page.screenshot({path:path.join(output, theme+'-'+width+'-legacy-material.png'),fullPage:true});
+
 
       await polygon.getByRole('button', {
         name: 'Clear boundary',

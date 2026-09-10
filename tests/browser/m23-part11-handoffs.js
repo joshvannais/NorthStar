@@ -30,8 +30,17 @@ async function main(){
    const page=await context.newPage();activePage=page;page.on('pageerror',e=>ledger.pageErrors.push({label,message:e.message}));
    await page.route('**/*',route=>{if(new URL(route.request().url()).origin!==origin){ledger.externalBlocked.push(route.request().url());return route.abort();}return route.continue();});
    await page.goto(origin+'/dashboard/completion-review?executionId='+work.execution.id);
-   const panel=page.locator('#downstreamHandoffs'),summary=panel.locator('summary');await summary.waitFor();await summary.focus();await page.keyboard.press('Enter');
+   const panel=page.locator('#downstreamHandoffs'),summary=panel.locator(':scope > summary');await summary.waitFor();await summary.focus();await page.keyboard.press('Enter');
    await panel.getByText('Current work records are ready for review.',{exact:true}).waitFor();
+   const explanation=panel.locator('.handoff-explanation');
+   assert.equal(await explanation.getAttribute('open'),null);
+   await explanation.locator('summary').focus();await page.keyboard.press('Enter');
+   assert(await explanation.locator('.handoff-notice').isVisible());
+   await page.keyboard.press('Enter');
+   const spacing=await page.evaluate(()=>{const gap=(a,b)=>document.querySelector(b).getBoundingClientRect().top-document.querySelector(a).getBoundingClientRect().bottom;return {timestamp:gap('#completionStatus','#completionSnapshot'),decision:gap('#completionAvailability','#completionActions'),refresh:gap('.handoff-status','#downstreamHandoffs > .completion-actions'),logo:document.querySelector('.completion-brand img').getAttribute('src'),gradient:getComputedStyle(document.querySelector('.oi-panel')).backgroundImage};});
+   assert(spacing.timestamp>=15 && spacing.decision>=15 && spacing.refresh>=15,JSON.stringify(spacing));
+   assert.equal(spacing.logo,'/assets/logo.png');assert.match(spacing.gradient,/linear-gradient/);
+   ledger.cases.push({label:label+'-visual-spacing-disclosure',...spacing,passed:true});
    assert.equal(await panel.locator('option:disabled').textContent(),'Interactive experience — practice work only');
    assert.equal(await panel.locator('#handoffConsent').isChecked(),false);
    await panel.locator('#handoffMission').selectOption('25');await panel.locator('#handoffConsent').check();await panel.locator('#handoffMission').selectOption('24');

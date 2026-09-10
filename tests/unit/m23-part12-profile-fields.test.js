@@ -8,7 +8,7 @@ const {
   prepareBusinessProfileForWrite
 } = require('../../src/services/businessProfileAdapter');
 describe('structured business settings respect existing saved shapes', () => {
-  test.each([undefined, {}, {
+  test.each([undefined, {}, { 'fence:': 0 }, { 'Legacy material reference': 12 }, { ':legacy': 5 }, {
     'fence:cedar': 0
   }, {
     'service:custom:pine': 12

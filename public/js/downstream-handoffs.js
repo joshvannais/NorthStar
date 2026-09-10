@@ -39,14 +39,16 @@
     if (unresolved && unresolved.id !== id) unresolved = null;
     var scope = ++generation, model = null, pending = false;
     var details = element('details',undefined,'handoff-panel completion-panel'); details.id = 'downstreamHandoffs';
-    var summary = element('summary','Handoffs for later work'); details.append(summary);
-    var intro = element('p','Save a record of this work for a later task. Only company owners and administrators can review it. Nothing is sent or used by another task yet.','completion-muted');
+    var summary = element('summary','Handoffs'); details.append(summary);
+    var intro = element('p','Save reviewed work for a later task.','completion-muted');
     var notice = element('p','This stays private to your company. Saving it does not approve a price, send a message, start an automatic task, create an invoice or make a payment.','handoff-notice');
+    var explanation = element('details',undefined,'handoff-explanation');
+    explanation.append(element('summary','What saving a handoff means'),notice);
     var status = element('p','Open to review the latest work records.','handoff-status'); status.setAttribute('role','status'); status.setAttribute('aria-live','polite'); status.tabIndex=-1;
     var content = element('div',undefined,'handoff-content'), controls = element('div',undefined,'completion-actions');
     var refresh = element('button','Reload handoff review'); refresh.type='button';
     var retry = element('button','Retry this same handoff'); retry.type='button'; retry.hidden=!unresolved;
-    controls.append(refresh,retry); details.append(intro,notice,status,controls,content); host.replaceChildren(details); current={host:host,id:id};
+    controls.append(refresh,retry); details.append(intro,explanation,status,controls,content); host.replaceChildren(details); current={host:host,id:id};
     function setStatus(text, focus) { status.textContent=text; if (focus) status.focus(); }
     function lock() { details.querySelectorAll('button,select,input').forEach(function(e) { e.disabled=pending || Boolean(unresolved); }); retry.disabled=pending; retry.hidden=!unresolved; }
     function clearContent() { model=null; content.replaceChildren(); }
@@ -90,7 +92,7 @@
       var select=element('select');select.id='handoffMission'; model.missions.forEach(function(m){var option=element('option',m.label+(m.available===false?' — practice work only':''));option.value=String(m.mission);option.disabled=m.available===false;select.append(option);});
       var boundary=element('p',model.missions[0].boundary,'completion-muted');boundary.id='handoffPurpose';select.setAttribute('aria-describedby','handoffPurpose');
       var consentLabel=element('label',undefined,'handoff-consent'), consent=element('input');consent.type='checkbox';consent.id='handoffConsent';consent.required=true;
-      consentLabel.append(consent,element('span','I approve saving this handoff for the selected purpose. Only company owners and administrators may review it. I understand that it does not yet allow another task to use these records.'));
+      consentLabel.append(consent,element('span','Save which records I reviewed for this purpose, for company owners and administrators only. Nothing will be sent or used by another task.'));
       var save=element('button','Save handoff','completion-primary');save.type='submit';
       form.append(label,select,boundary,consentLabel,save); select.addEventListener('change',function(){consent.checked=false;boundary.textContent=model.missions.find(function(m){return m.mission===Number(select.value);}).boundary;});
       form.addEventListener('submit',function(event){event.preventDefault();if(!pending&&!unresolved&&consent.checked)submit(descriptor('prepare',Number(select.value),model.sourceDigest));}); content.append(form);

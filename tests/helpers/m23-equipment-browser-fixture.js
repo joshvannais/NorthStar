@@ -28,6 +28,7 @@ async function createFixture(name, options = {}) {
   }
   const raw = require('./m19-part3-business-profile').canonicalFenceProfile({ companyName: 'Equipment browser fixture', serviceName: 'Equipment fixture work' });
   raw.polaris = {};
+  if (options.materialCosts) raw.canonicalCosts.materialCostByService = options.materialCosts;
   const profileVersion = options.profileVersion || 'm23-equipment-browser';
   const normalized = adaptBusinessProfile(raw, profileVersion);
   await ownerPool.query("INSERT INTO canonical_business_profiles(organization_id,version_number,version_label,raw_profile,normalized_profile,normalized_profile_hash,is_active,created_by) VALUES($1,1,$6,$2,$3,$4,true,$5)", [org, raw, normalized, normalized.hash, user, profileVersion]);

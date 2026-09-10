@@ -149,7 +149,7 @@
     var link = node('a', 'northstar-lockup');
     link.href = TODAY_PATH;
     link.appendChild(image());
-    link.appendChild(node('span', '', 'NorthStar'));
+    link.appendChild(node('span', 'today-wordmark', 'NorthStar'));
     return link;
   }
 
@@ -184,12 +184,9 @@
     toggle.setAttribute('aria-controls', 'todayMobileMenu');
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-label', 'Open navigation menu');
-    toggle.append(menuIcon(), node('span', '', 'NorthStar'));
+    toggle.append(menuIcon(), image(), node('span', 'today-wordmark', 'NorthStar'));
     var headerActions = node('div', 'mobile-header-actions');
-    var logo = image();
-    logo.alt = 'NorthStar';
-    logo.className = 'mobile-logo';
-    headerActions.appendChild(logo);
+    // The traditional logo is next to the wordmark in the menu control.
     var theme = node('span', 'northstar-theme-slot');
     theme.dataset.northstarThemeSlot = '';
     theme.dataset.northstarThemeLocation = 'mobile';

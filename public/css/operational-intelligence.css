@@ -6,3 +6,6 @@
 @media(prefers-reduced-motion:reduce){.oi-panel,.oi-panel *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 .oi-missing>summary{cursor:pointer;min-height:44px;padding:10px 0;font-size:14px;font-weight:600}.oi-missing>ul{margin-top:10px}
 #workIntelligenceHost{grid-column:1 / -1;min-width:0}
+
+/* Reuse the established demo-dashboard Polaris purple-to-slate treatment. */
+.oi-panel, [data-theme="dark"] .oi-panel { --oi-accent: #e9ddff; --oi-border: rgba(167,139,250,.45); --oi-text: #f8fafc; --oi-muted: #ede9f7; background: linear-gradient(145deg, rgba(124,58,237,.98), rgba(30,41,59,.98)), var(--theme-surface); }

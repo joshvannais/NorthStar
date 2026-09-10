@@ -82,3 +82,9 @@ preservation, competing versions and member permission denial. These are separat
 evidence lanes. They do not prove physical devices, manual assistive technology,
 provider actions, arbitrary production configuration or every role/theme/width
 combination. Per-run source identity and actual screenshots remain mandatory.
+
+### Founder visual correction and material compatibility follow-up
+
+Employee shell wordmark color changes only within the employee Today shell; header backgrounds and owner navigation retain their colors. The traditional logo accompanies the wordmark. Completion review follows the owner Operations lockup, adds timestamp/decision spacing, and uses the established Polaris purple-to-slate gradient. Handoffs keep action consequences beside consent and move explanatory detail into native keyboard-accessible disclosure. Desktop/mobile and both themes require fresh rendered evidence.
+
+Material controls must accept every supported nonblank saved reference, including an unspecified material (`service:`) and legacy references without a separator. Legacy rows remain editable without whole-map replacement; changing other costs must preserve them. Adding a row cannot overwrite an existing unspecified-material entry. Isolated editing, mounted roundtrip and unchanged backend calculation authority are required evidence.

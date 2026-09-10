@@ -14,7 +14,7 @@ async function main() {
   assert(!fs.existsSync(output));
   fs.mkdirSync(output);
   const fixture = await require('../helpers/m23-equipment-browser-fixture').createFixture('p12structured-' + selected, {
-    profileVersion: 'org-profile-v1'
+    profileVersion: 'org-profile-v1', materialCosts: {'fence:cedar': 12, 'fence:': 0, 'Legacy material reference': 7}
   });
   let browser, server;
   const ledger = {
@@ -93,7 +93,7 @@ async function main() {
       const map = p.locator('[data-profile-editor=material]');
       await map.getByLabel('Internal cost', {
         exact: true
-      }).fill(String(width));
+      }).first().fill(String(width));
       const equipment = p.locator('[data-profile-editor=equipment]');
       if ((await equipment.getByRole('button', {
         name: 'Add cost',
@@ -117,6 +117,8 @@ async function main() {
       await p.waitForFunction(() => !financialConfigurationDirty && !financialConfigurationSaving);
       const after = await p.evaluate(async () => (await (await fetch('/api/v1/business-profile')).json()).data);
       assert.strictEqual(after.canonicalCosts.materialCostByService['fence:cedar'], width);
+      assert.strictEqual(after.canonicalCosts.materialCostByService['fence:'],0);
+      assert.strictEqual(after.canonicalCosts.materialCostByService['Legacy material reference'],7);
       assert.strictEqual(after.canonicalCosts.equipmentCostByReference['Mini excavator hire'], 35.5);
       assert.deepStrictEqual(after.services, before.services);
       assert.deepStrictEqual(after.company, before.company);
@@ -209,20 +211,20 @@ async function main() {
     for (const p of [pa, pb]) await p.locator('[data-section=financial]').click();
     await pa.locator('[data-profile-editor=material]').getByLabel('Internal cost', {
       exact: true
-    }).fill('111');
+    }).first().fill('111');
     await pb.locator('[data-profile-editor=material]').getByLabel('Internal cost', {
       exact: true
-    }).fill('222');
+    }).first().fill('222');
     await pa.locator('#saveFinancialConfigurationBtn').click();
     await pa.waitForFunction(() => !financialConfigurationDirty && !financialConfigurationSaving);
     await pb.locator('#saveFinancialConfigurationBtn').click();
     await pb.waitForFunction(() => financialConfigurationConflicted);
     assert(await pb.locator('[data-profile-editor=material]').getByLabel('Internal cost', {
       exact: true
-    }).isDisabled());
+    }).first().isDisabled());
     assert.strictEqual(await pb.locator('[data-profile-editor=material]').getByLabel('Internal cost', {
       exact: true
-    }).inputValue(), '222');
+    }).first().inputValue(), '222');
     ledger.cases.push({
       realVersionConflict: true,
       draftPreserved: true,
@@ -244,8 +246,8 @@ async function main() {
     await gap.locator('#saveBtn').click();
     await gap.waitForFunction(() => document.getElementById('toast').textContent.includes('saved successfully'));
     await gbp.locator('#saveBtn').click(); await gbp.waitForFunction(() => generalProfileConflicted);
-    assert(await gbp.locator('[data-profile-editor=pricing]').getByLabel('Charge amount', {exact:true}).isDisabled());
-    assert.strictEqual(await gbp.locator('[data-profile-editor=pricing]').getByLabel('Charge amount', {exact:true}).inputValue(), '444');
+    assert(await gbp.locator('[data-profile-editor=pricing]').getByLabel('Charge amount', {exact:true}).first().isDisabled());
+    assert.strictEqual(await gbp.locator('[data-profile-editor=pricing]').getByLabel('Charge amount', {exact:true}).first().inputValue(), '444');
     ledger.cases.push({realGeneralVersionConflict:true, pricingDraftPreserved:true, conflictedPricingReadOnly:true});
     await gbp.screenshot({path:path.join(output,'profile-conflict.png'),fullPage:true});
     await ga.close(); await gb.close();

@@ -44,7 +44,7 @@
       }) && number(p.latitude, -90, 90) && number(p.longitude, -180, 180);
     });
     if (kind === 'material' || kind === 'equipment') return object(v) && Object.keys(v).every(function (k) {
-      return k.trim() && number(v[k], 0) && (kind !== 'material' || k.lastIndexOf(':') > 0 && k.lastIndexOf(':') < k.length - 1);
+      return k.trim() && number(v[k], 0);
     });
     if (!object(v) || Object.keys(v).some(function (k) {
       return !['requiredScope', 'allowedScopeValues', 'rangePercent', 'lineItems'].includes(k);
@@ -600,7 +600,7 @@
         var row = el('div', undefined, content);
         row.className = 'profile-structured-row';
         var current = saved;
-        if (kind === 'material') {
+        if (kind === 'material' && saved.indexOf(':') > 0) {
           var split = splitMaterial(saved, options.services);
           var choices = {};
           (options.services || []).forEach(function (s) {
@@ -612,13 +612,10 @@
           }, row);
           input('Material', split.material, function (v) {
             var material = v.toLowerCase();
-            if (!material.trim()) {
-              issue = 'Enter a material name.';
-              return;
-            }
             if (rename(split.service + ':' + material)) split.material = material;
           }, row);
-        } else input('Equipment pricing reference', saved, rename, row);
+          el('small', 'Leave Material blank when no material is specified.', row);
+        } else input(kind === 'material' ? 'Saved material pricing reference' : 'Equipment pricing reference', saved, rename, row);
         function rename(next) {
           if (!next.trim() || next !== current && own(state, next)) {
             issue = 'Each cost needs a different, nonempty reference.';
@@ -652,6 +649,7 @@
         }
         if (Object.keys(state).length && validate(kind, state)) { status.textContent = 'Complete the current cost row before adding another.'; return; }
         var k = kind === 'material' ? prefix + ':' : '';
+        if (own(state, k)) { status.textContent = 'Complete or edit the existing unspecified-material cost before adding another for this service.'; return; }
         state[k] = null;
         rerender();
       });

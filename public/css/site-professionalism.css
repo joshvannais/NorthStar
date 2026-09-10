@@ -1756,4 +1756,6 @@ html body .customer-drawer .drawer-header-meta #cdPolSummary { text-transform:ca
 .customer-drawer .drawer-contact-methods p:last-child { margin-bottom: 0; }
 .customer-drawer .drawer-contact-methods a { display: inline-block; padding: .35rem 0; }
 .customer-drawer .drawer-contact-hint { font-size: .8125rem; color: var(--neutral-600); }
-.customer-drawer .polaris-inline-star, #polarisContainer .polaris-inline-star, #customerIntelligenceContainer .polaris-inline-star { display: inline-block; font-size: 18px; color: var(--accent); margin-right: 8px; }
+html body .customer-drawer .drawer-polaris-insight > h3, #polarisContainer > h2, #customerIntelligenceContainer > h2 { display: flex; align-items: center; }
+html body .customer-drawer .polaris-inline-star, html body #polarisContainer .polaris-inline-star, html body #customerIntelligenceContainer .polaris-inline-star { display: inline-grid; font-size: 18px; height: 1em; margin-right: 8px; }
+html body .customer-drawer .polaris-inline-star::before, html body #polarisContainer .polaris-inline-star::before, html body #customerIntelligenceContainer .polaris-inline-star::before { position: absolute; }

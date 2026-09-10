@@ -16,6 +16,8 @@ window.CustomerDetail = (function() {
   var _currentData = null;
   var _openSequence = 0;
   var _reviewSequence = 0;
+  var _estimateReview = null;
+  var _decisionDraft = null;
   var _overlayEl = null;
   var _drawerEl = null;
   var _injected = false;
@@ -235,6 +237,7 @@ window.CustomerDetail = (function() {
     html += '            <section aria-label="Estimate review" style="margin-top:1rem">';
     html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
     html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
+    html += '              <div id="cdEstimateDecision" style="margin-top:1rem"></div>';
     html += '            </section>';
 
     html += '          </details>';
@@ -680,6 +683,7 @@ window.CustomerDetail = (function() {
       communicationId: typeof options.communicationId === 'string' ? options.communicationId : null
     };
 
+    _decisionDraft = null; _estimateReview = null;
     // Ensure drawer HTML is injected
     injectDrawerHTML();
     _returnFocus = document.activeElement && typeof document.activeElement.focus === 'function'
@@ -719,6 +723,76 @@ window.CustomerDetail = (function() {
     });
   }
 
+  function decisionMoney(value, currency) {
+    if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(value)) return 'Unavailable';
+    var parts = value.split('.'); return currency + ' ' + parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + parts[1];
+  }
+
+  function renderEstimateDecision(review) {
+    var root = $('cdEstimateDecision'); root.replaceChildren();
+    var state = review.decisions;
+    if (!state) { root.textContent = 'Decision history is unavailable. Refresh before approving this estimate.'; return; }
+    function text(value) { var p = document.createElement('p'); p.style.margin = '0 0 0.75rem'; p.textContent = value; root.appendChild(p); return p; }
+    function button(label, action) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-secondary btn-sm'; b.style.margin = '0.5rem 0.5rem 0 0'; b.textContent = label; b.onclick = action; root.appendChild(b); return b; }
+    if (state.current && state.current.action === 'approve') {
+      text('Human-reviewed price before tax: ' + decisionMoney(state.current.priceBeforeTax, state.current.currency));
+      text('Reviewed scope: ' + state.current.scopeSummary);
+    }
+    if (state.recoveryMessage) text(state.recoveryMessage);
+    if (state.canApprove) button(state.current && state.current.action === 'approve' ? 'Revise scope and price' : 'Review scope and price', function () { beginEstimateDecision('approve'); });
+    if (state.canWithdraw) button('Withdraw approval', function () { beginEstimateDecision('withdraw'); });
+    if (state.history && state.history.length) {
+      var history = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Decision history'; history.appendChild(summary);
+      var list = document.createElement('ol');
+      state.history.forEach(function (entry, index) { var item = document.createElement('li'); item.style.margin = '0.75rem 0'; var date = new Date(entry.createdAt);
+        item.textContent = (index === 0 ? 'Current: ' : 'Earlier: ') + (entry.action === 'withdraw' ? 'Approval withdrawn' : 'Approved for quote preparation: ' + decisionMoney(entry.priceBeforeTax, entry.currency)) + ' by ' + entry.actorName + ' on ' + (Number.isFinite(date.getTime()) ? date.toLocaleString() : 'an unavailable date') + '. ' + entry.reason; list.appendChild(item); });
+      history.appendChild(list); if (state.truncated) { var note = document.createElement('p'); note.textContent = 'Showing the 20 most recent decisions out of ' + state.total + '.'; history.appendChild(note); } root.appendChild(history);
+    }
+    if (_decisionDraft && _decisionDraft.estimateId === review.pins.estimateId && state.canApprove) renderDecisionForm();
+  }
+
+  function beginEstimateDecision(action) {
+    if (!_estimateReview || !_estimateReview.decisions) return;
+    var current = _estimateReview.decisions.current;
+    _decisionDraft = { estimateId: _estimateReview.pins.estimateId, action: action,
+      scope: current && current.action === 'approve' ? current.scopeSummary : '',
+      price: current && current.action === 'approve' ? current.priceBeforeTax : '', reason: '', confirmed: false, request: null };
+    renderEstimateDecision(_estimateReview);
+    var control = $('cdDecisionScope') || $('cdDecisionReason'); if (control) control.focus();
+  }
+
+  function renderDecisionForm() {
+    var root = $('cdEstimateDecision'), draft = _decisionDraft, form = document.createElement('form'); form.id = 'cdDecisionForm'; form.style.marginTop = '1rem';
+    function field(label, id, value, multiline) { var group = document.createElement('label'); group.style.display = 'block'; group.style.marginBottom = '0.75rem'; group.textContent = label;
+      var input = document.createElement(multiline ? 'textarea' : 'input'); input.id = id; input.value = value; input.required = true; input.style.display = 'block'; input.style.width = '100%'; input.style.boxSizing = 'border-box'; input.style.padding = '0.75rem'; input.style.color = '#172033'; input.style.background = '#fff'; group.appendChild(input); form.appendChild(group); return input; }
+    if (draft.action === 'approve') {
+      var scope = field('Reviewed work scope', 'cdDecisionScope', draft.scope, true); scope.maxLength = 4000; scope.oninput = function () { draft.scope = scope.value; draft.request = null; };
+      var price = field('Reviewed price before tax (' + _estimateReview.currency + ')', 'cdDecisionPrice', draft.price, false); price.inputMode = 'decimal'; price.pattern = '(0|[1-9][0-9]{0,11})\\.[0-9]{2}'; price.placeholder = '0.00'; price.oninput = function () { draft.price = price.value; draft.request = null; };
+    }
+    var reason = field('Reason for this decision', 'cdDecisionReason', draft.reason, true); reason.maxLength = 2000; reason.oninput = function () { draft.reason = reason.value; draft.request = null; };
+    var label = document.createElement('label'), confirm = document.createElement('input'); confirm.type = 'checkbox'; confirm.id = 'cdDecisionConfirm'; confirm.required = true; confirm.checked = draft.confirmed; confirm.onchange = function () { draft.confirmed = confirm.checked; draft.request = null; }; label.appendChild(confirm);
+    label.appendChild(document.createTextNode(draft.action === 'approve' ? ' I reviewed this recorded estimate, its missing information, the work scope and price. Approve these details for quote preparation only; nothing will be sent.' : ' Withdraw the current approval. Its history will remain, and these details will no longer be approved for quote preparation.')); form.appendChild(label);
+    var status = document.createElement('p'); status.id = 'cdDecisionStatus'; status.setAttribute('role', 'status'); status.style.marginTop = '0.75rem'; form.appendChild(status);
+    var save = document.createElement('button'); save.type = 'submit'; save.className = 'btn btn-secondary btn-sm'; save.textContent = draft.action === 'approve' ? 'Approve for quote preparation' : 'Confirm withdrawal'; form.appendChild(save);
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.style.marginLeft = '0.75rem'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); }; form.appendChild(cancel);
+    form.onsubmit = function (event) {
+      event.preventDefault(); if (!form.reportValidity() || !_estimateReview || !reviewPinsMatch(_estimateReview, _currentData && _currentData.canonical)) return;
+      var review = _estimateReview, generation = _openSequence, state = review.decisions, current = state.current;
+      if (!draft.request) draft.request = { key: crypto.randomUUID(), body: { action: draft.action, expectedRevision: current ? current.revision : 0, expectedDigest: current ? current.digest : 'none', sourcePins: review.pins,
+        scopeSummary: draft.action === 'approve' ? draft.scope.trim() : null, priceBeforeTax: draft.action === 'approve' ? draft.price : null, currency: review.currency, reason: draft.reason.trim(), confirmed: draft.confirmed, confirmationVersion: 'estimate-quote-preparation-v1' }, demoRevision: review.demoWorkspaceRevision };
+      var attempt = draft.request; save.disabled = cancel.disabled = true; status.textContent = 'Saving decision.';
+      var headers = { 'Content-Type': 'application/json', 'Idempotency-Key': attempt.key }; if (review.simulated) headers['X-NorthStar-Demo-Revision'] = String(attempt.demoRevision);
+      window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/' + encodeURIComponent(draft.estimateId) + '/decisions', { method: 'POST', headers: headers, body: JSON.stringify(attempt.body) }).then(function (response) {
+        if (!response.ok) { var error = new Error('save failed'); error.status = response.status; throw error; } return response.json();
+      }).then(function () { if (generation !== _openSequence || _decisionDraft !== draft) return; _decisionDraft = null; refreshEstimateReview(); }).catch(function (error) {
+        if (generation !== _openSequence || _decisionDraft !== draft) return;
+        status.textContent = error.status === 409 ? 'The review changed. Refresh the estimate, check your entries and confirm again before saving.' : error.status === 403 ? 'Your current account cannot save this decision.' : error.status === 400 ? 'Check the scope, price and confirmation before saving.' : 'The save could not be confirmed. Retry without changing your entries to check this same attempt.';
+        if (error.status === 409) { draft.confirmed = false; confirm.checked = false; draft.request = null; }
+      }).finally(function () { if (generation === _openSequence && _decisionDraft === draft) save.disabled = cancel.disabled = false; });
+    };
+    root.appendChild(form);
+  }
+
   function reviewPinsMatch(review, selected) {
     var p = review && review.pins, ids = selected && selected.ids, profile = selected && selected.businessProfile;
     return review && review.contract === 'NorthStarEstimateReview/v1' && p && ids && profile &&
@@ -736,6 +810,7 @@ window.CustomerDetail = (function() {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
+    _estimateReview = null; $('cdEstimateDecision').replaceChildren();
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
     button.disabled = true;
     function current() { return generation === _openSequence && request === _reviewSequence && _currentData && _currentData.canonical === selected && !_drawerEl.hidden; }
@@ -770,6 +845,7 @@ window.CustomerDetail = (function() {
           rowNode.appendChild(term); rowNode.appendChild(detail); list.appendChild(rowNode);
         }); root.appendChild(list);
         (review.missing || []).forEach(paragraph);
+        _estimateReview = review; renderEstimateDecision(review);
       }).catch(function(error) {
         if (!current()) return;
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?
@@ -922,7 +998,7 @@ window.CustomerDetail = (function() {
     }
     document.body.style.overflow = '';
     setBackgroundInert(false);
-    _currentData = null;
+    _currentData = null; _estimateReview = null; _decisionDraft = null;
     _sourceContext = { source: 'customer', communicationId: null };
     if (_returnFocus && typeof document.contains === 'function' && document.contains(_returnFocus)) _returnFocus.focus();
     _returnFocus = null;

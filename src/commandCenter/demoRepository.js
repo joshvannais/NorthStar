@@ -1,12 +1,17 @@
 'use strict';
 
 const crypto = require('crypto');
+const {normalizeDecision,demoDecision} = require('../estimating/decisionContract');
+const {buildEstimateReview} = require('../services/estimateReview');
+const decisionPolicy = require('../estimating/decisionPolicy');
 const { v5: uuidv5 } = require('uuid');
 const db = require('../db');
 const safeLogger = require('../observability/safeLogger');
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const {
   buildSimulatedGraph,
+  buildDemoWorkspace,
+  demoCanonicalItems,
   createInitialDemoState,
   tenantIdFromTokenHash,
 } = require('./workspace');
@@ -170,7 +175,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -194,10 +199,15 @@ function mutationInput(input) {
     }
     normalized.scenarioSelection = scenarioSelection;
   }
+  if(input.operation === 'estimate_review') {
+    if(typeof input.estimateId !== 'string' || !/^[0-9a-f-]{36}$/.test(input.estimateId)) fail(400,'DEMO_REVIEW_INVALID','Choose a demo estimate.');
+    normalized.estimateId=input.estimateId; normalized.decision=normalizeDecision(input.decision);
+  }
   normalized.requestDigest = sha256({
     operation: normalized.operation,
     expectedRevision: normalized.expectedRevision,
     scenarioSelection: normalized.scenarioSelection || null,
+    ...(normalized.operation==='estimate_review' ? {estimateId:normalized.estimateId,decision:normalized.decision} : {}),
   });
   return normalized;
 }
@@ -465,6 +475,7 @@ class DemoCommandCenterRepository {
 
   async mutate(token, rawInput, rawAdmission) {
     const input = mutationInput(rawInput);
+    if(input.operation==='estimate_review' && !decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
     const admitted = admission(rawAdmission);
     const pool = this.pool();
     const client = await pool.connect();
@@ -527,6 +538,9 @@ class DemoCommandCenterRepository {
             digest(replay.rows[0].request_digest) !== input.requestDigest) {
           fail(409, 'DEMO_IDEMPOTENCY_CONFLICT', 'That demo action key was already used for a different action.');
         }
+        if(input.operation==='estimate_review' && (current.state.estimateDecisions?.[input.estimateId] || []).some(event=>event.requestKey===input.idempotencyHash)) {
+          await client.query('COMMIT'); open=false; return {record:current,replayed:true};
+        }
         const replayRevision = revision(replay.rows[0].response_revision);
         const currentDigest = sha256({ state: current.state, revision: current.revision });
         if (replayRevision !== current.revision || digest(replay.rows[0].response_digest) !== currentDigest) {
@@ -546,7 +560,15 @@ class DemoCommandCenterRepository {
       let nextState;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if (input.operation === 'simulate_lead') {
+      if (input.operation === 'estimate_review') {
+        if(!decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
+        const item=demoCanonicalItems(workspace).find(value=>value.ids.estimate===input.estimateId);
+        if(!item) fail(404,'DEMO_REVIEW_UNAVAILABLE','That demo estimate is unavailable.');
+        const histories=current.state.estimateDecisions || {};
+        const result=demoDecision(histories[input.estimateId] || [],buildEstimateReview(item,{simulated:true}),input.decision,input.idempotencyHash,'Demo reviewer',now);
+        nextState=stableValue({...current.state,estimateDecisions:{...histories,[input.estimateId]:result.history}});
+      } else if (input.operation === 'simulate_lead') {
         if (current.simulationCount >= 12) fail(429, 'DEMO_SIMULATION_LIMIT', 'This demo session reached its lead limit.');
         if (lastSimulatedAt && now.getTime() - lastSimulatedAt.getTime() < SIMULATION_COOLDOWN_MS) {
           fail(429, 'DEMO_SIMULATION_RATE_LIMIT', 'Wait briefly before simulating another lead.');

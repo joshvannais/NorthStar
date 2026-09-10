@@ -23,6 +23,7 @@ const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
 const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
 const { approvalBodyBoundary } = require('./scheduling/approvalHttpBoundary');
+const { estimateDecisionBodyBoundary } = require('./estimating/httpBoundary');
 const { executionBodyBoundary } = require('./operations/httpBoundary');
 const { equipmentBodyBoundary } = require('./equipment/httpBoundary');
 const { createEquipmentRouter } = require('./routes/equipment');
@@ -80,6 +81,7 @@ app.use(recommendationBodyBoundary);
 // unambiguous bytes before the broader application parser. The preview is
 // evidence only and never a bearer capability.
 app.use(approvalBodyBoundary);
+app.use(estimateDecisionBodyBoundary);
 // Mission 23 Part 2 field-execution mutations own exact, bounded,
 // unambiguous bytes before the broader application parser consumes them.
 app.use(executionBodyBoundary);

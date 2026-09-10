@@ -263,25 +263,29 @@
       return d;
     }
     function rerender() {
-      var opened = Array.from(content.querySelectorAll('details')).map(function (d) {
-        return d.open;
-      });
-      var active = document.activeElement;
-      var label = active && active.closest('label');
-      var text = label && label.querySelector('span') && label.querySelector('span').textContent;
+      function scope(node) { var row=node.closest('.profile-structured-charge'); return row ? row.dataset.ruleCode : ''; }
+      function caption(node) { var span=node.querySelector('span'); return span ? span.textContent : node.textContent; }
+      function disclosureKey(node) {
+        var label=node.querySelector('summary').textContent, group=scope(node);
+        var peers=Array.from(content.querySelectorAll('details')).filter(function(d){return scope(d)===group && d.querySelector('summary').textContent===label;});
+        return group+'|'+label+'|'+peers.indexOf(node);
+      }
+      var opened=new Set(Array.from(content.querySelectorAll('details[open]')).map(disclosureKey));
+      var active=document.activeElement, label=active && active.closest('label');
+      var buttonActive=active && active.tagName==='BUTTON';
+      var activeGroup=active && content.contains(active) ? scope(active) : '';
+      var text=label ? caption(label) : buttonActive ? active.textContent : null;
+      var selector=label ? 'label' : 'button';
+      function matches(){return Array.from(content.querySelectorAll(selector)).filter(function(n){return scope(n)===activeGroup && caption(n)===text;});}
+      var oldMatches=text ? matches() : [], index=oldMatches.indexOf(label || active);
       fieldErrors.clear();
       draw();
-      Array.from(content.querySelectorAll('details')).forEach(function (d, i) {
-        d.open = Boolean(opened[i]);
-      });
-      if (text) {
-        var match = Array.from(content.querySelectorAll('label')).find(function (l) {
-          return l.querySelector('span') && l.querySelector('span').textContent === text;
-        });
-        if (match) {
-          var control = match.querySelector('input,select');
-          if (control) control.focus();
-        }
+      Array.from(content.querySelectorAll('details')).forEach(function(d){d.open=opened.has(disclosureKey(d));});
+      if(text){
+        var candidates=matches(), match=candidates[Math.min(Math.max(index,0),candidates.length-1)];
+        var control=match && (label ? match.querySelector('input,select') : match);
+        if(!control && buttonActive)control=content.querySelector('button');
+        if(control){var ancestor=control.parentElement;while(ancestor && ancestor!==content){if(ancestor.tagName==='DETAILS')ancestor.open=true;ancestor=ancestor.parentElement;}control.focus();}
       }
       changed();
     }
@@ -524,6 +528,7 @@
       (state.lineItems || []).forEach(function (r, i) {
         var row = details(r.label || 'Charge ' + (i + 1), content);
         row.className = 'profile-structured-charge';
+        row.dataset.ruleCode = r.code;
         input('Charge name', r.label, function (v) {
           r.label = v;
           row.querySelector('summary').textContent = v || 'Charge ' + (i + 1);

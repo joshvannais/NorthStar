@@ -169,9 +169,12 @@ async function main() {
         exact: true
       }).fill('0');
       const newCode = (await read()).pricing.lineItems.at(-1).code;
+      await newCharge.getByLabel('How to charge', {exact:true}).focus();
       await newCharge.getByLabel('How to charge', {
         exact: true
       }).selectOption('perUnit');
+      assert(await newCharge.getByLabel('How to charge',{exact:true}).evaluate(el=>el===document.activeElement));
+      ledger.cases.push({width,keyboardFocusStaysOnEditedCharge:true});
       await newCharge.getByLabel('Quantity to measure', {
         exact: true
       }).selectOption('linearFeet');

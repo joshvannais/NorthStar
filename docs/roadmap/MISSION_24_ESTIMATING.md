@@ -2,7 +2,7 @@
 
 Objective: Make Polaris own the complete estimating experience.
 
-This additive authority reconciliation preserves the founder's original nine phases. The current package is an architecture-only slice of Phase 1; it does not complete Phase 1 implementation or any later phase. There is no independently approved numbered implementation-part count. Existing authorities and historical evidence remain unchanged.
+This additive authority reconciliation preserves the founder's original nine phases. The initial package was an architecture-only slice of Phase 1. Subsequent bounded runtime adoptions are recorded below; none completes Phase 1 or any later phase. There is no independently approved numbered implementation-part count. Existing authorities and historical evidence remain unchanged.
 
 ## Original phases and acceptance direction
 
@@ -53,4 +53,8 @@ Use the [architecture contract](../architecture/MISSION_24_ESTIMATE_ARCHITECTURE
 
 Mission25 owns learning/calibration from projections, approved quotes, actuals and outcomes; Mission26 owns wider forecasts/distributions. Mission27 owns invoice/payment lifecycle; Mission28 owns approved communications/reminders. Mission29 retains governance, Mission31 the living demo including employee views, Mission32 the full manual/mobile Scenario Calculator/Estimate Studio, and Mission33 private platform administration. Mission24 preserves compatible evidence for these consumers without implementing them.
 
-Prior Mission23 evidence is inherited history, not rerun here: three focused API failures and fifteen wider failures remain distinct; hosted CI, physical Safari/devices/manual assistive technology, private authenticated production, live providers/storage/delivery and founder final visual verdict remain unavailable. The accepted Part11 untested restore/forward-fix limitation is not a waiver for future schema changes. The earlier premature gate error remains preserved. No database or browser test is claimed for this docs-only slice.
+Prior Mission23 evidence is inherited history, not rerun here: three focused API failures and fifteen wider failures remain distinct; hosted CI, physical Safari/devices/manual assistive technology, private authenticated production, live providers/storage/delivery and founder final visual verdict remain unavailable. The accepted Part11 untested restore/forward-fix limitation is not a waiver for future schema changes. The earlier premature gate error remains preserved. No database or browser test was claimed for the initial architecture-only slice. Later runtime evidence is recorded in each package receipt.
+
+## Incremental human decision authority adoption
+
+The next bounded Phase 1 runtime package is specified in [human estimate decisions](../operations/MISSION_24_ESTIMATE_DECISIONS.md). It adds human-reviewed scope and before-tax price approval/revision/withdrawal to the existing shared paid/demo drawer, with immutable source-pinned history and a read-preserving recovery build. This is separate from machine advice and future customer-safe quote output; it does not complete Phase 1 or implement all Phase 6/8 requirements. Exact package validation and release status belong to its sealed acceptance receipt.

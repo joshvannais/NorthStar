@@ -330,11 +330,11 @@
       surface: 'command-center',
       detailed: true,
       title: customer + ' · ' + service,
-      summary: presentationString(graph.lead && graph.lead.summary, 'The latest role-authorized record is ready for operational review.'),
+      summary: presentationString(graph.lead && graph.lead.summary, 'The latest job information is ready for review.'),
       confidence: confidence,
       confidenceExplanation: confidence === null
-        ? 'No supported confidence score is present in the current Polaris snapshot.'
-        : 'Calculated from the supporting scope and evidence recorded with this Polaris snapshot.',
+        ? 'No supported confidence score is available for this estimate.'
+        : 'Based on the job scope and evidence recorded with this estimate.',
       evidence: humanEvidence(graph),
       missing: missingInputs(graph),
       risks: risks,

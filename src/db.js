@@ -1288,6 +1288,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   await require('./completion/transcriptDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./workforce/workProfileDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./operations/handoffDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./estimating/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   const wrongRelationOwners = await client.query(
     `SELECT namespace.nspname, relation.relname,
             pg_get_userbyid(relation.relowner) AS owner
@@ -1339,6 +1340,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_completion_%'
            AND relation.relname NOT LIKE 'canonical_work_profile_%'
            AND relation.relname NOT LIKE 'canonical_handoff_%'
+           AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname NOT IN (
              'canonical_schedule_assignments',
              'canonical_schedule_approvals',
@@ -1643,6 +1645,20 @@ async function runMigrations(options = {}) {
       : null;
     await client.query('BEGIN');
     transactionOpen = true;
+    // Bound this 057 candidate's complete migration transaction lane, including
+    // the startup advisory wait and grant verification. No persistent settings.
+    // A later candidate must review its own timeout/recovery policy explicitly.
+    if (migrations[migrations.length - 1]?.file === '057_canonical_estimate_decisions.sql') {
+      const settings = await client.query(
+        "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
+      );
+      const inherited = Object.fromEntries(settings.rows.map(row => [row.name, row.setting]));
+      await client.query(
+        "SELECT set_config('lock_timeout',$1,true),set_config('statement_timeout',$2,true)",
+        [String(Math.min(Number(inherited.lock_timeout) || 5000, 5000)) + 'ms',
+          String(Math.min(Number(inherited.statement_timeout) || 20000, 20000)) + 'ms']
+      );
+    }
     await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_KEY]);
     // Forward ACL migrations use the already validated runtime identity, never
     // a caller-supplied role name. Scope it to the same migration transaction.

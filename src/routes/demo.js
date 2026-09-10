@@ -2,6 +2,8 @@
 
 const crypto = require('crypto');
 const { buildEstimateReview } = require('../services/estimateReview');
+const {projectDecisions} = require('../estimating/decisionContract');
+const decisionPolicy = require('../estimating/decisionPolicy');
 const express = require('express');
 const config = require('../config');
 const db = require('../db');
@@ -335,6 +337,17 @@ router.get('/command-center/canonical/surfaces/:surface', function (req, res) {
   return demoCanonicalProjection(req, res, false);
 });
 
+router.post('/command-center/estimates/:estimateId/decisions', async function(req,res) {
+  res.set('Cache-Control','no-store');
+  if(!mutationBoundary(req,res,'estimate-decision'))return;
+  if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'This review could not be read. Check your entries.'}});
+  try {
+    const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'estimate_review',estimateId:req.params.estimateId,
+      expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),decision:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});
+    return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});
+  }catch(error){return commandCenterFailure(req,res,error);}
+});
+
 router.get('/command-center/estimates/:estimateId/review', async function (req, res) {
   res.set('Cache-Control', 'no-store'); res.vary('Cookie');
   try {
@@ -342,7 +355,11 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     const record = await commandCenterRepository.read(token);
     const item = demoCanonicalItems(demoWorkspace(record)).find(value => value.ids.estimate === req.params.estimateId);
     if (!item) return res.status(404).json({ success: false, error: { message: 'That demo estimate is unavailable.' } });
-    return res.json({ success: true, data: buildEstimateReview(item, { simulated: true }) });
+    const review=buildEstimateReview(item, { simulated: true });
+    const history=record.state.estimateDecisions?.[req.params.estimateId] || [];
+    review.decisions=projectDecisions({current:history[0]||null,history,total:history.length,truncated:false},decisionPolicy.mutationsEnabled,true);
+    review.approval=review.decisions.status;review.approvalMessage=review.decisions.message;review.demoWorkspaceRevision=record.revision;
+    return res.json({ success: true, data: review });
   } catch (_error) {
     return res.status(503).json({ success: false, error: { message: 'Demo estimate review could not be loaded. Try again.' } });
   }

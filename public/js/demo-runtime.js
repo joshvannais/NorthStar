@@ -398,6 +398,13 @@
     }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
 
+    var estimateDecision = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/decisions$/.exec(url.pathname);
+    if (method === 'POST' && estimateDecision) {
+      var decisionHeaders = new Headers(options && options.headers || {});
+      decisionHeaders.set('X-NorthStar-Demo-Intent','estimate-decision');
+      return nativeFetch('/api/demo/command-center/estimates/' + encodeURIComponent(estimateDecision[1]) + '/decisions',
+        Object.assign({},options||{},{headers:decisionHeaders,credentials:'same-origin'}));
+    }
     var estimateReview = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/review$/.exec(url.pathname);
     if (method === 'GET' && estimateReview) {
       return nativeFetch('/api/demo/command-center/estimates/' + encodeURIComponent(estimateReview[1]) + '/review',

@@ -3,6 +3,9 @@
 const express = require('express');
 const db = require('../db');
 const { buildEstimateReview } = require('../services/estimateReview');
+const { readDecisions, mutateDecision } = require('../estimating/decisionRepository');
+const { projectDecisions } = require('../estimating/decisionContract');
+const decisionPolicy = require('../estimating/decisionPolicy');
 const audit = require('../audit/client');
 const {
   requireOnboardedInternal,
@@ -1380,6 +1383,16 @@ function createCanonicalRouter(options) {
     }
   });
 
+  router.post('/estimates/:estimateId/decisions', dependencies.auth, requireCanonicalContext, async function (req, res) {
+    res.set('Cache-Control', 'no-store');
+    if (!req.estimateDecisionBodyValidated || !UUID.test(req.params.estimateId)) return res.status(400).json({success:false,error:{message:'This review could not be read. Check your entries.'}});
+    try {
+      const result = await mutateDecision(resolvePool(dependencies.poolProvider), {...actorInput(req), estimateId:req.params.estimateId,
+        csrfToken:req.get('X-CSRF-Token'), idempotencyKey:req.get('Idempotency-Key')}, req.body);
+      return res.status(result.replayed ? 200 : 201).json({success:true,data:result});
+    } catch(error) { return res.status(error.status || 503).json({success:false,error:{code:error.code || 'ESTIMATE_DECISION_UNAVAILABLE',message:error.status ? error.message : 'The review could not be saved. Try again.'}}); }
+  });
+
   router.get('/estimates/:estimateId/review', dependencies.auth, requireCanonicalContext, async function (req, res) {
     res.set('Cache-Control', 'no-store');
     const failure = (status, message) => res.status(status).json({ success: false, error: { code: 'ESTIMATE_REVIEW_UNAVAILABLE', message } });
@@ -1392,7 +1405,11 @@ function createCanonicalRouter(options) {
         }
         const item = await getCanonicalGraph(client, requestContext(req), req.params.estimateId);
         if (!item || item.ids.estimate !== req.params.estimateId) return null;
-        return buildEstimateReview(item);
+        const review = buildEstimateReview(item);
+        const decisions = await readDecisions(client, {...actorInput(req), estimateId: item.ids.estimate});
+        review.decisions = projectDecisions(decisions, decisionPolicy.mutationsEnabled && operator.canMutate === true);
+        review.approval = review.decisions.status; review.approvalMessage = review.decisions.message;
+        return review;
       });
       if (!review) return failure(404, 'That estimate is unavailable.');
       return res.json({ success: true, data: review });

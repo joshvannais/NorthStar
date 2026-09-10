@@ -315,6 +315,7 @@
         }
         var title = document.createElement('h2');
         title.textContent = 'Polaris Intelligence';
+        var polarisStar = document.createElement('span'); polarisStar.className = 'polaris-inline-star'; polarisStar.setAttribute('aria-hidden', 'true'); polarisStar.textContent = '\u2726'; title.prepend(polarisStar);
         container.appendChild(title);
         var card = document.createElement('div');
         card.className = 'lead-detail-card';

@@ -281,6 +281,7 @@ window.CustomerDetail = (function() {
     var content = $('cdDrawerContent'), panel = $('cdPolarisInsight');
     var polarisSection = panel.parentElement;
     var brand = polarisSection.querySelector('h3'); panel.prepend(brand);
+    var polarisStar = document.createElement('span'); polarisStar.className = 'polaris-inline-star'; polarisStar.setAttribute('aria-hidden', 'true'); polarisStar.textContent = '\u2726'; brand.prepend(polarisStar);
     var headerMeta = document.createElement('div'); headerMeta.className = 'drawer-header-meta';
     headerMeta.append($('cdPolSummary'), $('cdStage'));
     var sourceBadge = document.createElement('span'); sourceBadge.id = 'cdDemoBadge'; sourceBadge.className = 'drawer-demo-badge'; sourceBadge.textContent = 'Demo'; sourceBadge.hidden = true; headerMeta.appendChild(sourceBadge);

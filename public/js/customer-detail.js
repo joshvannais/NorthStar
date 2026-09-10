@@ -832,7 +832,7 @@ window.CustomerDetail = (function() {
     function button(label,handler){var b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent=label;b.style.margin='0.5rem 0.5rem 0 0';b.onclick=handler;root.appendChild(b);return b;}
     if(!plans||plans.contract!=='estimate-material-plan-v1'||JSON.stringify(plans.sourcePins)!==JSON.stringify(review.pins)||plans.simulated!==review.simulated){para('Material planning is unavailable. Refresh this estimate.');return;}
     var current=plans.current;
-    function showResult(result,target){var p=document.createElement('p');p.textContent='Required: '+result.quantity+' '+result.unitLabel+'. Waste allowance: '+result.additionalQuantity+'. Planned quantity: '+result.plannedQuantity+'. Planned material cost: '+decisionMoney(result.total,result.currency)+'. '+result.rounding;p.style.overflowWrap='anywhere';target.appendChild(p);}
+    function showResult(result,target){var p=document.createElement('p');p.textContent='Required: '+result.quantity+' '+result.unitLabel+'. Extra for waste: '+result.additionalQuantity+' '+result.unitLabel+'. Planned quantity: '+result.plannedQuantity+' '+result.unitLabel+'. Planned material cost: '+decisionMoney(result.total,result.currency)+'. '+result.rounding;p.style.overflowWrap='anywhere';target.appendChild(p);}
     if(current&&current.action==='save'){
       para('Material plan: '+current.inputs.material);showResult(current.result,root);
       para((current.expectedDecisionRevision===0?(current.decisionBasisCurrent?'No human scope and price decision was recorded when this plan was saved.':'A scope and price decision was recorded after this plan. Review the plan again before using it.'):(current.decisionBasisCurrent?'Saved with the current scope and price decision.':'The scope and price decision has changed. Review this plan again before using it.'))+' This plan does not change the saved estimate or customer price.');
@@ -850,7 +850,7 @@ window.CustomerDetail = (function() {
     function invalidate(){draft.confirmed=false;draft.result=null;draft.request=null;confirm.checked=false;result.replaceChildren();}
     if(draft.action==='save'){
       var material=field('Material','cdPlanMaterial',draft.inputs.material);material.maxLength=160;material.required=true;material.oninput=function(){draft.inputs.material=material.value;invalidate();};
-      var unit=field('Unit','cdPlanUnit',draft.inputs.unit,'select');[['ea','Items'],['m','Metres'],['m2','Square metres'],['m3','Cubic metres'],['ft','Feet'],['ft2','Square feet'],['ft3','Cubic feet'],['yd3','Cubic yards'],['kg','Kilograms'],['lb','Pounds'],['l','Litres'],['gal','US gallons']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];unit.appendChild(o);});unit.value=draft.inputs.unit;
+      var unit=field('Unit','cdPlanUnit',draft.inputs.unit,'select');[['ea','Items'],['m','Metres'],['m2','Square metres'],['m3','Cubic metres'],['ft','Feet'],['ft2','Square feet'],['ft3','Cubic feet'],['yd3','Cubic yards'],['kg','Kilograms'],['lb','Pounds'],['l','Litres'],['gal','US liquid gallons']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];unit.appendChild(o);});unit.value=draft.inputs.unit;
       var quantity=field('Required quantity','cdPlanQuantity',draft.inputs.quantity);quantity.inputMode='decimal';quantity.required=true;quantity.oninput=function(){draft.inputs.quantity=quantity.value;invalidate();};
       var waste=field('Waste allowance (%)','cdPlanWaste',draft.inputs.wastePercent);waste.inputMode='decimal';waste.required=true;waste.oninput=function(){draft.inputs.wastePercent=waste.value;invalidate();};
       var price=field('Internal price per selected unit ('+review.currency+')','cdPlanPrice',draft.inputs.unitPrice);price.inputMode='decimal';price.required=true;price.placeholder='0.00';price.oninput=function(){draft.inputs.unitPrice=price.value;invalidate();};
@@ -889,7 +889,7 @@ window.CustomerDetail = (function() {
       paragraph(material.basis === 'recorded_configured_amount' ? 'This is the material amount saved for this estimate, not a current supplier price.' : 'The basis of this material amount is unavailable. Review it before relying on it.');
       var date = material.recordedAt && new Date(material.recordedAt);
       paragraph(date && Number.isFinite(date.getTime()) ? 'Estimate recorded ' + date.toLocaleString() + '.' : 'The estimate recording date is unavailable.');
-      paragraph('Material quantity, units and waste allowance have not been recorded here.');
+      paragraph('The recorded estimate does not include material quantity, units or waste allowance.');
       paragraph('The price date and current availability are unverified. Confirm both before relying on this amount.');
       if (material.simulated) paragraph('This example uses fictional material information.');
     }

@@ -1,7 +1,7 @@
 "use strict";
 const {stableValue,sha256}=require('../services/businessProfileAdapter');
 const VERSION='estimate-material-plan-v1';
-const UNITS=Object.freeze({ea:'Items',m:'Metres',m2:'Square metres',m3:'Cubic metres',ft:'Feet',ft2:'Square feet',ft3:'Cubic feet',yd3:'Cubic yards',kg:'Kilograms',lb:'Pounds',l:'Litres',gal:'US gallons'});
+const UNITS=Object.freeze({ea:'Items',m:'Metres',m2:'Square metres',m3:'Cubic metres',ft:'Feet',ft2:'Square feet',ft3:'Cubic feet',yd3:'Cubic yards',kg:'Kilograms',lb:'Pounds',l:'Litres',gal:'US liquid gallons'});
 const KEYS=['material','quantity','unit','wastePercent','unitPrice','sourceType','sourceNote','priceDate'];
 const FIELDS=['action','expectedRevision','expectedDigest','sourcePins','expectedDecisionRevision','expectedDecisionDigest','inputs','currency','reason','confirmed','confirmationVersion'];
 function fail(message='Review the material quantities, price and source before continuing.',status=400){throw Object.assign(new Error(message),{status,code:'MATERIAL_PLAN_INVALID'});}

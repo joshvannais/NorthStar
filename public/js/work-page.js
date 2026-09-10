@@ -978,7 +978,7 @@
       }, 'propose_completion'));
     } else {
       content.appendChild(unavailableNote(['completed', 'cancelled'].includes(model.execution.lifecycleState)
-        ? 'This work is completed or cancelled. Only an owner or administrator can change that status.'
+        ? 'This work is completed or cancelled, so you cannot propose completion. Contact an owner or administrator if more work is needed.'
         : 'Start or resume work before proposing completion.'));
     }
   }

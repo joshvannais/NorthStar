@@ -736,7 +736,7 @@ window.CustomerDetail = (function() {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
-    root.replaceChildren(); root.textContent = 'Loading estimate review…'; root.setAttribute('aria-busy', 'true');
+    root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
     button.disabled = true;
     function current() { return generation === _openSequence && request === _reviewSequence && _currentData && _currentData.canonical === selected && !_drawerEl.hidden; }
     function unavailable(message) { root.replaceChildren(); root.textContent = message; }

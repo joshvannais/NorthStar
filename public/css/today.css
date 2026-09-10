@@ -296,4 +296,4 @@
 /* Employee shell wordmark only: do not change header backgrounds or owner navigation. */
 .today-page .today-wordmark { color: #24456b; }
 [data-theme="dark"] .today-page .today-wordmark { color: #91add0; }
-.today-page #todayMenuToggle img { width: 30px; height: 30px; object-fit: contain; }
+

@@ -184,7 +184,9 @@
     toggle.setAttribute('aria-controls', 'todayMobileMenu');
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-label', 'Open navigation menu');
-    toggle.append(menuIcon(), image(), node('span', 'today-wordmark', 'NorthStar'));
+    var wordmarkLogo = image();
+    wordmarkLogo.className = 'mobile-logo';
+    toggle.append(menuIcon(), wordmarkLogo, node('span', 'today-wordmark', 'NorthStar'));
     var headerActions = node('div', 'mobile-header-actions');
     // The traditional logo is next to the wordmark in the menu control.
     var theme = node('span', 'northstar-theme-slot');

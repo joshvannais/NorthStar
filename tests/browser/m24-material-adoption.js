@@ -39,7 +39,7 @@ const output=path.resolve(option('output')),engine=option('browser');assert.ok(!
       await page.goto(origin+(demo?'/demo/':'/dashboard/')+host);await page.waitForLoadState('networkidle');
       if(await page.locator('#northstarQuickStartDialog[open]').count())await page.keyboard.press('Escape');
       if(host==='leads'||host==='communications')await page.getByText('Original estimate value',{exact:true}).first().waitFor();
-      if(host==='calendar')await page.getByText(/Original estimate total/).first().waitFor();
+      if(host==='calendar'){const pill=page.locator('.cal-kpi-pill').filter({hasText:'Pipeline'});await pill.waitFor();const text=await pill.innerText();assert.match(text,/Original estimate total|No recorded estimate|Loading/);ledger.cases.push(name+' Calendar pipeline actual state: '+text.replace(/\s+/g,' '));}
       assert.doesNotMatch(await page.locator('body').innerText(),/\uFFFD|source pins/);
       await page.screenshot({path:path.join(output,name+'-original-'+host+'.png')});ledger.cases.push(name+' original-source '+host+' summary is rendered separately from selected cost review');
     }

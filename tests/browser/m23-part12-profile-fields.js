@@ -33,7 +33,7 @@ async function main() {
   });
   const ledger = {
     head: require('child_process').execSync('git rev-parse HEAD').toString().trim(),
-    tree: require('child_process').execSync('git rev-parse HEAD^{tree}').toString().trim(),
+    tree: require('child_process').execFileSync('git', ['rev-parse', 'HEAD^{tree}']).toString().trim(),
     workingTreeDirty: Boolean(require('child_process').execSync('git status --porcelain').toString().trim()),
     browser: selected,
     version: browser.version(),

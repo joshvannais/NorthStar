@@ -74,3 +74,7 @@ The latest founder requirement is working paid/demo create, preview and download
 ## Part2 Slice1 material basis adoption
 
 After independently accepted Part1 architecture at PR188, Part2 Slice1 adds [recorded material basis](../operations/MISSION_24_MATERIAL_BASIS.md) to the shared private paid/demo review. It explains saved cost/material/date and evidence gaps with no new calculator, profile, schema or provider authority. Exact acceptance/release belongs to its packet; no Part2 completion is claimed. Quantity/unit/waste planning, authorized material sources/availability/freshness, richer arithmetic and downstream validation remain Part2 obligations, assigned in subsequent bounded slices without a fixed count.
+
+## Part2 Slice2 single-material planning
+
+[Single-material plans](../operations/MISSION_24_MATERIAL_PLANS.md) add actual shared paid/demo quantity/waste/unit-cost computation and immutable human-entered source history. They stay separate from recorded canonical estimate cost and existing human scope/price decisions; no quote approval or automatic R2 adoption. New058 and actual source-derived material-only/combined recovery require independent exact-package and later concrete release readiness review. Multi-material/source/availability intelligence and deliberate canonical revision adoption remain open; no Part2 completion or fixed slice count.

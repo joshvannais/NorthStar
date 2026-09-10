@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const {normalizeDecision,demoDecision} = require('../estimating/decisionContract');
 const {buildEstimateReview} = require('../services/estimateReview');
 const decisionPolicy = require('../estimating/decisionPolicy');
+const materialPlan=require('../estimating/materialPlanContract');
+const materialPlanPolicy=require('../estimating/materialPlanPolicy');
 const { v5: uuidv5 } = require('uuid');
 const db = require('../db');
 const safeLogger = require('../observability/safeLogger');
@@ -175,7 +177,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','material_plan'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -203,11 +205,13 @@ function mutationInput(input) {
     if(typeof input.estimateId !== 'string' || !/^[0-9a-f-]{36}$/.test(input.estimateId)) fail(400,'DEMO_REVIEW_INVALID','Choose a demo estimate.');
     normalized.estimateId=input.estimateId; normalized.decision=normalizeDecision(input.decision);
   }
+  if(input.operation==='material_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'MATERIAL_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=materialPlan.normalize(input.plan);}
   normalized.requestDigest = sha256({
     operation: normalized.operation,
     expectedRevision: normalized.expectedRevision,
     scenarioSelection: normalized.scenarioSelection || null,
     ...(normalized.operation==='estimate_review' ? {estimateId:normalized.estimateId,decision:normalized.decision} : {}),
+    ...(normalized.operation==='material_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
   });
   return normalized;
 }
@@ -475,6 +479,7 @@ class DemoCommandCenterRepository {
 
   async mutate(token, rawInput, rawAdmission) {
     const input = mutationInput(rawInput);
+    if(input.operation==='material_plan'&&!materialPlanPolicy.mutationsEnabled)fail(503,'MATERIAL_PLAN_PAUSED','New material plans are paused. Saved plans remain available.');
     if(input.operation==='estimate_review' && !decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
     const admitted = admission(rawAdmission);
     const pool = this.pool();
@@ -538,6 +543,7 @@ class DemoCommandCenterRepository {
             digest(replay.rows[0].request_digest) !== input.requestDigest) {
           fail(409, 'DEMO_IDEMPOTENCY_CONFLICT', 'That demo action key was already used for a different action.');
         }
+        if(input.operation==='material_plan'&&(current.state.materialPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='estimate_review' && (current.state.estimateDecisions?.[input.estimateId] || []).some(event=>event.requestKey===input.idempotencyHash)) {
           await client.query('COMMIT'); open=false; return {record:current,replayed:true};
         }
@@ -560,7 +566,11 @@ class DemoCommandCenterRepository {
       let nextState;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if (input.operation === 'estimate_review') {
+      if(input.operation==='material_plan'){
+        if(!materialPlanPolicy.mutationsEnabled)fail(503,'MATERIAL_PLAN_PAUSED','New material plans are paused. Saved plans remain available.');
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'MATERIAL_PLAN_UNAVAILABLE','That demo estimate is unavailable.');
+        const review=buildEstimateReview(item,{simulated:true});review.decisions={current:(current.state.estimateDecisions?.[input.estimateId]||[])[0]||null};const histories=current.state.materialPlans||{},history=histories[input.estimateId]||[];const result=materialPlan.demoPlan(history,review,input.plan,input.idempotencyHash,now);nextState=stableValue({...current.state,materialPlans:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
+      } else if (input.operation === 'estimate_review') {
         if(!decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
         const item=demoCanonicalItems(workspace).find(value=>value.ids.estimate===input.estimateId);

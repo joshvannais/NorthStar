@@ -319,7 +319,7 @@ window.CustomerDetail = (function() {
     panel.append(priceDetails,basisDetails);
     var contactSection = $('cdName').closest('.drawer-section'), profileSection = $('cdProfileSection');
     var contactDetails = document.createElement('details'); contactDetails.className = 'drawer-section drawer-customer-background';
-    var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Contact And Customer History';
+    var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Customer History';
     contactDetails.append(contactTitle,contactSection,profileSection);
     contactDetails.appendChild($('cdProbabilityRow'));
     panel.querySelector('.drawer-polaris-context').remove();

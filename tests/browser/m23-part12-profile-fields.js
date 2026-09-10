@@ -254,6 +254,12 @@ async function main() {
         width,
         absentVersusEmpty: true
       });
+      await material.getByRole('button', {name:'Add cost',exact:true}).click();
+      await material.getByLabel('Material', {exact:true}).fill('Cedar');
+      await material.getByLabel('Internal cost', {exact:true}).fill('0');
+      assert.deepStrictEqual((await read()).material, {'fence:cedar':0});
+      ledger.cases.push({width,newMaterialKeyMatchesCalculationCaseRules:true});
+
       await polygon.getByRole('button', {
         name: 'Clear boundary',
         exact: true

@@ -19,7 +19,7 @@ describe('structured business settings respect existing saved shapes', () => {
     expect(fields.splitMaterial('service:custom:pine', [{
       id: 'service'
     }, {
-      id: 'service:custom'
+      id: 'SERVICE:CUSTOM'
     }])).toEqual({
       service: 'service:custom',
       material: 'pine'

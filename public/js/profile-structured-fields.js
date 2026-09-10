@@ -103,7 +103,7 @@
   }
   function splitMaterial(saved, services) {
     var matches = (services || []).map(function (s) {
-      return String(s.id);
+      return String(s.id).trim().toLowerCase();
     }).filter(function (s) {
       return saved.startsWith(s + ':');
     }).sort(function (a, b) {
@@ -454,8 +454,8 @@
         }, row);
       });
       button('Add price', function () {
-        var n = 'choice';
-        while (own(map, n)) n += ' new';
+        if (Object.keys(map).some(function(k){return !k.trim() || !number(map[k],0);})) { status.textContent = 'Complete the current choice and price first.'; return; }
+        var n = '';
         map[n] = null;
         rerender();
       }, parent);
@@ -599,7 +599,7 @@
           var split = splitMaterial(saved, options.services);
           var choices = {};
           (options.services || []).forEach(function (s) {
-            choices[s.id] = s.name || 'Service';
+            choices[String(s.id).trim().toLowerCase()] = s.name || 'Service';
           });
           if (!own(choices, split.service)) choices[split.service] = 'Saved service ' + (i + 1);
           select('Service', split.service, choices, function (v) {
@@ -640,13 +640,13 @@
         }, row);
       });
       button('Add cost', function () {
-        var prefix = kind === 'material' ? ((options.services || [])[0] || {}).id : undefined;
+        var prefix = kind === 'material' ? String(((options.services || [])[0] || {}).id || '').trim().toLowerCase() : undefined;
         if (kind === 'material' && !prefix) {
           status.textContent = 'Add a service before adding its material costs.';
           return;
         }
-        var k = kind === 'material' ? prefix + ':material' : 'Equipment';
-        while (own(state, k)) k += ' new';
+        if (Object.keys(state).length && validate(kind, state)) { status.textContent = 'Complete the current cost row before adding another.'; return; }
+        var k = kind === 'material' ? prefix + ':' : '';
         state[k] = null;
         rerender();
       });

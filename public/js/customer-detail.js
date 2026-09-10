@@ -684,7 +684,7 @@ window.CustomerDetail = (function() {
       communicationId: typeof options.communicationId === 'string' ? options.communicationId : null
     };
 
-    _decisionDraft = null; _estimateReview = null;
+    _decisionDraft = null; _materialPlanDraft = null; _estimateReview = null;
     // Ensure drawer HTML is injected
     injectDrawerHTML();
     _returnFocus = document.activeElement && typeof document.activeElement.focus === 'function'
@@ -821,6 +821,59 @@ window.CustomerDetail = (function() {
       review.recordedAt === selected.snapshotCreatedAt;
   }
 
+  var _materialPlanDraft = null;
+  function materialPlanBasis(review) {
+    var plan=review.materialPlans;
+    return JSON.stringify({pins:review.pins,decision:plan&&plan.decisionBasis,current:plan&&plan.current&&{id:plan.current.id,revision:plan.current.revision,digest:plan.current.digest},allowed:plan&&plan.canMutate,currency:review.currency});
+  }
+  function renderMaterialPlan(review,parent) {
+    var plans=review.materialPlans,root=document.createElement('section');root.id='cdMaterialPlan';parent.appendChild(root);
+    function para(text){var p=document.createElement('p');p.textContent=text;p.style.overflowWrap='anywhere';root.appendChild(p);return p;}
+    function button(label,handler){var b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent=label;b.style.margin='0.5rem 0.5rem 0 0';b.onclick=handler;root.appendChild(b);return b;}
+    if(!plans||plans.contract!=='estimate-material-plan-v1'||JSON.stringify(plans.sourcePins)!==JSON.stringify(review.pins)||plans.simulated!==review.simulated){para('Material planning is unavailable. Refresh this estimate.');return;}
+    var current=plans.current;
+    function showResult(result,target){var p=document.createElement('p');p.textContent='Required: '+result.quantity+' '+result.unitLabel+'. Waste allowance: '+result.additionalQuantity+'. Planned quantity: '+result.plannedQuantity+'. Planned material cost: '+decisionMoney(result.total,result.currency)+'. '+result.rounding;p.style.overflowWrap='anywhere';target.appendChild(p);}
+    if(current&&current.action==='save'){
+      para('Material plan: '+current.inputs.material);showResult(current.result,root);
+      para((current.expectedDecisionRevision===0?(current.decisionBasisCurrent?'No human scope and price decision was recorded when this plan was saved.':'A scope and price decision was recorded after this plan. Review the plan again before using it.'):(current.decisionBasisCurrent?'Saved with the current scope and price decision.':'The scope and price decision has changed. Review this plan again before using it.'))+' This plan does not change the saved estimate or customer price.');
+      para('Price source: '+(current.inputs.sourceType==='my_estimate'?'My cost estimate. ':'Price information entered by a person. ')+current.inputs.sourceNote+' Price date: '+(current.inputs.priceDate||'Not provided')+'. Availability has not been verified.');
+    }else para(current?'The material plan was withdrawn. Its history remains available.':'No material plan has been saved for this estimate.');
+    if(plans.history.length){var history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Material plan history';history.appendChild(summary);plans.history.forEach(function(e){var p=document.createElement('p');p.textContent=(e.action==='save'?'Saved material plan':'Withdrew material plan')+' — '+e.actorName+' — '+new Date(e.createdAt).toLocaleString()+(e.result?' — '+decisionMoney(e.result.total,e.currency):'')+'. '+e.reason;history.appendChild(p);});if(plans.truncated){var note=document.createElement('p');note.textContent='Showing the latest 20 entries. Earlier history is retained.';history.appendChild(note);}root.appendChild(history);}
+    if(!plans.canMutate){para(plans.mutationsPaused?'New material plans are paused. Saved plans and history remain available.':'Material plans are read-only here. Saved plans and history remain available.');return;}
+    function start(action){_materialPlanDraft={action:action,estimateId:review.pins.estimateId,basis:materialPlanBasis(review),inputs:current&&current.inputs?JSON.parse(JSON.stringify(current.inputs)):{material:review.materialReview.material||'',quantity:'',unit:'ea',wastePercent:'',unitPrice:'',sourceType:'my_estimate',sourceNote:'',priceDate:null},reason:'',confirmed:false,result:null,request:null};render();var first=root.querySelector('input,select');if(first)first.focus();}
+    function render(){root.remove();renderMaterialPlan(review,parent);}
+    if(!_materialPlanDraft){button(current&&current.action==='save'?'Revise material plan':'Plan material cost',function(){start('save');});if(current&&current.action==='save')button('Withdraw material plan',function(){start('withdraw');});return;}
+    var draft=_materialPlanDraft;if(draft.estimateId!==review.pins.estimateId){_materialPlanDraft=null;render();return;}
+    if(draft.basis!==materialPlanBasis(review)){draft.basis=materialPlanBasis(review);draft.confirmed=false;draft.result=null;draft.request=null;draft.changed=true;}
+    var form=document.createElement('form');form.id='cdMaterialPlanForm';root.appendChild(form);
+    function field(label,id,value,type){var wrap=document.createElement('label');wrap.textContent=label;wrap.style.display='block';wrap.style.marginTop='0.75rem';var input=document.createElement(type==='select'?'select':'input');input.id=id;input.value=value||'';input.style.cssText='display:block;width:100%;box-sizing:border-box;padding:0.65rem;color:#172033;background:white;';if(type!=='select')input.type=type||'text';wrap.appendChild(input);form.appendChild(wrap);return input;}
+    function invalidate(){draft.confirmed=false;draft.result=null;draft.request=null;confirm.checked=false;result.replaceChildren();}
+    if(draft.action==='save'){
+      var material=field('Material','cdPlanMaterial',draft.inputs.material);material.maxLength=160;material.required=true;material.oninput=function(){draft.inputs.material=material.value;invalidate();};
+      var unit=field('Unit','cdPlanUnit',draft.inputs.unit,'select');[['ea','Items'],['m','Metres'],['m2','Square metres'],['m3','Cubic metres'],['ft','Feet'],['ft2','Square feet'],['ft3','Cubic feet'],['yd3','Cubic yards'],['kg','Kilograms'],['lb','Pounds'],['l','Litres'],['gal','US gallons']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];unit.appendChild(o);});unit.value=draft.inputs.unit;
+      var quantity=field('Required quantity','cdPlanQuantity',draft.inputs.quantity);quantity.inputMode='decimal';quantity.required=true;quantity.oninput=function(){draft.inputs.quantity=quantity.value;invalidate();};
+      var waste=field('Waste allowance (%)','cdPlanWaste',draft.inputs.wastePercent);waste.inputMode='decimal';waste.required=true;waste.oninput=function(){draft.inputs.wastePercent=waste.value;invalidate();};
+      var price=field('Internal price per selected unit ('+review.currency+')','cdPlanPrice',draft.inputs.unitPrice);price.inputMode='decimal';price.required=true;price.placeholder='0.00';price.oninput=function(){draft.inputs.unitPrice=price.value;invalidate();};
+      unit.onchange=function(){draft.inputs.unit=unit.value;draft.inputs.quantity='';draft.inputs.unitPrice='';quantity.value='';price.value='';invalidate();status.textContent='The unit changed. Enter the quantity and price for this unit.';};
+      var source=field('Price source','cdPlanSourceType',draft.inputs.sourceType,'select');[['my_estimate','My cost estimate'],['entered_price','Price information I entered']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];source.appendChild(o);});source.value=draft.inputs.sourceType;source.onchange=function(){draft.inputs.sourceType=source.value;invalidate();};
+      var note=field('Source note','cdPlanSourceNote',draft.inputs.sourceNote);note.maxLength=1000;note.required=true;note.oninput=function(){draft.inputs.sourceNote=note.value;invalidate();};
+      var date=field('Price date (optional)','cdPlanPriceDate',draft.inputs.priceDate,'date');date.oninput=function(){draft.inputs.priceDate=date.value||null;invalidate();};
+    }
+    var reason=field('Reason for this plan change','cdPlanReason',draft.reason);reason.maxLength=2000;reason.required=true;reason.oninput=function(){draft.reason=reason.value;draft.confirmed=false;confirm.checked=false;draft.request=null;};
+    var result=document.createElement('div');result.id='cdPlanResult';result.setAttribute('aria-live','polite');form.appendChild(result);if(draft.result)showResult(draft.result,result);
+    var label=document.createElement('label'),confirm=document.createElement('input');confirm.id='cdPlanConfirm';confirm.type='checkbox';confirm.checked=draft.confirmed;confirm.onchange=function(){draft.confirmed=confirm.checked;draft.request=null;};label.appendChild(confirm);label.appendChild(document.createTextNode(draft.action==='save'?' I reviewed these material inputs and their source. Save this plan without changing the estimate or customer price.':' Withdraw this material plan while retaining its history.'));form.appendChild(label);
+    var status=document.createElement('p');status.id='cdPlanStatus';status.setAttribute('role','status');status.tabIndex=-1;status.textContent=draft.changed?'The review changed. Calculate again and confirm this plan.':'';form.appendChild(status);
+    function body(){return {action:draft.action,expectedRevision:current?current.revision:0,expectedDigest:current?current.digest:'none',sourcePins:review.pins,expectedDecisionRevision:plans.decisionBasis.revision,expectedDecisionDigest:plans.decisionBasis.digest,inputs:draft.action==='save'?draft.inputs:null,currency:review.currency,reason:draft.reason,confirmed:draft.confirmed,confirmationVersion:'estimate-material-plan-v1'};}
+    function focusStart(){var b=parent.querySelector('#cdMaterialPlan button');if(b)b.focus();}
+    function send(preview){if(!form.reportValidity()||!reviewPinsMatch(review,_currentData&&_currentData.canonical))return;if(!preview&&(!draft.confirmed||draft.action==='save'&&!draft.result)){status.textContent='Calculate the material cost and confirm the plan before saving.';return;}
+      var generation=_openSequence,attempt=preview?{body:body()}:draft.request||(draft.request={body:JSON.parse(JSON.stringify(body())),key:crypto.randomUUID(),demoRevision:review.demoWorkspaceRevision});var serialized=JSON.stringify(attempt.body);Array.prototype.forEach.call(form.elements,function(c){c.disabled=true;});status.textContent=preview?'Calculating material cost.':'Saving material plan.';
+      var headers={'Content-Type':'application/json'};if(!preview)headers['Idempotency-Key']=attempt.key;if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(preview?review.demoWorkspaceRevision:attempt.demoRevision);
+      window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/'+encodeURIComponent(review.pins.estimateId)+(preview?'/material-plan-preview':'/material-plans'),{method:'POST',headers:headers,body:serialized}).then(function(response){return response.json().catch(function(){return {};}).then(function(b){if(!response.ok)throw {status:response.status};return b;});}).then(function(b){if(generation!==_openSequence||_materialPlanDraft!==draft||_estimateReview!==review)return;if(preview){if(!b.success||JSON.stringify(b.data.sourcePins)!==JSON.stringify(review.pins)||!b.data.decisionBasis||b.data.decisionBasis.revision!==plans.decisionBasis.revision||b.data.decisionBasis.digest!==plans.decisionBasis.digest)throw {status:409};draft.result=b.data.result;draft.confirmed=false;confirm.checked=false;result.replaceChildren();showResult(draft.result,result);status.textContent='Review this calculation, then confirm to save.';}else{_materialPlanDraft=null;refreshEstimateReview('material-saved');}}).catch(function(error){if(generation!==_openSequence||_materialPlanDraft!==draft||_estimateReview!==review)return;var known=[400,401,403,409,429,503].indexOf(error.status)>=0;status.textContent=error.status===400?'Check the material values and source, then calculate again.':error.status===401?'Sign in again before saving this plan.':error.status===403?'Your current account cannot save material plans.':error.status===409?'The estimate or review changed. Refresh, calculate again and confirm.':error.status===429?'The material-plan limit was reached. Review saved history before continuing.':error.status===503?'Material planning is unavailable. Refresh to read the saved plan.':'The result is unconfirmed. Retry this same attempt before changing the plan.';if(known){draft.confirmed=false;confirm.checked=false;draft.result=null;draft.request=null;result.replaceChildren();}}).finally(function(){if(generation===_openSequence&&_materialPlanDraft===draft&&_estimateReview===review){Array.prototype.forEach.call(form.elements,function(c){c.disabled=false;});status.focus();}});
+    }
+    function formButton(label,handler){var b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent=label;b.style.margin='0.75rem 0.5rem 0 0';b.onclick=handler;form.appendChild(b);}
+    if(draft.action==='save')formButton('Calculate material cost',function(){send(true);});formButton(draft.action==='save'?'Save material plan':'Confirm material withdrawal',function(){send(false);});formButton('Cancel material plan',function(){_materialPlanDraft=null;render();focusStart();});form.onsubmit=function(e){e.preventDefault();};
+  }
+
   function renderMaterialReview(review, parent) {
     var details = document.createElement('details'); details.id = 'cdMaterialReview';
     var summary = document.createElement('summary'); summary.textContent = 'Material basis'; details.appendChild(summary);
@@ -840,6 +893,7 @@ window.CustomerDetail = (function() {
       paragraph('The price date and current availability are unverified. Confirm both before relying on this amount.');
       if (material.simulated) paragraph('This example uses fictional material information.');
     }
+    renderMaterialPlan(review,details);
     parent.appendChild(details);
   }
 
@@ -874,7 +928,7 @@ window.CustomerDetail = (function() {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
-    var restoreFocus = focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
+    var restoreFocus = focusReason === 'material-saved' || focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
     _estimateReview = null; $('cdEstimateDecision').replaceChildren();
     $('cdCapellaReview').replaceChildren(); $('cdCapellaReview').hidden = true;
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
@@ -922,7 +976,7 @@ window.CustomerDetail = (function() {
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?
           'Estimate review is available to current owners and administrators.' : error.status === 404 ?
           'This estimate is no longer available. Reopen the customer to try again.' : 'Estimate review could not be loaded. Try refreshing it.');
-      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if (restoreFocus) { if (focusReason === 'decision-saved') focusDecisionAction('approve'); else button.focus(); } } });
+      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if (restoreFocus) { if (focusReason === 'material-saved') { var material=$('cdMaterialReview');if(material){material.open=true;var action=material.querySelector('#cdMaterialPlan button');if(action)action.focus();else button.focus();} } else if (focusReason === 'decision-saved') focusDecisionAction('approve'); else button.focus(); } } });
   }
 
   function populateDrawer(data) {

@@ -398,6 +398,8 @@
     }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
 
+    var materialPlan = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(material-plans|material-plan-preview)$/.exec(url.pathname);
+    if(method==='POST'&&materialPlan){var planHeaders=new Headers(options&&options.headers||{});planHeaders.set('X-NorthStar-Demo-Intent','material-plan');return nativeFetch('/api/demo/command-center/estimates/'+encodeURIComponent(materialPlan[1])+'/'+materialPlan[2],Object.assign({},options||{},{headers:planHeaders,credentials:'same-origin'}));}
     var estimateDecision = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/decisions$/.exec(url.pathname);
     if (method === 'POST' && estimateDecision) {
       var decisionHeaders = new Headers(options && options.headers || {});

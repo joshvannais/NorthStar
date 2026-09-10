@@ -1,0 +1,15 @@
+diff --git a/src/estimating/decisionPolicy.js b/src/estimating/decisionPolicy.js
+--- a/src/estimating/decisionPolicy.js
++++ b/src/estimating/decisionPolicy.js
+@@ -1,3 +1,3 @@
+ 'use strict';
+ // Source-controlled recovery build changes ONLY this constant to false.
+-module.exports = Object.freeze({ mutationsEnabled: true });
++module.exports = Object.freeze({ mutationsEnabled: false });
+diff --git a/src/estimating/materialPlanPolicy.js b/src/estimating/materialPlanPolicy.js
+--- a/src/estimating/materialPlanPolicy.js
++++ b/src/estimating/materialPlanPolicy.js
+@@ -1,2 +1,2 @@
+ 'use strict';
+-module.exports=Object.freeze({mutationsEnabled:true});
++module.exports=Object.freeze({mutationsEnabled:false});

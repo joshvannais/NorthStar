@@ -8,6 +8,10 @@ const { buildMaterialReview } = require('../estimating/materialReview');
 const { readDecisions, mutateDecision } = require('../estimating/decisionRepository');
 const { projectDecisions } = require('../estimating/decisionContract');
 const decisionPolicy = require('../estimating/decisionPolicy');
+const materialPlan = require('../estimating/materialPlanContract');
+const materialPlanPolicy = require('../estimating/materialPlanPolicy');
+const {readPlans,mutatePlan} = require('../estimating/materialPlanRepository');
+
 const audit = require('../audit/client');
 const {
   requireOnboardedInternal,
@@ -1385,6 +1389,24 @@ function createCanonicalRouter(options) {
     }
   });
 
+  router.post('/estimates/:estimateId/material-plans', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'This material plan could not be read. Check your entries.'}});
+    try {const result=await mutatePlan(resolvePool(dependencies.poolProvider),{...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')},req.body);return res.status(result.replayed?200:201).json({success:true,data:result});}
+    catch(error){return res.status(error.status||503).json({success:false,error:{message:error.status?error.message:'Material plans are unavailable. Try again.'}});}
+  });
+  router.post('/estimates/:estimateId/material-plan-preview', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'This material plan could not be read. Check your entries.'}});
+    try {const result=await withBroadCanonicalRead(req,dependencies,async(client,operator)=>{
+      if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Material planning is available to current owners and administrators.'),{status:403});
+      const item=await getCanonicalGraph(client,requestContext(req),req.params.estimateId);if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      const review=buildEstimateReview(item);review.decisions=await readDecisions(client,{...actorInput(req),estimateId:item.ids.estimate});const plans=await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate});
+      const body=materialPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')throw Object.assign(new Error('Enter a material plan to calculate.'),{status:400});materialPlan.checkBasis(body,review,plans.current);
+      return {result:materialPlan.calculate(body.inputs,body.currency),sourcePins:review.pins,decisionBasis:materialPlan.decisionBasis(review.decisions.current)};
+    });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Material planning is unavailable. Refresh and try again.'}});}
+  });
+
   router.post('/estimates/:estimateId/decisions', dependencies.auth, requireCanonicalContext, async function (req, res) {
     res.set('Cache-Control', 'no-store');
     if (!req.estimateDecisionBodyValidated || !UUID.test(req.params.estimateId)) return res.status(400).json({success:false,error:{message:'This review could not be read. Check your entries.'}});
@@ -1413,6 +1435,7 @@ function createCanonicalRouter(options) {
         review.approval = review.decisions.status; review.approvalMessage = review.decisions.message;
         review.riskReview = buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
+        review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);
         return review;
       });
       if (!review) return failure(404, 'That estimate is unavailable.');

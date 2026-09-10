@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { buildEstimateReview } = require('../services/estimateReview');
 const { buildCapellaReview } = require('../estimating/capellaReview');
+const { buildMaterialReview } = require('../estimating/materialReview');
 const {projectDecisions} = require('../estimating/decisionContract');
 const decisionPolicy = require('../estimating/decisionPolicy');
 const express = require('express');
@@ -361,6 +362,7 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     review.decisions=projectDecisions({current:history[0]||null,history,total:history.length,truncated:false},decisionPolicy.mutationsEnabled,true);
     review.approval=review.decisions.status;review.approvalMessage=review.decisions.message;review.demoWorkspaceRevision=record.revision;
     review.riskReview=buildCapellaReview(review, item.snapshot);
+    review.materialReview = buildMaterialReview(review, item.snapshot);
     return res.json({ success: true, data: review });
   } catch (_error) {
     return res.status(503).json({ success: false, error: { message: 'Demo estimate review could not be loaded. Try again.' } });

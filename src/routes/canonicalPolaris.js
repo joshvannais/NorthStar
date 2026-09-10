@@ -4,6 +4,7 @@ const express = require('express');
 const db = require('../db');
 const { buildEstimateReview } = require('../services/estimateReview');
 const { buildCapellaReview } = require('../estimating/capellaReview');
+const { buildMaterialReview } = require('../estimating/materialReview');
 const { readDecisions, mutateDecision } = require('../estimating/decisionRepository');
 const { projectDecisions } = require('../estimating/decisionContract');
 const decisionPolicy = require('../estimating/decisionPolicy');
@@ -1411,6 +1412,7 @@ function createCanonicalRouter(options) {
         review.decisions = projectDecisions(decisions, decisionPolicy.mutationsEnabled && operator.canMutate === true);
         review.approval = review.decisions.status; review.approvalMessage = review.decisions.message;
         review.riskReview = buildCapellaReview(review, item.snapshot);
+    review.materialReview = buildMaterialReview(review, item.snapshot);
         return review;
       });
       if (!review) return failure(404, 'That estimate is unavailable.');

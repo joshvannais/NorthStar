@@ -821,6 +821,28 @@ window.CustomerDetail = (function() {
       review.recordedAt === selected.snapshotCreatedAt;
   }
 
+  function renderMaterialReview(review, parent) {
+    var details = document.createElement('details'); details.id = 'cdMaterialReview';
+    var summary = document.createElement('summary'); summary.textContent = 'Material basis'; details.appendChild(summary);
+    function paragraph(text) { var node = document.createElement('p'); node.textContent = text; node.style.overflowWrap = 'anywhere'; details.appendChild(node); }
+    var material = review.materialReview;
+    var matches = material && material.contract === 'NorthStarMaterialReview/v1' &&
+      JSON.stringify(material.sourcePins) === JSON.stringify(review.pins) && material.recordedAt === review.recordedAt &&
+      material.currency === review.currency && material.simulated === review.simulated;
+    if (!matches) paragraph('Material information is unavailable. Refresh this estimate to try again.');
+    else {
+      paragraph(material.materialState === 'recorded' && typeof material.material === 'string' ? 'Material: ' + material.material : material.materialState === 'unspecified' ? 'Material not specified.' : 'The material description is unavailable.');
+      paragraph('Recorded material cost: ' + decisionMoney(material.amount, review.currency));
+      paragraph(material.basis === 'recorded_configured_amount' ? 'This is the material amount saved for this estimate, not a current supplier price.' : 'The basis of this material amount is unavailable. Review it before relying on it.');
+      var date = material.recordedAt && new Date(material.recordedAt);
+      paragraph(date && Number.isFinite(date.getTime()) ? 'Estimate recorded ' + date.toLocaleString() + '.' : 'The estimate recording date is unavailable.');
+      paragraph('Material quantity, units and waste allowance have not been recorded here.');
+      paragraph('The price date and current availability are unverified. Confirm both before relying on this amount.');
+      if (material.simulated) paragraph('This example uses fictional material information.');
+    }
+    parent.appendChild(details);
+  }
+
   function renderCapellaReview(review) {
     var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
     var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens'; root.appendChild(title);
@@ -888,6 +910,7 @@ window.CustomerDetail = (function() {
           } else detail.textContent = 'Unavailable';
           rowNode.appendChild(term); rowNode.appendChild(detail); list.appendChild(rowNode);
         }); root.appendChild(list);
+        renderMaterialReview(review, root);
         (review.missing || []).forEach(paragraph);
         if (_decisionDraft && _decisionDraft.basis !== decisionReviewBasis(review)) {
           _decisionDraft.confirmed = false; _decisionDraft.request = null; _decisionDraft.basisChanged = true;

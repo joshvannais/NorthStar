@@ -234,7 +234,7 @@ window.CustomerDetail = (function() {
     html += '            <div id="cdPricingBreakdown"><p>No role-authorized estimate factors are available.</p></div>';
     html += '            <section aria-label="Estimate review" style="margin-top:1rem">';
     html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
-    html += '              <button type="button" class="drawer-btn" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
+    html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
     html += '            </section>';
 
     html += '          </details>';

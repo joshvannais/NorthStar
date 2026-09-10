@@ -186,9 +186,13 @@ async function main() {
         const panel = p.locator('#section-' + tab);
         const text = await panel.innerText();
         assert(!/JSON|PostgreSQL|perUnit|canonicalPricing|quantityField|lineItems|unitRates|rangePercent|Tenant-scoped|Mission 24|Cost Authority|immutable|Stable service ID/.test(text), text);
+        await p.waitForFunction(() => getComputedStyle(document.getElementById('toast')).opacity === '0');
         await panel.screenshot({
           path: path.join(output, theme + '-' + width + '-' + tab + '.png')
         });
+        const visibleTarget = tab === 'services' ? panel.locator('.profile-structured-charge').first() : panel.locator('.profile-structured').first();
+        await visibleTarget.scrollIntoViewIfNeeded();
+        await p.screenshot({path:path.join(output, theme + '-' + width + '-' + tab + '-viewport.png')});
       }
       assert(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await c.close();

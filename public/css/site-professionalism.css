@@ -1674,3 +1674,26 @@ html[data-theme="dark"] body .customer-drawer .drawer-capella-review dl > div { 
   html body .customer-drawer .drawer-capella-review dl > div { flex-direction: column; gap: .35rem; }
   html body .customer-drawer .drawer-capella-review dd { text-align: left; white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* Recorded Polaris facts stay scannable in the shared customer drawer. */
+html body .customer-drawer .drawer-work-facts { margin:0; padding-left:18px; display:grid; gap:8px; color:var(--neutral-700); font-size:13px; line-height:1.5; overflow-wrap:anywhere; }
+html body .customer-drawer .drawer-work-detail h4 { margin-bottom:10px; }
+
+html body .customer-drawer .drawer-work-facts { color:#fff; }
+html body .customer-drawer .drawer-polaris-grid { grid-template-columns:1fr 1fr; gap:16px; }
+html body .customer-drawer .drawer-polaris-item { padding:0; border:0; background:transparent; }
+html body .customer-drawer .drawer-polaris-item:last-child { grid-column:1/-1; }
+html body .customer-drawer .drawer-polaris-item-value { font-size:15px; }
+html body .customer-drawer #cdPolPrice { font-size:24px; font-weight:700; }
+html body .customer-drawer .drawer-polaris-basis { color:rgba(255,255,255,.8); font-size:12px; line-height:1.5; margin:14px 0; }
+html body .customer-drawer .drawer-polaris-context { display:flex; flex-wrap:wrap; gap:8px 20px; color:#fff; font-size:13px; }
+html body .customer-drawer .drawer-polaris-analysis .drawer-work-detail { background:transparent; border:0; border-bottom:1px solid rgba(255,255,255,.2); padding:0 0 14px; }
+html body .customer-drawer .drawer-work-details { gap:16px; }
+@media(max-width:640px) { html body .customer-drawer .drawer-polaris-grid { grid-template-columns:1fr; } }
+
+html body .customer-drawer .drawer-transcript-disclosure > summary { cursor:pointer; font-weight:600; padding:8px 0; }
+html body .customer-drawer .drawer-transcript-disclosure[open] > summary { margin-bottom:12px; }
+
+html body .customer-drawer .drawer-unpriced-categories { color:rgba(255,255,255,.85); font-size:13px; margin:8px 0; }
+html body .customer-drawer .drawer-unpriced-categories > summary { cursor:pointer; }
+html body .customer-drawer .drawer-unpriced-categories ul { margin:8px 0; padding-left:18px; }

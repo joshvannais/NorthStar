@@ -21,6 +21,14 @@
     .lead-detail-card h3 { font-size: 13px; font-weight: 600; color: var(--neutral-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
     .lead-detail-card .value { font-size: 16px; font-weight: 600; color: var(--neutral-900); }
     .lead-detail-card .value-secondary { font-size: 14px; color: var(--neutral-600); margin-top: 2px; }
+    .lead-polaris-facts { display:grid; grid-template-columns:minmax(140px,1fr) minmax(0,2fr); gap:10px 20px; margin:0; }
+    .lead-polaris-facts dt { font-weight:600; color:var(--neutral-700); }
+    .lead-polaris-facts dd { margin:0; overflow-wrap:anywhere; }
+    .lead-polaris-facts ul { margin:0; padding-left:18px; display:grid; gap:5px; }
+    .lead-polaris-support { border-top:1px solid var(--neutral-200); margin-top:16px; padding-top:12px; }
+    .lead-polaris-support summary { cursor:pointer; font-weight:600; margin-bottom:12px; }
+    .lead-polaris-basis { color:var(--neutral-600); font-size:13px; margin:0 0 16px; line-height:1.5; }
+    @media(max-width:640px) { .lead-polaris-facts { grid-template-columns:1fr; gap:6px; } .lead-polaris-facts dd { margin-bottom:12px; } }
     .lead-detail-section { margin-bottom: 24px; }
     .lead-detail-section h2 { font-size: 16px; font-weight: 600; color: var(--neutral-900); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--neutral-200); }
     .lead-timeline { list-style: none; padding: 0; }
@@ -311,35 +319,65 @@
         var card = document.createElement('div');
         card.className = 'lead-detail-card';
         var formatter = window.NorthStarPresentationFormat;
-        [
-          ['Customer price', presentation.customerPrice, 'customerFacingPrice'],
-          ['Scope', presentation.service && presentation.service.scope, 'scope'],
-          ['Labor', { laborCharge: presentation.values.laborCharge, recordedLaborCost: presentation.values.knownInternalLaborCost, estimatedDurationHours: presentation.values.estimatedProductionDurationHours }, 'labor'],
-          ['Travel', presentation.values.travel, 'travel'],
-          ['Profit', { grossProfit: presentation.grossProfit, grossMarginPercent: presentation.grossMarginPercent, netProfit: presentation.netProfit, netMarginPercent: presentation.netMarginPercent }, 'profit'],
-          ['Confidence', presentation.confidence, 'confidence'],
-          ['Risk', presentation.risk, 'risk'],
-          ['Recommendations', presentation.recommendations, 'recommendations'],
-        ].forEach(function (entry) {
-          var row = document.createElement('div');
-          row.style.marginBottom = '8px';
-          var label = document.createElement('strong');
-          label.textContent = entry[0] + ': ';
-          var value = document.createElement('span');
-          value.textContent = formatter && typeof formatter.describe === 'function'
-            ? formatter.describe(entry[1], {
-              key: entry[2],
-              fallback: entry[0] + ' is unavailable because the required role-authorized input has not been recorded.'
-            })
-            : String(entry[1] === null || entry[1] === undefined
-              ? entry[0] + ' is unavailable because the required input has not been recorded.'
-              : typeof entry[1] === 'object'
-                ? entry[0] + ' is unavailable because the presentation formatter did not load.'
-                : entry[1]);
-          row.appendChild(label);
-          row.appendChild(value);
-          card.appendChild(row);
+        function describe(value, key) {
+          return formatter && typeof formatter.describe === 'function'
+            ? formatter.describe(value, { key: key || '', fallback: 'Unavailable' })
+            : 'Unavailable';
+        }
+        function amount(value) { return describe(value, 'cost'); }
+        function measure(value, unit) {
+          return typeof value === 'number' && Number.isFinite(value)
+            ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value) + unit
+            : 'Unavailable';
+        }
+        var values = presentation.values;
+        var travel = values.travel;
+        var confidence = presentation.confidence;
+        var factors = { supportedService: 'Service covered by the business', requiredScopeCollected: 'Required job details recorded', contradictoryFacts: 'Conflicting details', supportingFacts: 'Recorded supporting details' };
+        var confidenceText = confidence ? measure(confidence.score, '%') : 'Unavailable';
+        if (confidence && Array.isArray(confidence.factors)) confidence.factors.forEach(function (factor) {
+          if (factors[factor.factor]) confidenceText += '; ' + factors[factor.factor] + ': ' + describe(factor.value);
         });
+        var risk = presentation.risk;
+        var riskText = risk ? 'Emergency reported: ' + describe(risk.emergency) : 'Unavailable';
+        if (risk && typeof risk.evidence === 'string' && risk.evidence.trim()) riskText += '; ' + describe(risk.evidence);
+        var recommendations = Array.isArray(presentation.recommendations) ? presentation.recommendations.map(function (action) {
+          if (typeof action === 'string') return describe(action);
+          var text = action && (action.action || action.title || action.description || action.reason || action.label);
+          if (typeof text !== 'string') return '';
+          var urgency = (action.priority === 'high' || action.priority === 'critical') ? 'Urgent: ' : action.priority === 'low' ? 'When practical: ' : '';
+          return urgency + describe(text);
+        }).filter(Boolean).join('; ') : '';
+        var basis = document.createElement('p');
+        basis.className = 'lead-polaris-basis';
+        basis.textContent = 'Original estimate. Later material changes and reviewed prices are in the customer estimate review.';
+        card.appendChild(basis);
+        var facts = document.createElement('dl'); facts.className = 'lead-polaris-facts'; card.appendChild(facts);
+        var supporting = document.createElement('details'); supporting.className = 'lead-polaris-support';
+        var supportingTitle = document.createElement('summary'); supportingTitle.textContent = 'Scope and supporting details'; supporting.appendChild(supportingTitle);
+        var supportingFacts = document.createElement('dl'); supportingFacts.className = 'lead-polaris-facts'; supporting.appendChild(supportingFacts);
+        [
+          ['Original customer price', amount(presentation.customerPrice)],
+          ['Original scope', describe(presentation.service && presentation.service.scope, 'scope')],
+          ['Original labor', 'Charge: ' + amount(values.laborCharge) + '; Recorded cost: ' + amount(values.knownInternalLaborCost) + '; Estimated duration: ' + measure(values.estimatedProductionDurationHours, ' hours')],
+          ['Original travel', travel ? 'Distance: ' + measure(travel.distanceMiles, ' miles') + '; Time: ' + measure(travel.minutes, ' minutes') + '; Charge: ' + amount(travel.customerCharge) + '; Recorded cost: ' + amount(travel.knownInternalCost) : 'Unavailable'],
+          ['Original estimated profit', 'Gross profit: ' + amount(presentation.grossProfit) + '; Gross margin: ' + measure(presentation.grossMarginPercent, '%') + '; Net profit: ' + amount(presentation.netProfit) + '; Net margin: ' + measure(presentation.netMarginPercent, '%')],
+          ['Confidence in the original estimate', confidenceText],
+          ['Recorded risks', riskText],
+          ['Recommended next steps', recommendations || 'No recommendation recorded'],
+        ].forEach(function (entry) {
+          var host = ['Original scope', 'Original travel', 'Confidence in the original estimate'].indexOf(entry[0]) >= 0 ? supportingFacts : facts;
+          var label = document.createElement('dt'); label.textContent = entry[0];
+          var value = document.createElement('dd');
+          var parts = entry[1].split('; ');
+          if (parts.length > 1) {
+            var list = document.createElement('ul');
+            parts.forEach(function (text) { var item = document.createElement('li'); item.textContent = text; list.appendChild(item); });
+            value.appendChild(list);
+          } else value.textContent = entry[1];
+          host.appendChild(label); host.appendChild(value);
+        });
+        card.appendChild(supporting);
         container.appendChild(card);
       }
 

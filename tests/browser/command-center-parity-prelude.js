@@ -1327,13 +1327,13 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
     }));
     assert.ok(drawerText.includes('POLARIS'), viewport.label + ' detail contains Polaris intelligence');
     for (const heading of [
-      'Contact Information', 'Customer Profile', 'Job Details', 'Description',
-      'Gates and missing information', 'Materials', 'Equipment', 'Scheduling', 'Pricing', 'Risk',
+      'Contact Information', 'Customer Profile', 'Recorded scope',
+      'Needs review', 'Materials', 'Equipment', 'Scheduling', 'Pricing', 'Risk',
     ]) {
       assert.ok(drawerText.toLowerCase().includes(heading.toLowerCase()),
         viewport.label + ' detail contains readable ' + heading + ' section');
     }
-    const drawerOrder = ['Contact Information', 'Customer Profile', 'Job Details', 'Polaris™ Intelligence']
+    const drawerOrder = ['Contact Information', 'Customer Profile', 'Polaris™ Intelligence']
       .map(heading => drawerText.toLowerCase().indexOf(heading.toLowerCase()));
     assert.ok(drawerOrder.every(index => index >= 0) && drawerOrder.every((value, index) => index === 0 || value > drawerOrder[index - 1]),
       viewport.label + ' detail keeps contact and profile first, then work and Polaris intelligence');

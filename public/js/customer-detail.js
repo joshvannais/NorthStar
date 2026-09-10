@@ -198,37 +198,29 @@ window.CustomerDetail = (function() {
     html += '        <p class="drawer-missing-summary" id="cdMissingSummary" role="status" aria-live="polite" hidden></p>';
     html += '      </div>';
 
-    // Job Details
-    html += '      <div class="drawer-section">';
-    html += '        <h3 id="cdJobSectionHeading">Job Details</h3>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="cdService">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Original estimated value</span><span class="drawer-detail-value" id="cdEstValue">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Opportunity Stage</span><span class="drawer-detail-value" id="cdStage">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Close Probability</span><span class="drawer-detail-value" id="cdProb">\u2014</span></div>';
-    html += '      </div>';
-
     // POLARIS\u2122 Intelligence
-    html += '      <div class="drawer-section" id="cdExecutionSection"><h3>Work details</h3><p>Work details for the jobs shown on this page. Open Operations to review other recorded work.</p><div id="cdExecutionRecords"></div></div>';
+    html += '      <div class="drawer-section" id="cdExecutionSection"><h3>Work details</h3><div id="cdExecutionRecords"></div></div>';
     html += '      <div class="drawer-section">';
     html += '        <h3>POLARIS\u2122 Intelligence</h3>';
     html += '        <div class="drawer-polaris-insight" id="cdPolarisInsight">';
     html += '          <div class="drawer-polaris-grid">';
-    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Summary</div><div class="drawer-polaris-item-value" id="cdPolSummary">\u2014</div></div>';
-    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Original price guidance</div><div class="drawer-polaris-item-value" id="cdPolPrice">\u2014</div></div>';
-    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Confidence</div><div class="drawer-polaris-item-value" id="cdPolConfidence">\u2014</div></div>';
-    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Original revenue estimate</div><div class="drawer-polaris-item-value" id="cdPolRevenue">\u2014</div></div>';
+    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Job</div><div class="drawer-polaris-item-value" id="cdPolSummary">\u2014</div></div>';
+    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Original estimate</div><div class="drawer-polaris-item-value" id="cdPolPrice">\u2014</div></div>';
+    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recorded input score</div><div class="drawer-polaris-item-value" id="cdPolConfidence">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommended Action</div><div class="drawer-polaris-item-value" id="cdPolAction">\u2014</div></div>';
     html += '          </div>';
+    html += '          <p class="drawer-polaris-basis">Original estimate guidance, before any later material changes or human price review. The input score reflects recorded detail completeness and conflicting facts, not price accuracy.</p>';
+    html += '          <div class="drawer-polaris-context"><span>Stage: <strong id="cdStage"></strong></span><span id="cdProbabilityRow">Close probability: <strong id="cdProb"></strong></span></div>';
     html += '          <details class="drawer-polaris-analysis">';
     html += '            <summary>Work scope and estimate factors</summary>';
     html += '            <div class="drawer-work-details" aria-label="Recorded work scope and estimate factors">';
-    html += '              <section class="drawer-work-detail"><h4>Description</h4><p id="cdDescription">No customer or work description has been recorded.</p></section>';
-    html += '              <section class="drawer-work-detail"><h4>Gates and missing information</h4><p id="cdWorkGates">No missing-input guidance is recorded.</p></section>';
-    html += '              <section class="drawer-work-detail"><h4>Materials</h4><p id="cdWorkMaterials">Material requirements are unavailable because they have not been recorded.</p></section>';
-    html += '              <section class="drawer-work-detail"><h4>Equipment</h4><p id="cdWorkEquipment">Equipment requirements are unavailable because they have not been recorded.</p></section>';
-    html += '              <section class="drawer-work-detail"><h4>Scheduling</h4><p id="cdWorkScheduling">Scheduling inputs are unavailable because they have not been recorded.</p></section>';
-    html += '              <section class="drawer-work-detail"><h4>Pricing</h4><p id="cdWorkPricing">No recorded estimate is available to this account.</p></section>';
-    html += '              <section class="drawer-work-detail"><h4>Risk</h4><p id="cdWorkRisk">No specific risk is supported by the current recorded inputs.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Recorded scope</h4><ul class="drawer-work-facts" id="cdDescription"><li>No customer or work description has been recorded.</li></ul></section>';
+    html += '              <section class="drawer-work-detail"><h4>Needs review</h4><ul class="drawer-work-facts" id="cdWorkGates"><li>No missing-input guidance is recorded.</li></ul></section>';
+    html += '              <section class="drawer-work-detail"><h4>Materials</h4><ul class="drawer-work-facts" id="cdWorkMaterials"><li>Material requirements are unavailable because they have not been recorded.</li></ul></section>';
+    html += '              <section class="drawer-work-detail"><h4>Equipment</h4><ul class="drawer-work-facts" id="cdWorkEquipment"><li>Equipment requirements are unavailable because they have not been recorded.</li></ul></section>';
+    html += '              <section class="drawer-work-detail"><h4>Scheduling</h4><ul class="drawer-work-facts" id="cdWorkScheduling"><li>Scheduling inputs are unavailable because they have not been recorded.</li></ul></section>';
+    html += '              <section class="drawer-work-detail"><h4>Pricing</h4><ul class="drawer-work-facts" id="cdWorkPricing"><li>No recorded estimate is available to this account.</li></ul></section>';
+    html += '              <section class="drawer-work-detail"><h4>Risk</h4><ul class="drawer-work-facts" id="cdWorkRisk"><li>No specific risk is supported by the current recorded inputs.</li></ul></section>';
     html += '            </div>';
     html += '          </details>';
     html += '          <details class="drawer-polaris-pricing">';
@@ -254,12 +246,12 @@ window.CustomerDetail = (function() {
     html += '      </div>';
 
     // Call Transcript
-    html += '      <div class="drawer-section">';
-    html += '        <h3 id="cdTranscriptHeading" tabindex="-1">Call Transcript</h3>';
+    html += '      <details class="drawer-section drawer-transcript-disclosure" id="cdTranscriptDisclosure">';
+    html += '        <summary id="cdTranscriptHeading">Call transcript</summary>';
     html += '        <div class="drawer-transcript" id="cdTranscript" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:300px;">';
     html += '          <p style="font-size:13px;color:var(--neutral-500);">No transcript available.</p>';
     html += '        </div>';
-    html += '      </div>';
+    html += '      </details>';
 
     // Actions
     html += '      <div class="drawer-section">';
@@ -313,14 +305,16 @@ window.CustomerDetail = (function() {
   // ── Shared Transcript Rendering ──
 
   function renderTranscript(transcript, customerName) {
+    var simulated = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active;
+    if (simulated) $('cdTranscriptHeading').textContent = 'Simulated call transcript';
     var firstName = customerName ? customerName.split(' ')[0] : 'Customer';
     return window.NorthStarTranscriptRenderer.render($('cdTranscript'), transcript, {
       labels: { ai: 'AI AGENT', customer: firstName, system: '' },
       messages: {
-        missing: 'No transcript available.',
+        missing: simulated ? 'This older demo example has no saved conversation. Use Reset Demo in the demo toolbar to create new examples with simulated calls. Reset replaces the current demo and clears its changes.' : 'No transcript available.',
         unrecognized: 'Unrecognized transcript format.',
         parseError: 'Unable to parse transcript.',
-        empty: 'No transcript turns found.'
+        empty: simulated ? 'This older demo example has no saved conversation. Reset Demo creates new examples and clears the current demo changes.' : 'No transcript turns found.'
       },
       scroll: 'top',
       live: 'polite'
@@ -526,51 +520,61 @@ window.CustomerDetail = (function() {
   }
 
   function gateSummary(values) {
+    var prompts = {
+      vehicleCost:'Vehicle and fuel expenses need separate review; the estimate may not include them.', fuelCost:'Vehicle and fuel expenses need separate review; the estimate may not include them.',
+      callDurationSeconds:'Call length was not recorded.', actualCrewAssignment:'Confirm the crew before scheduling.',
+      appointmentPreference:'Confirm a suitable appointment time.', crewRecommendation:'Review the crew needed for this work.',
+      customerFacingPrice:'Review the missing job and price inputs before quoting.', preliminaryRange:'A price range is not available.',
+      equipmentCharge:'Review the equipment charge.', equipmentReference:'Confirm suitable equipment for the job.',
+      estimatedProductionDurationHours:'Confirm the expected work duration.', laborHours:'Confirm the labor hours.',
+      laborCharge:'Review the labor charge.', materialsCharge:'Review the material charge.',
+      knownDirectMaterialCost:'Material cost is missing.', knownEquipmentCost:'Equipment cost is missing.',
+      knownInternalLaborCost:'Labor cost is missing.', knownTravelInternalCost:'Travel cost is missing.',
+      knownDirectCosts:'Direct costs are incomplete; review missing costs before relying on profit figures.',
+      grossMargin:'Profit and margin figures are incomplete; review the missing costs.', grossProfit:'Profit and margin figures are incomplete; review the missing costs.',
+      netMargin:'Profit and margin figures are incomplete; review the missing costs.', netProfit:'Profit and margin figures are incomplete; review the missing costs.', overhead:'Overhead is not included.',
+      tax:'Confirm tax treatment before quoting.', totalIncludingTax:'A tax-inclusive total is unavailable.',
+      travelCustomerCharge:'Confirm travel distance, time and any customer charge.', travelDistanceMiles:'Confirm travel distance, time and any customer charge.',
+      travelMinutes:'Confirm travel distance, time and any customer charge.', travelSource:'Confirm travel distance, time and any customer charge.'
+    };
     var entries = [];
     (values && Array.isArray(values.missingInformation) ? values.missingInformation : []).forEach(function(item) {
-      var value = describe(item, '', 'missingInformation');
-      if (value) entries.push(value);
+      if (typeof item === 'string') entries.push('Confirm ' + describe(item, 'the missing job detail', 'detail') + '.');
+      else if (item && typeof item === 'object') entries.push(prompts[item.field] || 'Review the missing job details before committing to work.');
     });
     (values && Array.isArray(values.notCalculated) ? values.notCalculated : []).forEach(function(item) {
-      if (!item || typeof item !== 'object') return;
-      var formatter = presentationFormat();
-      var field = formatter && formatter.label ? formatter.label(item.field || 'Input') : capitalizeFirst(String(item.field || 'Input'));
-      var reason = describe(item.reason, 'a required input has not been recorded', 'reason');
-      entries.push(field + ' is unavailable because ' + reason.replace(/[.\s]+$/, '') + '.');
+      if (item && typeof item === 'object') entries.push(prompts[item.field] || 'Some estimate details are unavailable. Review the recorded job information.');
     });
-    return entries.length ? entries.join(' ') : 'No missing-input gate is recorded for this customer or work item.';
+    return entries.length ? entries.filter(function(value,index,list) { return list.indexOf(value) === index; }) : ['No missing information is recorded for this work.'];
+  }
+
+  function renderWorkFacts(id, value) {
+    var root = $(id); root.replaceChildren();
+    var entries = Array.isArray(value) ? value : [value];
+    (entries.length ? entries : ['Not recorded']).forEach(function(text) {
+      var item = document.createElement('li'); item.textContent = text; root.appendChild(item);
+    });
   }
 
   function workPresentation(data) {
-    var values = data.intelligence || {};
-    var service = values.service && typeof values.service === 'object' ? values.service : {};
-    var scope = service.scope;
-    var scheduling = {
-      constraint: scope && typeof scope === 'object' ? scope.schedulingConstraint : null,
-      estimatedDurationHours: values.estimatedProductionDurationHours,
-      travel: values.travel,
-    };
-    var pricing = {
-      customerPrice: values.customerFacingPrice,
-      preliminaryRange: values.preliminaryRange,
-      tax: values.taxDisposition,
-    };
-    var materialText = lineItemSummary(values, 'materials', 'Material requirements are unavailable because no material line item has been recorded.');
-    if (materialText.indexOf('unavailable') >= 0 && values.materialsCharge != null) {
-      materialText = 'Recorded materials charge: ' + fmtCurrency(values.materialsCharge) + '.';
-    }
-    var equipmentText = lineItemSummary(values, 'equipment', 'Equipment requirements are unavailable because no equipment line item has been recorded.');
-    if (equipmentText.indexOf('unavailable') >= 0 && values.equipmentCharge != null) {
-      equipmentText = 'Recorded equipment charge: ' + fmtCurrency(values.equipmentCharge) + '.';
-    }
+    var values = data.intelligence || {}, service = values.service || {}, scope = service.scope;
+    function measured(value, unit) { return typeof value === 'number' && Number.isFinite(value) ? value + ' ' + unit : 'Not recorded'; }
+    function cost(value) { return value == null ? 'Not recorded' : fmtCurrency(value); }
+    var labels = { customerDistanceMiles:'Customer distance', equipmentReference:'Equipment', jobType:'Work type', laborHours:'Labor time', serviceRadiusMiles:'Service radius', serviceZone:'Service area', linearFeet:'Length', estimatedDurationHours:'Estimated duration' };
+    var units = { customerDistanceMiles:'miles', serviceRadiusMiles:'miles', linearFeet:'ft', laborHours:'hours', estimatedDurationHours:'hours' };
+    var scopeFacts = scope && typeof scope === 'object' && !Array.isArray(scope) ? Object.keys(scope).filter(function(key) { return !presentationFormat().isInternalKey(key) || key === 'equipmentReference'; }).map(function(key) {
+      var label = labels[key] || presentationFormat().label(key);
+      return label + ': ' + (units[key] ? measured(scope[key],units[key]) : describe(scope[key],'Not recorded',key));
+    }) : [displayDescription(scope)];
+    var travel = values.travel || {};
     return {
-      description: displayDescription(scope),
-      gates: gateSummary(values),
-      materials: materialText,
-      equipment: equipmentText,
-      scheduling: describe(scheduling, 'Scheduling inputs are unavailable because they have not been recorded.', 'scheduling'),
-      pricing: describe(pricing, 'No recorded estimate is available to this account.', 'pricing'),
-      risk: describe(values.risk, 'No specific risk is supported by the current recorded inputs.', 'risk'),
+      description:scopeFacts,
+      gates:gateSummary(values),
+      materials:[lineItemSummary(values,'materials','Original material charge: '+cost(values.materialsCharge))],
+      equipment:[lineItemSummary(values,'equipment','Original equipment charge: '+cost(values.equipmentCharge))],
+      scheduling:['Estimated work: '+measured(values.estimatedProductionDurationHours,'hours'),'Travel distance: '+measured(travel.distanceMiles,'miles'),'Travel time: '+measured(travel.minutes,'minutes'),'Original travel charge: '+cost(travel.customerCharge),'Recorded travel cost: '+cost(travel.knownInternalCost)],
+      pricing:['Original estimate: '+cost(values.customerFacingPrice),'Original price range: '+(values.preliminaryRange ? cost(values.preliminaryRange.low)+' to '+cost(values.preliminaryRange.high) : 'Not recorded'),'Tax: '+(values.taxDisposition && values.taxDisposition.status==='calculated' ? cost(values.tax) : 'Needs review')],
+      risk:[values.risk && values.risk.emergency ? 'Emergency reported. Review the recorded details before committing to work.' : 'No emergency is recorded. Other job risks still require review.']
     };
   }
 
@@ -590,9 +594,9 @@ window.CustomerDetail = (function() {
     return {
       summary: presentation.serviceText || 'Recorded service',
       price: presentation.customerPriceRoundedText,
-      confidenceLabel: 'Confidence',
+      confidenceLabel: 'Input score',
       confidenceClass: '',
-      confidencePct: presentation.confidenceText,
+      confidencePct: canon.calculationVersion === 'm19-part3-canonical-v2' ? presentation.confidenceText : 'not assessed',
       revenue: fmtCurrency(canon.estimatedRevenue),
       action: presentation.recommendedActionText || 'No recommendation recorded',
       isCanonical: true
@@ -657,17 +661,21 @@ window.CustomerDetail = (function() {
         '<p class="drawer-pricing-category-detail">' + detail + '</p></section>';
     }
     var html = '<p class="drawer-pricing-category-detail">Missing amounts remain unpriced until the required company information is available.</p>';
-    categories.forEach(function(category) { html += categoryMarkup(category); });
-    var subtotal = values && Number.isFinite(Number(values.subtotalBeforeTax)) ? fmtCurrency(values.subtotalBeforeTax) : '\u2014';
-    html += '<div class="drawer-pricing-item"><span><strong>Recorded subtotal</strong></span><span><strong>' + subtotal + '</strong></span></div>';
+    categories.forEach(function(category) { if (items.some(function(item) { return itemCategory(item) === category.key; })) html += categoryMarkup(category); });
+    if (!items.length) html += '<p class="drawer-pricing-category-detail">No itemized charges are recorded.</p>';
+    var unpriced = categories.filter(function(category) { return !items.some(function(item) { return itemCategory(item) === category.key; }); });
+    if (unpriced.length && items.length) html += '<details class="drawer-unpriced-categories"><summary>Categories without a recorded amount</summary><ul>' + unpriced.map(function(category) { return '<li>' + escapeText(category.label) + '</li>'; }).join('') + '</ul></details>';
+
+    var subtotal = values && values.subtotalBeforeTax != null && Number.isFinite(Number(values.subtotalBeforeTax)) ? fmtCurrency(values.subtotalBeforeTax) : '\u2014';
+    html += '<div class="drawer-pricing-item"><span><strong>Original subtotal</strong></span><span><strong>' + subtotal + '</strong></span></div>';
     if (values && values.taxDisposition && values.taxDisposition.status === 'calculated') {
       html += '<div class="drawer-pricing-item"><span>Tax</span><span>' + fmtCurrency(values.tax) + '</span></div>';
-      html += '<div class="drawer-pricing-item"><span><strong>Recorded total</strong></span><span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
+      html += '<div class="drawer-pricing-item"><span><strong>Original total</strong></span><span><strong>' + fmtCurrency(values.totalIncludingTax) + '</strong></span></div>';
     } else {
       var taxReason = values && values.taxDisposition && values.taxDisposition.reason;
-      html += '<section class="drawer-pricing-category" data-pricing-category="tax"><div class="drawer-pricing-category-header"><span>Tax</span><span>\u2014</span></div><p class="drawer-pricing-category-detail">' + escapeText(describe(taxReason, 'Awaiting a recorded tax configuration.', 'reason')) + '</p></section>';
+      html += '<section class="drawer-pricing-category" data-pricing-category="tax"><div class="drawer-pricing-category-header"><span>Tax</span><span>\u2014</span></div><p class="drawer-pricing-category-detail">' + 'Tax treatment needs review before quoting.' + '</p></section>';
       var recordedTotal = presentation && presentation.customerPrice !== null ? presentation.customerPriceRoundedText : '\u2014';
-      html += '<div class="drawer-pricing-item"><span><strong>Recorded estimate</strong></span><span><strong>' + escapeText(recordedTotal) + '</strong></span></div>';
+      html += '<div class="drawer-pricing-item"><span><strong>Original estimate</strong></span><span><strong>' + escapeText(recordedTotal) + '</strong></span></div>';
     }
     return html;
   }
@@ -1063,15 +1071,12 @@ window.CustomerDetail = (function() {
     _drawerEl.setAttribute('aria-busy', 'false');
     if (_sourceContext.source === 'leads') {
       $('cdContextSummary').textContent = 'Lead inquiry details, recorded work facts, and the actions available for this customer.';
-      $('cdJobSectionHeading').textContent = 'Lead Inquiry';
       $('cdTranscriptHeading').textContent = 'Recorded Conversation';
     } else if (_sourceContext.source === 'communications') {
       $('cdContextSummary').textContent = 'Customer information and the complete prior communication history recorded for this customer.';
-      $('cdJobSectionHeading').textContent = 'Related Work';
       $('cdTranscriptHeading').textContent = 'Selected Conversation';
     } else {
       $('cdContextSummary').textContent = 'Customer details, recorded work facts, and available actions.';
-      $('cdJobSectionHeading').textContent = 'Job Details';
       $('cdTranscriptHeading').textContent = 'Call Transcript';
     }
 
@@ -1125,27 +1130,25 @@ window.CustomerDetail = (function() {
       : '';
 
     // Job Details
-    $('cdService').textContent = data.service || 'Unavailable — no service is recorded.';
     var work = workPresentation(data);
-    $('cdDescription').textContent = work.description;
-    $('cdWorkGates').textContent = work.gates;
-    $('cdWorkMaterials').textContent = work.materials;
-    $('cdWorkEquipment').textContent = work.equipment;
-    $('cdWorkScheduling').textContent = work.scheduling;
-    $('cdWorkPricing').textContent = work.pricing;
-    $('cdWorkRisk').textContent = work.risk;
-    $('cdEstValue').textContent = fmtCurrency(data.estimatedValue);
+    renderWorkFacts('cdDescription', work.description);
+    renderWorkFacts('cdWorkGates', work.gates);
+    renderWorkFacts('cdWorkMaterials', work.materials);
+    renderWorkFacts('cdWorkEquipment', work.equipment);
+    renderWorkFacts('cdWorkScheduling', work.scheduling);
+    renderWorkFacts('cdWorkPricing', work.pricing);
+    renderWorkFacts('cdWorkRisk', work.risk);
     $('cdStage').textContent = stageLabel(data.stage);
     $('cdProb').textContent = data.closeProbability != null
       ? data.closeProbability + '%'
-      : 'Unavailable — no probability is available to this account.';
+      : 'Not recorded';
+    $('cdProbabilityRow').hidden = data.closeProbability == null;
 
     // POLARIS Intelligence
     var intel = generatePolarisIntel(data);
     $('cdPolSummary').textContent = intel.summary;
     $('cdPolPrice').textContent = intel.price;
     $('cdPolConfidence').textContent = intel.confidenceLabel + ' (' + intel.confidencePct + ')';
-    $('cdPolRevenue').textContent = intel.revenue;
     $('cdPolAction').textContent = intel.action;
 
     // Pricing Breakdown
@@ -1196,6 +1199,7 @@ window.CustomerDetail = (function() {
     if (!commId || !_currentData) return;
     var transcript = _commIdToTranscript[commId];
     if (transcript) {
+      $('cdTranscriptDisclosure').open = true;
       renderTranscript(transcript, _currentData.name);
     }
   }

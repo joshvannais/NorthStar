@@ -487,7 +487,8 @@ async function exerciseCustomerDetail(page, evidence, label) {
       focusInside: document.getElementById('cdCustomerDrawer').contains(document.activeElement),
       contextual: {
         summary: document.getElementById('cdContextSummary').textContent,
-        jobHeading: document.getElementById('cdJobSectionHeading').textContent,
+        stagePresent: Boolean(document.getElementById('cdStage')),
+        duplicateInquiryPresent: Boolean(document.getElementById('cdJobSectionHeading')),
         historyHidden: document.getElementById('cdConversationHistorySection').hidden,
         historyCount: document.querySelectorAll('#cdConversationHistory > li').length,
         explicitPolarisAction: document.getElementById('cdBtnAskPolaris').textContent,
@@ -517,8 +518,8 @@ async function exerciseCustomerDetail(page, evidence, label) {
   recordCheck(evidence, new URL(page.url()).pathname + new URL(page.url()).search === locationBefore,
     label + ': customer identity retains the current surface instead of navigating to Polaris', page.url());
   if (isLeads || isCommandCenter) {
-    recordCheck(evidence, primary.contextual.jobHeading === 'Lead Inquiry' && primary.contextual.historyHidden === true,
-      label + ': lead-origin customer identity opens inquiry-focused detail', primary.contextual);
+    recordCheck(evidence, primary.contextual.stagePresent && !primary.contextual.duplicateInquiryPresent && primary.contextual.historyHidden === true,
+      label + ': lead-origin customer identity retains stage once inside consolidated Polaris detail', primary.contextual);
   }
   if (isCommunications) {
     recordCheck(evidence, primary.contextual.historyHidden === false && primary.contextual.historyCount === 2 &&

@@ -93,7 +93,7 @@ window.CustomerDetail = (function() {
 
   function fmtCurrency(n) {
     if (n == null || n === '' || typeof n === 'boolean' || !Number.isFinite(Number(n))) {
-      return 'Unavailable — no role-authorized amount is recorded.';
+      return 'Unavailable — no amount is available to this account.';
     }
     return '$' + Math.round(Number(n)).toLocaleString();
   }
@@ -227,13 +227,13 @@ window.CustomerDetail = (function() {
     html += '              <section class="drawer-work-detail"><h4>Materials</h4><p id="cdWorkMaterials">Material requirements are unavailable because they have not been recorded.</p></section>';
     html += '              <section class="drawer-work-detail"><h4>Equipment</h4><p id="cdWorkEquipment">Equipment requirements are unavailable because they have not been recorded.</p></section>';
     html += '              <section class="drawer-work-detail"><h4>Scheduling</h4><p id="cdWorkScheduling">Scheduling inputs are unavailable because they have not been recorded.</p></section>';
-    html += '              <section class="drawer-work-detail"><h4>Pricing</h4><p id="cdWorkPricing">Pricing is unavailable because a role-authorized estimate has not been recorded.</p></section>';
+    html += '              <section class="drawer-work-detail"><h4>Pricing</h4><p id="cdWorkPricing">No recorded estimate is available to this account.</p></section>';
     html += '              <section class="drawer-work-detail"><h4>Risk</h4><p id="cdWorkRisk">No specific risk is supported by the current recorded inputs.</p></section>';
     html += '            </div>';
     html += '          </details>';
     html += '          <details class="drawer-polaris-pricing">';
     html += '            <summary>Complete price breakdown</summary>';
-    html += '            <div id="cdPricingBreakdown"><p>No role-authorized estimate factors are available.</p></div>';
+    html += '            <div id="cdPricingBreakdown"><p>No estimate details are available to this account.</p></div>';
     html += '            <section aria-label="Estimate review" style="margin-top:1rem">';
     html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
     html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
@@ -568,7 +568,7 @@ window.CustomerDetail = (function() {
       materials: materialText,
       equipment: equipmentText,
       scheduling: describe(scheduling, 'Scheduling inputs are unavailable because they have not been recorded.', 'scheduling'),
-      pricing: describe(pricing, 'Pricing is unavailable because a role-authorized estimate has not been recorded.', 'pricing'),
+      pricing: describe(pricing, 'No recorded estimate is available to this account.', 'pricing'),
       risk: describe(values.risk, 'No specific risk is supported by the current recorded inputs.', 'risk'),
     };
   }
@@ -579,11 +579,11 @@ window.CustomerDetail = (function() {
     var canon = data.intelligence;
     var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(canon);
     if (!presentation) return {
-      summary: 'Polaris intelligence is unavailable because the required role-authorized inputs were not returned.',
-      price: 'Unavailable — no role-authorized price is recorded.',
+      summary: 'Polaris advice is unavailable because the required job information could not be loaded.',
+      price: 'Unavailable — no price is available to this account.',
       confidenceLabel: 'Confidence unavailable', confidenceClass: '',
       confidencePct: 'supporting inputs are incomplete',
-      revenue: 'Unavailable — no role-authorized revenue amount is recorded.',
+      revenue: 'Unavailable — no revenue amount is available to this account.',
       action: 'Record the missing customer and work inputs before acting.', isCanonical: false
     };
     return {
@@ -655,7 +655,7 @@ window.CustomerDetail = (function() {
         '<div class="drawer-pricing-category-header"><span>' + category.label + '</span><span>' + (matches.length ? escapeText(fmtCurrency(amount)) : '\u2014') + '</span></div>' +
         '<p class="drawer-pricing-category-detail">' + detail + '</p></section>';
     }
-    var html = '<p class="drawer-pricing-category-detail">Every pricing category stays visible. Missing amounts remain unpriced until a role-authorized business record supplies them.</p>';
+    var html = '<p class="drawer-pricing-category-detail">Missing amounts remain unpriced until the required company information is available.</p>';
     categories.forEach(function(category) { html += categoryMarkup(category); });
     var subtotal = values && Number.isFinite(Number(values.subtotalBeforeTax)) ? fmtCurrency(values.subtotalBeforeTax) : '\u2014';
     html += '<div class="drawer-pricing-item"><span><strong>Recorded subtotal</strong></span><span><strong>' + subtotal + '</strong></span></div>';
@@ -739,13 +739,13 @@ window.CustomerDetail = (function() {
       text('Reviewed scope: ' + state.current.scopeSummary);
     }
     if (state.recoveryMessage) text(state.recoveryMessage);
-    if (state.canApprove) button(state.current && state.current.action === 'approve' ? 'Revise scope and price' : 'Review scope and price', function () { beginEstimateDecision('approve'); });
-    if (state.canWithdraw) button('Withdraw approval', function () { beginEstimateDecision('withdraw'); });
+    if (state.canApprove && !_decisionDraft) button(state.current && state.current.action === 'approve' ? 'Revise scope and price' : 'Review scope and price', function () { beginEstimateDecision('approve'); });
+    if (state.canWithdraw && !_decisionDraft) button('Withdraw approval', function () { beginEstimateDecision('withdraw'); });
     if (state.history && state.history.length) {
       var history = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Decision history'; history.appendChild(summary);
       var list = document.createElement('ol');
       state.history.forEach(function (entry, index) { var item = document.createElement('li'); item.style.margin = '0.75rem 0'; var date = new Date(entry.createdAt);
-        item.textContent = (index === 0 ? 'Current: ' : 'Earlier: ') + (entry.action === 'withdraw' ? 'Approval withdrawn' : 'Approved for quote preparation: ' + decisionMoney(entry.priceBeforeTax, entry.currency)) + ' by ' + entry.actorName + ' on ' + (Number.isFinite(date.getTime()) ? date.toLocaleString() : 'an unavailable date') + '. ' + entry.reason; list.appendChild(item); });
+        item.textContent = (index === 0 ? 'Current: ' : 'Earlier: ') + (entry.action === 'withdraw' ? 'Approval withdrawn' : 'Approved for quote preparation: ' + decisionMoney(entry.priceBeforeTax, entry.currency)) + ' by ' + entry.actorName + ' on ' + (Number.isFinite(date.getTime()) ? date.toLocaleString() : 'an unavailable date') + '. ' + entry.reason + (entry.action === 'approve' ? ' Scope: ' + entry.scopeSummary : ''); list.appendChild(item); });
       history.appendChild(list); if (state.truncated) { var note = document.createElement('p'); note.textContent = 'Showing the 20 most recent decisions out of ' + state.total + '.'; history.appendChild(note); } root.appendChild(history);
     }
     if (_decisionDraft && _decisionDraft.estimateId === review.pins.estimateId && state.canApprove) renderDecisionForm();
@@ -780,7 +780,7 @@ window.CustomerDetail = (function() {
       var review = _estimateReview, generation = _openSequence, state = review.decisions, current = state.current;
       if (!draft.request) draft.request = { key: crypto.randomUUID(), body: { action: draft.action, expectedRevision: current ? current.revision : 0, expectedDigest: current ? current.digest : 'none', sourcePins: review.pins,
         scopeSummary: draft.action === 'approve' ? draft.scope.trim() : null, priceBeforeTax: draft.action === 'approve' ? draft.price : null, currency: review.currency, reason: draft.reason.trim(), confirmed: draft.confirmed, confirmationVersion: 'estimate-quote-preparation-v1' }, demoRevision: review.demoWorkspaceRevision };
-      var attempt = draft.request; save.disabled = cancel.disabled = true; status.textContent = 'Saving decision.';
+      var attempt = draft.request; Array.prototype.forEach.call(form.elements, function (control) { control.disabled = true; }); status.textContent = 'Saving decision.';
       var headers = { 'Content-Type': 'application/json', 'Idempotency-Key': attempt.key }; if (review.simulated) headers['X-NorthStar-Demo-Revision'] = String(attempt.demoRevision);
       window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/' + encodeURIComponent(draft.estimateId) + '/decisions', { method: 'POST', headers: headers, body: JSON.stringify(attempt.body) }).then(function (response) {
         if (!response.ok) { var error = new Error('save failed'); error.status = response.status; throw error; } return response.json();
@@ -788,7 +788,7 @@ window.CustomerDetail = (function() {
         if (generation !== _openSequence || _decisionDraft !== draft) return;
         status.textContent = error.status === 409 ? 'The review changed. Refresh the estimate, check your entries and confirm again before saving.' : error.status === 403 ? 'Your current account cannot save this decision.' : error.status === 400 ? 'Check the scope, price and confirmation before saving.' : 'The save could not be confirmed. Retry without changing your entries to check this same attempt.';
         if (error.status === 409) { draft.confirmed = false; confirm.checked = false; draft.request = null; }
-      }).finally(function () { if (generation === _openSequence && _decisionDraft === draft) save.disabled = cancel.disabled = false; });
+      }).finally(function () { if (generation === _openSequence && _decisionDraft === draft) Array.prototype.forEach.call(form.elements, function (control) { control.disabled = false; }); });
     };
     root.appendChild(form);
   }
@@ -977,7 +977,7 @@ window.CustomerDetail = (function() {
     askPolaris.disabled = !identifier;
     schedule.disabled = !identifier;
     if (!identifier) {
-      reason.textContent = 'These actions require a role-authorized customer or lead identifier. Add the missing record before continuing.';
+      reason.textContent = 'No customer or lead is available for these actions. Open or add the customer before continuing.';
     } else if (demo) {
       reason.textContent = 'Ask Polaris opens this fictional record. Demo Calendar is read-only; Schedule opens its context without saving a change.';
     } else {

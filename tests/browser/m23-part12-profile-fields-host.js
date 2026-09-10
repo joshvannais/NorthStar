@@ -185,7 +185,7 @@ async function main() {
         if (tab === 'services') await pricing.locator('.profile-structured-charge').first().locator('summary').first().click();
         const panel = p.locator('#section-' + tab);
         const text = await panel.innerText();
-        assert(!/JSON|PostgreSQL|perUnit|canonicalPricing|quantityField|lineItems|unitRates|immutable|Stable service ID/.test(text), text);
+        assert(!/JSON|PostgreSQL|perUnit|canonicalPricing|quantityField|lineItems|unitRates|rangePercent|Tenant-scoped|Mission 24|Cost Authority|immutable|Stable service ID/.test(text), text);
         await panel.screenshot({
           path: path.join(output, theme + '-' + width + '-' + tab + '.png')
         });

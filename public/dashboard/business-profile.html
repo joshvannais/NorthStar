@@ -154,7 +154,7 @@
         <div class="bp-header">
           <div>
             <h1 class="bp-title">Business Profile</h1>
-            <p id="polarisProfileGuidance" class="bp-subtitle">Keep the business details NorthStar uses for customer service, planning, and provider-neutral AI guidance in one place.</p>
+            <p id="polarisProfileGuidance" class="bp-subtitle">Keep the business details NorthStar uses for customer service and planning in one place.</p>
             <p id="businessProfileStatus" role="status" aria-live="polite" aria-atomic="true">Loading your Business Profile. Please wait before making changes.</p>
           </div>
           <div class="bp-header-actions">
@@ -388,8 +388,8 @@
         <!-- Section: Financial -->
         <div class="bp-section" id="section-financial">
           <div class="bp-card">
-            <h3 id="financialConfigurationHeading">Pricing &amp; Cost Authority</h3>
-            <div class="bp-section-desc">Tenant-scoped pricing philosophy, cost inputs, rates, and preliminary advisory-range preferences. Mission 24 owns estimate execution and authorized customer pricing.</div>
+            <h3 id="financialConfigurationHeading">Pricing and Internal Costs</h3>
+            <div class="bp-section-desc">Set your pricing preferences, internal costs and default price ranges. Review and approve each customer price before sharing it.</div>
             <div class="bp-authority-note" id="canonicalAuthorityNote" role="status" aria-live="polite">Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.</div>
             <div class="bp-grid">
               <div class="bp-field"><label for="fin-customerMarkupPercent">Customer Markup (%)</label><input id="fin-customerMarkupPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="customerMarkupPercent" type="number" step="0.01" min="0"><span class="help-text">Markup applied to supported pricing calculations.</span></div>
@@ -400,7 +400,7 @@
               <div class="bp-field"><label for="fin-desiredGrossMarginPercent">Desired Gross Margin (%)</label><input id="fin-desiredGrossMarginPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="desiredGrossMarginPercent" type="number" step="0.01" min="0" max="100"></div>
               <div class="bp-field"><label for="fin-desiredNetMarginPercent">Desired Net Margin (%)</label><input id="fin-desiredNetMarginPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="desiredNetMarginPercent" type="number" step="0.01" min="0" max="100"></div>
               <div class="bp-field"><label for="fin-maximumDiscountPercent">Maximum Discount (%)</label><input id="fin-maximumDiscountPercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="maximumDiscountPercent" type="number" step="0.01" min="0" max="100"></div>
-              <div class="bp-field"><label for="fin-defaultRangePercent">Default Preliminary Range (%)</label><input id="fin-defaultRangePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="defaultRangePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">Fallback only when a service has no valid explicit rangePercent.</span></div>
+              <div class="bp-field"><label for="fin-defaultRangePercent">Default Preliminary Range (%)</label><input id="fin-defaultRangePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="defaultRangePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">Used when a service has no price range of its own.</span></div>
               <div class="bp-field"><label for="cost-overheadPercent">Overhead (%)</label><input id="cost-overheadPercent" data-financial-control data-financial-section="canonicalCosts" data-financial-field="overheadPercent" type="number" step="0.01" min="0"><span class="help-text">Internal overhead percentage.</span></div>
               <div class="bp-field"><label for="cost-travelCostPerMile">Internal Travel Cost ($/mile)</label><input id="cost-travelCostPerMile" data-financial-control data-financial-section="canonicalCosts" data-financial-field="travelCostPerMile" type="number" step="0.01" min="0"><span class="help-text">Internal travel cost per mile.</span></div>
               <div class="bp-field bp-full"><label for="cost-materialCostByService">Material costs by service and material</label><textarea id="cost-materialCostByService" data-financial-control data-financial-section="canonicalCosts" data-financial-field="materialCostByService" data-financial-map rows="3" hidden></textarea><span class="help-text">Material-cost values must be non-negative numbers.</span></div>
@@ -411,7 +411,7 @@
               <div class="bp-field"><label for="crew-minimumBillableHours">Minimum Billable Hours</label><input id="crew-minimumBillableHours" data-financial-control data-financial-section="crew" data-financial-field="minimumBillableHours" type="number" step="0.5" min="0"></div>
               <div class="bp-field"><label for="veh-averageFuelCost">Average Fuel Cost ($/gal)</label><input id="veh-averageFuelCost" data-financial-control data-financial-section="vehicles" data-financial-field="averageFuelCost" type="number" step="0.1" min="0"></div>
               <div class="bp-field"><label for="veh-hourlyVehicleCost">Hourly Vehicle Cost ($/hr)</label><input id="veh-hourlyVehicleCost" data-financial-control data-financial-section="vehicles" data-financial-field="hourlyVehicleCost" type="number" step="0.5" min="0"></div>
-              <div class="bp-field"><label for="veh-maintenanceReserve">Maintenance Reserve (%)</label><input id="veh-maintenanceReserve" data-financial-control data-financial-section="vehicles" data-financial-field="maintenanceReserve" type="number" step="0.01" min="0" max="100"><span class="help-text">Presentation-only planning reserve; not consumed by current pricing calculations.</span></div>
+              <div class="bp-field"><label for="veh-maintenanceReserve">Maintenance Reserve (%)</label><input id="veh-maintenanceReserve" data-financial-control data-financial-section="vehicles" data-financial-field="maintenanceReserve" type="number" step="0.01" min="0" max="100"><span class="help-text">A planning allowance for maintenance. It is not included in current price calculations.</span></div>
             </div>
             <div id="canonicalFinancialError" class="bp-validation-error" role="alert" aria-live="assertive" tabindex="-1"></div>
             <div class="bp-header-actions">

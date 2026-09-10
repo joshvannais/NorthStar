@@ -1730,3 +1730,23 @@ html body .customer-drawer .drawer-customer-background[open] > summary { margin-
 
 html body .customer-drawer .drawer-header-meta #cdPolSummary { color:var(--neutral-600); font-size:14px; }
 html body .customer-drawer .drawer-card-note #cdPolAction { color:var(--neutral-900); font-size:14px; }
+
+html body .customer-drawer :is(h3,h4,label,button,summary,.drawer-fact-label,.drawer-polaris-item-label,.drawer-detail-label) { text-transform:capitalize; }
+html body .customer-drawer .drawer-fact-categorical { text-transform:capitalize; }
+html body .customer-drawer .drawer-primary-actions { margin-bottom:18px; }
+html body .customer-drawer .drawer-primary-actions h3 { margin-bottom:8px; }
+html body .customer-drawer .drawer-primary-actions .drawer-action-reason { flex-basis:100%; font-size:12px; margin:4px 0 0; }
+html body .customer-drawer .drawer-polaris-subsection { margin-top:14px; border-top:1px solid rgba(255,255,255,.25); }
+html body .customer-drawer .drawer-polaris-subsection > summary { cursor:pointer; padding:14px 0; min-height:44px; box-sizing:border-box; color:#fff; font-weight:600; font-size:14px; }
+html body .customer-drawer .drawer-polaris-subsection[open] > summary { margin-bottom:8px; }
+html body .customer-drawer .drawer-polaris-subsection .drawer-work-detail { margin:0; padding:0; border:0; background:transparent; }
+html body .customer-drawer .drawer-polaris-subsection .drawer-work-detail :is(h4,p) { color:#fff; }
+html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing { border-color:rgba(255,255,255,.25); }
+html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing :is(summary,h4,label,p,.drawer-pricing-category-header,.drawer-pricing-item,.drawer-pricing-category-detail,.drawer-unpriced-categories) { color:#fff; }
+html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing #cdPricingBreakdown { color:#fff; }
+html body .customer-drawer .drawer-polaris-insight .drawer-pricing-category, html body .customer-drawer .drawer-polaris-insight .drawer-pricing-item { border-color:rgba(255,255,255,.2); }
+
+html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing .drawer-capella-review :is(h4,p,dt,dd) { color:inherit; }
+
+html body .customer-drawer .drawer-original-range { text-transform:capitalize; }
+html body .customer-drawer .drawer-header-meta #cdPolSummary { text-transform:capitalize; }

@@ -247,7 +247,7 @@ window.CustomerDetail = (function() {
 
     // Call Transcript
     html += '      <details class="drawer-section drawer-transcript-disclosure" id="cdTranscriptDisclosure">';
-    html += '        <summary id="cdTranscriptHeading">Call transcript</summary>';
+    html += '        <summary id="cdTranscriptHeading">Call Transcript</summary>';
     html += '        <div class="drawer-transcript" id="cdTranscript" style="display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:300px;">';
     html += '          <p style="font-size:13px;color:var(--neutral-500);">No transcript available.</p>';
     html += '        </div>';
@@ -289,33 +289,40 @@ window.CustomerDetail = (function() {
     var confidenceNode = $('cdPolConfidence'), actionNode = $('cdPolAction');
     $('cdPolarisInsight').querySelector('.drawer-polaris-grid').replaceChildren(priceBox);
     var analysis = panel.querySelector('.drawer-polaris-analysis'); analysis.open = true;
-    analysis.querySelector('summary').textContent = 'Scope, travel and charges';
-    var scopeSection = $('cdDescription').parentElement; scopeSection.querySelector('h4').textContent = 'Scope details';
-    var travelSection = $('cdWorkScheduling').parentElement; travelSection.querySelector('h4').textContent = 'Travel and work time';
+    analysis.querySelector('summary').textContent = 'Scope Details';
+    var scopeSection = $('cdDescription').parentElement; scopeSection.querySelector('h4').remove();
+    var travelSection = $('cdWorkScheduling').parentElement; travelSection.querySelector('h4').remove();
     var charges = document.createElement('section'); charges.className = 'drawer-work-detail drawer-original-charges';
     var chargeTitle = document.createElement('h4'); chargeTitle.id = 'cdChargeHeading'; chargeTitle.textContent = 'Original charge details'; charges.appendChild(chargeTitle);
     charges.append($('cdWorkMaterials').parentElement, $('cdWorkEquipment').parentElement);
     var attention = document.createElement('section'); attention.className = 'drawer-card-note'; attention.id = 'cdAttentionSection';
-    var attentionTitle = document.createElement('h3'); attentionTitle.textContent = 'Needs attention'; attention.append(attentionTitle,$('cdWorkGates'));
+    var attentionTitle = document.createElement('h3'); attentionTitle.textContent = 'Needs Attention'; attention.append(attentionTitle,$('cdWorkGates'));
     var riskNode = $('cdWorkRisk');
     var nextAction = document.createElement('section'); nextAction.className = 'drawer-card-note';
-    var nextTitle = document.createElement('h3'); nextTitle.textContent = 'Next action'; nextAction.append(nextTitle,actionNode);
+    var nextTitle = document.createElement('h3'); nextTitle.textContent = 'Next Action'; nextAction.append(nextTitle,actionNode);
     var basisDetails = document.createElement('details'); basisDetails.className = 'drawer-estimate-basis';
-    var basisTitle = document.createElement('summary'); basisTitle.textContent = 'How to read this estimate';
+    var basisTitle = document.createElement('summary'); basisTitle.textContent = 'How To Read This Estimate';
     basisDetails.append(basisTitle,confidenceNode,panel.querySelector('.drawer-polaris-basis'),riskNode);
     var neutralContext = document.createElement('p'); neutralContext.id = 'cdNeutralContext'; basisDetails.appendChild(neutralContext);
-    panel.querySelector('.drawer-work-details').replaceChildren(scopeSection,travelSection,charges);
+    panel.querySelector('.drawer-work-details').replaceChildren(scopeSection);
+    var travelDetails = document.createElement('details'); travelDetails.className = 'drawer-polaris-subsection'; travelDetails.id = 'cdTravelDetails';
+    var travelTitle = document.createElement('summary'); travelTitle.textContent = 'Travel And Work Time'; travelDetails.append(travelTitle,travelSection);
+    var chargeDetails = document.createElement('details'); chargeDetails.className = 'drawer-polaris-subsection'; chargeDetails.id = 'cdChargeDetails';
+    var chargeSummary = document.createElement('summary'); chargeSummary.textContent = 'Original Charge Details'; chargeDetails.append(chargeSummary,charges);
+    panel.append(travelDetails,chargeDetails);
     panel.appendChild(basisDetails);
     var priceDetails = panel.querySelector('.drawer-polaris-pricing'); priceDetails.classList.add('drawer-section');
-    priceDetails.querySelector('summary').textContent = 'Price breakdown and estimate review';
+    priceDetails.querySelector('summary').textContent = 'Price Breakdown And Estimate Review';
+    panel.append(priceDetails,basisDetails);
     var contactSection = $('cdName').closest('.drawer-section'), profileSection = $('cdProfileSection');
     var contactDetails = document.createElement('details'); contactDetails.className = 'drawer-section drawer-customer-background';
-    var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Contact and customer history';
+    var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Contact And Customer History';
     contactDetails.append(contactTitle,contactSection,profileSection);
     contactDetails.appendChild($('cdProbabilityRow'));
     panel.querySelector('.drawer-polaris-context').remove();
-    content.prepend(polarisSection);
-    polarisSection.after(attention,nextAction,$('cdExecutionSection'),priceDetails,$('cdTranscriptDisclosure'),contactDetails);
+    var actionSection = $('cdBtnAskPolaris').closest('.drawer-section'); actionSection.classList.add('drawer-primary-actions');
+    content.prepend(actionSection,polarisSection);
+    polarisSection.after(attention,nextAction,$('cdExecutionSection'),$('cdTranscriptDisclosure'),contactDetails);
     $('cdContextSummary').hidden = true;
 
     // Event bindings
@@ -349,7 +356,7 @@ window.CustomerDetail = (function() {
 
   function renderTranscript(transcript, customerName) {
     var simulated = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active;
-    if (simulated) $('cdTranscriptHeading').textContent = 'Simulated call transcript';
+    if (simulated) $('cdTranscriptHeading').textContent = 'Simulated Call Transcript';
     var firstName = customerName ? customerName.split(' ')[0] : 'Customer';
     return window.NorthStarTranscriptRenderer.render($('cdTranscript'), transcript, {
       labels: { ai: 'AI AGENT', customer: firstName, system: '' },
@@ -600,6 +607,7 @@ window.CustomerDetail = (function() {
       if (separator > 0 && id !== 'cdWorkGates' && id !== 'cdWorkRisk') {
         var label = document.createElement('span'); label.className = 'drawer-fact-label'; label.textContent = text.slice(0,separator);
         var value = document.createElement('span'); value.className = 'drawer-fact-value'; value.textContent = text.slice(separator+2);
+        if (id === 'cdDescription' && /^(work type|material|equipment|service area|fixture|system type|leak severity)$/i.test(text.slice(0,separator))) value.classList.add('drawer-fact-categorical');
         item.append(label,value);
       } else item.textContent = text;
       root.appendChild(item);
@@ -1235,9 +1243,9 @@ window.CustomerDetail = (function() {
     if (!identifier) {
       reason.textContent = 'No customer or lead is available for these actions. Open or add the customer before continuing.';
     } else if (demo) {
-      reason.textContent = 'Ask Polaris opens this fictional record. Demo Calendar is read-only; Schedule opens its context without saving a change.';
+      reason.textContent = 'Demo Schedule opens read-only Calendar. Ask Polaris keeps this record selected.';
     } else {
-      reason.textContent = 'Ask Polaris keeps this exact record selected. Schedule opens the authorized Calendar flow for this customer.';
+      reason.textContent = 'Ask Polaris keeps this record selected. Schedule opens Calendar for this customer.';
     }
   }
 

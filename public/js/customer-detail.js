@@ -15,6 +15,7 @@
 window.CustomerDetail = (function() {
   var _currentData = null;
   var _openSequence = 0;
+  var _reviewSequence = 0;
   var _overlayEl = null;
   var _drawerEl = null;
   var _injected = false;
@@ -231,6 +232,11 @@ window.CustomerDetail = (function() {
     html += '          <details class="drawer-polaris-pricing">';
     html += '            <summary>Complete price breakdown</summary>';
     html += '            <div id="cdPricingBreakdown"><p>No role-authorized estimate factors are available.</p></div>';
+    html += '            <section aria-label="Estimate review" style="margin-top:1rem">';
+    html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
+    html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
+    html += '            </section>';
+
     html += '          </details>';
     html += '        </div>';
     html += '      </div>';
@@ -713,6 +719,65 @@ window.CustomerDetail = (function() {
     });
   }
 
+  function reviewPinsMatch(review, selected) {
+    var p = review && review.pins, ids = selected && selected.ids, profile = selected && selected.businessProfile;
+    return review && review.contract === 'NorthStarEstimateReview/v1' && p && ids && profile &&
+      p.estimateId === ids.estimate && p.graphId === ids.graph && p.customerId === ids.customer &&
+      p.operationId === ids.operation && p.opportunityId === ids.opportunity &&
+      JSON.stringify(p.supportingFactIds) === JSON.stringify(selected.supportingTranscriptFactIds || []) &&
+      p.snapshotId === ids.polarisSnapshot && p.snapshotDigest === selected.snapshotDigest &&
+      p.calculationVersion === selected.calculationVersion &&
+      p.normalizedInputFingerprint === selected.normalizedInputFingerprint &&
+      p.businessProfileId === profile.id && p.businessProfileVersion === profile.version && p.businessProfileHash === profile.hash &&
+      review.recordedAt === selected.snapshotCreatedAt;
+  }
+
+  function refreshEstimateReview() {
+    var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
+    var selected = _currentData && _currentData.canonical;
+    var generation = _openSequence, request = ++_reviewSequence;
+    root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
+    button.disabled = true;
+    function current() { return generation === _openSequence && request === _reviewSequence && _currentData && _currentData.canonical === selected && !_drawerEl.hidden; }
+    function unavailable(message) { root.replaceChildren(); root.textContent = message; }
+    if (!selected || !selected.ids || !selected.ids.estimate) {
+      unavailable('No estimate is available for this customer.'); root.setAttribute('aria-busy', 'false'); return;
+    }
+    window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/' + encodeURIComponent(selected.ids.estimate) + '/review', { cache: 'no-store' })
+      .then(function(response) {
+        if (!response.ok) { var error = new Error('review unavailable'); error.status = response.status; throw error; }
+        return response.json();
+      }).then(function(body) {
+        if (!current()) return;
+        var review = body && body.success && body.data;
+        if (!reviewPinsMatch(review, selected)) { unavailable('The estimate has changed. Close this panel and reopen the customer to review it.'); return; }
+        root.replaceChildren();
+        function paragraph(text) { var node = document.createElement('p'); node.style.margin = '0 0 0.75rem'; node.textContent = text; root.appendChild(node); }
+        if (review.simulated) paragraph('Demo example using fictional company and job information.');
+        paragraph(review.approvalMessage);
+        paragraph(review.basisMessage);
+        var date = new Date(review.recordedAt);
+        paragraph(Number.isFinite(date.getTime()) ? 'Estimate information recorded ' + date.toLocaleString() + '.' : 'The date of this estimate is unavailable.');
+        var list = document.createElement('div'); list.className = 'drawer-pricing-category';
+        (review.rows || []).forEach(function(row) {
+          var rowNode = document.createElement('div'); rowNode.className = 'drawer-pricing-item';
+          var term = document.createElement('span'), detail = document.createElement('span');
+          term.textContent = row.label;
+          if (typeof row.amount === 'number' && Number.isFinite(row.amount)) {
+            try { detail.textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency: review.currency }).format(row.amount); }
+            catch (_error) { detail.textContent = 'Currency unavailable'; }
+          } else detail.textContent = 'Unavailable';
+          rowNode.appendChild(term); rowNode.appendChild(detail); list.appendChild(rowNode);
+        }); root.appendChild(list);
+        (review.missing || []).forEach(paragraph);
+      }).catch(function(error) {
+        if (!current()) return;
+        unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?
+          'Estimate review is available to current owners and administrators.' : error.status === 404 ?
+          'This estimate is no longer available. Reopen the customer to try again.' : 'Estimate review could not be loaded. Try refreshing it.');
+      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; } });
+  }
+
   function populateDrawer(data) {
     var executionRecords = $('cdExecutionRecords');
     if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear(executionRecords);
@@ -821,6 +886,8 @@ window.CustomerDetail = (function() {
 
     // Pricing Breakdown
     $('cdPricingBreakdown').innerHTML = renderPricingBreakdown(data.estimates);
+    $('cdEstimateReviewRefresh').onclick = refreshEstimateReview;
+    refreshEstimateReview();
 
     // Transcript
     renderTranscript(data.primaryTranscript, data.name);

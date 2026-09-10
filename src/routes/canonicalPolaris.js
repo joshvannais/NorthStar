@@ -2,6 +2,7 @@
 
 const express = require('express');
 const db = require('../db');
+const { buildEstimateReview } = require('../services/estimateReview');
 const audit = require('../audit/client');
 const {
   requireOnboardedInternal,
@@ -1376,6 +1377,30 @@ function createCanonicalRouter(options) {
         return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
       }
       return sendPersistenceUnavailable(res);
+    }
+  });
+
+  router.get('/estimates/:estimateId/review', dependencies.auth, requireCanonicalContext, async function (req, res) {
+    res.set('Cache-Control', 'no-store');
+    const failure = (status, message) => res.status(status).json({ success: false, error: { code: 'ESTIMATE_REVIEW_UNAVAILABLE', message } });
+    if (!UUID.test(req.params.estimateId)) return failure(404, 'That estimate is unavailable.');
+    try {
+      const review = await withBroadCanonicalRead(req, dependencies, async (client, operator) => {
+        if (!operator || !operator.actor || !['owner', 'admin'].includes(operator.actor.accessRole)) {
+          const denied = new Error('Estimate review requires a current owner or administrator.');
+          denied.statusCode = 403; throw denied;
+        }
+        const item = await getCanonicalGraph(client, requestContext(req), req.params.estimateId);
+        if (!item || item.ids.estimate !== req.params.estimateId) return null;
+        return buildEstimateReview(item);
+      });
+      if (!review) return failure(404, 'That estimate is unavailable.');
+      return res.json({ success: true, data: review });
+    } catch (error) {
+      const status = error && [401, 403].includes(error.statusCode) ? error.statusCode : 503;
+      return failure(status, status === 401 ? 'Sign in again to review this estimate.' :
+        status === 403 ? 'Estimate review is available to current owners and administrators.' :
+        'Estimate review could not be loaded. Try again.');
     }
   });
 

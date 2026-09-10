@@ -398,6 +398,12 @@
     }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
 
+    var estimateReview = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/review$/.exec(url.pathname);
+    if (method === 'GET' && estimateReview) {
+      return nativeFetch('/api/demo/command-center/estimates/' + encodeURIComponent(estimateReview[1]) + '/review',
+        Object.assign({}, options || {}, { credentials: 'same-origin' }));
+    }
+
     if (method === 'GET' && url.pathname.indexOf('/api/v1/canonical/compat/') === 0) {
       return nativeFetch('/api/demo/command-center/canonical/compat/' +
         encodeURIComponent(decodeURIComponent(url.pathname.slice('/api/v1/canonical/compat/'.length))) + url.search,

@@ -1637,3 +1637,17 @@ html body .m22-state-chip {
     min-width: 0;
   }
 }
+
+/* Estimate review shares the existing Polaris disclosure and theme. */
+html body .customer-drawer #cdEstimateReview .drawer-pricing-item {
+  color: #fff;
+  font-weight: 400;
+}
+html body .customer-drawer #cdEstimateReview .drawer-pricing-item > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html body .customer-drawer #cdEstimateReviewRefresh {
+  min-height: 44px;
+  white-space: normal;
+}

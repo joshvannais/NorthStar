@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { buildEstimateReview } = require('../services/estimateReview');
 const express = require('express');
 const config = require('../config');
 const db = require('../db');
@@ -332,6 +333,19 @@ router.get('/command-center/canonical/compat/:surface', function (req, res) {
 
 router.get('/command-center/canonical/surfaces/:surface', function (req, res) {
   return demoCanonicalProjection(req, res, false);
+});
+
+router.get('/command-center/estimates/:estimateId/review', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  try {
+    const token = commandCenterToken(req, res);
+    const record = await commandCenterRepository.read(token);
+    const item = demoCanonicalItems(demoWorkspace(record)).find(value => value.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({ success: false, error: { message: 'That demo estimate is unavailable.' } });
+    return res.json({ success: true, data: buildEstimateReview(item, { simulated: true }) });
+  } catch (_error) {
+    return res.status(503).json({ success: false, error: { message: 'Demo estimate review could not be loaded. Try again.' } });
+  }
 });
 
 router.get('/command-center/polaris/:kind/:id', async function (req, res) {

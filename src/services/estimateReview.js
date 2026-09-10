@@ -10,7 +10,12 @@ const COMPONENTS = [
   ['Recorded equipment cost', 'knownEquipmentCost'],
   ['Recorded direct costs', 'knownDirectCosts'], ['Recorded overhead', 'overhead'],
 ];
-function amount(value) { return typeof value === 'number' && Number.isFinite(value) ? value : null; }
+function component(label, source, key) {
+  const present = Boolean(source && Object.prototype.hasOwnProperty.call(source, key));
+  const value = present ? source[key] : undefined;
+  const finite = typeof value === 'number' && Number.isFinite(value);
+  return { label, amount: finite ? value : null, sourceState: !present ? 'missing' : value === null ? 'unavailable' : finite ? 'recorded' : 'invalid' };
+}
 function buildEstimateReview(item, options = {}) {
   if (!item || !item.ids || !item.ids.estimate || !item.snapshot || !item.snapshotDigest ||
       !item.normalizedInputFingerprint || !item.businessProfileAuthorityId ||
@@ -18,8 +23,8 @@ function buildEstimateReview(item, options = {}) {
     throw new Error('Estimate review source is incomplete');
   }
   const values = item.snapshot;
-  const rows = COMPONENTS.map(([label, key]) => ({ label, amount: amount(values[key]) }));
-  rows.push({ label: 'Recorded travel cost', amount: amount(values.travel && values.travel.knownInternalCost) });
+  const rows = COMPONENTS.map(([label, key]) => component(label, values, key));
+  rows.push(component('Recorded travel cost', values.travel, 'knownInternalCost'));
   const missing = [];
   if (rows.some(row => row.amount === null)) missing.push('Some amounts are unavailable. Confirm the missing costs before quoting.');
   if (Array.isArray(values.notCalculated) && values.notCalculated.length) {

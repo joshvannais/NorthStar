@@ -91,9 +91,9 @@ async function main() {
       });
       await p.locator('[data-section=financial]').click();
       const map = p.locator('[data-profile-editor=material]');
-      await map.getByLabel('Internal cost', {
-        exact: true
-      }).first().fill(String(width));
+      const cedarRow = map.locator('.profile-structured-row').filter({has:p.getByLabel('Material',{exact:true})}).last();
+      await cedarRow.getByLabel('Internal cost',{exact:true}).fill(String(width));
+      await map.getByLabel('Saved material pricing reference',{exact:true}).locator('..').locator('..').getByLabel('Internal cost',{exact:true}).fill('17');
       const equipment = p.locator('[data-profile-editor=equipment]');
       if ((await equipment.getByRole('button', {
         name: 'Add cost',
@@ -118,7 +118,7 @@ async function main() {
       const after = await p.evaluate(async () => (await (await fetch('/api/v1/business-profile')).json()).data);
       assert.strictEqual(after.canonicalCosts.materialCostByService['fence:cedar'], width);
       assert.strictEqual(after.canonicalCosts.materialCostByService['fence:'],0);
-      assert.strictEqual(after.canonicalCosts.materialCostByService['Legacy material reference'],7);
+      assert.strictEqual(after.canonicalCosts.materialCostByService['Legacy material reference'],17);
       assert.strictEqual(after.canonicalCosts.equipmentCostByReference['Mini excavator hire'], 35.5);
       assert.deepStrictEqual(after.services, before.services);
       assert.deepStrictEqual(after.company, before.company);

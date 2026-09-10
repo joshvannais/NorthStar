@@ -1015,3 +1015,17 @@ Part 1 is complete only when:
 Unavailable evidence is not a pass. It prevents only the corresponding claim;
 it must never be replaced by a simulation, source-string assertion, provider
 marketing statement, or writer assurance.
+
+### Part12 founder-required structured-control extension
+
+The mandatory wording gate additionally includes the four ordinary Business
+Profile editors reachable in the host: Service Area boundary, Financial material
+costs (Service + Material + Internal cost), Financial equipment pricing-reference
+costs, and Services pricing rules. Replace code entry with typed controls while
+preserving exact existing saved identities, conditions, data shapes, permissions,
+version/CSRF/save boundaries and calculator semantics. This is an explicit
+legacy-host extension required by the founder, not retroactive original Mission23
+or Mission24 scope. No migration, backend contract, provider or new commercial
+feature is authorized by this correction. The all-part wording inventory and
+acceptance packet must include these controls and accurately label their tested
+states, source heads and unavailable evidence.

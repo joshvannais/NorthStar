@@ -271,7 +271,7 @@
               <div class="bp-field"><label>Max Service Radius (miles)</label><input id="sa-maxRadiusMiles" type="number" min="1" max="500" placeholder="50"></div>
               <div class="bp-field"><label>Max Travel Time (minutes)</label><input id="sa-maxTravelMinutes" type="number" min="1" max="240" placeholder="60"></div>
               <div class="bp-field bp-full"><label>Primary Territory</label><textarea id="sa-primaryTerritory" rows="2" placeholder="e.g., Greater Phoenix Metropolitan Area"></textarea></div>
-              <div class="bp-field bp-full"><label>Boundary Polygon (JSON)</label><textarea id="sa-polygon" rows="4" placeholder="[[33.4,-112.2],[33.7,-112.2],[33.7,-111.8]]"></textarea><span class="help-text">Empty array or at least three [latitude, longitude] points. Values remain Business Profile data; no mapping provider is contacted.</span></div>
+              <div class="bp-field bp-full"><label for="sa-polygon">Service area boundary</label><textarea id="sa-polygon" rows="4" hidden></textarea><span class="help-text">Enter at least three boundary points in order, or leave the boundary empty. Saving does not contact a mapping service.</span></div>
             </div>
           </div>
         </div>
@@ -377,8 +377,8 @@
         <div class="bp-section" id="section-services">
           <div class="bp-card">
             <h3>Service Catalog</h3>
-            <div class="bp-section-desc">Maintain stable service identities and the exact pricing-rule contract used by Polaris calculations.</div>
-            <div class="bp-authority-note">Existing IDs are immutable in this editor. Pricing rules use the versioned Business Profile contract: fixed, perUnit, perUnitByValue, and perItemByValue. Blank pricing JSON means the service is intentionally unpriced.</div>
+            <div class="bp-section-desc">Manage your services and the pricing rules Polaris uses for each one.</div>
+            <div class="bp-authority-note">Choose fixed charges, prices per unit, prices by choice, or prices per listed item. Services without pricing remain unpriced.</div>
             <div class="bp-service-actions"><button id="addServiceButton" class="bp-add-btn" type="button">Add service</button></div>
             <div id="servicesContainer" class="bp-repeat-list"></div>
             <div id="serviceCatalogError" class="bp-validation-error" role="alert"></div>
@@ -403,8 +403,8 @@
               <div class="bp-field"><label for="fin-defaultRangePercent">Default Preliminary Range (%)</label><input id="fin-defaultRangePercent" data-financial-control data-financial-section="canonicalPricing" data-financial-field="defaultRangePercent" type="number" step="0.01" min="0" max="100"><span class="help-text">Fallback only when a service has no valid explicit rangePercent.</span></div>
               <div class="bp-field"><label for="cost-overheadPercent">Overhead (%)</label><input id="cost-overheadPercent" data-financial-control data-financial-section="canonicalCosts" data-financial-field="overheadPercent" type="number" step="0.01" min="0"><span class="help-text">Internal overhead percentage.</span></div>
               <div class="bp-field"><label for="cost-travelCostPerMile">Internal Travel Cost ($/mile)</label><input id="cost-travelCostPerMile" data-financial-control data-financial-section="canonicalCosts" data-financial-field="travelCostPerMile" type="number" step="0.01" min="0"><span class="help-text">Internal travel cost per mile.</span></div>
-              <div class="bp-field bp-full"><label for="cost-materialCostByService">Material Cost by Service (JSON)</label><textarea id="cost-materialCostByService" data-financial-control data-financial-section="canonicalCosts" data-financial-field="materialCostByService" data-financial-map rows="3" placeholder='{"fence:cedar": 120}'></textarea><span class="help-text">Material-cost values must be non-negative numbers.</span></div>
-              <div class="bp-field bp-full"><label for="cost-equipmentCostByReference">Equipment Cost by Reference (JSON)</label><textarea id="cost-equipmentCostByReference" data-financial-control data-financial-section="canonicalCosts" data-financial-field="equipmentCostByReference" data-financial-map rows="3" placeholder='{"mini-excavator": 350}'></textarea><span class="help-text">Equipment-cost values must be non-negative numbers.</span></div>
+              <div class="bp-field bp-full"><label for="cost-materialCostByService">Material costs by service and material</label><textarea id="cost-materialCostByService" data-financial-control data-financial-section="canonicalCosts" data-financial-field="materialCostByService" data-financial-map rows="3" hidden></textarea><span class="help-text">Material-cost values must be non-negative numbers.</span></div>
+              <div class="bp-field bp-full"><label for="cost-equipmentCostByReference">Equipment costs by pricing reference</label><textarea id="cost-equipmentCostByReference" data-financial-control data-financial-section="canonicalCosts" data-financial-field="equipmentCostByReference" data-financial-map rows="3" hidden></textarea><span class="help-text">Equipment-cost values must be non-negative numbers.</span></div>
               <div class="bp-field"><label for="crew-averageHourlyRate">Average Hourly Rate ($/hr)</label><input id="crew-averageHourlyRate" data-financial-control data-financial-section="crew" data-financial-field="averageHourlyRate" type="number" step="0.5" min="0"></div>
               <div class="bp-field"><label for="crew-overtimeMultiplier">Overtime Multiplier</label><input id="crew-overtimeMultiplier" data-financial-control data-financial-section="crew" data-financial-field="overtimeMultiplier" type="number" step="0.1" min="1"></div>
               <div class="bp-field"><label for="crew-travelPay">Travel Pay ($/trip)</label><input id="crew-travelPay" data-financial-control data-financial-section="crew" data-financial-field="travelPay" type="number" step="0.5" min="0"></div>
@@ -786,6 +786,7 @@
         : 'Profile Unavailable';
       var reloadButton = document.getElementById('reloadProfileBtn');
       if (reloadButton) reloadButton.hidden = !generalProfileConflicted;
+      document.querySelectorAll('.svc-pricing, #sa-polygon').forEach(function(control){ if(control._profileFields) control._profileFields.sync(); });
     }
 
     function latchGeneralProfileConflict() {
@@ -1927,7 +1928,7 @@
       var migration = profile && profile.canonicalAuthority && profile.canonicalAuthority.legacyMigration;
       var note = document.getElementById('canonicalAuthorityNote');
       if (note) note.textContent = migration && migration.pending
-        ? 'Legacy margin or discount values are shown for one-way migration. Current values take precedence, and legacy bytes remain unchanged.'
+        ? 'Previously saved margin or discount values are shown where current settings are missing. Review them before saving.'
         : 'Blank values remain not configured. Explicit zero is preserved. Invalid values block Save rather than becoming defaults.';
       financialConfigurationSaving = false;
       financialConfigurationConflicted = false;
@@ -1993,7 +1994,7 @@
             }
             return;
           }
-          throw new Error(payload.errors ? payload.errors.join('; ') : payload.error && payload.error.message || 'Financial Configuration could not be saved.');
+          throw new Error(response.status === 403 ? 'You do not have permission to change financial settings. Contact an owner or administrator.' : 'Financial settings could not be saved. Review the entered values, then try again.');
         }
         advancePreservedSiblingVersions('financial', expectedVersion, profileVersion(payload.data));
         profileData = mergeFinancialProjection(profileData, payload.data);
@@ -2474,7 +2475,7 @@
       setVal('sa-maxRadiusMiles', serviceArea.maxRadiusMiles);
       setVal('sa-maxTravelMinutes', serviceArea.maxTravelMinutes);
       setVal('sa-primaryTerritory', serviceArea.primaryTerritory);
-      setVal('sa-polygon', JSON.stringify(Array.isArray(serviceArea.polygon) ? serviceArea.polygon : [], null, 2));
+      NorthStarProfileFields.mount(document.getElementById('sa-polygon'), 'polygon', Object.prototype.hasOwnProperty.call(serviceArea, 'polygon') ? serviceArea.polygon : undefined, { canEdit: function(){ return profileCanEdit && !generalProfileConflicted; } });
 
       // Routing
       setSelect('routing-preferredProvider', routing.preferredProvider);
@@ -2594,7 +2595,7 @@
       var valid = value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(function(mapKey) {
         return mapKey.trim() && typeof value[mapKey] === 'number' && Number.isFinite(value[mapKey]) && value[mapKey] >= 0;
       });
-      el.value = valid ? JSON.stringify(value, null, 2) : '';
+      NorthStarProfileFields.mount(el, key === 'materialCostByService' ? 'material' : 'equipment', present ? value : undefined, { services: profileData && profileData.services, canEdit: function(){ return profileCanEdit && !financialConfigurationConflicted && !financialConfigurationSaving; } });
       el.dataset.authorityState = present ? (valid ? 'configured' : 'malformed') : 'missing';
       el.dataset.userEdited = 'false';
       el.setAttribute('aria-invalid', present && !valid ? 'true' : 'false');
@@ -2605,32 +2606,21 @@
       var raw = el ? el.value.trim() : '';
       if (!raw) {
         if (el && el.dataset.authorityState === 'malformed' && el.dataset.userEdited !== 'true') {
-          throw new Error(label + ' is malformed in the persisted profile. Enter a valid number or clear it explicitly.');
+          throw new Error(label + ' needs review. Enter a valid number or explicitly clear it.');
         }
         return { configured: false };
       }
       var value = Number(raw);
       if (!Number.isFinite(value) || value < minimum || (maximum !== undefined && value > maximum) || (el.validity && !el.validity.valid)) {
-        throw new Error(label + ' must be a finite number' + (maximum === undefined ? ' at least ' + minimum : ' from ' + minimum + ' through ' + maximum) + '.');
+        throw new Error(label + ' must be a number' + (maximum === undefined ? ' at least ' + minimum : ' from ' + minimum + ' through ' + maximum) + '.');
       }
       return { configured: true, value: value };
     }
 
     function readCanonicalMap(id, label) {
       var el = document.getElementById(id);
-      var raw = el ? el.value.trim() : '';
-      if (!raw) {
-        if (el && el.dataset.authorityState === 'malformed' && el.dataset.userEdited !== 'true') {
-          throw new Error(label + ' is malformed in the persisted profile. Enter a valid JSON object or clear it explicitly.');
-        }
-        return { configured: false };
-      }
-      var value;
-      try { value = JSON.parse(raw); } catch (_error) { throw new Error(label + ' must be valid JSON.'); }
-      if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(function(key) {
-        return key.trim() && typeof value[key] === 'number' && Number.isFinite(value[key]) && value[key] >= 0;
-      })) throw new Error(label + ' must be a JSON object of non-negative finite numbers.');
-      return { configured: true, value: value };
+      var value = el._profileFields.read();
+      return value === undefined ? { configured: false } : { configured: true, value: value };
     }
 
     function showCanonicalError(message) {
@@ -2724,7 +2714,7 @@
     function collectStringList(containerId, valueClass, label) {
       return Array.from(document.querySelectorAll('#' + containerId + ' .' + valueClass)).map(function(control, index) {
         if (control.dataset.authorityState === 'malformed' && control.dataset.userEdited !== 'true') {
-          throw new Error(label + ' ' + (index + 1) + ' is malformed in the persisted profile. Edit or remove it before Save.');
+          throw new Error(label + ' ' + (index + 1) + ' needs review. Edit or remove it before saving.');
         }
         return readTextControlValue(control);
       });
@@ -3091,10 +3081,9 @@
 
       var grid = document.createElement('div');
       grid.className = 'bp-grid';
-      appendServiceField(grid, 'Stable service ID', 'svc-id', service.id || '', {
-        readOnly: !isNew,
-        help: isNew ? 'Choose once; it becomes immutable after Save.' : 'Immutable identity used by connected NorthStar services.',
-      });
+      var serviceReference = appendServiceField(grid, 'Service reference', 'svc-id', service.id || '', { readOnly: true });
+      serviceReference.type = 'hidden';
+      serviceReference.parentElement.hidden = true;
       var name = appendServiceField(grid, 'Service name', 'svc-name', service.name || '', {});
       name.addEventListener('input', function() { title.textContent = name.value || 'New service'; });
       appendServiceField(grid, 'Description', 'svc-description', service.description || '', { full: true });
@@ -3106,19 +3095,9 @@
         full: true,
         multiline: true,
       });
-      appendServiceField(
-        grid,
-        'Pricing Rules (JSON)',
-        'svc-pricing',
-        Object.prototype.hasOwnProperty.call(service, 'canonicalPricing')
-          ? JSON.stringify(service.canonicalPricing, null, 2) : '',
-        {
-          multiline: true,
-          full: true,
-          placeholder: '{\n  "requiredScope": [],\n  "rangePercent": 10,\n  "lineItems": []\n}',
-          help: 'Blank means unpriced. Configured JSON is validated server-side before a new version is written.',
-        }
-      );
+      var pricingCarrier = appendServiceField(grid, 'Service pricing', 'svc-pricing', '', { full: true });
+      pricingCarrier.type = 'hidden';
+      NorthStarProfileFields.mount(pricingCarrier, 'pricing', Object.prototype.hasOwnProperty.call(service, 'canonicalPricing') ? service.canonicalPricing : undefined, { canEdit: function(){ return profileCanEdit && !generalProfileConflicted; } });
       card.appendChild(grid);
       return card;
     }
@@ -3154,7 +3133,7 @@
         var service = JSON.parse(JSON.stringify(original || {}));
         var id = card.querySelector('.svc-id').value;
         var name = card.querySelector('.svc-name').value;
-        if (!id) serviceCatalogFailure('Service ' + (position + 1) + ' requires a stable ID.');
+        if (!id) serviceCatalogFailure('Service ' + (position + 1) + ' needs a saved service reference. Reload the profile and try again.');
         if (!name.trim()) serviceCatalogFailure('Service ' + (position + 1) + ' requires a name.');
         service.id = id;
         service.name = name;
@@ -3180,19 +3159,10 @@
         assignNumber('.svc-difficulty', 'difficulty', 'Difficulty multiplier', false);
         assignNumber('.svc-confidence', 'confidence', 'Confidence', false);
 
-        var pricingText = card.querySelector('.svc-pricing').value.trim();
-        if (!pricingText) {
-          delete service.canonicalPricing;
-        } else {
-          var pricing;
-          try { pricing = JSON.parse(pricingText); } catch (_error) {
-            serviceCatalogFailure('Pricing rules for ' + name + ' must be valid JSON.');
-          }
-          if (!pricing || typeof pricing !== 'object' || Array.isArray(pricing)) {
-            serviceCatalogFailure('Pricing rules for ' + name + ' must be a JSON object.');
-          }
-          service.canonicalPricing = pricing;
-        }
+        var pricing;
+        try { pricing = card.querySelector('.svc-pricing')._profileFields.read(); } catch (error) { serviceCatalogFailure(error.message); }
+        if (pricing === undefined) delete service.canonicalPricing;
+        else service.canonicalPricing = pricing;
         return service;
       });
     }
@@ -3201,7 +3171,7 @@
       if (!element || !element.value.trim()) return null;
       var value = Number(element.value);
       if (!Number.isFinite(value) || (element.validity && !element.validity.valid)) {
-        throw new Error(label + ' must be a valid finite number.');
+        throw new Error(label + ' must be a valid number.');
       }
       return value;
     }
@@ -3250,12 +3220,7 @@
 
     function readServicePolygon() {
       var element = document.getElementById('sa-polygon');
-      var raw = element ? element.value.trim() : '';
-      if (!raw) return [];
-      var polygon;
-      try { polygon = JSON.parse(raw); } catch (_error) { throw new Error('Boundary polygon must be valid JSON.'); }
-      if (!Array.isArray(polygon)) throw new Error('Boundary polygon must be a JSON array.');
-      return polygon;
+      return element._profileFields.read();
     }
 
     // ====================================================================
@@ -3409,12 +3374,12 @@
             var versionConflict = result.status === 409 && resp.error && resp.error.code === 'BUSINESS_PROFILE_VERSION_CONFLICT';
             if (versionConflict) latchGeneralProfileConflict();
             var msg = versionConflict ? 'Business Profile changed; reload the page before saving general profile changes.'
-              : resp.errors ? resp.errors.join('; ') : resp.error && resp.error.message || 'Validation failed';
+              : result.status === 403 ? 'You do not have permission to change the Business Profile. Contact an owner or administrator.' : 'The Business Profile could not be saved. Review the entered values, then try again.';
             showToast('❌ ' + msg, 'error');
           }
         })
         .catch(function() {
-          showToast('❌ Could not connect to server', 'error');
+          showToast('❌ Your Business Profile could not be saved. Check your connection and try again.', 'error');
         })
         .finally(function() {
           updateGeneralProfileActionState();
@@ -3502,6 +3467,8 @@
       loadAssetCatalogue();
     });
   </script>
+  <script src="/js/profile-structured-fields.js"></script>
+  <link rel="stylesheet" href="/css/profile-structured-fields.css">
   <script src="/js/command-center-contract.js"></script>
   <script src="/js/nav-component.js"></script>
   <script src="/js/knowledge-management.js"></script>

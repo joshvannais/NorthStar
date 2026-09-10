@@ -51,3 +51,34 @@ it passed because it shares a component. Physical Safari/devices, manual assisti
 technology, founder personal visual approval, real storage/provider behavior and
 private production remain unavailable. The inherited 15 wider-suite failures are
 not replaced with an all-green corpus claim.
+
+## Founder-required extension: structured Business Profile controls
+
+The all-implementation wording gate explicitly extends this Part12 candidate to
+four ordinary editors reachable from the Mission23 Business Profile host. This is
+an added legacy-host correction, not a claim that original Part5 authorized their
+original financial or pricing implementation. Part5's asset presentation authority
+remains at the roadmap's equipment catalogue contract.
+
+| Reachable editor | Existing shape and current surface | Required evidence |
+| --- | --- | --- |
+| Service Area boundary | Ordered latitude/longitude rows with add, remove, move up/down and clear. Saved pairs and coordinate objects keep their original representation. New coordinates are blank until entered; zero is never an inferred location. | Browser roundtrip, ordered editing, required coordinates and minimum point count; mounted profile save; desktop light/mobile dark. |
+| Financial material costs | Service, Material, Internal cost rows. Exact key is service key plus colon plus material, as consumed by canonicalPolarisCalculation143-146. Existing composite service references are retained, not treated as equipment IDs. | Exact composite-key and zero roundtrip; mounted financial save and preserved sibling profile data. |
+| Financial equipment costs | Equipment pricing reference and internal cost rows. A pricing reference is not assumed to be an individual equipment identity. Missing configuration, configured empty map and explicit zero remain distinct. | Reference/amount editing, absence/empty/zero, mounted save, unchanged equipment identity contracts. |
+| Services pricing | Existing fixed charge, price per unit, price per unit by choice and price per listed item rules. Required details, allowed typed choices, range percentage and typed/nested exact-match conditions remain editable. Existing charge references and detail keys stay internal and roundtrip unchanged. | Existing server validation for all four rule types, new rule creation/type changes, exact roundtrip of codes/conditions, generic and financial version conflicts, member denial, invalid draft and keyboard checks. |
+
+The new `profile-structured-fields.js` supplies typed form controls while hidden
+carriers preserve the existing page's save, dirty, reload and version boundaries.
+It does not create a backend schema, modify a calculator, connect a provider or add
+a Mission24 commercial action. Existing unrecognized/malformed settings are shown
+as unresolved, with their original data retained. They cannot be overwritten by a
+save until explicitly corrected or replaced; replacement requires two visible
+steps explaining that existing settings will be removed. Ordinary validation and
+permission failures give actionable text rather than raw API error details.
+
+`m23-part12-profile-fields.js` covers isolated rendered form/model parity and
+`m23-part12-profile-fields-host.js` covers mounted PostgreSQL saves, sibling
+preservation, competing versions and member permission denial. These are separate
+evidence lanes. They do not prove physical devices, manual assistive technology,
+provider actions, arbitrary production configuration or every role/theme/width
+combination. Per-run source identity and actual screenshots remain mandatory.

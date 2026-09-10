@@ -110,3 +110,23 @@ implementation to its downstream rendered surfaces, roles and states. The gate
 applies to all implementations, not just this diff or the integrated journey.
 The final evidence packet must distinguish static copy review, real browser
 presentation checks, durable workflow proof and specifically unavailable states.
+
+### Structured-control scope extension
+
+The founder's wording requirement also covers the four ordinary Business Profile
+code-entry editors reachable from this mission's host: service-area boundary,
+material costs by service and material, equipment costs by pricing reference, and
+per-service pricing rules. The structured-control extension is expressly broader
+than the original Part12 acceptance/test-only work and later copy-only correction.
+Its exact data-shape and surface map is in the wording inventory. No backend,
+calculation, API, permission, migration, provider or Mission24 feature is added.
+
+Acceptance requires typed-control roundtrip evidence, all four existing pricing
+rule types, blank versus missing/empty/zero, unknown-data preservation and explicit
+replacement, mounted saves and sibling preservation, real version conflict and
+member denial, plus browser interaction and visual checks. Existing inherited
+failures remain explicit: the two targeted older profile/financial API suites give
+14/17 at both the pre-extension e32f83d tree and this working implementation; the
+same three failures stem from immutable execution cleanup and its resulting
+profile-reference cleanup failures. This is not an all-green API/corpus claim and
+does not add or subtract from the separately recorded inherited wider 15 failures.

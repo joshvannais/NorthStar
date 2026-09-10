@@ -824,7 +824,7 @@ window.CustomerDetail = (function() {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
-    var restoreFocus = focusReason === 'decision-saved' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
+    var restoreFocus = focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
     _estimateReview = null; $('cdEstimateDecision').replaceChildren();
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
     button.disabled = true;
@@ -981,7 +981,7 @@ window.CustomerDetail = (function() {
 
     // Pricing Breakdown
     $('cdPricingBreakdown').innerHTML = renderPricingBreakdown(data.estimates);
-    $('cdEstimateReviewRefresh').onclick = refreshEstimateReview;
+    $('cdEstimateReviewRefresh').onclick = function () { refreshEstimateReview('review-refresh'); };
     refreshEstimateReview();
 
     // Transcript

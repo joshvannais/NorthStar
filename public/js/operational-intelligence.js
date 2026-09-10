@@ -76,31 +76,28 @@
       body.replaceChildren();
       body.append(node('p', 'oi-summary', value.summary), node('p', 'oi-muted', value.scope));
       var sections = node('div', 'oi-grid');
-      sections.append(list('Needs human review', value.conflicts), list('Missing inputs', value.missingInputs)); body.append(sections);
+      sections.append(list('Needs review', value.conflicts), list('Missing inputs', value.missingInputs)); body.append(sections);
       var compare = node('section', 'oi-section'); compare.append(node('h3', '', 'Plan and actual evidence'));
       value.comparisons.forEach(function(item) {
         var card = node('div', 'oi-comparison'); card.append(node('h4', '', item.title));
         if (item.code === 'schedule_and_labor') {
           var values = node('dl', 'oi-values');
           values.append(node('dt', '', 'Scheduled window'), node('dd', '', item.plannedWindowSeconds === null ? 'Unavailable' : (item.plannedWindowSeconds / 60).toLocaleString() + ' minutes'),
-            node('dt', '', 'Reviewed visible labor'), node('dd', '', item.reviewedLaborSeconds === null ? 'Unavailable' : (item.reviewedLaborSeconds / 60).toLocaleString() + ' person-minutes'));
+            node('dt', '', 'Reviewed work time'), node('dd', '', item.reviewedLaborSeconds === null ? 'Unavailable' : (item.reviewedLaborSeconds / 60).toLocaleString() + ' person-minutes'));
           card.append(values);
         } else card.append(node('p', 'oi-quantity', item.completed + ' of ' + item.total + ' ' + item.unit));
         card.append(node('p', 'oi-muted', item.explanation)); compare.append(card);
       });
-      body.append(compare, list('Suggested human next steps', value.recommendations));
+      body.append(compare, list('Suggested next steps', value.recommendations));
       var evidence = node('details', 'oi-evidence'); evidence.append(node('summary', '', 'Sources, freshness and confidence'));
       evidence.append(node('p', '', 'Confidence: limited. ' + value.confidence.basis), node('p', '', value.uncertainty),
-        node('p', '', 'Generated ' + value.generatedAt + ' · Expires ' + value.expiresAt), node('p', '', 'Rule ' + value.ruleVersion + ' · No model or provider used.'));
-      function pinText(label, item) { evidence.append(node('p', 'oi-pin', label + ' · ' + item.id + ' · revision ' + item.revision + ' · SHA-256 ' + item.digest)); }
-      pinText('Execution', value.execution); pinText('Assignment', value.assignment);
+        node('p', '', 'Prepared ' + new Date(value.generatedAt).toLocaleString() + ' · Refresh after ' + new Date(value.expiresAt).toLocaleTimeString()));
+      var domainNames = { labor: 'Time', materials: 'Materials', equipment: 'Equipment', fieldEvidence: 'Field evidence', progress: 'Progress and changes', completion: 'Completion decisions' };
       value.evidence.forEach(function(item) {
-        var group = node('details', 'oi-source-group'); group.append(node('summary', '', item.domain + ' · ' + item.returned + ' of ' + item.visibleTotal + ' visible records' + (item.complete ? '' : ' · incomplete')));
-        group.append(node('p', 'oi-pin', 'Source set SHA-256 ' + item.sourceSetDigest));
-        item.pins.forEach(function(source) { group.append(node('p', 'oi-pin', source.id + ' · revision ' + source.revision + ' · SHA-256 ' + source.digest)); }); evidence.append(group);
+        evidence.append(node('p', '', domainNames[item.domain] + ' · ' + item.returned + ' of ' + item.visibleTotal + ' records included' + (item.complete ? '' : ' · some records are unavailable')));
       });
-      evidence.append(node('p', 'oi-pin', 'Snapshot SHA-256 ' + value.snapshotDigest)); body.append(evidence);
-      body.append(node('p', 'oi-boundary', 'Advice only. No work, schedule, approval, price, invoice, customer contact or provider action is changed.'));
+      body.append(evidence);
+      body.append(node('p', 'oi-boundary', 'Advice only. You decide whether to act. Reviewing this summary does not change work, schedules or prices, approve completion, create invoices or contact customers.'));
     }
     async function load() {
       var token = ++generation, selected = executionId, started = performance.now(); if (controller) controller.abort(); clearTimeout(expiry);
@@ -108,13 +105,13 @@
       body.replaceChildren(); status.textContent = 'Reading current authorized evidence…'; refresh.disabled = true; loaded = true;
       try {
         var response = await fetch('/api/v1/field-executions/' + selected + '/intelligence', { credentials: 'same-origin', cache: 'no-store', signal: own.signal, headers: { Accept: 'application/json' } });
-        if (!response.ok) throw new Error(response.status === 409 ? 'Work authority changed. Reload work before reviewing intelligence.' : 'Intelligence is unavailable or access has changed. No previous advice is retained.');
+        if (!response.ok) throw new Error(response.status === 409 ? 'Your work details or access changed. Reload work before reviewing intelligence.' : 'Intelligence is unavailable or access has changed. No previous advice is retained.');
         var raw = await response.text(); assert(raw.length <= 500000); var payload = JSON.parse(raw); assert(payload.success === true);
         var data = validate(payload.data, selected); if (token !== generation) return;
-        render(data); status.textContent = 'Evidence snapshot ready · Human review required';
-        expiry = setTimeout(function() { if (token === generation) { body.replaceChildren(); status.textContent = 'This snapshot expired. Refresh to recheck current access and evidence.'; loaded = false; } }, Math.max(0, 300000 - (performance.now() - started)));
+        render(data); status.textContent = 'Summary ready · Review before acting';
+        expiry = setTimeout(function() { if (token === generation) { body.replaceChildren(); status.textContent = 'This summary is out of date. Refresh to check the latest work records.'; loaded = false; } }, Math.max(0, 300000 - (performance.now() - started)));
       } catch (error) {
-        if (token !== generation) return; body.replaceChildren(); status.textContent = navigator.onLine === false ? 'Offline. Intelligence requires a current server snapshot.' : error.name === 'AbortError' ? 'The evidence request timed out. Refresh to try again.' : error.message; loaded = false;
+        if (token !== generation) return; body.replaceChildren(); status.textContent = navigator.onLine === false ? 'You are offline. Reconnect and refresh to review the latest work records.' : error.name === 'AbortError' ? 'The evidence request timed out. Refresh to try again.' : 'This summary could not be loaded. Refresh to check your access and the latest work records.'; loaded = false;
       } finally { clearTimeout(timeout); if (token === generation) { refresh.disabled = false; controller = null; } }
     }
     shell.addEventListener('toggle', function() { if (shell && shell.open && !loaded) load(); }); refresh.addEventListener('click', load);

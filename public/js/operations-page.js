@@ -14,7 +14,7 @@
   var APPROVAL = { none: 'No pending proposal', pending: 'Pending owner review', expired: 'Proposal expired', changed: 'Proposal needs refresh' };
   var COPY = {
     loading: 'Loading the current operational view.',
-    empty: 'No recorded executions match this work state.',
+    empty: 'No recorded work matches this status.',
     restricted: 'This operational view is not available for your current account or role. No records are shown.',
     stale: 'Operational records changed. Refresh the overview before continuing.',
     retry: 'The operational overview is temporarily unavailable. Refresh to try again.',
@@ -88,7 +88,7 @@
       details.appendChild(node('p', '', APPROVAL[record.approval.state] + '. Proposed ' + date(data.pendingProposal.decidedAt) +
         '; expires ' + date(data.pendingProposal.expiresAt) + '.'));
     }
-    details.appendChild(node('p', '', 'This overview does not approve, cancel or reopen work. Completion remains an explicit, evidence-pinned decision.'));
+    details.appendChild(node('p', '', 'To approve, cancel or reopen work, open its completion review and confirm your decision.'));
     return details;
   }
   function renderRecord(record, scope) {
@@ -105,13 +105,13 @@
     var metrics = node('dl', 'operations-metrics');
     metric(metrics, 'Recorded schedule', record.schedule.start === null ? 'No current time recorded' :
       date(record.schedule.start, record.schedule.timeZone));
-    metric(metrics, 'Assignment authority', record.assignment.current ? 'Current recorded assignment' : 'Assignment changed; review needed');
+    metric(metrics, 'Assignment', record.assignment.current ? 'Current recorded assignment' : 'Assignment changed; review needed');
     metric(metrics, 'Progress facts', record.progress.recorded + ' recorded · ' + record.progress.needsReview + ' need review');
     metric(metrics, 'Open issues', record.blockers.open + ' blockers · ' + record.exceptions.open + ' exceptions');
     metric(metrics, 'Completion review', APPROVAL[record.approval.state]);
     metric(metrics, 'Evidence readiness', READINESS[record.evidence.state], 'data-evidence-state');
     metric(metrics, 'Work constraints', record.capacity.recordedConstraints + ' recorded · capacity unknown');
-    metric(metrics, 'Execution last changed', date(record.updatedAt));
+    metric(metrics, 'Work last changed', date(record.updatedAt));
     article.appendChild(metrics);
     if (record.progress.uncertain > 0) article.appendChild(node('p', 'operations-coordination-note',
       record.progress.uncertain + ' progress facts are estimated or unknown. No overall percentage is inferred.'));
@@ -127,9 +127,9 @@
   }
   function render(data) {
     currentData = data;
-    element('operationsScope').textContent = data.scope === 'owner_admin' ? 'Owner and admin · tenant-wide operational view' :
+    element('operationsScope').textContent = data.scope === 'owner_admin' ? 'Owner and administrator · Company operations' :
       'Dispatcher · limited coordination view';
-    element('operationsSnapshot').textContent = 'PostgreSQL snapshot · ' + date(data.evaluatedAt);
+    element('operationsSnapshot').textContent = 'Last checked · ' + date(data.evaluatedAt);
     var fragment = document.createDocumentFragment();
     data.records.forEach(function(record) { fragment.appendChild(renderRecord(record, data.scope)); });
     element('operationsRecords').replaceChildren(fragment);
@@ -138,12 +138,12 @@
     element('operationsPending').textContent = String(data.records.filter(function(record) { return record.approval.state === 'pending'; }).length);
     element('operationsConstraints').textContent = String(data.records.reduce(function(total, record) { return total + record.capacity.recordedConstraints; }, 0));
     element('operationsSummary').hidden = page.total === 0;
-    element('operationsPageDescription').textContent = page.total === 0 ? 'No matching recorded executions.' :
-      'Showing ' + (page.offset + 1) + '–' + (page.offset + page.returned) + ' of ' + page.total + ' matching recorded executions. Summary counts are for this page.';
+    element('operationsPageDescription').textContent = page.total === 0 ? 'No matching recorded work.' :
+      'Showing ' + (page.offset + 1) + '–' + (page.offset + page.returned) + ' of ' + page.total + ' matching jobs. Summary counts are for this page.';
     element('operationsNext').disabled = page.nextCursor === null;
     element('operationsPrevious').disabled = previousCursors.length === 0;
     status(page.total === 0 ? 'empty' : 'success', page.total === 0 ? null :
-      'Operational view refreshed. ' + page.returned + ' recorded executions shown. No operational state was changed.');
+      'Operational view refreshed. ' + page.returned + ' jobs shown. No work status was changed.');
   }
   async function load(nextCursor, action) {
     var expectedSnapshot = currentData;

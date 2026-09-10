@@ -99,8 +99,9 @@ async function createDatabaseFixture(options = {}) {
         "INSERT INTO canonical_transcripts(id,organization_id,operation_id,graph_id,customer_id,source,source_version,transcript_text,normalized_fingerprint) VALUES($1,$2,$3,$4,$5,'lead','fixture','Synthetic recorded work',$6)",
         [transcript, tenant, operation, graph, customer, hash(`transcript:${sequence}`)]);
       await ownerPool.query(
-        "INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,customer_id,status,service_type,job_scope) VALUES($1,$2,$3,$4,$5,'qualified','Plumbing',$6)",
-        [opportunity, tenant, operation, graph, customer, { jobTitle: options.title || `Recorded work ${sequence}` }]);
+        "INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,customer_id,status,service_type,job_scope) VALUES($1,$2,$3,$4,$5,'qualified',$7,$6)",
+        [opportunity, tenant, operation, graph, customer, { jobTitle: options.title || `Recorded work ${sequence}`,
+          ...(options.locationId ? { locationId: options.locationId } : {}) }, options.serviceType || 'Plumbing']);
       const start = options.start ? new Date(options.start) : new Date(Date.UTC(2027, 8, sequence, 13));
       await ownerPool.query(
         "INSERT INTO canonical_appointments(id,organization_id,operation_id,graph_id,opportunity_id,scheduled_start,scheduled_end,status) VALUES($1,$2,$3,$4,$5,$6,$7,'scheduled')",
@@ -124,6 +125,8 @@ async function createDatabaseFixture(options = {}) {
               acknowledgedWarningDigests: preview.body.data.warningDigests,
               acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests, reason: 'Explicit synthetic scheduling approval' });
           if (approval.status !== 200) throw new Error('Synthetic scheduling approval failed: ' + JSON.stringify(approval.body));
+          if (options.onSchedulingStep) await options.onSchedulingStep({ action, appointment,
+            preview: preview.body.data, approval: approval.body.data });
         }
         assignment = (await ownerPool.query('SELECT id,revision,rtrim(canonical_digest) AS digest FROM canonical_schedule_assignments WHERE appointment_id=$1', [appointment])).rows[0];
       } else {
@@ -133,6 +136,12 @@ async function createDatabaseFixture(options = {}) {
           "UPDATE canonical_schedule_assignments SET target_state='assigned',workforce_profile_id=$2,schedule_state='scheduled',dispatch_state='dispatched',needs_review=false,review_reasons='[]',revision=4,canonical_digest=canonical_schedule_assignment_digest('assigned',$2,NULL,'scheduled','dispatched',scheduled_start,scheduled_end,appointment_status,false,'[]'),last_action_code='dispatch',last_reason='Accepted synthetic scheduling baseline',updated_at=transaction_timestamp() WHERE appointment_id=$1 RETURNING id,revision,rtrim(canonical_digest) AS digest",
           [appointment, tenant === org ? actors.member.actorUserId : actors.otherOwner.actorUserId])).rows[0];
       } finally { await ownerPool.query('ALTER TABLE canonical_schedule_assignments ENABLE TRIGGER USER'); }
+      }
+      // Acceptance callers can continue through HTTP/browser initialization
+      // themselves, without a hidden repository mutation or synthetic dispatch.
+      if (options.stopAfterScheduling) {
+        if (!options.approvedScheduling) throw new Error('Mounted scheduling required');
+        return { assignment, actor, appointment, opportunity };
       }
       const repository = require('../../src/operations/repository');
       let execution = (await repository.initializeFieldExecution(runtimePool, {

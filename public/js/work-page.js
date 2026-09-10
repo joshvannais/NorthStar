@@ -29,17 +29,17 @@
   };
 
   var STATE_COPY = Object.freeze({
-    loading: ['Loading current work', 'NorthStar is checking the current assignment and execution.'],
-    empty: ['Work has not been opened yet', 'Create the server-owned work record before recording field activity.'],
+    loading: ['Loading current work', 'NorthStar is checking your assignment and work status.'],
+    empty: ['Work has not been opened yet', 'Open this job before recording field activity.'],
     offline: ['You appear to be offline', 'Reconnect, then reload. NorthStar has not confirmed or recorded any new work.'],
-    restricted: ['Work access changed', 'This appointment is not in your current direct or crew assignment scope.'],
-    'read-only': ['Work is read-only', 'This execution can be reviewed, but its current lifecycle does not permit worker changes.'],
-    stale: ['Work authority changed', 'Reload before recording anything. Browser state is not accepted as current authority.'],
-    conflict: ['Work changed before your action', 'Reload the current server record, review it, and try again if the action is still appropriate.'],
-    'partial-file': ['Some evidence is unavailable', 'Current work loaded, but one bounded evidence source is unavailable. No missing evidence is treated as success.'],
-    retry: ['NorthStar could not confirm the action', 'Retry sends the same request and idempotency key. No success is claimed until the server confirms it.'],
-    'applied-but-refresh-failed': ['Recorded; current view not confirmed', 'The server acknowledged the action, but the refreshed record could not be loaded. Reload before doing anything else.'],
-    success: ['Work updated', 'The server confirmed the action and the current record was refreshed.'],
+    restricted: ['Work access changed', 'You are not currently assigned to this job, either directly or through your crew.'],
+    'read-only': ['Work is read-only', 'You can review this work, but changes are not available in its current state.'],
+    stale: ['Your work details or access changed', 'Reload to check the latest work details and your access before recording anything.'],
+    conflict: ['Work changed before your action', 'Reload the latest work details, review them, and try again if the action is still appropriate.'],
+    'partial-file': ['Some evidence is unavailable', 'Your work loaded, but some supporting records could not be checked. Reload before relying on the evidence summary.'],
+    retry: ['NorthStar could not confirm the action', 'Retry to check whether this action was saved. NorthStar will avoid recording it twice.'],
+    'applied-but-refresh-failed': ['Recorded; current view not confirmed', 'Your action was saved, but the latest work details could not be loaded. Reload before doing anything else.'],
+    success: ['Work updated', 'Your action was saved and the work details are up to date.'],
   });
 
   function byId(id) { return document.getElementById(id); }
@@ -244,7 +244,7 @@
       form.querySelectorAll('select').forEach(function(control) {
         control.dispatchEvent(new Event('change', { bubbles: true }));
       });
-      byId('workStatus').textContent = 'Unsaved device-local draft removed. No server record changed.';
+      byId('workStatus').textContent = 'Unsaved draft removed. Saved work records have not changed.';
       var first = form.querySelector('input,select,textarea');
       if (first) first.focus();
     });
@@ -259,7 +259,7 @@
         action: actionName,
         label: submitLabel,
         copy: actionName === 'propose_completion' ? completionSelectionCopy() :
-          'Review this field evidence, then confirm it should be recorded against the current execution.',
+          'Review these work details, then confirm they should be saved for this job.',
         body: builder(new FormData(form)),
         path: mutationPath(actionName),
         form: form,
@@ -393,7 +393,7 @@
     var pins = executionPins();
     confirmAction({
       action: action, label: names[action],
-      copy: 'NorthStar will record this lifecycle change against the exact execution and assignment versions shown now.',
+      copy: 'NorthStar will check the latest job details and your assignment before saving this work-status change.',
       path: mutationPath(action),
       body: {
         action: action,
@@ -433,12 +433,12 @@
     if (!model.execution) {
       byId('workStateBadge').textContent = 'Not opened';
       byId('workStateBadge').dataset.state = 'empty';
-      content.appendChild(emptyNote('No field execution exists for this current approved assignment.'));
+      content.appendChild(emptyNote('This assigned job has not been opened for recording work yet.'));
       if (allows('initialize')) {
         content.appendChild(actionButton('Open work record', 'workLifecyclePrimary', function(event) {
           var recordPins = model.record.authority;
           confirmAction({ action: 'initialize', label: 'Open work record',
-            copy: 'NorthStar will create one server-owned field execution for this exact current assignment.',
+            copy: 'NorthStar will open a work record for your current assignment.',
             path: mutationPath('initialize'), body: {
               expectedAssignmentRevision: recordPins.revision,
               expectedAssignmentDigest: recordPins.digest,
@@ -446,7 +446,7 @@
             } }, event.currentTarget);
         }, 'btn btn-primary'));
       } else {
-        content.appendChild(unavailableNote('The server did not authorize opening work from this current record.'));
+        content.appendChild(unavailableNote('You cannot open this job with your current access. Reload or ask your administrator for help.'));
       }
       return;
     }
@@ -454,7 +454,7 @@
     byId('workStateBadge').textContent = label(state);
     byId('workStateBadge').dataset.state = state;
     var grid = node('div', 'work-summary-grid');
-    append(grid, summary('Current state', label(state)), summary('Last action', label(model.execution.lastAction)));
+    append(grid, summary('Current state', label(state)), summary('Last action', ({ initialize: 'Job opened', start: 'Work started', pause: 'Work paused', resume: 'Work resumed' })[model.execution.lastAction] || label(model.execution.lastAction)));
     content.appendChild(grid);
     var actions = node('div', 'work-actions');
     var nextAction = ['start', 'pause', 'resume'].find(allows);
@@ -465,11 +465,13 @@
       }, 'btn btn-primary');
       actions.appendChild(button);
     } else {
-      actions.appendChild(unavailableNote(['completed', 'cancelled'].includes(state)
-        ? 'This durable execution is read-only. An owner or administrator controls reopening.'
+      actions.appendChild(unavailableNote(state === 'completed'
+        ? 'This work is complete. An owner or administrator must reopen it before work can resume.'
+        : state === 'cancelled'
+          ? 'This recorded work was cancelled and cannot be resumed. Contact an owner or administrator if more work is needed.'
         : state === 'completion_pending'
           ? 'Completion is awaiting explicit review. You may withdraw your active proposal below.'
-          : 'This lifecycle is read-only from the worker experience.'));
+          : 'You can review this work, but no work actions are available to you. Contact an owner or administrator if you need to make changes.'));
     }
     content.appendChild(actions);
   }
@@ -495,7 +497,7 @@
     if (summaries.length) content.appendChild(node('p', '', summaries.map(function(item) {
       return label(item.category) + ': ' + Math.round(Number(item.observedSeconds || 0) / 60) + ' minutes';
     }).join(' · ')));
-    content.appendChild(node('p', '', clean(data.interpretation, 'Operational time evidence only; not payroll.')));
+    content.appendChild(node('p', '', 'Recorded work time. This does not calculate pay or overtime.'));
     if (!['start_timer', 'stop_timer', 'record_manual'].some(allows)) return;
     var categories = safeArray(data.categoryContract && data.categoryContract.categories).map(function(value) { return { value: value, label: label(value) }; });
     var open = intervals.find(function(interval) { return !interval.observedEnd && interval.reviewState !== 'rejected'; });
@@ -515,7 +517,7 @@
       confirmAction({ action: 'stop_timer', label: 'Stop timer', copy: 'Confirm the running timer should stop now.',
         path: mutationPath('stop_timer'), body: body }, event.currentTarget);
     }, 'btn btn-primary'));
-    if (allows('stop_timer') && !open) content.appendChild(unavailableNote('The server authorized a timer stop, but the pinned running interval was not returned. Reload before acting.'));
+    if (allows('stop_timer') && !open) content.appendChild(unavailableNote('The running timer could not be loaded. Reload before trying to stop it.'));
     if (allows('record_manual')) actions.appendChild(actionButton('Add manual time', '', function() { toggleForm('workLaborManual'); }));
     content.appendChild(actions);
     if (allows('start_timer')) content.appendChild(makeForm('workLaborStart', [
@@ -563,23 +565,23 @@
       });
       content.appendChild(list);
     }
-    content.appendChild(node('p', '', clean(data.interpretation, 'Recorded movement evidence only. Current stock is not inferred.')));
+    content.appendChild(node('p', '', 'Recorded material use and movement. Check physical stock before relying on these quantities. No cost or price is calculated.'));
     if (!allows('record_material')) return;
     var materialKinds = model.record.workCapabilities.materialMovementKinds;
     if (!materialKinds.length) {
-      content.appendChild(unavailableNote('The server did not return any material movement kind for this action.'));
+      content.appendChild(unavailableNote('No material actions are available. Reload or ask your administrator for help.'));
       return;
     }
     content.appendChild(actionButton('Record material', '', function() { toggleForm('workMaterialForm'); }));
     var materialForm = makeForm('workMaterialForm', [
       { name: 'movementKind', label: 'Movement', type: 'select', options: materialKinds.map(function(value) { return { value: value, label: label(value) }; }) },
-      { name: 'itemKey', label: 'Material key', maxLength: 64, help: 'Use a stable short key such as copper.pipe.' },
+      { name: 'itemKey', label: 'Material reference', maxLength: 64, help: 'Use the same short reference for this material each time, such as copper-pipe.' },
       { name: 'description', label: 'What was recorded', maxLength: 1000, wide: true },
       { name: 'quantity', label: 'Quantity', type: 'number', min: '0.000001', step: '0.000001' },
-      { name: 'unitCode', label: 'Unit key', maxLength: 64, value: 'each' },
-      { name: 'locationKey', label: 'Location key (optional)', required: false, maxLength: 64 },
-      { name: 'destinationLocationKey', label: 'Destination location key (transfer only)', required: false, maxLength: 64 },
-      { name: 'lotCode', label: 'Lot key (optional)', required: false, maxLength: 64 },
+      { name: 'unitCode', label: 'Unit', maxLength: 64, value: 'each' },
+      { name: 'locationKey', label: 'Location reference (optional)', required: false, maxLength: 64 },
+      { name: 'destinationLocationKey', label: 'Destination location (transfers only)', required: false, maxLength: 64 },
+      { name: 'lotCode', label: 'Lot reference (optional)', required: false, maxLength: 64 },
       { name: 'adjustmentDirection', label: 'Adjustment direction', type: 'select', required: false, options: [
         { value: '', label: 'Not an adjustment' }, { value: 'increase', label: 'Increase' }, { value: 'decrease', label: 'Decrease' },
       ] },
@@ -622,7 +624,7 @@
     var events = model.reads.equipment && safeArray(model.reads.equipment.events);
     var assets = model.reads.catalogue && safeArray(model.reads.catalogue.assets).filter(function(asset) { return asset.reviewState === 'reviewed'; });
     if (!model.reads.equipment || !model.reads.catalogue) {
-      content.appendChild(unavailableNote('Equipment evidence or the tenant catalogue could not be loaded. No equipment status is inferred.'));
+      content.appendChild(unavailableNote('Equipment details could not be loaded. Reload to check their current status.'));
       return;
     }
     if (!events.length) content.appendChild(emptyNote('No equipment event has been recorded for this work.'));
@@ -636,11 +638,11 @@
       });
       content.appendChild(list);
     }
-    if (!assets.length) { content.appendChild(unavailableNote('No reviewed tenant equipment is currently available to record here.')); return; }
+    if (!assets.length) { content.appendChild(unavailableNote('No reviewed company equipment is available to record here.')); return; }
     if (!allows('record_equipment')) return;
     var equipmentKinds = model.record.workCapabilities.equipmentKinds;
     if (!equipmentKinds.length) {
-      content.appendChild(unavailableNote('The server did not return any equipment event kind for this action.'));
+      content.appendChild(unavailableNote('No equipment actions are available. Reload or ask your administrator for help.'));
       return;
     }
     content.appendChild(actionButton('Record equipment use', '', function() { toggleForm('workEquipmentForm'); }));
@@ -650,7 +652,7 @@
       }) },
       { name: 'kind', label: 'Event', type: 'select', options: equipmentKinds.map(function(value) { return { value: value, label: label(value) }; }) },
       { name: 'observedAt', label: 'Observed at', type: 'datetime-local' },
-      { name: 'meterKey', label: 'Meter key', required: false, maxLength: 80 },
+      { name: 'meterKey', label: 'Meter name', required: false, maxLength: 80 },
       { name: 'reading', label: 'Meter reading', type: 'number', required: false, min: '0', step: '0.001' },
       { name: 'unit', label: 'Reading unit', type: 'select', required: false,
         options: ['hours','km','mi','percent','litres','gallons','count'].map(function(value) { return { value: value, label: label(value) }; }) },
@@ -718,7 +720,7 @@
       });
       content.appendChild(list);
     }
-    content.appendChild(unavailableNote('File capture is not offered here because durable field-file storage is not confirmed. No upload was attempted.'));
+    content.appendChild(unavailableNote('Photo and file uploads are not available here yet. Nothing has been uploaded.'));
     if (!['create_checklist', 'respond_item', 'record_note', 'record_observation'].some(allows)) return;
     var checklistItems = openChecklistItems(records);
     var actions = node('div', 'work-actions');
@@ -728,7 +730,7 @@
     if (allows('record_observation')) actions.appendChild(actionButton('Record observation', '', function() { toggleForm('workEvidenceObservation'); }));
     content.appendChild(actions);
     if (allows('create_checklist')) content.appendChild(makeForm('workEvidenceChecklist', [
-      { name: 'key', label: 'Checklist item key', maxLength: 64, value: 'inspection.item' },
+      { name: 'key', label: 'Checklist reference', maxLength: 64, value: 'inspection' },
       { name: 'prompt', label: 'Checklist item', type: 'textarea', maxLength: 500, wide: true },
       { name: 'required', label: 'Required item', type: 'select', options: [
         { value: 'true', label: 'Required' }, { value: 'false', label: 'Optional' },
@@ -835,7 +837,7 @@
     content.appendChild(actions);
     if (allows('record_progress')) content.appendChild(makeForm('workProgressForm', [
       { name: 'description', label: 'Progress description', type: 'textarea', maxLength: 1000, wide: true },
-      { name: 'workKey', label: 'Work key', value: 'current.work', maxLength: 64 },
+      { name: 'workKey', label: 'Work reference', value: 'current-work', maxLength: 64 },
       { name: 'completed', label: 'Completed quantity', type: 'number', min: '0', step: '0.000001' },
       { name: 'total', label: 'Planned quantity', type: 'number', min: '0.000001', step: '0.000001' },
       { name: 'unit', label: 'Unit', type: 'select', options: ['ea','m','m2','m3','ft','ft2','ft3','yd3','kg','lb','l','gal'].map(function(value) { return { value: value, label: value }; }) },
@@ -929,8 +931,8 @@
     var content = byId('workCompletionContent');
     content.replaceChildren();
     var data = model.reads.completion;
-    if (!data) { content.appendChild(unavailableNote('Completion authority could not be loaded. No completion is inferred.')); return; }
-    content.appendChild(node('p', '', clean(data.interpretation, 'Completion requires an explicit proposal and authorized approval.')));
+    if (!data) { content.appendChild(unavailableNote('Completion details could not be loaded. Reload to check whether this work is complete.')); return; }
+    content.appendChild(node('p', '', 'Completion needs a proposal and approval from an owner or administrator. Completing or reopening work does not change the schedule, accept work for the customer, or create an invoice.'));
     var records = safeArray(data.records);
     if (records.length) {
       var list = node('ul', 'work-record-list');
@@ -949,14 +951,14 @@
           id: data.activeProposal.id, revision: data.activeProposal.revision, digest: data.activeProposal.digest,
         } });
         confirmAction({ action: 'withdraw_completion', label: 'Withdraw completion proposal',
-          copy: 'This returns the execution to its explicit pre-proposal state. It does not delete completion history.',
+          copy: 'This withdraws the proposal and returns the work to its previous status. The completion history is kept.',
           path: mutationPath('withdraw_completion'), body: body }, event.currentTarget);
       }));
     } else if (allows('propose_completion')) {
       try { api.completionRequirements(model.reads.evidence); }
       catch (error) {
         content.appendChild(unavailableNote(error.code === 'WORK_EVIDENCE_SELECTION_LIMIT'
-          ? 'The current evidence exceeds the 20-per-kind selection limit for this view. No records have been omitted; a completion proposal cannot be prepared here.'
+          ? 'This work has more than 20 checklists, inspections, or files. This page cannot prepare a complete proposal for that amount of evidence. No proposal has been sent.'
           : 'The complete, current evidence selection could not be confirmed. Reload current work before proposing completion.'));
         content.appendChild(actionButton('Reload current work', '', function() { load(); }));
         return;
@@ -976,7 +978,7 @@
       }, 'propose_completion'));
     } else {
       content.appendChild(unavailableNote(['completed', 'cancelled'].includes(model.execution.lifecycleState)
-        ? 'This execution has a durable terminal state. Only authorized owner or administrator actions can change it.'
+        ? 'This work is completed or cancelled, so you cannot propose completion. Contact an owner or administrator if more work is needed.'
         : 'Start or resume work before proposing completion.'));
     }
   }
@@ -1005,14 +1007,14 @@
       renderLabor(); renderMaterials(); renderEquipment(); renderEvidence(); renderProgress(); renderCompletion();
     } else {
       ['workLaborContent','workMaterialsContent','workEquipmentContent','workEvidenceContent','workProgressContent','workCompletionContent']
-        .forEach(function(id) { byId(id).replaceChildren(unavailableNote('Open the server-owned work record to use this section.')); });
+        .forEach(function(id) { byId(id).replaceChildren(unavailableNote('Open this job to use this section.')); });
     }
     var pageState = model.partial.length ? 'partial-file' : announcement ? 'success' :
       !model.execution ? 'empty' : model.record.workCapabilities.mutable ? 'ready' : 'read-only';
     setState(pageState, '', announcement || (model.partial.length ? STATE_COPY['partial-file'][1] :
-      pageState === 'ready' ? 'Current server-owned work detail is ready.' : ''));
+      pageState === 'ready' ? 'Your current work details are ready.' : ''));
     if (tabStorage && !tabStorage.persistent) {
-      byId('workStatus').textContent += ' Draft and retry storage is unavailable in this tab. Reloading removes unconfirmed local state.';
+      byId('workStatus').textContent += ' This tab cannot keep unsaved drafts or remember an interrupted request. Reloading removes unsaved work. Check your saved records before trying an interrupted action again.';
     }
   }
 
@@ -1038,7 +1040,7 @@
       model.record = validateRecord(selected);
       if (selector.executionId && (!selected.execution || selected.execution.id !== selector.executionId)) {
         pruneDrafts(true);
-        setState('stale', '', 'The selected execution is no longer the current execution for this assigned appointment.', true);
+        setState('stale', '', 'These work details are no longer current for your assigned job. Return to Today and open the job again.', true);
         return false;
       }
       if (!selected.execution) {
@@ -1141,11 +1143,11 @@
         }
         else if (error.status === 409 || /STALE|CONFLICT/.test(error.code || '')) setState('conflict');
         else if (error.code === 'M23_FIELD_STORAGE_UNAVAILABLE') setState('partial-file');
-        else setState('retry', 'Action was not accepted', clean(error.message, 'Review the current fields and try again.'));
+        else setState('retry', 'Action was not accepted', 'Review the current fields and try again. If it still fails, reload or contact your administrator.');
       } else {
         model.retryMutation = { descriptor: descriptor, trigger: trigger };
         var retryCopy = error.retryAfter
-          ? 'Retry the same request after ' + clean(error.retryAfter, 'the server delay') + '. No success is claimed yet.'
+          ? 'NorthStar is busy. Wait a moment, then use Retry to check whether your action was saved. Retrying will not record it twice.'
           : STATE_COPY.retry[1];
         setState(root.navigator && root.navigator.onLine === false ? 'offline' : 'retry', '', retryCopy);
       }

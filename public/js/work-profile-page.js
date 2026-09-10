@@ -87,7 +87,7 @@
         pending=null;dirty=false;retry.hidden=true;unavailable(error);
       } else if(error.status===400) {
         pending=null;editor.querySelectorAll('button,input,select,textarea').forEach(function(e){e.disabled=false;});
-        announce(error.message+' Check field lengths, dates and reference-only document identifiers.','error');
+        announce('Your changes could not be saved. Check the text lengths, dates and document references, then try again.','error');
       } else {
         retry.hidden=false;announce('Save was not confirmed. Your exact request is retained here; use Retry same request to avoid a duplicate.','error');
       }
@@ -99,7 +99,7 @@
     var list=n('ol');
     data.history.forEach(function(record){
       var item=n('li'), line=n('div','wp-heading');
-      line.append(n('strong','',human(record.action)+' · '+human(record.stream)+' version '+record.revision),badge(record.status));
+      line.append(n('strong','',human(record.action)+' · '+human(record.stream)),badge(record.status));
       item.append(line,n('p','wp-muted',record.actorName+' · '+human(record.actorAccessRole)+' · '+date(record.created_at)));
       if(record.reason)item.appendChild(n('p','',record.reason));
       var details=n('details'), detailSummary=n('summary','','View exact submitted information');
@@ -110,7 +110,7 @@
         record.document.certifications.forEach(function(c){details.appendChild(n('p','wp-muted',c.name+' · '+c.issuer+' · Expires '+(c.expiresOn || 'not specified')+' · Reference '+(c.documentReference || 'not provided')+
           (record.status==='approved' && record.verifiedCertificationIds.includes(c.id)?' · Evidence verified for this decision':'')));});
       } else details.appendChild(n('p','',human(record.document.status)+' · '+record.document.note+' · Until '+date(record.document.until)));
-      details.appendChild(n('p','wp-muted','Record '+record.id+(record.previous_id?' · Previous '+record.previous_id:'')));
+      if(record.previous_id)details.appendChild(n('p','wp-muted','Earlier entries are retained in this history.'));
       item.appendChild(details);list.appendChild(item);
     });
     if(!data.history.length)disclosure.appendChild(n('p','wp-muted','Your first submission will start this history.'));
@@ -239,7 +239,7 @@
     finishEditor(form,'Review decision',function(event){
       confirmBody={action:action,expectedRevision:revision,reason:reason.value};
       if(action==='approve')confirmBody.verifiedCertificationIds=checks.filter(function(c){return c.checked&&!c.disabled;}).map(function(c){return c.value;});
-      document.getElementById('profileConfirmCopy').textContent=human(action)+' version '+revision+' for '+data.person.name+'. Reason: '+reason.value;
+      document.getElementById('profileConfirmCopy').textContent=human(action)+' the current profile for '+data.person.name+'. Reason: '+reason.value;
       // WebKit does not focus buttons on pointer activation. Restore the actual
       // submit control rather than whichever text field happened to retain focus.
       opener=event.submitter || form.querySelector('button[type="submit"]');confirmDialog.showModal();

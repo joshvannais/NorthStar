@@ -1,4 +1,5 @@
 'use strict';
+const { observeUserWording } = require('../helpers/m23-user-wording');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -29,6 +30,7 @@ async function main() {
   const { app } = require('../../src/server'); const server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const runtime = resolveBrowserRuntime(selected); const browser = await runtime.browserType.launch({ executablePath: runtime.executablePath, headless: true });
+  await observeUserWording(browser);
   const report = { browser: selected, version: browser.version(), source: baseline ? baselineHead : 'current correction working tree', fixture: 'Ordinary synthetic field text only; all legacy markup fragments replaced before rendering.', cases: [], tabCopies: [], externalRequests: [], pageErrors: [], posts: [] };
   let scenario = 'empty'; let records = []; let evidenceCalls = 0;
   async function context(width = 1440, theme = 'light') {

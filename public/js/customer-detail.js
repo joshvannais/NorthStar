@@ -205,7 +205,7 @@ window.CustomerDetail = (function() {
     html += '      </div>';
 
     // POLARIS\u2122 Intelligence
-    html += '      <div class="drawer-section" id="cdExecutionSection"><h3>Work execution</h3><p>Exact work records in this loaded customer view. Other work may be outside this page.</p><div id="cdExecutionRecords"></div></div>';
+    html += '      <div class="drawer-section" id="cdExecutionSection"><h3>Work details</h3><p>Work details for the jobs shown on this page. Open Operations to review other recorded work.</p><div id="cdExecutionRecords"></div></div>';
     html += '      <div class="drawer-section">';
     html += '        <h3>POLARIS\u2122 Intelligence</h3>';
     html += '        <div class="drawer-polaris-insight" id="cdPolarisInsight">';
@@ -580,7 +580,7 @@ window.CustomerDetail = (function() {
     return {
       summary: presentation.serviceText || 'Recorded service',
       price: presentation.customerPriceRoundedText,
-      confidenceLabel: 'Server confidence',
+      confidenceLabel: 'Confidence',
       confidenceClass: '',
       confidencePct: presentation.confidenceText,
       revenue: fmtCurrency(canon.estimatedRevenue),
@@ -809,7 +809,7 @@ window.CustomerDetail = (function() {
     $('cdStage').textContent = stageLabel(data.stage);
     $('cdProb').textContent = data.closeProbability != null
       ? data.closeProbability + '%'
-      : 'Unavailable — no role-authorized probability is recorded.';
+      : 'Unavailable — no probability is available to this account.';
 
     // POLARIS Intelligence
     var intel = generatePolarisIntel(data);

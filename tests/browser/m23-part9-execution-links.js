@@ -1,4 +1,5 @@
 'use strict';
+const { observeUserWording } = require('../helpers/m23-user-wording');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process');
 const {resolveBrowserRuntime}=require('../helpers/playwright-runtime');
 const {navigationFixture}=require('../helpers/navigation-fixture');
@@ -25,6 +26,7 @@ async function main(){
  const https=require('node:https');https.request=()=>{throw Error('Server external transport forbidden');};https.get=https.request;
  const app=require('../../src/server').app,server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
  const origin=`http://127.0.0.1:${server.address().port}`,runtime=resolveBrowserRuntime(selected),browser=await runtime.browserType.launch({headless:true,executablePath:runtime.executablePath});ledger.version=browser.version();
+  await observeUserWording(browser);
  let active;
  try{
  const profiles=[{name:'1440',width:1440,height:1000},{name:'390',width:390,height:844},{name:'320',width:320,height:740},{name:'reflow-200',width:720,height:500},{name:'reflow-400',width:360,height:350}].filter(p=>opt('profile','all')==='all'||p.name===opt('profile'));
@@ -62,19 +64,19 @@ async function main(){
   }
   const target=surface==='calendar'?'#calendarAuthorityBoard .execution-link':surface==='command'?'#commandCenterSchedulingRecords .execution-link':'#cdExecutionRecords .execution-link';
   if(baseline){const section=page.locator(surface==='calendar'?'#calendarAuthorityBoard':surface==='command'?'#commandCenterSchedulingRecords':'#cdCustomerDrawer');await section.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,label+'.png')});ledger.cases.push({label,baseline:true});await context.close();continue;}
-  const disclosure=page.locator(target).first();await disclosure.waitFor({state:'visible'});assert.equal(linkRequests,0);await disclosure.locator('summary').click();await disclosure.getByRole('link',{name:'Review execution'}).waitFor();assert.equal(linkRequests,1);
+  const disclosure=page.locator(target).first();await disclosure.waitFor({state:'visible'});assert.equal(linkRequests,0);await disclosure.locator('summary').click();await disclosure.getByRole('link',{name:'Review completion'}).waitFor();assert.equal(linkRequests,1);
   const geometry=await disclosure.evaluate(node=>{const box=node.getBoundingClientRect(),control=node.querySelector('summary').getBoundingClientRect(),link=node.querySelector('a').getBoundingClientRect();return{left:box.left,right:box.right,width:innerWidth,summaryHeight:control.height,linkHeight:link.height,overflow:document.documentElement.scrollWidth>innerWidth+1};});
   assert.ok(geometry.left>=-1&&geometry.right<=geometry.width+1,JSON.stringify(geometry));assert.ok(geometry.summaryHeight>=43&&geometry.linkHeight>=43);assert.equal(geometry.overflow,false);await page.screenshot({path:path.join(output,label+'.png')});
   await disclosure.locator('summary').focus();await page.keyboard.press('Enter');await page.waitForFunction(selector=>{const node=document.querySelector(selector);return !node.open&&!node.querySelector('a');},target);assert.equal(await disclosure.locator('a').count(),0);
-  mode='restricted';await disclosure.locator('summary').click();await disclosure.getByText('Execution review is available only',{exact:false}).waitFor();assert.equal(await disclosure.locator('a').count(),0);
-  await disclosure.locator('summary').click();mode='unavailable';await disclosure.locator('summary').click();await disclosure.getByText('An exact execution link is unavailable.',{exact:false}).waitFor();assert.equal(await disclosure.locator('a').count(),0);
-  await disclosure.locator('summary').click();mode='slow';await disclosure.locator('summary').click();await disclosure.getByText('Checking current execution access…').waitFor();await disclosure.locator('summary').click();await page.waitForTimeout(400);assert.equal(await disclosure.locator('a').count(),0);
-  mode='error';await disclosure.locator('summary').click();await disclosure.getByRole('button',{name:'Retry execution lookup'}).waitFor();mode='available';await disclosure.getByRole('button',{name:'Retry execution lookup'}).click();await disclosure.getByRole('link',{name:'Review execution'}).waitFor();
-  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('northstar:auth-generation')));assert.equal(await disclosure.locator('a').count(),0);await disclosure.locator('summary').click();await disclosure.getByRole('link',{name:'Review execution'}).waitFor();
-  await Promise.all([page.waitForURL('**/dashboard/completion-review?executionId='+id(7)),disclosure.getByRole('link',{name:'Review execution'}).click()]);assert.equal(new URL(page.url()).searchParams.get('executionId'),id(7));
+  mode='restricted';await disclosure.locator('summary').click();await disclosure.getByText('Completion review is available only',{exact:false}).waitFor();assert.equal(await disclosure.locator('a').count(),0);
+  await disclosure.locator('summary').click();mode='unavailable';await disclosure.locator('summary').click();await disclosure.getByText('Work details could not be found or confirmed.',{exact:false}).waitFor();assert.equal(await disclosure.locator('a').count(),0);
+  await disclosure.locator('summary').click();mode='slow';await disclosure.locator('summary').click();await disclosure.getByText('Checking access to this job’s work details…').waitFor();await disclosure.locator('summary').click();await page.waitForTimeout(400);assert.equal(await disclosure.locator('a').count(),0);
+  mode='error';await disclosure.locator('summary').click();await disclosure.getByRole('button',{name:'Try again'}).waitFor();mode='available';await disclosure.getByRole('button',{name:'Try again'}).click();await disclosure.getByRole('link',{name:'Review completion'}).waitFor();
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('northstar:auth-generation')));assert.equal(await disclosure.locator('a').count(),0);await disclosure.locator('summary').click();await disclosure.getByRole('link',{name:'Review completion'}).waitFor();
+  await Promise.all([page.waitForURL('**/dashboard/completion-review?executionId='+id(7)),disclosure.getByRole('link',{name:'Review completion'}).click()]);assert.equal(new URL(page.url()).searchParams.get('executionId'),id(7));
   if(surface==='command' && theme==='light' && profile.name==='1440'){
     await page.goto(origin+'/dashboard');await page.waitForLoadState('networkidle');
-    const upcoming=page.locator('#commandCenterSchedule .execution-link').first();await upcoming.locator('summary').click();await upcoming.getByRole('link',{name:'Review execution'}).waitFor();await page.screenshot({path:path.join(output,'ordinary-command-upcoming-light-1440.png')});await Promise.all([page.waitForURL('**/dashboard/completion-review?executionId='+id(7)),upcoming.getByRole('link',{name:'Review execution'}).click()]);ledger.cases.push({label:'command-upcoming-pointer',destination:true});
+    const upcoming=page.locator('#commandCenterSchedule .execution-link').first();await upcoming.locator('summary').click();await upcoming.getByRole('link',{name:'Review completion'}).waitFor();await page.screenshot({path:path.join(output,'ordinary-command-upcoming-light-1440.png')});await Promise.all([page.waitForURL('**/dashboard/completion-review?executionId='+id(7)),upcoming.getByRole('link',{name:'Review completion'}).click()]);ledger.cases.push({label:'command-upcoming-pointer',destination:true});
     const beforeDemo=linkRequests;await page.goto(origin+'/demo');await page.waitForLoadState('networkidle');
     const demoQuick=page.locator('#northstarQuickStartDialog[open]');if(await demoQuick.count())await page.keyboard.press('Escape');
     const demoDisclosure=page.locator('#commandCenterSchedule .execution-link').first();await demoDisclosure.waitFor({state:'visible'});await demoDisclosure.locator('summary').click();await demoDisclosure.getByText('Demo work is read-only.',{exact:false}).waitFor();assert.equal(await demoDisclosure.locator('a').count(),0);assert.equal(linkRequests,beforeDemo);ledger.cases.push({label:'demo-local-read-only',paidLookupRequests:0});

@@ -56,3 +56,10 @@ html.completion-document { scroll-behavior: auto; }
 .completion-skip:not(:focus) { width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
 .completion-skip:focus { min-height: 44px; clip-path: none; box-shadow: var(--shadow-md); }
 @media (max-width: 390px) { .completion-main { padding-top: 1.2rem; } .completion-actions button { flex: 1 1 100%; } .completion-page dialog { padding: 1rem; } }
+
+/* Match the established owner Operations lockup; preserve owner header colors. */
+.completion-brand { gap: 10px; }
+.completion-brand img { object-fit: contain; flex: 0 0 36px; }
+.completion-brand span { color: var(--neutral-800, #263344); }
+#completionSnapshot { margin-block: 1rem; }
+#completionActions { margin-top: 1rem; }

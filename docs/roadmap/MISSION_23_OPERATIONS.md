@@ -93,24 +93,38 @@ knowledge authorities without replacing any of them.
   Personal/current-crew Today, worker execution, evidence completeness/current-
   leaf, tab ownership and the accepted completion-review UI remain unchanged.
   Candidate writer tests are not independent approval or release evidence.
-  My Work Profile remains an explicit later reconciliation under `M23-01`:
-  existing workforce role/location/skill editors do not establish employee
-  self-assertions, owner categories, certification verification/expiry,
-  availability, owner review or audit/history for that proposed experience.
-  These residuals prevent a Part 9 completeness claim; backend endpoints alone
-  do not close a mounted user-workflow gate.
+  My Work Profile (`M23-01`) subsequently completed Part 9 through PR #180:
+  approved head `619a4d7cc989f4fa480ef44efe6f1b2ead6a2b29`, normal merge
+  `6b48d375c58f2bfd44bed83bdf5e920c89c9edf5`, and sole automatic deployment
+  `36582c99-7fab-45d1-8a50-b877516caf98`. The retained September 9 release
+  acceptance records independent approval and bounded production acceptance.
+  [My Work Profile](../M23_MY_WORK_PROFILE.md) and migration 055 implement
+  employee claims, owner/admin reviews, certification-reference decisions,
+  expiry, self-declared availability and retained history. This historical
+  release evidence closes the earlier residual; Part 12 does not rerun or
+  re-award that acceptance through its same-job journey.
 - **Part 10: independently accepted and normally merged through PR #181 as
   `202190bc4198352b33438ec39c05ffe225b8fcb7`.** The coordinator's supplied
   September 9, 2026 release receipt records approved head
   `9d35ab971128c965a79ee22f280abd830b175932`, sole automatic deployment
   `a60e47e4-0ed9-42a6-8dee-6ae9a2e9edbd`, exact revision and bounded public
   acceptance. This is the Part 11 base, not a new production inspection.
-- **Part 11: writer candidate only; not independently accepted or released.**
+- **Part 11: independently accepted and normally merged through PR #182 as
+  `c7e011517f0a48c0d1fda0ba32d72871bbc7cc26`.** The coordinator's supplied
+  release receipt records sole automatic deployment
+  `12231628-9dd6-4eb1-9f0e-f006787e80f8`, healthy bounded public acceptance and
+  54 matching applied migrations. Untested restoration and the forward-fix-only
+  recovery limitation remain disclosed; founder continuation was explicit.
+  The prior premature-merge gate error is preserved, not retroactively erased.
   [Downstream reference handoffs](../operations/DOWNSTREAM_HANDOFFS.md) defines
   the consent-confirmed owner/admin reference receipts and append-only revocation
   authority. Delivery/consumption remain unavailable; Mission 31 remains
-  synthetic-only. The additive 056 migration requires its own production gate.
-- **Part 12: not implemented.**
+  synthetic-only. Migration 056 remains frozen without a destructive rollback.
+- **Part 12: same-job acceptance writer candidate; not independently accepted
+  or released.** [Acceptance map](../operations/MISSION_23_ACCEPTANCE.md)
+  traces mounted PostgreSQL/HTTP/browser authority, distinguishes Part 9's
+  historical My Work Profile acceptance, and preserves unavailable evidence. Candidate tests do not
+  establish entire-mission completeness or authorize Mission 24 implementation.
 - Part 1's no-runtime statements remain historical evidence about its exact
   released diff. They do not describe the deployed Part 2 implementation.
 - Every later part must update status only after its own exact-head audit and
@@ -904,6 +918,21 @@ evidence seal.
 
 ### Accessibility and visual acceptance
 
+- The wording gate covers every Mission 23 implementation in Parts 1–12,
+  including earlier backend authority subsequently rendered by another part.
+  The [implementation-to-surface inventory](../operations/MISSION_23_WORDING_INVENTORY.md)
+  maps all parts to their pages, components, roles and states. A backend-only
+  label does not exempt its later display sinks.
+- After every implementation or correction, and before advancing to the next
+  step, review all affected user-facing wording. Pages, cards, forms, dialogs,
+  errors, empty/loading/denied states, labels, hints, tooltips and accessibility
+  names must use clear business language in desktop/mobile and light/dark views.
+  Correct exposed backend wording, raw internal IDs/digests, database/route names,
+  stack traces and code-like implementation explanations immediately. Keep
+  meaningful consent, permissions, accuracy and action consequences clear.
+  Engineering detail belongs in internal diagnostics and evidence, not product
+  copy. This wording gate is mandatory for the writer and independent auditor;
+  passing functional checks alone does not satisfy it.
 - Semantic headings/landmarks, labels/instructions, programmatic names and
   states, error association, keyboard order, visible focus, modal containment,
   Escape/restoration, announcements, touch targets, non-color status, contrast,
@@ -986,3 +1015,17 @@ Part 1 is complete only when:
 Unavailable evidence is not a pass. It prevents only the corresponding claim;
 it must never be replaced by a simulation, source-string assertion, provider
 marketing statement, or writer assurance.
+
+### Part12 founder-required structured-control extension
+
+The mandatory wording gate additionally includes the four ordinary Business
+Profile editors reachable in the host: Service Area boundary, Financial material
+costs (Service + Material + Internal cost), Financial equipment pricing-reference
+costs, and Services pricing rules. Replace code entry with typed controls while
+preserving exact existing saved identities, conditions, data shapes, permissions,
+version/CSRF/save boundaries and calculator semantics. This is an explicit
+legacy-host extension required by the founder, not retroactive original Mission23
+or Mission24 scope. No migration, backend contract, provider or new commercial
+feature is authorized by this correction. The all-part wording inventory and
+acceptance packet must include these controls and accurately label their tested
+states, source heads and unavailable evidence.

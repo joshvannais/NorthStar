@@ -1,4 +1,5 @@
 'use strict';
+const { observeUserWording } = require('../helpers/m23-user-wording');
 
 const assert = require('assert');
 const fs = require('fs');
@@ -35,7 +36,7 @@ const CHECKLIST = 'c1600000-0000-4000-8000-000000000003';
 const CHECKLIST_RESPONSE = 'c1600000-0000-4000-8000-000000000004';
 const LABOR_INTERVAL = 'c1600000-0000-4000-8000-000000000005';
 const COMPLETION_PROPOSAL = 'c1600000-0000-4000-8000-000000000006';
-const HOSTILE = '<img src=x onerror="globalThis.m23Part9aCompromised=true">';
+const HOSTILE = process.argv.includes('--ordinary') ? 'Routine service visit' : '<img src=x onerror="globalThis.m23Part9aCompromised=true">';
 const ASSIGNMENT_DIGEST = 'a'.repeat(64);
 const EXECUTION_DIGEST = 'b'.repeat(64);
 let currentActions = ['start'];
@@ -62,7 +63,7 @@ function today(executionPointer = execution().data) {
       assignment: { kind: 'worker', label: 'Alex Rivera', direct: true, currentCrew: false },
       dispatch: { state: 'dispatched' }, review: { needsReview: false, reasons: [] },
       route: { providerNeutral: true, providerCalls: 0, status: 'unavailable', evidenceDigest: null,
-        travelDurationMinutes: null, distance: null, implications: ['No route provider was called.'], uncertainty: [] },
+        travelDurationMinutes: null, distance: null, implications: ['Live traffic and travel times have not been checked.'], uncertainty: [] },
       instructions: { status: 'available', text: `Use the side entrance. ${HOSTILE}`, truncated: false },
       customer: { name: `Jamie Carter ${HOSTILE}`, phone: '+1 555 010 1234', serviceLocation: { street: '125 Maple Avenue', city: 'Riverton', state: 'MA', postalCode: '02110' } },
       crew: null, authority: { revision: 7, digest: ASSIGNMENT_DIGEST, approvedCurrent: true },
@@ -126,6 +127,7 @@ async function main() {
   const origin = `http://127.0.0.1:${server.address().port}`;
   const runtime = resolveBrowserRuntime(selected);
   const browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+  await observeUserWording(browser);
   ledger.version = browser.version();
   let currentExecution = execution();
   let failToday = false;
@@ -352,7 +354,7 @@ async function main() {
         assert.strictEqual(geometry.overviewBelowHeading, true, JSON.stringify(geometry));
         assert.strictEqual(geometry.focusable, true, JSON.stringify(geometry));
         if (partialEvidence) {
-          assert.match(await page.locator('#workStatus').textContent(), /evidence source is unavailable/);
+          assert.match(await page.locator('#workStatus').textContent(), /supporting records could not be checked/);
           assert.match(await page.locator('#workEvidenceContent').textContent(), /could not be loaded/);
           ledger.cases.push({ partialFile: true, missingEvidenceClaimedAsSuccess: false });
         }
@@ -400,7 +402,8 @@ async function main() {
           await checklistDialog.waitFor();
           await checklistDialog.getByRole('button', { name: 'Confirm Create checklist' }).click();
           await page.waitForFunction(() => document.body.dataset.workState === 'retry');
-          assert.match(await page.locator('#workStateCopy').textContent(), /after 1/);
+          assert.match(await page.locator('#workStateCopy').textContent(), /NorthStar is busy.*Retry.*not record it twice/);
+          assert.doesNotMatch(await page.locator('#workStateCopy').textContent(), /after 1|server delay|Retry-After/);
           assert.strictEqual(await page.getByRole('button', { name: 'Retry same request' }).count(), 1);
           await page.getByRole('button', { name: 'Retry same request' }).click();
           await page.waitForFunction(() => document.body.dataset.workState === 'success');
@@ -431,7 +434,7 @@ async function main() {
           await page.getByRole('dialog', { name: 'Confirm Record field note' })
             .getByRole('button', { name: 'Confirm Record field note' }).click();
           await page.waitForFunction(() => document.body.dataset.workState === 'applied-but-refresh-failed');
-          assert.match(await page.locator('#workStateCopy').textContent(), /acknowledged/);
+          assert.match(await page.locator('#workStateCopy').textContent(), /was saved/);
           failToday = false;
           await page.getByRole('button', { name: 'Reload current work' }).click();
           await page.waitForFunction(() => document.body.dataset.workState === 'ready');
@@ -614,7 +617,7 @@ async function main() {
     const initializePage = await initializeContext.newPage();
     await initializePage.goto(`${origin}/dashboard/work?appointmentId=${APPOINTMENT}`, { waitUntil: 'domcontentloaded' });
     await initializePage.waitForFunction(() => document.body.dataset.workState === 'empty', null, { timeout: 5000 });
-    assert.match(await initializePage.locator('#workStateCopy').textContent(), /server-owned work record/);
+    assert.match(await initializePage.locator('#workStateCopy').textContent(), /Open this job/);
     await initializePage.getByRole('button', { name: 'Open work record' }).click();
     const initializeConfirm = initializePage.getByRole('dialog', { name: 'Confirm Open work record' })
       .getByRole('button', { name: 'Confirm Open work record' });
@@ -669,8 +672,8 @@ async function main() {
     await readOnlyPage.waitForFunction(() => document.body.dataset.workState === 'read-only', null, { timeout: 5000 });
     assert.strictEqual(await readOnlyPage.locator('#workSections').isVisible(), true);
     assert.match(await readOnlyPage.locator('#workStateBadge').textContent(), /Completed/);
-    assert.match(await readOnlyPage.locator('#workStatus').textContent(), /reviewed.*does not permit worker changes/);
-    assert.strictEqual(await readOnlyPage.locator('#workSections button').count(), 0);
+    assert.match(await readOnlyPage.locator('#workStatus').textContent(), /review this work.*changes are not available/);
+    assert.strictEqual(await readOnlyPage.locator('#workSections .work-card button').count(), 0);
     ledger.cases.push({ readOnly: true, terminalHistoryVisible: true, mutationCapabilityExposed: false });
     await readOnlyContext.close();
 

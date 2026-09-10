@@ -1,4 +1,5 @@
 'use strict';
+const { observeUserWording } = require('../helpers/m23-user-wording');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -31,6 +32,7 @@ async function main() {
     const origin = `http://127.0.0.1:${server.address().port}`;
     const runtime = resolveBrowserRuntime(selected);
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+  await observeUserWording(browser);
     ledger.version = browser.version();
     const profiles = [ { name: '1440', width: 1440, height: 1000 }, { name: '390', width: 390, height: 844 },
       { name: '320', width: 320, height: 700 }, { name: 'reflow-200', width: 720, height: 500 }, { name: 'reflow-400', width: 360, height: 250 } ]
@@ -144,7 +146,7 @@ async function main() {
         assert.ok(Math.abs(dialogBounds.x + dialogBounds.width / 2 - profile.width / 2) <= 1 &&
           Math.abs(dialogBounds.y + dialogBounds.height / 2 - profile.height / 2) <= 1,
         'confirmation is centered in both axes');
-        assert.match(await page.locator('#completionConfirmDetails').innerText(), /Execution revision/);
+        assert.match(await page.locator('#completionConfirmDetails').innerText(), /latest work and assignment/);
         if (action === 'reopen_execution' || action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Recheck the completed seal/);
         if (action === 'correct_completion') assert.match(await page.locator('#completionConfirmDetails').innerText(), /Clarified the recorded observation/);
         assert.equal(await page.evaluate(() => document.activeElement.id), 'completionCancelButton', 'confirmation starts on safe cancel choice');

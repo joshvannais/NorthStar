@@ -103,9 +103,9 @@ function routeProjection(row) {
     evidenceDigest: null,
     travelDurationMinutes: null,
     distance: null,
-    implications: ['No current durable route or travel evidence is available for this job.'],
-    uncertainty: review ? ['Current scheduling authority needs review.', 'No live provider lookup was performed.']
-      : ['No live provider lookup was performed.'],
+    implications: ['A current route and travel estimate are not available for this job.'],
+    uncertainty: review ? ['The current schedule needs review.', 'Live traffic and travel times have not been checked.']
+      : ['Live traffic and travel times have not been checked.'],
   };
 }
 

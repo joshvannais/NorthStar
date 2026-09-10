@@ -23,7 +23,7 @@
   <main id="operationsMain" class="operations-main" tabindex="-1">
     <div class="operations-intro">
       <div>
-        <p class="operations-eyebrow">Work execution</p>
+        <p class="operations-eyebrow">Recorded work</p>
         <h1>Operations</h1>
         <p class="operations-description">A clear view of recorded work, open issues and readiness for review.</p>
       </div>
@@ -40,7 +40,7 @@
           <option value="active">Active work</option>
           <option value="completion_pending">Completion pending</option>
           <option value="completed">Completed work</option>
-          <option value="all">All recorded executions</option>
+          <option value="all">All recorded work</option>
         </select>
       </div>
       <button id="operationsRefresh" class="operations-button operations-button-primary" type="button">Refresh overview</button>
@@ -49,13 +49,13 @@
       Loading the current operational view.
     </div>
     <section id="operationsSummary" class="operations-summary" aria-label="On this page" hidden>
-      <div><span class="operations-stat-label">Executions on this page</span><strong id="operationsShown">0</strong></div>
+      <div><span class="operations-stat-label">Jobs on this page</span><strong id="operationsShown">0</strong></div>
       <div><span class="operations-stat-label">Pending review on this page</span><strong id="operationsPending">0</strong></div>
       <div><span class="operations-stat-label">Recorded work constraints</span><strong id="operationsConstraints">0</strong></div>
       <div><span class="operations-stat-label">Capacity</span><strong id="operationsCapacity">Unknown</strong><span class="operations-stat-note">Availability is not assessed here.</span></div>
     </section>
-    <section id="operationsRecords" class="operations-records" aria-label="Recorded executions" aria-busy="true"></section>
-    <nav class="operations-pagination" aria-label="Execution pages">
+    <section id="operationsRecords" class="operations-records" aria-label="Recorded work" aria-busy="true"></section>
+    <nav class="operations-pagination" aria-label="Work pages">
       <p id="operationsPageDescription">No page loaded.</p>
       <div>
         <button id="operationsPrevious" class="operations-button" type="button" disabled>Previous page</button>

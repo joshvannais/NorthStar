@@ -57,3 +57,7 @@ The package changes only these architecture/roadmap documents, with no HTML/CSS/
 ## Human decision consumer extension
 
 The existing shared drawer now consumes a separate human decision ledger through its owner/admin estimate-review read and bounded decision write. Demo uses the same renderer/projector with isolated synthetic storage. See [the decision contract](../operations/MISSION_24_ESTIMATE_DECISIONS.md) for exact ledger, permissions, source pins, recovery and wording states. Broad machine estimate projections retain their original semantics; no worker or customer output projection receives approval authority. This does not remove the inventory's future adoption gaps.
+
+## Part1 Slice4 consumer extension
+
+The existing owner/admin estimate-review GET now also passes its same-transaction graph snapshot and human decision to src/estimating/capellaReview.js. src/routes/demo.js uses that identical projector with its isolated stored demo workspace. public/js/customer-detail.js renders the comparison in its existing contextual review; demo-runtime continues redirecting demo requests away from private endpoints. No other broad machine-price projection gains human approval or private risk content. The output has no new writer, schema, customer projection or provider. Details and changed wording states: [Capella recorded costs](../operations/MISSION_24_CAPELLA_RECORDED_COSTS.md). The original inventory remains explicitly dated; this is an additive extension.

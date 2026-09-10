@@ -238,6 +238,7 @@ window.CustomerDetail = (function() {
     html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
     html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
     html += '              <div id="cdEstimateDecision" style="margin-top:1rem"></div>';
+    html += '              <section id="cdCapellaReview" class="drawer-capella-review" aria-labelledby="cdCapellaTitle" hidden></section>';
     html += '            </section>';
 
     html += '          </details>';
@@ -820,12 +821,40 @@ window.CustomerDetail = (function() {
       review.recordedAt === selected.snapshotCreatedAt;
   }
 
+  function renderCapellaReview(review) {
+    var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
+    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens'; root.appendChild(title);
+    function paragraph(value) { var p = document.createElement('p'); p.textContent = value; root.appendChild(p); }
+    var risk = review.riskReview, decision = review.decisions && review.decisions.current;
+    var matches = risk && risk.contract === 'NorthStarCapellaRecordedCosts/v1' &&
+      JSON.stringify(risk.sourcePins) === JSON.stringify(review.pins) && risk.recordedAt === review.recordedAt &&
+      risk.currency === review.currency && risk.simulated === review.simulated &&
+      (decision ? risk.decision && risk.decision.id === decision.id && risk.decision.revision === decision.revision && risk.decision.digest === decision.digest : risk.decision === null);
+    if (!matches) { paragraph('Cost comparison is unavailable. Refresh this estimate to try again.'); return; }
+    paragraph(risk.message);
+    if (risk.state === 'compared' || risk.state === 'shortfall') {
+      var amount = risk.remainingAfterDirectCosts;
+      var valid = typeof amount === 'string' && /^-?(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(amount) &&
+        decision && decision.action === 'approve' && risk.priceBeforeTax === decision.priceBeforeTax &&
+        decisionMoney(risk.priceBeforeTax, review.currency) !== 'Unavailable' && decisionMoney(risk.recordedDirectCosts, review.currency) !== 'Unavailable';
+      if (!valid) { paragraph('Cost comparison is unavailable. Refresh this estimate to try again.'); return; }
+      var list = document.createElement('dl');
+      [['Reviewed price before tax', risk.priceBeforeTax], ['Recorded direct costs', risk.recordedDirectCosts],
+        [risk.state === 'shortfall' ? 'Shortfall against recorded direct costs' : 'Remaining after recorded direct costs', amount.replace(/^-/, '')]].forEach(function (row) {
+        var group = document.createElement('div'), term = document.createElement('dt'), detail = document.createElement('dd');
+        term.textContent = row[0]; detail.textContent = decisionMoney(row[1], review.currency); group.appendChild(term); group.appendChild(detail); list.appendChild(group);
+      }); root.appendChild(list);
+    }
+    paragraph(risk.limitation);
+  }
+
   function refreshEstimateReview(focusReason) {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
     var restoreFocus = focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
     _estimateReview = null; $('cdEstimateDecision').replaceChildren();
+    $('cdCapellaReview').replaceChildren(); $('cdCapellaReview').hidden = true;
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
     button.disabled = true;
     function current() { return generation === _openSequence && request === _reviewSequence && _currentData && _currentData.canonical === selected && !_drawerEl.hidden; }
@@ -864,7 +893,7 @@ window.CustomerDetail = (function() {
           _decisionDraft.confirmed = false; _decisionDraft.request = null; _decisionDraft.basisChanged = true;
           _decisionDraft.basis = decisionReviewBasis(review);
         }
-        _estimateReview = review; renderEstimateDecision(review);
+        _estimateReview = review; renderEstimateDecision(review); renderCapellaReview(review);
       }).catch(function(error) {
         if (!current()) return;
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?

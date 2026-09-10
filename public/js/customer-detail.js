@@ -281,6 +281,9 @@ window.CustomerDetail = (function() {
     var content = $('cdDrawerContent'), panel = $('cdPolarisInsight');
     var polarisSection = panel.parentElement;
     var brand = polarisSection.querySelector('h3'); panel.prepend(brand);
+    var description = document.createElement('p'); description.id = 'cdJobDescription'; description.className = 'drawer-job-description'; brand.after(description);
+    var descriptionDetails = document.createElement('details'); descriptionDetails.id = 'cdJobDescriptionDetails'; descriptionDetails.className = 'drawer-job-description-details'; descriptionDetails.hidden = true;
+    var descriptionSummary = document.createElement('summary'); descriptionSummary.textContent = 'Full Job Description'; var descriptionBody = document.createElement('p'); descriptionBody.id = 'cdFullJobDescription'; descriptionDetails.append(descriptionSummary,descriptionBody); description.after(descriptionDetails);
     var polarisStar = document.createElement('span'); polarisStar.className = 'polaris-inline-star'; polarisStar.setAttribute('aria-hidden', 'true'); polarisStar.textContent = '\u2726'; brand.prepend(polarisStar);
     var headerMeta = document.createElement('div'); headerMeta.className = 'drawer-header-meta';
     headerMeta.append($('cdPolSummary'), $('cdStage'));
@@ -620,7 +623,7 @@ window.CustomerDetail = (function() {
       if (separator > 0 && id !== 'cdWorkGates' && id !== 'cdWorkRisk') {
         var label = document.createElement('span'); label.className = 'drawer-fact-label'; label.textContent = text.slice(0,separator);
         var value = document.createElement('span'); value.className = 'drawer-fact-value'; value.textContent = text.slice(separator+2);
-        if (id === 'cdDescription' && /^(work type|material|equipment|service area|fixture|system type|leak severity)$/i.test(text.slice(0,separator))) value.classList.add('drawer-fact-categorical');
+        if (id === 'cdDescription' && /^(work type|material|equipment|service area|fixture|system type|leak severity|finish|access|terrain|breaker behavior)$/i.test(text.slice(0,separator))) value.classList.add('drawer-fact-categorical');
         item.append(label,value);
       } else item.textContent = text;
       root.appendChild(item);
@@ -631,9 +634,10 @@ window.CustomerDetail = (function() {
     var values = data.intelligence || {}, service = values.service || {}, scope = service.scope;
     function measured(value, unit) { return typeof value === 'number' && Number.isFinite(value) ? value + ' ' + unit : 'Not recorded'; }
     function cost(value) { return value == null ? 'Not recorded' : fmtCurrency(value); }
-    var labels = { customerDistanceMiles:'Customer distance', equipmentReference:'Equipment', jobType:'Work type', laborHours:'Labor time', serviceRadiusMiles:'Service radius', serviceZone:'Service area', linearFeet:'Length', estimatedDurationHours:'Estimated duration' };
-    var units = { customerDistanceMiles:'miles', serviceRadiusMiles:'miles', linearFeet:'ft', laborHours:'hours', estimatedDurationHours:'hours' };
-    var scopeFacts = scope && typeof scope === 'object' && !Array.isArray(scope) ? Object.keys(scope).filter(function(key) { return key !== 'timeZone' && (!presentationFormat().isInternalKey(key) || key === 'equipmentReference'); }).map(function(key) {
+    var labels = { customerDistanceMiles:'Customer distance', equipmentReference:'Equipment', jobType:'Work type', laborHours:'Labor time', serviceRadiusMiles:'Service radius', serviceZone:'Service area', linearFeet:'Length', estimatedDurationHours:'Estimated duration', seer:'SEER', sqft:'Area', squareFeet:'Area' };
+    var units = { customerDistanceMiles:'miles', serviceRadiusMiles:'miles', linearFeet:'ft', laborHours:'hours', estimatedDurationHours:'hours', sqft:'square feet', squareFeet:'square feet' };
+    if (service.key === 'hvac') { labels.tonnage = 'Cooling capacity'; units.tonnage = 'tons'; }
+    var scopeFacts = scope && typeof scope === 'object' && !Array.isArray(scope) ? Object.keys(scope).filter(function(key) { return !['timeZone','description','workDescription'].includes(key) && (!presentationFormat().isInternalKey(key) || key === 'equipmentReference'); }).map(function(key) {
       var label = labels[key] || presentationFormat().label(key);
       return label + ': ' + (units[key] ? measured(scope[key],units[key]) : describe(scope[key],'Not recorded',key));
     }) : [displayDescription(scope)];
@@ -647,6 +651,32 @@ window.CustomerDetail = (function() {
       pricing:['Original estimate: '+cost(values.customerFacingPrice),'Original price range: '+(values.preliminaryRange ? cost(values.preliminaryRange.low)+' to '+cost(values.preliminaryRange.high) : 'Not recorded'),'Tax: '+(values.taxDisposition && values.taxDisposition.status==='calculated' ? cost(values.tax) : 'Needs review')],
       risk:[values.risk && typeof values.risk.emergency === 'boolean' ? (values.risk.emergency ? 'Emergency reported. Review the recorded details before committing to work.' : 'No emergency is recorded. Other job risks still require review.') : 'Risk information is not recorded. Review job risks before committing to work.']
     };
+  }
+
+  function jobDescription(data) {
+    var service = data.intelligence && data.intelligence.service || {}, scope = service.scope;
+    var recorded = typeof scope === 'string' ? scope : scope && (typeof scope.description === 'string' ? scope.description : typeof scope.workDescription === 'string' ? scope.workDescription : null);
+    if (recorded && recorded.trim()) return recorded.trim();
+    if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return 'No job description has been recorded.';
+    var label = typeof service.label === 'string' && service.label.trim() ? service.label.trim() : 'Recorded work';
+    var detail = service.key === 'hvac' ? scope.systemType : service.key === 'plumbing' ? scope.fixture : service.key === 'concrete' ? scope.finish : scope.material;
+    var sentence = label;
+    if (typeof detail === 'string' && detail.trim()) sentence += service.key === 'hvac' ? ' involving a ' + detail.trim() + ' system' : service.key === 'plumbing' ? ' for a ' + detail.trim() : service.key === 'concrete' ? ' with a ' + detail.trim() + ' finish' : ' using ' + detail.trim();
+    var sentences = [sentence + '.'];
+    if (typeof scope.symptoms === 'string' && scope.symptoms.trim()) sentences.push('Reported issue: ' + scope.symptoms.trim() + '.');
+    var size = Number.isFinite(scope.linearFeet) ? 'Recorded length: ' + scope.linearFeet + ' ft.' : Number.isFinite(scope.squareFeet) ? 'Recorded area: ' + scope.squareFeet + ' square feet.' : Number.isFinite(scope.sqft) ? 'Recorded area: ' + scope.sqft + ' square feet.' : Number.isFinite(scope.squares) && service.key === 'roofing' ? 'Recorded roof area: ' + scope.squares + ' roofing squares.' : null;
+    if (size) sentences.push(size);
+    if (sentences.length === 1 && sentence === label) sentences.push('Review the recorded scope below before confirming the work.');
+    return sentences.join(' ');
+  }
+
+  function renderJobDescription(data) {
+    var full = jobDescription(data), limit = 240, long = full.length > limit;
+    var excerpt = long ? full.slice(0,limit) : full;
+    if (long) { var stop = excerpt.lastIndexOf(' '); if (stop > 120) excerpt = excerpt.slice(0,stop); excerpt += '\u2026'; }
+    $('cdJobDescription').textContent = excerpt;
+    $('cdJobDescriptionDetails').hidden = !long; $('cdJobDescriptionDetails').open = false;
+    $('cdFullJobDescription').textContent = long ? full : '';
   }
 
   // ── POLARIS Intelligence ──
@@ -1222,6 +1252,7 @@ window.CustomerDetail = (function() {
     // Job Details
     var work = workPresentation(data);
     renderWorkFacts('cdDescription', work.description);
+    renderJobDescription(data);
     renderWorkFacts('cdWorkGates', work.gates);
     renderWorkFacts('cdWorkMaterials', work.materials);
     renderWorkFacts('cdWorkEquipment', work.equipment);

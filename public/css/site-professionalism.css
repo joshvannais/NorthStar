@@ -1759,3 +1759,6 @@ html body .customer-drawer .drawer-header-meta #cdPolSummary { text-transform:ca
 html body .customer-drawer .drawer-polaris-insight > h3, #polarisContainer > h2, #customerIntelligenceContainer > h2 { display: flex; align-items: center; }
 html body .customer-drawer .polaris-inline-star, html body #polarisContainer .polaris-inline-star, html body #customerIntelligenceContainer .polaris-inline-star { display: inline-grid; font-size: 18px; height: 1em; margin-right: 8px; }
 html body .customer-drawer .polaris-inline-star::before, html body #polarisContainer .polaris-inline-star::before, html body #customerIntelligenceContainer .polaris-inline-star::before { position: absolute; }
+.customer-drawer .drawer-job-description { margin: -4px 0 16px; font-size: 14px; line-height: 1.6; color: inherit; overflow-wrap: anywhere; }
+.customer-drawer .drawer-job-description-details { margin: 0 0 16px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.customer-drawer .drawer-job-description-details > summary { cursor: pointer; min-height: 44px; align-content: center; }

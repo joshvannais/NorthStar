@@ -1290,6 +1290,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   await require('./operations/handoffDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/materialPlanDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./estimating/materialAdoptionDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   const wrongRelationOwners = await client.query(
     `SELECT namespace.nspname, relation.relname,
             pg_get_userbyid(relation.relowner) AS owner
@@ -1343,6 +1344,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_handoff_%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_material_plans'
+           AND relation.relname <> 'canonical_estimate_revisions'
            AND relation.relname NOT IN (
              'canonical_schedule_assignments',
              'canonical_schedule_approvals',
@@ -1647,10 +1649,10 @@ async function runMigrations(options = {}) {
       : null;
     await client.query('BEGIN');
     transactionOpen = true;
-    // Bound the 057/058 candidates' complete migration transaction lane, including
+    // Bound the 057/058/059 candidates' complete migration transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
-    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql'].includes(migrations[migrations.length - 1]?.file)) {
+    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql'].includes(migrations[migrations.length - 1]?.file)) {
       const settings = await client.query(
         "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
       );

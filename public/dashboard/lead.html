@@ -167,7 +167,7 @@
           '<div class="lead-detail-grid">' +
             '<div class="lead-detail-card"><h3>Status</h3><div class="value">' + statusBadge + '</div></div>' +
             '<div class="lead-detail-card"><h3>Service</h3><div class="value">' + serviceMarkup + '</div><div class="value-secondary">' + jobDetailMarkup + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Estimated Value</h3><div class="value" style="color:var(--brand-600);">' + priceMarkup + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Original estimate value</h3><div class="value" style="color:var(--brand-600);">' + priceMarkup + '</div></div>' +
             '<div class="lead-detail-card"><h3>Outcome</h3><div class="value" style="text-transform:capitalize;">' + outcomeMarkup + '</div></div>' +
             '<div class="lead-detail-card"><h3>Phone</h3><div class="value">' + phoneMarkup + '</div></div>' +
             '<div class="lead-detail-card"><h3>Address</h3><div class="value" id="leadCanonicalAddress">Address unavailable</div><div id="leadNavigationLauncher"></div></div>' +
@@ -455,7 +455,7 @@
 
           // Snapshot Grid
           '<div class="lead-detail-grid">' +
-            '<div class="lead-detail-card"><h3>Revenue</h3><div class="value" style="color:var(--brand-600);">$' + (ci.snapshot.estimatedRevenue || 0).toLocaleString() + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Original revenue estimate</h3><div class="value" style="color:var(--brand-600);">$' + (ci.snapshot.estimatedRevenue || 0).toLocaleString() + '</div></div>' +
             '<div class="lead-detail-card"><h3>Profit</h3><div class="value" style="color:var(--success);">$' + (ci.snapshot.estimatedProfit || 0).toLocaleString() + ' (' + (ci.snapshot.profitMargin || '0%') + ')</div></div>' +
             '<div class="lead-detail-card"><h3>Labor Cost</h3><div class="value">$' + (ci.snapshot.estimatedLabor || 0).toLocaleString() + '</div></div>' +
             '<div class="lead-detail-card"><h3>Crew Needed</h3><div class="value">' + (ci.snapshot.recommendedCrew || '\u2014') + ' technicians</div></div>' +

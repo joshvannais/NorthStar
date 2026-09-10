@@ -18,9 +18,9 @@ window.PolarisUI = (function () {
       '<div class="polaris-section-heading">POLARIS&trade; Intelligence</div>' +
       '<div class="polaris-grid">' +
         '<div><div class="polaris-metric-label">Service</div><div class="polaris-metric-value">' + escapeHtml(presentation.serviceText) + '</div></div>' +
-        '<div><div class="polaris-metric-label">Customer Price</div><div class="polaris-metric-value gold">' + escapeHtml(presentation.customerPriceText) + '</div></div>' +
+        '<div><div class="polaris-metric-label">Original price guidance</div><div class="polaris-metric-value gold">' + escapeHtml(presentation.customerPriceText) + '</div></div>' +
         '<div><div class="polaris-metric-label">Confidence</div><div class="polaris-metric-value">' + escapeHtml(presentation.confidenceText) + '</div></div>' +
-        '<div><div class="polaris-metric-label">Gross Profit</div><div class="polaris-metric-value">' + escapeHtml(presentation.grossProfitText) + '</div></div>' +
+        '<div><div class="polaris-metric-label">Original gross profit estimate</div><div class="polaris-metric-value">' + escapeHtml(presentation.grossProfitText) + '</div></div>' +
       '</div>' +
       '<div class="polaris-reasoning"><strong>Recommended action:</strong> ' + escapeHtml(recommendation) + '</div>' +
     '</div>';

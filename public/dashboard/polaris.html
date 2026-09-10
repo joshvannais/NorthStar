@@ -1154,7 +1154,7 @@
           return 'The demo workspace has ' + currency(total) + ' in recorded customer-facing estimates. Profit is not calculated because authoritative labor, material, overhead, and tax inputs are intentionally absent; Polaris will not invent them.';
         }
         if (/pipeline|revenue|value/.test(normalized)) {
-          return 'The current demo pipeline contains ' + graphs.length + ' role-authorized records totaling ' + currency(total) + '. The largest recorded opportunity is ' + top.customer.name + ' — ' + top.lead.serviceLabel + ' at ' + currency(top.estimate.customerPrice) + '.';
+          return 'The original demo estimates cover ' + graphs.length + ' records totaling ' + currency(total) + '. The largest original estimate is ' + top.customer.name + ' — ' + top.lead.serviceLabel + ' at ' + currency(top.estimate.customerPrice) + '.';
         }
         if (/attention|urgent|follow.?up/.test(normalized)) {
           if (!attention.length) return 'No current demo lead is marked hot, follow-up, or needs-information.';

@@ -415,7 +415,7 @@ class CalendarRenderer {
     var todayValue = unavailable ? '\u2014' : todayEvents.length;
     var totalValue = unavailable ? '\u2014' : totalEvents;
     var pipelineText = unavailable || pipelineValue == null ? '\u2014' : '$' + Number(pipelineValue).toLocaleString();
-    var pipelineNote = unavailable ? 'Loading' : pipelineValue == null ? 'No recorded estimate' : 'Recorded estimate total';
+    var pipelineNote = unavailable ? 'Loading' : pipelineValue == null ? 'No recorded estimate' : 'Original estimate total';
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill"><span class="cal-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments this month</span></span>

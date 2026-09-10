@@ -202,7 +202,7 @@ window.CustomerDetail = (function() {
     html += '      <div class="drawer-section">';
     html += '        <h3 id="cdJobSectionHeading">Job Details</h3>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Service</span><span class="drawer-detail-value" id="cdService">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Estimated Value</span><span class="drawer-detail-value" id="cdEstValue">\u2014</span></div>';
+    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Original estimated value</span><span class="drawer-detail-value" id="cdEstValue">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Opportunity Stage</span><span class="drawer-detail-value" id="cdStage">\u2014</span></div>';
     html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Close Probability</span><span class="drawer-detail-value" id="cdProb">\u2014</span></div>';
     html += '      </div>';
@@ -214,9 +214,9 @@ window.CustomerDetail = (function() {
     html += '        <div class="drawer-polaris-insight" id="cdPolarisInsight">';
     html += '          <div class="drawer-polaris-grid">';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Summary</div><div class="drawer-polaris-item-value" id="cdPolSummary">\u2014</div></div>';
-    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Pricing Recommendation</div><div class="drawer-polaris-item-value" id="cdPolPrice">\u2014</div></div>';
+    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Original price guidance</div><div class="drawer-polaris-item-value" id="cdPolPrice">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Confidence</div><div class="drawer-polaris-item-value" id="cdPolConfidence">\u2014</div></div>';
-    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Revenue Opportunity</div><div class="drawer-polaris-item-value" id="cdPolRevenue">\u2014</div></div>';
+    html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Original revenue estimate</div><div class="drawer-polaris-item-value" id="cdPolRevenue">\u2014</div></div>';
     html += '            <div class="drawer-polaris-item"><div class="drawer-polaris-item-label">Recommended Action</div><div class="drawer-polaris-item-value" id="cdPolAction">\u2014</div></div>';
     html += '          </div>';
     html += '          <details class="drawer-polaris-analysis">';
@@ -232,8 +232,8 @@ window.CustomerDetail = (function() {
     html += '            </div>';
     html += '          </details>';
     html += '          <details class="drawer-polaris-pricing">';
-    html += '            <summary>Complete price breakdown</summary>';
-    html += '            <div id="cdPricingBreakdown"><p>No estimate details are available to this account.</p></div>';
+    html += '            <summary>Estimate costs and price review</summary>';
+    html += '            <p>Original price breakdown. Material changes and human price decisions are shown in the estimate review below.</p><div id="cdPricingBreakdown"><p>No estimate details are available to this account.</p></div>';
     html += '            <section aria-label="Estimate review" style="margin-top:1rem">';
     html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
     html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
@@ -684,7 +684,7 @@ window.CustomerDetail = (function() {
       communicationId: typeof options.communicationId === 'string' ? options.communicationId : null
     };
 
-    _decisionDraft = null; _materialPlanDraft = null; _estimateReview = null;
+    _decisionDraft = null; _materialPlanDraft = null; _adoptionDraft = null; _selectedEstimateRevision = null; _estimateReview = null;
     // Ensure drawer HTML is injected
     injectDrawerHTML();
     _returnFocus = document.activeElement && typeof document.activeElement.focus === 'function'
@@ -730,7 +730,7 @@ window.CustomerDetail = (function() {
   }
 
   function decisionReviewBasis(review) {
-    var state = review.decisions, current = state.current;
+    var state = review.decisions, current = state.writeBasis || state.current;
     return JSON.stringify({ pins: review.pins, recordedAt: review.recordedAt, currency: review.currency,
       revision: current ? current.revision : 0, digest: current ? current.digest : 'none',
       demoRevision: review.demoWorkspaceRevision, canApprove: state.canApprove, canWithdraw: state.canWithdraw });
@@ -790,7 +790,7 @@ window.CustomerDetail = (function() {
     var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.style.marginLeft = '0.75rem'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); focusDecisionAction(draft.action); }; form.appendChild(cancel);
     form.onsubmit = function (event) {
       event.preventDefault(); if (!form.reportValidity() || !_estimateReview || !reviewPinsMatch(_estimateReview, _currentData && _currentData.canonical)) return;
-      var review = _estimateReview, generation = _openSequence, state = review.decisions, current = state.current;
+      var review = _estimateReview, generation = _openSequence, state = review.decisions, current = state.writeBasis || state.current;
       if (!draft.request) draft.request = { key: crypto.randomUUID(), body: { action: draft.action, expectedRevision: current ? current.revision : 0, expectedDigest: current ? current.digest : 'none', sourcePins: review.pins,
         scopeSummary: draft.action === 'approve' ? draft.scope.trim() : null, priceBeforeTax: draft.action === 'approve' ? draft.price : null, currency: review.currency, reason: draft.reason.trim(), confirmed: draft.confirmed, confirmationVersion: 'estimate-quote-preparation-v1' }, demoRevision: review.demoWorkspaceRevision };
       var attempt = draft.request; Array.prototype.forEach.call(form.elements, function (control) { control.disabled = true; }); status.textContent = 'Saving decision.';
@@ -818,10 +818,10 @@ window.CustomerDetail = (function() {
       p.calculationVersion === selected.calculationVersion &&
       p.normalizedInputFingerprint === selected.normalizedInputFingerprint &&
       p.businessProfileId === profile.id && p.businessProfileVersion === profile.version && p.businessProfileHash === profile.hash &&
-      review.recordedAt === selected.snapshotCreatedAt;
+      (p.revision ? review.originalRecordedAt === selected.snapshotCreatedAt && p.revision.number === review.selectedRevision && p.revision.calculationVersion === 'estimate-material-adoption-v1' : review.recordedAt === selected.snapshotCreatedAt);
   }
 
-  var _materialPlanDraft = null;
+  var _materialPlanDraft = null, _adoptionDraft = null, _selectedEstimateRevision = null;
   function materialPlanBasis(review) {
     var plan=review.materialPlans;
     return JSON.stringify({pins:review.pins,decision:plan&&plan.decisionBasis,current:plan&&plan.current&&{id:plan.current.id,revision:plan.current.revision,digest:plan.current.digest},allowed:plan&&plan.canMutate,currency:review.currency});
@@ -834,8 +834,9 @@ window.CustomerDetail = (function() {
     var current=plans.current;
     function showResult(result,target){var p=document.createElement('p');p.textContent='Required: '+result.quantity+' '+result.unitLabel+'. Extra for waste: '+result.additionalQuantity+' '+result.unitLabel+'. Planned quantity: '+result.plannedQuantity+' '+result.unitLabel+'. Price per unit: '+decisionMoney(result.unitPrice,result.currency)+'. Planned material cost: '+decisionMoney(result.total,result.currency)+'. '+result.rounding;p.style.overflowWrap='anywhere';target.appendChild(p);}
     if(current&&current.action==='save'){
-      para('Material plan: '+current.inputs.material);showResult(current.result,root);
-      para((current.expectedDecisionRevision===0?(current.decisionBasisCurrent?'No human scope and price decision was recorded when this plan was saved.':'A scope and price decision was recorded after this plan. Review the plan again before using it.'):(current.decisionBasisCurrent?'Saved with the current scope and price decision.':'The scope and price decision has changed. Review this plan again before using it.'))+' This plan does not change the saved estimate or customer price.');
+      para('Latest material plan: '+current.inputs.material);showResult(current.result,root);
+      para(!current.sourceBasisCurrent?'This plan was saved for a different estimate in this job’s history.':current.expectedDecisionRevision===0&&plans.decisionBasis.revision===0?'No human scope and price decision was recorded when this plan was saved.':current.decisionBasisCurrent?'Saved with the selected estimate’s current scope and price decision.':'The scope and price decision has changed since this plan was saved. Review the plan again before using it.');
+      para('Saving or editing a material plan does not automatically change an estimate or customer price.');
       para('Price source: '+(current.inputs.sourceType==='my_estimate'?'My cost estimate. ':'Price information entered by a person. ')+current.inputs.sourceNote+' Price date: '+(current.inputs.priceDate||'Not provided')+'. Availability has not been verified.');
     }else para(current?'The material plan was withdrawn. Its history remains available.':'No material plan has been saved for this estimate.');
     if(plans.history.length){var history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Material plan history';history.appendChild(summary);plans.history.forEach(function(e){var p=document.createElement('p');p.textContent=(e.action==='save'?'Saved material plan':'Withdrew material plan')+' — '+e.actorName+' — '+new Date(e.createdAt).toLocaleString()+(e.result?' — '+decisionMoney(e.result.total,e.currency):'')+'. '+e.reason;history.appendChild(p);});if(plans.truncated){var note=document.createElement('p');note.textContent='Showing the latest 20 entries. Earlier history is retained.';history.appendChild(note);}root.appendChild(history);}
@@ -874,6 +875,57 @@ window.CustomerDetail = (function() {
     if(draft.action==='save')formButton('Calculate material cost',function(){send(true);});formButton(draft.action==='save'?'Save material plan':'Confirm material withdrawal',function(){send(false);});formButton('Cancel material plan',function(){_materialPlanDraft=null;render();focusStart();});form.onsubmit=function(e){e.preventDefault();};
   }
 
+  function renderRevisionSelector(review,parent) {
+    if (!review.currentRevision) return;
+    var label=document.createElement('label');label.textContent='Estimate history';label.style.cssText='display:block;margin-bottom:0.75rem;';
+    var select=document.createElement('select');select.id='cdEstimateRevisionSelect';select.style.cssText='display:block;max-width:100%;padding:0.65rem;color:#172033;background:white;color-scheme:light;';
+    function option(value,text){var o=document.createElement('option');o.value=String(value);o.textContent=text;select.appendChild(o);}
+    (review.revisionHistory||[]).forEach(function(entry){var date=new Date(entry.createdAt);option(entry.revision,(entry.revision===review.currentRevision?'Current estimate':'Earlier estimate')+(Number.isFinite(date.getTime())?' — '+date.toLocaleString():''));});
+    option(1,'Original estimate'+(review.currentRevision===1?' (current)':''));select.value=String(review.selectedRevision);
+    select.onchange=function(){_selectedEstimateRevision=Number(select.value);_decisionDraft=null;_materialPlanDraft=null;_adoptionDraft=null;refreshEstimateReview('revision-selected');};label.appendChild(select);parent.appendChild(label);
+    if(!review.isCurrent){var note=document.createElement('p');note.textContent='Viewing an earlier estimate. Select the current estimate to make changes.';parent.appendChild(note);}
+  }
+  function renderMaterialAdoption(review,parent) {
+    var root=document.createElement('section');root.id='cdMaterialAdoption';parent.appendChild(root);
+    function para(value){var p=document.createElement('p');p.textContent=value;p.style.overflowWrap='anywhere';root.appendChild(p);return p;}
+    function button(label,fn,id){var b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent=label;b.id=id||'';b.style.margin='0.5rem 0.5rem 0 0';b.onclick=fn;root.appendChild(b);return b;}
+    var plan=review.materialPlans&&review.materialPlans.current;
+    if(review.adoptionPaused){para('New estimate changes are paused. Saved estimates remain available.');return;}
+    if(!review.canAdopt||!plan||plan.action!=='save')return;
+    if(JSON.stringify(plan.sourcePins)!==JSON.stringify(review.pins)){para('Save the material plan against this current estimate before including it.');return;}
+    var basis=materialPlanBasis(review);
+    if(_adoptionDraft&&_adoptionDraft.basis!==basis){_adoptionDraft.result=null;_adoptionDraft.confirmed=false;_adoptionDraft.request=null;_adoptionDraft.basis=basis;_adoptionDraft.changed=true;}
+    function redraw(){root.remove();renderMaterialAdoption(review,parent);}
+    if(!_adoptionDraft){button('Use material plan in estimate',function(){_adoptionDraft={basis:basis,reason:'',confirmed:false,result:null,request:null};redraw();$('cdAdoptionReason').focus();},'cdAdoptionStart');return;}
+    var draft=_adoptionDraft,form=document.createElement('form');form.id='cdAdoptionForm';root.appendChild(form);
+    var intro=document.createElement('p');intro.textContent='Replace this estimate’s material cost with the saved plan. The original estimate stays in history. Review the job and price again afterward.';form.appendChild(intro);
+    var label=document.createElement('label');label.textContent='Reason for using this plan';label.style.display='block';
+    var reason=document.createElement('textarea');reason.id='cdAdoptionReason';reason.required=true;reason.maxLength=2000;reason.value=draft.reason;reason.style.cssText='display:block;width:100%;box-sizing:border-box;padding:0.65rem;color:#172033;background:white;';label.appendChild(reason);form.appendChild(label);
+    var result=document.createElement('p');result.id='cdAdoptionResult';form.appendChild(result);
+    function showResult(){result.textContent=draft.result?'New material cost: '+decisionMoney(draft.result.knownDirectMaterialCost,review.currency)+'. New recorded direct costs: '+decisionMoney(draft.result.knownDirectCosts,review.currency)+'. Original price and tax stay unchanged.':'';}showResult();
+    var confirmLabel=document.createElement('label'),confirm=document.createElement('input');confirm.id='cdAdoptionConfirm';confirm.type='checkbox';confirm.checked=draft.confirmed;confirmLabel.appendChild(confirm);confirmLabel.appendChild(document.createTextNode(' I reviewed these costs and want to use this material plan in a new estimate.'));form.appendChild(confirmLabel);
+    var status=document.createElement('p');status.id='cdAdoptionStatus';status.setAttribute('role','status');status.tabIndex=-1;status.textContent=draft.changed?'The saved information changed. Preview and confirm again.':'';form.appendChild(status);
+    reason.oninput=function(){draft.reason=reason.value;draft.confirmed=false;confirm.checked=false;draft.result=null;draft.request=null;showResult();};confirm.onchange=function(){draft.confirmed=confirm.checked;draft.request=null;};
+    function formButton(text,fn){var b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent=text;b.style.margin='0.5rem 0.5rem 0 0';b.onclick=fn;form.appendChild(b);}
+    function send(preview){
+      if(!form.reportValidity())return;if(!preview&&(!draft.result||!draft.confirmed)){status.textContent='Preview the costs, then confirm before saving.';status.focus();return;}
+      var body={sourcePins:review.pins,expectedPlanId:plan.id,expectedPlanRevision:plan.revision,expectedPlanDigest:plan.digest,expectedDecisionRevision:review.decisions.writeBasis.revision,expectedDecisionDigest:review.decisions.writeBasis.digest,reason:draft.reason.trim(),confirmed:preview?false:draft.confirmed,confirmationVersion:'estimate-material-adoption-v1'};
+      if(!preview&&!draft.request)draft.request={key:crypto.randomUUID(),body:body,demoRevision:review.demoWorkspaceRevision};
+      var attempt=preview?{key:crypto.randomUUID(),body:body,demoRevision:review.demoWorkspaceRevision}:draft.request;
+      var headers={'Content-Type':'application/json','Idempotency-Key':attempt.key};if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(attempt.demoRevision);
+      var generation=_openSequence;Array.prototype.forEach.call(form.elements,function(c){c.disabled=true;});status.textContent=preview?'Preparing cost review.':'Saving estimate.';
+      window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/'+encodeURIComponent(review.pins.estimateId)+(preview?'/material-adoption-preview':'/material-adoptions'),{method:'POST',headers:headers,body:JSON.stringify(attempt.body)}).then(function(response){return response.json().catch(function(){return {};}).then(function(data){if(!response.ok)throw {status:response.status};return data;});}).then(function(data){
+        if(generation!==_openSequence||_adoptionDraft!==draft||_estimateReview!==review)return;
+        if(preview){if(!data.success||JSON.stringify(data.data.sourcePins)!==JSON.stringify(review.pins)||data.data.planId!==plan.id||data.data.planDigest!==plan.digest||JSON.stringify(data.data.decisionBasis)!==JSON.stringify(review.decisions.writeBasis))throw {status:409};draft.result=data.data.result;draft.confirmed=false;confirm.checked=false;showResult();status.textContent='Review these costs, then confirm to save.';}
+        else{_adoptionDraft=null;_decisionDraft=null;_materialPlanDraft=null;_selectedEstimateRevision=null;refreshEstimateReview('adoption-saved');}
+      }).catch(function(error){if(generation!==_openSequence||_adoptionDraft!==draft||_estimateReview!==review)return;
+        status.textContent=error.status===401?'Sign in again, then reopen this estimate.':error.status===403?'Your current account cannot change this estimate.':error.status===409?'The estimate or material plan changed. Refresh and review again.':error.status===400?'Check the material plan and reason before continuing.':error.status===429?'The estimate-change limit was reached. Review the saved history.':error.status===503?'New estimate changes are unavailable. Refresh to check the saved estimate.':'The save could not be confirmed. Retry this same attempt before changing your entries.';
+        if([400,401,403,409,429,503].indexOf(error.status)>=0){draft.confirmed=false;confirm.checked=false;draft.result=null;draft.request=null;showResult();}
+      }).finally(function(){if(generation===_openSequence&&_adoptionDraft===draft&&_estimateReview===review){Array.prototype.forEach.call(form.elements,function(c){c.disabled=false;});status.focus();}});
+    }
+    formButton('Preview estimate costs',function(){send(true);});formButton('Save new estimate',function(){send(false);});formButton('Cancel estimate change',function(){_adoptionDraft=null;redraw();var start=$('cdAdoptionStart');if(start)start.focus();});form.onsubmit=function(e){e.preventDefault();};
+  }
+
   function renderMaterialReview(review, parent) {
     var details = document.createElement('details'); details.id = 'cdMaterialReview';
     var summary = document.createElement('summary'); summary.textContent = 'Material basis'; details.appendChild(summary);
@@ -882,7 +934,14 @@ window.CustomerDetail = (function() {
     var matches = material && material.contract === 'NorthStarMaterialReview/v1' &&
       JSON.stringify(material.sourcePins) === JSON.stringify(review.pins) && material.recordedAt === review.recordedAt &&
       material.currency === review.currency && material.simulated === review.simulated;
-    if (!matches) paragraph('Material information is unavailable. Refresh this estimate to try again.');
+    if (review.adoptedMaterialPlan) {
+      var adopted=review.adoptedMaterialPlan,inputs=adopted.inputs;
+      paragraph('Included material: '+inputs.material+'. Recorded material cost: '+decisionMoney(review.financialCosts.knownDirectMaterialCost,review.currency)+'.');
+      paragraph('Required quantity: '+inputs.quantity+' '+review.financialCosts.material.unitLabel+'. Waste allowance: '+inputs.wastePercent+'%. Planned quantity: '+review.financialCosts.material.plannedQuantity+'.');
+      paragraph('Entered unit price: '+decisionMoney(inputs.unitPrice,review.currency)+'. '+inputs.sourceNote);
+      paragraph(inputs.priceDate?'Entered price date: '+inputs.priceDate+'. Current availability is unverified.':'The price date and current availability are unverified.');
+      if(review.materialPlans&&review.materialPlans.current&&review.materialPlans.current.id!==adopted.id)paragraph('The material plan has changed since it was included. This estimate keeps the plan shown above until you deliberately use a newer plan.');
+    } else if (!matches) paragraph('Material information is unavailable. Refresh this estimate to try again.');
     else {
       paragraph(material.materialState === 'recorded' && typeof material.material === 'string' ? 'Material: ' + material.material : material.materialState === 'unspecified' ? 'Material not specified.' : 'The material description is unavailable.');
       paragraph('Recorded material cost: ' + decisionMoney(material.amount, review.currency));
@@ -894,6 +953,7 @@ window.CustomerDetail = (function() {
       if (material.simulated) paragraph('This example uses fictional material information.');
     }
     renderMaterialPlan(review,details);
+    renderMaterialAdoption(review,details);
     parent.appendChild(details);
   }
 
@@ -928,7 +988,7 @@ window.CustomerDetail = (function() {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
-    var restoreFocus = focusReason === 'material-saved' || focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
+    var restoreFocus = focusReason === 'adoption-saved' || focusReason === 'revision-selected' || focusReason === 'material-saved' || focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
     _estimateReview = null; $('cdEstimateDecision').replaceChildren();
     $('cdCapellaReview').replaceChildren(); $('cdCapellaReview').hidden = true;
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
@@ -938,7 +998,7 @@ window.CustomerDetail = (function() {
     if (!selected || !selected.ids || !selected.ids.estimate) {
       unavailable('No estimate is available for this customer.'); root.setAttribute('aria-busy', 'false'); return;
     }
-    window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/' + encodeURIComponent(selected.ids.estimate) + '/review', { cache: 'no-store' })
+    window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/' + encodeURIComponent(selected.ids.estimate) + '/review' + (_selectedEstimateRevision === null ? '' : '?revision=' + encodeURIComponent(_selectedEstimateRevision)), { cache: 'no-store' })
       .then(function(response) {
         if (!response.ok) { var error = new Error('review unavailable'); error.status = response.status; throw error; }
         return response.json();
@@ -948,6 +1008,7 @@ window.CustomerDetail = (function() {
         if (!reviewPinsMatch(review, selected)) { unavailable('The estimate has changed. Close this panel and reopen the customer to review it.'); return; }
         root.replaceChildren();
         function paragraph(text) { var node = document.createElement('p'); node.style.margin = '0 0 0.75rem'; node.textContent = text; root.appendChild(node); }
+        renderRevisionSelector(review,root);
         if (review.simulated) paragraph('Demo example using fictional company and job information.');
         paragraph(review.approvalMessage);
         paragraph(review.basisMessage);
@@ -957,11 +1018,13 @@ window.CustomerDetail = (function() {
         (review.rows || []).forEach(function(row) {
           var rowNode = document.createElement('div'); rowNode.className = 'drawer-pricing-item';
           var term = document.createElement('span'), detail = document.createElement('span');
+          rowNode.style.gap='0.75rem';term.style.minWidth='0';detail.style.whiteSpace='nowrap';detail.style.flexShrink='0';
           term.textContent = row.label;
           if (typeof row.amount === 'number' && Number.isFinite(row.amount)) {
             try { detail.textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency: review.currency }).format(row.amount); }
             catch (_error) { detail.textContent = 'Currency unavailable'; }
-          } else detail.textContent = 'Unavailable';
+          } else if (typeof row.amount === 'string') detail.textContent = decisionMoney(row.amount,review.currency);
+          else detail.textContent = row.sourceState==='not_applicable'?'Not applicable':'Unavailable';
           rowNode.appendChild(term); rowNode.appendChild(detail); list.appendChild(rowNode);
         }); root.appendChild(list);
         renderMaterialReview(review, root);
@@ -976,7 +1039,7 @@ window.CustomerDetail = (function() {
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?
           'Estimate review is available to current owners and administrators.' : error.status === 404 ?
           'This estimate is no longer available. Reopen the customer to try again.' : 'Estimate review could not be loaded. Try refreshing it.');
-      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if (restoreFocus) { if (focusReason === 'material-saved') { var material=$('cdMaterialReview');if(material){material.open=true;var action=material.querySelector('#cdMaterialPlan button');if(action)action.focus();else button.focus();} } else if (focusReason === 'decision-saved') focusDecisionAction('approve'); else button.focus(); } } });
+      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if (restoreFocus) { if (focusReason === 'material-saved') { var material=$('cdMaterialReview');if(material){material.open=true;var action=material.querySelector('#cdMaterialPlan button');if(action)action.focus();else button.focus();} } else if (focusReason === 'decision-saved' || focusReason === 'adoption-saved') focusDecisionAction('approve'); else if(focusReason==='revision-selected'&&$('cdEstimateRevisionSelect'))$('cdEstimateRevisionSelect').focus(); else button.focus(); } } });
   }
 
   function populateDrawer(data) {

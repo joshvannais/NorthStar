@@ -14,7 +14,7 @@ function projectDecisions(state, enabled, simulated=false) {
  const fields=['id','revision','digest','previousId','action','actorName','createdAt','sourcePins','scopeSummary','priceBeforeTax','currency','reason','confirmationVersion'];
  const project=event=>event?Object.fromEntries(fields.map(key=>[key,event[key]])):null;
  const current=project(state.current);
- return {current,history:(state.history||[]).map(project),total:state.total||0,truncated:state.truncated===true,simulated,canApprove:enabled,canWithdraw:enabled&&current?.action==='approve',
+ return {current,writeBasis:state.writeBasis || {revision:state.current?.revision||0,digest:state.current?.digest||'none'},history:(state.history||[]).map(project),total:state.total||0,truncated:state.truncated===true,simulated,canApprove:enabled,canWithdraw:enabled&&current?.action==='approve',
   status:current?.action==='approve'?'approved_for_quote_preparation':current?'withdrawn':'not_recorded_here',
   message:!current?'Approval is not recorded here. Confirm the job and price before preparing a customer quote.':current.action==='approve'?'Scope and price approved for quote preparation. Nothing has been sent to the customer.':'The approval was withdrawn. Review the job and price before preparing a quote.',
   recoveryMessage:enabled?null:'New decisions are paused. Saved reviews and history remain available.'};
@@ -24,7 +24,7 @@ function demoDecision(state, item, body, key, actorName, now) {
  const digest=sha256(value),replay=history.find(event=>event.requestKey===key);
  if(replay){if(replay.requestDigest!==digest)throw Object.assign(new Error('That save attempt was already used for different details.'),{status:409,code:'ESTIMATE_DECISION_CONFLICT'});return {history,receipt:replay,replayed:true};}
  if(value.expectedRevision!==(current?.revision||0)||value.expectedDigest!==(current?.digest||'none')||sha256(value.sourcePins)!==sha256(item.pins)||value.currency!==item.currency)throw Object.assign(new Error('The review changed. Refresh and review your entries before saving.'),{status:409,code:'ESTIMATE_DECISION_CONFLICT'});
- if(value.action==='withdraw'&&current?.action!=='approve')throw invalid();if(history.length>=20)throw Object.assign(new Error('This demo has reached its review limit. Reset the demo to practice again.'),{status:429,code:'DEMO_REVIEW_LIMIT'});
+ if(value.action==='withdraw'&&(current?.action!=='approve'||sha256(current.sourcePins)!==sha256(item.pins)))throw invalid();if(history.length>=20)throw Object.assign(new Error('This demo has reached its review limit. Reset the demo to practice again.'),{status:429,code:'DEMO_REVIEW_LIMIT'});
  const receipt={id:require('node:crypto').randomUUID(),revision:(current?.revision||0)+1,previousId:current?.id||null,action:value.action,sourcePins:item.pins,scopeSummary:value.scopeSummary,priceBeforeTax:value.priceBeforeTax,currency:item.currency,reason:value.reason,confirmationVersion:VERSION,actorName,createdAt:now.toISOString(),digest:sha256({digest,prior:current?.digest||null}),requestKey:key,requestDigest:digest};
  return {history:[receipt,...history],receipt,replayed:false};
 }

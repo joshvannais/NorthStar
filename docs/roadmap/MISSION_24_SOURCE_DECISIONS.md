@@ -42,4 +42,3 @@ Local artifact root: `C:/Users/joshv/Documents/Codex/2026-09-09/view-northstar-m
 | `m24-authority-plan-29c4ce9/MISSION_24_PHASE_1_PLAN_RECONCILED.md` | `b6ecc5211d933e039ab4582a3430dd965eb575f5413bdf0cff5637f059ea2770`; additive revision, original plan preserved. |
 
 The retrospective report's exact SHA-256 is `dda651d51bcc83bfd0f5a24843642b4afbd0e121782adff18e7956ae051df85f`. Its source distinctions control over assistant naming shorthand. Root's `MISSION_24_ADDITIONS_RECONCILIATION.md` independently reconciles these sources. `m23-part11-sealed-handoff/authorities/SUCCESSOR_HANDOFF.md` 151–161 preserves successor authority; its compressed document-only Capella description is expanded here to retain the explicit Risk Lens decision. No historical source has been overwritten.
-

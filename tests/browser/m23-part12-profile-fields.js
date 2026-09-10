@@ -271,7 +271,10 @@ async function main() {
       await material.getByLabel('Material', {exact:true}).fill('');
       assert.deepStrictEqual((await read()).material, {'fence:':0, 'Retained legacy material':17, ':legacy':5});
       await material.getByRole('button', {name:'Add cost',exact:true}).click();
-      assert.deepStrictEqual((await read()).material, {'fence:':0, 'Retained legacy material':17, ':legacy':5});
+      await material.getByLabel('Material for new cost',{exact:true}).fill('cedar');
+      await material.getByLabel('New internal cost',{exact:true}).fill('9');
+      await material.getByRole('button',{name:'Add this cost',exact:true}).click();
+      assert.deepStrictEqual((await read()).material, {'fence:':0, 'Retained legacy material':17, ':legacy':5, 'fence:cedar':9});
       ledger.cases.push({width,unspecifiedMaterialAndArbitraryReferencesRetained:true,duplicateAddCannotOverwrite:true});
       await page.screenshot({path:path.join(output, theme+'-'+width+'-legacy-material.png'),fullPage:true});
 

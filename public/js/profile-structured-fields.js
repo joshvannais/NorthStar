@@ -128,6 +128,7 @@
     var state = copy(initial),
       unresolved = !shape(kind, state),
       issue = '',
+      pendingCost = null,
       fieldErrors = new Map();
     carrier.value = state === undefined ? '' : JSON.stringify(state);
     var host = document.createElement('fieldset');
@@ -167,8 +168,8 @@
       attributeFilter: ['disabled']
     });
     function emit() {
-      carrier.value = fieldErrors.size || issue ? 'Unresolved form entry' : state === undefined ? '' : JSON.stringify(state);
-      carrier.dataset.structuredInvalid = issue || fieldErrors.size || unresolved ? 'true' : 'false';
+      carrier.value = fieldErrors.size || issue || pendingCost ? 'Unresolved form entry' : state === undefined ? '' : JSON.stringify(state);
+      carrier.dataset.structuredInvalid = issue || fieldErrors.size || unresolved || pendingCost ? 'true' : 'false';
       carrier.dispatchEvent(new Event('input', {
         bubbles: true
       }));
@@ -641,6 +642,23 @@
           rerender();
         }, row);
       });
+      if (pendingCost) {
+        var draft = el('div', undefined, content);
+        draft.className = 'profile-structured-row';
+        el('strong', 'New material cost', draft);
+        var services = {};
+        (options.services || []).forEach(function (s) { services[String(s.id).trim().toLowerCase()] = s.name || 'Service'; });
+        select('Service for new cost', pendingCost.service, services, function (v) { pendingCost.service = v; }, draft);
+        input('Material for new cost', pendingCost.material, function (v) { pendingCost.material = v.toLowerCase(); }, draft);
+        input('New internal cost', pendingCost.amount, function (v) { pendingCost.amount = v; }, draft, 'number', 0);
+        button('Add this cost', function () {
+          var reference = pendingCost.service + ':' + pendingCost.material;
+          if (own(state, reference)) { status.textContent = 'A cost already exists for this service and material. Choose another material or edit the existing cost.'; return; }
+          if (!number(pendingCost.amount, 0)) { status.textContent = 'Enter the internal cost before adding it.'; return; }
+          state[reference] = pendingCost.amount; pendingCost = null; rerender();
+        }, draft);
+        button('Cancel new cost', function () { pendingCost = null; rerender(); }, draft);
+      }
       button('Add cost', function () {
         var prefix = kind === 'material' ? String(((options.services || [])[0] || {}).id || '').trim().toLowerCase() : undefined;
         if (kind === 'material' && !prefix) {
@@ -649,7 +667,8 @@
         }
         if (Object.keys(state).length && validate(kind, state)) { status.textContent = 'Complete the current cost row before adding another.'; return; }
         var k = kind === 'material' ? prefix + ':' : '';
-        if (own(state, k)) { status.textContent = 'Complete or edit the existing unspecified-material cost before adding another for this service.'; return; }
+        if (pendingCost) { status.textContent = 'Finish or cancel the new material cost first.'; return; }
+        if (own(state, k)) { pendingCost = {service: prefix, material: '', amount: null}; rerender(); return; }
         state[k] = null;
         rerender();
       });
@@ -730,12 +749,13 @@
         state = copy(value);
         unresolved = !shape(kind, state);
         fieldErrors.clear();
+        pendingCost = null;
         issue = '';
         carrier.value = state === undefined ? '' : JSON.stringify(state);
         draw();
       },
       read: function () {
-        var message = issue || Array.from(fieldErrors.values())[0] || (unresolved ? 'Review or explicitly replace the unresolved settings before saving.' : validate(kind, state));
+        var message = issue || Array.from(fieldErrors.values())[0] || (pendingCost ? 'Finish or cancel the new material cost before saving.' : '') || (unresolved ? 'Review or explicitly replace the unresolved settings before saving.' : validate(kind, state));
         if (message) {
           status.textContent = message;
           throw new Error(message);

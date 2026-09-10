@@ -1,0 +1,15 @@
+'use strict';
+const {createInitialDemoState,buildDemoWorkspace,demoCanonicalItems}=require('../../src/commandCenter/workspace');
+const {calculateCanonicalPolaris}=require('../../src/services/canonicalPolarisCalculation');
+const {sha256}=require('../../src/services/businessProfileAdapter');
+const {buildEstimateReview}=require('../../src/services/estimateReview');
+const {buildCapellaReview}=require('../../src/estimating/capellaReview');
+const tenant='00000000-0000-4000-8000-000000000101',date=new Date('2026-09-10T00:00:00Z');
+function workspace(state){return buildDemoWorkspace({tenantId:tenant,state,revision:1,sessionId:'00000000-0000-4000-8000-000000000102',expiresAt:'2026-09-11T00:00:00Z',persisted:true,simulationCount:0});}
+test.each(Array.from({length:12},(_,i)=>'capella-demo-'+i))('new/reset ordinary %s example binds canonical input/profile and preserves incomplete peers',seed=>{
+ const state=createInitialDemoState(tenant,date,{seed}),graph=state.graphs[0],input=graph.polaris.syntheticCalculation.input;
+ expect(graph.polaris.snapshot).toEqual(calculateCanonicalPolaris(input));expect(graph.polaris.snapshotDigest).toBe(sha256(graph.polaris.snapshot));expect(graph.polaris.snapshot.knownDirectCosts).toBe(1406);expect(graph.polaris.snapshot.customerFacingPrice).toBe(state.workspace.jobs[0].estimatedValue);
+ expect(input.businessProfileAuthority.profileHash).toBe(sha256(input.businessProfile));const items=demoCanonicalItems(workspace(state)),review=buildEstimateReview(items[0],{simulated:true});expect(review.pins.normalizedInputFingerprint).toBe(graph.polaris.snapshot.normalizedInputFingerprint);expect(review.pins.businessProfileId).toBe(input.businessProfileAuthority.id);expect(review.pins.businessProfileVersion).toBe(input.businessProfile.version);expect(review.pins.businessProfileHash).toBe(sha256(input.businessProfile));
+ review.decisions={current:{id:'synthetic-unit-decision',revision:1,digest:'synthetic-digest',action:'approve',sourcePins:review.pins,currency:review.currency,priceBeforeTax:'2000.00'}};expect(buildCapellaReview(review,items[0].snapshot).remainingAfterDirectCosts).toBe('594.00');review.decisions.current.priceBeforeTax='100.00';expect(buildCapellaReview(review,items[0].snapshot).remainingAfterDirectCosts).toBe('-1306.00');expect(items[1].snapshot.knownDirectCosts).toBeUndefined();expect(items[1].calculationVersion).toBe('command-center-demo-v1');
+});
+test('existing stored graphs and decisions are not recalculated when read by new workspace',()=>{const fixture=require('../fixtures/m24-demo-pre-slice4.json');const state=structuredClone(fixture.state),before=JSON.stringify(state);const result=workspace(state);expect(result.graphs).toEqual(state.graphs);expect(JSON.stringify(state)).toBe(before);const oldReview=buildEstimateReview(demoCanonicalItems(result)[0],{simulated:true});expect(oldReview.pins).toEqual(fixture.reviewPins);expect(oldReview.rows.find(r=>r.label==='Recorded direct costs').amount).toBeNull();expect(state.estimateDecisions).toEqual(fixture.state.estimateDecisions);});

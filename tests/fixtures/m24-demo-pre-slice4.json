@@ -1,0 +1,1710 @@
+{
+  "source": "7881bd27d5164ec6fcd7eca79604310b7da54099; synthetic fixture only",
+  "state": {
+    "createdAt": "2026-09-10T00:00:00.000Z",
+    "generation": 1,
+    "graphs": [
+      {
+        "businessProfile": {
+          "businessKey": "seeded_fictional_workspace",
+          "company": "Truefield Harbor Example Home Services",
+          "crewCount": 2,
+          "description": "Fictional whole-home service contractor created only for this isolated NorthStar demo.",
+          "email": "truefield.harbor.office@example.com",
+          "headquarters": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.6,
+              "longitude": -122.3
+            },
+            "country": "US",
+            "fictional": true,
+            "formatted": "100 Example Service Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "state": "WA",
+            "street": "100 Example Service Way",
+            "timeZone": "America/Los_Angeles"
+          },
+          "hours": "Monday-Friday, 8:00 AM-5:00 PM",
+          "industry": "Whole-home repair and improvement",
+          "mode": "fictional_read_only",
+          "ownerName": "Riley Fixture",
+          "phone": "(206) 555-0101",
+          "pricingModel": "Fictional recorded labor, material, travel, and review inputs",
+          "readiness": {
+            "guidance": "Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile.",
+            "items": [
+              {
+                "label": "Dispatch origin",
+                "state": "reviewed"
+              },
+              {
+                "label": "Service area",
+                "state": "reviewed"
+              },
+              {
+                "label": "Operating hours",
+                "state": "reviewed"
+              },
+              {
+                "label": "Customer guidance",
+                "state": "needs_review"
+              },
+              {
+                "label": "Financial configuration",
+                "state": "needs_review"
+              },
+              {
+                "label": "Voice assistant configuration",
+                "state": "needs_review"
+              }
+            ],
+            "label": "Review needed",
+            "separation": "Profile Readiness is separate from integration status and uses clear categories for recognized details.",
+            "state": "needs_review"
+          },
+          "serviceArea": "Example Harbor fictional service territory",
+          "serviceRadiusMiles": 29,
+          "serviceZones": [
+            "Harbor Example Zone",
+            "Central Example Zone",
+            "Evergreen Example Zone"
+          ],
+          "services": [
+            {
+              "estimate": 6800,
+              "id": "52f01511-c179-58d5-b157-104312c5f039",
+              "industryCompatibility": "residential_home_services",
+              "key": "fence",
+              "label": "Fence installation"
+            },
+            {
+              "estimate": 14800,
+              "id": "18b1b5d9-dcca-50f8-b516-8e7c8b59f25f",
+              "industryCompatibility": "residential_home_services",
+              "key": "roofing",
+              "label": "Roof replacement"
+            },
+            {
+              "estimate": 9600,
+              "id": "ab947c79-4b3f-545a-9ab9-aeef198cfaee",
+              "industryCompatibility": "residential_home_services",
+              "key": "hvac",
+              "label": "HVAC service"
+            },
+            {
+              "estimate": 2850,
+              "id": "4797d003-2502-5883-b634-34555263b98e",
+              "industryCompatibility": "residential_home_services",
+              "key": "plumbing",
+              "label": "Plumbing service"
+            },
+            {
+              "estimate": 4250,
+              "id": "7e02801a-8c67-565b-bf89-a271370ccc15",
+              "industryCompatibility": "residential_home_services",
+              "key": "electrical",
+              "label": "Electrical service"
+            },
+            {
+              "estimate": 11200,
+              "id": "3fe1b938-282f-50f7-9074-411a01fb2a34",
+              "industryCompatibility": "residential_home_services",
+              "key": "concrete",
+              "label": "Concrete installation"
+            }
+          ],
+          "timeZone": "America/Los_Angeles",
+          "voiceAssistant": {
+            "greeting": "Thank you for calling Truefield Harbor Example Home Services. How can I help today?",
+            "name": "NorthStar Office Manager"
+          }
+        },
+        "communication": {
+          "channel": "voice",
+          "direction": "inbound",
+          "id": "0e9255fe-40fc-58d5-934b-a936584e7e98",
+          "intent": null,
+          "subject": "Fence installation for a fictional customer in Central Example Zone.",
+          "transcript": []
+        },
+        "customer": {
+          "address": "463 Demo Way, Example Harbor, WA 00000",
+          "context": null,
+          "email": "cameron.example.1@example.com",
+          "fictional": true,
+          "id": "eecee01f-2094-5f2b-8325-af22d70df855",
+          "location": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.278482,
+              "longitude": -122.392684
+            },
+            "country": "US",
+            "distanceMiles": 22.63,
+            "fictional": true,
+            "formatted": "463 Demo Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Central Example Zone",
+            "state": "WA",
+            "street": "463 Demo Way",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "name": "Cameron Example",
+          "phone": "(206) 555-0145"
+        },
+        "estimate": {
+          "currency": "USD",
+          "customerPrice": 6800,
+          "fictional": true,
+          "id": "ec0b5b03-19e2-5b6f-95ca-dfd704551dbf",
+          "lineItems": [
+            {
+              "category": "service",
+              "code": "fictional-demo-scope",
+              "customerCharge": 6800,
+              "label": "Fence installation scope"
+            }
+          ]
+        },
+        "ids": {
+          "appointment": "5266fd29-e7a8-5490-91b9-acd571518de3",
+          "communication": "0e9255fe-40fc-58d5-934b-a936584e7e98",
+          "customer": "eecee01f-2094-5f2b-8325-af22d70df855",
+          "estimate": "ec0b5b03-19e2-5b6f-95ca-dfd704551dbf",
+          "graph": "d1850e53-161d-5349-8adb-ef131684de19",
+          "lead": "2c9c4cbe-ebbd-584b-9cbd-a19c93b2d9d2",
+          "operation": "3d71f532-f694-5405-aab8-bb0ed0ea19b0",
+          "opportunity": "2c9c4cbe-ebbd-584b-9cbd-a19c93b2d9d2",
+          "polarisSnapshot": "44d9b0e2-f1aa-50c5-9f46-78abe670c6d3",
+          "work": "5266fd29-e7a8-5490-91b9-acd571518de3"
+        },
+        "lead": {
+          "callerIntent": null,
+          "id": "2c9c4cbe-ebbd-584b-9cbd-a19c93b2d9d2",
+          "outcome": null,
+          "serviceLabel": "Fence installation",
+          "serviceType": "fence",
+          "status": "hot",
+          "summary": "Fence installation for a fictional customer in Central Example Zone.",
+          "urgency": null
+        },
+        "polaris": {
+          "calculationVersion": "command-center-demo-v1",
+          "completeDetail": true,
+          "facts": [
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for customerDistanceMiles.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-1",
+              "normalizedValue": 22.63,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "customerDistanceMiles"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for gates.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-2",
+              "normalizedValue": 2,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "gates"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for height.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-3",
+              "normalizedValue": 6,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "height"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for jobType.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-4",
+              "normalizedValue": "replace",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "jobType"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for linearFeet.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-5",
+              "normalizedValue": 146,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "linearFeet"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for material.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-6",
+              "normalizedValue": "cedar",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "material"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for serviceRadiusMiles.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-7",
+              "normalizedValue": 29,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "serviceRadiusMiles"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for serviceZone.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-8",
+              "normalizedValue": "Central Example Zone",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "serviceZone"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for timeZone.",
+              "id": "seeded-job-4405f829-13c0-55f6-bf75-9ab977961690-fact-9",
+              "normalizedValue": "America/Los_Angeles",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "timeZone"
+            }
+          ],
+          "fictional": true,
+          "id": "44d9b0e2-f1aa-50c5-9f46-78abe670c6d3",
+          "snapshot": {
+            "calculationVersion": "command-center-demo-v1",
+            "confidence": {
+              "factors": [
+                {
+                  "factor": "fictionalDemoScope",
+                  "value": true
+                },
+                {
+                  "factor": "supportingFacts",
+                  "value": 9
+                },
+                {
+                  "factor": "roleAuthorizedDetail",
+                  "value": true
+                }
+              ],
+              "score": 84
+            },
+            "contract": "CanonicalPolarisOutput",
+            "customerFacingPrice": 6800,
+            "estimatedRevenue": 6800,
+            "grossMarginPercent": null,
+            "grossProfit": null,
+            "missingInformation": [],
+            "netMarginPercent": null,
+            "netProfit": null,
+            "notCalculated": [
+              {
+                "field": "knownDirectCosts",
+                "reason": "The account-free demo does not represent a contractor's authoritative cost configuration."
+              },
+              {
+                "field": "netProfit",
+                "reason": "Profit requires complete tenant-authored cost and overhead authority."
+              }
+            ],
+            "preliminaryRange": {
+              "high": 7480,
+              "low": 6120
+            },
+            "pricingLineItems": [
+              {
+                "category": "service",
+                "code": "fictional-demo-scope",
+                "customerCharge": 6800,
+                "label": "Fence installation scope"
+              }
+            ],
+            "reasoning": [
+              "The service request matches the fictional workspace service catalogue.",
+              "The customer location is inside the configured fictional service radius."
+            ],
+            "recommendedActions": [
+              {
+                "code": "review-fictional-job",
+                "label": "Review the fictional job and confirm the next step.",
+                "priority": "high"
+              }
+            ],
+            "risk": {
+              "emergency": false,
+              "evidence": null,
+              "signal": null
+            },
+            "service": {
+              "key": "fence",
+              "label": "Fence installation",
+              "scope": {
+                "customerDistanceMiles": 22.63,
+                "gates": 2,
+                "height": 6,
+                "jobType": "replace",
+                "linearFeet": 146,
+                "material": "cedar",
+                "serviceRadiusMiles": 29,
+                "serviceZone": "Central Example Zone",
+                "timeZone": "America/Los_Angeles"
+              },
+              "supported": true
+            },
+            "supportingTranscriptFactIds": []
+          },
+          "snapshotDigest": "61365b499e1f687584a4b9f127f64d9ac1205db7e48c201eafcdc560c54c6a4a"
+        },
+        "projectionDigest": "c8966e6ec91fdcd01e0126dbcca1b7ab26f611ee649ef622cec7d71e6abe5b77",
+        "scenario": null,
+        "source": {
+          "type": "account_free_demo",
+          "version": 2
+        },
+        "timestamps": {
+          "communicationOccurredAt": "2026-09-09T23:48:00.000Z",
+          "createdAt": "2026-09-09T23:48:00.000Z",
+          "snapshotCreatedAt": "2026-09-09T23:48:00.000Z",
+          "updatedAt": "2026-09-09T23:48:00.000Z"
+        },
+        "work": {
+          "assignedTo": "Avery Example",
+          "id": "5266fd29-e7a8-5490-91b9-acd571518de3",
+          "scheduledStart": "2026-09-11T02:00:00.000Z",
+          "schedulingConstraint": null,
+          "status": "follow_up_due",
+          "timeZone": "America/Los_Angeles",
+          "title": "Fence installation estimate visit"
+        }
+      },
+      {
+        "businessProfile": {
+          "businessKey": "seeded_fictional_workspace",
+          "company": "Truefield Harbor Example Home Services",
+          "crewCount": 2,
+          "description": "Fictional whole-home service contractor created only for this isolated NorthStar demo.",
+          "email": "truefield.harbor.office@example.com",
+          "headquarters": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.6,
+              "longitude": -122.3
+            },
+            "country": "US",
+            "fictional": true,
+            "formatted": "100 Example Service Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "state": "WA",
+            "street": "100 Example Service Way",
+            "timeZone": "America/Los_Angeles"
+          },
+          "hours": "Monday-Friday, 8:00 AM-5:00 PM",
+          "industry": "Whole-home repair and improvement",
+          "mode": "fictional_read_only",
+          "ownerName": "Riley Fixture",
+          "phone": "(206) 555-0101",
+          "pricingModel": "Fictional recorded labor, material, travel, and review inputs",
+          "readiness": {
+            "guidance": "Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile.",
+            "items": [
+              {
+                "label": "Dispatch origin",
+                "state": "reviewed"
+              },
+              {
+                "label": "Service area",
+                "state": "reviewed"
+              },
+              {
+                "label": "Operating hours",
+                "state": "reviewed"
+              },
+              {
+                "label": "Customer guidance",
+                "state": "needs_review"
+              },
+              {
+                "label": "Financial configuration",
+                "state": "needs_review"
+              },
+              {
+                "label": "Voice assistant configuration",
+                "state": "needs_review"
+              }
+            ],
+            "label": "Review needed",
+            "separation": "Profile Readiness is separate from integration status and uses clear categories for recognized details.",
+            "state": "needs_review"
+          },
+          "serviceArea": "Example Harbor fictional service territory",
+          "serviceRadiusMiles": 29,
+          "serviceZones": [
+            "Harbor Example Zone",
+            "Central Example Zone",
+            "Evergreen Example Zone"
+          ],
+          "services": [
+            {
+              "estimate": 6800,
+              "id": "52f01511-c179-58d5-b157-104312c5f039",
+              "industryCompatibility": "residential_home_services",
+              "key": "fence",
+              "label": "Fence installation"
+            },
+            {
+              "estimate": 14800,
+              "id": "18b1b5d9-dcca-50f8-b516-8e7c8b59f25f",
+              "industryCompatibility": "residential_home_services",
+              "key": "roofing",
+              "label": "Roof replacement"
+            },
+            {
+              "estimate": 9600,
+              "id": "ab947c79-4b3f-545a-9ab9-aeef198cfaee",
+              "industryCompatibility": "residential_home_services",
+              "key": "hvac",
+              "label": "HVAC service"
+            },
+            {
+              "estimate": 2850,
+              "id": "4797d003-2502-5883-b634-34555263b98e",
+              "industryCompatibility": "residential_home_services",
+              "key": "plumbing",
+              "label": "Plumbing service"
+            },
+            {
+              "estimate": 4250,
+              "id": "7e02801a-8c67-565b-bf89-a271370ccc15",
+              "industryCompatibility": "residential_home_services",
+              "key": "electrical",
+              "label": "Electrical service"
+            },
+            {
+              "estimate": 11200,
+              "id": "3fe1b938-282f-50f7-9074-411a01fb2a34",
+              "industryCompatibility": "residential_home_services",
+              "key": "concrete",
+              "label": "Concrete installation"
+            }
+          ],
+          "timeZone": "America/Los_Angeles",
+          "voiceAssistant": {
+            "greeting": "Thank you for calling Truefield Harbor Example Home Services. How can I help today?",
+            "name": "NorthStar Office Manager"
+          }
+        },
+        "communication": {
+          "channel": "voice",
+          "direction": "inbound",
+          "id": "e4b7c0f5-0acb-5071-a0b5-bd915642c95a",
+          "intent": null,
+          "subject": "Roof replacement for a fictional customer in Evergreen Example Zone.",
+          "transcript": []
+        },
+        "customer": {
+          "address": "248 Demo Way, Example Harbor, WA 00000",
+          "context": null,
+          "email": "morgan.demo.2@example.com",
+          "fictional": true,
+          "id": "92a1ff5a-7568-53c8-9eb4-bc7741ca1be7",
+          "location": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.651843,
+              "longitude": -122.074156
+            },
+            "country": "US",
+            "distanceMiles": 11.11,
+            "fictional": true,
+            "formatted": "248 Demo Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Evergreen Example Zone",
+            "state": "WA",
+            "street": "248 Demo Way",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "name": "Morgan Demo",
+          "phone": "(206) 555-0144"
+        },
+        "estimate": {
+          "currency": "USD",
+          "customerPrice": 14800,
+          "fictional": true,
+          "id": "760d1011-cb94-5ecf-be36-a942f10f3c37",
+          "lineItems": [
+            {
+              "category": "service",
+              "code": "fictional-demo-scope",
+              "customerCharge": 14800,
+              "label": "Roof replacement scope"
+            }
+          ]
+        },
+        "ids": {
+          "appointment": "69f59ce5-f56e-5509-9cf8-bb8ab8bb468f",
+          "communication": "e4b7c0f5-0acb-5071-a0b5-bd915642c95a",
+          "customer": "92a1ff5a-7568-53c8-9eb4-bc7741ca1be7",
+          "estimate": "760d1011-cb94-5ecf-be36-a942f10f3c37",
+          "graph": "f0fbc588-21bd-582c-b841-8c820d431c61",
+          "lead": "632926ed-b5da-5c6c-9030-560c5f6530c1",
+          "operation": "b50e4ec1-d425-583f-85ea-e8b11f71bfa1",
+          "opportunity": "632926ed-b5da-5c6c-9030-560c5f6530c1",
+          "polarisSnapshot": "d21ba089-6c80-5c44-906f-cfaa3edd4137",
+          "work": "69f59ce5-f56e-5509-9cf8-bb8ab8bb468f"
+        },
+        "lead": {
+          "callerIntent": null,
+          "id": "632926ed-b5da-5c6c-9030-560c5f6530c1",
+          "outcome": null,
+          "serviceLabel": "Roof replacement",
+          "serviceType": "roofing",
+          "status": "booked",
+          "summary": "Roof replacement for a fictional customer in Evergreen Example Zone.",
+          "urgency": null
+        },
+        "polaris": {
+          "calculationVersion": "command-center-demo-v1",
+          "completeDetail": true,
+          "facts": [
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for customerDistanceMiles.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-1",
+              "normalizedValue": 11.11,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "customerDistanceMiles"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for jobType.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-2",
+              "normalizedValue": "replace",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "jobType"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for material.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-3",
+              "normalizedValue": "architectural",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "material"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for pitch.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-4",
+              "normalizedValue": "6/12",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "pitch"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for serviceRadiusMiles.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-5",
+              "normalizedValue": 29,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "serviceRadiusMiles"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for serviceZone.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-6",
+              "normalizedValue": "Evergreen Example Zone",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "serviceZone"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for squares.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-7",
+              "normalizedValue": 28,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "squares"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for stories.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-8",
+              "normalizedValue": 2,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "stories"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for timeZone.",
+              "id": "seeded-job-ea3a7318-998c-51c7-859b-40fd771b9456-fact-9",
+              "normalizedValue": "America/Los_Angeles",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "timeZone"
+            }
+          ],
+          "fictional": true,
+          "id": "d21ba089-6c80-5c44-906f-cfaa3edd4137",
+          "snapshot": {
+            "calculationVersion": "command-center-demo-v1",
+            "confidence": {
+              "factors": [
+                {
+                  "factor": "fictionalDemoScope",
+                  "value": true
+                },
+                {
+                  "factor": "supportingFacts",
+                  "value": 9
+                },
+                {
+                  "factor": "roleAuthorizedDetail",
+                  "value": true
+                }
+              ],
+              "score": 87
+            },
+            "contract": "CanonicalPolarisOutput",
+            "customerFacingPrice": 14800,
+            "estimatedRevenue": 14800,
+            "grossMarginPercent": null,
+            "grossProfit": null,
+            "missingInformation": [],
+            "netMarginPercent": null,
+            "netProfit": null,
+            "notCalculated": [
+              {
+                "field": "knownDirectCosts",
+                "reason": "The account-free demo does not represent a contractor's authoritative cost configuration."
+              },
+              {
+                "field": "netProfit",
+                "reason": "Profit requires complete tenant-authored cost and overhead authority."
+              }
+            ],
+            "preliminaryRange": {
+              "high": 16280,
+              "low": 13320
+            },
+            "pricingLineItems": [
+              {
+                "category": "service",
+                "code": "fictional-demo-scope",
+                "customerCharge": 14800,
+                "label": "Roof replacement scope"
+              }
+            ],
+            "reasoning": [
+              "The service request matches the fictional workspace service catalogue.",
+              "The customer location is inside the configured fictional service radius."
+            ],
+            "recommendedActions": [
+              {
+                "code": "review-fictional-job",
+                "label": "Review the fictional job and confirm the next step.",
+                "priority": "medium"
+              }
+            ],
+            "risk": {
+              "emergency": false,
+              "evidence": null,
+              "signal": null
+            },
+            "service": {
+              "key": "roofing",
+              "label": "Roof replacement",
+              "scope": {
+                "customerDistanceMiles": 11.11,
+                "jobType": "replace",
+                "material": "architectural",
+                "pitch": "6/12",
+                "serviceRadiusMiles": 29,
+                "serviceZone": "Evergreen Example Zone",
+                "squares": 28,
+                "stories": 2,
+                "timeZone": "America/Los_Angeles"
+              },
+              "supported": true
+            },
+            "supportingTranscriptFactIds": []
+          },
+          "snapshotDigest": "d02e5130f3d09db4d943a4bc64ab28bfa36f074f90f1276f09f6f31f3868f95d"
+        },
+        "projectionDigest": "93531c6d1c909588802993bd30904d2cb801075bfb19a648eb559ad2006122d8",
+        "scenario": null,
+        "source": {
+          "type": "account_free_demo",
+          "version": 2
+        },
+        "timestamps": {
+          "communicationOccurredAt": "2026-09-09T23:22:00.000Z",
+          "createdAt": "2026-09-09T23:22:00.000Z",
+          "snapshotCreatedAt": "2026-09-09T23:22:00.000Z",
+          "updatedAt": "2026-09-09T23:22:00.000Z"
+        },
+        "work": {
+          "assignedTo": "Cameron Sample",
+          "id": "69f59ce5-f56e-5509-9cf8-bb8ab8bb468f",
+          "scheduledStart": "2026-09-10T04:00:00.000Z",
+          "schedulingConstraint": null,
+          "status": "scheduled",
+          "timeZone": "America/Los_Angeles",
+          "title": "Roof replacement estimate visit"
+        }
+      },
+      {
+        "businessProfile": {
+          "businessKey": "seeded_fictional_workspace",
+          "company": "Truefield Harbor Example Home Services",
+          "crewCount": 2,
+          "description": "Fictional whole-home service contractor created only for this isolated NorthStar demo.",
+          "email": "truefield.harbor.office@example.com",
+          "headquarters": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.6,
+              "longitude": -122.3
+            },
+            "country": "US",
+            "fictional": true,
+            "formatted": "100 Example Service Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "state": "WA",
+            "street": "100 Example Service Way",
+            "timeZone": "America/Los_Angeles"
+          },
+          "hours": "Monday-Friday, 8:00 AM-5:00 PM",
+          "industry": "Whole-home repair and improvement",
+          "mode": "fictional_read_only",
+          "ownerName": "Riley Fixture",
+          "phone": "(206) 555-0101",
+          "pricingModel": "Fictional recorded labor, material, travel, and review inputs",
+          "readiness": {
+            "guidance": "Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile.",
+            "items": [
+              {
+                "label": "Dispatch origin",
+                "state": "reviewed"
+              },
+              {
+                "label": "Service area",
+                "state": "reviewed"
+              },
+              {
+                "label": "Operating hours",
+                "state": "reviewed"
+              },
+              {
+                "label": "Customer guidance",
+                "state": "needs_review"
+              },
+              {
+                "label": "Financial configuration",
+                "state": "needs_review"
+              },
+              {
+                "label": "Voice assistant configuration",
+                "state": "needs_review"
+              }
+            ],
+            "label": "Review needed",
+            "separation": "Profile Readiness is separate from integration status and uses clear categories for recognized details.",
+            "state": "needs_review"
+          },
+          "serviceArea": "Example Harbor fictional service territory",
+          "serviceRadiusMiles": 29,
+          "serviceZones": [
+            "Harbor Example Zone",
+            "Central Example Zone",
+            "Evergreen Example Zone"
+          ],
+          "services": [
+            {
+              "estimate": 6800,
+              "id": "52f01511-c179-58d5-b157-104312c5f039",
+              "industryCompatibility": "residential_home_services",
+              "key": "fence",
+              "label": "Fence installation"
+            },
+            {
+              "estimate": 14800,
+              "id": "18b1b5d9-dcca-50f8-b516-8e7c8b59f25f",
+              "industryCompatibility": "residential_home_services",
+              "key": "roofing",
+              "label": "Roof replacement"
+            },
+            {
+              "estimate": 9600,
+              "id": "ab947c79-4b3f-545a-9ab9-aeef198cfaee",
+              "industryCompatibility": "residential_home_services",
+              "key": "hvac",
+              "label": "HVAC service"
+            },
+            {
+              "estimate": 2850,
+              "id": "4797d003-2502-5883-b634-34555263b98e",
+              "industryCompatibility": "residential_home_services",
+              "key": "plumbing",
+              "label": "Plumbing service"
+            },
+            {
+              "estimate": 4250,
+              "id": "7e02801a-8c67-565b-bf89-a271370ccc15",
+              "industryCompatibility": "residential_home_services",
+              "key": "electrical",
+              "label": "Electrical service"
+            },
+            {
+              "estimate": 11200,
+              "id": "3fe1b938-282f-50f7-9074-411a01fb2a34",
+              "industryCompatibility": "residential_home_services",
+              "key": "concrete",
+              "label": "Concrete installation"
+            }
+          ],
+          "timeZone": "America/Los_Angeles",
+          "voiceAssistant": {
+            "greeting": "Thank you for calling Truefield Harbor Example Home Services. How can I help today?",
+            "name": "NorthStar Office Manager"
+          }
+        },
+        "communication": {
+          "channel": "voice",
+          "direction": "inbound",
+          "id": "9f8726dd-a50e-5165-baff-98c7b6b5daa8",
+          "intent": null,
+          "subject": "HVAC service for a fictional customer in Harbor Example Zone.",
+          "transcript": []
+        },
+        "customer": {
+          "address": "348 Fixture Court, Example Harbor, WA 00000",
+          "context": null,
+          "email": "drew.demo.3@example.com",
+          "fictional": true,
+          "id": "2c74accb-1902-53ea-9fd0-083ad2e4c305",
+          "location": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.745104,
+              "longitude": -122.647067
+            },
+            "country": "US",
+            "distanceMiles": 19.01,
+            "fictional": true,
+            "formatted": "348 Fixture Court, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Harbor Example Zone",
+            "state": "WA",
+            "street": "348 Fixture Court",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "name": "Drew Demo",
+          "phone": "(206) 555-0123"
+        },
+        "estimate": {
+          "currency": "USD",
+          "customerPrice": 9600,
+          "fictional": true,
+          "id": "d3793498-bb38-5e99-91a2-e255be8a9681",
+          "lineItems": [
+            {
+              "category": "service",
+              "code": "fictional-demo-scope",
+              "customerCharge": 9600,
+              "label": "HVAC service scope"
+            }
+          ]
+        },
+        "ids": {
+          "appointment": "ecfcb8e3-c799-5d09-9352-a36aeba36a66",
+          "communication": "9f8726dd-a50e-5165-baff-98c7b6b5daa8",
+          "customer": "2c74accb-1902-53ea-9fd0-083ad2e4c305",
+          "estimate": "d3793498-bb38-5e99-91a2-e255be8a9681",
+          "graph": "be9be258-557b-52ad-932e-390332129d11",
+          "lead": "66d87b6d-9cae-5885-87ca-29f58b5a6dc5",
+          "operation": "8d043bee-b2fb-560e-8592-e337363ad41d",
+          "opportunity": "66d87b6d-9cae-5885-87ca-29f58b5a6dc5",
+          "polarisSnapshot": "6be14b56-8670-59c6-9a26-6c7cd3b3df28",
+          "work": "ecfcb8e3-c799-5d09-9352-a36aeba36a66"
+        },
+        "lead": {
+          "callerIntent": null,
+          "id": "66d87b6d-9cae-5885-87ca-29f58b5a6dc5",
+          "outcome": null,
+          "serviceLabel": "HVAC service",
+          "serviceType": "hvac",
+          "status": "qualified",
+          "summary": "HVAC service for a fictional customer in Harbor Example Zone.",
+          "urgency": null
+        },
+        "polaris": {
+          "calculationVersion": "command-center-demo-v1",
+          "completeDetail": true,
+          "facts": [
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for customerDistanceMiles.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-1",
+              "normalizedValue": 19.01,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "customerDistanceMiles"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for jobType.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-2",
+              "normalizedValue": "replace",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "jobType"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for seer.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-3",
+              "normalizedValue": 16,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "seer"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for serviceRadiusMiles.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-4",
+              "normalizedValue": 29,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "serviceRadiusMiles"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for serviceZone.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-5",
+              "normalizedValue": "Harbor Example Zone",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "serviceZone"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for sqft.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-6",
+              "normalizedValue": 2100,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "sqft"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for systemType.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-7",
+              "normalizedValue": "heat pump",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "systemType"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for timeZone.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-8",
+              "normalizedValue": "America/Los_Angeles",
+              "speaker": "system",
+              "status": "collected",
+              "variable": "timeZone"
+            },
+            {
+              "confidence": 1,
+              "evidenceSource": "demo_record",
+              "evidenceText": "Demo record detail collected for tonnage.",
+              "id": "seeded-job-1093b574-f816-5ef4-ada3-04395cf664c9-fact-9",
+              "normalizedValue": 3,
+              "speaker": "system",
+              "status": "collected",
+              "variable": "tonnage"
+            }
+          ],
+          "fictional": true,
+          "id": "6be14b56-8670-59c6-9a26-6c7cd3b3df28",
+          "snapshot": {
+            "calculationVersion": "command-center-demo-v1",
+            "confidence": {
+              "factors": [
+                {
+                  "factor": "fictionalDemoScope",
+                  "value": true
+                },
+                {
+                  "factor": "supportingFacts",
+                  "value": 9
+                },
+                {
+                  "factor": "roleAuthorizedDetail",
+                  "value": true
+                }
+              ],
+              "score": 90
+            },
+            "contract": "CanonicalPolarisOutput",
+            "customerFacingPrice": 9600,
+            "estimatedRevenue": 9600,
+            "grossMarginPercent": null,
+            "grossProfit": null,
+            "missingInformation": [],
+            "netMarginPercent": null,
+            "netProfit": null,
+            "notCalculated": [
+              {
+                "field": "knownDirectCosts",
+                "reason": "The account-free demo does not represent a contractor's authoritative cost configuration."
+              },
+              {
+                "field": "netProfit",
+                "reason": "Profit requires complete tenant-authored cost and overhead authority."
+              }
+            ],
+            "preliminaryRange": {
+              "high": 10560,
+              "low": 8640
+            },
+            "pricingLineItems": [
+              {
+                "category": "service",
+                "code": "fictional-demo-scope",
+                "customerCharge": 9600,
+                "label": "HVAC service scope"
+              }
+            ],
+            "reasoning": [
+              "The service request matches the fictional workspace service catalogue.",
+              "The customer location is inside the configured fictional service radius."
+            ],
+            "recommendedActions": [
+              {
+                "code": "review-fictional-job",
+                "label": "Review the fictional job and confirm the next step.",
+                "priority": "medium"
+              }
+            ],
+            "risk": {
+              "emergency": false,
+              "evidence": null,
+              "signal": null
+            },
+            "service": {
+              "key": "hvac",
+              "label": "HVAC service",
+              "scope": {
+                "customerDistanceMiles": 19.01,
+                "jobType": "replace",
+                "seer": 16,
+                "serviceRadiusMiles": 29,
+                "serviceZone": "Harbor Example Zone",
+                "sqft": 2100,
+                "systemType": "heat pump",
+                "timeZone": "America/Los_Angeles",
+                "tonnage": 3
+              },
+              "supported": true
+            },
+            "supportingTranscriptFactIds": []
+          },
+          "snapshotDigest": "8f419095fdb5dc2ebdfeaacdb3eb2e2c0ea2bcff5f85f4200fb4f9d4130cc10c"
+        },
+        "projectionDigest": "a31850efa60ba1cc120e87a59c6d0b34e2b0db742f8ba76dc2e08a69e93b6f8a",
+        "scenario": null,
+        "source": {
+          "type": "account_free_demo",
+          "version": 2
+        },
+        "timestamps": {
+          "communicationOccurredAt": "2026-09-09T22:56:00.000Z",
+          "createdAt": "2026-09-09T22:56:00.000Z",
+          "snapshotCreatedAt": "2026-09-09T22:56:00.000Z",
+          "updatedAt": "2026-09-09T22:56:00.000Z"
+        },
+        "work": {
+          "assignedTo": "Avery Example",
+          "id": "ecfcb8e3-c799-5d09-9352-a36aeba36a66",
+          "scheduledStart": "2026-09-12T02:00:00.000Z",
+          "schedulingConstraint": null,
+          "status": "estimate_ready",
+          "timeZone": "America/Los_Angeles",
+          "title": "HVAC service estimate visit"
+        }
+      }
+    ],
+    "schemaVersion": 2,
+    "seed": "9b8af031b5385187d7c6db770f94fb1e36d76217a0c80ce7d26bdb037f8f7f78",
+    "workspace": {
+      "businessProfile": {
+        "businessKey": "seeded_fictional_workspace",
+        "company": "Truefield Harbor Example Home Services",
+        "crewCount": 2,
+        "description": "Fictional whole-home service contractor created only for this isolated NorthStar demo.",
+        "email": "truefield.harbor.office@example.com",
+        "headquarters": {
+          "city": "Example Harbor",
+          "coordinates": {
+            "latitude": 47.6,
+            "longitude": -122.3
+          },
+          "country": "US",
+          "fictional": true,
+          "formatted": "100 Example Service Way, Example Harbor, WA 00000",
+          "postalCode": "00000",
+          "state": "WA",
+          "street": "100 Example Service Way",
+          "timeZone": "America/Los_Angeles"
+        },
+        "hours": "Monday-Friday, 8:00 AM-5:00 PM",
+        "industry": "Whole-home repair and improvement",
+        "mode": "fictional_read_only",
+        "ownerName": "Riley Fixture",
+        "phone": "(206) 555-0101",
+        "pricingModel": "Fictional recorded labor, material, travel, and review inputs",
+        "readiness": {
+          "guidance": "Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile.",
+          "items": [
+            {
+              "label": "Dispatch origin",
+              "state": "reviewed"
+            },
+            {
+              "label": "Service area",
+              "state": "reviewed"
+            },
+            {
+              "label": "Operating hours",
+              "state": "reviewed"
+            },
+            {
+              "label": "Customer guidance",
+              "state": "needs_review"
+            },
+            {
+              "label": "Financial configuration",
+              "state": "needs_review"
+            },
+            {
+              "label": "Voice assistant configuration",
+              "state": "needs_review"
+            }
+          ],
+          "label": "Review needed",
+          "separation": "Profile Readiness is separate from integration status and uses clear categories for recognized details.",
+          "state": "needs_review"
+        },
+        "serviceArea": "Example Harbor fictional service territory",
+        "serviceRadiusMiles": 29,
+        "serviceZones": [
+          "Harbor Example Zone",
+          "Central Example Zone",
+          "Evergreen Example Zone"
+        ],
+        "services": [
+          {
+            "estimate": 6800,
+            "id": "52f01511-c179-58d5-b157-104312c5f039",
+            "industryCompatibility": "residential_home_services",
+            "key": "fence",
+            "label": "Fence installation"
+          },
+          {
+            "estimate": 14800,
+            "id": "18b1b5d9-dcca-50f8-b516-8e7c8b59f25f",
+            "industryCompatibility": "residential_home_services",
+            "key": "roofing",
+            "label": "Roof replacement"
+          },
+          {
+            "estimate": 9600,
+            "id": "ab947c79-4b3f-545a-9ab9-aeef198cfaee",
+            "industryCompatibility": "residential_home_services",
+            "key": "hvac",
+            "label": "HVAC service"
+          },
+          {
+            "estimate": 2850,
+            "id": "4797d003-2502-5883-b634-34555263b98e",
+            "industryCompatibility": "residential_home_services",
+            "key": "plumbing",
+            "label": "Plumbing service"
+          },
+          {
+            "estimate": 4250,
+            "id": "7e02801a-8c67-565b-bf89-a271370ccc15",
+            "industryCompatibility": "residential_home_services",
+            "key": "electrical",
+            "label": "Electrical service"
+          },
+          {
+            "estimate": 11200,
+            "id": "3fe1b938-282f-50f7-9074-411a01fb2a34",
+            "industryCompatibility": "residential_home_services",
+            "key": "concrete",
+            "label": "Concrete installation"
+          }
+        ],
+        "timeZone": "America/Los_Angeles",
+        "voiceAssistant": {
+          "greeting": "Thank you for calling Truefield Harbor Example Home Services. How can I help today?",
+          "name": "NorthStar Office Manager"
+        }
+      },
+      "company": {
+        "description": "Fictional whole-home service contractor created only for this isolated NorthStar demo.",
+        "email": "truefield.harbor.office@example.com",
+        "fictional": true,
+        "industry": "Whole-home repair and improvement",
+        "name": "Truefield Harbor Example Home Services",
+        "ownerName": "Riley Fixture",
+        "phone": "(206) 555-0101",
+        "serviceRadiusMiles": 29,
+        "timeZone": "America/Los_Angeles"
+      },
+      "contract": "northstar_seeded_fictional_demo_workspace_v1",
+      "customers": [
+        {
+          "address": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.278482,
+              "longitude": -122.392684
+            },
+            "country": "US",
+            "distanceMiles": 22.63,
+            "fictional": true,
+            "formatted": "463 Demo Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Central Example Zone",
+            "state": "WA",
+            "street": "463 Demo Way",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "email": "cameron.example.1@example.com",
+          "fictional": true,
+          "id": "7eae580f-886a-51ba-b186-bd2e3cfefab2",
+          "name": "Cameron Example",
+          "phone": "(206) 555-0145"
+        },
+        {
+          "address": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.651843,
+              "longitude": -122.074156
+            },
+            "country": "US",
+            "distanceMiles": 11.11,
+            "fictional": true,
+            "formatted": "248 Demo Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Evergreen Example Zone",
+            "state": "WA",
+            "street": "248 Demo Way",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "email": "morgan.demo.2@example.com",
+          "fictional": true,
+          "id": "40f237d4-f8fc-5545-acf9-07b30654d6de",
+          "name": "Morgan Demo",
+          "phone": "(206) 555-0144"
+        },
+        {
+          "address": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.745104,
+              "longitude": -122.647067
+            },
+            "country": "US",
+            "distanceMiles": 19.01,
+            "fictional": true,
+            "formatted": "348 Fixture Court, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Harbor Example Zone",
+            "state": "WA",
+            "street": "348 Fixture Court",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "email": "drew.demo.3@example.com",
+          "fictional": true,
+          "id": "31034f29-e8b9-5012-ae00-eb712abeddcd",
+          "name": "Drew Demo",
+          "phone": "(206) 555-0123"
+        },
+        {
+          "address": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.635396,
+              "longitude": -122.570055
+            },
+            "country": "US",
+            "distanceMiles": 12.81,
+            "fictional": true,
+            "formatted": "521 Demo Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Evergreen Example Zone",
+            "state": "WA",
+            "street": "521 Demo Way",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "email": "jordan.sample.4@example.com",
+          "fictional": true,
+          "id": "e6592140-dc8f-527d-bb67-8bf6c6d19766",
+          "name": "Jordan Sample",
+          "phone": "(206) 555-0155"
+        },
+        {
+          "address": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.689607,
+              "longitude": -122.49554
+            },
+            "country": "US",
+            "distanceMiles": 11.01,
+            "fictional": true,
+            "formatted": "815 Demo Way, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Harbor Example Zone",
+            "state": "WA",
+            "street": "815 Demo Way",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "email": "cameron.fixture.5@example.com",
+          "fictional": true,
+          "id": "d66253bd-3ae2-5672-90ba-d371142a9d65",
+          "name": "Cameron Fixture",
+          "phone": "(206) 555-0150"
+        },
+        {
+          "address": {
+            "city": "Example Harbor",
+            "coordinates": {
+              "latitude": 47.565905,
+              "longitude": -122.051475
+            },
+            "country": "US",
+            "distanceMiles": 11.82,
+            "fictional": true,
+            "formatted": "306 Sample Loop, Example Harbor, WA 00000",
+            "postalCode": "00000",
+            "serviceZone": "Evergreen Example Zone",
+            "state": "WA",
+            "street": "306 Sample Loop",
+            "timeZone": "America/Los_Angeles",
+            "withinServiceRadius": true
+          },
+          "email": "cameron.example.6@example.com",
+          "fictional": true,
+          "id": "2dfebb75-10cb-56d6-a0a1-6697e1e69402",
+          "name": "Cameron Example",
+          "phone": "(206) 555-0146"
+        }
+      ],
+      "jobs": [
+        {
+          "assignedMemberId": "3245fb56-e6a0-5cf0-b95c-4c3106353ffd",
+          "assignedTo": "Avery Example",
+          "confidence": 84,
+          "customerId": "7eae580f-886a-51ba-b186-bd2e3cfefab2",
+          "estimatedValue": 6800,
+          "id": "4405f829-13c0-55f6-bf75-9ab977961690",
+          "jobType": "replacement",
+          "leadStatus": "hot",
+          "scheduledStart": "2026-09-11T02:00:00.000Z",
+          "scope": {
+            "gates": 2,
+            "height": 6,
+            "jobType": "replace",
+            "linearFeet": 146,
+            "material": "cedar"
+          },
+          "serviceKey": "fence",
+          "serviceLabel": "Fence installation",
+          "summary": "Fence installation for a fictional customer in Central Example Zone.",
+          "timeZone": "America/Los_Angeles",
+          "workStatus": "follow_up_due"
+        },
+        {
+          "assignedMemberId": "e2bd14a6-f341-5e7e-adf8-315d768e4d99",
+          "assignedTo": "Cameron Sample",
+          "confidence": 87,
+          "customerId": "40f237d4-f8fc-5545-acf9-07b30654d6de",
+          "estimatedValue": 14800,
+          "id": "ea3a7318-998c-51c7-859b-40fd771b9456",
+          "jobType": "replacement",
+          "leadStatus": "booked",
+          "scheduledStart": "2026-09-10T04:00:00.000Z",
+          "scope": {
+            "jobType": "replace",
+            "material": "architectural",
+            "pitch": "6/12",
+            "squares": 28,
+            "stories": 2
+          },
+          "serviceKey": "roofing",
+          "serviceLabel": "Roof replacement",
+          "summary": "Roof replacement for a fictional customer in Evergreen Example Zone.",
+          "timeZone": "America/Los_Angeles",
+          "workStatus": "scheduled"
+        },
+        {
+          "assignedMemberId": "3245fb56-e6a0-5cf0-b95c-4c3106353ffd",
+          "assignedTo": "Avery Example",
+          "confidence": 90,
+          "customerId": "31034f29-e8b9-5012-ae00-eb712abeddcd",
+          "estimatedValue": 9600,
+          "id": "1093b574-f816-5ef4-ada3-04395cf664c9",
+          "jobType": "replacement",
+          "leadStatus": "qualified",
+          "scheduledStart": "2026-09-12T02:00:00.000Z",
+          "scope": {
+            "jobType": "replace",
+            "seer": 16,
+            "sqft": 2100,
+            "systemType": "heat pump",
+            "tonnage": 3
+          },
+          "serviceKey": "hvac",
+          "serviceLabel": "HVAC service",
+          "summary": "HVAC service for a fictional customer in Harbor Example Zone.",
+          "timeZone": "America/Los_Angeles",
+          "workStatus": "estimate_ready"
+        }
+      ],
+      "services": [
+        {
+          "estimate": 6800,
+          "id": "52f01511-c179-58d5-b157-104312c5f039",
+          "industryCompatibility": "residential_home_services",
+          "key": "fence",
+          "label": "Fence installation"
+        },
+        {
+          "estimate": 14800,
+          "id": "18b1b5d9-dcca-50f8-b516-8e7c8b59f25f",
+          "industryCompatibility": "residential_home_services",
+          "key": "roofing",
+          "label": "Roof replacement"
+        },
+        {
+          "estimate": 9600,
+          "id": "ab947c79-4b3f-545a-9ab9-aeef198cfaee",
+          "industryCompatibility": "residential_home_services",
+          "key": "hvac",
+          "label": "HVAC service"
+        },
+        {
+          "estimate": 2850,
+          "id": "4797d003-2502-5883-b634-34555263b98e",
+          "industryCompatibility": "residential_home_services",
+          "key": "plumbing",
+          "label": "Plumbing service"
+        },
+        {
+          "estimate": 4250,
+          "id": "7e02801a-8c67-565b-bf89-a271370ccc15",
+          "industryCompatibility": "residential_home_services",
+          "key": "electrical",
+          "label": "Electrical service"
+        },
+        {
+          "estimate": 11200,
+          "id": "3fe1b938-282f-50f7-9074-411a01fb2a34",
+          "industryCompatibility": "residential_home_services",
+          "key": "concrete",
+          "label": "Concrete installation"
+        }
+      ],
+      "team": {
+        "crews": [
+          {
+            "availability": "Available tomorrow",
+            "id": "a5b63631-52f2-5087-b0b6-986b250e3777",
+            "lead": "Avery Example",
+            "leadMemberId": "3245fb56-e6a0-5cf0-b95c-4c3106353ffd",
+            "name": "Example Crew A"
+          },
+          {
+            "availability": "Available this week",
+            "id": "f25fb183-0e76-5380-9e48-62b6b034fa23",
+            "lead": "Cameron Sample",
+            "leadMemberId": "e2bd14a6-f341-5e7e-adf8-315d768e4d99",
+            "name": "Example Crew B"
+          }
+        ],
+        "members": [
+          {
+            "accessRole": "owner",
+            "email": "riley.fixture@example.com",
+            "fictional": true,
+            "id": "11b6375f-e4a3-5456-8a95-77dec4b97114",
+            "name": "Riley Fixture",
+            "operationalRole": "Owner",
+            "phone": "(206) 555-0102"
+          },
+          {
+            "accessRole": "admin",
+            "email": "taylor.demo@example.com",
+            "fictional": true,
+            "id": "25108e00-078e-58f8-b9b6-df2fc4b6a4cd",
+            "name": "Taylor Demo",
+            "operationalRole": "Dispatcher",
+            "phone": "(206) 555-0103"
+          },
+          {
+            "accessRole": "member",
+            "email": "avery.example@example.com",
+            "fictional": true,
+            "id": "3245fb56-e6a0-5cf0-b95c-4c3106353ffd",
+            "name": "Avery Example",
+            "operationalRole": "Crew lead",
+            "phone": "(206) 555-0104"
+          },
+          {
+            "accessRole": "member",
+            "email": "cameron.sample@example.com",
+            "fictional": true,
+            "id": "e2bd14a6-f341-5e7e-adf8-315d768e4d99",
+            "name": "Cameron Sample",
+            "operationalRole": "Technician",
+            "phone": "(206) 555-0105"
+          }
+        ],
+        "mode": "fictional_read_only"
+      },
+      "tenant": {
+        "businessProfileKey": "seeded_fictional_workspace",
+        "fictional": true,
+        "id": "715ad540-5381-51e5-9df0-f3f7eedc525b",
+        "isolated": true,
+        "name": "Truefield Harbor Example Home Services"
+      },
+      "territory": {
+        "areaCode": "206",
+        "center": {
+          "latitude": 47.6,
+          "longitude": -122.3
+        },
+        "city": "Example Harbor",
+        "country": "US",
+        "headquarters": {
+          "city": "Example Harbor",
+          "coordinates": {
+            "latitude": 47.6,
+            "longitude": -122.3
+          },
+          "country": "US",
+          "fictional": true,
+          "formatted": "100 Example Service Way, Example Harbor, WA 00000",
+          "postalCode": "00000",
+          "state": "WA",
+          "street": "100 Example Service Way",
+          "timeZone": "America/Los_Angeles"
+        },
+        "key": "pacific-example",
+        "label": "Example Harbor fictional service territory",
+        "postalCode": "00000",
+        "radiusMiles": 29,
+        "state": "WA",
+        "timeZone": "America/Los_Angeles",
+        "zones": [
+          "Harbor Example Zone",
+          "Central Example Zone",
+          "Evergreen Example Zone"
+        ]
+      }
+    },
+    "estimateDecisions": {
+      "ec0b5b03-19e2-5b6f-95ca-dfd704551dbf": [
+        {
+          "id": "synthetic-legacy-preservation-fixture",
+          "revision": 1,
+          "action": "approve",
+          "sourcePins": {
+            "businessProfileHash": "f31352d391be6536830f36ac850300e91f33012e51dd43093ed66ebcda633d0b",
+            "businessProfileId": "1afbf7bc-e806-5d7e-ace4-c501c8022971",
+            "businessProfileVersion": "1",
+            "calculationVersion": "command-center-demo-v1",
+            "customerId": "eecee01f-2094-5f2b-8325-af22d70df855",
+            "estimateId": "ec0b5b03-19e2-5b6f-95ca-dfd704551dbf",
+            "graphId": "d1850e53-161d-5349-8adb-ef131684de19",
+            "normalizedInputFingerprint": "80fa55f65a5058a58768fc24688bc3c488c688fdb65d01607fbb03f8137a98da",
+            "operationId": "3d71f532-f694-5405-aab8-bb0ed0ea19b0",
+            "opportunityId": "2c9c4cbe-ebbd-584b-9cbd-a19c93b2d9d2",
+            "snapshotDigest": "61365b499e1f687584a4b9f127f64d9ac1205db7e48c201eafcdc560c54c6a4a",
+            "snapshotId": "44d9b0e2-f1aa-50c5-9f46-78abe670c6d3",
+            "supportingFactIds": []
+          },
+          "priceBeforeTax": "1200.00",
+          "currency": "USD"
+        }
+      ]
+    }
+  },
+  "reviewPins": {
+    "businessProfileHash": "f31352d391be6536830f36ac850300e91f33012e51dd43093ed66ebcda633d0b",
+    "businessProfileId": "1afbf7bc-e806-5d7e-ace4-c501c8022971",
+    "businessProfileVersion": "1",
+    "calculationVersion": "command-center-demo-v1",
+    "customerId": "eecee01f-2094-5f2b-8325-af22d70df855",
+    "estimateId": "ec0b5b03-19e2-5b6f-95ca-dfd704551dbf",
+    "graphId": "d1850e53-161d-5349-8adb-ef131684de19",
+    "normalizedInputFingerprint": "80fa55f65a5058a58768fc24688bc3c488c688fdb65d01607fbb03f8137a98da",
+    "operationId": "3d71f532-f694-5405-aab8-bb0ed0ea19b0",
+    "opportunityId": "2c9c4cbe-ebbd-584b-9cbd-a19c93b2d9d2",
+    "snapshotDigest": "61365b499e1f687584a4b9f127f64d9ac1205db7e48c201eafcdc560c54c6a4a",
+    "snapshotId": "44d9b0e2-f1aa-50c5-9f46-78abe670c6d3",
+    "supportingFactIds": []
+  }
+}

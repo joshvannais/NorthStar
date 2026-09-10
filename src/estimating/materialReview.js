@@ -14,7 +14,7 @@ function buildMaterialReview(review, snapshot) {
   return stableValue({
     contract: 'NorthStarMaterialReview/v1', sourcePins: review.pins, recordedAt: review.recordedAt,
     currency: review.currency, simulated: review.simulated === true,
-    material, materialState: material ? 'recorded' : raw == null || raw === '' ? 'unspecified' : 'unavailable',
+    material, materialState: material ? 'recorded' : raw == null || typeof raw === 'string' && !raw.trim() ? 'unspecified' : 'unavailable',
     amount: valid ? parts[0] + '.' + (parts[1] || '').padEnd(2, '0') : null,
     amountState: !present ? 'missing' : value === null ? 'unavailable' : valid ? 'recorded' : 'invalid',
     basis: basisKnown ? 'recorded_configured_amount' : 'unavailable',

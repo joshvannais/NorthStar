@@ -31,4 +31,3 @@ for(const demo of [false,true])for(const [theme,width] of [['light',1440],['dark
 }
 assert.deepEqual(ledger.errors,[]);ledger.pass=true;
 }finally{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));if(f)await f.cleanup();fs.writeFileSync(path.join(output,'ledger.json'),JSON.stringify(ledger,null,2));}})().catch(e=>{console.error(e);process.exitCode=1;});
-

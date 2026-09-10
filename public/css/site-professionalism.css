@@ -1750,3 +1750,9 @@ html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing .draw
 
 html body .customer-drawer .drawer-original-range { text-transform:capitalize; }
 html body .customer-drawer .drawer-header-meta #cdPolSummary { text-transform:capitalize; }
+.customer-drawer .drawer-service-address { margin: .6rem 0 0; color: var(--neutral-600); font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.customer-drawer .drawer-contact-methods { flex-basis: 100%; border: 1px solid var(--neutral-200); border-radius: .75rem; padding: .75rem; overflow-wrap: anywhere; }
+.customer-drawer .drawer-contact-methods p { margin: 0 0 .5rem; }
+.customer-drawer .drawer-contact-methods p:last-child { margin-bottom: 0; }
+.customer-drawer .drawer-contact-methods a { display: inline-block; padding: .35rem 0; }
+.customer-drawer .drawer-contact-hint { font-size: .8125rem; color: var(--neutral-600); }

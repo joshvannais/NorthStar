@@ -259,6 +259,8 @@ window.CustomerDetail = (function() {
     html += '        <div style="display:flex;gap:8px;flex-wrap:wrap;">';
     html += '          <button class="btn btn-secondary btn-sm" id="cdBtnAskPolaris" aria-describedby="cdPolarisActionReason" disabled>Ask Polaris</button>';
     html += '          <button class="btn btn-primary btn-sm" id="cdBtnSchedule" aria-describedby="cdPolarisActionReason">Schedule</button>';
+    html += '          <button type="button" class="btn btn-secondary btn-sm" id="cdBtnContact" aria-expanded="false" aria-controls="cdContactMethods">Contact</button>';
+    html += '          <div id="cdContactMethods" class="drawer-contact-methods" hidden></div>';
     html += '          <p class="drawer-action-reason" id="cdPolarisActionReason">Actions become available after this customer record finishes loading.</p>';
     html += '        </div>';
     html += '      </div>';
@@ -284,6 +286,7 @@ window.CustomerDetail = (function() {
     var sourceBadge = document.createElement('span'); sourceBadge.id = 'cdDemoBadge'; sourceBadge.className = 'drawer-demo-badge'; sourceBadge.textContent = 'Demo'; sourceBadge.hidden = true; headerMeta.appendChild(sourceBadge);
     var identity = document.createElement('div'); identity.className = 'drawer-identity';
     var header = _drawerEl.querySelector('.drawer-header'); identity.append($('cdDrawerTitle'),headerMeta); header.prepend(identity);
+    var serviceAddress = document.createElement('p'); serviceAddress.id = 'cdServiceAddress'; serviceAddress.className = 'drawer-service-address'; identity.appendChild(serviceAddress);
     var priceBox = $('cdPolPrice').parentElement; priceBox.classList.add('drawer-primary-estimate');
     var range = document.createElement('div'); range.id = 'cdPolRange'; range.className = 'drawer-original-range'; priceBox.appendChild(range);
     var confidenceNode = $('cdPolConfidence'), actionNode = $('cdPolAction');
@@ -326,6 +329,11 @@ window.CustomerDetail = (function() {
     $('cdContextSummary').hidden = true;
 
     // Event bindings
+    $('cdBtnContact').addEventListener('click', function() {
+      var expanded = this.getAttribute('aria-expanded') === 'true';
+      this.setAttribute('aria-expanded', String(!expanded));
+      $('cdContactMethods').hidden = expanded;
+    });
     _overlayEl.addEventListener('click', function(event) { event.preventDefault(); close(); });
     $('cdDrawerClose').addEventListener('click', function(event) { event.preventDefault(); event.stopPropagation(); close(); });
     document.addEventListener('keydown', function(e) {
@@ -497,6 +505,10 @@ window.CustomerDetail = (function() {
     data.intelligence = values || null;
     data.service = presentation ? presentation.serviceText : '';
     data.description = presentation && presentation.service ? presentation.service.scope : null;
+    // Only the selected job's recorded scope, or the isolated demo graph's
+    // validated jobsite binding, may supply the prominent service address.
+    data.serviceAddress = data.description && typeof data.description.address === 'string' ? data.description.address.trim() : '';
+    if (!data.serviceAddress && window.location.pathname.indexOf('/demo') === 0 && typeof data.address === 'string') data.serviceAddress = data.address.trim();
     data.estimatedValue = presentation ? presentation.customerPrice : null;
     data.closeProbability = null;
     data.estimates = raw.estimate ? [raw.estimate] : [];
@@ -1145,6 +1157,25 @@ window.CustomerDetail = (function() {
     $('cdPhone').textContent = data.phone || '\u2014';
     if (!data.phone) missing.push('phone number');
     $('cdEmail').textContent = data.email || '\u2014';
+    $('cdServiceAddress').textContent = data.serviceAddress || 'Service Address Not Recorded';
+    $('cdServiceAddress').setAttribute('aria-label', data.serviceAddress ? 'Service Address: ' + data.serviceAddress : 'Service Address Not Recorded');
+    var contactMethods = $('cdContactMethods'); contactMethods.replaceChildren(); contactMethods.hidden = true;
+    $('cdBtnContact').setAttribute('aria-expanded', 'false');
+    var contactCount = 0;
+    function addContactMethod(label, value, href) {
+      if (!value) return;
+      var row = document.createElement('p'); var name = document.createElement('strong'); name.textContent = label + ': ';
+      var method = document.createElement(href ? 'a' : 'span'); method.textContent = value;
+      if (href) method.href = href;
+      row.append(name, method); contactMethods.appendChild(row); contactCount++;
+    }
+    var phone = typeof data.phone === 'string' ? data.phone.trim() : '';
+    var email = typeof data.email === 'string' ? data.email.trim() : '';
+    addContactMethod('Phone', phone, /^[+\d\s().-]+$/.test(phone) && /\d/.test(phone) ? 'tel:' + phone.replace(/[^+\d]/g, '') : null);
+    addContactMethod('Email', email, /^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(email) ? 'mailto:' + encodeURIComponent(email) : null);
+    var contactHint = document.createElement('p'); contactHint.className = 'drawer-contact-hint';
+    contactHint.textContent = contactCount ? (window.location.pathname.indexOf('/demo') === 0 ? 'These are fictional demo contact details.' : 'Choose a method to open your phone or email app.') : 'No phone number or email address is recorded.';
+    contactMethods.appendChild(contactHint);
     if (!data.email) missing.push('email address');
     var canonicalAddress = typeof data.address === 'string' && data.address.trim()
       ? data.address

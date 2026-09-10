@@ -282,6 +282,25 @@ async function main() {
       mountedPermissionDenial: true
     });
     await member.close();
+    const recoveryContext = await context(fixture.session,390,'dark');
+    const recovery = await recoveryContext.newPage();await open(recovery);
+    await recovery.locator('[data-section=financial]').click();
+    const recoveryMap = recovery.locator('[data-profile-editor=material]');
+    await recoveryMap.getByRole('button',{name:'Add cost',exact:true}).click();
+    await recoveryMap.getByLabel('New internal cost',{exact:true}).fill('-1');
+    await recoveryMap.getByRole('button',{name:'Cancel new cost',exact:true}).click();
+    await recoveryMap.getByRole('button',{name:'Add cost',exact:true}).click();
+    await recoveryMap.getByRole('button',{name:'Remove configuration',exact:true}).click();
+    const removal = recovery.waitForResponse(r=>r.request().method()==='PUT' && r.url().endsWith('/financialConfiguration'));
+    await recovery.locator('#saveFinancialConfigurationBtn').click();
+    const removedResponse=await removal;assert.strictEqual(removedResponse.status(),200);await removedResponse.finished();
+    await recovery.waitForFunction(()=>!financialConfigurationDirty && !financialConfigurationSaving);
+    await recovery.reload();await recovery.waitForFunction(()=>document.getElementById('businessProfileRoot').dataset.state==='ready');
+    const removed=await recovery.evaluate(()=>document.getElementById('cost-materialCostByService')._profileFields.read());
+    assert.strictEqual(removed,undefined);
+    ledger.cases.push({cancelInvalidThenRemovePendingDraft:true,mountedRemovalSaveAndReload:true});
+    await recoveryContext.close();
+
     assert.deepStrictEqual(ledger.pageErrors, []);
     ledger.pass = true;
   } catch (e) {
@@ -298,3 +317,4 @@ main().catch(e => {
   console.error(e);
   process.exitCode = 1;
 });
+

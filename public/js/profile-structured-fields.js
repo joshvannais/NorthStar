@@ -179,13 +179,13 @@
       status.textContent = issue;
       emit();
     }
-    function button(text, fn, parent) {
+    function button(text, fn, parent, allowInvalid) {
       var b = el('button', text, parent || content);
       b.type = 'button';
       b.className = 'equipment-button';
       b.addEventListener('click', function () {
         if (host.disabled) return;
-        if (fieldErrors.size) {
+        if (fieldErrors.size && !allowInvalid) {
           status.textContent = 'Correct the highlighted entry before changing other settings.';
           return;
         }
@@ -657,9 +657,16 @@
           if (!number(pendingCost.amount, 0)) { status.textContent = 'Enter the internal cost before adding it.'; return; }
           state[reference] = pendingCost.amount; pendingCost = null; rerender();
         }, draft);
-        button('Cancel new cost', function () { pendingCost = null; rerender(); }, draft);
+        button('Cancel new cost', function () {
+          fieldErrors.forEach(function (_message, field) { if (draft.contains(field)) fieldErrors.delete(field); });
+          pendingCost = null;
+          draft.remove();
+          issue = Array.from(fieldErrors.values())[0] || '';
+          changed();
+          addCostButton.focus();
+        }, draft, true);
       }
-      button('Add cost', function () {
+      var addCostButton = button('Add cost', function () {
         var prefix = kind === 'material' ? String(((options.services || [])[0] || {}).id || '').trim().toLowerCase() : undefined;
         if (kind === 'material' && !prefix) {
           status.textContent = 'Add a service before adding its material costs.';
@@ -734,12 +741,16 @@
         if (kind === 'pricing') pricing();else if (kind === 'polygon') polygon();else costs();
         button(kind === 'polygon' ? 'Clear boundary' : kind === 'pricing' ? 'Use no pricing' : 'Remove configuration', function () {
           state = kind === 'polygon' ? [] : undefined;
+          pendingCost = null;
+          issue = '';
           rerender();
-        });
+        }, undefined, kind === 'material' || kind === 'equipment');
         if (kind === 'material' || kind === 'equipment') button('Keep an empty cost list', function () {
           state = {};
+          pendingCost = null;
+          issue = '';
           rerender();
-        });
+        }, undefined, true);
       }
       sync();
     }

@@ -276,6 +276,30 @@ async function main() {
       await material.getByRole('button',{name:'Add this cost',exact:true}).click();
       assert.deepStrictEqual((await read()).material, {'fence:':0, 'Retained legacy material':17, ':legacy':5, 'fence:cedar':9});
       ledger.cases.push({width,unspecifiedMaterialAndArbitraryReferencesRetained:true,duplicateAddCannotOverwrite:true});
+      const retainedCosts = (await read()).material;
+      await material.getByRole('button',{name:'Add cost',exact:true}).click();
+      await material.getByLabel('New internal cost',{exact:true}).fill('-1');
+      await material.getByRole('button',{name:'Cancel new cost',exact:true}).click();
+      assert.deepStrictEqual((await read()).material,retainedCosts);
+      assert(await material.getByRole('button',{name:'Add cost',exact:true}).evaluate(e=>e===document.activeElement));
+      await material.getByRole('button',{name:'Add cost',exact:true}).click();
+      await material.getByLabel('New internal cost',{exact:true}).fill('-1');
+      await material.getByLabel('Internal cost',{exact:true}).first().fill('-2');
+      await material.getByRole('button',{name:'Cancel new cost',exact:true}).click();
+      assert.strictEqual(await material.getByLabel('Internal cost',{exact:true}).first().inputValue(),'-2');
+      assert.strictEqual(await material.getByLabel('Internal cost',{exact:true}).first().getAttribute('aria-invalid'),'true');
+      assert.match(await page.evaluate(()=>{try{document.getElementById('material')._profileFields.read();return '';}catch(e){return e.message;}}),/valid internal cost/);
+      await material.getByLabel('Internal cost',{exact:true}).first().fill(String(Object.values(retainedCosts)[0]));
+      assert.deepStrictEqual((await read()).material,retainedCosts);
+      for(const invalid of [false,true]) {
+        await material.getByRole('button',{name:'Add cost',exact:true}).click();
+        if(invalid)await material.getByLabel('New internal cost',{exact:true}).fill('-1');
+        await material.getByRole('button',{name:'Remove configuration',exact:true}).click();
+        assert.strictEqual((await read()).material,undefined);
+        await page.evaluate(v=>document.getElementById('material')._profileFields.load(v),retainedCosts);
+      }
+      ledger.cases.push({width,cancelInvalidDraftPreservesUnrelatedErrors:true,wholeMapRemovalClearsPendingDraft:true,keyboardFocusRecovered:true});
+
       await page.screenshot({path:path.join(output, theme+'-'+width+'-legacy-material.png'),fullPage:true});
 
 

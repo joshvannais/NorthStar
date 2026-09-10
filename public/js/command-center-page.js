@@ -366,8 +366,8 @@
       kpiCard('Connected records', String(graphs.length), graphs.length ? 'Customer, lead, work, and Polaris records in this workspace.' : 'No role-authorized records are available.'),
       kpiCard('Needs attention', String(attention), attention ? 'Records with urgency, missing inputs, or follow-up state.' : 'No current priority signal is supported.'),
       kpiCard('Scheduled work', String(scheduled), scheduled ? 'Work items with a recorded appointment time.' : 'No appointment time is currently recorded.'),
-      kpiCard(mode === 'demo' ? 'Recorded demo value' : 'Recorded opportunity value', values.length ? formatMoney(total) : 'Unavailable',
-        values.length ? 'Sum of recorded customer-facing estimates; not recognized revenue.' : 'No role-authorized customer price is available.')
+      kpiCard(mode === 'demo' ? 'Original demo estimate value' : 'Original estimate value', values.length ? formatMoney(total) : 'Unavailable',
+        values.length ? 'Original price guidance, before later cost or human price reviews. This is not earned revenue.' : 'No role-authorized customer price is available.')
     );
   }
 
@@ -656,7 +656,7 @@
         var mobileAction = actionEntries(graph)[0];
         var details = element('dl', 'command-center-mobile-work-details');
         details.append(
-          element('dt', '', 'Recorded Value'), element('dd', '', mobileRecorded),
+          element('dt', '', 'Original estimate'), element('dd', '', mobileRecorded),
           element('dt', '', 'Status'), element('dd', '', mobileStatus),
           element('dt', '', 'Next Action'), element('dd', '', mobileAction ? presentationString(mobileAction.label, 'Recommendation unavailable') : 'Review complete Polaris detail')
         );

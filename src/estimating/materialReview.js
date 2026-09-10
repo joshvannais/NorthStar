@@ -2,6 +2,14 @@
 const { stableValue } = require('../services/businessProfileAdapter');
 const VERSION = 'm19-part3-canonical-v2';
 function buildMaterialReview(review, snapshot) {
+  if (review.adoptedMaterialPlan && review.financialCosts) {
+    const plan=review.adoptedMaterialPlan;
+    return stableValue({contract:'NorthStarMaterialReview/v1',sourcePins:review.pins,recordedAt:review.recordedAt,
+      currency:review.currency,simulated:review.simulated===true,material:plan.inputs.material,materialState:'recorded',
+      amount:review.financialCosts.knownDirectMaterialCost,amountState:'recorded',basis:'adopted_material_plan',
+      quantity:plan.inputs.quantity,unit:plan.inputs.unit,waste:plan.inputs.wastePercent,
+      availability:'not_verified',priceEffectiveDate:plan.inputs.priceDate||'not_recorded'});
+  }
   const present = Boolean(snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'knownDirectMaterialCost'));
   const value = present ? snapshot.knownDirectMaterialCost : undefined;
   const text = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? String(value) : '';

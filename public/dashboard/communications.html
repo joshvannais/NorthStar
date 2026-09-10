@@ -491,7 +491,7 @@
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Connected Records</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Appointments</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Lead Conversion</div><div class="ds-kpi-trend"></div></div>
-        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Estimated Revenue</div><div class="ds-kpi-trend"></div></div>
+        <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Original estimate value</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Missed Calls</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">Average Response Time</div><div class="ds-kpi-trend"></div></div>
         <div class="ds-kpi-card communications-kpi-placeholder" aria-hidden="true"><div class="ds-kpi-icon"></div><div class="ds-kpi-value">&mdash;</div><div class="ds-kpi-label">AI Transfer Rate</div><div class="ds-kpi-trend"></div></div>
@@ -555,12 +555,12 @@
           </div>
           <!-- Revenue Range Section -->
           <div class="filter-section">
-            <div class="filter-section-title">Revenue Range</div>
+            <div class="filter-section-title">Original estimate range</div>
             <div class="filter-range-row">
-              <label class="sr-only" for="filterRevenueMin">Minimum recorded revenue</label>
+              <label class="sr-only" for="filterRevenueMin">Minimum original estimate value</label>
               <input type="number" class="filter-range-input" id="filterRevenueMin" placeholder="Min $" min="0" onchange="setFilterRevenue()">
               <span class="filter-range-sep">to</span>
-              <label class="sr-only" for="filterRevenueMax">Maximum recorded revenue</label>
+              <label class="sr-only" for="filterRevenueMax">Maximum original estimate value</label>
               <input type="number" class="filter-range-input" id="filterRevenueMax" placeholder="Max $" min="0" onchange="setFilterRevenue()">
             </div>
           </div>
@@ -1059,7 +1059,7 @@ function loadKpiGrid() {
     { id:'new_leads', icon:'people', label:'Connected Records', value: total == null ? '\u2014' : total, trend: total == null ? 'Not Available' : 'Role-authorized records' },
     { id:'appointments', icon:'calendar', label:'Appointments', value: appointments == null ? '\u2014' : appointments, trend: appointments == null ? 'Not Available' : 'Recorded appointments' },
     { id:'lead_conversion', icon:'trend', label:'Lead Conversion', value: '\u2014', trend: 'Requires qualified and won outcomes' },
-    { id:'avg_job_value', icon:'dollar', label:'Estimated Revenue', value: revenue == null ? '\u2014' : '$'+Number(revenue).toLocaleString(), trend: revenue == null ? 'No recorded estimate' : 'Recorded customer estimates' },
+    { id:'avg_job_value', icon:'dollar', label:'Original estimate value', value: revenue == null ? '\u2014' : '$'+Number(revenue).toLocaleString(), trend: revenue == null ? 'No recorded estimate' : 'Original customer price guidance' },
     { id:'missed_calls', icon:'blocked', label:'Missed Calls', value: '\u2014', trend: 'Requires call outcome records' },
     { id:'avg_response_time', icon:'bolt', label:'Average Response Time', value: '\u2014', trend: 'Requires response timestamps' },
     { id:'ai_transfer_rate', icon:'transfer', label:'AI Transfer Rate', value: '\u2014', trend: 'Requires transfer outcomes' },

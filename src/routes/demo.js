@@ -1,4 +1,8 @@
 'use strict';
+const adoption = require('../estimating/materialAdoptionContract');
+const adoptionPolicy = require('../estimating/materialAdoptionPolicy');
+const {buildRevisionReview,selectDemoRevision,projectSelectedDemoDecisions,demoAdopt} = require('../estimating/estimateRevisionReview');
+
 
 const crypto = require('crypto');
 const { buildEstimateReview } = require('../services/estimateReview');
@@ -348,8 +352,21 @@ router.post('/command-center/estimates/:estimateId/material-plans',async functio
 router.post('/command-center/estimates/:estimateId/material-plan-preview',async function(req,res){
  res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'material-plan'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the material plan entries.'}});
  try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
- const review=buildEstimateReview(item,{simulated:true});review.decisions={current:(record.state.estimateDecisions?.[item.ids.estimate]||[])[0]||null};const current=(record.state.materialPlans?.[item.ids.estimate]||[])[0]||null;const body=materialPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')return res.status(400).json({success:false,error:{message:'Enter a material plan to calculate.'}});materialPlan.checkBasis(body,review,current);return res.json({success:true,data:{result:materialPlan.calculate(body.inputs,body.currency),sourcePins:review.pins,decisionBasis:materialPlan.decisionBasis(review.decisions.current)}});
+ const review=buildRevisionReview(item,selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(record.state.estimateDecisions?.[item.ids.estimate]||[],review,true);const current=(record.state.materialPlans?.[item.ids.estimate]||[])[0]||null;const body=materialPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')return res.status(400).json({success:false,error:{message:'Enter a material plan to calculate.'}});materialPlan.checkBasis(body,review,current);return res.json({success:true,data:{result:materialPlan.calculate(body.inputs,body.currency),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis}});
  }catch(e){return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Demo material planning is unavailable.'}});}
+});
+
+router.post('/command-center/estimates/:estimateId/material-adoptions',async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'material-adoption'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check this estimate and material plan.'}});
+ try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'estimate_adopt',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),adoption:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});}catch(e){return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Demo estimate changes are unavailable.'}});}
+});
+router.post('/command-center/estimates/:estimateId/material-adoption-preview',async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'material-adoption'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check this estimate and material plan.'}});
+ try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
+ const review=buildRevisionReview(item,selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(record.state.estimateDecisions?.[item.ids.estimate]||[],review,true);
+ const plan=record.state.materialPlans?.[item.ids.estimate]?.[0],body=adoption.normalize({...req.body,confirmed:true});adoption.checkBasis(body,review,plan);
+ return res.json({success:true,data:{result:adoption.calculate(item,plan),sourcePins:review.pins,planId:plan.id,planDigest:plan.digest,decisionBasis:review.decisions.writeBasis}});
+ }catch(e){return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Demo estimate changes are unavailable.'}});}
 });
 
 router.post('/command-center/estimates/:estimateId/decisions', async function(req,res) {
@@ -370,16 +387,18 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     const record = await commandCenterRepository.read(token);
     const item = demoCanonicalItems(demoWorkspace(record)).find(value => value.ids.estimate === req.params.estimateId);
     if (!item) return res.status(404).json({ success: false, error: { message: 'That demo estimate is unavailable.' } });
-    const review=buildEstimateReview(item, { simulated: true });
+    const selected=req.query.revision===undefined?null:Number(req.query.revision);
+    const review=buildRevisionReview(item,selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[],selected),{simulated:true});
     const history=record.state.estimateDecisions?.[req.params.estimateId] || [];
-    review.decisions=projectDecisions({current:history[0]||null,history,total:history.length,truncated:false},decisionPolicy.mutationsEnabled,true);
+    review.decisions=projectSelectedDemoDecisions(history,review,decisionPolicy.mutationsEnabled);
     review.approval=review.decisions.status;review.approvalMessage=review.decisions.message;review.demoWorkspaceRevision=record.revision;
     review.riskReview=buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
-    const plans=record.state.materialPlans?.[item.ids.estimate]||[];review.materialPlans=materialPlan.project({current:plans[0]||null,history:plans,total:plans.length},review,materialPlanPolicy.mutationsEnabled,true,!materialPlanPolicy.mutationsEnabled);
+    const plans=record.state.materialPlans?.[item.ids.estimate]||[];review.materialPlans=materialPlan.project({current:plans[0]||null,history:plans,total:plans.length},review,review.isCurrent&&materialPlanPolicy.mutationsEnabled,true,!materialPlanPolicy.mutationsEnabled);
+    review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled;review.adoptionPaused=!adoptionPolicy.mutationsEnabled;
     return res.json({ success: true, data: review });
   } catch (_error) {
-    return res.status(503).json({ success: false, error: { message: 'Demo estimate review could not be loaded. Try again.' } });
+    return res.status(_error.status===404?404:503).json({ success: false, error: { message: _error.status===404?'That demo estimate is unavailable.':'Demo estimate review could not be loaded. Try again.' } });
   }
 });
 

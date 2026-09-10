@@ -500,6 +500,42 @@ function buildDemoGraph(input) {
   return graph;
 }
 
+// New/reset examples only: visible fictional dialogue, never a provider call or a
+// replacement source for the already recorded estimate facts/calculation.
+function withSeededDemoConversation(graph) {
+  const scope = graph.polaris.snapshot.service.scope || {};
+  const example = graph.polaris.syntheticCalculation;
+  const turns = [{ speaker:'system', text:'Simulated conversation based on this saved example. No live call or knowledge search occurred.' },
+    { speaker:'ai', text:'Thanks for calling. What work would you like help with?' },
+    { speaker:'customer', text:'I am asking about ' + graph.lead.serviceLabel.toLowerCase() + ' at ' + graph.customer.address + '.' }];
+  const questions = [
+    ['jobType','Is this new work, a repair, or a replacement?','The work is ', ''],
+    ['material','What material are you considering?','The material is ', ''],
+    ['linearFeet','About how much length is involved?','About ', ' feet'],
+    ['squares','Do you have an approximate roof size?','About ', ' roofing squares'],
+    ['stories','How many stories does the building have?','It has ', ' stories'],
+    ['pitch','Do you know the roof pitch?','The pitch is ', ''],
+    ['systemType','What type of heating or cooling system do you have?','It is a ', ''],
+    ['tonnage','Do you know the system size?','The recorded size is ', ' tons'],
+    ['sqft','About how large is the area it serves?','About ', ' square feet'],
+    ['fixture','Which fixture needs attention?','The affected fixture is a ', ''],
+    ['leakSeverity','Is there an active leak, and how severe is it?','The leak is described as ', '']
+  ];
+  questions.forEach(([key,question,prefix,suffix])=>{if(scope[key]!==null&&scope[key]!==undefined){turns.push({speaker:'ai',text:question},{speaker:'customer',text:prefix+String(scope[key])+suffix+'.'});}});
+  if(typeof scope.waterShutoff==='boolean') turns.push({speaker:'ai',text:'Has the water been shut off?'},{speaker:'customer',text:scope.waterShutoff?'Yes, it has been shut off.':'No, it has not been shut off.'});
+  turns.push({speaker:'ai',text:'Thank you. We will verify measurements and access before committing to the work.'});
+  if(example){
+    const input=example.input;
+    turns.push({speaker:'ai',text:'For this example, the business estimate uses a '+input.businessProfile.crew.defaultCrewSize+'-person crew and '+scope.laborHours+' hours of work. The equipment allowance comes from the fictional business profile; actual suitability and availability still need review.'});
+    turns.push({speaker:'system',text:'Estimate basis: saved job details and the fictional business cost profile. Material quantity and current supplier availability have not been verified.'});
+  }else turns.push({speaker:'ai',text:'We have a preliminary estimate for this example, but the internal costs are incomplete. The owner needs to review them before a price is agreed.'});
+  turns.push({speaker:'ai',text:'What timing would work for you, and are there any access restrictions?'},
+    {speaker:'customer',text:scope.schedulingConstraint ? String(scope.schedulingConstraint) : 'Please follow up with me to confirm the timing and access.'},
+    {speaker:'ai',text:'I will leave the recorded scope and open questions for owner review. This conversation does not approve a price or book the work.'});
+  const result={...graph,communication:{...graph.communication,transcript:turns}};
+  delete result.projectionDigest;result.projectionDigest=sha256(result);return stableValue(result);
+}
+
 function initialGraphs(seededWorkspace, createdAt) {
   const customers = new Map(seededWorkspace.customers.map(customer => [customer.id, customer]));
   return seededWorkspace.jobs.map(function (job, index) {
@@ -538,7 +574,7 @@ function initialGraphs(seededWorkspace, createdAt) {
       ],
       businessProfile: seededWorkspace.businessProfile,
     });
-    return index === 0 ? addRecordedCostExample(seededWorkspace.tenant.id, graph) : graph;
+    return withSeededDemoConversation(index === 0 ? addRecordedCostExample(seededWorkspace.tenant.id, graph) : graph);
   });
 }
 

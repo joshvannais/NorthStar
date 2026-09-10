@@ -246,12 +246,12 @@ window.PolarisEngine = (function () {
       return;
     }
     setText('polarisTopOpp', selected.serviceText);
-    setText('polarisTopOppDesc', selected.customerPriceText);
+    setText('polarisTopOppDesc', 'Original price guidance: ' + selected.customerPriceText);
     setText('polarisTopConf', selected.confidenceText);
     setText('polarisPipeline', metrics && metrics.estimatedRevenue !== null ? '$' + Number(metrics.estimatedRevenue).toLocaleString() : '\u2014');
-    setText('polarisPipeConf', 'Role-authorized values');
+    setText('polarisPipeConf', 'Original estimated values');
     setText('polarisFocus', selected.recommendedActionText || '\u2014');
-    setText('polarisFocusDesc', 'Based on the latest role-authorized customer and work evidence');
+    setText('polarisFocusDesc', 'Based on original recorded customer and work information');
     setText('polarisFocusConf', selected.risk && selected.risk.emergency ? 'Emergency evidence' : 'No active emergency');
   }
 

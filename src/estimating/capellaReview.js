@@ -36,7 +36,7 @@ function buildCapellaReview(review, snapshot) {
     return unavailable('review_changed', 'Refresh this estimate and review its saved price before comparing costs.');
   }
   const price = priceCents(decision.priceBeforeTax);
-  const direct = snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'knownDirectCosts') ? recordedCents(snapshot.knownDirectCosts) : null;
+  const direct = review.pins?.revision?.calculationVersion === 'estimate-material-adoption-v1' ? priceCents(review.financialCosts?.knownDirectCosts) : snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'knownDirectCosts') ? recordedCents(snapshot.knownDirectCosts) : null;
   if (price === null) return unavailable('price_unavailable', 'The saved price cannot be compared. Review the scope and price again.');
   if (direct === null) return unavailable('costs_unavailable', 'Recorded direct costs are incomplete or unavailable. Confirm the missing costs before relying on this comparison.');
   const remaining = price - direct;

@@ -1326,17 +1326,7 @@ async function exerciseViewport(browser, origin, viewport, ledger) {
       drawerText,
     }));
     assert.ok(drawerText.includes('POLARIS'), viewport.label + ' detail contains Polaris intelligence');
-    for (const heading of [
-      'Contact Information', 'Customer Profile', 'Job Details', 'Description',
-      'Gates and missing information', 'Materials', 'Equipment', 'Scheduling', 'Pricing', 'Risk',
-    ]) {
-      assert.ok(drawerText.toLowerCase().includes(heading.toLowerCase()),
-        viewport.label + ' detail contains readable ' + heading + ' section');
-    }
-    const drawerOrder = ['Contact Information', 'Customer Profile', 'Job Details', 'Polaris™ Intelligence']
-      .map(heading => drawerText.toLowerCase().indexOf(heading.toLowerCase()));
-    assert.ok(drawerOrder.every(index => index >= 0) && drawerOrder.every((value, index) => index === 0 || value > drawerOrder[index - 1]),
-      viewport.label + ' detail keeps contact and profile first, then work and Polaris intelligence');
+    await fromRoot('tests/helpers/m24-drawer-hierarchy').assertDrawerHierarchy(page, viewport.label);
     assert.ok(!/\[object Object\]|\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b|\b[0-9a-f]{40,}\b/i.test(drawerText),
       viewport.label + ' detail never exposes object serialization or internal identifiers');
     assert.ok(drawerText.includes('AI AGENT') && !drawerText.includes('No transcript available.'),

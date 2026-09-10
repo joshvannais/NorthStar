@@ -1,4 +1,8 @@
 'use strict';
+const adoption = require('../estimating/materialAdoptionContract');
+const adoptionPolicy = require('../estimating/materialAdoptionPolicy');
+const {buildRevisionReview,selectDemoRevision,projectSelectedDemoDecisions,demoAdopt} = require('../estimating/estimateRevisionReview');
+
 
 const crypto = require('crypto');
 const {normalizeDecision,demoDecision} = require('../estimating/decisionContract');
@@ -177,7 +181,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','material_plan'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','material_plan','estimate_adopt'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -205,12 +209,14 @@ function mutationInput(input) {
     if(typeof input.estimateId !== 'string' || !/^[0-9a-f-]{36}$/.test(input.estimateId)) fail(400,'DEMO_REVIEW_INVALID','Choose a demo estimate.');
     normalized.estimateId=input.estimateId; normalized.decision=normalizeDecision(input.decision);
   }
+  if(input.operation==='estimate_adopt'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'ESTIMATE_ADOPTION_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.adoption=adoption.normalize(input.adoption);}
   if(input.operation==='material_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'MATERIAL_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=materialPlan.normalize(input.plan);}
   normalized.requestDigest = sha256({
     operation: normalized.operation,
     expectedRevision: normalized.expectedRevision,
     scenarioSelection: normalized.scenarioSelection || null,
     ...(normalized.operation==='estimate_review' ? {estimateId:normalized.estimateId,decision:normalized.decision} : {}),
+    ...(normalized.operation==='estimate_adopt'?{estimateId:normalized.estimateId,adoption:normalized.adoption}:{}),
     ...(normalized.operation==='material_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
   });
   return normalized;
@@ -479,6 +485,7 @@ class DemoCommandCenterRepository {
 
   async mutate(token, rawInput, rawAdmission) {
     const input = mutationInput(rawInput);
+    if(input.operation==='estimate_adopt'&&!adoptionPolicy.mutationsEnabled)fail(503,'ESTIMATE_ADOPTION_PAUSED','New estimate changes are paused. Saved estimates remain available.');
     if(input.operation==='material_plan'&&!materialPlanPolicy.mutationsEnabled)fail(503,'MATERIAL_PLAN_PAUSED','New material plans are paused. Saved plans remain available.');
     if(input.operation==='estimate_review' && !decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
     const admitted = admission(rawAdmission);
@@ -543,6 +550,7 @@ class DemoCommandCenterRepository {
             digest(replay.rows[0].request_digest) !== input.requestDigest) {
           fail(409, 'DEMO_IDEMPOTENCY_CONFLICT', 'That demo action key was already used for a different action.');
         }
+        if(input.operation==='estimate_adopt'&&(current.state.estimateRevisions?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='material_plan'&&(current.state.materialPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='estimate_review' && (current.state.estimateDecisions?.[input.estimateId] || []).some(event=>event.requestKey===input.idempotencyHash)) {
           await client.query('COMMIT'); open=false; return {record:current,replayed:true};
@@ -566,17 +574,23 @@ class DemoCommandCenterRepository {
       let nextState;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if(input.operation==='material_plan'){
+      if(input.operation==='estimate_adopt'){
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
+        const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'ESTIMATE_ADOPTION_UNAVAILABLE','That demo estimate is unavailable.');
+        const histories=current.state.estimateRevisions||{},history=histories[input.estimateId]||[];
+        const result=demoAdopt(item,history,current.state.estimateDecisions?.[input.estimateId]||[],current.state.materialPlans?.[input.estimateId]?.[0],input.adoption,input.idempotencyHash,now);
+        nextState=stableValue({...current.state,estimateRevisions:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
+      } else if(input.operation==='material_plan'){
         if(!materialPlanPolicy.mutationsEnabled)fail(503,'MATERIAL_PLAN_PAUSED','New material plans are paused. Saved plans remain available.');
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'MATERIAL_PLAN_UNAVAILABLE','That demo estimate is unavailable.');
-        const review=buildEstimateReview(item,{simulated:true});review.decisions={current:(current.state.estimateDecisions?.[input.estimateId]||[])[0]||null};const histories=current.state.materialPlans||{},history=histories[input.estimateId]||[];const result=materialPlan.demoPlan(history,review,input.plan,input.idempotencyHash,now);nextState=stableValue({...current.state,materialPlans:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
+        const review=buildRevisionReview(item,selectDemoRevision(item,current.state.estimateRevisions?.[input.estimateId]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(current.state.estimateDecisions?.[input.estimateId]||[],review,true);const histories=current.state.materialPlans||{},history=histories[input.estimateId]||[];const result=materialPlan.demoPlan(history,review,input.plan,input.idempotencyHash,now);nextState=stableValue({...current.state,materialPlans:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
       } else if (input.operation === 'estimate_review') {
         if(!decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
         const item=demoCanonicalItems(workspace).find(value=>value.ids.estimate===input.estimateId);
         if(!item) fail(404,'DEMO_REVIEW_UNAVAILABLE','That demo estimate is unavailable.');
         const histories=current.state.estimateDecisions || {};
-        const result=demoDecision(histories[input.estimateId] || [],buildEstimateReview(item,{simulated:true}),input.decision,input.idempotencyHash,'Demo reviewer',now);
+        const result=demoDecision(histories[input.estimateId] || [],buildRevisionReview(item,selectDemoRevision(item,current.state.estimateRevisions?.[input.estimateId]||[]),{simulated:true}),input.decision,input.idempotencyHash,'Demo reviewer',now);
         nextState=stableValue({...current.state,estimateDecisions:{...histories,[input.estimateId]:result.history}});
       } else if (input.operation === 'simulate_lead') {
         if (current.simulationCount >= 12) fail(429, 'DEMO_SIMULATION_LIMIT', 'This demo session reached its lead limit.');

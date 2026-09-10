@@ -78,3 +78,8 @@ After independently accepted Part1 architecture at PR188, Part2 Slice1 adds [rec
 ## Part2 Slice2 single-material planning
 
 [Single-material plans](../operations/MISSION_24_MATERIAL_PLANS.md) add actual shared paid/demo quantity/waste/unit-cost computation and immutable human-entered source history. They stay separate from recorded canonical estimate cost and existing human scope/price decisions; no quote approval or automatic R2 adoption. New058 and actual source-derived material-only/combined recovery require independent exact-package and later concrete release readiness review. Multi-material/source/availability intelligence and deliberate canonical revision adoption remain open; no Part2 completion or fixed slice count.
+
+
+### Part2 Slice3 — one-plan adoption
+
+This bounded implementation appends an explicit material-cost-only estimate revision with fresh human scope/price review, selected private Polaris/Capella basis and functional shared demo. See [the source/acceptance/recovery contract](../operations/MISSION_24_MATERIAL_ADOPTION.md). Original prices, tax, operational graphs and prior history stay original; broader consumer adoption is inventoried separately. Part2 remains open for multiple materials, source freshness and availability intelligence. The canonical nine Parts and later quote ownership are unchanged; this entry is not a Part2 completion or release claim.

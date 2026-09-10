@@ -10,6 +10,10 @@ const { projectDecisions } = require('../estimating/decisionContract');
 const decisionPolicy = require('../estimating/decisionPolicy');
 const materialPlan = require('../estimating/materialPlanContract');
 const materialPlanPolicy = require('../estimating/materialPlanPolicy');
+const adoption = require('../estimating/materialAdoptionContract');
+const adoptionPolicy = require('../estimating/materialAdoptionPolicy');
+const {buildRevisionReview} = require('../estimating/estimateRevisionReview');
+const {readRevisions,readSelectedDecisions,mutateAdoption} = require('../estimating/materialAdoptionRepository');
 const {readPlans,mutatePlan} = require('../estimating/materialPlanRepository');
 
 const audit = require('../audit/client');
@@ -1401,10 +1405,37 @@ function createCanonicalRouter(options) {
     try {const result=await withBroadCanonicalRead(req,dependencies,async(client,operator)=>{
       if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Material planning is available to current owners and administrators.'),{status:403});
       const item=await getCanonicalGraph(client,requestContext(req),req.params.estimateId);if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
-      const review=buildEstimateReview(item);review.decisions=await readDecisions(client,{...actorInput(req),estimateId:item.ids.estimate});const plans=await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate});
+      const input={...actorInput(req),estimateId:item.ids.estimate};const review=buildRevisionReview(item,await readRevisions(client,input));review.decisions=await readSelectedDecisions(client,input);const plans=await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate});
       const body=materialPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')throw Object.assign(new Error('Enter a material plan to calculate.'),{status:400});materialPlan.checkBasis(body,review,plans.current);
-      return {result:materialPlan.calculate(body.inputs,body.currency),sourcePins:review.pins,decisionBasis:materialPlan.decisionBasis(review.decisions.current)};
+      return {result:materialPlan.calculate(body.inputs,body.currency),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
     });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Material planning is unavailable. Refresh and try again.'}});}
+  });
+
+  router.post('/estimates/:estimateId/material-adoption-preview', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check this estimate and material plan before continuing.'}});
+    try {const result=await withBroadCanonicalRead(req,dependencies,async(client,operator)=>{
+      if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Estimate changes are available to current owners and administrators.'),{status:403});
+      const input={...actorInput(req),estimateId:req.params.estimateId};
+      const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
+      if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      const review=buildRevisionReview(item,await readRevisions(client,input));
+      review.decisions=await readSelectedDecisions(client,input);
+      const plans=await readPlans(client,input),body=adoption.normalize({...req.body,confirmed:true});
+      adoption.checkBasis(body,review,plans.current);
+      return {result:adoption.calculate(item,plans.current),sourcePins:review.pins,planId:plans.current.id,planDigest:plans.current.digest,decisionBasis:review.decisions.writeBasis};
+    });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
+  });
+  router.post('/estimates/:estimateId/material-adoptions', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check this estimate and material plan before continuing.'}});
+    try {const input={...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')};
+      const result=await mutateAdoption(resolvePool(dependencies.poolProvider),input,req.body,async(client,receipt)=>{
+        const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
+        if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+        adoption.calculate(item,receipt.materialPlan);
+      });return res.status(result.replayed?200:201).json({success:true,data:result});
+    }catch(error){return res.status(error.status||503).json({success:false,error:{message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
   });
 
   router.post('/estimates/:estimateId/decisions', dependencies.auth, requireCanonicalContext, async function (req, res) {
@@ -1429,19 +1460,25 @@ function createCanonicalRouter(options) {
         }
         const item = await getCanonicalGraph(client, requestContext(req), req.params.estimateId);
         if (!item || item.ids.estimate !== req.params.estimateId) return null;
-        const review = buildEstimateReview(item);
-        const decisions = await readDecisions(client, {...actorInput(req), estimateId: item.ids.estimate});
-        review.decisions = projectDecisions(decisions, decisionPolicy.mutationsEnabled && operator.canMutate === true);
+        const selected=req.query.revision===undefined?null:Number(req.query.revision);
+        if(selected!==null&&(!Number.isSafeInteger(selected)||selected<1||selected>10000))throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+        const input={...actorInput(req),estimateId:item.ids.estimate};
+        const review = buildRevisionReview(item,await readRevisions(client,input,selected));
+        const decisions = await readSelectedDecisions(client,input,selected);
+        review.decisions = projectDecisions(decisions, review.isCurrent && decisionPolicy.mutationsEnabled && operator.canMutate === true);
+        if(!review.isCurrent)review.decisions.recoveryMessage='Earlier estimates are read-only. Select the current estimate to review its scope and price.';
         review.approval = review.decisions.status; review.approvalMessage = review.decisions.message;
         review.riskReview = buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
-        review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);
+        review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);
+        review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled&&operator.canMutate===true;
+        review.adoptionPaused=!adoptionPolicy.mutationsEnabled;
         return review;
       });
       if (!review) return failure(404, 'That estimate is unavailable.');
       return res.json({ success: true, data: review });
     } catch (error) {
-      const status = error && [401, 403].includes(error.statusCode) ? error.statusCode : 503;
+      const status = error && [400,401,403,404].includes(error.status||error.statusCode) ? (error.status||error.statusCode) : 503;
       return failure(status, status === 401 ? 'Sign in again to review this estimate.' :
         status === 403 ? 'Estimate review is available to current owners and administrators.' :
         'Estimate review could not be loaded. Try again.');

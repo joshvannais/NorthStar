@@ -1697,3 +1697,36 @@ html body .customer-drawer .drawer-transcript-disclosure[open] > summary { margi
 html body .customer-drawer .drawer-unpriced-categories { color:rgba(255,255,255,.85); font-size:13px; margin:8px 0; }
 html body .customer-drawer .drawer-unpriced-categories > summary { cursor:pointer; }
 html body .customer-drawer .drawer-unpriced-categories ul { margin:8px 0; padding-left:18px; }
+
+/* Approved compact customer-card hierarchy: existing NorthStar type and palette. */
+html body .customer-drawer .drawer-identity { min-width:0; }
+html body .customer-drawer .drawer-header-meta { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; margin-top:6px; font-size:14px; color:var(--neutral-600); }
+html body .customer-drawer .drawer-header-meta #cdStage, html body .customer-drawer .drawer-demo-badge { border-radius:999px; padding:3px 9px; background:var(--neutral-100); color:var(--neutral-700); font-size:12px; }
+html body .customer-drawer .drawer-polaris-insight > h3 { color:#fff; margin:0 0 16px; font-size:16px; }
+html body .customer-drawer .drawer-polaris-grid { display:block; }
+html body .customer-drawer #cdPolPrice { font-size:32px; line-height:1.2; margin:6px 0; }
+html body .customer-drawer .drawer-original-range { color:rgba(255,255,255,.85); font-size:14px; margin-top:8px; }
+html body .customer-drawer .drawer-polaris-analysis .drawer-work-details { display:grid; grid-template-columns:1fr; }
+html body .customer-drawer .drawer-work-facts { list-style:none; padding:0; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 20px; }
+html body .customer-drawer .drawer-fact-label, html body .customer-drawer .drawer-fact-value { display:block; }
+html body .customer-drawer .drawer-fact-label { color:rgba(255,255,255,.75); font-size:12px; }
+html body .customer-drawer .drawer-fact-value { color:#fff; font-size:14px; margin-top:3px; }
+html body .customer-drawer .drawer-original-charges { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+html body .customer-drawer .drawer-original-charges > h4 { grid-column:1/-1; }
+html body .customer-drawer .drawer-original-charges .drawer-work-detail { border:0; padding:0; }
+html body .customer-drawer .drawer-original-charges .drawer-work-facts { grid-template-columns:1fr; }
+html body .customer-drawer .drawer-card-note { padding:16px; border:1px solid var(--neutral-200); border-radius:12px; background:var(--neutral-50); margin:14px 0; font-size:14px; }
+html body .customer-drawer .drawer-card-note h3 { margin:0 0 10px; font-size:14px; }
+html body .customer-drawer .drawer-card-note .drawer-work-facts { display:grid; grid-template-columns:1fr; gap:6px; color:var(--neutral-700); list-style:disc; padding-left:18px; }
+html body .customer-drawer .drawer-estimate-basis { font-size:12px; color:rgba(255,255,255,.85); margin-top:14px; }
+html body .customer-drawer .drawer-estimate-basis > summary { cursor:pointer; }
+html body .customer-drawer .drawer-estimate-basis #cdPolConfidence { margin-top:10px; }
+html body .customer-drawer .drawer-polaris-pricing { border:1px solid var(--neutral-200); border-radius:12px; padding:14px 16px; margin:14px 0; }
+html body .customer-drawer .drawer-polaris-pricing > summary, html body .customer-drawer .drawer-polaris-pricing #cdPricingBreakdown, html body .customer-drawer .drawer-pricing-category-header, html body .customer-drawer .drawer-pricing-item, html body .customer-drawer .drawer-unpriced-categories { color:var(--neutral-900); }
+html body .customer-drawer .drawer-pricing-category-detail { color:var(--neutral-600); }
+html body .customer-drawer .drawer-pricing-category, html body .customer-drawer .drawer-pricing-item { border-color:var(--neutral-200); }
+html body .customer-drawer .drawer-customer-background > summary { cursor:pointer; font-size:14px; font-weight:600; padding:8px 0; }
+html body .customer-drawer .drawer-customer-background[open] > summary { margin-bottom:12px; }
+
+html body .customer-drawer .drawer-header-meta #cdPolSummary { color:var(--neutral-600); font-size:14px; }
+html body .customer-drawer .drawer-card-note #cdPolAction { color:var(--neutral-900); font-size:14px; }

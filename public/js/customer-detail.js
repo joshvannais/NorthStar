@@ -275,6 +275,49 @@ window.CustomerDetail = (function() {
     _overlayEl = $('cdDrawerOverlay');
     _drawerEl = $('cdCustomerDrawer');
 
+    // Approved customer-card hierarchy, using the existing shared controls/data.
+    var content = $('cdDrawerContent'), panel = $('cdPolarisInsight');
+    var polarisSection = panel.parentElement;
+    var brand = polarisSection.querySelector('h3'); panel.prepend(brand);
+    var headerMeta = document.createElement('div'); headerMeta.className = 'drawer-header-meta';
+    headerMeta.append($('cdPolSummary'), $('cdStage'));
+    var sourceBadge = document.createElement('span'); sourceBadge.id = 'cdDemoBadge'; sourceBadge.className = 'drawer-demo-badge'; sourceBadge.textContent = 'Demo'; sourceBadge.hidden = true; headerMeta.appendChild(sourceBadge);
+    var identity = document.createElement('div'); identity.className = 'drawer-identity';
+    var header = _drawerEl.querySelector('.drawer-header'); identity.append($('cdDrawerTitle'),headerMeta); header.prepend(identity);
+    var priceBox = $('cdPolPrice').parentElement; priceBox.classList.add('drawer-primary-estimate');
+    var range = document.createElement('div'); range.id = 'cdPolRange'; range.className = 'drawer-original-range'; priceBox.appendChild(range);
+    var confidenceNode = $('cdPolConfidence'), actionNode = $('cdPolAction');
+    $('cdPolarisInsight').querySelector('.drawer-polaris-grid').replaceChildren(priceBox);
+    var analysis = panel.querySelector('.drawer-polaris-analysis'); analysis.open = true;
+    analysis.querySelector('summary').textContent = 'Scope, travel and charges';
+    var scopeSection = $('cdDescription').parentElement; scopeSection.querySelector('h4').textContent = 'Scope details';
+    var travelSection = $('cdWorkScheduling').parentElement; travelSection.querySelector('h4').textContent = 'Travel and work time';
+    var charges = document.createElement('section'); charges.className = 'drawer-work-detail drawer-original-charges';
+    var chargeTitle = document.createElement('h4'); chargeTitle.id = 'cdChargeHeading'; chargeTitle.textContent = 'Original charge details'; charges.appendChild(chargeTitle);
+    charges.append($('cdWorkMaterials').parentElement, $('cdWorkEquipment').parentElement);
+    var attention = document.createElement('section'); attention.className = 'drawer-card-note'; attention.id = 'cdAttentionSection';
+    var attentionTitle = document.createElement('h3'); attentionTitle.textContent = 'Needs attention'; attention.append(attentionTitle,$('cdWorkGates'));
+    var riskNode = $('cdWorkRisk');
+    var nextAction = document.createElement('section'); nextAction.className = 'drawer-card-note';
+    var nextTitle = document.createElement('h3'); nextTitle.textContent = 'Next action'; nextAction.append(nextTitle,actionNode);
+    var basisDetails = document.createElement('details'); basisDetails.className = 'drawer-estimate-basis';
+    var basisTitle = document.createElement('summary'); basisTitle.textContent = 'How to read this estimate';
+    basisDetails.append(basisTitle,confidenceNode,panel.querySelector('.drawer-polaris-basis'),riskNode);
+    var neutralContext = document.createElement('p'); neutralContext.id = 'cdNeutralContext'; basisDetails.appendChild(neutralContext);
+    panel.querySelector('.drawer-work-details').replaceChildren(scopeSection,travelSection,charges);
+    panel.appendChild(basisDetails);
+    var priceDetails = panel.querySelector('.drawer-polaris-pricing'); priceDetails.classList.add('drawer-section');
+    priceDetails.querySelector('summary').textContent = 'Price breakdown and estimate review';
+    var contactSection = $('cdName').closest('.drawer-section'), profileSection = $('cdProfileSection');
+    var contactDetails = document.createElement('details'); contactDetails.className = 'drawer-section drawer-customer-background';
+    var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Contact and customer history';
+    contactDetails.append(contactTitle,contactSection,profileSection);
+    contactDetails.appendChild($('cdProbabilityRow'));
+    panel.querySelector('.drawer-polaris-context').remove();
+    content.prepend(polarisSection);
+    polarisSection.after(attention,nextAction,$('cdExecutionSection'),priceDetails,$('cdTranscriptDisclosure'),contactDetails);
+    $('cdContextSummary').hidden = true;
+
     // Event bindings
     _overlayEl.addEventListener('click', function(event) { event.preventDefault(); close(); });
     $('cdDrawerClose').addEventListener('click', function(event) { event.preventDefault(); event.stopPropagation(); close(); });
@@ -522,8 +565,8 @@ window.CustomerDetail = (function() {
   function gateSummary(values) {
     var prompts = {
       vehicleCost:'Vehicle and fuel expenses need separate review; the estimate may not include them.', fuelCost:'Vehicle and fuel expenses need separate review; the estimate may not include them.',
-      callDurationSeconds:'Call length was not recorded.', actualCrewAssignment:'Confirm the crew before scheduling.',
-      appointmentPreference:'Confirm a suitable appointment time.', crewRecommendation:'Review the crew needed for this work.',
+      callDurationSeconds:'Call length was not recorded.', actualCrewAssignment:'Confirm the crew and appointment before scheduling.',
+      appointmentPreference:'Confirm the crew and appointment before scheduling.', crewRecommendation:'Review the crew needed for this work.',
       customerFacingPrice:'Review the missing job and price inputs before quoting.', preliminaryRange:'A price range is not available.',
       equipmentCharge:'Review the equipment charge.', equipmentReference:'Confirm suitable equipment for the job.',
       estimatedProductionDurationHours:'Confirm the expected work duration.', laborHours:'Confirm the labor hours.',
@@ -540,10 +583,10 @@ window.CustomerDetail = (function() {
     var entries = [];
     (values && Array.isArray(values.missingInformation) ? values.missingInformation : []).forEach(function(item) {
       if (typeof item === 'string') entries.push('Confirm ' + describe(item, 'the missing job detail', 'detail') + '.');
-      else if (item && typeof item === 'object') entries.push(prompts[item.field] || 'Review the missing job details before committing to work.');
+      else if (item && typeof item === 'object' && item.field !== 'callDurationSeconds') entries.push(prompts[item.field] || 'Review the missing job details before committing to work.');
     });
     (values && Array.isArray(values.notCalculated) ? values.notCalculated : []).forEach(function(item) {
-      if (item && typeof item === 'object') entries.push(prompts[item.field] || 'Some estimate details are unavailable. Review the recorded job information.');
+      if (item && typeof item === 'object' && item.field !== 'callDurationSeconds') entries.push(prompts[item.field] || 'Some estimate details are unavailable. Review the recorded job information.');
     });
     return entries.length ? entries.filter(function(value,index,list) { return list.indexOf(value) === index; }) : ['No missing information is recorded for this work.'];
   }
@@ -552,7 +595,14 @@ window.CustomerDetail = (function() {
     var root = $(id); root.replaceChildren();
     var entries = Array.isArray(value) ? value : [value];
     (entries.length ? entries : ['Not recorded']).forEach(function(text) {
-      var item = document.createElement('li'); item.textContent = text; root.appendChild(item);
+      var item = document.createElement('li');
+      var separator = String(text).indexOf(': ');
+      if (separator > 0 && id !== 'cdWorkGates' && id !== 'cdWorkRisk') {
+        var label = document.createElement('span'); label.className = 'drawer-fact-label'; label.textContent = text.slice(0,separator);
+        var value = document.createElement('span'); value.className = 'drawer-fact-value'; value.textContent = text.slice(separator+2);
+        item.append(label,value);
+      } else item.textContent = text;
+      root.appendChild(item);
     });
   }
 
@@ -562,7 +612,7 @@ window.CustomerDetail = (function() {
     function cost(value) { return value == null ? 'Not recorded' : fmtCurrency(value); }
     var labels = { customerDistanceMiles:'Customer distance', equipmentReference:'Equipment', jobType:'Work type', laborHours:'Labor time', serviceRadiusMiles:'Service radius', serviceZone:'Service area', linearFeet:'Length', estimatedDurationHours:'Estimated duration' };
     var units = { customerDistanceMiles:'miles', serviceRadiusMiles:'miles', linearFeet:'ft', laborHours:'hours', estimatedDurationHours:'hours' };
-    var scopeFacts = scope && typeof scope === 'object' && !Array.isArray(scope) ? Object.keys(scope).filter(function(key) { return !presentationFormat().isInternalKey(key) || key === 'equipmentReference'; }).map(function(key) {
+    var scopeFacts = scope && typeof scope === 'object' && !Array.isArray(scope) ? Object.keys(scope).filter(function(key) { return key !== 'timeZone' && (!presentationFormat().isInternalKey(key) || key === 'equipmentReference'); }).map(function(key) {
       var label = labels[key] || presentationFormat().label(key);
       return label + ': ' + (units[key] ? measured(scope[key],units[key]) : describe(scope[key],'Not recorded',key));
     }) : [displayDescription(scope)];
@@ -570,11 +620,11 @@ window.CustomerDetail = (function() {
     return {
       description:scopeFacts,
       gates:gateSummary(values),
-      materials:[lineItemSummary(values,'materials','Original material charge: '+cost(values.materialsCharge))],
-      equipment:[lineItemSummary(values,'equipment','Original equipment charge: '+cost(values.equipmentCharge))],
+      materials:[cost(values.materialsCharge)],
+      equipment:[cost(values.equipmentCharge)],
       scheduling:['Estimated work: '+measured(values.estimatedProductionDurationHours,'hours'),'Travel distance: '+measured(travel.distanceMiles,'miles'),'Travel time: '+measured(travel.minutes,'minutes'),'Original travel charge: '+cost(travel.customerCharge),'Recorded travel cost: '+cost(travel.knownInternalCost)],
       pricing:['Original estimate: '+cost(values.customerFacingPrice),'Original price range: '+(values.preliminaryRange ? cost(values.preliminaryRange.low)+' to '+cost(values.preliminaryRange.high) : 'Not recorded'),'Tax: '+(values.taxDisposition && values.taxDisposition.status==='calculated' ? cost(values.tax) : 'Needs review')],
-      risk:[values.risk && values.risk.emergency ? 'Emergency reported. Review the recorded details before committing to work.' : 'No emergency is recorded. Other job risks still require review.']
+      risk:[values.risk && typeof values.risk.emergency === 'boolean' ? (values.risk.emergency ? 'Emergency reported. Review the recorded details before committing to work.' : 'No emergency is recorded. Other job risks still require review.') : 'Risk information is not recorded. Review job risks before committing to work.']
     };
   }
 
@@ -1136,8 +1186,20 @@ window.CustomerDetail = (function() {
     renderWorkFacts('cdWorkMaterials', work.materials);
     renderWorkFacts('cdWorkEquipment', work.equipment);
     renderWorkFacts('cdWorkScheduling', work.scheduling);
-    renderWorkFacts('cdWorkPricing', work.pricing);
+
     renderWorkFacts('cdWorkRisk', work.risk);
+    var sourceValues = data.intelligence || {}, sourceScope = sourceValues.service && sourceValues.service.scope || {};
+    var neutral = [];
+    if (sourceValues.callDurationSeconds == null) neutral.push('Call length not recorded.');
+    if (sourceScope.timeZone) {
+      var zoneLabel = 'Needs confirmation';
+      try { zoneLabel = new Intl.DateTimeFormat('en-US', { timeZone:sourceScope.timeZone, timeZoneName:'longGeneric' }).formatToParts(new Date()).find(function(part) { return part.type === 'timeZoneName'; }).value; } catch (_zoneError) {}
+      neutral.push('Work time zone: ' + zoneLabel + '.');
+    }
+    $('cdNeutralContext').textContent = neutral.join(' ');
+    if (sourceValues.risk && sourceValues.risk.emergency) $('cdAttentionSection').appendChild($('cdWorkRisk'));
+    else $('cdNeutralContext').parentElement.insertBefore($('cdWorkRisk'),$('cdNeutralContext'));
+    $('cdChargeHeading').textContent = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active ? 'Original charges · fictional example' : 'Original charge details';
     $('cdStage').textContent = stageLabel(data.stage);
     $('cdProb').textContent = data.closeProbability != null
       ? data.closeProbability + '%'
@@ -1147,6 +1209,9 @@ window.CustomerDetail = (function() {
     // POLARIS Intelligence
     var intel = generatePolarisIntel(data);
     $('cdPolSummary').textContent = intel.summary;
+    $('cdDemoBadge').hidden = !(window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active);
+    var originalRange = data.intelligence && data.intelligence.preliminaryRange;
+    $('cdPolRange').textContent = originalRange && originalRange.low != null && originalRange.high != null ? 'Original range: ' + fmtCurrency(originalRange.low) + ' – ' + fmtCurrency(originalRange.high) : 'Original range not recorded';
     $('cdPolPrice').textContent = intel.price;
     $('cdPolConfidence').textContent = intel.confidenceLabel + ' (' + intel.confidencePct + ')';
     $('cdPolAction').textContent = intel.action;

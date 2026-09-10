@@ -3,6 +3,7 @@
 const { v5: uuidv5 } = require('uuid');
 const contract = require('../../public/js/command-center-contract');
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
+const { addRecordedCostExample } = require('./demoEstimateExample');
 const { projectIntegrationCatalogue } = require('../integrations/catalogue');
 const { defaultPreferenceDocument, PROVIDERS: MAP_PROVIDERS } = require('../mapPreferences/contract');
 const pipeline = require('../routes/simulation/pipeline');
@@ -254,8 +255,9 @@ function demoCanonicalItem(tenantId, graph, configuration) {
   });
   const businessProfile = graph.businessProfile || configuration && configuration.businessProfile || {};
   const businessProfileKey = String(businessProfile.businessKey || 'owner_operator');
-  const businessProfileAuthorityId = id(tenantId, 'demo-business-profile:' + businessProfileKey);
-  const businessProfileInputHash = sha256(businessProfile);
+  const calculatedExample = graph.polaris.syntheticCalculation && graph.polaris.syntheticCalculation.contract === 'NorthStarFictionalCostExample/v1';
+  const businessProfileAuthorityId = calculatedExample ? graph.polaris.snapshot.businessProfileInputId : id(tenantId, 'demo-business-profile:' + businessProfileKey);
+  const businessProfileInputHash = calculatedExample ? graph.polaris.snapshot.businessProfileInputHash : sha256(businessProfile);
   const transcriptText = demoTranscriptText(graph.communication && graph.communication.transcript);
   const timestamps = {
     operationClaimedAt: createdAt,
@@ -342,8 +344,8 @@ function demoCanonicalItem(tenantId, graph, configuration) {
     },
     facts,
     calculationVersion: graph.polaris.calculationVersion || DEMO_CALCULATION_VERSION,
-    normalizedInputFingerprint: sha256({ graph: graph.ids.graph, snapshot: graph.polaris.snapshot }),
-    businessProfileInputVersion: '1',
+    normalizedInputFingerprint: calculatedExample ? graph.polaris.snapshot.normalizedInputFingerprint : sha256({ graph: graph.ids.graph, snapshot: graph.polaris.snapshot }),
+    businessProfileInputVersion: calculatedExample ? graph.polaris.snapshot.businessProfileInputVersion : '1',
     businessProfileInputHash,
     businessProfileAuthorityId,
     supportingTranscriptFactIds: facts.filter(function (_fact, index) {
@@ -503,7 +505,7 @@ function initialGraphs(seededWorkspace, createdAt) {
   return seededWorkspace.jobs.map(function (job, index) {
     const customer = customers.get(job.customerId);
     if (!customer) throw new Error('A seeded demo job has no fictional customer authority.');
-    return buildDemoGraph({
+    const graph = buildDemoGraph({
       tenantId: seededWorkspace.tenant.id,
       key: 'seeded-job-' + job.id,
       createdAt: shift(createdAt, -(12 + index * 26) * 60 * 1000),
@@ -536,6 +538,7 @@ function initialGraphs(seededWorkspace, createdAt) {
       ],
       businessProfile: seededWorkspace.businessProfile,
     });
+    return index === 0 ? addRecordedCostExample(seededWorkspace.tenant.id, graph) : graph;
   });
 }
 

@@ -58,3 +58,9 @@ Prior Mission23 evidence is inherited history, not rerun here: three focused API
 ## Incremental human decision authority adoption
 
 The next bounded Phase 1 runtime package is specified in [human estimate decisions](../operations/MISSION_24_ESTIMATE_DECISIONS.md). It adds human-reviewed scope and before-tax price approval/revision/withdrawal to the existing shared paid/demo drawer, with immutable source-pinned history and a read-preserving recovery build. This is separate from machine advice and future customer-safe quote output; it does not complete Phase 1 or implement all Phase 6/8 requirements. Exact package validation and release status belong to its sealed acceptance receipt.
+
+## Reporting labels and Capella read adoption
+
+Founder-assigned reporting Parts1–9 correspond to the original canonical Phases1–9 above. They do not change original authority or establish a fixed slice count. Part1 delivery sequence: Slice1 architecture/contracts (PR184), Slice2 persisted review (PR185), Slice3 human decisions (PR186), and Slice4 private Capella recorded-cost comparison. Slice numbers are newly assigned reporting labels, not original roadmap wording. Part1 remains incomplete.
+
+Slice4 is bounded by [Capella recorded costs](../operations/MISSION_24_CAPELLA_RECORDED_COSTS.md): exact human price versus recorded direct costs, same estimate/decision provenance and isolated shared demo. It does not complete the Risk Lens, scenarios, sensitivity, Polaris chat request or branded customer quote. Exact tests/audit/release remain the sealed package's responsibility.

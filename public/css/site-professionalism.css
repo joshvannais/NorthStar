@@ -1651,3 +1651,26 @@ html body .customer-drawer #cdEstimateReviewRefresh {
   min-height: 44px;
   white-space: normal;
 }
+
+/* Mission24 Part1 Slice4: private recorded-cost comparison in the shared drawer. */
+html body .customer-drawer .drawer-capella-review {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #c9a65c;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fffaf0, #f5e8c8);
+  color: #473617;
+}
+html body .customer-drawer .drawer-capella-review[hidden] { display: none; }
+html body .customer-drawer .drawer-capella-review :is(h4,p,dt,dd) { color: inherit; }
+html body .customer-drawer .drawer-capella-review h4 { margin: 0 0 .65rem; font-size: 1rem; }
+html body .customer-drawer .drawer-capella-review p { margin: .65rem 0 0; line-height: 1.5; }
+html body .customer-drawer .drawer-capella-review dl { margin: .75rem 0; }
+html body .customer-drawer .drawer-capella-review dl > div { display: flex; justify-content: space-between; gap: 1rem; padding: .6rem 0; border-bottom: 1px solid #d9c497; }
+html body .customer-drawer .drawer-capella-review dd { margin: 0; font-weight: 700; text-align: right; white-space: nowrap; }
+html[data-theme="dark"] body .customer-drawer .drawer-capella-review { background: linear-gradient(135deg, #322b1e, #241f17); color: #fff0cf; border-color: #907545; }
+html[data-theme="dark"] body .customer-drawer .drawer-capella-review dl > div { border-color: #655437; }
+@media (max-width: 480px) {
+  html body .customer-drawer .drawer-capella-review dl > div { flex-direction: column; gap: .35rem; }
+  html body .customer-drawer .drawer-capella-review dd { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+}

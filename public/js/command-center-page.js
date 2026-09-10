@@ -656,7 +656,7 @@
         var mobileAction = actionEntries(graph)[0];
         var details = element('dl', 'command-center-mobile-work-details');
         details.append(
-          element('dt', '', 'Recorded Value'), element('dd', '', mobileRecorded),
+          element('dt', '', 'Original estimate'), element('dd', '', mobileRecorded),
           element('dt', '', 'Status'), element('dd', '', mobileStatus),
           element('dt', '', 'Next Action'), element('dd', '', mobileAction ? presentationString(mobileAction.label, 'Recommendation unavailable') : 'Review complete Polaris detail')
         );

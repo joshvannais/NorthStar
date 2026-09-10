@@ -76,7 +76,7 @@ async function main() {
       await page.evaluate(data => {
         for (const [k, v] of Object.entries(data)) NorthStarProfileFields.mount(document.getElementById(k), k, v, {
           services: [{
-            id: 'fence',
+            id: 'FENCE',
             name: 'Fence installation'
           }, {
             id: 'service:custom',

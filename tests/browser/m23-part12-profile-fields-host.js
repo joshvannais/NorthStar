@@ -133,8 +133,9 @@ async function main() {
       await pricing.getByLabel('Charge amount', {
         exact: true
       }).fill(String(width + 1));
+      const profileSaved = p.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/business-profile' && r.request().method() === 'PUT');
       await p.locator('#saveBtn').click();
-      await p.waitForFunction(() => document.getElementById('toast').textContent.includes('saved successfully'));
+      const profileSaveResponse = await profileSaved; assert.strictEqual(profileSaveResponse.status(), 200); await profileSaveResponse.finished();
       const full = await p.evaluate(async () => (await (await fetch('/api/v1/business-profile')).json()).data);
       assert.strictEqual(full.services[0].canonicalPricing.lineItems[2].amount, width + 1);
       assert.deepStrictEqual(full.services[0].canonicalPricing.lineItems.map(x => x.code), before.services[0].canonicalPricing.lineItems.map(x => x.code));
@@ -171,8 +172,9 @@ async function main() {
       await polygon.getByLabel('Longitude', {
         exact: true
       }).nth(0).fill('-72');
+      const polygonSaved = p.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/business-profile' && r.request().method() === 'PUT');
       await p.locator('#saveBtn').click();
-      await p.waitForFunction(() => document.getElementById('saveBtn').textContent === 'Save Profile');
+      const polygonResponse = await polygonSaved; assert.strictEqual(polygonResponse.status(), 200); await polygonResponse.finished();
       const saved = await p.evaluate(async () => (await (await fetch('/api/v1/business-profile')).json()).data);
       assert(Array.isArray(saved.serviceArea.polygon));
       assert.deepStrictEqual(saved.serviceArea.polygon[0], [41, -72]);

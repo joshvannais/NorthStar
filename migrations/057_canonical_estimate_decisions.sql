@@ -69,6 +69,8 @@ BEGIN
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Current owner or admin required' USING ERRCODE='42501'; END IF;
  -- Lock subscription eligibility as well as the audited actor helper's membership/account/session/onboarding rows.
  PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE;
+ -- The inherited helper uses a LEFT JOIN; this new mutation contract requires a present subscription row.
+ IF NOT FOUND THEN RAISE EXCEPTION 'Current subscription authority unavailable' USING ERRCODE='42501'; END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE);
  SELECT currency INTO current_currency FROM public.canonical_estimates WHERE organization_id=org AND id=estimate FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Estimate unavailable' USING ERRCODE='P0002'; END IF;
@@ -88,6 +90,8 @@ BEGIN
  SELECT * INTO old FROM public.canonical_estimate_decisions WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN
   IF old.request_digest<>request_hash THEN RAISE EXCEPTION 'Decision key conflict' USING ERRCODE='23505'; END IF;
+  -- A replay may have waited for the estimate or idempotency lock. Revalidate current expiry before returning it.
+  PERFORM public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE);
   RETURN jsonb_build_object('receipt',public.canonical_estimate_decision_projection(old),'replayed',TRUE);
  END IF;
  SELECT * INTO current_row FROM public.canonical_estimate_decisions WHERE organization_id=org AND estimate_id=estimate ORDER BY revision DESC LIMIT 1;

@@ -728,19 +728,31 @@ window.CustomerDetail = (function() {
     var parts = value.split('.'); return currency + ' ' + parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + parts[1];
   }
 
+  function decisionReviewBasis(review) {
+    var state = review.decisions, current = state.current;
+    return JSON.stringify({ pins: review.pins, recordedAt: review.recordedAt, currency: review.currency,
+      revision: current ? current.revision : 0, digest: current ? current.digest : 'none',
+      demoRevision: review.demoWorkspaceRevision, canApprove: state.canApprove, canWithdraw: state.canWithdraw });
+  }
+
+  function focusDecisionAction(action) {
+    var target = $(action === 'withdraw' ? 'cdDecisionWithdrawAction' : 'cdDecisionReviewAction') || $('cdDecisionReviewAction') || $('cdEstimateReviewRefresh');
+    if (target) target.focus();
+  }
+
   function renderEstimateDecision(review) {
     var root = $('cdEstimateDecision'); root.replaceChildren();
     var state = review.decisions;
     if (!state) { root.textContent = 'Decision history is unavailable. Refresh before approving this estimate.'; return; }
     function text(value) { var p = document.createElement('p'); p.style.margin = '0 0 0.75rem'; p.textContent = value; root.appendChild(p); return p; }
-    function button(label, action) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-secondary btn-sm'; b.style.margin = '0.5rem 0.5rem 0 0'; b.textContent = label; b.onclick = action; root.appendChild(b); return b; }
+    function button(label, action, id) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-secondary btn-sm'; b.style.margin = '0.5rem 0.5rem 0 0'; b.textContent = label; b.id = id; b.onclick = action; root.appendChild(b); return b; }
     if (state.current && state.current.action === 'approve') {
       text('Human-reviewed price before tax: ' + decisionMoney(state.current.priceBeforeTax, state.current.currency));
       text('Reviewed scope: ' + state.current.scopeSummary);
     }
     if (state.recoveryMessage) text(state.recoveryMessage);
-    if (state.canApprove && !_decisionDraft) button(state.current && state.current.action === 'approve' ? 'Revise scope and price' : 'Review scope and price', function () { beginEstimateDecision('approve'); });
-    if (state.canWithdraw && !_decisionDraft) button('Withdraw approval', function () { beginEstimateDecision('withdraw'); });
+    if (state.canApprove && !_decisionDraft) button(state.current && state.current.action === 'approve' ? 'Revise scope and price' : 'Review scope and price', function () { beginEstimateDecision('approve'); }, 'cdDecisionReviewAction');
+    if (state.canWithdraw && !_decisionDraft) button('Withdraw approval', function () { beginEstimateDecision('withdraw'); }, 'cdDecisionWithdrawAction');
     if (state.history && state.history.length) {
       var history = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Decision history'; history.appendChild(summary);
       var list = document.createElement('ol');
@@ -755,7 +767,7 @@ window.CustomerDetail = (function() {
     if (!_estimateReview || !_estimateReview.decisions) return;
     var current = _estimateReview.decisions.current;
     _decisionDraft = { estimateId: _estimateReview.pins.estimateId, action: action,
-      scope: current && current.action === 'approve' ? current.scopeSummary : '',
+      basis: decisionReviewBasis(_estimateReview), basisChanged: false, scope: current && current.action === 'approve' ? current.scopeSummary : '',
       price: current && current.action === 'approve' ? current.priceBeforeTax : '', reason: '', confirmed: false, request: null };
     renderEstimateDecision(_estimateReview);
     var control = $('cdDecisionScope') || $('cdDecisionReason'); if (control) control.focus();
@@ -772,9 +784,9 @@ window.CustomerDetail = (function() {
     var reason = field('Reason for this decision', 'cdDecisionReason', draft.reason, true); reason.maxLength = 2000; reason.oninput = function () { draft.reason = reason.value; draft.request = null; };
     var label = document.createElement('label'), confirm = document.createElement('input'); confirm.type = 'checkbox'; confirm.id = 'cdDecisionConfirm'; confirm.required = true; confirm.checked = draft.confirmed; confirm.onchange = function () { draft.confirmed = confirm.checked; draft.request = null; }; label.appendChild(confirm);
     label.appendChild(document.createTextNode(draft.action === 'approve' ? ' I reviewed this recorded estimate, its missing information, the work scope and price. Approve these details for quote preparation only; nothing will be sent.' : ' Withdraw the current approval. Its history will remain, and these details will no longer be approved for quote preparation.')); form.appendChild(label);
-    var status = document.createElement('p'); status.id = 'cdDecisionStatus'; status.setAttribute('role', 'status'); status.style.marginTop = '0.75rem'; form.appendChild(status);
+    var status = document.createElement('p'); status.id = 'cdDecisionStatus'; status.setAttribute('role', 'status'); status.tabIndex = -1; if (draft.basisChanged) status.textContent = 'The saved review changed. Check your entries and confirm again before saving.'; status.style.marginTop = '0.75rem'; form.appendChild(status);
     var save = document.createElement('button'); save.type = 'submit'; save.className = 'btn btn-secondary btn-sm'; save.textContent = draft.action === 'approve' ? 'Approve for quote preparation' : 'Confirm withdrawal'; form.appendChild(save);
-    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.style.marginLeft = '0.75rem'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); }; form.appendChild(cancel);
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.style.marginLeft = '0.75rem'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); focusDecisionAction(draft.action); }; form.appendChild(cancel);
     form.onsubmit = function (event) {
       event.preventDefault(); if (!form.reportValidity() || !_estimateReview || !reviewPinsMatch(_estimateReview, _currentData && _currentData.canonical)) return;
       var review = _estimateReview, generation = _openSequence, state = review.decisions, current = state.current;
@@ -784,9 +796,11 @@ window.CustomerDetail = (function() {
       var headers = { 'Content-Type': 'application/json', 'Idempotency-Key': attempt.key }; if (review.simulated) headers['X-NorthStar-Demo-Revision'] = String(attempt.demoRevision);
       window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/' + encodeURIComponent(draft.estimateId) + '/decisions', { method: 'POST', headers: headers, body: JSON.stringify(attempt.body) }).then(function (response) {
         if (!response.ok) { var error = new Error('save failed'); error.status = response.status; throw error; } return response.json();
-      }).then(function () { if (generation !== _openSequence || _decisionDraft !== draft) return; _decisionDraft = null; refreshEstimateReview(); }).catch(function (error) {
+      }).then(function () { if (generation !== _openSequence || _decisionDraft !== draft) return; _decisionDraft = null; refreshEstimateReview('decision-saved'); }).catch(function (error) {
         if (generation !== _openSequence || _decisionDraft !== draft) return;
-        status.textContent = error.status === 409 ? 'The review changed. Refresh the estimate, check your entries and confirm again before saving.' : error.status === 403 ? 'Your current account cannot save this decision.' : error.status === 400 ? 'Check the scope, price and confirmation before saving.' : 'The save could not be confirmed. Retry without changing your entries to check this same attempt.';
+        status.textContent = error.status === 401 ? 'Your session ended. Sign in again, then reopen this estimate to review and confirm your decision.' : error.status === 409 ? 'The review changed. Refresh the estimate, check your entries and confirm again before saving.' : error.status === 403 ? 'Your current account cannot save this decision.' : error.status === 400 ? 'Check the scope, price and confirmation before saving.' : error.status === 429 ? (review.simulated ? 'This demo has reached an action limit. Review the saved history and try again later.' : 'This estimate has reached its decision limit. Review the saved history or contact support.') : error.status === 503 ? 'New decisions are unavailable. Refresh this estimate to check its saved decisions before trying again.' : 'The save could not be confirmed. Retry without changing your entries to check this same attempt.';
+        if ([401, 403, 429, 503].indexOf(error.status) !== -1) { draft.confirmed = false; confirm.checked = false; }
+        status.focus();
         if (error.status === 409) { draft.confirmed = false; confirm.checked = false; draft.request = null; }
       }).finally(function () { if (generation === _openSequence && _decisionDraft === draft) Array.prototype.forEach.call(form.elements, function (control) { control.disabled = false; }); });
     };
@@ -806,10 +820,11 @@ window.CustomerDetail = (function() {
       review.recordedAt === selected.snapshotCreatedAt;
   }
 
-  function refreshEstimateReview() {
+  function refreshEstimateReview(focusReason) {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
+    var restoreFocus = focusReason === 'decision-saved' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
     _estimateReview = null; $('cdEstimateDecision').replaceChildren();
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
     button.disabled = true;
@@ -845,13 +860,17 @@ window.CustomerDetail = (function() {
           rowNode.appendChild(term); rowNode.appendChild(detail); list.appendChild(rowNode);
         }); root.appendChild(list);
         (review.missing || []).forEach(paragraph);
+        if (_decisionDraft && _decisionDraft.basis !== decisionReviewBasis(review)) {
+          _decisionDraft.confirmed = false; _decisionDraft.request = null; _decisionDraft.basisChanged = true;
+          _decisionDraft.basis = decisionReviewBasis(review);
+        }
         _estimateReview = review; renderEstimateDecision(review);
       }).catch(function(error) {
         if (!current()) return;
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?
           'Estimate review is available to current owners and administrators.' : error.status === 404 ?
           'This estimate is no longer available. Reopen the customer to try again.' : 'Estimate review could not be loaded. Try refreshing it.');
-      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; } });
+      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if (restoreFocus) { if (focusReason === 'decision-saved') focusDecisionAction('approve'); else button.focus(); } } });
   }
 
   function populateDrawer(data) {

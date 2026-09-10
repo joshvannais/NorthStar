@@ -58,3 +58,21 @@ Architecture acceptance requires source-linked ownership, compatibility and auth
 ## Incremental architecture adoption after the original proposal
 
 Part1 Slices2–3 released exact persisted review and immutable human decisions; the original dated proposal above remains historical. Slice4 adds the private recorded-cost comparison described in [its operations contract](../operations/MISSION_24_CAPELLA_RECORDED_COSTS.md), with no second estimate/calculator or saved risk report. This supplies an initial same-estimate/same-decision Risk Lens read consumer, not full scenario/sensitivity, complete profitability, chat or customer-quote authority. The separate customer-safe quote responsibility and richer evidence requirements remain open.
+
+## Part1 exit and phase ownership matrix
+
+Additive reconciliation at released4ec690b864344ac99c6b9c81cb8b202fcaa18290; original dated proposal remains above. Parts map to the original phases; slices are delivery labels, not an original or fixed denominator. Proposed architecture exit criteria below require independent acceptance and root disposition. This docs package does **not** preclaim Part1 complete.
+
+| Architecture obligation | Released foundation / contract | Remaining implementation owner |
+| --- | --- | --- |
+| One estimate lineage and immutable calculation | Existing canonical graph writer/snapshot, Slice2 pinned review; preserve historical versions and bytes | New source revisions must be designed with each relevant Parts2–7 input adoption; no parallel estimator. |
+| Provenance/missingness/currency/units | Slice2 review pins; original compatibility rules; source-linked consumer inventory | Parts2 material,3 labor,4 equipment,5 actual origin/travel and later applicable pricing; no invented inventory or provider authority. |
+| Private advice | Existing persisted Polaris/assistant consumers; human authority remains separate | Parts6–7 richer pricing/reasoning and Part9 evidence credibility. |
+| Private Capella Risk Lens | Slice4 current reviewed-price versus recorded-cost comparison, same estimate/decision pins | Parts2–7 applicable risk/scenario/sensitivity evidence; Part8 contextual/chat presentation and Part9 validation. Not full Risk Lens completion. |
+| Explicit human scope/price authority | Slice3 immutable approval/revision/withdrawal with current role, consent, pins, concurrency and application pause | Part6 richer pricing decisions; Part8 explicit commercial composition decisions, not inferred from machine/schedule approval. |
+| Customer-safe commercial projection/revision | [Quote contract](MISSION_24_CUSTOMER_QUOTE_CONTRACT.md) now specifies itemization/tax/issuer/disclosure/revision boundaries and working demo preview/download | Parts6/8 implementation and Part9 end-to-end validation; quote runtime remains absent. |
+| Downstream lineage and consent | Original compatibility rules and quote contract preserve exact historical references | Mission25 learning,27 invoice/payment,28 communication,31 wider living employee demo,32 manual studio. No implied consumption or sending consent. |
+
+Architecture exit requires every row to have a source-backed owner, invariants, compatibility constraints and meaningful acceptance examples, with no unresolved fundamental price/quote authority. Runtime completion of every future row is not required merely to finish architecture. After independent acceptance root may assess a Part1 transition to Part2; a discovered foundational gap must be named and bounded before that disposition. Do not invent another fixed slice count or quietly reclassify allPart8 runtime as Part1.
+
+Released sequence: Slice1 PR184 architecture, Slice2 PR185 persisted review, Slice3 PR186 human decisions, Slice4 PR187 recorded-cost comparison. Slice5 is this docs-only contract/exit reconciliation, pending its own review/release. These citations identify historical packages, not repeated acceptance runs.

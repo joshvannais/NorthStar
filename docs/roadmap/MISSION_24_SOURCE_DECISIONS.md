@@ -42,3 +42,20 @@ Local artifact root: `C:/Users/joshv/Documents/Codex/2026-09-09/view-northstar-m
 | `m24-authority-plan-29c4ce9/MISSION_24_PHASE_1_PLAN_RECONCILED.md` | `b6ecc5211d933e039ab4582a3430dd965eb575f5413bdf0cff5637f059ea2770`; additive revision, original plan preserved. |
 
 The retrospective report's exact SHA-256 is `dda651d51bcc83bfd0f5a24843642b4afbd0e121782adff18e7956ae051df85f`. Its source distinctions control over assistant naming shorthand. Root's `MISSION_24_ADDITIONS_RECONCILIATION.md` independently reconciles these sources. `m23-part11-sealed-handoff/authorities/SUCCESSOR_HANDOFF.md` 151–161 preserves successor authority; its compressed document-only Capella description is expanded here to retain the explicit Risk Lens decision. No historical source has been overwritten.
+
+## September10 quote and demo requirement
+
+Latest founder requirement, retained by root in the same master threadC: every paid feature must have a working isolated demo equivalent. When quotes become viewable/downloadable, both paid and demo must support complete create→preview→download through the same relevant projection/validation/document renderer. A static example or delayedMission31 substitute is insufficient.
+
+Documents must be exceptionally professional with established typography/theme, an organized accurate price breakdown and prominent real or simulated issuing business at top. Use an authentic NorthStar logo/name together as a subtle tiny but readable bottom-right signature, not a second dominant header. Verify preview and actual download at normal print scale, including long content/pagination/alignment. Human-edited totals require explicit reviewed itemization/adjustments; do not invent allocations or automatically expose private economics. These are founder requirements preserved in a root receipt, not newly claimed verbatim archive line locators. Exact renderer/format/tax/storage mechanisms remain implementation decisions requiring bounded scope review.
+
+Local artifact root is the retained workspace listed above. Hashes identify the read versions; evolving status files are not timeless authority. Receipt requirements are summarized self-contained in the [quote contract](../architecture/MISSION_24_CUSTOMER_QUOTE_CONTRACT.md), so private local files are provenance, not runtime dependencies.
+
+| Local receipt | SHA-256 |
+| --- | --- |
+| `NORTHSTAR_DEMO_QUOTE_PARITY_REQUIREMENT.md` | `9bc4d16a3cde0346dab9e0ad62a6f7f2f9ac64257cdef3d2004c7c92fa03ddb8` |
+| `M24_P1_S4_RELEASE_ACCEPTANCE.md` | `da68fa42be19f32e5108856970afb672d8e79f480234af9c3efe251c96adc7a9` |
+| `MISSION_24_PROGRESS_LABELS.md` | `16f0b03ae7e0d6973e9d6fb1dc353f2c41036779bba8a060d62f0e9fb773ce03` |
+| `m24-p1-s5-scope-4ec690b/NEXT_IMPLEMENTATION_PLAN.md` | `96c53c966a126910bc2caa55b16ae1fca10f91e254b8fca08c0c6879502dd52a` |
+
+The plan's Part1 exit matrix and recommendation to proceed toPart2 after acceptance are implementation planning, not a new founder-authored phase list. Root approved this bounded documentation scope; no source statement claims the quote runtime, Part1 completion or later phase acceptance. The separate image concept adds no code/design implementation authority.

@@ -186,7 +186,7 @@ async function main() {
         const panel = p.locator('#section-' + tab);
         const text = await panel.innerText();
         assert(!/JSON|PostgreSQL|perUnit|canonicalPricing|quantityField|lineItems|unitRates|rangePercent|Tenant-scoped|Mission 24|Cost Authority|immutable|Stable service ID/.test(text), text);
-        await p.waitForFunction(() => getComputedStyle(document.getElementById('toast')).opacity === '0');
+        await p.waitForFunction(() => { const style = getComputedStyle(document.getElementById('toast')); return style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0; });
         await panel.screenshot({
           path: path.join(output, theme + '-' + width + '-' + tab + '.png')
         });

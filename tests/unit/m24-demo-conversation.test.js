@@ -1,18 +1,21 @@
 'use strict';
-const {createInitialDemoState,demoCanonicalItems}=require('../../src/commandCenter/workspace');
+const {createInitialDemoState,demoCanonicalItems,buildSimulatedGraph}=require('../../src/commandCenter/workspace');
+const {demoConversation}=require('../../src/commandCenter/demoConversation');
+const {DEFAULT_SELECTION}=require('../../src/commandCenter/scenarioSpace');
 const {sha256}=require('../../src/services/businessProfileAdapter');
 const make=seed=>createInitialDemoState('11111111-1111-4111-8111-111111111111','2026-09-10T00:00:00Z',{seed});
-test.each(['conversation-review','another-local-example','third-local-example'])('seeded conversations follow saved jobs and distinguish authored simulation: %s',seed=>{
+function speech(graph){const turns=graph.communication.transcript,text=turns.map(t=>t.text).join('\n');expect(turns.every(t=>['ai','customer'].includes(t.speaker))).toBe(true);expect(text).not.toMatch(/fictional|for this example|business profile|crew|labor allowance|internal cost|does not approve|Retell|knowledge search|\$|guaranteed/i);expect(text).toContain(graph.customer.address);expect(text).toContain('confirm the scope and any appointment');expect(text).not.toMatch(/undefined|\[object Object\]/);return text;}
+test.each(['conversation-review','another-local-example','third-local-example'])('seeded dialogue speaks saved facts with no invented pricing or internal boilerplate: %s',seed=>{
  const state=make(seed);expect(make(seed)).toEqual(state);
- for(const graph of state.graphs){const turns=graph.communication.transcript,text=turns.map(t=>t.text).join('\n'),scope=graph.polaris.snapshot.service.scope;
- expect(text).toContain('Simulated conversation based on this saved example');expect(text).toContain('No live call or knowledge search occurred');expect(text).toContain(graph.lead.serviceLabel.toLowerCase());expect(text).toContain(graph.customer.address);expect(text).toContain('does not approve a price or book the work');
- for(const key of ['material','linearFeet','squares','stories','pitch','systemType','tonnage','sqft','fixture','leakSeverity'])if(scope[key]!=null)expect(text).toContain(String(scope[key]));
- expect(text).not.toMatch(/\$|guaranteed|verified supplier|Retell has/);
- if(graph.polaris.syntheticCalculation){const input=graph.polaris.syntheticCalculation.input;expect(text).toContain(input.businessProfile.crew.defaultCrewSize+'-person crew');expect(text).toContain(scope.laborHours+' hours');expect(text).toContain('actual suitability and availability still need review');expect(graph.polaris.snapshotDigest).toBe(sha256(graph.polaris.snapshot));}
- else expect(text).toContain('internal costs are incomplete');
- expect(text).toContain('follow up with me to confirm the timing and access');
+ for(const graph of state.graphs){const text=speech(graph),scope=graph.polaris.snapshot.service.scope;
+ for(const key of ['material','linearFeet','squares','stories','pitch','systemType','tonnage','sqft','fixture','leakSeverity','squareFeet','finish'])if(scope[key]!=null)expect(text.toLowerCase()).toContain(String(scope[key]).toLowerCase().replace(/_/g,' '));
+ expect(graph.polaris.snapshotDigest).toBe(sha256(graph.polaris.snapshot));
  }
 });
-test('reading a saved older demo never inserts a conversation or changes its pinned graph',()=>{
- const state=make('older-demo');state.graphs.forEach(g=>g.communication.transcript=[]);const workspace={tenant:state.workspace.tenant,graphs:state.graphs};const before=JSON.stringify(workspace);const items=demoCanonicalItems(workspace);expect(JSON.stringify(workspace)).toBe(before);expect(items.every(i=>!i.transcript.text)).toBe(true);
-});
+test.each(['fence','roofing','hvac','plumbing','electrical','concrete'])('Simulate Lead speaks actual selected %s facts and keeps original graphs untouched',service=>{const state=make('dialogue-all-services'),before=JSON.stringify(state),graph=buildSimulatedGraph({tenantId:state.workspace.tenant.id,key:'dialogue-'+service,createdAt:'2026-09-10T01:00:00Z',workspace:state.workspace,scenarioSelection:{...DEFAULT_SELECTION,service}});speech(graph);expect(JSON.stringify(state)).toBe(before);for(const key of require('../../src/routes/simulation/scenario-catalog')[service].scopeSchema.required){expect(graph.polaris.snapshot.service.scope[key]).toBeDefined();expect(graph.polaris.facts.some(f=>f.variable===key&&f.evidenceSource==='transcript')).toBe(true);}});
+test('unknown HVAC input does not invent a gas system, area or capacity',()=>{const text=demoConversation({serviceKey:'hvac',scope:{jobType:'repair'},customer:{}}).map(t=>t.text).join('\n');expect(text).toContain("I'm not sure about that yet.");expect(text).not.toMatch(/gas|2,000|3 tons/);});
+test('concrete and electrical answers preserve negative facts instead of inventing damage',()=>{const concrete=demoConversation({serviceKey:'concrete',scope:{jobType:'install',squareFeet:500,existingRemoval:false,finish:'broom',access:'wide'},customer:{}}).map(t=>t.text).join(' ');expect(concrete).toContain('No existing concrete needs removal.');expect(concrete).not.toMatch(/cracked|old one/);const electric=demoConversation({serviceKey:'electrical',scope:{jobType:'inspect',symptoms:'panel assessment',breakerBehavior:'stable',safetyConcern:false},customer:{}}).map(t=>t.text).join(' ');expect(electric).toContain('Stable.');expect(electric).not.toMatch(/burning|tripping/);});
+test('reading a saved older demo never inserts a conversation or changes its pinned graph',()=>{const state=make('older-demo');state.graphs.forEach(g=>g.communication.transcript=[]);const workspace={tenant:state.workspace.tenant,graphs:state.graphs};const before=JSON.stringify(workspace);const items=demoCanonicalItems(workspace);expect(JSON.stringify(workspace)).toBe(before);expect(items.every(i=>!i.transcript.text)).toBe(true);});
+
+test('business knowledge is limited to an actually supplied matching service',()=>{const missing=demoConversation({serviceKey:'hvac',businessProfile:{services:[]}}).map(t=>t.text).join(' ');expect(missing).not.toContain('Our services include');const present=demoConversation({serviceKey:'hvac',businessProfile:{services:[{key:'hvac',label:'HVAC service'}]}}).map(t=>t.text).join(' ');expect(present).toContain('Our services include HVAC service.');});
+test('selected urgency and appointment request do not refer to an unoffered time',()=>{const graph=buildSimulatedGraph({tenantId:'11111111-1111-4111-8111-111111111111',key:'timing',createdAt:'2026-09-10T01:00:00Z',scenarioSelection:DEFAULT_SELECTION});const text=speech(graph);expect(text).toContain('this week');expect(text).not.toMatch(/next week|That time works/);expect(text).toContain('confirm the appointment with me');});

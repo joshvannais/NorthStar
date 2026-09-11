@@ -178,16 +178,6 @@ window.CustomerDetail = (function() {
     // Content wrapper (hidden during load)
     html += '    <div id="cdDrawerContent" style="display:none;">';
 
-    // Contact Information
-    html += '      <div class="drawer-section">';
-    html += '        <h3>Contact Information</h3>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Name</span><span class="drawer-detail-value" id="cdName">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Phone</span><span class="drawer-detail-value" id="cdPhone">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Email</span><span class="drawer-detail-value" id="cdEmail">\u2014</span></div>';
-    html += '        <div class="drawer-detail-row"><span class="drawer-detail-label">Address</span><span class="drawer-detail-value" id="cdAddress">\u2014</span></div>';
-    html += '        <div id="cdNavigationLauncher"></div>';
-    html += '      </div>';
-
     // Customer Profile
     html += '      <div class="drawer-section" id="cdProfileSection">';
     html += '        <h3>Customer Profile</h3>';
@@ -321,15 +311,15 @@ window.CustomerDetail = (function() {
     var priceDetails = panel.querySelector('.drawer-polaris-pricing'); priceDetails.classList.add('drawer-section');
     priceDetails.querySelector('summary').textContent = 'Price Breakdown And Estimate Review';
     panel.append(priceDetails,basisDetails);
-    var contactSection = $('cdName').closest('.drawer-section'), profileSection = $('cdProfileSection');
+    var profileSection = $('cdProfileSection');
     var contactDetails = document.createElement('details'); contactDetails.className = 'drawer-section drawer-customer-background';
     var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Customer History';
-    contactDetails.append(contactTitle,contactSection,profileSection);
+    contactDetails.append(contactTitle,profileSection);
     contactDetails.appendChild($('cdProbabilityRow'));
     panel.querySelector('.drawer-polaris-context').remove();
     var actionSection = $('cdBtnAskPolaris').closest('.drawer-section'); actionSection.classList.add('drawer-primary-actions');
     content.prepend(actionSection,polarisSection);
-    polarisSection.after(attention,nextAction,$('cdExecutionSection'),$('cdTranscriptDisclosure'),contactDetails);
+    polarisSection.after($('cdCapellaReview'),attention,nextAction,$('cdExecutionSection'),$('cdTranscriptDisclosure'),contactDetails);
     $('cdContextSummary').hidden = true;
 
     // Event bindings
@@ -369,6 +359,12 @@ window.CustomerDetail = (function() {
   function renderTranscript(transcript, customerName) {
     var simulated = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active;
     if (simulated) $('cdTranscriptHeading').textContent = 'Simulated Call Transcript';
+    var disclosure = $('cdTranscriptDisclosureNote');
+    if (!disclosure) { disclosure=document.createElement('p'); disclosure.id='cdTranscriptDisclosureNote'; $('cdTranscript').before(disclosure); }
+    disclosure.hidden = !simulated;
+    disclosure.textContent = 'Authored demo conversation. No live call or connected knowledge search took place.';
+    if (simulated && /For this example|fictional business profile|does not approve a price or book the work|internal costs are incomplete/.test(typeof transcript==='string'?transcript:JSON.stringify(transcript))) disclosure.textContent='Earlier saved demo conversation. Simulate Lead creates a new example with updated dialogue. Reset Demo replaces this workspace and clears its changes.';
+
     var firstName = customerName ? customerName.split(' ')[0] : 'Customer';
     return window.NorthStarTranscriptRenderer.render($('cdTranscript'), transcript, {
       labels: { ai: 'AI AGENT', customer: firstName, system: '' },
@@ -1066,10 +1062,23 @@ window.CustomerDetail = (function() {
     parent.appendChild(details);
   }
 
+  function appendCapellaRefresh(root) {
+    var button=document.createElement('button'); button.id='cdCapellaRefresh'; button.type='button'; button.className='btn btn-secondary btn-sm'; button.textContent='Refresh Capella'; button.style.marginTop='.75rem';
+    button.disabled=Boolean($('cdEstimateReviewRefresh').disabled);
+    button.onclick=function(){refreshEstimateReview('capella-refresh');}; root.appendChild(button);
+  }
+
+  function renderCapellaStatus(message) {
+    var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
+    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens';
+    var status = document.createElement('p'); status.setAttribute('role','status'); status.textContent = message;
+    root.append(title,status); appendCapellaRefresh(root);
+  }
+
   function renderCapellaReview(review) {
     var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
-    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens'; root.appendChild(title);
-    function paragraph(value) { var p = document.createElement('p'); p.textContent = value; root.appendChild(p); }
+    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens'; root.appendChild(title); appendCapellaRefresh(root);
+    function paragraph(value) { var p = document.createElement('p'); p.textContent = value; root.insertBefore(p,$('cdCapellaRefresh')); }
     var risk = review.riskReview, decision = review.decisions && review.decisions.current;
     var matches = risk && risk.contract === 'NorthStarCapellaRecordedCosts/v1' &&
       JSON.stringify(risk.sourcePins) === JSON.stringify(review.pins) && risk.recordedAt === review.recordedAt &&
@@ -1088,7 +1097,7 @@ window.CustomerDetail = (function() {
         [risk.state === 'shortfall' ? 'Shortfall against recorded direct costs' : 'Remaining after recorded direct costs', amount.replace(/^-/, '')]].forEach(function (row) {
         var group = document.createElement('div'), term = document.createElement('dt'), detail = document.createElement('dd');
         term.textContent = row[0]; detail.textContent = decisionMoney(row[1], review.currency); group.appendChild(term); group.appendChild(detail); list.appendChild(group);
-      }); root.appendChild(list);
+      }); root.insertBefore(list,$('cdCapellaRefresh'));
     }
     paragraph(risk.limitation);
   }
@@ -1097,15 +1106,15 @@ window.CustomerDetail = (function() {
     var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
-    var restoreFocus = focusReason === 'adoption-saved' || focusReason === 'revision-selected' || focusReason === 'material-saved' || focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
-    _estimateReview = null; $('cdEstimateDecision').replaceChildren();
-    $('cdCapellaReview').replaceChildren(); $('cdCapellaReview').hidden = true;
+    var restoreFocus = focusReason === 'capella-refresh' || focusReason === 'adoption-saved' || focusReason === 'revision-selected' || focusReason === 'material-saved' || focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
+    _estimateReview = null; button.disabled = true; $('cdEstimateDecision').replaceChildren();
+    renderCapellaStatus('Loading cost comparison.');
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
     button.disabled = true;
     function current() { return generation === _openSequence && request === _reviewSequence && _currentData && _currentData.canonical === selected && !_drawerEl.hidden; }
-    function unavailable(message) { root.replaceChildren(); root.textContent = message; }
+    function unavailable(message) { root.replaceChildren(); root.textContent = message; renderCapellaStatus(message); }
     if (!selected || !selected.ids || !selected.ids.estimate) {
-      unavailable('No estimate is available for this customer.'); root.setAttribute('aria-busy', 'false'); return;
+      unavailable('No estimate is available for this customer.'); root.setAttribute('aria-busy', 'false'); button.disabled=false; if($('cdCapellaRefresh'))$('cdCapellaRefresh').disabled=false; return;
     }
     window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/' + encodeURIComponent(selected.ids.estimate) + '/review' + (_selectedEstimateRevision === null ? '' : '?revision=' + encodeURIComponent(_selectedEstimateRevision)), { cache: 'no-store' })
       .then(function(response) {
@@ -1148,7 +1157,7 @@ window.CustomerDetail = (function() {
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?
           'Estimate review is available to current owners and administrators.' : error.status === 404 ?
           'This estimate is no longer available. Reopen the customer to try again.' : 'Estimate review could not be loaded. Try refreshing it.');
-      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if (restoreFocus) { if (focusReason === 'material-saved') { var material=$('cdMaterialReview');if(material){material.open=true;var action=material.querySelector('#cdMaterialPlan button');if(action)action.focus();else button.focus();} } else if (focusReason === 'decision-saved' || focusReason === 'adoption-saved') focusDecisionAction('approve'); else if(focusReason==='revision-selected'&&$('cdEstimateRevisionSelect'))$('cdEstimateRevisionSelect').focus(); else button.focus(); } } });
+      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if ($('cdCapellaRefresh')) $('cdCapellaRefresh').disabled=false; if (restoreFocus) { if (focusReason === 'capella-refresh' && $('cdCapellaRefresh')) $('cdCapellaRefresh').focus(); else if (focusReason === 'material-saved') { var material=$('cdMaterialReview');if(material){material.open=true;var action=material.querySelector('#cdMaterialPlan button');if(action)action.focus();else button.focus();} } else if (focusReason === 'decision-saved' || focusReason === 'adoption-saved') focusDecisionAction('approve'); else if(focusReason==='revision-selected'&&$('cdEstimateRevisionSelect'))$('cdEstimateRevisionSelect').focus(); else button.focus(); } } });
   }
 
   function populateDrawer(data) {
@@ -1183,11 +1192,8 @@ window.CustomerDetail = (function() {
 
     // Contact Information
     var missing = [];
-    $('cdName').textContent = data.name || '\u2014';
     if (!data.name) missing.push('customer name');
-    $('cdPhone').textContent = data.phone || '\u2014';
     if (!data.phone) missing.push('phone number');
-    $('cdEmail').textContent = data.email || '\u2014';
     $('cdServiceAddress').textContent = data.serviceAddress || 'Service Address Not Recorded';
     $('cdServiceAddress').setAttribute('aria-label', data.serviceAddress ? 'Service Address: ' + data.serviceAddress : 'Service Address Not Recorded');
     var contactMethods = $('cdContactMethods'); contactMethods.replaceChildren(); contactMethods.hidden = true;
@@ -1208,31 +1214,10 @@ window.CustomerDetail = (function() {
     contactHint.textContent = contactCount ? (window.location.pathname.indexOf('/demo') === 0 ? 'These are fictional demo contact details.' : 'Choose a method to open your phone or email app.') : 'No phone number or email address is recorded.';
     contactMethods.appendChild(contactHint);
     if (!data.email) missing.push('email address');
-    var canonicalAddress = typeof data.address === 'string' && data.address.trim()
-      ? data.address
-      : null;
-    var navigationRoot = $('cdNavigationLauncher');
-    var navigationLauncher = typeof NorthStarNavigationLauncher === 'undefined'
-      ? null
-      : NorthStarNavigationLauncher;
-    $('cdAddress').textContent = canonicalAddress || '\u2014';
-    if (!canonicalAddress) missing.push('service address');
-    if (!navigationLauncher || typeof navigationLauncher.mount !== 'function') {
-      navigationRoot.className = 'navigation-launcher';
-      var navigationStatus = document.createElement('p');
-      navigationStatus.className = 'navigation-launcher__status';
-      navigationStatus.setAttribute('role', 'status');
-      navigationStatus.setAttribute('aria-live', 'polite');
-      navigationStatus.textContent = 'Navigation unavailable.';
-      navigationRoot.replaceChildren(navigationStatus);
-    } else {
-      var navigationMount = NorthStarNavigationLauncher.mount(
-        navigationRoot,
-        { address: data.address, label: 'customer jobsite' }
-      );
-      $('cdAddress').textContent = navigationMount.destination
-        ? navigationMount.destination.address
-        : '\u2014';
+    if (!data.serviceAddress) missing.push('service address');
+    if (data.serviceAddress && window.NorthStarNavigationLauncher) {
+      var navigationRoot = document.createElement('div'); contactMethods.appendChild(navigationRoot);
+      window.NorthStarNavigationLauncher.mount(navigationRoot, { address:data.serviceAddress, label:'service address' });
     }
 
     // Customer Profile

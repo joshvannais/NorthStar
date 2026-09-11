@@ -106,7 +106,7 @@ const DIMENSIONS = Object.freeze({
         customerLine: 'There is no emergency; I am planning ahead.', priority: 'low', hoursUntilVisit: 120, emergency: false
       }),
       option('this_week', 'Needed this week', 'The caller wants action during the next several days.', {
-        customerLine: 'Sometime next week would be great, but it is not an emergency.', priority: 'medium', hoursUntilVisit: 72, emergency: false
+        customerLine: 'Sometime this week would be great, but it is not an emergency.', priority: 'medium', hoursUntilVisit: 72, emergency: false
       }),
       option('within_24_hours', 'Within 24 hours', 'Active conditions make a prompt response important.', {
         customerLine: 'The condition is active, so I need help within 24 hours.', priority: 'high', hoursUntilVisit: 20, emergency: false
@@ -158,7 +158,7 @@ const DIMENSIONS = Object.freeze({
     options: Object.freeze([
       option('booked', 'Appointment booked', 'The caller accepts a provisional estimate or inspection visit.', {
         leadStatus: 'booked', workStatus: 'scheduled', confidence: 91,
-        customerLine: 'That time works; please book the visit.', action: 'Prepare the assigned visit and confirm access.'
+        customerLine: 'Please arrange a visit and confirm the appointment with me.', action: 'Prepare the assigned visit and confirm access.'
       }),
       option('follow_up', 'Follow-up requested', 'The caller wants a follow-up before choosing a visit.', {
         leadStatus: 'follow_up', workStatus: 'follow_up_due', confidence: 82,

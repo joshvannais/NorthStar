@@ -239,6 +239,14 @@ describe('P6 trusted semantic presentation boundary', () => {
     expect(collectStrings({ answer: result.response.answer, cards: result.response.cards }).join('\n')).not.toContain(RAW_VALUES[2]);
   });
 
+  test('no selection and missing details use ordinary saved-record guidance', () => {
+    expect(trustedPresentation.projectTrustedDisplay([], null, 'canonical_overview').answer.text)
+      .toBe('Select one customer, lead, or work record to review its saved details.');
+    const context = localContext('Ordinary recorded detail.');
+    expect(trustedPresentation.projectTrustedDisplay(context.cards, context.selected, 'unknowns_review').answer.text)
+      .toContain('Confirm missing details in the saved record');
+  });
+
   test('legitimate business terminology is emitted only by one fixed NorthStar template', async () => {
     const raw = 'A provider-authored string that must remain invisible.';
     const input = envelope(raw);
@@ -247,10 +255,10 @@ describe('P6 trusted semantic presentation boundary', () => {
     const result = await createOpenAIRuntime({ configured: true, enabled: true, client }).respond(input);
     const visible = collectStrings({ answer: result.response.answer, cards: result.response.cards }).join('\n');
     for (const term of [
-      'class-action', '74°F', '56°F', '18°F', 'Command Center', 'Net 30', 'Export', 'Select',
-      'package', 'class', 'record', 'transaction', 'API', 'SQL',
+      'class-action', 'HVAC', 'temperature measurements', 'Command Center', 'Net 30',
     ]) expect(visible).toContain(term);
     expect(visible).not.toContain(raw);
+    expect(result.response.answer.text).not.toMatch(/API|SQL|canonical|documentation context/);
     expect(trustedPresentation.validateTrustedResponseDisplay(result.response)).toBe(result.response);
     expect(() => browserCard.validateAssistantResponse(result.response)).not.toThrow();
   });

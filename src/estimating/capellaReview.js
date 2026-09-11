@@ -1,6 +1,7 @@
 'use strict';
 
 const { stableValue } = require('../services/businessProfileAdapter');
+const { VERSIONS: MATERIAL_ADOPTION_VERSIONS } = require('./materialAdoptionContract');
 const MAX_MONEY = /^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/;
 function priceCents(value) {
   return typeof value === 'string' && MAX_MONEY.test(value) ? BigInt(value.replace('.', '')) : null;
@@ -36,7 +37,11 @@ function buildCapellaReview(review, snapshot) {
     return unavailable('review_changed', 'Refresh this estimate and review its saved price before comparing costs.');
   }
   const price = priceCents(decision.priceBeforeTax);
-  const direct = ['estimate-material-adoption-v1','estimate-material-adoption-v2','estimate-material-adoption-v3'].includes(review.pins?.revision?.calculationVersion) ? priceCents(review.financialCosts?.knownDirectCosts) : snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'knownDirectCosts') ? recordedCents(snapshot.knownDirectCosts) : null;
+  const childRevision = review.pins?.revision;
+  // A child estimate must use its own supported cost basis, never the original snapshot.
+  const direct = childRevision
+    ? MATERIAL_ADOPTION_VERSIONS.includes(childRevision.calculationVersion) ? priceCents(review.financialCosts?.knownDirectCosts) : null
+    : snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'knownDirectCosts') ? recordedCents(snapshot.knownDirectCosts) : null;
   if (price === null) return unavailable('price_unavailable', 'The saved price cannot be compared. Review the scope and price again.');
   if (direct === null) return unavailable('costs_unavailable', 'Recorded direct costs are incomplete or unavailable. Confirm the missing costs before relying on this comparison.');
   const remaining = price - direct;

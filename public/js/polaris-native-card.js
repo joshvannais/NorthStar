@@ -374,7 +374,7 @@
       });
       unknowns.appendChild(unknownList);
     } else {
-      unknowns.appendChild(child('p', 'polaris-native-card-empty', 'No contract-defined unknowns were identified.'));
+      unknowns.appendChild(child('p', 'polaris-native-card-empty', 'No additional missing details were identified in this review.'));
     }
     article.appendChild(unknowns);
 
@@ -387,7 +387,7 @@
 
     var footer = child('footer', 'polaris-native-card-footer');
     footer.appendChild(child('span', '', 'Advisory and read-only'));
-    footer.appendChild(child('span', '', 'No canonical mutation'));
+    footer.appendChild(child('span', '', 'Saved Records Unchanged'));
     article.appendChild(footer);
 
     container.replaceChildren(article);

@@ -30,6 +30,8 @@ assert.ok(!fs.existsSync(out)); fs.mkdirSync(out, {recursive:true});
       });
       const page = await context.newPage(); current = page;
       const privateReads = [];
+      const operationsReads = [];
+      page.on('response', response => { if (new URL(response.url()).pathname.startsWith('/api/demo/command-center/operations')) operationsReads.push({path:new URL(response.url()).pathname,status:response.status()}); });
       page.on('pageerror', error => ledger.errors.push(error.message));
       page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/v1/')) privateReads.push(new URL(request.url()).pathname); });
       const prefix = mode === 'demo' ? '/demo' : '/dashboard';
@@ -49,9 +51,18 @@ assert.ok(!fs.existsSync(out)); fs.mkdirSync(out, {recursive:true});
       await page.locator((width < 600 ? '#mobileMenu' : '.sidebar') + ' a[data-nav-id="operations"]').click();
       await page.locator('#ownerWork select').waitFor();
       assert.equal(new URL(page.url()).pathname, prefix + '/operations');
+      if (mode === 'demo') {
+        await page.getByText('Current Work Loaded.', {exact:true}).waitFor();
+        await page.getByText('No recorded work matches this status.', {exact:true}).waitFor();
+        await page.getByText('No Work Opened Yet', {exact:true}).waitFor();
+        assert.equal(await page.locator('#ownerWork select option').count(), 3);
+        assert.ok(operationsReads.some(r => r.path.endsWith('/operations') && r.status === 200));
+        assert.ok(operationsReads.some(r => r.path.endsWith('/overview') && r.status === 200));
+        assert.ok(operationsReads.every(r => r.status === 200));
+      }
       await page.screenshot({path:path.join(out, mode + '-' + width + '-operations.png'),fullPage:true});
       if (mode === 'demo') assert.deepEqual(privateReads, []);
-      ledger.cases.push({mode,width,theme,entry:true,calendar:true,operations:true,demoPrivateRequests:mode === 'demo' ? privateReads : null});
+      ledger.cases.push({mode,width,theme,entry:true,calendar:true,operations:true,operationsReads,demoReadyState:mode === 'demo',demoPrivateRequests:mode === 'demo' ? privateReads : null});
       await context.close();
     }
     const context = await browser.newContext(); const page = await context.newPage(); current = page;

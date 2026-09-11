@@ -297,7 +297,8 @@
       if(active.directory.simulated)active.demoWorkspaceRevision=body.data.demoWorkspaceRevision;
       renderAcknowledgements(body.data);
       setStatus('Review each item before confirming this change.', 'ready', false);
-      active.approve.focus();
+      var firstAcknowledgment=active.review.querySelector('input[type="checkbox"]');
+      if(firstAcknowledgment)firstAcknowledgment.focus();else if(!active.approve.disabled)active.approve.focus();else active.status.focus();
     }).catch(function (error) {
       if (active!==requestOwner) return;
       setStatus(error.message, 'error', true);
@@ -683,7 +684,7 @@
     var reasonWrapper = el('div', 'm22-dialog-field');
     var reasonLabel = el('label', '', 'Human approval reason');
     var reason = document.createElement('textarea'); reason.maxLength = 1000; reason.required = true;
-    reason.value = value(options.reason, 'Human-approved ' + action + ' from ' + value(options.source, 'operator scheduling') + '.');
+    reason.value = value(options.reason, '');
     reasonLabel.appendChild(reason); reasonWrapper.appendChild(reasonLabel); form.appendChild(reasonWrapper); active.reason = reason;
     document.addEventListener('keydown', trap);
     reason.focus();

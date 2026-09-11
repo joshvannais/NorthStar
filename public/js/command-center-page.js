@@ -429,7 +429,7 @@
   }
 
   function renderSchedule(graphs) {
-    var canonicalRecords = mode === 'paid' && workspace && workspace.schedulingOverview && Array.isArray(workspace.schedulingOverview.records)
+    var canonicalRecords = workspace && workspace.schedulingOverview && Array.isArray(workspace.schedulingOverview.records)
       ? workspace.schedulingOverview.records : null;
     var scheduled = canonicalRecords
       ? canonicalRecords.filter(function (record) { return record.authority && record.authority.scheduleState === 'scheduled'; })
@@ -442,7 +442,7 @@
     list.replaceChildren();
     if (!scheduled.length) {
       var empty = element('li');
-      empty.append(element('time', '', '—'), element('div', '', 'No role-authorized appointment time is currently recorded.'));
+      empty.append(element('time', '', '—'), element('div', '', 'No appointment has both a reviewed start and end time yet.'));
       list.appendChild(empty);
       return;
     }

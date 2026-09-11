@@ -681,7 +681,7 @@ class CalendarRenderer {
     var note = document.createElement('p');
     note.className = 'cal-context-note';
     if (!operator || operator.canMutate !== true || !overview) {
-      note.textContent = operator && operator.canRead
+      note.textContent = operator && operator.simulated ? 'Demo schedule changes are paused. Saved times remain available.' : operator && operator.canRead
         ? 'Calendar changes require current owner, admin, or dispatcher access.'
         : 'Scheduling controls are unavailable for this account.';
       this.newEventArea.appendChild(note);
@@ -807,7 +807,7 @@ class CalendarRenderer {
       if (!operator.canMutate) {
         var readOnly = document.createElement('p');
         readOnly.className = 'm22-overview-read-only';
-        readOnly.textContent = 'You can view this appointment. Editing is unavailable for this account.';
+        readOnly.textContent = operator.simulated ? 'Demo schedule changes are paused. Saved times remain available.' : 'You can view this appointment. Editing is unavailable for this account.';
         actions.appendChild(readOnly);
       }
       item.append(recordTitle, states, actions); list.appendChild(item);

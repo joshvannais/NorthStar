@@ -398,6 +398,17 @@
     }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
 
+    var scheduleTimes=/^\/api\/v1\/canonical\/appointments\/([a-f0-9-]+)\/(mutation-previews|mutation-approvals)$/.exec(url.pathname);
+    if(method==='POST'&&scheduleTimes){
+      var scheduleHeaders=new Headers(options&&options.headers||{});scheduleHeaders.set('X-NorthStar-Demo-Intent','schedule-times');
+      return nativeFetch('/api/demo/command-center/appointments/'+encodeURIComponent(scheduleTimes[1])+'/'+scheduleTimes[2],Object.assign({},options||{},{headers:scheduleHeaders,credentials:'same-origin'})).then(function(response){
+        // Invalidate only after a successful persisted operation. Existing UI
+        // consent keeps its captured pin; no latest-state substitution here.
+        if(response.ok){workspaceRequest=null;workspace=null;}
+        return response;
+      });
+    }
+
     var adoption = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(material-adoptions|material-adoption-preview)$/.exec(url.pathname);
     if(method==='POST'&&adoption){var adoptionHeaders=new Headers(options&&options.headers||{});adoptionHeaders.set('X-NorthStar-Demo-Intent','material-adoption');return nativeFetch('/api/demo/command-center/estimates/'+encodeURIComponent(adoption[1])+'/'+adoption[2],Object.assign({},options||{},{headers:adoptionHeaders,credentials:'same-origin'}));}
     var materialPlan = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(material-plans|material-plan-preview)$/.exec(url.pathname);

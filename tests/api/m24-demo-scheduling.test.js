@@ -1,0 +1,42 @@
+'use strict';
+const request=require('supertest');
+const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
+const time=require('../../public/js/scheduling-time-contract');
+const suite=process.env.M19_PG_ADMIN_URL?describe:describe.skip;
+suite('Mounted isolated demo scheduling',()=>{
+ let f,agent,cookie,workspace;
+ async function read(){const r=await agent.get('/api/demo/command-center').set('Cookie',cookie||'');expect(r.status).toBe(200);if(!cookie)cookie=r.headers['set-cookie'][0].split(';')[0];workspace=r.body.data;return workspace;}
+ function send(id,path,key,revision,body){return agent.post('/api/demo/command-center/appointments/'+id+'/'+path).set('Host','northstar.test').set('Origin','http://northstar.test').set('Sec-Fetch-Site','same-origin').set('Cookie',cookie).set('Idempotency-Key',key).set('X-NorthStar-Demo-Intent','schedule-times').set('X-NorthStar-Demo-Revision',String(revision)).send(body);}
+ function proposal(w){const r=w.schedulingOverview.records.find(r=>r.allowedActions.length),zone=w.configuration.businessProfile.timeZone;const start=new Date(Date.now()+86400000),end=new Date(start.getTime()+7200000);return{id:r.appointmentId,body:{expectedRevision:r.authority.revision,expectedDigest:r.authority.digest,expectedTimeZone:zone,action:r.allowedActions[0],target:{kind:'unassigned',id:null},scheduledStart:time.formatInstant(start.toISOString(),zone).rfc3339,scheduledEnd:time.formatInstant(end.toISOString(),zone).rfc3339,appointmentStatus:r.authority.appointmentStatus,reason:'Review these entered times; staffing remains unassigned.'}};}
+ beforeAll(async()=>{f=await createDatabaseFixture();agent=request(f.app);await read();},60000);
+ afterAll(async()=>{if(f)await f.cleanup();},30000);
+ test('preview, explicit confirmation, exact replay and reload preserve original graphs',async()=>{
+  const before=await read(),p=proposal(before);
+  const preview=await send(p.id,'mutation-previews','demo-time-preview-0001',before.integrity.revision,p.body);expect(preview.status).toBe(201);const v=preview.body.data;expect(v.conflicts.status).toBe('needs_review');
+  const original=(await f.ownerPool.query('SELECT state FROM demo_command_center_sessions')).rows[0].state.graphs; const pending=await read();expect(pending.schedulingOverview.records.find(r=>r.appointmentId===p.id).authority.scheduledEnd).toBeNull();
+  const body={previewId:v.id,previewDigest:v.previewDigest,acknowledgedWarningDigests:v.warningDigests,acknowledgedReviewReasonDigests:v.reviewReasonDigests,reason:p.body.reason};
+  const saved=await send(p.id,'mutation-approvals','demo-time-approval-0001',v.demoWorkspaceRevision,body);expect(saved.status).toBe(201);expect(saved.body.data.scheduleAuthority.revision).toBe(2);
+  const replay=await send(p.id,'mutation-approvals','demo-time-approval-0001',v.demoWorkspaceRevision,body);expect(replay.status).toBe(200);expect(replay.body.data).toEqual(saved.body.data);
+  const after=await read(),row=after.schedulingOverview.records.find(r=>r.appointmentId===p.id);expect(row.allowedActions).toEqual(['reschedule']);expect(row.authority.scheduledEnd).toBe(saved.body.data.scheduleAuthority.scheduledEnd);
+  const stored=(await f.ownerPool.query('SELECT state FROM demo_command_center_sessions')).rows[0].state;expect(stored.graphs).toEqual(original);expect(stored.demoScheduling.history).toHaveLength(1);
+ });
+ test('two current previews serialize and only one can consume the same workspace version',async()=>{
+  const w=await read(),p=proposal(w);const results=await Promise.all(['parallel-preview-a-0001','parallel-preview-b-0001'].map(k=>send(p.id,'mutation-previews',k,w.integrity.revision,p.body)));expect(results.map(r=>r.status).sort()).toEqual([201,409]);
+ });
+ test('reschedule creates another immutable event on the same appointment and aligns Calendar reads',async()=>{
+  const w=await read(),p=proposal(w);p.body.scheduledStart=time.formatInstant(new Date(Date.now()+172800000).toISOString(),w.configuration.businessProfile.timeZone).rfc3339;p.body.scheduledEnd=time.formatInstant(new Date(Date.now()+180000000).toISOString(),w.configuration.businessProfile.timeZone).rfc3339;
+  const preview=await send(p.id,'mutation-previews','reschedule-preview-0001',w.integrity.revision,p.body);expect(preview.status).toBe(201);const v=preview.body.data;
+  const response=await send(p.id,'mutation-approvals','reschedule-confirm-0001',v.demoWorkspaceRevision,{previewId:v.id,previewDigest:v.previewDigest,acknowledgedWarningDigests:v.warningDigests,acknowledgedReviewReasonDigests:v.reviewReasonDigests,reason:p.body.reason});expect(response.status).toBe(201);expect(response.body.data.scheduleAuthority.revision).toBe(3);
+  const calendar=await agent.get('/api/demo/command-center/canonical/compat/calendar').set('Cookie',cookie);expect(calendar.status).toBe(200);const record=calendar.body.data.schedulingOverview.records.find(r=>r.appointmentId===p.id);expect(record.authority).toEqual(response.body.data.scheduleAuthority);
+  const stored=(await f.ownerPool.query('SELECT state FROM demo_command_center_sessions')).rows[0].state;expect(stored.demoScheduling.history).toHaveLength(2);expect(stored.demoScheduling.history[1].response.scheduleAuthority.revision).toBe(2);expect(stored.graphs).toHaveLength(3);
+ });
+ test('missing end remains missing and cannot save guessed duration',async()=>{const w=await read(),p=proposal(w);p.body.scheduledEnd=null;const response=await send(p.id,'mutation-previews','missing-end-preview-0001',w.integrity.revision,p.body);expect(response.status).toBe(400);expect((await read()).integrity.revision).toBe(w.integrity.revision);});
+ test('expiry is checked after an ordinary session lock wait before a replay returns',async()=>{
+  const {DemoCommandCenterRepository,normalizeToken}=require('../../src/commandCenter/demoRepository');const {sha256}=require('../../src/services/businessProfileAdapter');
+  const w=await read(),p=proposal(w),key='expiry-lock-preview-0001';const response=await send(p.id,'mutation-previews',key,w.integrity.revision,p.body);expect(response.status).toBe(201);
+  const token=normalizeToken(decodeURIComponent(cookie.split('=').slice(1).join('=')),new Date()),row=(await f.ownerPool.query('SELECT * FROM demo_command_center_sessions WHERE id=$1',[token.sessionId])).rows[0];
+  let now=new Date();const repository=new DemoCommandCenterRepository(()=>f.runtimePool,{clock:()=>now});const holder=await f.ownerPool.connect();await holder.query('BEGIN');await holder.query('SELECT id FROM demo_command_center_sessions WHERE id=$1 FOR UPDATE',[token.sessionId]);
+  const pending=repository.mutate(token,{operation:'schedule_preview',appointmentId:p.id,scheduleBody:p.body,expectedRevision:w.integrity.revision,idempotencyKey:key},{sourceHash:sha256('ordinary local fixture')}).then(()=>({saved:true}),error=>({status:error.status}));
+  await new Promise(r=>setTimeout(r,60));now=new Date(new Date(row.expires_at).getTime()+1);await holder.query('ROLLBACK');holder.release();expect(await pending).toEqual({status:410});expect((await f.ownerPool.query('SELECT revision FROM demo_command_center_sessions WHERE id=$1',[token.sessionId])).rows[0].revision).toBe(row.revision);
+ });
+});

@@ -58,6 +58,11 @@
 .m22-hard-block { padding: 12px; border: 2px solid #b42318; border-radius: 8px; color: #b42318; font-weight: 600; }
 .m22-dispatch-warning { padding: 12px; border-left: 4px solid #955400; background: color-mix(in srgb, #f5b942 15%, transparent); }
 .m22-dialog-status { min-height: 24px; overflow-wrap: anywhere; }
+.m22-dialog-body > div:not(.m22-dialog-grid) > section { margin-block: 16px; }
+.m22-dialog-body h3 { margin: 0 0 8px; font-size: 1rem; line-height: 1.4; }
+.m22-dialog-footer button { color: var(--text-primary, #172033); background: var(--surface, #fff); }
+[data-theme="light"] .m22-dialog { --surface: var(--theme-surface, #fff); --border-color: var(--theme-border, #d7dce5); --text-primary: var(--theme-text, #172033); --text-secondary: var(--theme-muted, #586174); }
+[data-theme="dark"] .m22-dialog { --surface: var(--theme-surface, #161a22); --border-color: var(--theme-border, #3b4352); --text-primary: var(--theme-text, #f2f5fb); --text-secondary: var(--theme-muted, #b8c0ce); }
 .m22-dialog-status[data-state="error"] { color: #b42318; font-weight: 600; }
 .m22-dialog-status[data-state="success"] { color: #087443; font-weight: 600; }
 .m22-dialog-close { min-width: 44px; min-height: 44px; border: 0; color: inherit; background: transparent; font-size: 1.5rem; cursor: pointer; }

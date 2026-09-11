@@ -4,7 +4,8 @@ const { stableValue, sha256 } = require('../services/businessProfileAdapter');
 const material = require('./materialPlanContract');
 const VERSION = 'estimate-material-adoption-v1';
 const V2 = 'estimate-material-adoption-v2';
-const VERSIONS = Object.freeze([VERSION,V2]);
+const V3 = 'estimate-material-adoption-v3';
+const VERSIONS = Object.freeze([VERSION,V2,V3]);
 const BASE_VERSION = 'm19-part3-canonical-v2';
 const MAX_CENTS = 99999999999999n;
 const FIELDS = ['sourcePins', 'expectedPlanId', 'expectedPlanRevision', 'expectedPlanDigest',
@@ -33,7 +34,7 @@ function nonnegative(value) { return typeof value === 'number' && Number.isFinit
 // tax and operational snapshots are never modified or recalculated here.
 function calculate(item, plan, version=VERSION) {
   if (item?.calculationVersion !== BASE_VERSION || !item.snapshot ||
-      !VERSIONS.includes(version) || !material.VERSIONS.includes(plan?.calculationVersion) || (version===VERSION && plan?.calculationVersion!==material.VERSION) || plan.action !== 'save' ||
+      !VERSIONS.includes(version) || !material.VERSIONS.includes(plan?.calculationVersion) || (VERSIONS.indexOf(version)<material.VERSIONS.indexOf(plan?.calculationVersion)) || plan.action !== 'save' ||
       plan.currency !== item.estimate?.currency || !['USD', 'CAD', 'EUR'].includes(plan.currency)) {
     fail('This estimate or material plan cannot be used for a new cost review.');
   }
@@ -91,4 +92,4 @@ function checkBasis(body, review, plan) {
     fail('The estimate, material plan or price review changed. Refresh and review the plan again.', 409);
   }
 }
-module.exports = { VERSION, V2, VERSIONS, BASE_VERSION, calculate, normalize, checkBasis, cents, recordedCents, decimal };
+module.exports = { VERSION, V2, V3, VERSIONS, BASE_VERSION, calculate, normalize, checkBasis, cents, recordedCents, decimal };

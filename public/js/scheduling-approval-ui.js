@@ -392,9 +392,13 @@
     }).catch(function (error) {
       if (active!==requestOwner) return;
       if (active.applied) { showRefreshFailure(error); return; }
+      if ([409, 410, 428].includes(error.status)) {
+        back();
+        setStatus(error.message, 'error', true);
+        return;
+      }
       setStatus(error.message, 'error', true);
       active.approve.disabled = false;
-      if ([409, 410, 428].includes(error.status)) active.back.hidden = false;
     });
   }
 
@@ -403,6 +407,8 @@
     active.preview = null;
     active.previewAttempt = null;
     active.idempotencyKey = null;
+    active.review.replaceChildren();
+    active.approve.disabled = true;
     active.form.hidden = false;
     active.review.hidden = true;
     active.back.hidden = true;
@@ -685,7 +691,7 @@
     var reasonWrapper = el('div', 'm22-dialog-field');
     var reasonLabel = el('label', '', 'Human approval reason');
     var reason = document.createElement('textarea'); reason.maxLength = 1000; reason.required = true;
-    reason.value = value(options.reason, '');
+    reason.value = typeof options.reason === 'string' ? options.reason : '';
     reasonLabel.appendChild(reason); reasonWrapper.appendChild(reasonLabel); form.appendChild(reasonWrapper); active.reason = reason;
     document.addEventListener('keydown', trap);
     reason.focus();

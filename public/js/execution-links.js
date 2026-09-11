@@ -22,7 +22,7 @@
   function mount(container,expected,options){
     options=options||{};
     var details=document.createElement('details');details.className='execution-link';
-    var summary=document.createElement('summary');summary.textContent='Work details';
+    var summary=document.createElement('summary');summary.textContent=options.summaryLabel || 'Work details';
     var body=document.createElement('div');body.className='execution-link-content';
     var status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     body.appendChild(status);details.append(summary,body);container.appendChild(details);

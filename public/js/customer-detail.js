@@ -189,7 +189,7 @@ window.CustomerDetail = (function() {
     html += '      </div>';
 
     // POLARIS\u2122 Intelligence
-    html += '      <div class="drawer-section" id="cdExecutionSection"><h3>Work details</h3><div id="cdExecutionRecords"></div></div>';
+    html += '      <details class="drawer-section" id="cdExecutionSection"><summary>Work Details</summary><div id="cdExecutionRecords"></div></details>';
     html += '      <div class="drawer-section">';
     html += '        <h3>POLARIS\u2122 Intelligence</h3>';
     html += '        <div class="drawer-polaris-insight" id="cdPolarisInsight">';
@@ -310,7 +310,8 @@ window.CustomerDetail = (function() {
     panel.appendChild(basisDetails);
     var priceDetails = panel.querySelector('.drawer-polaris-pricing'); priceDetails.classList.add('drawer-section');
     priceDetails.querySelector('summary').textContent = 'Price Breakdown And Estimate Review';
-    panel.append(priceDetails,basisDetails);
+    analysis.after(priceDetails);
+    panel.appendChild(basisDetails);
     var profileSection = $('cdProfileSection');
     var contactDetails = document.createElement('details'); contactDetails.className = 'drawer-section drawer-customer-background';
     var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Customer History';
@@ -1062,6 +1063,15 @@ window.CustomerDetail = (function() {
     parent.appendChild(details);
   }
 
+  function capellaTitle() {
+    var title = document.createElement('h4'); title.id = 'cdCapellaTitle';
+    var mark = document.createElement('span'); mark.className = 'capella-four-star'; mark.setAttribute('aria-hidden','true');
+    ['north','east','south','west'].forEach(function(direction) {
+      var star = document.createElement('span'); star.className = 'polaris-inline-star capella-star-' + direction; mark.appendChild(star);
+    });
+    title.append(mark,document.createTextNode('CAPELLA\u2122 Risk Lens')); return title;
+  }
+
   function appendCapellaRefresh(root) {
     var button=document.createElement('button'); button.id='cdCapellaRefresh'; button.type='button'; button.className='btn btn-secondary btn-sm'; button.textContent='Refresh Capella'; button.style.marginTop='.75rem';
     button.disabled=Boolean($('cdEstimateReviewRefresh').disabled);
@@ -1070,14 +1080,14 @@ window.CustomerDetail = (function() {
 
   function renderCapellaStatus(message) {
     var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
-    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens';
+    var title = capellaTitle();
     var status = document.createElement('p'); status.setAttribute('role','status'); status.textContent = message;
     root.append(title,status); appendCapellaRefresh(root);
   }
 
   function renderCapellaReview(review) {
     var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
-    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens'; root.appendChild(title); appendCapellaRefresh(root);
+    var title = capellaTitle(); root.appendChild(title); appendCapellaRefresh(root);
     function paragraph(value) { var p = document.createElement('p'); p.textContent = value; root.insertBefore(p,$('cdCapellaRefresh')); }
     var risk = review.riskReview, decision = review.decisions && review.decisions.current;
     var matches = risk && risk.contract === 'NorthStarCapellaRecordedCosts/v1' &&
@@ -1167,12 +1177,11 @@ window.CustomerDetail = (function() {
     (data.canonicalRecords || []).forEach(function(record) {
       var ids = record && record.ids || {};
       var group = document.createElement('div');
-      var title = document.createElement('h4');
-      title.textContent = record && record.values && record.values.service && record.values.service.label || 'Recorded work';
-      group.appendChild(title); executionRecords.appendChild(group);
+      var label = record && record.values && record.values.service && record.values.service.label || 'Recorded Work';
+      executionRecords.appendChild(group);
       if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.mount(group, {
         appointmentId:ids.appointment, graphId:ids.graph, customerId:ids.customer
-      });
+      }, {summaryLabel:label});
     });
     if (!executionRecords.children.length) executionRecords.textContent = 'No exact work records are available in this loaded customer view.';
     $('cdDrawerLoading').style.display = 'none';

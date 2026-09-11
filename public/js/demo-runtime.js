@@ -13,7 +13,7 @@
   var workspace = null;
   var workspaceRequest = null;
   var accountRequest = null;
-  var readonlyMessage = 'This account-free demo is read-only outside Simulate Lead and Reset demo.';
+  var readonlyMessage = 'This action is not available in the demo. Existing demo scheduling and review tools remain available.';
   var SCENARIO_PREFERENCES_KEY = 'northstarDemoScenarioPreferences';
   var RETURN_TO_TOOLBAR_KEY = 'northstarDemoReturnToToolbar';
   var returnToToolbarRequested = false;

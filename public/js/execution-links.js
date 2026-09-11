@@ -28,7 +28,7 @@
     body.appendChild(status);details.append(summary,body);container.appendChild(details);
     var serial=0,controller=null,timer=null,disposed=false;
     var demo=options.demo===true || /^\/demo(?:\/|$|-)/.test(window.location.pathname);
-    var initial=demo?'Demo work is read-only. Real company work cannot be opened from this practice workspace.':
+    var initial=demo?'Field work and completion review are not available in this demo yet. Your saved scheduling changes remain available.':
       identity(expected)?'Open to check the work details available for this job.':'Work details could not be linked to this job. Review the job in Operations.';
     status.textContent=initial;
     function reset(){serial+=1;if(controller)controller.abort();controller=null;if(timer)clearTimeout(timer);timer=null;body.replaceChildren(status);status.textContent=initial;body.removeAttribute('aria-busy');}

@@ -1,0 +1,9 @@
+# Owner Operations navigation entry correction
+
+PR204 added Operations to the canonical route contract, but the navigation component's presentation list still omitted it. Its exact count/order check emptied the available presentation entries; the subsequent account-navigation check sent otherwise valid demo and paid sessions to sign-in. Public discovery observed `/demo` HTTP 200, the demo workspace HTTP 200, and then a client navigation to `/login`, with no HTTP redirect or JavaScript exception.
+
+This correction adds the missing Operations label/icon/path presentation in canonical order. The contract, server permissions, account loading, strict destination checks, Today minimization and all persistence routines remain unchanged. It does not make a demo session a paid account.
+
+Focused verification mounts the actual server, pages, session adapter and demo repository against disposable PostgreSQL, navigates from Command Center through Calendar to Operations using actual links on desktop/mobile, and checks that unauthenticated paid entry still redirects. Browser tests close the ordinary first-visit Quick Start dialog through its accessible Close control. No scheduling/work mutation is needed. Unit checks reproduce the missing-entry rejection and cover restricted paid subsets, Today, unknown/duplicate entries and cross-mode destinations.
+
+The only newly rendered copy is the existing business label “Operations”; the icon is decorative. Desktop light/mobile dark screenshots cover the affected navigation and destination. No schema, startup, provider, recovery policy or financial changes occur. Prior PR204 functional public acceptance remains paused and is not represented as completed by this local correction. Physical browsers/devices beyond the recorded Chrome/WebKit engines and authenticated production paid evidence remain unavailable.

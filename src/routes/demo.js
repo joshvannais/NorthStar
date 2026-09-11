@@ -299,7 +299,7 @@ for(const [suffix,operation] of [['mutation-previews','schedule_preview'],['muta
    return res.status(result.replayed?200:201).json({success:true,data:result.schedulingResponse,replayed:result.replayed});
   }catch(error){
    const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:503;
-   const messages={400:'Check the appointment, start and end times, reason and acknowledgements.',403:'This demo cannot change that appointment.',404:'That demo appointment is unavailable.',409:'The demo changed. Refresh and review the times again.',410:'This session or preview expired. Refresh and review again.',428:'Refresh the appointment before reviewing a change.',429:'This demo reached its action limit. Saved schedules remain available.',503:'Schedule changes are unavailable. Refresh to check saved times.'};
+   const messages={400:'Check the appointment, start and end times, reason and acknowledgements.',403:'This demo cannot change that appointment.',404:'That demo appointment is unavailable.',409:'The demo changed. Refresh and review the appointment again.',410:'This session or preview expired. Refresh and review again.',428:'Refresh the appointment before reviewing a change.',429:'This demo reached its action limit. Saved schedules remain available.',503:'Scheduling changes are unavailable. Refresh to check the saved appointment.'};
    return res.status(status).json({success:false,error:{message:messages[status]||'The scheduling request could not be completed.'}});
   }
  });

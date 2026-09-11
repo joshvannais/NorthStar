@@ -229,8 +229,9 @@
     active.review.appendChild(summary);
 
     if (active.current.dispatchState === 'dispatched' && ['reassign', 'unassign', 'reschedule'].includes(active.action)) {
-      active.review.appendChild(el('p', 'm22-dispatch-warning', 'Approval revokes the current dispatch. A new human dispatch approval will be required.'));
+      active.review.appendChild(el('p', 'm22-dispatch-warning', active.directory.simulated?'This change revokes the recorded dispatch. Review and dispatch again after the change.':'Approval revokes the current dispatch. A new human dispatch approval will be required.'));
     }
+    if(active.directory.simulated&&active.action==='dispatch')active.review.appendChild(el('p','m22-dispatch-warning','This records dispatch in your demo only. No team or customer is notified.'));
     var conflicts = preview.conflicts || {};
     active.review.appendChild(evidenceSection('Issues that prevent this change', conflicts.hardConflicts || [],
       conflicts.hardConflicts && conflicts.hardConflicts.length ? 'm22-hard-block' : ''));
@@ -660,8 +661,9 @@
     currentSummary.appendChild(terms); body.appendChild(currentSummary);
     if(directory.simulated)body.appendChild(el('p','',directory.workforceAvailable?'Simulated team and availability only. No real worker is assigned or customer contacted. Review the proposed change before confirming.':'This older demo has no saved team details. Time changes remain available. Reset starts a new demo and clears its current changes.'));
     if (current.dispatchState === 'dispatched' && ['reassign', 'unassign', 'reschedule'].includes(action)) {
-      body.appendChild(el('p', 'm22-dispatch-warning', 'If approved, this action revokes current dispatch and requires a new human dispatch approval.'));
+      body.appendChild(el('p', 'm22-dispatch-warning', directory.simulated?'This change revokes the recorded dispatch. Review and dispatch again after the change.':'If approved, this action revokes current dispatch and requires a new human dispatch approval.'));
     }
+    if(directory.simulated&&action==='dispatch')body.appendChild(el('p','m22-dispatch-warning','This records dispatch in your demo only. No team or customer is notified.'));
     var form = el('div');
     var review = el('div'); review.hidden = true;
     body.append(form, review);

@@ -507,7 +507,7 @@
     var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
     if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
     var page = overview.page || { shown: overview.records.length, total: overview.records.length };
-    definition.textContent = mode==='demo'?'Practice scheduling an existing appointment. Enter start and end times; staff assignment and dispatch are not available in this demo yet.':'Review current appointments in your business time zone.';
+    definition.textContent = mode==='demo'?(operator.canMutate!==true?'New demo scheduling changes are paused. Saved appointments remain available.':operator.workforceAvailable?'Practice scheduling, team assignment, and dispatch for an existing demo appointment. No real team or customer is notified.':'This older demo has no saved team details. Time changes remain available; Reset starts a new demo and clears its changes.'):'Review current appointments in your business time zone.';
     categoryNames.forEach(function (name) {
       var count = name === 'all' ? overview.total : overview.counts[name];
       var button = element('button', 'm22-category-button');

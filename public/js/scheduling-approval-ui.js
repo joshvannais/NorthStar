@@ -216,7 +216,7 @@
     appendTerm(terms, 'Action', ACTION_LABELS[preview.action] || preview.action);
     appendTerm(terms, 'Appointment', active.title);
     appendTerm(terms, 'Target', targetLabel(preview.proposal.target, active.directory, active.targetPageTargets));
-    appendTerm(terms, 'Schedule', formatInstant(preview.proposal.scheduledStart, active.timeZone) + ' to ' + formatInstant(preview.proposal.scheduledEnd, active.timeZone));
+    appendTerm(terms, 'Schedule', preview.proposal.scheduledStart === null && preview.proposal.scheduledEnd === null ? 'Not yet scheduled' : formatInstant(preview.proposal.scheduledStart, active.timeZone) + ' to ' + formatInstant(preview.proposal.scheduledEnd, active.timeZone));
     appendTerm(terms, 'Time zone', zoneLabel(active.timeZone));
     appendTerm(terms, 'Preview expires', formatInstant(preview.expiresAt, active.timeZone));
     appendTerm(terms, 'Reason', displayProjection().text(active.reason.value.trim(), 'Approval reason unavailable'));
@@ -650,7 +650,7 @@
     appendTerm(terms, 'Appointment', appointmentTitle);
     appendTerm(terms, 'Customer', value(record.customer && record.customer.name, 'Customer name unavailable'));
     appendTerm(terms, 'Target', targetLabel(targetForAuthority(current), directory));
-    appendTerm(terms, 'Schedule', formatInstant(current.scheduledStart, timeZone) + ' to ' + formatInstant(current.scheduledEnd, timeZone));
+    appendTerm(terms, 'Schedule', current.scheduledStart === null && current.scheduledEnd === null ? 'Not yet scheduled' : formatInstant(current.scheduledStart, timeZone) + ' to ' + formatInstant(current.scheduledEnd, timeZone));
     appendTerm(terms, 'Review', current.needsReview ? 'More scheduling information needs review.' : 'Review the recorded appointment before changing it.');
     currentSummary.appendChild(terms); body.appendChild(currentSummary);
     if(directory.simulated)body.appendChild(el('p','',directory.workforceAvailable?'Simulated team and availability only. No real worker is assigned or customer contacted. Review the proposed change before confirming.':'This older demo has no saved team details. Time changes remain available. Reset starts a new demo and clears its current changes.'));

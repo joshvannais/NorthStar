@@ -32,11 +32,11 @@
     count(value.revision); if (value.revision < 1) invalid();
   }
   function samePin(a, b) { return Boolean(a && b && a.id === b.id && a.revision === b.revision && a.digest === b.digest); }
-  function validate(value) {
+  function validate(value, options) {
     exact(value, ['version', 'authority', 'scopeDigest', 'evaluatedAt', 'title', 'execution', 'proposal', 'history', 'commands', 'readOnlyReason']);
-    if (value.version !== VERSION || value.authority !== 'postgresql') invalid();
+    if (value.version !== VERSION || value.authority !== (options && options.demo === true ? 'isolated_demo_postgresql' : 'postgresql')) invalid();
     match(value.scopeDigest, HASH); instant(value.evaluatedAt); text(value.title, 500);
-    if ([null, 'onboarding_incomplete', 'subscription_read_only'].indexOf(value.readOnlyReason) === -1) invalid();
+    if ([null, 'onboarding_incomplete', 'subscription_read_only'].concat(options && options.demo === true ? ['operations_paused'] : []).indexOf(value.readOnlyReason) === -1) invalid();
     var execution = value.execution;
     exact(execution, ['id', 'appointmentId', 'lifecycleState', 'revision', 'digest', 'assignment']);
     pin({ id: execution.id, revision: execution.revision, digest: execution.digest }); match(execution.appointmentId, UUID);
@@ -102,8 +102,8 @@
     if (/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f<>]|(?:https?:\/\/|www\.)/i.test(value)) invalid();
     return value;
   }
-  function actionBody(value, action, targetId, fields) {
-    validate(value);
+  function actionBody(value, action, targetId, fields, options) {
+    validate(value, options);
     var command = value.commands.find(function(item) { return item.action === action &&
       (action !== 'correct_completion' || item.target.id === targetId); });
     if (!command || !fields) invalid();

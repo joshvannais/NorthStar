@@ -140,6 +140,15 @@ function createFieldExecutionsRouter(options = {}) {
       return res.status(503).json({ success: false, error: { code: 'OPERATIONAL_INTELLIGENCE_UNAVAILABLE', message: 'Operational intelligence is temporarily unavailable.' } });
     }
   });
+  for (const path of ['/owner-work','/owner-work/appointments/:appointmentId']) router.get(path,tenantAuth,throttle,permission('operations','read'),async(req,res)=>{
+    res.set('Cache-Control','no-store, private');res.vary('Cookie');
+    try {
+      const id=req.params.appointmentId?normalizeCompletionRead(req.params.appointmentId,{}):null;
+      const data=await require('../operations/ownerWorkRepository').readOwnerWork(poolProvider(),actor(req),id);
+      return res.json({success:true,data});
+    } catch(error) { const status=[400,403,404,409].includes(error.status)?error.status:503;
+      return res.status(status).json({success:false,error:{message:status===403?'Owner work controls are unavailable for this role.':status===404?'That job is unavailable. Choose a job from Operations.':'Work details are unavailable. Refresh before trying again.'}}); }
+  });
   router.get('/links/appointments/:appointmentId', (_req, res, next) => {
     res.set('Cache-Control', 'no-store, private'); res.vary('Cookie'); next();
   }, tenantAuth, (req, res, next) => {

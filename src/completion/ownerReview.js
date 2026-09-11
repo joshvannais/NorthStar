@@ -5,10 +5,10 @@ const { projectSubscription, canMutateInternal } = require('../accounts/subscrip
 const pin = record => ({ id: record.id, revision: record.revision, digest: record.digest });
 function invalid() { throw new Error('COMPLETION_REVIEW_INVALID'); }
 
-function projectOwnerReview(body, context, input) {
+function projectReview(body, context, input, demo) {
   if (!input || !['owner', 'admin'].includes(input.actorAccessRole) || !body || body.success !== true || !body.data || !context) invalid();
   const data = body.data, execution = data.execution;
-  if (data.authority !== 'postgresql' || data.completionInferred !== false || !execution || !Array.isArray(data.records) ||
+  if (data.authority !== (demo ? 'isolated_demo_postgresql' : 'postgresql') || data.completionInferred !== false || !execution || !Array.isArray(data.records) ||
     data.records.length > 200 || input.executionId && execution.id !== input.executionId ||
     context.assignment_id !== execution.assignmentId || context.appointment_id !== execution.appointmentId) invalid();
   const assignment = { id: context.assignment_id, revision: Number(context.revision), digest: context.digest,
@@ -37,7 +37,7 @@ function projectOwnerReview(body, context, input) {
         return [key, gates.requirements[key].length];
       }).concat(['labor', 'materials', 'progress', 'fieldEvidence', 'equipment'].map(key => [key, gates[key] && gates[key].count]))) };
   }
-  const readOnlyReason = context.onboarding_status !== 'complete' ? 'onboarding_incomplete' :
+  const readOnlyReason = demo ? (context.mutationsEnabled ? null : 'operations_paused') : context.onboarding_status !== 'complete' ? 'onboarding_incomplete' :
     canMutateInternal(projectSubscription(context)) ? null : 'subscription_read_only';
   const commands = [];
   const add = (action, record) => commands.push({ action, target: record ? pin(record) : null });
@@ -52,11 +52,13 @@ function projectOwnerReview(body, context, input) {
       if (!data.records.some(successor => successor.previousRecordId === record.id)) add('correct_completion', record);
     }
   }
-  return contract.validate({ version: contract.VERSION, authority: 'postgresql',
+  return contract.validate({ version: contract.VERSION, authority: demo ? 'isolated_demo_postgresql' : 'postgresql',
     scopeDigest: crypto.createHash('sha256').update(JSON.stringify([input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId])).digest('hex'),
     evaluatedAt: new Date(context.server_now).toISOString(), title: context.title,
     execution: { id: execution.id, appointmentId: execution.appointmentId, lifecycleState: execution.lifecycleState,
       revision: execution.revision, digest: execution.digest, assignment },
-    proposal: projectedProposal, history: { records, total: data.totalRecordCount, truncated: data.truncated }, commands, readOnlyReason });
+    proposal: projectedProposal, history: { records, total: data.totalRecordCount, truncated: data.truncated }, commands, readOnlyReason }, { demo: demo === true });
 }
-module.exports = { projectOwnerReview };
+function projectOwnerReview(body, context, input) { return projectReview(body, context, input, false); }
+function projectDemoOwnerReview(body, context, input) { return projectReview(body, context, input, true); }
+module.exports = { projectOwnerReview, projectDemoOwnerReview };

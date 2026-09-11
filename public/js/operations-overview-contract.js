@@ -97,9 +97,9 @@
     exact(value.capacity, ['status', 'recordedConstraints']); one(value.capacity.status, ['unknown']); number(value.capacity.recordedConstraints);
     if (scope === 'owner_admin') validateOwnerDetails(value.ownerDetails, value);
   }
-  function validate(value) {
+  function validate(value, options) {
     exact(value, ['version', 'authority', 'readOnly', 'scope', 'evaluatedAt', 'dataDigest', 'filter', 'capacity', 'pagination', 'records']);
-    one(value.version, [VERSION]); one(value.authority, ['postgresql']); one(value.readOnly, [true]);
+    one(value.version, [VERSION]); one(value.authority, [options && options.demo === true ? 'isolated_demo_postgresql' : 'postgresql']); one(value.readOnly, [true]);
     one(value.scope, ['owner_admin', 'dispatcher_coordination']); instant(value.evaluatedAt); match(value.dataDigest, HASH);
     one(value.filter, STATES); exact(value.capacity, ['status']); one(value.capacity.status, ['unknown']);
     var page = value.pagination;

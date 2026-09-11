@@ -14,6 +14,7 @@
     Object.freeze({ id: 'leads', label: 'Leads', resource: 'leads', paidPath: '/dashboard/leads', demoPath: '/demo/leads' }),
     Object.freeze({ id: 'communications', label: 'Communications', resource: 'calls', paidPath: '/dashboard/communications', demoPath: '/demo/communications' }),
     Object.freeze({ id: 'calendar', label: 'Calendar', resource: 'calendar', paidPath: '/dashboard/calendar', demoPath: '/demo/calendar' }),
+    Object.freeze({ id: 'operations', label: 'Operations', resource: 'operations', paidPath: '/dashboard/operations', demoPath: '/demo/operations' }),
     Object.freeze({ id: 'team', label: 'Team', resource: 'team', paidPath: '/dashboard/team', demoPath: '/demo/team' }),
     Object.freeze({ id: 'business-profile', label: 'Business Profile', resource: 'settings', paidPath: '/dashboard/business-profile', demoPath: '/demo/business-profile' }),
     Object.freeze({ id: 'settings', label: 'Settings', resource: 'settings', paidPath: '/dashboard/settings', demoPath: '/demo/settings' }),

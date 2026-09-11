@@ -580,7 +580,7 @@ class DemoCommandCenterRepository {
         return { record: current, replayed: true };
       }
       if (current.revision !== input.expectedRevision) {
-        fail(409, 'DEMO_REVISION_CONFLICT', 'The demo changed in another tab. Refresh before trying that action again.');
+        fail(409, 'DEMO_REVISION_CONFLICT', 'The demo has changed. Refresh before trying that action again.');
       }
       if (current.mutationCount >= MAX_MUTATIONS) {
         fail(429, 'DEMO_SESSION_LIMIT', 'This demo session reached its bounded action limit.');

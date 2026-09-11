@@ -640,7 +640,7 @@ class CalendarRenderer {
     if (this.loading) {
       html += `<div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule\u2026</div>`;
     } else if (this.rejected) {
-      html += `<div class="cal-event-list-empty" role="alert" aria-live="assertive">Calendar could not load. Try again to refresh your schedule.</div><button type="button" class="cal-new-event-btn" id="calendarRetry">Try Again</button>`;
+      html += `<div class="cal-event-list-empty" role="alert" aria-live="assertive">Calendar could not load. Try again to refresh your schedule.</div><button type="button" class="m22-action-button" id="calendarRetry">Try Again</button>`;
     } else if (todayEvents.length === 0) {
       html += `<div class="cal-event-list-empty">No events scheduled for today</div>`;
     } else {
@@ -727,23 +727,23 @@ class CalendarRenderer {
     var heading = document.createElement('div');
     heading.className = 'm22-authority-heading';
     var copy = document.createElement('div');
-    var title = document.createElement('h2'); title.id = 'calendarAuthorityTitle'; title.textContent = 'Scheduling authority';
+    var title = document.createElement('h2'); title.id = 'calendarAuthorityTitle'; title.textContent = 'Schedule Overview';
     var description = document.createElement('p');
     description.textContent = operator && operator.canMutate
       ? 'Review appointments and approve schedule changes.'
       : operator && operator.canRead
         ? 'Review current appointments. Changes require owner or dispatcher access.'
-        : 'Scheduling details are limited to authorized owners and dispatchers.';
+        : 'Review the schedule details available to this account.';
     copy.append(title, description); heading.appendChild(copy); this.authorityBoard.appendChild(heading);
     if (!projection) {
-      this.authorityBoard.appendChild(Object.assign(document.createElement('p'), { className:'m22-overview-empty', textContent:'Current Calendar authority is loading or unavailable.' }));
+      this.authorityBoard.appendChild(Object.assign(document.createElement('p'), { className:'m22-overview-empty', textContent:this.loading ? 'Loading schedule details…' : 'Schedule details could not load. Try again above.' }));
       return;
     }
     if (!operator || operator.canRead !== true || !overview) {
       var unavailable = document.createElement('p'); unavailable.className = 'm22-overview-empty';
       unavailable.textContent = operator && operator.reason === 'subscription_read_only'
-        ? 'This subscription is read-only. No scheduling mutation is available.'
-        : 'No owner/dispatcher mutation authority is available for this signed-in account.';
+        ? 'This subscription allows viewing schedules. Editing is unavailable.'
+        : 'Schedule changes are unavailable for this account.';
       this.authorityBoard.appendChild(unavailable); return;
     }
     var page = overview.page || { shown:(overview.records || []).length, total:(overview.records || []).length };
@@ -812,7 +812,7 @@ class CalendarRenderer {
       if (!operator.canMutate) {
         var readOnly = document.createElement('p');
         readOnly.className = 'm22-overview-read-only';
-        readOnly.textContent = 'Read-only: ' + calendarTitleCaseLabel(operator.reason || 'mutation authority unavailable') + '.';
+        readOnly.textContent = 'You can view this appointment. Editing is unavailable for this account.';
         actions.appendChild(readOnly);
       }
       item.append(recordTitle, states, actions); list.appendChild(item);

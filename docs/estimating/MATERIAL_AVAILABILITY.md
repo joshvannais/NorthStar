@@ -23,3 +23,7 @@ Current owner/admin/session/CSRF checks and authority-before-replay remain. Fres
 063 revalidation can lock both existing ledgers. Local upgrade/rollback evidence does not establish production row counts, external writers, physical restore or backup cutoff coverage. Production release requires a fresh root disposition after independent audit. No production action is part of implementation.
 
 Part2 remains seven slices. Slice7 owns broader consumer integration and Part2 exit. This package does not complete Part2 or verified supplier/stock capabilities; the separately assigned Operations demo delivery stays outside Slice6.
+
+## Review correction
+
+Availability comparisons display explicit line units in preview, saved/current and adopted evidence. Alternative facts precede consent, in paired desktop columns or stacked mobile sections. My Observation without a reference is explicitly line-specific, not a company-wide stock count. Exact allowlisted validation messages and the server-returned expired assessment provide actionable guidance without rendering raw errors. Known rejection invalidates consent; uncertain network outcomes retain the same request key.

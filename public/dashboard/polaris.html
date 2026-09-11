@@ -978,7 +978,7 @@
         var alert = document.createElement('div');
         alert.className = 'polaris-native-card-error';
         alert.setAttribute('role', 'alert');
-        alert.textContent = 'Customer intelligence is unavailable because the structured response was rejected. No data was changed.';
+        alert.textContent = 'Saved customer details could not be read. Refresh and try again.';
         host.replaceChildren(alert);
       }
 
@@ -1025,18 +1025,18 @@
             !conversationAllowed) {
           document.getElementById('polarisSelectedContextTitle').textContent = 'Saved customer intelligence';
           document.getElementById('polarisSelectedContextSummary').textContent =
-            'Open this record from Leads, Customer Detail, or Calendar to review its saved canonical intelligence. Conversation remains read-only.';
+            'Open this record from Leads, Customer Detail, or Calendar to review its saved details. Conversation remains read-only.';
           document.getElementById('polarisNativeCardHost').replaceChildren();
           return;
         }
         document.getElementById('polarisSelectedContextTitle').textContent = 'Loading selected record';
-        document.getElementById('polarisSelectedContextSummary').textContent = 'Checking exact record and organization authority.';
+        document.getElementById('polarisSelectedContextSummary').textContent = 'Loading the selected customer’s saved details.';
         if (window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true &&
             typeof window.NorthStarDemoRuntime.loadWorkspace === 'function') {
           window.NorthStarDemoRuntime.loadWorkspace(false).then(function(workspace) {
             if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) return;
             var graph = findSelectedGraph(workspace, selectedAtRequest);
-            if (!graph) return showSelectedUnavailable('This exact record is not present in the current demo session. No fallback record is shown.');
+            if (!graph) return showSelectedUnavailable('This customer is no longer available in this demo. Open a current customer record.');
             document.getElementById('polarisSelectedContextTitle').textContent =
               (graph.customer && graph.customer.name || 'Customer') + ' · ' +
               (graph.lead && (graph.lead.serviceLabel || graph.lead.serviceType) || 'Requested work');
@@ -1045,11 +1045,11 @@
             enableMaterialReview();
             if (!renderCards([NorthStarPolarisCard.buildDemoCard(graph, selectedAtRequest)])) {
               document.getElementById('polarisSelectedContextTitle').textContent = 'Selected record unavailable';
-              document.getElementById('polarisSelectedContextSummary').textContent = 'The local structured record was rejected. No fallback record is shown.';
+              document.getElementById('polarisSelectedContextSummary').textContent = 'The saved customer details could not be read. Refresh and try again.';
             }
           }).catch(function() {
             if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) return;
-            showSelectedUnavailable('The deterministic demo session is unavailable. No fallback record is shown.');
+            showSelectedUnavailable('The demo could not be loaded. Refresh and try again.');
           });
           return;
         }
@@ -1059,8 +1059,8 @@
         }, function(error, status, payload) {
           if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) return;
           if (error || status < 200 || status >= 300 || !payload || !payload.data) {
-            var message = payload && payload.error && payload.error.message;
-            showSelectedUnavailable(message || 'The exact selected record could not be loaded for this organization and role.');
+            var message = status === 401 ? 'Sign in again to open this customer record.' : status === 403 ? 'Your current account cannot open this customer record.' : status === 404 ? 'This customer record is unavailable. Open a current record from Leads.' : 'The selected customer details could not be loaded. Refresh and try again.';
+            showSelectedUnavailable(message);
             return;
           }
           try {
@@ -1085,7 +1085,7 @@
             activeCanonicalBacking = backing;
             enableMaterialReview();
           } catch (_contractError) {
-            showSelectedUnavailable('The structured response was rejected. No fallback record is shown.');
+            showSelectedUnavailable('The saved customer details could not be read. Refresh and try again.');
             showStructuredContractUnavailable();
           }
         });

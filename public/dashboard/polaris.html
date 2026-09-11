@@ -11,6 +11,7 @@
   <script src="/js/polaris-professional-text.js"></script>
   <script src="/js/polaris-trusted-presentation.js"></script>
   <script src="/js/polaris-native-card.js"></script>
+  <script src="/js/saved-material-review.js"></script>
   <link rel="stylesheet" href="/css/polaris-native-card.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Polaris — NorthStar</title>
@@ -522,6 +523,12 @@
       .polaris-prompt-bar { left: 0; }
       .polaris-main { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
     }
+    #polarisMaterialSection summary { cursor:pointer; padding:12px 0; font:inherit; font-weight:600; }
+    #polarisMaterialSection select { display:block; max-width:100%; margin:8px 0 12px; }
+    #polarisMaterialSection button { min-height:44px; margin:0 0 8px; }
+    #polarisMaterialBody dl { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px 16px; }
+    #polarisMaterialBody dd { margin:0; overflow-wrap:anywhere; }
+    #polarisMaterialBody p { margin:10px 0; }
 </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
@@ -563,6 +570,17 @@
               <section class="polaris-access-notice" id="polarisAccessNotice" role="status" aria-live="polite" aria-atomic="true" hidden></section>
               <section class="polaris-access-notice" id="polarisUsageNotice" role="status" aria-live="polite" aria-atomic="true" hidden></section>
               <div class="polaris-native-card-host" id="polarisNativeCardHost" aria-live="polite"></div>
+              <section id="polarisMaterialSection" class="polaris-selected-context" hidden>
+                <details id="polarisMaterialDetails">
+                  <summary>Saved Material Review</summary>
+                  <p>Read the selected estimate and its material basis. General conversation retains the original estimate context.</p>
+                  <label for="polarisMaterialRevision">Estimate History</label>
+                  <select id="polarisMaterialRevision" aria-label="Estimate History"></select>
+                  <button type="button" class="polaris-clear-btn" id="polarisMaterialRefresh">Refresh Saved Material Review</button>
+                  <p id="polarisMaterialStatus" role="status"></p>
+                  <div id="polarisMaterialBody"></div>
+                </details>
+              </section>
               <div class="polaris-welcome">
                 <div class="polaris-welcome-icon">✦</div>
                 <div class="polaris-welcome-title">Welcome to POLARIS™</div>
@@ -670,6 +688,92 @@
       var activeCanonicalBacking = null;
       var activeAccountAuthority = null;
       var contextGeneration = 0;
+      var materialGeneration = 0;
+      var materialEstimateId = null;
+      var materialRevision = null;
+      function clearMaterialReview() {
+        materialGeneration += 1;
+        materialEstimateId = null;
+        materialRevision = null;
+        document.getElementById('polarisMaterialSection').hidden = true;
+        document.getElementById('polarisMaterialBody').replaceChildren();
+        document.getElementById('polarisMaterialRevision').replaceChildren();
+        document.getElementById('polarisMaterialStatus').textContent = '';
+      }
+      function enableMaterialReview() {
+        document.getElementById('polarisMaterialSection').hidden = false;
+      }
+      function materialRead(path) {
+        var request = window.NorthStarAccountSession && window.NorthStarAccountSession.fetch ? window.NorthStarAccountSession.fetch(path, {method:'GET',cache:'no-store'}) : window.fetch(path, {method:'GET',credentials:'same-origin',cache:'no-store'});
+        return request.then(function(response) { if (!response.ok) throw {status:response.status}; return response.json(); }).then(function(body) { if (!body.success || !body.data) throw {status:503}; return body.data; });
+      }
+      function loadMaterialReview(reply) {
+        var selection = activeSelection && Object.freeze({kind:activeSelection.kind,identifier:activeSelection.identifier});
+        var context = contextGeneration, generation = ++materialGeneration;
+        var demo = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true;
+        var status = document.getElementById('polarisMaterialStatus'), body = document.getElementById('polarisMaterialBody');
+        function current() { return context === contextGeneration && generation === materialGeneration && sameActiveSelection(selection, activeSelection); }
+        if (!selection || !conversationAllowed || (!demo && !activeCanonicalBacking)) {
+          if (reply) addMessage('assistant','Open an available customer record in Polaris to review its saved materials and costs.','sent');
+          return;
+        }
+        enableMaterialReview();
+        document.getElementById('polarisMaterialDetails').open = true;
+        status.textContent = 'Loading Saved Material Review…';
+        body.replaceChildren();
+        var estimate;
+        if (demo) {
+          estimate = window.NorthStarDemoRuntime.loadWorkspace(false).then(function(workspace) {
+            var graph = findSelectedGraph(workspace, selection);
+            if (!graph || !graph.ids || !UUID.test(graph.ids.estimate || '')) throw {status:404};
+            return graph.ids.estimate;
+          });
+        } else {
+          var card = activeCanonicalBacking.cards && activeCanonicalBacking.cards[0];
+          var graphId = card && card.authority && card.authority.graphId;
+          estimate = UUID.test(graphId || '') ? materialRead('/api/v1/canonical/graphs/' + encodeURIComponent(graphId)).then(function(graph) {
+            var key = selection.kind === 'lead' ? 'opportunity' : selection.kind === 'work' ? 'appointment' : 'customer';
+            if (!graph.ids || graph.ids[key] !== selection.identifier || !UUID.test(graph.ids.estimate || '')) throw {status:404};
+            return graph.ids.estimate;
+          }) : Promise.reject({status:404});
+        }
+        estimate.then(function(id) {
+          if (!current()) return null;
+          materialEstimateId = id;
+          return materialRead('/api/v1/canonical/estimates/' + encodeURIComponent(id) + '/review' + (materialRevision === null ? '' : '?revision=' + materialRevision));
+        }).then(function(review) {
+          if (!current() || !review) return;
+          if (review.pins.estimateId !== materialEstimateId || review.simulated !== !!demo || (materialRevision !== null && review.selectedRevision !== materialRevision)) throw {status:409};
+          var model = NorthStarSavedMaterialReview.project(review);
+          var select = document.getElementById('polarisMaterialRevision');
+          select.replaceChildren();
+          var latest = document.createElement('option'); latest.value=''; latest.textContent='Current Estimate'; select.append(latest);
+          for (var number=review.currentRevision; number>=1; number--) {
+            if (number !== 1 && !(review.revisionHistory || []).some(function(r) { return r.revision === number; })) continue;
+            var option=document.createElement('option'); option.value=String(number); option.textContent='Estimate ' + number + (number===1?' — Original':''); select.append(option);
+          }
+          select.value=materialRevision===null?'':String(materialRevision);
+          NorthStarSavedMaterialReview.render(body, model);
+          status.textContent='Saved Material Review Loaded';
+          if (reply) addMessage('assistant',NorthStarSavedMaterialReview.text(model),'sent');
+        }).catch(function(error) {
+          if (!current()) return;
+          body.replaceChildren();
+          var message = error.status===401?'Sign in again to read this estimate.':error.status===403?'Your current account cannot read this estimate.':error.status===404?'This selected estimate is unavailable. Open the customer record again.':error.status===429?'Please wait before refreshing the saved material review.':'The saved material review is unavailable. Refresh to try again.';
+          status.textContent=message;
+          if (reply) addMessage('assistant',message,'error');
+        });
+      }
+      function respondToSavedMaterialQuery(message) {
+        if (!/^(?:show|review|refresh)\s+(?:(?:the|my|saved|recorded|current|selected)\s+)*(?:materials?|material costs?|cost basis|direct costs?|profit inputs?)[?.!]*$/i.test(message.trim())) return false;
+        loadMaterialReview(true);
+        return true;
+      }
+      document.getElementById('polarisMaterialDetails').addEventListener('toggle',function() {
+        if (this.open && !document.getElementById('polarisMaterialStatus').textContent) loadMaterialReview(false);
+      });
+      document.getElementById('polarisMaterialRefresh').addEventListener('click',function() { loadMaterialReview(false); });
+      document.getElementById('polarisMaterialRevision').addEventListener('change',function() { materialRevision=this.value===''?null:Number(this.value); loadMaterialReview(false); });
 
       function selectedQuery() {
         var query = new URLSearchParams(window.location.search);
@@ -690,6 +794,7 @@
 
       function invalidateCanonicalBacking() {
         contextGeneration += 1;
+        clearMaterialReview();
         activeCanonicalBacking = null;
       }
 
@@ -859,6 +964,7 @@
       }
 
       function showSelectedUnavailable(message) {
+        clearMaterialReview();
         activeCanonicalBacking = null;
         var section = document.getElementById('polarisSelectedContext');
         document.getElementById('polarisSelectedContextTitle').textContent = 'Selected record unavailable';
@@ -894,6 +1000,7 @@
 
       function renderSelectedContext() {
         var generation = ++contextGeneration;
+        clearMaterialReview();
         activeCanonicalBacking = null;
         activeSelection = selectedQuery();
         var selectedAtRequest = activeSelection ? Object.freeze({
@@ -927,18 +1034,21 @@
         if (window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true &&
             typeof window.NorthStarDemoRuntime.loadWorkspace === 'function') {
           window.NorthStarDemoRuntime.loadWorkspace(false).then(function(workspace) {
-            var graph = findSelectedGraph(workspace, activeSelection);
+            if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) return;
+            var graph = findSelectedGraph(workspace, selectedAtRequest);
             if (!graph) return showSelectedUnavailable('This exact record is not present in the current demo session. No fallback record is shown.');
             document.getElementById('polarisSelectedContextTitle').textContent =
               (graph.customer && graph.customer.name || 'Customer') + ' · ' +
               (graph.lead && (graph.lead.serviceLabel || graph.lead.serviceType) || 'Requested work');
             document.getElementById('polarisSelectedContextSummary').textContent =
               graph.lead && (graph.lead.summary || graph.lead.scope) || 'No work scope is recorded.';
-            if (!renderCards([NorthStarPolarisCard.buildDemoCard(graph, activeSelection)])) {
+            enableMaterialReview();
+            if (!renderCards([NorthStarPolarisCard.buildDemoCard(graph, selectedAtRequest)])) {
               document.getElementById('polarisSelectedContextTitle').textContent = 'Selected record unavailable';
               document.getElementById('polarisSelectedContextSummary').textContent = 'The local structured record was rejected. No fallback record is shown.';
             }
           }).catch(function() {
+            if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) return;
             showSelectedUnavailable('The deterministic demo session is unavailable. No fallback record is shown.');
           });
           return;
@@ -973,6 +1083,7 @@
               throw new Error('stale_context_response');
             }
             activeCanonicalBacking = backing;
+            enableMaterialReview();
           } catch (_contractError) {
             showSelectedUnavailable('The structured response was rejected. No fallback record is shown.');
             showStructuredContractUnavailable();
@@ -1151,7 +1262,7 @@
         })[0];
 
         if (/profit|margin/.test(normalized)) {
-          return 'The demo workspace has ' + currency(total) + ' in recorded customer-facing estimates. Profit is not calculated because authoritative labor, material, overhead, and tax inputs are intentionally absent; Polaris will not invent them.';
+          return 'Open the selected customer’s Saved Material Review to compare recorded costs. Additional expenses may be missing; recorded estimates are not a profit forecast.';
         }
         if (/pipeline|revenue|value/.test(normalized)) {
           return 'The original demo estimates cover ' + graphs.length + ' records totaling ' + currency(total) + '. The largest original estimate is ' + top.customer.name + ' — ' + top.lead.serviceLabel + ' at ' + currency(top.estimate.customerPrice) + '.';
@@ -1184,6 +1295,7 @@
 
       function respondToAccountFreeDemoChat(message) {
         if (!window.NorthStarDemoRuntime || window.NorthStarDemoRuntime.active !== true) return false;
+        if (/\b(profit|margin)\b/i.test(message)) { loadMaterialReview(true); return true; }
         addMessage(
           'assistant',
           demoPolarisResponse(message) + ' This answer was calculated locally from the isolated demo session; no live provider request was sent.',
@@ -1271,6 +1383,7 @@
         addMessage('user', message, 'sent', requestKey);
         input.value = '';
         resetInputHeight();
+        if (respondToSavedMaterialQuery(message)) return;
         if (respondToAccountFreeDemoChat(message)) return;
         if (window.NorthStarEquipment && window.NorthStarEquipment.isEquipmentRequest(message)) {
           window.NorthStarEquipment.open({ entryPath: 'polaris', message: message });
@@ -1281,6 +1394,7 @@
 
       function retryLastMessage(text, requestKey, errorId) {
         if (isLoading || !conversationAllowed) return;
+        if (respondToSavedMaterialQuery(text)) return;
         if (respondToAccountFreeDemoChat(text)) return;
         var errorIndex = messages.findIndex(function(message) { return message.id === errorId; });
         if (errorIndex >= 0 && messages[errorIndex].role === 'assistant' && messages[errorIndex].status === 'error') {

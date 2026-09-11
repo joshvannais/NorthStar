@@ -98,3 +98,8 @@ The original inventory above remains historically pinned. At released ac60bfc pl
 | Financial legacy writes and later quote/invoice sinks | Existing legacy-write denial remains; human decision is recorded scope/price authority, not a generated/sent quote. | Parts6/8/9 and later invoice/learning ownership remain as previously reconciled. |
 
 Source reconciliation searched original estimate/snapshot joins and calculator callers, followed the eight mounted canonical surfaces, compatibility registrations, assistant context and the shared browser adapters. This package introduces no global latest-economics promise. Wording checks cover the changed rendered summary labels as well as the new private review states; unchanged later consumers are explicitly inventoried rather than silently treated as adopted.
+
+
+## Part2 Slice7 selected material integration
+
+[The current consumer and exit map](MISSION_24_MATERIAL_INTEGRATION.md) adds the selected Polaris saved-material read and fixes CAPELLA v4 renewed-review cost selection. Historical entries above retain their original source dates. General provider context and original aggregate feeds remain original; no private material receipts are added to the provider protocol or worker views. Current/historical review uses the existing owner/admin read and isolated demo adapter. Independent and release acceptance remain separate.

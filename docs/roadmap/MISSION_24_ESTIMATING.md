@@ -87,3 +87,8 @@ This bounded implementation appends an explicit material-cost-only estimate revi
 ### Part2 Slice4 — multiple materials
 
 The [whole-plan contract](../architecture/MISSION_24_MULTI_MATERIAL_PLANS.md) extends immutable single-material plans to ordered line items and exact whole-plan adoption, with retained legacy history and renewed human review. Seven planned Part2 slices remain; this package does not absorb sources/freshness (Slice5), availability (Slice6), integration/exit (Slice7), or owner Operations demo. Acceptance and release require exact sealed independent review and new061 recovery disposition.
+
+
+### Part2 Slice7 — integration and exit review
+
+The designated seven-slice plan concludes with [material consumer integration and acceptance](../architecture/MISSION_24_MATERIAL_INTEGRATION.md). Slices5/6 provide human-recorded cost sources/freshness and reported availability/alternatives; live supplier/inventory authority is not claimed. Slice7 fixes renewed v4 CAPELLA comparison and connects the selected Polaris saved-material read. Part2 acceptance still requires the exact independent verdict and released-source verification. No eighth slice or Operations expansion is implied; the separately assigned owner Operations demo follows Part2 acceptance before Part3.

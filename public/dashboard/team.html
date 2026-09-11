@@ -528,6 +528,14 @@
     }
     function render() {
       state.policies = JSON.parse(JSON.stringify(state.data.policies || []));
+      var evidenceNote = document.getElementById('demoTeamEvidence');
+      if (state.data.simulated === true) {
+        if (!evidenceNote) { evidenceNote = document.createElement('p'); evidenceNote.id = 'demoTeamEvidence'; evidenceNote.setAttribute('role','note'); document.getElementById('workforceShell').prepend(evidenceNote); }
+        evidenceNote.textContent = state.data.schedulingEvidenceAvailable
+          ? 'Simulated Team. Skills and crew membership below are used when reviewing assignments. Availability covers a limited example period; check each appointment before confirming.'
+          : 'This older demo has no saved scheduling skills or availability. Existing times remain available. Reset starts a new demo and clears its current changes.';
+      } else if (evidenceNote) evidenceNote.remove();
+
       renderSummary(); renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
       applyWorkforceSearch();
       document.getElementById('workforceShell').removeAttribute('inert');

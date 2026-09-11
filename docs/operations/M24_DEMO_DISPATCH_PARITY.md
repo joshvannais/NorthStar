@@ -1,0 +1,13 @@
+# Mission 24 Part 2 Slice 3 — demo dispatch and revocation
+
+The shared scheduling dialog can record dispatch for a current assigned, scheduled, open demo appointment. This changes isolated simulated state only: no team or customer is notified and no employee account or field execution is created. It uses existing preview/approval normalization and real workforce conflict/recommendation evaluators; missing evidence still needs review and hard conflicts cannot be overridden.
+
+Dispatch preserves the exact current target and interval. Reassign, unassign or an actual reschedule revokes current dispatch atomically, requiring a fresh dispatch review. There is no standalone revoke or appointment-cancellation operation. Cancel in the dialog dismisses the proposal without changing saved state. A no-op reschedule is rejected, matching the paid transition.
+
+Saved history keeps existing time/assignment receipt bytes and appends new dispatched/revoked authority revisions. Current workspace/assignment/source pins, generation, session expiry, exact warning acknowledgements, preview expiry and exact-key replay remain enforced. Replaying an old successful dispatch returns that original receipt; it does not restore dispatch after a later revocation. The original appointment/graph/estimate/financial and workforce identities remain unchanged.
+
+Calendar, Command Center, canonical compatibility and shared customer-work projections consume the same current scheduleAuthority. Demo labels identify simulated consequences. Legacy sessions without workforce retain their existing time-only behavior and deliberate Reset consequence; no automatic reset or retrospective approval. Paused views retain saved state and offer no new changes.
+
+No migration: existing060 admits schedule_preview/schedule_approve and dispatch is a validated nested action. All58 SQL and startup/paid permissions remain unchanged. Prior PR196 readers reject dispatched history, so recovery requires a current compatible policy-only pause or forward fix, not that old reader. The exact candidate-derived pause must be run against both dispatched and revoked populated histories; its evidence belongs in the sealed handoff. This document alone does not claim tests passed or physical restoration is available.
+
+Acceptance covers dispatch/revocation/redispatch, exact history/replay/expiry/current-state behavior, paid six-operation parity, rendered consent/consequences/Cancel/focus in Chrome and WebKit desktop/mobile themes, and actual populated pause/forward resume. Record omitted/retained evidence explicitly. No production or provider action is authorized here. Part2 retains seven incomplete slices; new appointment/lifecycle parity and material Slices4–7 remain separate next work.

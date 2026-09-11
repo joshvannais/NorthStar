@@ -103,17 +103,26 @@
   }
 
   function jsonRequest(url, options, context) {
+    var simulated = Boolean(active && active.directory && active.directory.simulated);
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.fetch !== 'function') {
       return Promise.reject(new Error('Your session could not be checked. Reopen this page.'));
     }
     return global.NorthStarAccountSession.fetch(url, options).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (body) {
-        if (!response.ok || !body || body.success !== true) throw responseFailure(response, body, context);
+        if (!response.ok || !body || body.success !== true) {
+          var failure = responseFailure(response, body, context);
+          if (simulated && context !== 'team-search') {
+            if (response.status >= 500) failure.message = 'The result could not be confirmed. Refresh to check the appointment and its dispatch status before starting a different change; retrying this attempt keeps the same request.';
+            if (response.status === 429) failure.message = 'The scheduling action limit was reached. Saved appointment details remain available.';
+          }
+          throw failure;
+        }
         return body;
       });
     }).catch(function (error) {
       if (error && (error.status || /unavailable|authority|expired|changed|rejected/i.test(error.message))) throw error;
       if(context === 'team-search')throw new Error('The team search was interrupted. Check your connection and search again.');
+      if (simulated) throw new Error('The connection was interrupted. Check the appointment and its dispatch status before starting a different change; retrying this attempt keeps the same request.');
       throw new Error('The connection was interrupted. Check the saved times before starting a different change; retrying this attempt keeps the same request.');
     });
   }
@@ -229,8 +238,9 @@
     active.review.appendChild(summary);
 
     if (active.current.dispatchState === 'dispatched' && ['reassign', 'unassign', 'reschedule'].includes(active.action)) {
-      active.review.appendChild(el('p', 'm22-dispatch-warning', 'Approval revokes the current dispatch. A new human dispatch approval will be required.'));
+      active.review.appendChild(el('p', 'm22-dispatch-warning', active.directory.simulated?'This change revokes the recorded dispatch. Review and dispatch again after the change.':'Approval revokes the current dispatch. A new human dispatch approval will be required.'));
     }
+    if(active.directory.simulated&&active.action==='dispatch')active.review.appendChild(el('p','m22-dispatch-warning','This records dispatch in your demo only. No team or customer is notified.'));
     var conflicts = preview.conflicts || {};
     active.review.appendChild(evidenceSection('Issues that prevent this change', conflicts.hardConflicts || [],
       conflicts.hardConflicts && conflicts.hardConflicts.length ? 'm22-hard-block' : ''));
@@ -660,8 +670,9 @@
     currentSummary.appendChild(terms); body.appendChild(currentSummary);
     if(directory.simulated)body.appendChild(el('p','',directory.workforceAvailable?'Simulated team and availability only. No real worker is assigned or customer contacted. Review the proposed change before confirming.':'This older demo has no saved team details. Time changes remain available. Reset starts a new demo and clears its current changes.'));
     if (current.dispatchState === 'dispatched' && ['reassign', 'unassign', 'reschedule'].includes(action)) {
-      body.appendChild(el('p', 'm22-dispatch-warning', 'If approved, this action revokes current dispatch and requires a new human dispatch approval.'));
+      body.appendChild(el('p', 'm22-dispatch-warning', directory.simulated?'This change revokes the recorded dispatch. Review and dispatch again after the change.':'If approved, this action revokes current dispatch and requires a new human dispatch approval.'));
     }
+    if(directory.simulated&&action==='dispatch')body.appendChild(el('p','m22-dispatch-warning','This records dispatch in your demo only. No team or customer is notified.'));
     var form = el('div');
     var review = el('div'); review.hidden = true;
     body.append(form, review);

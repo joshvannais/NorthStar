@@ -1,5 +1,7 @@
 (function() {
   'use strict';
+  if(location.pathname.indexOf('/demo/')===0){var simulation=document.createElement('p');simulation.id='completionSimulation';simulation.className='completion-eyebrow';simulation.textContent='Simulated Work — Demo Only';document.getElementById('completionMain').prepend(simulation);}
+  if(simulation){var dialogSimulation=simulation.cloneNode(true);dialogSimulation.id='completionDialogSimulation';dialogSimulation.textContent='Demo Only — Simulated Work';document.getElementById('completionConfirm').prepend(dialogSimulation);}
   var contract = window.NorthStarCompletionReview, client = window.NorthStarFieldExecutionClient;
   var selectedId, model = null, selection = null, confirmation = null, outcome = null, pending = false, generation = 0;
   var controllers = new Set(), restoreFocus = null;

@@ -9,6 +9,14 @@ suite('Owner Operations shared SQL and isolated lifecycle',()=>{
  beforeAll(async()=>{f=await createDatabaseFixture();},60000);
  afterAll(async()=>{if(f)await f.cleanup();},30000);
  const ok=r=>{expect(r.status).toBe(201);return r.body;};
+ test('operations429 exposes only an allowlisted capacity category',async()=>{
+  const s=session(f.app),w=await s.read(),id=w.schedulingOverview.records[0].appointmentId;
+  const repo=require('../../src/commandCenter/demoRepository');
+  for(const [code,expected]of [['DEMO_SESSION_LIMIT','session'],['DEMO_WORK_CAPACITY','saved_work'],['DEMO_SOURCE_RATE_LIMIT','temporary'],['UNRECOGNIZED_LIMIT','temporary']]){
+   const mock=jest.spyOn(repo.DemoCommandCenterRepository.prototype,'mutate').mockRejectedValueOnce(Object.assign(new Error('Controlled local limit.'),{status:429,code}));
+   try{const r=await s.send(id,'initialize',{},w.integrity.revision,require('crypto').randomUUID());expect(r.status).toBe(429);expect(r.body.error.limitKind).toBe(expected);expect(r.body.error.code).toBeUndefined();}finally{mock.mockRestore();}
+  }
+ });
  test('ordinary scheduled job uses one work identity, real review gate, completion history and reopening',async()=>{
   const s=session(f.app),id=await s.setup(),before=await s.read();
   ok(await s.act(id,'initialize'));ok(await s.act(id,'transition',{action:'start'}));let d=await s.detail(id);

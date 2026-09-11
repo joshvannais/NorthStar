@@ -295,7 +295,8 @@ function operationsFailure(req,res,error) {
  const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:503;
  const known=typeof error.code==='string'&&/^DEMO_(?:WORK_|OPERATIONS_|COMPLETION_|PROGRESS_|EVIDENCE_|CHECKLIST_|SESSION_|REVISION_|IDEMPOTENCY_)/.test(error.code);
  const fallback={400:'Check the required work details.',403:'These work controls are unavailable for this session.',404:'That saved work is unavailable. Choose a job from Operations.',409:'The saved work changed. Refresh and review your action again.',410:'This session or completion request expired. Refresh to review the saved work.',429:'This demo reached its action limit. Saved work remains available.',503:'Work updates are unavailable. Refresh to check the saved work before trying again.'};
- return res.status(status).json({success:false,error:{message:known?error.message:fallback[status]||'Work details are temporarily unavailable.'}});
+ const limitKind=status===429?(error.code==='DEMO_SESSION_LIMIT'?'session':error.code==='DEMO_WORK_CAPACITY'?'saved_work':'temporary'):null;
+ return res.status(status).json({success:false,error:{message:known?error.message:fallback[status]||'Work details are temporarily unavailable.',...(limitKind?{limitKind}: {})}});
 }
 for (const [path,select] of [
  ['/command-center/operations',()=>({})],

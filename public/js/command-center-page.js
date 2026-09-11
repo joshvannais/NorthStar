@@ -61,8 +61,12 @@
     var timeZone = suppliedTimeZone || tenantTimeZone();
     if (!timeZone) return null;
     try {
+      var zoneName = new Intl.DateTimeFormat([], { timeZone: timeZone, timeZoneName: 'long' })
+        .formatToParts(parsed).find(function (part) { return part.type === 'timeZoneName'; }).value;
+      var offset = new Intl.DateTimeFormat([], { timeZone: timeZone, timeZoneName: 'longOffset' })
+        .formatToParts(parsed).find(function (part) { return part.type === 'timeZoneName'; }).value;
       return parsed.toLocaleString([], { timeZone: timeZone, dateStyle: 'medium', timeStyle: 'short' }) +
-        ' (' + timeZone + ')';
+        ' (' + zoneName + (zoneName === offset ? '' : ', ' + offset) + ')';
     } catch (_error) { return null; }
   }
 

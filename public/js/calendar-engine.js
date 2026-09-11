@@ -784,6 +784,7 @@ class CalendarRenderer {
       var recordTitle = document.createElement('h3');
       recordTitle.textContent = calendarRecordLabel(record.customer && record.customer.name, 'Customer name unavailable', 'name') +
         ' · ' + calendarRecordLabel(record.work && record.work.title, 'Job title unavailable', 'role');
+      if(record.authority.targetLabel){var teamLabel=document.createElement('p');teamLabel.textContent='Team: '+record.authority.targetLabel;item.appendChild(teamLabel);}
       var states = document.createElement('ul'); states.className = 'm22-state-list';
       [record.authority.targetState, record.authority.scheduleState, record.authority.dispatchState,
         record.conflict.status].filter(Boolean).forEach(function(state) {

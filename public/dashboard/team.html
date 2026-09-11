@@ -74,12 +74,12 @@
         </section>
 
         <section class="wf-panel" aria-labelledby="membersTitle">
-          <div class="wf-panel-head"><div><h2 id="membersTitle">People and access</h2><p class="wf-panel-desc">Login permissions and operational job roles remain separate authorities.</p></div></div>
+          <div class="wf-panel-head"><div><h2 id="membersTitle">People and access</h2><p class="wf-panel-desc">Manage sign-in permissions separately from job roles.</p></div></div>
           <div id="membersList" class="wf-grid"><div class="wf-loading" role="status">Loading workforce…</div></div>
         </section>
 
         <section class="wf-panel" aria-labelledby="skillsTitle">
-          <div class="wf-panel-head"><div><h2 id="skillsTitle">Skills</h2><p class="wf-panel-desc">Tenant skills may reference stable services from the service catalogue.</p></div></div>
+          <div class="wf-panel-head"><div><h2 id="skillsTitle">Skills</h2><p class="wf-panel-desc">Match team skills to the services your business offers.</p></div></div>
           <form id="skillForm" class="wf-form-grid" hidden>
             <div class="form-group"><label for="skillKey">Stable key</label><input id="skillKey" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._:\-]{0,63}"></div>
             <div class="form-group"><label for="skillName">Name</label><input id="skillName" required maxlength="120"></div>
@@ -102,7 +102,7 @@
         </section>
 
         <section class="wf-panel" aria-labelledby="policiesTitle">
-          <div class="wf-panel-head"><div><h2 id="policiesTitle">Workforce policies</h2><p class="wf-panel-desc">Versioned Business Profile policy authority. These entries do not create assignments or field state.</p></div><button id="addPolicy" class="btn btn-secondary btn-sm" type="button" hidden>Add policy</button></div>
+          <div class="wf-panel-head"><div><h2 id="policiesTitle">Workforce policies</h2><p class="wf-panel-desc">Business policies guide planning. Review each assignment before confirming it.</p></div><button id="addPolicy" class="btn btn-secondary btn-sm" type="button" hidden>Add policy</button></div>
           <div id="policiesList" class="wf-grid"><div class="wf-loading" role="status">Loading workforce policies…</div></div>
           <div id="policyActions" class="wf-actions" hidden><button id="savePolicies" class="btn btn-primary" type="button">Save policies</button></div>
         </section>
@@ -528,6 +528,14 @@
     }
     function render() {
       state.policies = JSON.parse(JSON.stringify(state.data.policies || []));
+      var evidenceNote = document.getElementById('demoTeamEvidence');
+      if (state.data.simulated === true) {
+        if (!evidenceNote) { evidenceNote = document.createElement('p'); evidenceNote.id = 'demoTeamEvidence'; evidenceNote.setAttribute('role','note'); document.getElementById('workforceShell').prepend(evidenceNote); }
+        evidenceNote.textContent = state.data.schedulingEvidenceAvailable
+          ? 'Simulated Team. Skills and crew membership below are used when reviewing assignments. Availability covers a limited example period; check each appointment before confirming.'
+          : 'This older demo has no saved scheduling skills or availability. Existing times remain available. Reset starts a new demo and clears its current changes.';
+      } else if (evidenceNote) evidenceNote.remove();
+
       renderSummary(); renderForms(); renderInvitations(); renderMembers(); renderSkills(); renderCrews(); renderPolicies();
       applyWorkforceSearch();
       document.getElementById('workforceShell').removeAttribute('inert');
@@ -551,7 +559,7 @@
       empty(document.getElementById('policiesList'), 'Loading workforce policies…');
     }
     function renderWorkforceError(message) {
-      var unavailable = message || 'Workforce authority is unavailable.';
+      var unavailable = message || 'Team information is unavailable. Refresh and try again.';
       ['membersList', 'skillsList', 'crewsList', 'policiesList'].forEach(function(id) {
         empty(document.getElementById(id), unavailable, 'wf-error');
       });
@@ -576,7 +584,7 @@
         document.getElementById('workProfileReviewLink').hidden = state.data.workProfileReviewHref !== '/dashboard/work-profile-reviews';
         render();
       } catch (error) {
-        renderWorkforceError(error && error.message ? error.message : 'Workforce authority is unavailable.');
+        renderWorkforceError(error && error.message ? error.message : 'Team information is unavailable. Refresh and try again.');
       }
     }
     document.getElementById('inviteForm').addEventListener('submit', function (event) {

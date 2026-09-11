@@ -586,6 +586,7 @@ function createInitialDemoState(tenantId, createdAt, options = {}) {
     generation,
     seed,
     workspace: seededWorkspace,
+    schedulingWorkforce: require('./demoWorkforce').create(seededWorkspace,createdAt),
     graphs: initialGraphs(seededWorkspace, createdAt),
   });
 }
@@ -850,10 +851,13 @@ function buildDemoWorkspace(input) {
     id: demoViewerId(tenant.id),
     label: 'Account-free demo visitor',
   };
+  const workforce=require('./demoWorkforce');
+  const evidence=workforce.read(input.state);
+  workspace.configuration.workforceProjection=workforce.team(evidence,configuration.workforce,configuration.businessProfile);
   const scheduling=require('./demoScheduling').projection(workspace,input.state);
   workspace.graphs=workspace.graphs.map(graph=>{
     const current=scheduling.schedulingOverview.records.find(r=>r.graphId===graph.ids.graph).authority;
-    return {...graph,work:{...graph.work,originalStatus:graph.work.status,originalScheduledStart:graph.work.scheduledStart||null,status:current.appointmentStatus,scheduledStart:current.scheduledStart,scheduledEnd:current.scheduledEnd,scheduleAuthority:current}};
+    return {...graph,work:{...graph.work,originalStatus:graph.work.status,originalScheduledStart:graph.work.scheduledStart||null,originalAssignedTo:graph.work.assignedTo||null,assignedTo:current.targetLabel||null,status:current.appointmentStatus,scheduledStart:current.scheduledStart,scheduledEnd:current.scheduledEnd,scheduleAuthority:current}};
   });
   Object.assign(workspace,scheduling);
   workspace.integrity.digest=sha256({workspaceDigest:workspace.integrity.digest,schedulingOperator:scheduling.schedulingOperator.digest,schedulingOverview:scheduling.schedulingOverview.digest});

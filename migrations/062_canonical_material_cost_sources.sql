@@ -9,6 +9,14 @@ ALTER TABLE public.canonical_estimate_revisions ADD CONSTRAINT canonical_estimat
 ALTER TABLE public.canonical_estimate_revisions ADD CONSTRAINT canonical_estimate_revisions_confirmation_version_check CHECK(confirmation_version=calculation_version);
 
 -- Versioned human-recorded cost evidence; no supplier verification or new provider authority.
+-- Comparison-only normalization, exactly matching the JavaScript explicit edge set.
+-- No case-folding, internal-space collapse, Unicode composition or evidence rewriting.
+CREATE FUNCTION public.canonical_material_source_identity_text(value TEXT)
+RETURNS TEXT LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE SET search_path=pg_catalog AS $$
+ SELECT btrim(value,U&'\0020\00a0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200a\2028\2029\202f\205f\3000\feff')
+$$;
+REVOKE ALL ON FUNCTION public.canonical_material_source_identity_text(TEXT) FROM PUBLIC;
+
 CREATE FUNCTION public.canonical_material_source_assess(v JSONB,currency_value TEXT,service_value TEXT,as_of DATE)
 RETURNS JSONB LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE line JSONB; e JSONB; other JSONB; flags TEXT[]; parts TEXT[]; all_parts TEXT[]:=ARRAY[as_of::text]; rows JSONB:='[]'; k TEXT; source_hash TEXT; idx INT:=0;
@@ -20,7 +28,7 @@ BEGIN
   e:=line->'evidence'; flags:=ARRAY[]::TEXT[];
   IF public.canonical_field_evidence_object_keys_exact(e,keys) IS NOT TRUE OR e->>'kind' IS NULL OR e->>'kind' NOT IN ('my_estimate','company_record','supplier_quote','published_reference') THEN RAISE EXCEPTION 'Source category invalid' USING ERRCODE='22023'; END IF;
   FOREACH k IN ARRAY ARRAY['issuer','reference','region','locality','serviceKey','materialSpecification','exceptionReason'] LOOP
-   IF e->k IS DISTINCT FROM 'null'::JSONB AND (jsonb_typeof(e->k) IS DISTINCT FROM 'string' OR length(btrim(e->>k))=0 OR length(e->>k)>CASE WHEN k='exceptionReason' THEN 500 ELSE 160 END OR (e->>k)~U&'[\0001-\001f\007f-\009f]') THEN RAISE EXCEPTION 'Source text invalid' USING ERRCODE='22023'; END IF;
+   IF e->k IS DISTINCT FROM 'null'::JSONB AND (jsonb_typeof(e->k) IS DISTINCT FROM 'string' OR length(public.canonical_material_source_identity_text(e->>k))=0 OR length(e->>k)>CASE WHEN k='exceptionReason' THEN 500 ELSE 160 END OR (e->>k)~U&'[\0001-\001f\007f-\009f]') THEN RAISE EXCEPTION 'Source text invalid' USING ERRCODE='22023'; END IF;
   END LOOP;
   FOREACH k IN ARRAY ARRAY['effectiveOn','validThrough'] LOOP
    IF e->k IS DISTINCT FROM 'null'::JSONB AND (jsonb_typeof(e->k) IS DISTINCT FROM 'string' OR (e->>k)!~'^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}$' OR (e->>k)::date::text<>e->>k) THEN RAISE EXCEPTION 'Source date invalid' USING ERRCODE='22023'; END IF;
@@ -36,7 +44,7 @@ BEGIN
   IF e->'appliesToReviewedJob'<>'true'::jsonb THEN flags:=array_append(flags,'applicability_unconfirmed'); END IF;
   IF e->>'issuer' IS NOT NULL AND e->>'reference' IS NOT NULL THEN
    FOR other IN SELECT value FROM jsonb_array_elements(v->'lines') LOOP
-    IF btrim(other->'evidence'->>'issuer')=btrim(e->>'issuer') AND btrim(other->'evidence'->>'reference')=btrim(e->>'reference') AND other->'evidence'->'materialSpecification' IS NOT DISTINCT FROM e->'materialSpecification' AND other->'evidence'->'effectiveOn' IS NOT DISTINCT FROM e->'effectiveOn' AND (other->>'unitPrice'<>line->>'unitPrice' OR other->>'unit'<>line->>'unit') THEN flags:=array_append(flags,'conflict'); EXIT; END IF;
+    IF public.canonical_material_source_identity_text(other->'evidence'->>'issuer')=public.canonical_material_source_identity_text(e->>'issuer') AND public.canonical_material_source_identity_text(other->'evidence'->>'reference')=public.canonical_material_source_identity_text(e->>'reference') AND public.canonical_material_source_identity_text(other->'evidence'->>'materialSpecification') IS NOT DISTINCT FROM public.canonical_material_source_identity_text(e->>'materialSpecification') AND other->'evidence'->'effectiveOn' IS NOT DISTINCT FROM e->'effectiveOn' AND (other->>'unitPrice'<>line->>'unitPrice' OR other->>'unit'<>line->>'unit') THEN flags:=array_append(flags,'conflict'); EXIT; END IF;
    END LOOP;
   END IF;
   parts:=ARRAY[line->>'lineId']; FOREACH k IN ARRAY keys LOOP parts:=array_append(parts,e->>k); END LOOP;

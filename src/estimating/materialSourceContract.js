@@ -7,6 +7,10 @@ function exact(o,keys){return o&&typeof o==='object'&&!Array.isArray(o)&&Object.
 function text(v,max){return typeof v==='string'&&v.trim().length>0&&Array.from(v).length<=max&&!/[\u0000-\u001f\u007f-\u009f]/.test(v);}
 function date(v){return typeof v==='string'&&/^[1-9]\d{3}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v;}
 function utcDate(now=new Date()){return now.toISOString().slice(0,10);}
+// Comparison only: trim this explicit whitespace set at the edges. Preserve case,
+// internal spacing, punctuation, Unicode composition and null; never rewrite evidence.
+function identityText(value){return value===null?null:value.replace(/^[\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/g,'');}
+function referenceIdentity(e){return JSON.stringify([identityText(e.issuer),identityText(e.reference),identityText(e.materialSpecification),e.effectiveOn]);}
 function digest(parts){return crypto.createHash('sha256').update(JSON.stringify(parts),'utf8').digest('hex');}
 function validate(line,currency){const e=line.evidence;if(!exact(e,KEYS)||!KINDS.includes(e.kind))fail('Choose a cost source for each material.');
  for(const k of ['issuer','reference','region','locality','serviceKey','materialSpecification','exceptionReason'])if(e[k]!==null&&!text(e[k],k==='exceptionReason'?500:160))fail('Review the cost source details.');
@@ -18,17 +22,15 @@ function validate(line,currency){const e=line.evidence;if(!exact(e,KEYS)||!KINDS
  if(typeof e.appliesToReviewedJob!=='boolean')fail('Review whether this source applies to this job.');
  return e;
 }
-function assess(inputs,currency,{now=new Date(),serviceKey=null}={}){const asOfDate=utcDate(now),seen=new Map();const lines=inputs.lines.map(line=>{const e=validate(line,currency),flags=[];
+function assess(inputs,currency,{now=new Date(),serviceKey=null}={}){const asOfDate=utcDate(now);const lines=inputs.lines.map(line=>{const e=validate(line,currency),flags=[];
  if(e.effectiveOn===null)flags.push('date_missing');else if(e.effectiveOn>asOfDate)flags.push('not_effective');
  if(e.validThrough===null)flags.push('end_date_missing');else if(e.validThrough<asOfDate)flags.push('expired');
  if(e.countryCode===null)flags.push('place_unknown');
  if(e.serviceKey!==null&&serviceKey!==null&&e.serviceKey!==serviceKey)flags.push('service_mismatch');
  if(!e.appliesToReviewedJob)flags.push('applicability_unconfirmed');
- const ref=e.reference&&e.issuer?JSON.stringify([e.issuer.trim(),e.reference.trim(),e.materialSpecification,e.effectiveOn]):null;
- if(ref){const old=seen.get(ref);if(old&&(old.price!==line.unitPrice||old.unit!==line.unit||old.currency!==currency)){flags.push('conflict');old.flags.push('conflict');}else if(!old)seen.set(ref,{price:line.unitPrice,unit:line.unit,currency,flags});}
  return {lineId:line.lineId,evidenceDigest:digest([line.lineId,...KEYS.map(k=>e[k]===null?null:String(e[k]))]),flags};
  });
- for(let i=0;i<inputs.lines.length;i++){const a=inputs.lines[i],e=a.evidence;if(!e.issuer||!e.reference)continue;for(const b of inputs.lines){const f=b.evidence;if(f.issuer&&f.reference&&JSON.stringify([e.issuer.trim(),e.reference.trim(),e.materialSpecification,e.effectiveOn])===JSON.stringify([f.issuer.trim(),f.reference.trim(),f.materialSpecification,f.effectiveOn])&&(a.unitPrice!==b.unitPrice||a.unit!==b.unit))lines[i].flags.push('conflict');}}
+ for(let i=0;i<inputs.lines.length;i++){const a=inputs.lines[i],e=a.evidence;if(!e.issuer||!e.reference)continue;for(const b of inputs.lines){const f=b.evidence;if(f.issuer&&f.reference&&referenceIdentity(e)===referenceIdentity(f)&&(a.unitPrice!==b.unitPrice||a.unit!==b.unit))lines[i].flags.push('conflict');}}
  for(const row of lines)row.flags=[...new Set(row.flags)];
  return {asOfDate,lines,digest:digest([asOfDate,...lines.flatMap(l=>[l.lineId,l.evidenceDigest,...l.flags])])};
 }

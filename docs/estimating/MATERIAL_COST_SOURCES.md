@@ -29,3 +29,7 @@ A pre-v3 application is not a compatible rollback after v3 history exists. Candi
 ## Verification scope
 
 Focused tests cover exact arithmetic and source binding, SQL/JavaScript assessment agreement, roles/tenants, legacy replay/downgrade protection, inclusive expiry and controlled transaction-midnight rollback, paid/demo real browser forms and history, source-field consent invalidation, populated upgrade and actual paused readers, forward resume and bounded startup contention. Controlled error/clock fixtures are identified separately from ordinary interactions. Chrome and Playwright WebKit do not prove physical Safari or device coverage. No new external-provider evidence is claimed.
+
+## Comparison normalization correction
+
+Issuer, reference and material specification use the same explicit edge-whitespace comparison in JavaScript and SQL: U+0020, U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF. Control characters remain invalid. Raw evidence, evidence digests and saved receipts are never trimmed. Case, internal spacing, punctuation, Unicode composition, null versus specified values and effective date remain distinct; there is no fuzzy matching. Corrected current assessments may flag formatting-equivalent conflicting inputs that an earlier assessment missed; new saves/adoptions require current review. Historical exact replay and immutable receipts remain historical.

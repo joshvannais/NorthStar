@@ -63,7 +63,8 @@ async function main() {
         assert.equal(await page.getByRole('button', { name: 'Retry this message' }).count(), 0);
         assert.deepEqual(errors, []);
         const file = engine + '-' + width + '-' + theme + '-' + intent + '.png';
-        await page.screenshot({ path: path.join(output, file), fullPage: true });
+        await page.screenshot({ path: path.join(output, file), fullPage: true, animations: 'disabled' });
+        await page.locator('.polaris-chat-message').last().screenshot({ path: path.join(output, file.replace('.png', '-answer.png')), animations: 'disabled' });
         ledger.cases.push({ width, theme, intent, text, screenshot: file, messages, mocked: true });
         await context.close();
       }

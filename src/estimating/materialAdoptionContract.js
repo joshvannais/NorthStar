@@ -5,7 +5,8 @@ const material = require('./materialPlanContract');
 const VERSION = 'estimate-material-adoption-v1';
 const V2 = 'estimate-material-adoption-v2';
 const V3 = 'estimate-material-adoption-v3';
-const VERSIONS = Object.freeze([VERSION,V2,V3]);
+const V4='estimate-material-adoption-v4';
+const VERSIONS = Object.freeze([VERSION,V2,V3,V4]);
 const BASE_VERSION = 'm19-part3-canonical-v2';
 const MAX_CENTS = 99999999999999n;
 const FIELDS = ['sourcePins', 'expectedPlanId', 'expectedPlanRevision', 'expectedPlanDigest',
@@ -92,4 +93,4 @@ function checkBasis(body, review, plan) {
     fail('The estimate, material plan or price review changed. Refresh and review the plan again.', 409);
   }
 }
-module.exports = { VERSION, V2, V3, VERSIONS, BASE_VERSION, calculate, normalize, checkBasis, cents, recordedCents, decimal };
+module.exports = { VERSION, V2, V3, V4, VERSIONS, BASE_VERSION, calculate, normalize, checkBasis, cents, recordedCents, decimal };

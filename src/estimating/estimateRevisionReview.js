@@ -28,7 +28,7 @@ function buildRevisionReview(item, selection, options = {}) {
     rows: [...original.rows.slice(0, 3).map(row => ({ ...row, label: 'Original estimate: ' + row.label.toLowerCase(), recordedAt: original.recordedAt })), ...costRows],
     basisMessage: 'Material costs use the saved plan below. Other direct costs use the original estimate. The original price and tax have not been recalculated.',
     missing: costs.knownDirectCosts === null ? ['Some applicable direct costs are unavailable. Review the missing costs before relying on a comparison.'] : [],
-    adoptedMaterialPlan: {...selected.materialPlan,...(selected.materialPlan.calculationVersion==='estimate-material-plan-v3'?{currentSourceAssessment:require('./materialSourceContract').assess(selected.materialPlan.inputs,selected.materialPlan.currency,{serviceKey:original.materialSourceContext.serviceKey})}:{})}, financialCosts: costs,
+    adoptedMaterialPlan: {...selected.materialPlan,...(['estimate-material-plan-v3','estimate-material-plan-v4'].includes(selected.materialPlan.calculationVersion)?{currentSourceAssessment:require('./materialSourceContract').assess(selected.materialPlan.inputs,selected.materialPlan.currency,{serviceKey:original.materialSourceContext.serviceKey}),...(selected.materialPlan.calculationVersion==='estimate-material-plan-v4'?{currentAvailabilityAssessment:require('./materialAvailabilityContract').assess(selected.materialPlan.inputs,costs.material)}:{})}:{})}, financialCosts: costs,
     originalRecordedAt: original.recordedAt });
 }
 function selectDemoRevision(item, revisions = [], requested = null) {
@@ -59,7 +59,7 @@ function demoAdopt(item, revisions, decisions, plan, raw, key, now) {
   const selection = selectDemoRevision(item, revisions);
   const review = buildRevisionReview(item, selection, { simulated: true });
   review.decisions = projectSelectedDemoDecisions(decisions, review, true);
-  adoption.checkBasis(body, review, plan); if(plan.calculationVersion==='estimate-material-plan-v3')require('./materialSourceContract').checkSaved(plan.inputs,plan.currency,{now,serviceKey:review.materialSourceContext?.serviceKey||null},true); adoption.calculate(item, plan, body.confirmationVersion);
+  adoption.checkBasis(body, review, plan); if(['estimate-material-plan-v3','estimate-material-plan-v4'].includes(plan.calculationVersion))require('./materialPlanContract').checkEvidence(plan.inputs,plan.currency,plan.calculationVersion,{now,serviceKey:review.materialSourceContext?.serviceKey||null},true); adoption.calculate(item, plan, body.confirmationVersion);
   if (revisions.length >= 20) throw Object.assign(new Error('This demo has reached its estimate-change limit. Reset the demo to start again.'), { status: 429 });
   if (revisions.some(event => event.materialPlanId === plan.id)) throw Object.assign(new Error('This material plan is already included. Review the current estimate.'), { status: 409 });
   const id = require('node:crypto').randomUUID(), revision = selection.currentRevision + 1;

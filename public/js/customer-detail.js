@@ -950,6 +950,7 @@ window.CustomerDetail = (function() {
     text('Material Cost',decisionMoney(result.total,result.currency));
     text('Rounding',result.rounding);
   }
+  function sameSourceFlags(a,b){return !!a&&!!b&&a.lines.length===b.lines.length&&a.lines.every(function(row,i){var other=b.lines[i];return row.lineId===other.lineId&&row.evidenceDigest===other.evidenceDigest&&JSON.stringify(row.flags)===JSON.stringify(other.flags);});}
   function materialSourceAssessment(assessment,target) {
     var labels={date_missing:'Date Not Recorded',end_date_missing:'No End Date Recorded',not_effective:'Not Effective Yet',expired:'Past Recorded End Date',place_unknown:'Place Not Recorded',service_mismatch:'Different Service',applicability_unconfirmed:'Confirm Job Applicability',conflict:'Conflicting Prices'};
     var p=document.createElement('p');p.textContent='Source Review: '+assessment.asOfDate+' (UTC)';target.appendChild(p);
@@ -969,7 +970,7 @@ window.CustomerDetail = (function() {
     var current=plans.current;
     if(current&&current.action==='save'){
       para('Latest Material Plan — '+materialLines(current).length+' material'+(materialLines(current).length===1?'':'s'));
-      materialResult(current.result,root);materialLines(current).forEach(function(line){materialSource(line,root);});if(current.currentSourceAssessment&&JSON.stringify(current.currentSourceAssessment.lines)!==JSON.stringify(current.inputs.sourceAssessment.lines))materialSourceAssessment(current.currentSourceAssessment,root);
+      materialResult(current.result,root);materialLines(current).forEach(function(line){materialSource(line,root);});if(current.currentSourceAssessment&&!sameSourceFlags(current.currentSourceAssessment,current.inputs.sourceAssessment))materialSourceAssessment(current.currentSourceAssessment,root);
       para(!current.sourceBasisCurrent?'This plan was saved for a different estimate in this job’s history.':current.expectedDecisionRevision===0&&plans.decisionBasis.revision===0?'No human scope and price decision was recorded when this plan was saved.':current.decisionBasisCurrent?'Saved with the selected estimate’s current scope and price decision.':'The scope and price decision has changed since this plan was saved. Review the plan again before using it.');
       para('Saving or editing a material plan does not automatically change an estimate or customer price. Availability has not been verified.');
     }else para(current?'The material plan was withdrawn. Its history remains available.':'No material plan has been saved for this estimate.');
@@ -1093,7 +1094,7 @@ window.CustomerDetail = (function() {
     if (review.adoptedMaterialPlan) {
       var adopted=review.adoptedMaterialPlan,inputs=adopted.inputs;
       paragraph('Included Material Plan: '+materialLines(adopted).length+' materials. Recorded Material Cost: '+decisionMoney(review.financialCosts.knownDirectMaterialCost,review.currency)+'.');
-      materialResult(review.financialCosts.material,details);materialLines(adopted).forEach(function(line){materialSource(line,details);});if(adopted.currentSourceAssessment&&JSON.stringify(adopted.currentSourceAssessment.lines)!==JSON.stringify(adopted.inputs.sourceAssessment.lines))materialSourceAssessment(adopted.currentSourceAssessment,details);
+      materialResult(review.financialCosts.material,details);materialLines(adopted).forEach(function(line){materialSource(line,details);});if(adopted.currentSourceAssessment&&!sameSourceFlags(adopted.currentSourceAssessment,adopted.inputs.sourceAssessment))materialSourceAssessment(adopted.currentSourceAssessment,details);
       paragraph('Current availability has not been verified.');
       if(review.materialPlans&&review.materialPlans.current&&review.materialPlans.current.id!==adopted.id)paragraph('The material plan has changed since it was included. This estimate keeps the plan shown above until you deliberately use a newer plan.');
     } else if (!matches) paragraph('Material information is unavailable. Refresh this estimate to try again.');

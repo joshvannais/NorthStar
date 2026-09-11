@@ -103,17 +103,26 @@
   }
 
   function jsonRequest(url, options, context) {
+    var simulated = Boolean(active && active.directory && active.directory.simulated);
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.fetch !== 'function') {
       return Promise.reject(new Error('Your session could not be checked. Reopen this page.'));
     }
     return global.NorthStarAccountSession.fetch(url, options).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (body) {
-        if (!response.ok || !body || body.success !== true) throw responseFailure(response, body, context);
+        if (!response.ok || !body || body.success !== true) {
+          var failure = responseFailure(response, body, context);
+          if (simulated && context !== 'team-search') {
+            if (response.status >= 500) failure.message = 'The result could not be confirmed. Refresh to check the appointment and its dispatch status before starting a different change; retrying this attempt keeps the same request.';
+            if (response.status === 429) failure.message = 'The scheduling action limit was reached. Saved appointment details remain available.';
+          }
+          throw failure;
+        }
         return body;
       });
     }).catch(function (error) {
       if (error && (error.status || /unavailable|authority|expired|changed|rejected/i.test(error.message))) throw error;
       if(context === 'team-search')throw new Error('The team search was interrupted. Check your connection and search again.');
+      if (simulated) throw new Error('The connection was interrupted. Check the appointment and its dispatch status before starting a different change; retrying this attempt keeps the same request.');
       throw new Error('The connection was interrupted. Check the saved times before starting a different change; retrying this attempt keeps the same request.');
     });
   }

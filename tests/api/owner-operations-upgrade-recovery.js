@@ -25,7 +25,7 @@ assert.ok(!fs.existsSync(output));
   await stop(current.child);ledger.cases.push('Real isolated schedule/assignment/dispatch and work/note/pending-proposal history populated before pause');
   for(const source of [paused,combined]){
    const app=await launch(source,false,connection);s.use(app.origin);d=await s.detail(id);assert.equal(d.execution.lifecycleState,'completion_pending');
-   const review=await s.agent.get('/api/demo/command-center/operations/executions/'+d.execution.id+'/completion-review').set('Cookie',s.cookie);assert.equal(review.status,200);assert.equal(review.body.data.proposal.id,p.id);
+   const review=await s.agent.get('/api/demo/command-center/operations/executions/'+d.execution.id+'/completion-review').set('Cookie',s.cookie);assert.equal(review.status,200);assert.equal(review.body.data.proposal.pin.id,p.id);
    assert.equal((await s.act(id,'completion',{action:'approve_completion',proposal:pin})).status,503);
    assert.deepEqual(await saved(w.session.id),before);assert.deepEqual(await paidSnapshot(),old);await stop(app.child);
    ledger.cases.push('Actually executed '+path.basename(source)+' reads pending proposal and saved evidence;503 denies mutation without modifying demo or paid histories');

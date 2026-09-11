@@ -5,6 +5,13 @@ const suite=process.env.M19_PG_ADMIN_URL?describe:describe.skip;
 suite('shared completion loader with explicit isolated typed evidence',()=>{
  let f;beforeAll(async()=>{f=await createDatabaseFixture();},60000);afterAll(async()=>{if(f)await f.cleanup();},30000);
  const gates=['required_checklists','required_inspections','required_files','unresolved_blockers_or_exceptions','progress_review','open_labor_timers','labor_review','material_review','equipment_checkout','equipment_downtime','field_evidence_review'];
+ test('complete lifecycle matrix rejects unsupported pairs and preserves correction state',async()=>{
+  const states=['not_started','in_progress','paused','completion_pending','completed','reopened','cancelled'];
+  const actions=['start','pause','resume','propose_completion','approve_completion','withdraw_completion','cancel_execution','reopen_execution','resume_reopened','correct_completion'];
+  const allowed={not_started:{start:'in_progress',cancel_execution:'cancelled'},in_progress:{pause:'paused',propose_completion:'completion_pending',cancel_execution:'cancelled'},paused:{resume:'in_progress',propose_completion:'completion_pending',cancel_execution:'cancelled'},completion_pending:{approve_completion:'completed',withdraw_completion:'paused',cancel_execution:'cancelled'},completed:{reopen_execution:'reopened'},reopened:{propose_completion:'completion_pending',resume_reopened:'in_progress',cancel_execution:'cancelled'},cancelled:{}};
+  for(const state of states)for(const action of actions){const result=await f.runtimePool.query('SELECT canonical_work_lifecycle_after($1,$2,$3) value',[state,action,'paused']);expect(result.rows[0].value).toBe(action==='correct_completion'?state:allowed[state][action]||null);}
+  expect((await f.runtimePool.query("SELECT canonical_work_lifecycle_after('completion_pending','withdraw_completion','completed') value")).rows[0].value).toBeNull();
+ });
  test.each(gates)('%s is blocked by its actual missing or unresolved evidence',async gate=>{
   const org=crypto.randomUUID(),execution=crypto.randomUUID(),id=crypto.randomUUID(),asset=crypto.randomUUID(),digest='a'.repeat(64);
   const row={id,root_id:id,organization_id:org,execution_id:execution,revision:1,canonical_digest:digest};

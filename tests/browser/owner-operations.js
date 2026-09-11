@@ -68,6 +68,21 @@ const engine=arg('browser'),out=path.resolve(arg('output'));assert.ok(!fs.exists
   await page.getByRole('button',{name:'Reopen completed work',exact:true}).waitFor();
   await page.reload();await page.getByRole('button',{name:'Reopen completed work',exact:true}).waitFor();
   await page.screenshot({path:path.join(out,tag+'-completed.png'),fullPage:true});
+  if(process.argv.includes('--extended')){
+   await page.getByRole('button',{name:'Reopen completed work',exact:true}).click();
+   await page.locator('#completionReason').fill('Reopen to inspect the remaining work area.');
+   await page.locator('#completionNextAction').fill('Inspect the second work area.');
+   await page.locator('#completionPrepare').click();await page.locator('#completionConfirmButton').click();
+   await page.getByRole('button',{name:'Resume reopened work',exact:true}).click();
+   await page.locator('#completionReason').fill('Resume the recorded follow-up work.');
+   await page.locator('#completionPrepare').click();await page.locator('#completionConfirmButton').click();
+   await page.getByRole('button',{name:'Cancel recorded work',exact:true}).click();
+   await page.locator('#completionReason').fill('Stop this recorded work; retain its appointment and history.');
+   await page.locator('#completionPrepare').click();await page.locator('#completionConfirmButton').click();
+   await page.getByText('Cancelled',{exact:true}).waitFor();await page.reload();await page.getByText('Cancelled',{exact:true}).waitFor();
+   await page.screenshot({path:path.join(out,tag+'-reopened-resumed-cancelled.png'),fullPage:true});
+   ledger.cases.push({tag,actualReopenResumeCancelReload:true});
+  }
   ledger.cases.push({demo,theme,width,errorContrast,openedAndCancelled:true,initializationAndStart:demo?'browser':'existing paid fixture',recordedNote:true,measuredProgressAndOwnerReview:true,completionProposedApproved:true,completionCancelFocus:true,reload:true,uncheckedAndSpaceConsent:true,privateRequests});if(demo)assert.deepEqual(privateRequests,[]);
   await context.close();
  }

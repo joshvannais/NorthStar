@@ -48,11 +48,11 @@ const arg=n=>process.argv.find(x=>x.startsWith('--'+n+'=')).slice(n.length+3),en
   for(const status of [401,403,503]){await p.route('**/estimates/*/review',r=>r.fulfill({status,contentType:'application/json',body:JSON.stringify({success:false,error:{message:'untrusted diagnostic'}})}));await p.locator('#polarisMaterialRefresh').click();await p.waitForFunction(()=>!document.getElementById('polarisMaterialStatus').textContent.startsWith('Loading'));assert.equal(await p.locator('#polarisMaterialBody').innerText(),'');assert.doesNotMatch(await p.locator('#polarisMaterialStatus').innerText(),/untrusted/);await p.screenshot({path:path.join(out,tag+'-error-'+status+'.png')});await p.unroute('**/estimates/*/review');}
   await p.locator('#polarisPromptInput').fill('Show saved material costs');await p.locator('#polarisSendBtn').click();await p.locator('#polarisMaterialStatus').getByText('Saved Material Review Loaded',{exact:true}).waitFor();assert.match(await p.locator('#polarisMaterialBody').innerText(),new RegExp(expected.replace('.','\\.')));assert.deepEqual(mutations,[]);
   const other=demo?await p.evaluate(async()=>((await(await fetch('/api/demo/command-center')).json()).data.graphs[1])):f.estimateGraphs[1];
-  let release;const hold=new Promise(r=>release=r);let intercepted;const seen=new Promise(r=>intercepted=r);
-  await p.route('**/estimates/'+graph.ids.estimate+'/review',async r=>{intercepted();await hold;await r.continue();});
+  let release;const hold=new Promise(r=>release=r);let intercepted;const seen=new Promise(r=>intercepted=r);let handled;const finished=new Promise(r=>handled=r);
+  await p.route('**/estimates/'+graph.ids.estimate+'/review',async r=>{intercepted();await hold;await r.continue();handled();});
   await p.locator('#polarisMaterialRefresh').click();await seen;assert.match(await p.locator('#polarisMaterialStatus').innerText(),/^Loading/);assert.equal(await p.locator('#polarisMaterialBody').innerText(),'');
   await p.evaluate(id=>{history.pushState({},'',location.pathname+'?kind=customer&id='+id);dispatchEvent(new PopStateEvent('popstate'));},other.ids.customer);
-  release();await p.unroute('**/estimates/'+graph.ids.estimate+'/review');await p.waitForLoadState('networkidle');
+  release();await finished;await p.unroute('**/estimates/'+graph.ids.estimate+'/review');await p.waitForLoadState('networkidle');
   assert.equal(await p.locator('#polarisMaterialBody').innerText(),'');
   await p.locator('#polarisMaterialRefresh').click();await p.locator('#polarisMaterialStatus').getByText('Saved Material Review Loaded',{exact:true}).waitFor();assert.doesNotMatch(await p.locator('#polarisMaterialBody').innerText(),/USD 33.00/);
   assert.deepEqual(mutations,[]);

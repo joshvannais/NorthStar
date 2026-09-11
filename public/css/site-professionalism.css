@@ -1799,3 +1799,23 @@ html body .customer-drawer .capella-star-north { top: 0; left: 4.5px; }
 html body .customer-drawer .capella-star-east { top: 4.5px; right: 0; }
 html body .customer-drawer .capella-star-south { bottom: 0; left: 4.5px; }
 html body .customer-drawer .capella-star-west { top: 4.5px; left: 0; }
+
+/* Expanded review keeps the same rhythm without duplicate borders. */
+html body #cdCustomerDrawer .drawer-polaris-analysis .drawer-work-detail { border: 0; border-radius: 0; padding-bottom: 0; }
+html body #cdCustomerDrawer .drawer-review-section { margin-top: 24px; }
+html body #cdCustomerDrawer .drawer-review-section > h4 { margin: 0 0 16px; }
+html body #cdCustomerDrawer #cdEstimateRevisionSelect { margin-top: 8px; margin-bottom: 16px; min-height: 44px; }
+html body #cdCustomerDrawer #cdEstimateReview > .drawer-pricing-category { border-bottom: 0; padding-bottom: 0; }
+html body #cdCustomerDrawer #cdEstimateReview > .drawer-pricing-category > .drawer-pricing-item:last-child { border-bottom: 0; }
+html body #cdCustomerDrawer #cdMaterialReview { margin: 16px 0; border: 0; }
+html body #cdCustomerDrawer #cdMaterialReview[open] > summary { margin-bottom: 8px; }
+html body #cdCustomerDrawer #cdMaterialReview > p { margin: 0 0 12px; }
+html body #cdCustomerDrawer .drawer-decision-confirmation { display: grid; grid-template-columns: 20px minmax(0,1fr); align-items: start; gap: 12px; margin-top: 20px; line-height: 1.6; cursor: pointer; }
+html body #cdCustomerDrawer .drawer-decision-confirmation > input { display: block; width: 20px; height: 20px; min-width: 20px; padding: 0; margin: 2px 0 0; }
+html body #cdCustomerDrawer .drawer-decision-confirmation > span { min-width: 0; overflow-wrap: anywhere; }
+html body #cdCustomerDrawer .drawer-review-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; margin-top: 16px; }
+html body #cdCustomerDrawer .drawer-review-actions > button { margin: 0; min-height: 44px; white-space: normal; }
+@media(max-width:640px) {
+  html body #cdCustomerDrawer .drawer-review-actions { display: grid; grid-template-columns: minmax(0,1fr); }
+  html body #cdCustomerDrawer .drawer-review-actions > button { width: 100%; }
+}

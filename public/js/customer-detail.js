@@ -216,7 +216,7 @@ window.CustomerDetail = (function() {
     html += '          <details class="drawer-polaris-pricing">';
     html += '            <summary>Estimate costs and price review</summary>';
     html += '            <p>Original price breakdown. Material changes and human price decisions are shown in the estimate review below.</p><div id="cdPricingBreakdown"><p>No estimate details are available to this account.</p></div>';
-    html += '            <section aria-label="Estimate review" style="margin-top:1rem">';
+    html += '            <section class="drawer-review-section" aria-label="Estimate review">';
     html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
     html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
     html += '              <div id="cdEstimateDecision" style="margin-top:1rem"></div>';
@@ -889,11 +889,12 @@ window.CustomerDetail = (function() {
       var price = field('Reviewed price before tax (' + _estimateReview.currency + ')', 'cdDecisionPrice', draft.price, false); price.inputMode = 'decimal'; price.pattern = '(0|[1-9][0-9]{0,11})\\.[0-9]{2}'; price.placeholder = '0.00'; price.oninput = function () { draft.price = price.value; draft.request = null; };
     }
     var reason = field('Reason for this decision', 'cdDecisionReason', draft.reason, true); reason.maxLength = 2000; reason.oninput = function () { draft.reason = reason.value; draft.request = null; };
-    var label = document.createElement('label'), confirm = document.createElement('input'); confirm.type = 'checkbox'; confirm.id = 'cdDecisionConfirm'; confirm.required = true; confirm.checked = draft.confirmed; confirm.onchange = function () { draft.confirmed = confirm.checked; draft.request = null; }; label.appendChild(confirm);
-    label.appendChild(document.createTextNode(draft.action === 'approve' ? ' I reviewed this recorded estimate, its missing information, the work scope and price. Approve these details for quote preparation only; nothing will be sent.' : ' Withdraw the current approval. Its history will remain, and these details will no longer be approved for quote preparation.')); form.appendChild(label);
+    var label = document.createElement('label'), confirm = document.createElement('input'); label.className = 'drawer-decision-confirmation'; confirm.type = 'checkbox'; confirm.id = 'cdDecisionConfirm'; confirm.required = true; confirm.checked = draft.confirmed; confirm.onchange = function () { draft.confirmed = confirm.checked; draft.request = null; }; label.appendChild(confirm);
+    var confirmationText = document.createElement('span'); confirmationText.textContent = draft.action === 'approve' ? ' I reviewed this recorded estimate, its missing information, the work scope and price. Approve these details for quote preparation only; nothing will be sent.' : ' Withdraw the current approval. Its history will remain, and these details will no longer be approved for quote preparation.'; label.appendChild(confirmationText); form.appendChild(label);
     var status = document.createElement('p'); status.id = 'cdDecisionStatus'; status.setAttribute('role', 'status'); status.tabIndex = -1; if (draft.basisChanged) status.textContent = 'The saved review changed. Check your entries and confirm again before saving.'; status.style.marginTop = '0.75rem'; form.appendChild(status);
-    var save = document.createElement('button'); save.type = 'submit'; save.className = 'btn btn-secondary btn-sm'; save.textContent = draft.action === 'approve' ? 'Approve for quote preparation' : 'Confirm withdrawal'; form.appendChild(save);
-    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.style.marginLeft = '0.75rem'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); focusDecisionAction(draft.action); }; form.appendChild(cancel);
+    var actions = document.createElement('div'); actions.className = 'drawer-review-actions'; form.appendChild(actions);
+    var save = document.createElement('button'); save.type = 'submit'; save.className = 'btn btn-secondary btn-sm'; save.textContent = draft.action === 'approve' ? 'Approve for quote preparation' : 'Confirm withdrawal'; actions.appendChild(save);
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); focusDecisionAction(draft.action); }; actions.appendChild(cancel);
     form.onsubmit = function (event) {
       event.preventDefault(); if (!form.reportValidity() || !_estimateReview || !reviewPinsMatch(_estimateReview, _currentData && _currentData.canonical)) return;
       var review = _estimateReview, generation = _openSequence, state = review.decisions, current = state.writeBasis || state.current;

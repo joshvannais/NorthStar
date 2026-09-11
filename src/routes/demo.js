@@ -285,6 +285,12 @@ router.get('/command-center', async function (req, res) {
   }
 });
 
+router.get('/command-center/operator-targets',async function(req,res){
+ res.set('Cache-Control','no-store');res.vary('Cookie');
+ try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const workspace=demoWorkspace(record);const workforce=require('../commandCenter/demoWorkforce');return res.json({success:true,data:workforce.page(workforce.read(record.state),workspace.tenant.id,req.query)});}
+ catch(error){return res.status(error.status||503).json({success:false,error:{message:'Team search is unavailable. Refresh and search again.'}});}
+});
+
 for(const [suffix,operation] of [['mutation-previews','schedule_preview'],['mutation-approvals','schedule_approve']]) {
  router.post('/command-center/appointments/:appointmentId/'+suffix,express.json({limit:'64kb'}),async function(req,res){
   res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'schedule-times'))return;

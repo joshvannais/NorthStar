@@ -536,6 +536,7 @@
       var summary = element('div', 'm22-record-summary');
       summary.append(element('h3', '', presentationString(record.customer && record.customer.name, 'Customer name unavailable') + ' · ' + presentationString(record.work && record.work.title, 'Job title unavailable')),
         element('p', 'm22-record-time', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Start and end times need review'));
+      if(record.authority.targetLabel)summary.append(element('p','m22-record-time','Team: '+record.authority.targetLabel));
       var states = element('dl', 'm22-state-summary');
       states.append(
         schedulingStateItem('Assignment', record.authority.targetState),

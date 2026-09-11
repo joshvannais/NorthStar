@@ -142,6 +142,7 @@
   }
 
   function workforce(value) {
+    if(value.configuration.workforceProjection)return {data:value.configuration.workforceProjection};
     var locationId = 'demo-location-main';
     var skillIds = ['demo-skill-estimates', 'demo-skill-dispatch'];
     return {
@@ -398,6 +399,7 @@
     }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
 
+    if(method==='GET'&&url.pathname==='/api/v1/canonical/operator-targets')return nativeFetch('/api/demo/command-center/operator-targets'+url.search,Object.assign({},options||{},{credentials:'same-origin'}));
     var scheduleTimes=/^\/api\/v1\/canonical\/appointments\/([a-f0-9-]+)\/(mutation-previews|mutation-approvals)$/.exec(url.pathname);
     if(method==='POST'&&scheduleTimes){
       var scheduleHeaders=new Headers(options&&options.headers||{});scheduleHeaders.set('X-NorthStar-Demo-Intent','schedule-times');

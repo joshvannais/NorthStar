@@ -38,7 +38,7 @@
   }
 
   function textForEvidence(entry) {
-    var explanations={target_unassigned:'No worker or crew is assigned. Staffing and availability still need review.',target_unavailable:'The selected worker or crew is unavailable.',inactive_target:'The selected worker is inactive.',inactive_crew_member:'A member of this crew is inactive.',crew_membership_incomplete:'The crew membership is incomplete.',crew_membership_bounded:'Not all crew members could be checked.',required_skill_authority_missing:'Required job skills have not been confirmed.',required_skill_authority_bounded:'Some required skills could not be checked.',required_skill_mismatch:'The selected team does not have the recorded required skill.',location_scope_authority_missing:'The service location has not been confirmed.',target_location_scope_missing:'The selected team has no confirmed service location.',location_scope_mismatch:'The selected team belongs to a different service location.',working_hours_authority_incomplete:'Working hours are incomplete for these dates.',outside_working_hours:'The proposed times are outside recorded working hours.',availability_authority_bounded:'Some availability information could not be checked.',availability_authority_missing:'Availability has not been recorded.',availability_authority_stale:'Recorded availability needs to be updated.',declared_availability_incomplete:'Availability does not cover the entire proposed interval.',declared_unavailable:'The selected team is unavailable during this interval.',approved_schedule_overlap:'These times overlap another approved assignment for this team.',overlap_authority_unapproved:'These times overlap work whose scheduling approval is not recorded.',schedule_buffer_threshold:'These times leave less than the recorded gap between jobs.',workload_authority_incomplete:'Some workload information is missing.',workload_authority_unapproved:'Some workload entries have not been approved.',workload_evidence_bounded:'Not all workload entries could be checked.',max_jobs_per_day_threshold:'This would exceed the recorded daily job limit.',workday_length_threshold:'This would exceed the recorded workday length.',crew_size_threshold:'The crew size needs review for this job.',schedule_evidence_bounded:'Not all existing appointments could be checked.',conflict_evidence_bounded:'Additional scheduling checks need review.',candidate_set_bounded:'Not all workers or crews could be considered.',candidate_set_empty:'No worker or crew recommendation is available.',recommendation_evidence_incomplete:'More information is needed before recommending a team.',all_candidates_hard_conflict:'Every checked team has a scheduling conflict.',recommended_candidate_needs_review:'The suggested team still needs review.',conflict_authority_needs_review:'Scheduling checks need further review.',conflict_explanations_bounded:'Some scheduling explanations are unavailable.',candidate_origin_location_missing:'The team starting location is missing.',candidate_origin_location_authority_unavailable:'The team starting location is unconfirmed.',candidate_origin_coordinates_unavailable:'The team starting location cannot be located on the map.',appointment_destination_location_missing:'The job location is missing.',appointment_destination_location_authority_unavailable:'The job location is unconfirmed.',appointment_destination_coordinates_unavailable:'The job location cannot be located on the map.',driving_route_evidence_unavailable:'Driving time and route have not been verified.',geodesic_distance_available:'A straight-line distance is available; it is not driving distance.',geodesic_distance_unavailable:'Distance information is unavailable.',candidate_conflict_status:'Review the scheduling checks for this team.',schedule_incomplete:'Enter both the start and end of the appointment.'};
+    var explanations={appointment_schedule_unavailable:'Choose appointment times before reviewing availability.',target_unassigned:'No worker or crew is assigned. Staffing and availability still need review.',target_unavailable:'The selected worker or crew is unavailable.',inactive_target:'The selected worker is inactive.',inactive_crew_member:'A member of this crew is inactive.',crew_membership_incomplete:'The crew membership is incomplete.',crew_membership_bounded:'Not all crew members could be checked.',required_skill_authority_missing:'Required job skills have not been confirmed.',required_skill_authority_bounded:'Some required skills could not be checked.',required_skill_mismatch:'The selected team does not have the recorded required skill.',location_scope_authority_missing:'The service location has not been confirmed.',target_location_scope_missing:'The selected team has no confirmed service location.',location_scope_mismatch:'The selected team belongs to a different service location.',working_hours_authority_incomplete:'Working hours are incomplete for these dates.',outside_working_hours:'The proposed times are outside recorded working hours.',availability_authority_bounded:'Some availability information could not be checked.',availability_authority_missing:'Availability has not been recorded.',availability_authority_stale:'Recorded availability needs to be updated.',declared_availability_incomplete:'Availability does not cover the entire proposed interval.',declared_unavailable:'The selected team is unavailable during this interval.',approved_schedule_overlap:'These times overlap another approved assignment for this team.',overlap_authority_unapproved:'These times overlap work whose scheduling approval is not recorded.',schedule_buffer_threshold:'These times leave less than the recorded gap between jobs.',workload_authority_incomplete:'Some workload information is missing.',workload_authority_unapproved:'Some workload entries have not been approved.',workload_evidence_bounded:'Not all workload entries could be checked.',max_jobs_per_day_threshold:'This would exceed the recorded daily job limit.',workday_length_threshold:'This would exceed the recorded workday length.',crew_size_threshold:'The crew size needs review for this job.',schedule_evidence_bounded:'Not all existing appointments could be checked.',conflict_evidence_bounded:'Additional scheduling checks need review.',candidate_set_bounded:'Not all workers or crews could be considered.',candidate_set_empty:'No worker or crew recommendation is available.',recommendation_evidence_incomplete:'More information is needed before recommending a team.',all_candidates_hard_conflict:'Every checked team has a scheduling conflict.',recommended_candidate_needs_review:'The suggested team still needs review.',conflict_authority_needs_review:'Scheduling checks need further review.',conflict_explanations_bounded:'Some scheduling explanations are unavailable.',candidate_origin_location_missing:'The team starting location is missing.',candidate_origin_location_authority_unavailable:'The team starting location is unconfirmed.',candidate_origin_coordinates_unavailable:'The team starting location cannot be located on the map.',appointment_destination_location_missing:'The job location is missing.',appointment_destination_location_authority_unavailable:'The job location is unconfirmed.',appointment_destination_coordinates_unavailable:'The job location cannot be located on the map.',driving_route_evidence_unavailable:'Driving time and route have not been verified.',geodesic_distance_available:'A straight-line distance is available; it is not driving distance.',geodesic_distance_unavailable:'Distance information is unavailable.',candidate_conflict_status:'Review the scheduling checks for this team.',schedule_incomplete:'Enter both the start and end of the appointment.'};
     var code=typeof entry==='string'?entry:entry&&entry.code;
     if(explanations[code])return explanations[code];
     if(entry&&entry.candidate&&entry.candidate.label)return value(entry.candidate.label,'Team name unavailable')+': '+(entry.eligibility==='ineligible'?'Scheduling conflict; cannot be selected.':entry.eligibility==='eligible'?'Review this scheduling suggestion.':'More scheduling information needs review.');
@@ -175,7 +175,7 @@
   function proposedTarget() {
     if (active.action === 'unassign') return { kind: 'unassigned', id: null };
     if (!['assign', 'reassign'].includes(active.action)) return targetForAuthority(active.current);
-    if (active.targetLookupBusy) throw new Error('Wait for the current bounded target lookup to finish.');
+    if (active.targetLookupBusy) throw new Error('Wait for the team search to finish.');
     var selected = active.target.value.split(':');
     if (selected.length !== 2 || !selected[1]) throw new Error('Choose a current active worker or crew.');
     return { kind: selected[0], id: selected[1] };
@@ -431,7 +431,7 @@
     if (!active) return;
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (active.applied) { setStatus('This approval is durable. Retry refresh or reload before leaving the stale view.', 'applied-refresh-failed', true); return; }
+      if (active.applied) { setStatus('This change was saved. Refresh to see the updated appointment.', 'applied-refresh-failed', true); return; }
       close(); return;
     }
     if (event.key !== 'Tab') return;
@@ -485,11 +485,11 @@
     if (!['assign', 'reassign'].includes(active.action)) return;
     var wrapper = el('div', 'm22-dialog-field');
     var label = el('label', '', active.action === 'assign' ? 'Assign to active worker or crew' : 'Reassign to a different active worker or crew');
-    var select = document.createElement('select'); select.required = true;
+    var select = document.createElement('select'); select.required = true; select.setAttribute('aria-label',label.textContent);
     function replaceOptions(targets, emptyLabel) {
       var previous = select.value;
       select.replaceChildren();
-      var placeholder = el('option', '', emptyLabel || 'Choose a current target'); placeholder.value = ''; select.appendChild(placeholder);
+      var placeholder = el('option', '', emptyLabel || 'Choose a worker or crew'); placeholder.value = ''; select.appendChild(placeholder);
       (targets || []).filter(function (entry) { return entry.kind !== 'unassigned'; }).forEach(function (entry) {
         var kind = entry.kind === 'profile' ? 'worker' : 'crew';
         var option = el('option', '', displayProjection().text(entry.label,
@@ -511,28 +511,28 @@
       if (directory.truncated === true) {
         select.disabled = true;
         active.previewButton.disabled = true;
-        setStatus('The current target list is incomplete and bounded target discovery is unavailable. Refresh before acting.', 'error', true);
+        setStatus('Some workers or crews could not be loaded. Refresh before continuing.', 'error', true);
       }
       return;
     }
 
     var lookup = el('section', 'm22-target-lookup');
-    lookup.setAttribute('aria-label', 'Bounded active worker and crew lookup');
+    lookup.setAttribute('aria-label', 'Search workers and crews');
     var guidance = el('p', 'm22-target-lookup-guidance');
     guidance.textContent = discovery.truncated
       ? 'The initial selector is incomplete: showing ' + discovery.shown + ' of ' + discovery.total +
-        ' current targets. Search or move through bounded authoritative pages.'
-      : 'All ' + discovery.total + ' current targets are shown. You can also search the authoritative directory.';
+        ' workers and crews. Search or view the next page.'
+      : 'All ' + discovery.total + ' workers and crews are shown. You can also search by name.';
     var searchLabel = el('label', '', 'Search active workers and crews');
     var search = document.createElement('input'); search.type = 'search'; search.maxLength = 100;
     search.setAttribute('autocomplete', 'off'); search.setAttribute('spellcheck', 'false');
     searchLabel.appendChild(search);
     var controls = el('div', 'm22-record-actions');
-    var searchButton = el('button', 'm22-action-button', 'Search current targets'); searchButton.type = 'button';
-    var nextButton = el('button', 'm22-action-button', 'Next target page'); nextButton.type = 'button'; nextButton.hidden = true;
+    var searchButton = el('button', 'm22-action-button', 'Search team'); searchButton.type = 'button';
+    var nextButton = el('button', 'm22-action-button', 'Next page'); nextButton.type = 'button'; nextButton.hidden = true;
     var lookupStatus = el('p', 'm22-target-lookup-status', discovery.truncated
-      ? 'The initial list is incomplete; no omitted target is claimed unavailable.'
-      : 'The initial target list is complete.');
+      ? 'More workers and crews are available on the next pages.'
+      : 'All workers and crews are listed.');
     lookupStatus.setAttribute('role', 'status'); lookupStatus.setAttribute('aria-live', 'polite'); lookupStatus.tabIndex = -1;
     controls.append(searchButton, nextButton); lookup.append(guidance, searchLabel, controls, lookupStatus); form.appendChild(lookup);
 
@@ -559,7 +559,7 @@
       if (active.targetLookupBusy) return Promise.resolve(false);
       var query = search.value.normalize('NFC').trim();
       if (query.length > 100 || /[\u0000-\u001f\u007f]/.test(query)) {
-        setLookupStatus('Search must be 100 characters or fewer and contain no control bytes.', 'error', true);
+        setLookupStatus('Use a name of 100 characters or fewer for your search.', 'error', true);
         return Promise.resolve(false);
       }
       var endpoint = TARGET_DIRECTORY_ENDPOINT + '?query=' + encodeURIComponent(query);
@@ -567,25 +567,25 @@
       var requestOwner = active;
       active.targetLookupBusy = true;
       search.disabled = true; select.disabled = true; searchButton.disabled = true; nextButton.disabled = true;
-      setLookupStatus('Loading a bounded current target page…', 'pending', false);
+      setLookupStatus('Loading workers and crews…', 'pending', false);
       return jsonRequest(endpoint, {
         method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
       }).then(function (body) {
         if (active !== requestOwner) return false;
-        if (!validTargetPage(body.data)) throw new Error('The current target directory response is invalid. Refresh before acting.');
+        if (!validTargetPage(body.data)) throw new Error('The team list could not be loaded. Refresh before continuing.');
         var page = body.data;
         active.targetPageTargets = page.targets.slice();
-        replaceOptions(page.targets, page.targets.length ? 'Choose a current target from this bounded page' : 'No current targets match this search');
+        replaceOptions(page.targets, page.targets.length ? 'Choose a worker or crew' : 'No workers or crews match this search');
         nextButton.dataset.cursor = page.page.nextCursor || '';
         nextButton.hidden = !page.page.nextCursor;
         var queryDescription = page.query ? ' matching “' + page.query + '”' : '';
         var boundedDescription = page.page.nextCursor
-          ? '. This page is bounded; use Next target page or search again.'
-          : '. This is the final bounded page; search again to revisit earlier targets.';
+          ? '. Choose Next page to see more results.'
+          : '. This is the last page. Search again to return to earlier results.';
         setLookupStatus(page.targets.length
-          ? 'Showing ' + page.page.shown + ' of ' + page.page.total + ' current targets' + queryDescription +
+          ? 'Showing ' + page.page.shown + ' of ' + page.page.total + ' workers and crews' + queryDescription +
             (page.page.truncated ? boundedDescription : '. This result is complete.')
-          : 'No current active worker or crew matches this bounded search.', page.targets.length ? 'ready' : 'empty', false);
+          : 'No active workers or crews match your search.', page.targets.length ? 'ready' : 'empty', false);
         if (page.targets.length) select.focus({ preventScroll: true }); else search.focus({ preventScroll: true });
         return true;
       }).catch(function (error) {
@@ -594,12 +594,12 @@
         nextButton.dataset.cursor = '';
         if (error && error.code === 'M22_OPERATOR_TARGET_DIRECTORY_STALE') {
           active.targetPageTargets = [];
-          replaceOptions([], 'Directory changed; restart this search');
-          setLookupStatus('The current target directory changed during paging. Restart this bounded search; no target is claimed unavailable.', 'error', true);
+          replaceOptions([], 'Team changed; search again');
+          setLookupStatus('The team changed while you were searching. Search again before continuing.', 'error', true);
           return false;
         }
-        setLookupStatus((error && error.message ? error.message : 'Target lookup failed.') +
-          ' The displayed selector may remain incomplete; retry this lookup before treating a target as unavailable.', 'error', true);
+        setLookupStatus((error && error.message ? error.message : 'Team search failed.') +
+          ' Search again to check the full team list.', 'error', true);
         return false;
       }).finally(function () {
         if (active !== requestOwner) return;
@@ -610,7 +610,7 @@
     search.addEventListener('input', function () {
       nextButton.hidden = true;
       nextButton.dataset.cursor = '';
-      setLookupStatus('Search text changed. Run a new bounded authoritative search.', 'ready', false);
+      setLookupStatus('Search text changed. Select Search team to update the results.', 'ready', false);
     });
     searchButton.addEventListener('click', function () { loadTargetPage(null); });
     nextButton.addEventListener('click', function () {
@@ -653,7 +653,7 @@
     appendTerm(terms, 'Schedule', formatInstant(current.scheduledStart, timeZone) + ' to ' + formatInstant(current.scheduledEnd, timeZone));
     appendTerm(terms, 'Review', current.needsReview ? 'More scheduling information needs review.' : 'Review the recorded appointment before changing it.');
     currentSummary.appendChild(terms); body.appendChild(currentSummary);
-    if(directory.simulated)body.appendChild(el('p','','Simulated scheduling only. No real worker is assigned and no customer is contacted. Enter both the start and end; staffing and availability still need review.'));
+    if(directory.simulated)body.appendChild(el('p','',directory.workforceAvailable?'Simulated team and availability only. No real worker is assigned or customer contacted. Review the proposed change before confirming.':'This older demo has no saved team details. Time changes remain available. Reset starts a new demo and clears its current changes.'));
     if (current.dispatchState === 'dispatched' && ['reassign', 'unassign', 'reschedule'].includes(action)) {
       body.appendChild(el('p', 'm22-dispatch-warning', 'If approved, this action revokes current dispatch and requires a new human dispatch approval.'));
     }

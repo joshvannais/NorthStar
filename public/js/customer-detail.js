@@ -925,7 +925,7 @@ window.CustomerDetail = (function() {
       p.calculationVersion === selected.calculationVersion &&
       p.normalizedInputFingerprint === selected.normalizedInputFingerprint &&
       p.businessProfileId === profile.id && p.businessProfileVersion === profile.version && p.businessProfileHash === profile.hash &&
-      (p.revision ? review.originalRecordedAt === selected.snapshotCreatedAt && p.revision.number === review.selectedRevision && ['estimate-material-adoption-v1','estimate-material-adoption-v2','estimate-material-adoption-v3'].indexOf(p.revision.calculationVersion)>=0 : review.recordedAt === selected.snapshotCreatedAt);
+      (p.revision ? review.originalRecordedAt === selected.snapshotCreatedAt && p.revision.number === review.selectedRevision && ['estimate-material-adoption-v1','estimate-material-adoption-v2','estimate-material-adoption-v3','estimate-material-adoption-v4'].indexOf(p.revision.calculationVersion)>=0 : review.recordedAt === selected.snapshotCreatedAt);
   }
 
   var _materialPlanDraft = null, _adoptionDraft = null, _selectedEstimateRevision = null;

@@ -30,6 +30,7 @@
     } else if (current && current.action === 'withdraw') notes.push('The latest plan was withdrawn. Earlier estimates keep their recorded material history.');
     if (adopted) {
       var source = adopted.currentSourceAssessment, availability = adopted.currentAvailabilityAssessment;
+      if (adopted.inputs && adopted.inputs.sourceAssessment) notes.push('Saved Source Review: ' + date(adopted.inputs.sourceAssessment.asOfDate) + '. Current Date Check: ' + date(source && source.asOfDate) + '.');
       notes.push(!source ? 'Cost source details were not recorded with this plan.' : source.lines.some(function(l) { return l.flags.length; }) ? 'Some cost sources need review. Open the material plan for its dated cautions.' : 'Cost sources are human-recorded; supplier prices are not independently verified.');
       if (availability) availability.lines.forEach(function(line) {
         if (line.currentStatus !== 'reported_shortage') return;

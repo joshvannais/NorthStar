@@ -33,11 +33,19 @@ const arg=n=>process.argv.find(x=>x.startsWith('--'+n+'=')).slice(n.length+3),en
   assert.notEqual(prepared.cost,null);
   assert.match(await p.locator('#cdCapellaReview').innerText(),new RegExp(expected.replace('-','').replace('.','\\.')));
   await p.locator('#cdCapellaReview').scrollIntoViewIfNeeded();await p.screenshot({path:path.join(out,tag+'-renewed-capella.png')});
+  await p.evaluate(async ({id,demo})=>{
+    const route='/api/v1/canonical/estimates/'+id;let r=(await(await NorthStarAccountSession.fetch(route+'/review')).json()).data;
+    const inputs=structuredClone(r.materialPlans.current.inputs);inputs.lines[0].unitPrice='4.00';inputs.lines[0].evidence.statedUnitPrice='4.00';inputs.sourceAssessment=null;inputs.availabilityAssessment=null;
+    const b={action:'save',expectedRevision:r.materialPlans.current.revision,expectedDigest:r.materialPlans.current.digest,sourcePins:r.pins,expectedDecisionRevision:r.decisions.writeBasis.revision,expectedDecisionDigest:r.decisions.writeBasis.digest,inputs,currency:r.currency,reason:'Separate later plan, deliberately not adopted',confirmed:true,confirmationVersion:'estimate-material-plan-v4'};
+    const headers={'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID()};if(demo)headers['X-NorthStar-Demo-Revision']=String(r.demoWorkspaceRevision);
+    const preview=await NorthStarAccountSession.fetch(route+'/material-plan-preview',{method:'POST',headers,body:JSON.stringify(b)});if(!preview.ok)throw Error('later preview '+preview.status);const result=(await preview.json()).data.result;inputs.sourceAssessment=result.sourceAssessment;inputs.availabilityAssessment=result.availabilityAssessment;
+    headers['Idempotency-Key']=crypto.randomUUID();const saved=await NorthStarAccountSession.fetch(route+'/material-plans',{method:'POST',headers,body:JSON.stringify(b)});if(!saved.ok)throw Error('later save '+saved.status);
+  },{id:graph.ids.estimate,demo});
   await p.goto(origin+prefix+'/polaris?kind=customer&id='+graph.ids.customer);await p.waitForLoadState('networkidle');
   await p.locator('#polarisMaterialSection').waitFor({state:'visible',timeout:15000});
   await p.locator('#polarisMaterialDetails > summary').focus();await p.keyboard.press('Enter');
   await p.locator('#polarisMaterialStatus').getByText('Saved Material Review Loaded',{exact:true}).waitFor();
-  const first=await p.locator('#polarisMaterialBody').innerText();assert.match(first,/Included Material Cost/);assert.match(first,/USD 33.00/);assert.match(first,new RegExp(expected.replace('.','\\.')));
+  const first=await p.locator('#polarisMaterialBody').innerText();assert.match(first,/Included Material Cost/);assert.match(first,/USD 33.00/);assert.match(first,/Latest Saved Plan/);assert.match(first,/USD 44.00/);assert.match(first,new RegExp(expected.replace('.','\\.')));
   assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await p.locator('#polarisMaterialSection').scrollIntoViewIfNeeded();await p.screenshot({path:path.join(out,tag+'-original.png')});
   const mutations=[];p.on('request',r=>{if(r.method()==='POST'&&!r.url().endsWith('/assistant/context'))mutations.push(r.url());});

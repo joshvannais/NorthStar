@@ -83,3 +83,7 @@ After independently accepted Part1 architecture at PR188, Part2 Slice1 adds [rec
 ### Part2 Slice3 — one-plan adoption
 
 This bounded implementation appends an explicit material-cost-only estimate revision with fresh human scope/price review, selected private Polaris/Capella basis and functional shared demo. See [the source/acceptance/recovery contract](../operations/MISSION_24_MATERIAL_ADOPTION.md). Original prices, tax, operational graphs and prior history stay original; broader consumer adoption is inventoried separately. Part2 remains open for multiple materials, source freshness and availability intelligence. The canonical nine Parts and later quote ownership are unchanged; this entry is not a Part2 completion or release claim.
+
+### Part2 Slice4 — multiple materials
+
+The [whole-plan contract](../architecture/MISSION_24_MULTI_MATERIAL_PLANS.md) extends immutable single-material plans to ordered line items and exact whole-plan adoption, with retained legacy history and renewed human review. Seven planned Part2 slices remain; this package does not absorb sources/freshness (Slice5), availability (Slice6), integration/exit (Slice7), or owner Operations demo. Acceptance and release require exact sealed independent review and new061 recovery disposition.

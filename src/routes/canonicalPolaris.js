@@ -1407,7 +1407,7 @@ function createCanonicalRouter(options) {
       const item=await getCanonicalGraph(client,requestContext(req),req.params.estimateId);if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
       const input={...actorInput(req),estimateId:item.ids.estimate};const review=buildRevisionReview(item,await readRevisions(client,input));review.decisions=await readSelectedDecisions(client,input);const plans=await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate});
       const body=materialPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')throw Object.assign(new Error('Enter a material plan to calculate.'),{status:400});materialPlan.checkBasis(body,review,plans.current);
-      return {result:materialPlan.calculate(body.inputs,body.currency),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
+      return {result:materialPlan.calculate(body.inputs,body.currency,body.confirmationVersion),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
     });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Material planning is unavailable. Refresh and try again.'}});}
   });
 
@@ -1423,7 +1423,7 @@ function createCanonicalRouter(options) {
       review.decisions=await readSelectedDecisions(client,input);
       const plans=await readPlans(client,input),body=adoption.normalize({...req.body,confirmed:true});
       adoption.checkBasis(body,review,plans.current);
-      return {result:adoption.calculate(item,plans.current),sourcePins:review.pins,planId:plans.current.id,planDigest:plans.current.digest,decisionBasis:review.decisions.writeBasis};
+      return {result:adoption.calculate(item,plans.current,body.confirmationVersion),sourcePins:review.pins,planId:plans.current.id,planDigest:plans.current.digest,decisionBasis:review.decisions.writeBasis};
     });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
   });
   router.post('/estimates/:estimateId/material-adoptions', dependencies.auth, requireCanonicalContext, async function(req,res) {
@@ -1433,7 +1433,7 @@ function createCanonicalRouter(options) {
       const result=await mutateAdoption(resolvePool(dependencies.poolProvider),input,req.body,async(client,receipt)=>{
         const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
         if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
-        adoption.calculate(item,receipt.materialPlan);
+        adoption.calculate(item,receipt.materialPlan,receipt.calculationVersion);
       });return res.status(result.replayed?200:201).json({success:true,data:result});
     }catch(error){return res.status(error.status||503).json({success:false,error:{message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
   });

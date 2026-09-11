@@ -3,6 +3,8 @@
 const { stableValue, sha256 } = require('../services/businessProfileAdapter');
 const material = require('./materialPlanContract');
 const VERSION = 'estimate-material-adoption-v1';
+const V2 = 'estimate-material-adoption-v2';
+const VERSIONS = Object.freeze([VERSION,V2]);
 const BASE_VERSION = 'm19-part3-canonical-v2';
 const MAX_CENTS = 99999999999999n;
 const FIELDS = ['sourcePins', 'expectedPlanId', 'expectedPlanRevision', 'expectedPlanDigest',
@@ -29,13 +31,13 @@ function nonnegative(value) { return typeof value === 'number' && Number.isFinit
 
 // Deliberately retained, versioned cost-only calculation. Original customer pricing,
 // tax and operational snapshots are never modified or recalculated here.
-function calculate(item, plan) {
+function calculate(item, plan, version=VERSION) {
   if (item?.calculationVersion !== BASE_VERSION || !item.snapshot ||
-      plan?.calculationVersion !== material.VERSION || plan.action !== 'save' ||
+      !VERSIONS.includes(version) || !material.VERSIONS.includes(plan?.calculationVersion) || (version===VERSION && plan?.calculationVersion!==material.VERSION) || plan.action !== 'save' ||
       plan.currency !== item.estimate?.currency || !['USD', 'CAD', 'EUR'].includes(plan.currency)) {
     fail('This estimate or material plan cannot be used for a new cost review.');
   }
-  const result = material.calculate(plan.inputs, plan.currency);
+  const result = material.calculate(plan.inputs, plan.currency, plan.calculationVersion);
   const original = item.snapshot;
   const laborValid = nonnegative(original.laborCharge);
   const equipmentValid = nonnegative(original.equipmentCharge);
@@ -53,7 +55,7 @@ function calculate(item, plan) {
     travelValid && required.every(value => value !== null);
   const total = complete ? required.reduce((sum, value) => sum + value, 0n) : null;
   if (total !== null && total > MAX_CENTS) fail('The combined costs are too large. Review the material quantity and price.');
-  return stableValue({ calculationVersion: VERSION, currency: plan.currency,
+  return stableValue({ calculationVersion: version, currency: plan.currency,
     material: result, knownDirectMaterialCost: result.total,
     knownInternalLaborCost: decimal(labor), knownEquipmentCost: decimal(equipment),
     knownTravelInternalCost: decimal(travel), knownDirectCosts: decimal(total),
@@ -73,7 +75,7 @@ function normalize(body) {
       !Number.isSafeInteger(body.expectedDecisionRevision) || body.expectedDecisionRevision < 0 || body.expectedDecisionRevision > 10000 ||
       typeof body.expectedDecisionDigest !== 'string' ||
       (body.expectedDecisionRevision === 0 ? body.expectedDecisionDigest !== 'none' : !/^[0-9a-f]{64}$/.test(body.expectedDecisionDigest)) ||
-      body.confirmed !== true || body.confirmationVersion !== VERSION || typeof body.reason !== 'string' ||
+      body.confirmed !== true || !VERSIONS.includes(body.confirmationVersion) || typeof body.reason !== 'string' ||
       !body.reason.trim() || Array.from(body.reason.trim()).length > 2000 || /[\u0000-\u001f\u007f-\u009f]/.test(body.reason)) {
     fail('Review the material plan and confirm how it will change this estimate.');
   }
@@ -89,4 +91,4 @@ function checkBasis(body, review, plan) {
     fail('The estimate, material plan or price review changed. Refresh and review the plan again.', 409);
   }
 }
-module.exports = { VERSION, BASE_VERSION, calculate, normalize, checkBasis, cents, recordedCents, decimal };
+module.exports = { VERSION, V2, VERSIONS, BASE_VERSION, calculate, normalize, checkBasis, cents, recordedCents, decimal };

@@ -1649,10 +1649,10 @@ async function runMigrations(options = {}) {
       : null;
     await client.query('BEGIN');
     transactionOpen = true;
-    // Bound the 057/058/059/060 candidates' complete migration transaction lane, including
+    // Bound the 057/058/059/060/061 candidates' complete migration transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
-    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql'].includes(migrations[migrations.length - 1]?.file)) {
+    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql'].includes(migrations[migrations.length - 1]?.file)) {
       const settings = await client.query(
         "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
       );

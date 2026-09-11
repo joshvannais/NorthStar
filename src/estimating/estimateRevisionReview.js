@@ -11,12 +11,12 @@ function buildRevisionReview(item, selection, options = {}) {
     currentRevision: selection.currentRevision, isCurrent: selection.isCurrent,
     revisionHistory: selection.history, adoptedMaterialPlan: null };
   if (!selected) return review;
-  if (selected.calculationVersion !== adoption.VERSION || sha256(selected.originalSourcePins) !== sha256(original.pins) ||
+  if (!adoption.VERSIONS.includes(selected.calculationVersion) || sha256(selected.originalSourcePins) !== sha256(original.pins) ||
       selected.revision !== selection.selectedRevision || selected.pins?.revision?.id !== selected.id ||
       selected.pins?.revision?.digest !== selected.digest) {
     throw Object.assign(new Error('This saved estimate could not be verified. Refresh and try again.'), { status: 503 });
   }
-  const costs = adoption.calculate(item, selected.materialPlan);
+  const costs = adoption.calculate(item, selected.materialPlan, selected.calculationVersion);
   const costRows = [ ['Recorded material cost', 'knownDirectMaterialCost'], ['Recorded labor cost', 'knownInternalLaborCost'],
     ['Recorded equipment cost', 'knownEquipmentCost'], ['Recorded direct costs', 'knownDirectCosts'],
     ['Recorded travel cost', 'knownTravelInternalCost'] ].map(([label, key]) => {
@@ -59,18 +59,18 @@ function demoAdopt(item, revisions, decisions, plan, raw, key, now) {
   const selection = selectDemoRevision(item, revisions);
   const review = buildRevisionReview(item, selection, { simulated: true });
   review.decisions = projectSelectedDemoDecisions(decisions, review, true);
-  adoption.checkBasis(body, review, plan); adoption.calculate(item, plan);
+  adoption.checkBasis(body, review, plan); adoption.calculate(item, plan, body.confirmationVersion);
   if (revisions.length >= 20) throw Object.assign(new Error('This demo has reached its estimate-change limit. Reset the demo to start again.'), { status: 429 });
   if (revisions.some(event => event.materialPlanId === plan.id)) throw Object.assign(new Error('This material plan is already included. Review the current estimate.'), { status: 409 });
   const id = require('node:crypto').randomUUID(), revision = selection.currentRevision + 1;
-  const inputFingerprint = sha256({ original: selection.originalPins, parent: review.pins, materialPlan: plan, calculationVersion: adoption.VERSION });
+  const inputFingerprint = sha256({ original: selection.originalPins, parent: review.pins, materialPlan: plan, calculationVersion: body.confirmationVersion });
   const digest = sha256({ id, revision, body, inputFingerprint, previous: revisions[0]?.id || null });
   const receipt = { id, revision, digest, previousId: revisions[0]?.id || null, materialPlanId: plan.id,
     materialPlan: stableValue(plan), sourcePins: review.pins, originalSourcePins: selection.originalPins,
-    calculationVersion: adoption.VERSION, inputFingerprint, expectedDecisionRevision: body.expectedDecisionRevision,
-    expectedDecisionDigest: body.expectedDecisionDigest, reason: body.reason, confirmationVersion: adoption.VERSION,
+    calculationVersion: body.confirmationVersion, inputFingerprint, expectedDecisionRevision: body.expectedDecisionRevision,
+    expectedDecisionDigest: body.expectedDecisionDigest, reason: body.reason, confirmationVersion: body.confirmationVersion,
     createdAt: now.toISOString(), actorName: 'Demo reviewer', requestKey: key, requestDigest,
-    pins: { ...selection.originalPins, revision: { id, number: revision, digest, calculationVersion: adoption.VERSION, inputFingerprint } } };
+    pins: { ...selection.originalPins, revision: { id, number: revision, digest, calculationVersion: body.confirmationVersion, inputFingerprint } } };
   return { receipt, replayed: false };
 }
 module.exports = { buildRevisionReview, selectDemoRevision, projectSelectedDemoDecisions, demoAdopt };

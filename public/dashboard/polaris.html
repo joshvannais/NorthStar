@@ -1361,7 +1361,7 @@
               loadAssistantStatus();
             } catch (_contractError) {
               showStructuredContractUnavailable();
-              addMessage('assistant', 'Polaris returned an unsupported structured response. No data was changed.', 'error', key, null);
+              addMessage('assistant', 'Polaris could not confirm this answer. Refresh the selected record and try again. No data was changed.', 'error', key, null);
             }
             return;
           }

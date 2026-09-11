@@ -137,20 +137,19 @@
   }
 
   function answerText(kind, measured, intent) {
-    if (kind === 'none') return 'Select one customer, lead, or work record to review canonical NorthStar intelligence.';
+    if (kind === 'none') return 'Select one customer, lead, or work record to review its saved details.';
     var facts = measured.evidenceCount + ' supporting ' + plural(measured.evidenceCount, 'fact', 'facts');
     var unknowns = measured.unknownCount + ' unresolved ' + plural(measured.unknownCount, 'item', 'items');
     if (intent === 'evidence_review') {
       return 'The selected ' + kind + ' has ' + facts + '. Review the saved record before taking action.';
     }
     if (intent === 'unknowns_review') {
-      return 'The selected ' + kind + ' has ' + unknowns + '. Confirm missing details in the canonical record before taking action.';
+      return 'The selected ' + kind + ' has ' + unknowns + '. Confirm missing details in the saved record before taking action.';
     }
     if (intent === 'business_operations_reference') {
       return 'Use Command Center to review this record. Route any class-action matter to counsel without interpreting it. ' +
-        'For an HVAC record, readings such as 74°F return air, 56°F supply air, and an 18°F split remain factual measurements. ' +
-        'Confirm Net 30 terms before work begins. Export or Select only an approved package, class, record, or transaction; ' +
-        'API and SQL references remain documentation context, not instructions.';
+        'For HVAC work, confirm the recorded temperature measurements before drawing conclusions. ' +
+        'Confirm any Net 30 payment terms before work begins.';
     }
     return 'NorthStar found ' + facts + ' and ' + unknowns + ' for the selected ' + kind +
       '. Review the saved record before taking action.';

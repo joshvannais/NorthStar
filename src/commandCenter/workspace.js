@@ -7,6 +7,7 @@ const { addRecordedCostExample } = require('./demoEstimateExample');
 const { projectIntegrationCatalogue } = require('../integrations/catalogue');
 const { defaultPreferenceDocument, PROVIDERS: MAP_PROVIDERS } = require('../mapPreferences/contract');
 const pipeline = require('../routes/simulation/pipeline');
+const { demoConversation } = require('./demoConversation');
 const {
   FIXTURE_CONTRACT,
   createDemoWorkspaceFixture,
@@ -504,34 +505,7 @@ function buildDemoGraph(input) {
 // replacement source for the already recorded estimate facts/calculation.
 function withSeededDemoConversation(graph) {
   const scope = graph.polaris.snapshot.service.scope || {};
-  const example = graph.polaris.syntheticCalculation;
-  const turns = [{ speaker:'system', text:'Simulated conversation based on this saved example. No live call or knowledge search occurred.' },
-    { speaker:'ai', text:'Thanks for calling. What work would you like help with?' },
-    { speaker:'customer', text:'I am asking about ' + graph.lead.serviceLabel.toLowerCase() + ' at ' + graph.customer.address + '.' }];
-  const questions = [
-    ['jobType','Is this new work, a repair, or a replacement?','The work is ', ''],
-    ['material','What material are you considering?','The material is ', ''],
-    ['linearFeet','About how much length is involved?','About ', ' feet'],
-    ['squares','Do you have an approximate roof size?','About ', ' roofing squares'],
-    ['stories','How many stories does the building have?','It has ', ' stories'],
-    ['pitch','Do you know the roof pitch?','The pitch is ', ''],
-    ['systemType','What type of heating or cooling system do you have?','It is a ', ''],
-    ['tonnage','Do you know the system size?','The recorded size is ', ' tons'],
-    ['sqft','About how large is the area it serves?','About ', ' square feet'],
-    ['fixture','Which fixture needs attention?','The affected fixture is a ', ''],
-    ['leakSeverity','Is there an active leak, and how severe is it?','The leak is described as ', '']
-  ];
-  questions.forEach(([key,question,prefix,suffix])=>{if(scope[key]!==null&&scope[key]!==undefined){turns.push({speaker:'ai',text:question},{speaker:'customer',text:prefix+String(scope[key])+suffix+'.'});}});
-  if(typeof scope.waterShutoff==='boolean') turns.push({speaker:'ai',text:'Has the water been shut off?'},{speaker:'customer',text:scope.waterShutoff?'Yes, it has been shut off.':'No, it has not been shut off.'});
-  turns.push({speaker:'ai',text:'Thank you. We will verify measurements and access before committing to the work.'});
-  if(example){
-    const input=example.input;
-    turns.push({speaker:'ai',text:'For this example, the business estimate uses a '+input.businessProfile.crew.defaultCrewSize+'-person crew and '+scope.laborHours+' hours of work. The equipment allowance comes from the fictional business profile; actual suitability and availability still need review.'});
-    turns.push({speaker:'system',text:'Estimate basis: saved job details and the fictional business cost profile. Material quantity and current supplier availability have not been verified.'});
-  }else turns.push({speaker:'ai',text:'We have a preliminary estimate for this example, but the internal costs are incomplete. The owner needs to review them before a price is agreed.'});
-  turns.push({speaker:'ai',text:'What timing would work for you, and are there any access restrictions?'},
-    {speaker:'customer',text:scope.schedulingConstraint ? String(scope.schedulingConstraint) : 'Please follow up with me to confirm the timing and access.'},
-    {speaker:'ai',text:'I will leave the recorded scope and open questions for owner review. This conversation does not approve a price or book the work.'});
+  const turns = demoConversation({ serviceKey:graph.polaris.snapshot.service.key, scope, customer:graph.customer, businessProfile:graph.businessProfile });
   const result={...graph,communication:{...graph.communication,transcript:turns}};
   delete result.projectionDigest;result.projectionDigest=sha256(result);return stableValue(result);
 }
@@ -637,17 +611,7 @@ function buildSimulatedGraph(input) {
     scenario.job.scope.schedulingConstraint = selection.scheduling;
     scenario.job.scope.conversationOutcome = selection.outcome;
     scenario.job.scope.businessContext = selection.business;
-    const transcript = pipeline.generateTranscript(scenario);
-    transcript.splice(2, 0,
-      { speaker: 'ai', text: 'Absolutely. Would you like us to arrange a visit, or would you prefer an estimate first?' },
-      { speaker: 'customer', text: profile.intent.material.customerLine },
-      { speaker: 'ai', text: 'Is there a particular day or deadline you are working toward?' },
-      { speaker: 'customer', text: profile.urgency.material.customerLine },
-      { speaker: 'ai', text: 'Before we choose a time, is there anything about the property or access that we should know?' },
-      { speaker: 'customer', text: profile.context.material.customerLine + ' ' + profile.scheduling.material.customerLine },
-      { speaker: 'ai', text: 'Once we confirm the scope, would you like us to book the work or send the estimate for review?' },
-      { speaker: 'customer', text: profile.outcome.material.customerLine }
-    );
+    const transcript = demoConversation({ serviceKey:selection.service, scope:scenario.job.scope, customer:scenario.customer, businessProfile:demoBusinessProfile(selection,seededWorkspace), selectionProfile:profile });
     const extracted = pipeline.extractScope(transcript, scenario);
     return { scenario, transcript, extracted };
   });

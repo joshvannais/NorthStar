@@ -10,7 +10,8 @@ async function assertDrawerHierarchy(page, label) {
       description: q('#cdJobDescription').textContent.trim(),
       descriptionFollowsTitle: q('#cdPolarisInsight > h3').nextElementSibling === q('#cdJobDescription'),
       pricingInside: q('#cdPolarisInsight').contains(q('.drawer-polaris-pricing')),
-      backgroundRetained: ['cdName','cdPhone','cdEmail','cdProfileStatus'].every(id=>q('.drawer-customer-background').contains(q('#'+id))),
+      backgroundRetained: q('.drawer-customer-background').contains(q('#cdProfileStatus')) && !q('.drawer-customer-background').textContent.includes('Contact Information'),
+      capellaSibling: q('#cdPolarisInsight').parentElement.nextElementSibling === q('#cdCapellaReview') && !q('#cdCapellaReview').closest('details'),
       actions: ['cdBtnAskPolaris','cdBtnSchedule','cdBtnContact'].every(id=>q('.drawer-primary-actions').contains(q('#'+id))),
       scopeFacts: q('#cdDescription').children.length
     };
@@ -18,6 +19,6 @@ async function assertDrawerHierarchy(page, label) {
   for (const heading of ['Scope Details','Travel And Work Time','Original Charge Details','Price Breakdown And Estimate Review','Customer History']) assert.ok(state.headings.includes(heading),label+' retains '+heading);
   assert.ok(state.order && state.actions,label+' keeps identity/actions before Polaris and history below');
   assert.ok(state.description && state.descriptionFollowsTitle && state.scopeFacts,label+' keeps readable description directly beneath Polaris and structured facts below');
-  assert.ok(state.pricingInside && state.backgroundRetained,label+' preserves review placement and contact/profile content');
+  assert.ok(state.pricingInside && state.backgroundRetained && state.capellaSibling,label+' preserves review placement, independent Capella and unduplicated history');
 }
 module.exports = { assertDrawerHierarchy };

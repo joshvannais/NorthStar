@@ -7,10 +7,27 @@
   font-family: var(--font-family, Inter, ui-sans-serif, system-ui, sans-serif);
   line-height: 1.55;
 }
+.owner-work{margin-block:24px;padding:24px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--neutral-50);min-width:0}
+.owner-work h2,.owner-work h3{margin:0 0 16px;font:inherit;font-weight:600}
+.owner-work label{display:flex;flex-direction:column;gap:8px;min-width:0;font:inherit}
+.owner-work input,.owner-work select,.owner-work textarea{font:inherit;padding:10px 12px;border:1px solid var(--neutral-300);border-radius:6px;background:var(--neutral-50);color:inherit;min-width:0;max-width:100%;width:100%}
+.owner-work textarea{min-height:90px;resize:vertical}
+.owner-work-actions{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-block:16px}
+.owner-work-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.owner-work-fields>.owner-work-fields{grid-column:1/-1}
+.owner-work-fields>p{grid-column:1/-1}
+.owner-work form{margin-top:24px;padding-top:24px;border-top:1px solid var(--neutral-200)}
+.owner-work .owner-work-check{display:flex;flex-direction:row;align-items:flex-start;gap:12px;margin-block:16px}
+.owner-work-check input{width:18px;height:18px;flex:0 0 18px;margin-top:4px}
+.owner-work article{padding-block:12px;border-bottom:1px solid var(--neutral-200)}
+.owner-work article button{margin:4px 12px 4px 0}
+.owner-work summary{padding-block:12px;cursor:pointer;font:inherit;font-weight:600}
+.owner-work-error{color:var(--danger,#b91c1c)}
+@media(max-width:600px){.owner-work{padding:16px}.owner-work-fields{grid-template-columns:1fr}.owner-work-actions>*{width:100%}.owner-work-actions button{min-height:44px}}
 .operations-page *, .operations-page *::before, .operations-page *::after { box-sizing: border-box; }
 .operations-page [hidden] { display: none !important; }
 .operations-page a { color: var(--brand-700, #785916); }
-.operations-page :is(button, select, a, summary):focus-visible {
+.operations-page :is(button, select, a, summary, input, textarea):focus-visible {
   outline: 3px solid var(--brand-500, #b99758);
   outline-offset: 4px;
 }

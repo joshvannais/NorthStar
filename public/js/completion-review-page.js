@@ -1,5 +1,7 @@
 (function() {
   'use strict';
+  if(location.pathname.indexOf('/demo/')===0){var simulation=document.createElement('p');simulation.id='completionSimulation';simulation.className='completion-eyebrow';simulation.textContent='Simulated Work — Demo Only';document.getElementById('completionMain').prepend(simulation);}
+  if(simulation){var dialogSimulation=simulation.cloneNode(true);dialogSimulation.id='completionDialogSimulation';dialogSimulation.textContent='Demo Only — Simulated Work';document.getElementById('completionConfirm').prepend(dialogSimulation);}
   var contract = window.NorthStarCompletionReview, client = window.NorthStarFieldExecutionClient;
   var selectedId, model = null, selection = null, confirmation = null, outcome = null, pending = false, generation = 0;
   var controllers = new Set(), restoreFocus = null;
@@ -68,6 +70,7 @@
     byId('completionAssignment').hidden = !value.execution.assignment.changed;
     byId('completionAssignment').textContent = 'The assignment has changed. Review the latest assignment and completion evidence before approving.';
     byId('completionAvailability').textContent = value.readOnlyReason === 'onboarding_incomplete' ? 'Account onboarding is incomplete. Recorded decisions remain read-only.' :
+      value.readOnlyReason === 'operations_paused' ? 'New work decisions are paused. Saved decisions and history remain available.' :
       value.readOnlyReason === 'subscription_read_only' ? 'Current account access is read-only. No decision can be submitted.' :
         value.commands.some(function(command) { return command.action !== 'correct_completion'; })
           ? 'Choose a decision and provide a reason. NorthStar checks your access and the latest work details before saving.'
@@ -103,7 +106,7 @@
     var controller = new AbortController(); controllers.add(controller);
     var timer = setTimeout(function() { controller.abort(); }, options && options.method === 'POST' ? 30000 : 15000);
     try {
-      var response = await fetch(path, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {}, { signal: controller.signal }));
+      var response = await (/^\/demo(?:\/|$)/.test(location.pathname)?window.NorthStarDemoRuntime.fetch:window.fetch)(path, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {}, { signal: controller.signal }));
       var text = await response.text();
       if (new TextEncoder().encode(text).length > 1048576) throw new Error('RESPONSE_LIMIT');
       return { ok: response.ok, status: response.status, body: JSON.parse(text) };
@@ -118,7 +121,7 @@
         if ([401, 403, 404].includes(response.status)) { outcome = null; status('restricted', 'This completion review is not available to the current signed-in account.'); lock(); return false; }
         throw new Error('READ_UNAVAILABLE');
       }
-      var value = contract.validate(response.body.data);
+      var value = contract.validate(response.body.data, {demo:location.pathname.indexOf('/demo')===0});
       if (value.execution.id !== selectedId || outcome && outcome.scope !== value.scopeDigest) throw new Error('SCOPE_CHANGED');
       if (outcome && outcome.kind === 'applied') outcome = null;
       render(value);
@@ -167,7 +170,7 @@
   byId('completionForm').addEventListener('submit', function(event) {
     event.preventDefault(); if (!selection || !model || pending || outcome) return;
     try {
-      var body = contract.actionBody(model, selection.action, selection.target, { reason: byId('completionReason').value, nextAction: byId('completionNextAction').value, note: byId('completionNote').value });
+      var body = contract.actionBody(model, selection.action, selection.target, { reason: byId('completionReason').value, nextAction: byId('completionNextAction').value, note: byId('completionNote').value }, {demo:location.pathname.indexOf('/demo')===0});
       confirmation = { key: 'm23-owner-completion-' + crypto.randomUUID(), body: body, scope: model.scopeDigest };
       byId('completionConfirmTitle').textContent = LABELS[selection.action]; byId('completionConfirmDescription').textContent = COPY[selection.action];
       byId('completionConfirmReason').textContent = 'Reason: ' + body.reason;

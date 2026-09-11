@@ -1,0 +1,42 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+process.env.NODE_ENV='test';process.env.AUTH_ACCESS_SECRET='owner-operations-corrections-local-only';
+for(const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','RETELL_API_KEY','STRIPE_SECRET_KEY'])delete process.env[key];
+const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture'),{session}=require('../helpers/owner-operations-demo-session'),{resolveBrowserRuntime}=require('../helpers/playwright-runtime');
+const arg=n=>process.argv.find(v=>v.startsWith('--'+n+'=')).slice(n.length+3),engine=arg('browser'),out=path.resolve(arg('output'));assert.ok(!fs.existsSync(out));fs.mkdirSync(out,{recursive:true});
+(async()=>{let f,server,browser;const ledger={engine,cases:[]};try{
+ f=await createDatabaseFixture();server=f.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const origin='http://127.0.0.1:'+server.address().port,runtime=resolveBrowserRuntime(engine);browser=await runtime.browserType.launch({headless:true,executablePath:runtime.executablePath});
+ for(const demo of [true,false])for(const [theme,width]of [['light',1440],['dark',390]]){
+  const selectedCase=process.argv.find(v=>v.startsWith('--case='));if(selectedCase&&selectedCase.slice(7)!==(demo?'demo':'paid')+'-'+theme+'-'+width)continue;
+  const s=session(f.app),paid=demo?null:await f.createExecution(),id=demo?await s.setup():paid.appointment,tag=(demo?'demo':'paid')+'-'+theme+'-'+width;
+  const context=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});await context.addInitScript(t=>localStorage.setItem('northstar-theme',t),theme);
+  if(demo){const at=s.cookie.indexOf('=');await context.addCookies([{name:s.cookie.slice(0,at),value:s.cookie.slice(at+1),url:origin}]);}else await context.addCookies(Object.entries(paid.actor.session.cookies).map(([name,value])=>({name,value,url:origin,sameSite:'Lax',httpOnly:name!=='northstar_csrf'})));
+  const page=await context.newPage(),prefix=demo?'/demo':'/dashboard',list=demo?'/api/demo/command-center/operations':'/api/v1/field-executions/owner-work';let listMode='failure',listGets=0,emptyGets=0;
+  if(process.argv.includes('--decisions-only')){
+   let executionId;
+   if(demo){for(const [family,body]of [['initialize',{}],['transition',{action:'start'}],['completion',{action:'propose_completion',expiresAt:new Date(Date.now()+3600000).toISOString(),gateRequirements:{checklists:[],inspections:[],files:[]}}]])assert.equal((await s.act(id,family,body)).status,201);executionId=(await s.detail(id)).execution.id;}
+   else{await f.completion(paid);executionId=paid.execution.id;}
+   await page.goto(origin+prefix+'/completion-review?executionId='+executionId);await page.getByRole('button',{name:'Approve completion',exact:true}).waitFor();
+   assert.equal(await page.locator('#completionSimulation').count(),demo?1:0);await page.getByText('Proposal',{exact:true}).waitFor();await page.getByRole('button',{name:'Approve completion',exact:true}).click();await page.locator('#completionReason').fill('Review only; no decision is submitted.');await page.locator('#completionPrepare').click();assert.equal(await page.locator('#completionSimulation').count(),demo?1:0);assert.equal(await page.locator('#completionDialogSimulation').isVisible(),demo);await page.screenshot({path:path.join(out,tag+'-decision-history.png'),fullPage:true});await page.locator('#completionCancelButton').click();
+   ledger.cases.push({tag,actualProposalHistory:true,decisionDialogCancelled:true,demoOnlyLabel:demo,paidLabelUnchanged:!demo});await context.close();continue;
+  }
+  page.on('request',r=>{if(/owner-work\/appointments\/$|operations\/appointments\/$/.test(new URL(r.url()).pathname))emptyGets++;});
+  await page.route('**'+list,async route=>{listGets++;if(listMode==='failure')return route.fulfill({status:503,contentType:'application/json',body:'{"success":false}'});if(listMode==='empty')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:{authority:demo?'isolated_demo_postgresql':'postgresql',records:[]}})});return route.continue();});
+  await page.goto(origin+prefix+'/operations?appointmentId='+id);await page.getByText('Work updates are temporarily unavailable. Refresh to check the saved work.',{exact:true}).waitFor();
+  listMode='success';await page.getByRole('button',{name:'Refresh Work Details',exact:true}).click();await page.getByRole('button',{name:demo?'Open Work':'Pause Work',exact:true}).waitFor();assert.equal(await page.locator('#ownerWork select').first().inputValue(),id);
+  await page.getByRole('button',{name:'Refresh Work Details',exact:true}).click();await page.getByRole('button',{name:demo?'Open Work':'Pause Work',exact:true}).waitFor();assert.equal(await page.locator('#ownerWork select').first().inputValue(),id);assert.equal(listGets,3);assert.equal(emptyGets,0);
+  await page.screenshot({path:path.join(out,tag+'-list-recovered.png'),fullPage:true});
+  const posts=[];let kind='temporary';const actionPattern=demo?'**/api/demo/command-center/operations/appointments/*/actions':'**/api/v1/field-executions/*/transitions';
+  await page.route(actionPattern,async route=>{posts.push({key:route.request().headers()['idempotency-key'],body:route.request().postData()});if(kind==='network')return route.abort();return route.fulfill({status:429,contentType:'application/json',body:JSON.stringify({success:false,error:{limitKind:kind,message:'UNTRUSTED_DIAGNOSTIC_DO_NOT_RENDER'}})});});
+  for(const type of demo?['temporary','session','saved_work']:['temporary']){
+   kind=type;await page.getByRole('button',{name:demo?'Open Work':'Pause Work',exact:true}).click();await page.locator('#ownerWork-reason').fill('Review this local error presentation.');await page.locator('[name=confirmed]').check();await page.getByRole('button',{name:'Save Reviewed Update',exact:true}).click();
+   await page.getByText(type==='temporary'?'Too many requests. Wait briefly, then try again.':new RegExp('This demo has reached its '+(type==='session'?'action':'saved-work')+' limit')).waitFor();assert.ok(!(await page.locator('body').innerText()).includes('UNTRUSTED_DIAGNOSTIC'));await page.screenshot({path:path.join(out,tag+'-'+type+'.png'),fullPage:true});
+  }
+  kind='network';await page.getByRole('button',{name:demo?'Open Work':'Pause Work',exact:true}).click();await page.locator('#ownerWork-reason').fill('Keep this exact uncertain request.');await page.locator('[name=confirmed]').check();await page.getByRole('button',{name:'Save Reviewed Update',exact:true}).click();await page.getByRole('button',{name:'Retry Same Update',exact:true}).click();await page.getByRole('button',{name:'Retry Same Update',exact:true}).waitFor();assert.deepEqual(posts.at(-1),posts.at(-2));
+  listMode='empty';await page.getByRole('button',{name:'Refresh Work Details',exact:true}).click();await page.getByText('No Eligible Jobs Are Available. Schedule Existing Work Before Opening Its Work Details.',{exact:true}).waitFor();assert.equal(emptyGets,0);
+  let release;const held=new Promise(r=>release=r);await page.route('**/completion-review',async route=>{if(route.request().resourceType()==='document')return route.continue();await held;return route.fulfill({status:503,contentType:'application/json',body:'{"success":false}'});});
+  await page.goto(origin+prefix+'/completion-review?executionId='+(demo?'11111111-1111-4111-8111-111111111111':paid.execution.id));
+  assert.equal(await page.locator('#completionSimulation').count(),demo?1:0);if(demo)await page.getByText('Simulated Work — Demo Only',{exact:true}).waitFor();await page.screenshot({path:path.join(out,tag+'-completion-loading.png'),fullPage:true});release();await page.waitForTimeout(100);assert.equal(await page.locator('#completionSimulation').count(),demo?1:0);await page.screenshot({path:path.join(out,tag+'-completion-error.png'),fullPage:true});
+  ledger.cases.push({tag,listRecovery:true,selectionPreserved:true,noEmptyRequests:true,emptyState:true,limitKinds:demo?3:1,diagnosticsSuppressed:true,exactUncertainRetry:true,persistentSimulationLabel:demo,paidLabelUnchanged:!demo,controlledErrors:true});await context.close();
+ }
+}catch(error){ledger.failure=error.stack;process.exitCode=1;}finally{fs.writeFileSync(path.join(out,'ledger.json'),JSON.stringify(ledger,null,2));if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));if(f)await f.cleanup();}})();

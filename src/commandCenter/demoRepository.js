@@ -1,6 +1,8 @@
 'use strict';
 const demoScheduling = require('./demoScheduling');
 const demoSchedulingPolicy = require('./demoSchedulingPolicy');
+const demoOperations = require('./demoOperations');
+const demoOperationsPolicy = require('./demoOperationsPolicy');
 const adoption = require('../estimating/materialAdoptionContract');
 const adoptionPolicy = require('../estimating/materialAdoptionPolicy');
 const {buildRevisionReview,selectDemoRevision,projectSelectedDemoDecisions,demoAdopt} = require('../estimating/estimateRevisionReview');
@@ -87,6 +89,7 @@ function state(value) {
     }
     value.graphs.forEach(graph => validateDemoGraphAgainstWorkspace(graph, value.workspace));
     demoScheduling.validateState(value);
+    demoOperations.validateState(value);
     const graphIds = value.graphs.map(graph => graph.ids.graph);
     if (new Set(graphIds).size !== graphIds.length) {
       throw new Error('The persisted demo state contains duplicate graph authority.');
@@ -184,7 +187,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','material_plan','estimate_adopt','schedule_preview','schedule_approve'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -198,6 +201,13 @@ function mutationInput(input) {
     expectedRevision: input.expectedRevision,
     idempotencyHash: sha256(input.idempotencyKey),
   };
+  if (input.operation === 'work_action') {
+    if (!/^[0-9a-f-]{36}$/.test(input.appointmentId || '') || !input.operations ||
+      Object.keys(input.operations).some(k => !['family','body'].includes(k)) ||
+      !['initialize','transition','progress','evidence','completion'].includes(input.operations.family) ||
+      !input.operations.body || Buffer.byteLength(JSON.stringify(input.operations)) > 32768) fail(400,'DEMO_WORK_INPUT','Choose a job and check the required work details.');
+    normalized.appointmentId = input.appointmentId; normalized.operations = stableValue(input.operations); normalized.idempotencyKey = input.idempotencyKey;
+  }
   if (input.operation === 'schedule_preview' || input.operation === 'schedule_approve') {
     if(typeof input.appointmentId!=='string'||!/^[0-9a-f-]{36}$/.test(input.appointmentId)||!input.scheduleBody||Buffer.byteLength(JSON.stringify(input.scheduleBody))>65536)fail(400,'DEMO_SCHEDULE_INPUT_INVALID','Check the appointment and proposed times.');
     normalized.appointmentId=input.appointmentId;normalized.scheduleBody=stableValue(input.scheduleBody);normalized.idempotencyKey=input.idempotencyKey;
@@ -226,6 +236,7 @@ function mutationInput(input) {
     ...(normalized.operation==='estimate_adopt'?{estimateId:normalized.estimateId,adoption:normalized.adoption}:{}),
     ...(normalized.operation==='material_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation.startsWith('schedule_')?{appointmentId:normalized.appointmentId,scheduleBody:normalized.scheduleBody}:{}),
+    ...(normalized.operation==='work_action'?{appointmentId:normalized.appointmentId,operations:normalized.operations}:{}),
   });
   return normalized;
 }
@@ -491,8 +502,38 @@ class DemoCommandCenterRepository {
     );
   }
 
+  async readOperations(token, selector = {}) {
+    await this.read(token); // Preserve existing bounded session admission/migration.
+    const client = await this.pool().connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'");
+      const result=await client.query('SELECT id,tenant_id,token_hash,state,revision,simulation_count,mutation_count,last_simulated_at,expires_at,clock_timestamp() now FROM demo_command_center_sessions WHERE token_hash=$1',[token.tokenHash]);
+      const row=result.rows[0]; assertRowAuthority(row,token);
+      let now=date(row.now);
+      if(date(row.expires_at)<=now)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+      const record=recordFromRow(row,token,true);
+      const workspace=buildDemoWorkspace({tenantId:record.tenantId,sessionId:record.sessionId,state:record.state,revision:record.revision,simulationCount:record.simulationCount,persisted:true,expiresAt:record.expiresAt});
+      let appointmentId=selector.appointmentId;
+      if(selector.executionId)appointmentId=demoOperations.ledger(record.state).events.find(e=>e.work.execution.id===selector.executionId)?.appointmentId;
+      if(selector.executionId&&!appointmentId)fail(404,'DEMO_WORK_NOT_FOUND','That saved work is unavailable. Choose a job from Operations.');
+      const data=selector.overview?await demoOperations.overview(client,workspace,record.state,selector.filter||'active',now):selector.review?demoOperations.completionReview(workspace,record.state,appointmentId,now):appointmentId?
+        await demoOperations.readDetail(client,workspace,record.state,appointmentId,now):
+        {version:'owner-work-selection-v1',authority:'isolated_demo_postgresql',demoWorkspaceRevision:record.revision,records:workspace.graphs.map(graph=>{
+          const id=graph.ids.appointment||graph.ids.work,work=demoOperations.workFor(record.state,id);
+          return{appointmentId:id,title:graph.work.title||graph.polaris.snapshot.service.label,executionId:work?.execution.id||null};
+        })};
+      now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);
+      if(date(row.expires_at)<=now)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+      await client.query('COMMIT');return selector.review?{review:data,demoWorkspaceRevision:record.revision}:data;
+    } catch(error) { await client.query('ROLLBACK').catch(()=>{});throw error; }
+    finally {client.release();}
+  }
+
   async mutate(token, rawInput, rawAdmission) {
     const input = mutationInput(rawInput);
+    const operations = input.operation === 'work_action';
+    if (operations && !demoOperationsPolicy.mutationsEnabled) fail(503,'DEMO_OPERATIONS_PAUSED','New work updates are paused. Saved work and completion history remain available.');
     const scheduling = input.operation.startsWith('schedule_');
     if(scheduling&&!demoSchedulingPolicy.mutationsEnabled)fail(503,'DEMO_SCHEDULE_PAUSED','New demo schedule changes are paused. Saved times remain available.');
     if(input.operation==='estimate_adopt'&&!adoptionPolicy.mutationsEnabled)fail(503,'ESTIMATE_ADOPTION_PAUSED','New estimate changes are paused. Saved estimates remain available.');
@@ -540,7 +581,7 @@ class DemoCommandCenterRepository {
       if (!lockedRow) fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
       assertRowAuthority(lockedRow, token);
       const sourceOperation=input.operation==='material_plan'&&['estimate-material-plan-v3','estimate-material-plan-v4'].includes(input.plan?.confirmationVersion)||input.operation==='estimate_adopt'&&['estimate-material-adoption-v3','estimate-material-adoption-v4'].includes(input.adoption?.confirmationVersion);
-      if(sourceOperation)now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
+      if(sourceOperation || operations)now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
       if (date(lockedRow.expires_at).getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
       }
@@ -561,6 +602,13 @@ class DemoCommandCenterRepository {
         if (replay.rows[0].operation !== input.operation ||
             digest(replay.rows[0].request_digest) !== input.requestDigest) {
           fail(409, 'DEMO_IDEMPOTENCY_CONFLICT', 'That demo action key was already used for a different action.');
+        }
+        if (operations) {
+          const moment = date((await client.query('SELECT clock_timestamp() now')).rows[0].now);
+          if (date(lockedRow.expires_at) <= moment) fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+          const workspace = buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
+          const operationsResponse = demoOperations.replay(workspace,current.state,input);
+          await client.query('COMMIT'); open=false; return {record:current,replayed:true,operationsResponse};
         }
         if(scheduling){
           const replayNow=date(this.clock());if(date(lockedRow.expires_at)<=replayNow)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
@@ -589,9 +637,13 @@ class DemoCommandCenterRepository {
 
       let nextState;
       let schedulingResponse;
+      let operationsResponse;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if(scheduling){
+      if (operations) {
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
+        const result=await demoOperations.apply(client,workspace,current.state,input,now); nextState=result.state; operationsResponse=result.response;
+      } else if(scheduling){
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
         const result=demoScheduling.apply(workspace,current.state,input,date(this.clock()));nextState=result.state;schedulingResponse=result.response;
       } else if(input.operation==='estimate_adopt'){
@@ -643,6 +695,13 @@ class DemoCommandCenterRepository {
       const nextRevision = current.revision + 1;
       const nextMutationCount = current.mutationCount + 1;
       const responseDigest = sha256({ state: nextState, revision: nextRevision });
+      if(operations){
+        // Match the existing database JSONB byte limit, including PostgreSQL's
+        // representation. Preserve all saved history when another snapshot
+        // would exceed the finite demo; never truncate or replace old records.
+        const size=(await client.query('SELECT octet_length($1::jsonb::text) bytes',[nextState])).rows[0].bytes;
+        if(size>524288)fail(429,'DEMO_WORK_CAPACITY','This demo has reached its saved-work limit. Existing work remains available. Reset starts a new demo and clears its saved changes.');
+      }
       if(scheduling&&date(lockedRow.expires_at)<=date(this.clock()))fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
       const updated = await client.query(
         `UPDATE demo_command_center_sessions
@@ -668,9 +727,19 @@ class DemoCommandCenterRepository {
         }
       }
       await validateSourceAtCommit();
+      if (operations) {
+        const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);
+        if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+        const command=input.operations.body;
+        if(command.action==='propose_completion' && date(command.expiresAt)<=moment)fail(410,'DEMO_COMPLETION_EXPIRED','Choose a later completion review expiry.');
+        if(command.action==='approve_completion') {
+          const work=demoOperations.workFor(current.state,input.appointmentId),proposal=work?.completion.find(r=>r.id===command.proposal?.id);
+          if(!proposal || date(proposal.expiresAt)<=moment)fail(410,'DEMO_COMPLETION_EXPIRED','This completion request expired. Withdraw it and request a new review.');
+        }
+      }
       await client.query('COMMIT');
       open = false;
-      return { record: recordFromRow(updated.rows[0], token, true), replayed: false, ...(scheduling?{schedulingResponse}:{}) };
+      return { record: recordFromRow(updated.rows[0], token, true), replayed: false, ...(scheduling?{schedulingResponse}:{}), ...(operations?{operationsResponse}:{}) };
     } catch (error) {
       if (open) {
         try { await client.query('ROLLBACK'); } catch (_) {}

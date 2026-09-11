@@ -580,6 +580,7 @@ function createInitialDemoState(tenantId, createdAt, options = {}) {
   const seededWorkspace = createDemoWorkspaceFixture({ seed: sourceSeed, anchorTime: createdAt });
   const generation = Number.isSafeInteger(input.generation) && input.generation >= 1
     ? input.generation : 1;
+  const graphs=initialGraphs(seededWorkspace,createdAt);
   return stableValue({
     schemaVersion: DEMO_STATE_VERSION,
     createdAt: iso(createdAt),
@@ -587,7 +588,8 @@ function createInitialDemoState(tenantId, createdAt, options = {}) {
     seed,
     workspace: seededWorkspace,
     schedulingWorkforce: require('./demoWorkforce').create(seededWorkspace,createdAt),
-    graphs: initialGraphs(seededWorkspace, createdAt),
+    operationsSchedulingBasis: require('./demoOperationsBasis').create(seededWorkspace,graphs,createdAt),
+    graphs,
   });
 }
 

@@ -28,18 +28,25 @@
     body.appendChild(status);details.append(summary,body);container.appendChild(details);
     var serial=0,controller=null,timer=null,disposed=false;
     var demo=options.demo===true || /^\/demo(?:\/|$|-)/.test(window.location.pathname);
-    var initial=demo?'Field work and completion review are not available in this demo yet. Your saved scheduling changes remain available.':
-      identity(expected)?'Open to check the work details available for this job.':'Work details could not be linked to this job. Review the job in Operations.';
+    var initial=identity(expected)?'Open to check the work details available for this job.':'Work details could not be linked to this job. Review the job in Operations.';
     status.textContent=initial;
     function reset(){serial+=1;if(controller)controller.abort();controller=null;if(timer)clearTimeout(timer);timer=null;body.replaceChildren(status);status.textContent=initial;body.removeAttribute('aria-busy');}
     function invalidate(){reset();details.open=false;}
     function dispose(){invalidate();disposed=true;window.removeEventListener('pagehide',invalidate);window.removeEventListener('northstar:auth-generation',invalidate);}
     details.executionLinkDispose=dispose;window.addEventListener('pagehide',invalidate);window.addEventListener('northstar:auth-generation',invalidate);
     async function load(){
-      reset();if(disposed || demo || !identity(expected))return;
+      reset();if(disposed || !identity(expected))return;
       var generation=serial;controller=new AbortController();timer=setTimeout(function(){if(controller)controller.abort();},12000);
       status.textContent='Checking access to this job’s work details…';body.setAttribute('aria-busy','true');
       try {
+        if(demo){
+          var checked=await window.fetch('/api/demo/command-center/operations/appointments/'+expected.appointmentId,{cache:'no-store',signal:controller.signal});
+          if(!checked.ok)throw new Error('Work unavailable');var detail=(await checked.json()).data;
+          if(disposed||generation!==serial||!details.isConnected||!details.open)return;
+          if(!detail||detail.authority!=='isolated_demo_postgresql'||detail.appointmentId!==expected.appointmentId||detail.graphId!==expected.graphId||detail.customerId!==expected.customerId)throw new Error('Work association changed');
+          status.textContent=detail.execution?'Recorded simulated work is available.':'No work has been opened for this simulated job yet.';
+          var workLink=document.createElement('a');workLink.className='btn btn-secondary btn-sm';workLink.textContent='Open Work Details';workLink.href='/demo/operations?appointmentId='+encodeURIComponent(expected.appointmentId);body.appendChild(workLink);return;
+        }
         if(!window.NorthStarAccountSession || typeof window.NorthStarAccountSession.fetch!=='function')throw new Error('Session unavailable');
         var response=await window.NorthStarAccountSession.fetch('/api/v1/field-executions/links/appointments/'+expected.appointmentId+
           '?graphId='+expected.graphId+'&customerId='+expected.customerId,{method:'GET',cache:'no-store',signal:controller.signal});

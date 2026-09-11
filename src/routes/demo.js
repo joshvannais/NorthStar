@@ -291,6 +291,32 @@ router.get('/command-center/operator-targets',async function(req,res){
  catch(error){return res.status(error.status||503).json({success:false,error:{message:'Team search is unavailable. Refresh and search again.'}});}
 });
 
+function operationsFailure(req,res,error) {
+ const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:503;
+ const known=typeof error.code==='string'&&/^DEMO_(?:WORK_|OPERATIONS_|COMPLETION_|PROGRESS_|EVIDENCE_|CHECKLIST_|SESSION_|REVISION_|IDEMPOTENCY_)/.test(error.code);
+ const fallback={400:'Check the required work details.',403:'These work controls are unavailable for this session.',404:'That saved work is unavailable. Choose a job from Operations.',409:'The saved work changed. Refresh and review your action again.',410:'This session or completion request expired. Refresh to review the saved work.',429:'This demo reached its action limit. Saved work remains available.',503:'Work updates are unavailable. Refresh to check the saved work before trying again.'};
+ const limitKind=status===429?(error.code==='DEMO_SESSION_LIMIT'?'session':error.code==='DEMO_WORK_CAPACITY'?'saved_work':'temporary'):null;
+ return res.status(status).json({success:false,error:{message:known?error.message:fallback[status]||'Work details are temporarily unavailable.',...(limitKind?{limitKind}: {})}});
+}
+for (const [path,select] of [
+ ['/command-center/operations',()=>({})],
+ ['/command-center/operations/overview',req=>({overview:true,filter:req.query.state||'active'})],
+ ['/command-center/operations/appointments/:appointmentId',req=>({appointmentId:req.params.appointmentId})],
+ ['/command-center/operations/executions/:executionId/completion-review',req=>({executionId:req.params.executionId,review:true})],
+]) router.get(path,async function(req,res){
+ res.set('Cache-Control','no-store');res.vary('Cookie');
+ try{const value=await commandCenterRepository.readOperations(commandCenterToken(req,res),select(req));return res.json(value.review?{success:true,data:value.review,demoWorkspaceRevision:value.demoWorkspaceRevision}:{success:true,data:value});}
+ catch(error){return operationsFailure(req,res,error);}
+});
+router.post('/command-center/operations/appointments/:appointmentId/actions',express.json({limit:'32kb'}),async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'owner-operations'))return;
+ try{
+  const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'work_action',appointmentId:req.params.appointmentId,
+   operations:req.body,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});
+  return res.status(result.replayed?200:201).json({...result.operationsResponse,replayed:result.replayed,demoWorkspaceRevision:result.record.revision});
+ }catch(error){return operationsFailure(req,res,error);}
+});
+
 for(const [suffix,operation] of [['mutation-previews','schedule_preview'],['mutation-approvals','schedule_approve']]) {
  router.post('/command-center/appointments/:appointmentId/'+suffix,express.json({limit:'64kb'}),async function(req,res){
   res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'schedule-times'))return;

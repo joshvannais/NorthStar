@@ -49,11 +49,14 @@ function current(workspace,state,graph){
 function targetFor(authority){return authority.targetState==='unassigned'?{kind:'unassigned',id:null}:{kind:authority.workforceProfileId?'profile':'crew',id:authority.workforceProfileId||authority.workforceCrewId};}
 function evidence(workspace,proposal,state,graph){
  const v=workforce.read(state),candidate=workforce.candidate(v,proposal.target);
+ const basis=require('./demoOperationsBasis').read(state),jobBasis=basis?.appointments.find(a=>a.appointmentId===(graph.ids.appointment||graph.ids.work));
+ const profile=jobBasis?{...workspace.configuration.businessProfile,hours:basis.hours}:workspace.configuration.businessProfile;
  const schedules=workspace.graphs.filter(g=>g.ids.graph!==graph.ids.graph).map(g=>current(workspace,state,g)).filter(a=>a.scheduleState==='scheduled'&&a.targetState==='assigned').map(a=>({assignmentId:a.id,profileIds:(workforce.candidate(v,targetFor(a))||{members:[]}).members.map(m=>m.profileId),scheduledStart:a.scheduledStart,scheduledEnd:a.scheduledEnd,approved:true}));
  const appointment={serviceId:graph.work.serviceType||graph.polaris.snapshot.service.key,locationId:null};
  // Job location scope is not inferred from its postal address.
  const scope=graph.lead&&graph.lead.scope||graph.work.scope||{};if(typeof scope.locationId==='string')appointment.locationId=scope.locationId;
- function evaluate(c){return proposal.scheduledStart===null?{status:'needs_review',hardConflicts:[],warnings:[],needsReview:true,reviewReasons:[{code:'appointment_schedule_unavailable'}]}:evaluateConflictEvidence({proposal:{...proposal,target:c?{kind:c.kind,id:c.targetId}:proposal.target},candidate:c,appointment,businessProfile:workspace.configuration.businessProfile,skillAuthorityKnown:Boolean(v&&v.serviceKeys.includes(appointment.serviceId)),schedules,scheduleSetTruncated:false,workloadSchedules:schedules,workloadSetTruncated:false});}
+ if(jobBasis)appointment.locationId=jobBasis.locationId;
+ function evaluate(c){return proposal.scheduledStart===null?{status:'needs_review',hardConflicts:[],warnings:[],needsReview:true,reviewReasons:[{code:'appointment_schedule_unavailable'}]}:evaluateConflictEvidence({proposal:{...proposal,target:c?{kind:c.kind,id:c.targetId}:proposal.target},candidate:c,appointment,businessProfile:profile,skillAuthorityKnown:Boolean(v&&v.serviceKeys.includes(appointment.serviceId)),schedules,scheduleSetTruncated:false,workloadSchedules:schedules,workloadSetTruncated:false});}
  const conflicts=evaluate(candidate);
  const recommendation=evaluateRecommendationCandidates({candidates:workforce.targets(v).map(t=>({kind:t.kind,id:t.id,label:t.label,homeLocationId:'headquarters',authority:{simulated:true,evidenceDigest:v.digest},conflicts:evaluate(workforce.candidate(v,t))})),businessProfile:workspace.configuration.businessProfile,destinationLocationId:appointment.locationId,globalEvidenceIncomplete:!v,candidateSetTruncated:false});
  return {conflicts,recommendation};

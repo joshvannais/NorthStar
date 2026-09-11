@@ -391,6 +391,7 @@
     };
   }
 
+  var operationsReads=new Map(),operationsRequests=new Map();
   function transport(input, options) {
     var url = requestPath(input);
     var method = methodOf(options, input);
@@ -398,6 +399,21 @@
       return Promise.resolve(jsonResponse({ error: readonlyMessage, code: 'demo_external_request_blocked' }, 403));
     }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
+    if(method==='GET'&&url.pathname==='/api/v1/operational-overview')return nativeFetch('/api/demo/command-center/operations/overview'+url.search,options);
+    var ownerRead=/^\/api\/v1\/field-executions\/owner-work(?:\/appointments\/([a-f0-9-]+))?$/.exec(url.pathname);
+    if(method==='GET'&&ownerRead)return nativeFetch('/api/demo/command-center/operations'+(ownerRead[1]?'/appointments/'+ownerRead[1]:''),options);
+    var ownerReview=/^\/api\/v1\/field-executions\/([a-f0-9-]+)\/completion-review$/.exec(url.pathname);
+    if(method==='GET'&&ownerReview)return nativeFetch('/api/demo/command-center/operations/executions/'+ownerReview[1]+'/completion-review',options).then(async function(response){
+      if(response.ok){var envelope=await response.clone().json();operationsReads.set(ownerReview[1],{appointmentId:envelope.data.execution.appointmentId,revision:envelope.demoWorkspaceRevision});}return response;
+    });
+    var ownerDecision=/^\/api\/v1\/field-executions\/([a-f0-9-]+)\/completion-actions$/.exec(url.pathname);
+    if(method==='POST'&&ownerDecision){
+      var h=new Headers(options&&options.headers||{}),k=h.get('Idempotency-Key'),basis=operationsRequests.get(k)||operationsReads.get(ownerDecision[1]);
+      if(!basis)return Promise.resolve(jsonResponse({success:false,error:{message:'Refresh the completion review before deciding.'}},409));
+      if(!operationsRequests.has(k)){if(operationsRequests.size>=64)return Promise.resolve(jsonResponse({success:false,error:{message:'Reload this page before starting another decision.'}},429));operationsRequests.set(k,basis);}
+      h.set('X-NorthStar-Demo-Intent','owner-operations');h.set('X-NorthStar-Demo-Revision',String(basis.revision));
+      return nativeFetch('/api/demo/command-center/operations/appointments/'+basis.appointmentId+'/actions',Object.assign({},options,{headers:h,body:JSON.stringify({family:'completion',body:JSON.parse(options.body)})}));
+    }
 
     if(method==='GET'&&url.pathname==='/api/v1/canonical/operator-targets')return nativeFetch('/api/demo/command-center/operator-targets'+url.search,Object.assign({},options||{},{credentials:'same-origin'}));
     var scheduleTimes=/^\/api\/v1\/canonical\/appointments\/([a-f0-9-]+)\/(mutation-previews|mutation-approvals)$/.exec(url.pathname);
@@ -492,6 +508,7 @@
       }
     }
     if (url.pathname === '/dashboard/executive-brief') return '/demo' + url.search + url.hash;
+    if (url.pathname === '/dashboard/completion-review') return '/demo/completion-review' + url.search + url.hash;
     if (url.pathname === '/dashboard/lead') {
       var leadId = url.searchParams.get('id');
       return '/demo/polaris' + (leadId ? '?leadId=' + encodeURIComponent(leadId) : '');

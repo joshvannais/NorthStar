@@ -67,7 +67,7 @@
     else {
       var list = node('ul');
       data.progress.forEach(function(item) {
-        var parts = [item.workKey];
+        var parts = [item.workKey.replace(/[-_.:]+/g, ' ').replace(/\b[a-z]/g, function(letter) { return letter.toUpperCase(); })];
         if (item.quantity) parts.push(item.quantity.completed + ' of ' + item.quantity.total + ' ' + item.quantity.unit);
         if (item.milestone) parts.push(item.milestone.key + ': ' + item.milestone.state.replace(/_/g, ' '));
         parts.push(item.uncertainty, item.reviewState.replace(/_/g, ' '), date(item.observedAt));
@@ -118,7 +118,7 @@
     if (scope === 'owner_admin') {
       article.appendChild(ownerDetails(record));
       var reviewLink = node('a', 'operations-back', 'Review completion');
-      reviewLink.href = '/dashboard/completion-review?executionId=' + encodeURIComponent(record.executionId);
+      reviewLink.href = (location.pathname.indexOf('/demo')===0?'/demo':'/dashboard')+'/completion-review?executionId=' + encodeURIComponent(record.executionId);
       reviewLink.setAttribute('aria-label', 'Review completion for ' + record.title);
       article.appendChild(reviewLink);
     }
@@ -127,7 +127,7 @@
   }
   function render(data) {
     currentData = data;
-    element('operationsScope').textContent = data.scope === 'owner_admin' ? 'Owner and administrator · Company operations' :
+    element('operationsScope').textContent = data.authority === 'isolated_demo_postgresql' ? 'Simulated Owner And Administrator View' : data.scope === 'owner_admin' ? 'Owner and administrator · Company operations' :
       'Dispatcher · limited coordination view';
     element('operationsSnapshot').textContent = 'Last checked · ' + date(data.evaluatedAt);
     var fragment = document.createDocumentFragment();
@@ -161,7 +161,7 @@
     var params = new URLSearchParams({ state: selectedState, limit: '25' });
     if (nextCursor) params.set('cursor', nextCursor);
     try {
-      var response = await global.fetch('/api/v1/operational-overview?' + params.toString(), {
+      var response = await (/^\/demo(?:\/|$)/.test(location.pathname)?global.NorthStarDemoRuntime.fetch:global.fetch)('/api/v1/operational-overview?' + params.toString(), {
         method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
         headers: { Accept: 'application/json' }, signal: controller.signal,
       });
@@ -175,7 +175,7 @@
       if (new TextEncoder().encode(raw).length > 1024 * 1024) throw new Error('OPERATIONS_RESPONSE_TOO_LARGE');
       var body = JSON.parse(raw);
       if (body.success !== true || !contract) throw new Error('OPERATIONS_RESPONSE_INVALID');
-      var data = contract.validate(body.data);
+      var data = contract.validate(body.data, {demo:location.pathname.indexOf('/demo')===0});
       if (data.filter !== selectedState || data.pagination.limit !== 25) throw new Error('OPERATIONS_RESPONSE_INVALID');
       // Returning to page one has no cursor and therefore re-evaluates at a
       // fresh database timestamp. Its complete dataset/scope digest must still
@@ -217,6 +217,7 @@
     element('operationsPrevious').addEventListener('click', function() {
       if (previousCursors.length) load(previousCursors[previousCursors.length - 1], 'previous');
     });
+    global.addEventListener('northstar:owner-work-saved', function() { load(null, 'refresh'); });
     global.addEventListener('pagehide', suspend);
     global.addEventListener('pageshow', function(event) { if (event.persisted) load(null, 'refresh'); });
     document.addEventListener('visibilitychange', function() { if (document.hidden) suspend(); });

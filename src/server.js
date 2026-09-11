@@ -155,6 +155,7 @@ const demoPageFiles = Object.freeze({
   leads: 'public/dashboard/leads.html',
   communications: 'public/dashboard/communications.html',
   calendar: 'public/dashboard/calendar.html',
+  operations: 'public/dashboard/operations.html',
   team: 'public/dashboard/team.html',
   'business-profile': 'public/dashboard/business-profile.html',
   settings: 'public/dashboard/settings.html',
@@ -163,6 +164,7 @@ const demoPageFiles = Object.freeze({
 for (const destination of commandCenterContract.ROUTES) {
   pages[destination.demoPath] = demoPageFiles[destination.id];
 }
+pages['/demo/completion-review']='public/dashboard/completion-review.html';
 
 // Redirect old /dashboard/calls to /dashboard/communications
 app.get('/dashboard/calls', (req, res) => {

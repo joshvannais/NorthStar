@@ -6,7 +6,7 @@ const {createEstimateReviewFixture}=require('../helpers/m24-estimate-review-fixt
 const arg=n=>process.argv.find(x=>x.startsWith('--'+n+'=')).slice(n.length+3),engine=arg('browser'),out=path.resolve(arg('output'));assert.ok(!fs.existsSync(out));fs.mkdirSync(out,{recursive:true});
 (async()=>{let f,server,browser;const ledger={engine,cases:[],errors:[]};try{
  f=await createEstimateReviewFixture({recordedLaborHours:2});server=f.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const origin='http://127.0.0.1:'+server.address().port,rt=resolveBrowserRuntime(engine);browser=await rt.browserType.launch({headless:true,executablePath:rt.executablePath});
- for(const demo of [false,true])for(const [theme,width]of [['light',1440],['dark',390]]){
+ for(const demo of [false,true])for(const [theme,width]of [['light',1440],['dark',1440],['light',390],['dark',390]]){
   const tag=(demo?'demo':'paid')+'-'+theme+'-'+width,c=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});
   await c.addInitScript(t=>localStorage.setItem('northstar-theme',t),theme);
   if(!demo)await c.addCookies(Object.entries(f.actors.owner.session.cookies).map(([name,value])=>({name,value,url:origin,sameSite:'Lax',httpOnly:name!=='northstar_csrf'})));

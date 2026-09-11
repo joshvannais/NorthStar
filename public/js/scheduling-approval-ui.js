@@ -79,7 +79,7 @@
     list.append(el('dt', '', term), el('dd', '', description));
   }
 
-  function responseFailure(response, body) {
+  function responseFailure(response, body, context) {
     var code = body && body.error && body.error.code || body && body.code || '';
     var messages = {
       400: 'Check the appointment times, reason and required acknowledgements.',
@@ -92,23 +92,28 @@
       429: 'The scheduling action limit was reached. Saved times remain available.',
     };
     var message = messages[response.status] || (response.status >= 500 ? 'The result could not be confirmed. Refresh to check saved times before trying again.' : 'The scheduling request could not be completed. Refresh and review the appointment.');
+    if(context === 'team-search'){
+      var searchMessages={400:'Check the name you entered and search again.',401:messages[401],403:'Your current account cannot view this team list.',409:'The team list changed. Search again for current results.',410:'This session ended. Sign in again or reopen the demo.',428:'Refresh this page before searching again.',429:'Team search is temporarily limited. Wait a moment and search again.'};
+      message=searchMessages[response.status]||'The team list could not be loaded. Try the search again.';
+    }
     var error = new Error(message);
     error.status = response.status;
     error.code = code;
     return error;
   }
 
-  function jsonRequest(url, options) {
+  function jsonRequest(url, options, context) {
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.fetch !== 'function') {
       return Promise.reject(new Error('Your session could not be checked. Reopen this page.'));
     }
     return global.NorthStarAccountSession.fetch(url, options).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (body) {
-        if (!response.ok || !body || body.success !== true) throw responseFailure(response, body);
+        if (!response.ok || !body || body.success !== true) throw responseFailure(response, body, context);
         return body;
       });
     }).catch(function (error) {
       if (error && (error.status || /unavailable|authority|expired|changed|rejected/i.test(error.message))) throw error;
+      if(context === 'team-search')throw new Error('The team search was interrupted. Check your connection and search again.');
       throw new Error('The connection was interrupted. Check the saved times before starting a different change; retrying this attempt keeps the same request.');
     });
   }
@@ -570,7 +575,7 @@
       setLookupStatus('Loading workers and crews…', 'pending', false);
       return jsonRequest(endpoint, {
         method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
-      }).then(function (body) {
+      }, 'team-search').then(function (body) {
         if (active !== requestOwner) return false;
         if (!validTargetPage(body.data)) throw new Error('The team list could not be loaded. Refresh before continuing.');
         var page = body.data;

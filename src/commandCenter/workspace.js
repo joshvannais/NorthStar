@@ -382,6 +382,23 @@ function demoCanonicalItem(tenantId, graph, configuration) {
   return canonical;
 }
 
+// Calendar uses the current synthetic workspace profile, not an estimate's historical
+// calculation profile. The persisted workspace revision versions this read snapshot;
+// its hash binds the actual configuration even when a filtered Calendar has no jobs.
+function demoCalendarTimeZoneAuthority(workspace) {
+  const profile = workspace && workspace.configuration && workspace.configuration.businessProfile;
+  const revision = workspace && workspace.integrity && workspace.integrity.revision;
+  if (!profile || !Number.isSafeInteger(revision) || revision < 1) {
+    throw new Error('Demo Calendar profile is unavailable.');
+  }
+  return {
+    profileId: id(workspace.tenant.id, 'demo-calendar-business-profile'),
+    profileVersion: revision,
+    profileHash: sha256(profile),
+    timeZone: profile.timeZone,
+  };
+}
+
 function demoCanonicalItems(workspace) {
   if (!workspace || !workspace.tenant || !Array.isArray(workspace.graphs)) {
     throw new Error('Demo workspace is malformed.');
@@ -893,6 +910,7 @@ module.exports = {
   buildSimulatedGraph,
   createInitialDemoState,
   demoCanonicalItems,
+  demoCalendarTimeZoneAuthority,
   demoConfiguration,
   demoViewerId,
   routeProjection,

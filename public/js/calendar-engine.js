@@ -91,26 +91,36 @@ function calendarTodayDate() {
 }
 
 function calendarScheduleLabel(event) {
-  if (!event || !event.rawScheduledStart || !event.rawScheduledEnd) return 'Schedule unavailable';
+  if (!event || !event.rawScheduledStart) return 'Start time not recorded';
   var start = new Date(event.rawScheduledStart);
-  var end = new Date(event.rawScheduledEnd);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Schedule unavailable';
+  var end = event.rawScheduledEnd ? new Date(event.rawScheduledEnd) : null;
+  if (Number.isNaN(start.getTime())) return 'Start time not recorded';
   var timeZone;
   try { timeZone = calendarTimeZoneAuthority().timeZone; } catch (_error) { return 'Schedule unavailable'; }
-  var options = { timeZone:timeZone, weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' };
-  return start.toLocaleString([], options) + ' to ' + end.toLocaleString([], options) + ' (' + timeZone + ')';
+  var options = { timeZone:timeZone, weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' };
+  return start.toLocaleString([], options) + (end && !Number.isNaN(end.getTime())
+    ? ' to ' + end.toLocaleString([], options) : '; end time not recorded');
+}
+
+function calendarEventCanEdit(event) {
+  var projection = window.CanonicalIntelligence && window.CanonicalIntelligence.getProjection('calendar');
+  return Boolean(projection && projection.schedulingOperator && projection.schedulingOperator.canMutate === true &&
+    projection.schedulingOverview && (projection.schedulingOverview.records || []).some(function(record) {
+      return String(record.appointmentId) === String(event.id);
+    }));
 }
 
 function calendarEventButton(event, className, content, options) {
   options = options || {};
-  var label = 'Edit schedule for ' + (event.title || 'appointment') + ', currently ' + calendarScheduleLabel(event);
-  var draggable = options.draggable ? ' draggable="true"' : '';
+  var label = (calendarEventCanEdit(event) ? 'Edit schedule for ' : 'View schedule for ') + (event.title || 'appointment') + ', currently ' + calendarScheduleLabel(event);
+  var draggable = options.draggable && calendarEventCanEdit(event) ? ' draggable="true"' : '';
   return '<button type="button" class="' + className + ' cal-schedule-event" data-calendar-event-action="edit" ' +
     'data-calendar-event-id="' + escapeCalendarMarkup(event.id) + '" aria-label="' + escapeCalendarMarkup(label) + '"' +
     draggable + '>' + content + '</button>';
 }
 
 function calendarResizeButton(event, className) {
+  if (!calendarEventCanEdit(event)) return '';
   return '<button type="button" class="' + className + ' cal-schedule-resize" data-calendar-event-action="resize" ' +
     'data-calendar-event-id="' + escapeCalendarMarkup(event.id) + '" aria-label="Resize schedule for ' +
     escapeCalendarMarkup(event.title || 'appointment') + '">Resize</button>';
@@ -415,7 +425,7 @@ class CalendarRenderer {
     var todayValue = unavailable ? '\u2014' : todayEvents.length;
     var totalValue = unavailable ? '\u2014' : totalEvents;
     var pipelineText = unavailable || pipelineValue == null ? '\u2014' : '$' + Number(pipelineValue).toLocaleString();
-    var pipelineNote = unavailable ? 'Loading' : pipelineValue == null ? 'No recorded estimate' : 'Original estimate total';
+    var pipelineNote = this.loading ? 'Loading' : this.rejected ? 'Unavailable' : pipelineValue == null ? 'No recorded estimate' : 'Original estimate total';
 
     this.kpiBar.innerHTML = `
       <span class="cal-kpi-pill"><span class="cal-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><span class="cal-kpi-num">${monthValue}</span><span class="cal-kpi-label">Appointments this month</span></span>
@@ -588,7 +598,7 @@ class CalendarRenderer {
     const todayStr = calendarTodayDate() || s._formatDate(new Date());
     let html = '<div class="cal-agenda-view">';
     if (sorted.length === 0) {
-      html += '<div class="cal-agenda-empty">No events scheduled. Use the + New Event button to add one.</div>';
+      html += '<div class="cal-agenda-empty">' + (this.loading ? 'Loading schedule…' : this.rejected ? 'Schedule unavailable. Try again below.' : 'No events scheduled.') + '</div>';
     } else {
       let lastDate = '';
       sorted.forEach(e => {
@@ -630,7 +640,7 @@ class CalendarRenderer {
     if (this.loading) {
       html += `<div class="cal-event-list-empty" role="status" aria-live="polite">Loading schedule\u2026</div>`;
     } else if (this.rejected) {
-      html += `<div class="cal-event-list-empty" role="alert" aria-live="assertive">Calendar data unavailable. Try again.</div>`;
+      html += `<div class="cal-event-list-empty" role="alert" aria-live="assertive">Calendar could not load. Try again to refresh your schedule.</div><button type="button" class="m22-action-button" id="calendarRetry">Try Again</button>`;
     } else if (todayEvents.length === 0) {
       html += `<div class="cal-event-list-empty">No events scheduled for today</div>`;
     } else {
@@ -645,6 +655,16 @@ class CalendarRenderer {
       });
     }
     this.eventList.innerHTML = html;
+    var retry = this.eventList.querySelector('#calendarRetry');
+    if (retry) retry.addEventListener('click', function () {
+      window.refreshCalendar().then(function () {
+        var target = document.querySelector('.cal-today-btn');
+        if (target) target.focus();
+      }).catch(function () {
+        var target = document.querySelector('#calendarRetry');
+        if (target) target.focus();
+      });
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -707,23 +727,23 @@ class CalendarRenderer {
     var heading = document.createElement('div');
     heading.className = 'm22-authority-heading';
     var copy = document.createElement('div');
-    var title = document.createElement('h2'); title.id = 'calendarAuthorityTitle'; title.textContent = 'Scheduling authority';
+    var title = document.createElement('h2'); title.id = 'calendarAuthorityTitle'; title.textContent = 'Schedule Overview';
     var description = document.createElement('p');
     description.textContent = operator && operator.canMutate
       ? 'Review appointments and approve schedule changes.'
       : operator && operator.canRead
         ? 'Review current appointments. Changes require owner or dispatcher access.'
-        : 'Scheduling details are limited to authorized owners and dispatchers.';
+        : 'Review the schedule details available to this account.';
     copy.append(title, description); heading.appendChild(copy); this.authorityBoard.appendChild(heading);
     if (!projection) {
-      this.authorityBoard.appendChild(Object.assign(document.createElement('p'), { className:'m22-overview-empty', textContent:'Current Calendar authority is loading or unavailable.' }));
+      this.authorityBoard.appendChild(Object.assign(document.createElement('p'), { className:'m22-overview-empty', textContent:this.loading ? 'Loading schedule details…' : 'Schedule details could not load. Try again above.' }));
       return;
     }
     if (!operator || operator.canRead !== true || !overview) {
       var unavailable = document.createElement('p'); unavailable.className = 'm22-overview-empty';
       unavailable.textContent = operator && operator.reason === 'subscription_read_only'
-        ? 'This subscription is read-only. No scheduling mutation is available.'
-        : 'No owner/dispatcher mutation authority is available for this signed-in account.';
+        ? 'This subscription allows viewing schedules. Editing is unavailable.'
+        : 'Schedule changes are unavailable for this account.';
       this.authorityBoard.appendChild(unavailable); return;
     }
     var page = overview.page || { shown:(overview.records || []).length, total:(overview.records || []).length };
@@ -792,7 +812,7 @@ class CalendarRenderer {
       if (!operator.canMutate) {
         var readOnly = document.createElement('p');
         readOnly.className = 'm22-overview-read-only';
-        readOnly.textContent = 'Read-only: ' + calendarTitleCaseLabel(operator.reason || 'mutation authority unavailable') + '.';
+        readOnly.textContent = 'You can view this appointment. Editing is unavailable for this account.';
         actions.appendChild(readOnly);
       }
       item.append(recordTitle, states, actions); list.appendChild(item);
@@ -894,7 +914,7 @@ class CalendarModal {
     var overview = projection && projection.schedulingOverview;
     var record = overview && (overview.records || []).find(function(candidate) { return String(candidate.appointmentId) === String(event.id); });
     if (!record || !projection.schedulingOperator || projection.schedulingOperator.canMutate !== true) {
-      throw new Error('Current operator scheduling authority is unavailable. Refresh Calendar before acting.');
+      return this.openReadOnlyEvent(event, options);
     }
     return window.NorthStarSchedulingApproval.open({
       record: record,
@@ -910,6 +930,28 @@ class CalendarModal {
         : options.action === 'calendar_resize' ? 'Calendar resize or touch gesture' : 'Calendar accessible edit control',
       onApplied: window.refreshCalendar
     });
+  }
+
+  openReadOnlyEvent(event, options) {
+    this.pendingReturnFocus = options.returnFocus || document.activeElement;
+    var start = event.rawScheduledStart ? new Date(event.rawScheduledStart) : null;
+    var timeZone = calendarTimeZoneAuthority().timeZone;
+    var startText = start && !Number.isNaN(start.getTime())
+      ? start.toLocaleString([], { timeZone:timeZone, weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' })
+      : 'Start time not recorded';
+    var end = event.rawScheduledEnd ? new Date(event.rawScheduledEnd) : null;
+    var endText = end && !Number.isNaN(end.getTime())
+      ? end.toLocaleString([], { timeZone:timeZone, month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' })
+      : 'End time not recorded';
+    var demo = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true;
+    this._show('<div class="cal-modal-overlay" id="calModalOverlay" onclick="window.calModal.close()">' +
+      '<div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="calModalTitle" onclick="event.stopPropagation()">' +
+      '<div class="cal-modal-header"><h2 id="calModalTitle">Schedule Details</h2><button type="button" class="cal-modal-close" onclick="window.calModal.close()" aria-label="Close schedule details">×</button></div>' +
+      '<div class="cal-modal-body"><p><strong>' + escapeCalendarMarkup(event.title || 'Customer name unavailable') + '</strong></p>' +
+      '<p>' + escapeCalendarMarkup(event.serviceType || 'Service not recorded') + '</p><p>Start: ' + escapeCalendarMarkup(startText) + '</p><p>End: ' + escapeCalendarMarkup(endText) + '</p>' +
+      '<p>' + (demo ? 'Simulated schedule. Editing is not available in this demo.' : 'This schedule is available to view. Editing requires current scheduling access.') + '</p></div></div></div>');
+    document.querySelector('#calModalOverlay .cal-modal-close').focus();
+    return true;
   }
 
   _retiredEditEvent(event, options) {
@@ -1342,8 +1384,8 @@ window.syncCalendarFromAppStore = function() {
       id: record.id,
       title: calendarDisplayProjection().text(record.customer && record.customer.name, 'Customer name unavailable'),
       date: zonedStart ? zonedStart.date : null,
-      time: zonedStart ? zonedStart.time + ' (' + timeZone + ')' : null,
-      endTime: zonedEnd ? zonedEnd.time + ' (' + timeZone + ')' : null,
+      time: zonedStart ? start.toLocaleTimeString([], { timeZone:timeZone, hour:'numeric', minute:'2-digit', timeZoneName:'short' }) : null,
+      endTime: zonedEnd ? end.toLocaleTimeString([], { timeZone:timeZone, hour:'numeric', minute:'2-digit', timeZoneName:'short' }) : null,
       timeValue: zonedStart ? zonedStart.time : null,
       endDate: zonedEnd ? zonedEnd.date : null,
       endTimeValue: zonedEnd ? zonedEnd.time : null,

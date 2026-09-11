@@ -1,0 +1,8 @@
+const fs=require('fs'),vm=require('vm'),path=require('path');
+const source=fs.readFileSync(path.join(__dirname,'../../public/js/command-center-page.js'),'utf8');
+const fragment=source.slice(source.indexOf('  function formatDate('),source.indexOf('  function tenantCalendarDate('));
+const format=vm.runInNewContext(fragment+';formatDate',{Intl,Date,Number,tenantTimeZone:()=>null});
+test('repeated fall-back hour preserves distinct daylight and standard offsets',()=>{const a=format('2026-11-01T05:30:00Z','America/New_York'),b=format('2026-11-01T06:30:00Z','America/New_York');expect(a).toContain('1:30');expect(b).toContain('1:30');expect(a).toContain('Eastern Daylight Time, GMT-04:00');expect(b).toContain('Eastern Standard Time, GMT-05:00');expect(a).not.toContain('America/');});
+test('spring-forward instant uses correct new local hour and offset',()=>{expect(format('2026-03-08T06:59:00Z','America/New_York')).toContain('1:59');expect(format('2026-03-08T07:00:00Z','America/New_York')).toContain('3:00');expect(format('2026-03-08T07:00:00Z','America/New_York')).toContain('GMT-04:00');});
+test('non-hour zone and UTC retain their actual time context',()=>{expect(format('2026-01-01T00:00:00Z','Asia/Kolkata')).toContain('GMT+05:30');expect(format('2026-01-01T00:00:00Z','UTC')).toContain('Coordinated Universal Time');});
+test('missing and invalid values remain unavailable, without guessing a zone',()=>{for(const value of[null,undefined,'','not-a-date'])expect(format(value,'UTC')).toBeNull();expect(format('2026-01-01T00:00:00Z','Invalid/Zone')).toBeNull();expect(format('2026-01-01T00:00:00Z',null)).toBeNull();});

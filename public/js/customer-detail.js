@@ -189,7 +189,7 @@ window.CustomerDetail = (function() {
     html += '      </div>';
 
     // POLARIS\u2122 Intelligence
-    html += '      <div class="drawer-section" id="cdExecutionSection"><h3>Work details</h3><div id="cdExecutionRecords"></div></div>';
+    html += '      <details class="drawer-section" id="cdExecutionSection"><summary>Work Details</summary><div id="cdExecutionRecords"></div></details>';
     html += '      <div class="drawer-section">';
     html += '        <h3>POLARIS\u2122 Intelligence</h3>';
     html += '        <div class="drawer-polaris-insight" id="cdPolarisInsight">';
@@ -216,7 +216,7 @@ window.CustomerDetail = (function() {
     html += '          <details class="drawer-polaris-pricing">';
     html += '            <summary>Estimate costs and price review</summary>';
     html += '            <p>Original price breakdown. Material changes and human price decisions are shown in the estimate review below.</p><div id="cdPricingBreakdown"><p>No estimate details are available to this account.</p></div>';
-    html += '            <section aria-label="Estimate review" style="margin-top:1rem">';
+    html += '            <section class="drawer-review-section" aria-label="Estimate review">';
     html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
     html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
     html += '              <div id="cdEstimateDecision" style="margin-top:1rem"></div>';
@@ -310,7 +310,8 @@ window.CustomerDetail = (function() {
     panel.appendChild(basisDetails);
     var priceDetails = panel.querySelector('.drawer-polaris-pricing'); priceDetails.classList.add('drawer-section');
     priceDetails.querySelector('summary').textContent = 'Price Breakdown And Estimate Review';
-    panel.append(priceDetails,basisDetails);
+    analysis.after(priceDetails);
+    panel.appendChild(basisDetails);
     var profileSection = $('cdProfileSection');
     var contactDetails = document.createElement('details'); contactDetails.className = 'drawer-section drawer-customer-background';
     var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Customer History';
@@ -888,11 +889,12 @@ window.CustomerDetail = (function() {
       var price = field('Reviewed price before tax (' + _estimateReview.currency + ')', 'cdDecisionPrice', draft.price, false); price.inputMode = 'decimal'; price.pattern = '(0|[1-9][0-9]{0,11})\\.[0-9]{2}'; price.placeholder = '0.00'; price.oninput = function () { draft.price = price.value; draft.request = null; };
     }
     var reason = field('Reason for this decision', 'cdDecisionReason', draft.reason, true); reason.maxLength = 2000; reason.oninput = function () { draft.reason = reason.value; draft.request = null; };
-    var label = document.createElement('label'), confirm = document.createElement('input'); confirm.type = 'checkbox'; confirm.id = 'cdDecisionConfirm'; confirm.required = true; confirm.checked = draft.confirmed; confirm.onchange = function () { draft.confirmed = confirm.checked; draft.request = null; }; label.appendChild(confirm);
-    label.appendChild(document.createTextNode(draft.action === 'approve' ? ' I reviewed this recorded estimate, its missing information, the work scope and price. Approve these details for quote preparation only; nothing will be sent.' : ' Withdraw the current approval. Its history will remain, and these details will no longer be approved for quote preparation.')); form.appendChild(label);
+    var label = document.createElement('label'), confirm = document.createElement('input'); label.className = 'drawer-decision-confirmation'; confirm.type = 'checkbox'; confirm.id = 'cdDecisionConfirm'; confirm.required = true; confirm.checked = draft.confirmed; confirm.onchange = function () { draft.confirmed = confirm.checked; draft.request = null; }; label.appendChild(confirm);
+    var confirmationText = document.createElement('span'); confirmationText.textContent = draft.action === 'approve' ? ' I reviewed this recorded estimate, its missing information, the work scope and price. Approve these details for quote preparation only; nothing will be sent.' : ' Withdraw the current approval. Its history will remain, and these details will no longer be approved for quote preparation.'; label.appendChild(confirmationText); form.appendChild(label);
     var status = document.createElement('p'); status.id = 'cdDecisionStatus'; status.setAttribute('role', 'status'); status.tabIndex = -1; if (draft.basisChanged) status.textContent = 'The saved review changed. Check your entries and confirm again before saving.'; status.style.marginTop = '0.75rem'; form.appendChild(status);
-    var save = document.createElement('button'); save.type = 'submit'; save.className = 'btn btn-secondary btn-sm'; save.textContent = draft.action === 'approve' ? 'Approve for quote preparation' : 'Confirm withdrawal'; form.appendChild(save);
-    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.style.marginLeft = '0.75rem'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); focusDecisionAction(draft.action); }; form.appendChild(cancel);
+    var actions = document.createElement('div'); actions.className = 'drawer-review-actions'; form.appendChild(actions);
+    var save = document.createElement('button'); save.type = 'submit'; save.className = 'btn btn-secondary btn-sm'; save.textContent = draft.action === 'approve' ? 'Approve for quote preparation' : 'Confirm withdrawal'; actions.appendChild(save);
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary btn-sm'; cancel.textContent = 'Cancel'; cancel.onclick = function () { _decisionDraft = null; renderEstimateDecision(_estimateReview); focusDecisionAction(draft.action); }; actions.appendChild(cancel);
     form.onsubmit = function (event) {
       event.preventDefault(); if (!form.reportValidity() || !_estimateReview || !reviewPinsMatch(_estimateReview, _currentData && _currentData.canonical)) return;
       var review = _estimateReview, generation = _openSequence, state = review.decisions, current = state.writeBasis || state.current;
@@ -1062,6 +1064,15 @@ window.CustomerDetail = (function() {
     parent.appendChild(details);
   }
 
+  function capellaTitle() {
+    var title = document.createElement('h4'); title.id = 'cdCapellaTitle';
+    var mark = document.createElement('span'); mark.className = 'capella-four-star'; mark.setAttribute('aria-hidden','true');
+    ['north','east','south','west'].forEach(function(direction) {
+      var star = document.createElement('span'); star.className = 'polaris-inline-star capella-star-' + direction; mark.appendChild(star);
+    });
+    title.append(mark,document.createTextNode('CAPELLA\u2122 Risk Lens')); return title;
+  }
+
   function appendCapellaRefresh(root) {
     var button=document.createElement('button'); button.id='cdCapellaRefresh'; button.type='button'; button.className='btn btn-secondary btn-sm'; button.textContent='Refresh Capella'; button.style.marginTop='.75rem';
     button.disabled=Boolean($('cdEstimateReviewRefresh').disabled);
@@ -1070,14 +1081,14 @@ window.CustomerDetail = (function() {
 
   function renderCapellaStatus(message) {
     var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
-    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens';
+    var title = capellaTitle();
     var status = document.createElement('p'); status.setAttribute('role','status'); status.textContent = message;
     root.append(title,status); appendCapellaRefresh(root);
   }
 
   function renderCapellaReview(review) {
     var root = $('cdCapellaReview'); root.replaceChildren(); root.hidden = false;
-    var title = document.createElement('h4'); title.id = 'cdCapellaTitle'; title.textContent = 'Capella\u2122 Risk Lens'; root.appendChild(title); appendCapellaRefresh(root);
+    var title = capellaTitle(); root.appendChild(title); appendCapellaRefresh(root);
     function paragraph(value) { var p = document.createElement('p'); p.textContent = value; root.insertBefore(p,$('cdCapellaRefresh')); }
     var risk = review.riskReview, decision = review.decisions && review.decisions.current;
     var matches = risk && risk.contract === 'NorthStarCapellaRecordedCosts/v1' &&
@@ -1167,12 +1178,11 @@ window.CustomerDetail = (function() {
     (data.canonicalRecords || []).forEach(function(record) {
       var ids = record && record.ids || {};
       var group = document.createElement('div');
-      var title = document.createElement('h4');
-      title.textContent = record && record.values && record.values.service && record.values.service.label || 'Recorded work';
-      group.appendChild(title); executionRecords.appendChild(group);
+      var label = record && record.values && record.values.service && record.values.service.label || 'Recorded Work';
+      executionRecords.appendChild(group);
       if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.mount(group, {
         appointmentId:ids.appointment, graphId:ids.graph, customerId:ids.customer
-      });
+      }, {summaryLabel:label});
     });
     if (!executionRecords.children.length) executionRecords.textContent = 'No exact work records are available in this loaded customer view.';
     $('cdDrawerLoading').style.display = 'none';

@@ -1762,3 +1762,60 @@ html body .customer-drawer .polaris-inline-star::before, html body #polarisConta
 .customer-drawer .drawer-job-description { margin: -4px 0 16px; font-size: 14px; line-height: 1.6; color: inherit; overflow-wrap: anywhere; }
 .customer-drawer .drawer-job-description-details { margin: 0 0 16px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .customer-drawer .drawer-job-description-details > summary { cursor: pointer; min-height: 44px; align-content: center; }
+
+/* One disclosure rhythm throughout the shared customer card. */
+html body #cdCustomerDrawer details > summary {
+  display: list-item;
+  list-style: disclosure-closed outside;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: normal;
+  padding: 12px 0;
+  margin: 0 0 0 18px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+html body #cdCustomerDrawer details[open] > summary { list-style-type: disclosure-open; }
+html body #cdCustomerDrawer details > summary::marker { font-size: 1em; color: inherit; }
+html body #cdCustomerDrawer details > summary:focus-visible { outline: 2px solid var(--northstar-brand-gold); outline-offset: 3px; }
+html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing {
+  border: 0;
+  border-top: 1px solid rgba(255,255,255,.25);
+  border-radius: 0;
+  padding: 0;
+  margin: 14px 0 0;
+  background: transparent;
+}
+html body .customer-drawer #cdCapellaTitle { display: flex; align-items: center; }
+html body .customer-drawer .capella-four-star { position: relative; display: inline-block; width: 18px; min-width: 18px; height: 18px; margin-right: 8px; }
+html body .customer-drawer .capella-four-star .polaris-inline-star { position: absolute; font-size: 9px; width: 9px; min-width: 9px; height: 9px; margin: 0; }
+html body .customer-drawer .capella-star-north { top: 0; left: 4.5px; }
+html body .customer-drawer .capella-star-east { top: 4.5px; right: 0; }
+html body .customer-drawer .capella-star-south { bottom: 0; left: 4.5px; }
+html body .customer-drawer .capella-star-west { top: 4.5px; left: 0; }
+
+/* Expanded review keeps the same rhythm without duplicate borders. */
+html body #cdCustomerDrawer .drawer-polaris-analysis .drawer-work-detail { border: 0; border-radius: 0; padding-bottom: 0; }
+html body #cdCustomerDrawer .drawer-review-section { margin-top: 24px; }
+html body #cdCustomerDrawer .drawer-review-section > h4 { margin: 0 0 16px; }
+html body #cdCustomerDrawer #cdEstimateRevisionSelect { margin-top: 8px; margin-bottom: 16px; min-height: 44px; }
+html body #cdCustomerDrawer #cdEstimateReview > .drawer-pricing-category { border-bottom: 0; padding-bottom: 0; }
+html body #cdCustomerDrawer #cdEstimateReview > .drawer-pricing-category > .drawer-pricing-item:last-child { border-bottom: 0; }
+html body #cdCustomerDrawer #cdMaterialReview { margin: 16px 0; border: 0; }
+html body #cdCustomerDrawer #cdMaterialReview[open] > summary { margin-bottom: 8px; }
+html body #cdCustomerDrawer #cdMaterialReview > p { margin: 0 0 12px; }
+html body #cdCustomerDrawer .drawer-decision-confirmation { display: grid; grid-template-columns: 20px minmax(0,1fr); align-items: start; gap: 12px; margin-top: 20px; line-height: 1.6; cursor: pointer; }
+html body #cdCustomerDrawer .drawer-decision-confirmation > input { display: block; width: 20px; height: 20px; min-width: 20px; padding: 0; margin: 2px 0 0; }
+html body #cdCustomerDrawer .drawer-decision-confirmation > span { min-width: 0; overflow-wrap: anywhere; }
+html body #cdCustomerDrawer .drawer-review-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; margin-top: 16px; }
+html body #cdCustomerDrawer .drawer-review-actions > button { margin: 0; min-height: 44px; white-space: normal; }
+@media(max-width:640px) {
+  html body #cdCustomerDrawer .drawer-review-actions { display: grid; grid-template-columns: minmax(0,1fr); }
+  html body #cdCustomerDrawer .drawer-review-actions > button { width: 100%; }
+}

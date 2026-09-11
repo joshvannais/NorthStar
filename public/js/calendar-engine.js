@@ -680,13 +680,8 @@ class CalendarRenderer {
     var demo = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true;
     var note = document.createElement('p');
     note.className = 'cal-context-note';
-    if (demo) {
-      note.textContent = 'Demo Calendar is read-only. Explore schedule details here; saving changes requires an authorized paid workspace.';
-      this.newEventArea.appendChild(note);
-      return;
-    }
     if (!operator || operator.canMutate !== true || !overview) {
-      note.textContent = operator && operator.canRead
+      note.textContent = operator && operator.simulated ? 'Demo schedule changes are paused. Saved times remain available.' : operator && operator.canRead
         ? 'Calendar changes require current owner, admin, or dispatcher access.'
         : 'Scheduling controls are unavailable for this account.';
       this.newEventArea.appendChild(note);
@@ -704,9 +699,9 @@ class CalendarRenderer {
       create.disabled = true;
       create.setAttribute('aria-describedby', 'calendarCreateReason');
       note.id = 'calendarCreateReason';
-      note.textContent = 'No unscheduled role-authorized work is available on this page. Create a lead or work record first, then return here to schedule it.';
+      note.textContent = 'No unscheduled work is available on this page. Choose an existing appointment to review its times.';
     } else {
-      note.textContent = 'Schedule an existing role-authorized work record through preview and explicit approval.';
+      note.textContent = demo ? 'Practice scheduling an existing demo appointment. Enter both times; staffing and availability still need review. No customer is contacted.' : 'Review the start and end times before confirming an existing appointment.';
       create.addEventListener('click', function() {
         window.NorthStarSchedulingApproval.open({
           record:unscheduled, directory:operator, action:'schedule', timeZone:overview.timeZone,
@@ -812,7 +807,7 @@ class CalendarRenderer {
       if (!operator.canMutate) {
         var readOnly = document.createElement('p');
         readOnly.className = 'm22-overview-read-only';
-        readOnly.textContent = 'You can view this appointment. Editing is unavailable for this account.';
+        readOnly.textContent = operator.simulated ? 'Demo schedule changes are paused. Saved times remain available.' : 'You can view this appointment. Editing is unavailable for this account.';
         actions.appendChild(readOnly);
       }
       item.append(recordTitle, states, actions); list.appendChild(item);

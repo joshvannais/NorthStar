@@ -404,7 +404,10 @@ function demoCanonicalItems(workspace) {
     throw new Error('Demo workspace is malformed.');
   }
   return workspace.graphs.map(function (graph) {
-    return demoCanonicalItem(workspace.tenant.id, graph, workspace.configuration);
+    const item=demoCanonicalItem(workspace.tenant.id, graph, workspace.configuration);
+    const record=workspace.schedulingOverview&&workspace.schedulingOverview.records.find(r=>r.appointmentId===item.ids.appointment);
+    if(record){item.appointment={...item.appointment,status:record.authority.appointmentStatus,scheduledStart:record.authority.scheduledStart,scheduledEnd:record.authority.scheduledEnd,scheduleAuthority:record.authority};item.projectionDigest=sha256({projection:item.projectionDigest,scheduleAuthority:record.authority});}
+    return item;
   });
 }
 
@@ -847,6 +850,13 @@ function buildDemoWorkspace(input) {
     id: demoViewerId(tenant.id),
     label: 'Account-free demo visitor',
   };
+  const scheduling=require('./demoScheduling').projection(workspace,input.state);
+  workspace.graphs=workspace.graphs.map(graph=>{
+    const current=scheduling.schedulingOverview.records.find(r=>r.graphId===graph.ids.graph).authority;
+    return {...graph,work:{...graph.work,originalStatus:graph.work.status,originalScheduledStart:graph.work.scheduledStart||null,status:current.appointmentStatus,scheduledStart:current.scheduledStart,scheduledEnd:current.scheduledEnd,scheduleAuthority:current}};
+  });
+  Object.assign(workspace,scheduling);
+  workspace.integrity.digest=sha256({workspaceDigest:workspace.integrity.digest,schedulingOperator:scheduling.schedulingOperator.digest,schedulingOverview:scheduling.schedulingOverview.digest});
   return workspace;
 }
 

@@ -429,7 +429,7 @@
   }
 
   function renderSchedule(graphs) {
-    var canonicalRecords = mode === 'paid' && workspace && workspace.schedulingOverview && Array.isArray(workspace.schedulingOverview.records)
+    var canonicalRecords = workspace && workspace.schedulingOverview && Array.isArray(workspace.schedulingOverview.records)
       ? workspace.schedulingOverview.records : null;
     var scheduled = canonicalRecords
       ? canonicalRecords.filter(function (record) { return record.authority && record.authority.scheduleState === 'scheduled'; })
@@ -442,7 +442,7 @@
     list.replaceChildren();
     if (!scheduled.length) {
       var empty = element('li');
-      empty.append(element('time', '', '—'), element('div', '', 'No role-authorized appointment time is currently recorded.'));
+      empty.append(element('time', '', '—'), element('div', '', 'No appointment has both a reviewed start and end time yet.'));
       list.appendChild(empty);
       return;
     }
@@ -497,22 +497,17 @@
     categories.replaceChildren();
     if (global.NorthStarExecutionLinks) global.NorthStarExecutionLinks.clear(records);
     records.replaceChildren();
-    if (mode === 'demo') {
-      definition.textContent = 'This demo is read-only.';
-      records.appendChild(element('li', 'm22-overview-empty', 'Scheduling changes are available in a paid workspace.'));
-      return;
-    }
     var overview = workspace && workspace.schedulingOverview;
     var operator = workspace && workspace.schedulingOperator;
     if (!overview || !operator || operator.canRead !== true) {
-      definition.textContent = 'Current owner or active-dispatcher scheduling authority is unavailable. No mutation control is shown.';
-      records.appendChild(element('li', 'm22-overview-empty', 'Refresh after verifying the current session, role, membership, onboarding, and subscription state.'));
+      definition.textContent = 'Scheduling details are unavailable for this account.';
+      records.appendChild(element('li', 'm22-overview-empty', 'Refresh the page or check with your administrator.'));
       return;
     }
     var categoryNames = ['all', 'unassigned', 'due', 'overdue', 'atRisk', 'conflicting'];
     if (!categoryNames.includes(schedulingCategory)) schedulingCategory = 'atRisk';
     var page = overview.page || { shown: overview.records.length, total: overview.records.length };
-    definition.textContent = 'Review current scheduling records in ' + overview.timeZone + '.';
+    definition.textContent = mode==='demo'?'Practice scheduling an existing appointment. Enter start and end times; staff assignment and dispatch are not available in this demo yet.':'Review current appointments in your business time zone.';
     categoryNames.forEach(function (name) {
       var count = name === 'all' ? overview.total : overview.counts[name];
       var button = element('button', 'm22-category-button');
@@ -540,7 +535,7 @@
       item.dataset.appointmentId = record.appointmentId;
       var summary = element('div', 'm22-record-summary');
       summary.append(element('h3', '', presentationString(record.customer && record.customer.name, 'Customer name unavailable') + ' · ' + presentationString(record.work && record.work.title, 'Job title unavailable')),
-        element('p', 'm22-record-time', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Unscheduled in ' + overview.timeZone));
+        element('p', 'm22-record-time', formatDate(record.authority.scheduledStart, overview.timeZone) || 'Start and end times need review'));
       var states = element('dl', 'm22-state-summary');
       states.append(
         schedulingStateItem('Assignment', record.authority.targetState),
@@ -575,14 +570,14 @@
         actions.appendChild(button);
       });
       if (!operator.canMutate) actions.appendChild(element('p', 'm22-overview-read-only',
-        'Read-only: ' + titleCase(operator.reason) + '. Preview and approval controls are unavailable.'));
+        'Saved times remain available. New scheduling changes are unavailable.'));
       item.appendChild(actions); records.appendChild(item);
       if (global.NorthStarExecutionLinks) global.NorthStarExecutionLinks.mount(item, {
         appointmentId:record.appointmentId, graphId:record.graphId, customerId:record.customer && record.customer.id
       });
     });
     if (!selected.length) records.appendChild(element('li', 'm22-overview-empty',
-      'No appointments from this bounded page are in the server-defined category; the complete category count remains shown above.'));
+      'No appointments in this view match the selected category.'));
   }
 
   function renderLeads(graphs) {

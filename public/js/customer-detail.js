@@ -1301,7 +1301,7 @@ window.CustomerDetail = (function() {
     if (!identifier) {
       reason.textContent = 'No customer or lead is available for these actions. Open or add the customer before continuing.';
     } else if (demo) {
-      reason.textContent = 'Demo Schedule opens read-only Calendar. Ask Polaris keeps this record selected.';
+      reason.textContent = 'Demo Schedule opens Calendar for this customer. Ask Polaris keeps this record selected.';
     } else {
       reason.textContent = 'Ask Polaris keeps this record selected. Schedule opens Calendar for this customer.';
     }

@@ -5,6 +5,7 @@ const {buildRevisionReview,selectDemoRevision,projectSelectedDemoDecisions,demoA
 
 
 const crypto = require('crypto');
+const {sha256}=require('../services/businessProfileAdapter');
 const { buildEstimateReview } = require('../services/estimateReview');
 const { buildCapellaReview } = require('../estimating/capellaReview');
 const { buildMaterialReview } = require('../estimating/materialReview');
@@ -123,9 +124,10 @@ async function demoCanonicalProjection(req, res, compatibility) {
     const context = demoCanonicalContext(workspace);
     const calendarTimeZoneAuthority = req.params.surface === 'calendar'
       ? demoCalendarTimeZoneAuthority(workspace) : null;
-    const data = compatibility
+    let data = compatibility
       ? compatibilityProjection(req.params.surface, items, context, calendarTimeZoneAuthority)
       : surfaceProjection(req.params.surface, items, context);
+    if(req.params.surface==='calendar')data={...data,schedulingOperator:workspace.schedulingOperator,schedulingOverview:workspace.schedulingOverview,digest:sha256({projection:data.digest,operator:workspace.schedulingOperator.digest,overview:workspace.schedulingOverview.digest})};
     return res.json({ success: true, data });
   } catch (error) {
     return commandCenterFailure(req, res, error);
@@ -282,6 +284,20 @@ router.get('/command-center', async function (req, res) {
     return commandCenterFailure(req, res, error);
   }
 });
+
+for(const [suffix,operation] of [['mutation-previews','schedule_preview'],['mutation-approvals','schedule_approve']]) {
+ router.post('/command-center/appointments/:appointmentId/'+suffix,express.json({limit:'64kb'}),async function(req,res){
+  res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'schedule-times'))return;
+  try {
+   const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation,appointmentId:req.params.appointmentId,scheduleBody:req.body,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});
+   return res.status(result.replayed?200:201).json({success:true,data:result.schedulingResponse,replayed:result.replayed});
+  }catch(error){
+   const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:503;
+   const messages={400:'Check the appointment, start and end times, reason and acknowledgements.',403:'This demo cannot change that appointment.',404:'That demo appointment is unavailable.',409:'The demo changed. Refresh and review the times again.',410:'This session or preview expired. Refresh and review again.',428:'Refresh the appointment before reviewing a change.',429:'This demo reached its action limit. Saved schedules remain available.',503:'Schedule changes are unavailable. Refresh to check saved times.'};
+   return res.status(status).json({success:false,error:{message:messages[status]||'The scheduling request could not be completed.'}});
+  }
+ });
+}
 
 router.post('/command-center/simulations/leads', async function (req, res) {
   res.set('Cache-Control', 'no-store');

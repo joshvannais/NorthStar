@@ -1,4 +1,6 @@
 'use strict';
+const demoScheduling = require('./demoScheduling');
+const demoSchedulingPolicy = require('./demoSchedulingPolicy');
 const adoption = require('../estimating/materialAdoptionContract');
 const adoptionPolicy = require('../estimating/materialAdoptionPolicy');
 const {buildRevisionReview,selectDemoRevision,projectSelectedDemoDecisions,demoAdopt} = require('../estimating/estimateRevisionReview');
@@ -84,6 +86,7 @@ function state(value) {
       throw new Error('The persisted demo graph count is outside the bounded lifecycle.');
     }
     value.graphs.forEach(graph => validateDemoGraphAgainstWorkspace(graph, value.workspace));
+    demoScheduling.validateState(value);
     const graphIds = value.graphs.map(graph => graph.ids.graph);
     if (new Set(graphIds).size !== graphIds.length) {
       throw new Error('The persisted demo state contains duplicate graph authority.');
@@ -181,7 +184,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','material_plan','estimate_adopt'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','material_plan','estimate_adopt','schedule_preview','schedule_approve'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -195,6 +198,10 @@ function mutationInput(input) {
     expectedRevision: input.expectedRevision,
     idempotencyHash: sha256(input.idempotencyKey),
   };
+  if (input.operation === 'schedule_preview' || input.operation === 'schedule_approve') {
+    if(typeof input.appointmentId!=='string'||!/^[0-9a-f-]{36}$/.test(input.appointmentId)||!input.scheduleBody||Buffer.byteLength(JSON.stringify(input.scheduleBody))>65536)fail(400,'DEMO_SCHEDULE_INPUT_INVALID','Check the appointment and proposed times.');
+    normalized.appointmentId=input.appointmentId;normalized.scheduleBody=stableValue(input.scheduleBody);normalized.idempotencyKey=input.idempotencyKey;
+  }
   if (input.operation === 'simulate_lead') {
     const fallback = typeof input.serviceKey === 'string'
       ? { ...DEFAULT_SELECTION, service: input.serviceKey }
@@ -218,6 +225,7 @@ function mutationInput(input) {
     ...(normalized.operation==='estimate_review' ? {estimateId:normalized.estimateId,decision:normalized.decision} : {}),
     ...(normalized.operation==='estimate_adopt'?{estimateId:normalized.estimateId,adoption:normalized.adoption}:{}),
     ...(normalized.operation==='material_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
+    ...(normalized.operation.startsWith('schedule_')?{appointmentId:normalized.appointmentId,scheduleBody:normalized.scheduleBody}:{}),
   });
   return normalized;
 }
@@ -485,6 +493,8 @@ class DemoCommandCenterRepository {
 
   async mutate(token, rawInput, rawAdmission) {
     const input = mutationInput(rawInput);
+    const scheduling = input.operation.startsWith('schedule_');
+    if(scheduling&&!demoSchedulingPolicy.mutationsEnabled)fail(503,'DEMO_SCHEDULE_PAUSED','New demo schedule changes are paused. Saved times remain available.');
     if(input.operation==='estimate_adopt'&&!adoptionPolicy.mutationsEnabled)fail(503,'ESTIMATE_ADOPTION_PAUSED','New estimate changes are paused. Saved estimates remain available.');
     if(input.operation==='material_plan'&&!materialPlanPolicy.mutationsEnabled)fail(503,'MATERIAL_PLAN_PAUSED','New material plans are paused. Saved plans remain available.');
     if(input.operation==='estimate_review' && !decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
@@ -495,7 +505,7 @@ class DemoCommandCenterRepository {
     try {
       await client.query('BEGIN');
       open = true;
-      const now = date(this.clock());
+      let now = date(this.clock());
       let locked = await client.query(
         `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
                 last_simulated_at, expires_at
@@ -529,6 +539,7 @@ class DemoCommandCenterRepository {
       const lockedRow = locked.rows[0] || null;
       if (!lockedRow) fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
       assertRowAuthority(lockedRow, token);
+      if(scheduling)now=date(this.clock());
       if (date(lockedRow.expires_at).getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
       }
@@ -549,6 +560,10 @@ class DemoCommandCenterRepository {
         if (replay.rows[0].operation !== input.operation ||
             digest(replay.rows[0].request_digest) !== input.requestDigest) {
           fail(409, 'DEMO_IDEMPOTENCY_CONFLICT', 'That demo action key was already used for a different action.');
+        }
+        if(scheduling){
+          const replayNow=date(this.clock());if(date(lockedRow.expires_at)<=replayNow)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+          const schedulingResponse=demoScheduling.replay(current.state,input,replayNow);await client.query('COMMIT');open=false;return{record:current,replayed:true,schedulingResponse};
         }
         if(input.operation==='estimate_adopt'&&(current.state.estimateRevisions?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='material_plan'&&(current.state.materialPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){await client.query('COMMIT');open=false;return {record:current,replayed:true};}
@@ -572,9 +587,13 @@ class DemoCommandCenterRepository {
       }
 
       let nextState;
+      let schedulingResponse;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if(input.operation==='estimate_adopt'){
+      if(scheduling){
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
+        const result=demoScheduling.apply(workspace,current.state,input,date(this.clock()));nextState=result.state;schedulingResponse=result.response;
+      } else if(input.operation==='estimate_adopt'){
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
         const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'ESTIMATE_ADOPTION_UNAVAILABLE','That demo estimate is unavailable.');
         const histories=current.state.estimateRevisions||{},history=histories[input.estimateId]||[];
@@ -621,6 +640,7 @@ class DemoCommandCenterRepository {
       const nextRevision = current.revision + 1;
       const nextMutationCount = current.mutationCount + 1;
       const responseDigest = sha256({ state: nextState, revision: nextRevision });
+      if(scheduling&&date(lockedRow.expires_at)<=date(this.clock()))fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
       const updated = await client.query(
         `UPDATE demo_command_center_sessions
             SET state = $2, revision = $3, simulation_count = $4, mutation_count = $5,
@@ -637,9 +657,16 @@ class DemoCommandCenterRepository {
          VALUES ($1,$2,$3,$4,$5,$6)`,
         [current.sessionId, input.idempotencyHash, input.operation, input.requestDigest, nextRevision, responseDigest]
       );
+      if(scheduling){
+        const committedAt=date(this.clock());if(date(lockedRow.expires_at)<=committedAt)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+        if(input.operation==='schedule_approve'){
+          const preview=current.state.demoScheduling.previews.find(p=>p.response.id===input.scheduleBody.previewId);
+          if(!preview||date(preview.response.expiresAt)<=committedAt)fail(410,'DEMO_SCHEDULE_PREVIEW_EXPIRED','This preview expired. Review the times again.');
+        }
+      }
       await client.query('COMMIT');
       open = false;
-      return { record: recordFromRow(updated.rows[0], token, true), replayed: false };
+      return { record: recordFromRow(updated.rows[0], token, true), replayed: false, ...(scheduling?{schedulingResponse}:{}) };
     } catch (error) {
       if (open) {
         try { await client.query('ROLLBACK'); } catch (_) {}

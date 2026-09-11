@@ -11,7 +11,7 @@
 
   function displayProjection() {
     if (!global.NorthStarDisplayProjection) {
-      throw new Error('Scheduling display projection is unavailable.');
+      throw new Error('Scheduling details could not load. Refresh this page.');
     }
     return global.NorthStarDisplayProjection;
   }
@@ -38,14 +38,11 @@
   }
 
   function textForEvidence(entry) {
-    if (typeof entry === 'string') return displayProjection().text(entry.slice(0, 1000), 'Evidence detail unavailable');
-    if (!entry || typeof entry !== 'object') return 'Evidence is unavailable.';
-    var parts = ['code', 'label', 'message', 'reason', 'description', 'status'].map(function (key) {
-      return typeof entry[key] === 'string' ? entry[key] : '';
-    }).filter(Boolean);
-    if (parts.length) return displayProjection().text(parts.join(' — ').slice(0, 1000), 'Evidence detail unavailable');
-    try { return displayProjection().text(JSON.stringify(entry).slice(0, 1000), 'Evidence detail unavailable'); }
-    catch (_error) { return 'Evidence is unavailable.'; }
+    var explanations={target_unassigned:'No worker or crew is assigned. Staffing and availability still need review.',target_unavailable:'The selected worker or crew is unavailable.',inactive_target:'The selected worker is inactive.',inactive_crew_member:'A member of this crew is inactive.',crew_membership_incomplete:'The crew membership is incomplete.',crew_membership_bounded:'Not all crew members could be checked.',required_skill_authority_missing:'Required job skills have not been confirmed.',required_skill_authority_bounded:'Some required skills could not be checked.',required_skill_mismatch:'The selected team does not have the recorded required skill.',location_scope_authority_missing:'The service location has not been confirmed.',target_location_scope_missing:'The selected team has no confirmed service location.',location_scope_mismatch:'The selected team belongs to a different service location.',working_hours_authority_incomplete:'Working hours are incomplete for these dates.',outside_working_hours:'The proposed times are outside recorded working hours.',availability_authority_bounded:'Some availability information could not be checked.',availability_authority_missing:'Availability has not been recorded.',availability_authority_stale:'Recorded availability needs to be updated.',declared_availability_incomplete:'Availability does not cover the entire proposed interval.',declared_unavailable:'The selected team is unavailable during this interval.',approved_schedule_overlap:'These times overlap another approved assignment for this team.',overlap_authority_unapproved:'These times overlap work whose scheduling approval is not recorded.',schedule_buffer_threshold:'These times leave less than the recorded gap between jobs.',workload_authority_incomplete:'Some workload information is missing.',workload_authority_unapproved:'Some workload entries have not been approved.',workload_evidence_bounded:'Not all workload entries could be checked.',max_jobs_per_day_threshold:'This would exceed the recorded daily job limit.',workday_length_threshold:'This would exceed the recorded workday length.',crew_size_threshold:'The crew size needs review for this job.',schedule_evidence_bounded:'Not all existing appointments could be checked.',conflict_evidence_bounded:'Additional scheduling checks need review.',candidate_set_bounded:'Not all workers or crews could be considered.',candidate_set_empty:'No worker or crew recommendation is available.',recommendation_evidence_incomplete:'More information is needed before recommending a team.',all_candidates_hard_conflict:'Every checked team has a scheduling conflict.',recommended_candidate_needs_review:'The suggested team still needs review.',conflict_authority_needs_review:'Scheduling checks need further review.',conflict_explanations_bounded:'Some scheduling explanations are unavailable.',candidate_origin_location_missing:'The team starting location is missing.',candidate_origin_location_authority_unavailable:'The team starting location is unconfirmed.',candidate_origin_coordinates_unavailable:'The team starting location cannot be located on the map.',appointment_destination_location_missing:'The job location is missing.',appointment_destination_location_authority_unavailable:'The job location is unconfirmed.',appointment_destination_coordinates_unavailable:'The job location cannot be located on the map.',driving_route_evidence_unavailable:'Driving time and route have not been verified.',geodesic_distance_available:'A straight-line distance is available; it is not driving distance.',geodesic_distance_unavailable:'Distance information is unavailable.',candidate_conflict_status:'Review the scheduling checks for this team.',schedule_incomplete:'Enter both the start and end of the appointment.'};
+    var code=typeof entry==='string'?entry:entry&&entry.code;
+    if(explanations[code])return explanations[code];
+    if(entry&&entry.candidate&&entry.candidate.label)return value(entry.candidate.label,'Team name unavailable')+': '+(entry.eligibility==='ineligible'?'Scheduling conflict; cannot be selected.':entry.eligibility==='eligible'?'Review this scheduling suggestion.':'More scheduling information needs review.');
+    return 'Additional scheduling information needs review. Refresh the schedule for details.';
   }
 
   function targetLabel(target, directory, discoveredTargets) {
@@ -57,15 +54,17 @@
     });
     return match
       ? displayProjection().text(match.label, target.kind === 'profile' ? 'Employee name unavailable' : 'Crew name unavailable')
-      : target.kind + ' ' + target.id;
+      : 'Selected team name unavailable';
   }
+
+  function zoneLabel(zone){try{return new Intl.DateTimeFormat(undefined,{timeZone:zone,timeZoneName:'longGeneric'}).formatToParts(new Date()).find(function(p){return p.type==='timeZoneName';}).value;}catch(_){return 'Business time zone';}}
 
   function formatInstant(instant, timeZone) {
     if (!instant) return 'Unscheduled';
     try {
       return new Date(instant).toLocaleString([], {
         timeZone: timeZone, dateStyle: 'medium', timeStyle: 'short',
-      }) + ' (' + timeZone + ')';
+      }) + ' (' + zoneLabel(timeZone) + ')';
     } catch (_error) { return 'Schedule unavailable'; }
   }
 
@@ -82,17 +81,17 @@
 
   function responseFailure(response, body) {
     var code = body && body.error && body.error.code || body && body.code || '';
-    var supplied = body && body.error && body.error.message || body && body.message;
     var messages = {
-      401: 'Your signed-in session is no longer current. Sign in again; no change was applied.',
-      403: 'Your role, membership, subscription, or session no longer authorizes this action. No change was applied.',
-      409: 'Current scheduling authority or evidence changed. Refresh and request a new preview.',
+      400: 'Check the appointment times, reason and required acknowledgements.',
+      401: 'Your session ended. Sign in again or reopen the demo before continuing.',
+      403: 'Your current account cannot make this scheduling change.',
+      409: 'The schedule changed. Refresh and review a new preview.',
       410: 'This preview expired. Request a new preview before approving.',
-      422: 'The proposal cannot be approved because current scheduling evidence rejects it.',
-      428: 'Exact preview or approval evidence is missing. Refresh and begin again.',
+      422: 'The proposed change has a scheduling conflict. Review the appointment before continuing.',
+      428: 'Refresh the appointment and review a new preview before confirming.',
+      429: 'The scheduling action limit was reached. Saved times remain available.',
     };
-    var message = supplied || messages[response.status] ||
-      (response.status >= 500 ? 'Scheduling is temporarily unavailable. No change was applied.' : 'The request was rejected. No change was applied.');
+    var message = messages[response.status] || (response.status >= 500 ? 'The result could not be confirmed. Refresh to check saved times before trying again.' : 'The scheduling request could not be completed. Refresh and review the appointment.');
     var error = new Error(message);
     error.status = response.status;
     error.code = code;
@@ -101,7 +100,7 @@
 
   function jsonRequest(url, options) {
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.fetch !== 'function') {
-      return Promise.reject(new Error('Current signed-in session authority is unavailable.'));
+      return Promise.reject(new Error('Your session could not be checked. Reopen this page.'));
     }
     return global.NorthStarAccountSession.fetch(url, options).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (body) {
@@ -110,7 +109,7 @@
       });
     }).catch(function (error) {
       if (error && (error.status || /unavailable|authority|expired|changed|rejected/i.test(error.message))) throw error;
-      throw new Error('The network is offline or unavailable. No change was applied.');
+      throw new Error('The connection was interrupted. Check the saved times before starting a different change; retrying this attempt keeps the same request.');
     });
   }
 
@@ -123,12 +122,13 @@
       };
     }
     var contract = global.NorthStarSchedulingTime;
-    if (!contract) throw new Error('Workspace scheduling time authority is unavailable.');
+    if (!contract) throw new Error('The scheduling time zone is unavailable. Refresh before choosing times.');
+    if(!active.startDate.value||!active.startTime.value||(!active.preserveElapsedDuration&&(!active.endDate.value||!active.endTime.value)))throw new Error('Enter both the start and end date and time.');
     var start = contract.resolveWallTime(active.startDate.value, active.startTime.value, active.timeZone);
     var end = active.preserveElapsedDuration ? null
       : contract.resolveWallTime(active.endDate.value, active.endTime.value, active.timeZone);
     if (start.status === 'gap' || end && end.status === 'gap') {
-      throw new Error('That wall clock falls in a daylight-saving gap. Choose a valid local time.');
+      throw new Error('The clocks skip that time for daylight saving. Choose another local time.');
     }
     function candidate(resolution, select, label) {
       var previous = select.value;
@@ -164,7 +164,7 @@
     } else {
       selectedEnd = candidate(end, active.endOccurrence, 'end');
     }
-    if (!selectedStart || !selectedEnd) throw new Error('Choose the explicit daylight-saving occurrence for each ambiguous wall clock.');
+    if (!selectedStart || !selectedEnd) throw new Error('That time occurs twice when the clocks change. Choose its first or second occurrence.');
     if (selectedEnd.epochMilliseconds <= selectedStart.epochMilliseconds) throw new Error('Schedule end must be after schedule start.');
     return {
       start: selectedStart.rfc3339 || selectedStart.raw,
@@ -211,15 +211,13 @@
   function renderAcknowledgements(preview) {
     active.review.replaceChildren();
     var summary = el('section', 'm22-dialog-summary');
-    summary.appendChild(el('h3', '', 'Exact preview — review before approval'));
+    summary.appendChild(el('h3', '', 'Review the proposed change'));
     var terms = el('dl');
     appendTerm(terms, 'Action', ACTION_LABELS[preview.action] || preview.action);
     appendTerm(terms, 'Appointment', active.title);
     appendTerm(terms, 'Target', targetLabel(preview.proposal.target, active.directory, active.targetPageTargets));
     appendTerm(terms, 'Schedule', formatInstant(preview.proposal.scheduledStart, active.timeZone) + ' to ' + formatInstant(preview.proposal.scheduledEnd, active.timeZone));
-    appendTerm(terms, 'Workspace time zone', active.timeZone);
-    appendTerm(terms, 'Current revision', String(active.current.revision));
-    appendTerm(terms, 'Proposed states', preview.proposal.scheduleState + ' · ' + preview.proposal.dispatchState + ' · ' + preview.proposal.appointmentStatus);
+    appendTerm(terms, 'Time zone', zoneLabel(active.timeZone));
     appendTerm(terms, 'Preview expires', formatInstant(preview.expiresAt, active.timeZone));
     appendTerm(terms, 'Reason', displayProjection().text(active.reason.value.trim(), 'Approval reason unavailable'));
     summary.appendChild(terms);
@@ -229,23 +227,23 @@
       active.review.appendChild(el('p', 'm22-dispatch-warning', 'Approval revokes the current dispatch. A new human dispatch approval will be required.'));
     }
     var conflicts = preview.conflicts || {};
-    active.review.appendChild(evidenceSection('Hard conflicts', conflicts.hardConflicts || [],
+    active.review.appendChild(evidenceSection('Issues that prevent this change', conflicts.hardConflicts || [],
       conflicts.hardConflicts && conflicts.hardConflicts.length ? 'm22-hard-block' : ''));
-    active.review.appendChild(evidenceSection('Soft warnings', conflicts.warnings || []));
-    active.review.appendChild(evidenceSection('Needs-review reasons', conflicts.reviewReasons || []));
+    active.review.appendChild(evidenceSection('Warnings', conflicts.warnings || []));
+    active.review.appendChild(evidenceSection('Needs review', conflicts.reviewReasons || []));
     var recommendation = preview.recommendation || {};
-    active.review.appendChild(evidenceSection('Route and recommendation evidence and uncertainty',
+    active.review.appendChild(evidenceSection('Team and travel suggestions',
       (recommendation.candidates || recommendation.alternatives || []).concat(recommendation.reviewReasons || recommendation.uncertainty || [])));
 
     var acknowledgements = el('section');
-    acknowledgements.appendChild(el('h3', '', 'Required exact acknowledgements'));
+    acknowledgements.appendChild(el('h3', '', 'Confirm you reviewed these items'));
     var list = el('ul', 'm22-ack-list');
     var all = [];
     (preview.warningDigests || []).forEach(function (digest, index) {
       all.push({ digest: digest, label: 'Acknowledge warning ' + (index + 1) + ': ' + textForEvidence((conflicts.warnings || [])[index]) });
     });
     (preview.reviewReasonDigests || []).forEach(function (digest, index) {
-      all.push({ digest: digest, label: 'Acknowledge review reason ' + (index + 1) + ': ' + textForEvidence((conflicts.reviewReasons || [])[index]) });
+      all.push({ digest: digest, label: 'I reviewed: ' + textForEvidence((conflicts.reviewReasons || [])[index]) });
     });
     all.forEach(function (entry) {
       var checkbox = document.createElement('input');
@@ -282,28 +280,37 @@
   function requestPreview() {
     var payload;
     try { payload = previewPayload(); } catch (error) { setStatus(error.message, 'error', true); return; }
+    var requestOwner=active,headers={Accept:'application/json','Content-Type':'application/json'};
+    if(active.directory.simulated){
+      if(!global.crypto||typeof global.crypto.randomUUID!=='function'){setStatus('This browser could not prepare the preview. Reload before continuing.','error',true);return;}
+      var fingerprint=JSON.stringify(payload);
+      if(!active.previewAttempt||active.previewAttempt.fingerprint!==fingerprint)active.previewAttempt={fingerprint:fingerprint,key:crypto.randomUUID(),workspaceRevision:active.demoWorkspaceRevision};
+      headers['Idempotency-Key']=active.previewAttempt.key;headers['X-NorthStar-Demo-Revision']=String(active.previewAttempt.workspaceRevision);
+    }
     active.previewButton.disabled = true;
-    setStatus('Creating a 15-minute non-capability preview from current authority…', 'pending', false);
+    setStatus('Checking the proposed change. This does not save the appointment yet.', 'pending', false);
     jsonRequest('/api/v1/canonical/appointments/' + encodeURIComponent(active.appointmentId) + '/mutation-previews', {
       method: 'POST', credentials: 'same-origin', cache: 'no-store',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify(payload),
     }).then(function (body) {
-      if (!active) return;
+      if (active!==requestOwner) return;
+      if(active.directory.simulated)active.demoWorkspaceRevision=body.data.demoWorkspaceRevision;
       renderAcknowledgements(body.data);
-      setStatus('Preview created. It grants no mutation; review every item before approving.', 'ready', false);
-      active.approve.focus();
+      setStatus('Review each item before confirming this change.', 'ready', false);
+      var firstAcknowledgment=active.review.querySelector('input[type="checkbox"]');
+      if(firstAcknowledgment)firstAcknowledgment.focus();else if(!active.approve.disabled)active.approve.focus();else active.status.focus();
     }).catch(function (error) {
-      if (!active) return;
+      if (active!==requestOwner) return;
       setStatus(error.message, 'error', true);
-    }).finally(function () { if (active) active.previewButton.disabled = false; });
+    }).finally(function () { if (active===requestOwner) active.previewButton.disabled = false; });
   }
 
   function appliedAuthority(body) {
     var data = body && body.data;
     var current = data && data.scheduleAuthority;
     if (!current || !Number.isSafeInteger(current.revision) || !/^[0-9a-f]{64}$/.test(current.digest || '')) {
-      throw new Error('The approval response did not include exact durable revision evidence. Reload before any further action.');
+      throw new Error('The saved schedule could not be confirmed. Reload before making another change.');
     }
     return Object.freeze({
       appointmentId: active.appointmentId,
@@ -327,9 +334,7 @@
     active.reload.hidden = false;
     active.cancel.hidden = true;
     active.closeButton.hidden = true;
-    setStatus('Approval applied durably at revision ' + active.applied.revision +
-      ', but authoritative refresh failed. Do not approve again. Retry refresh or reload this page. ' +
-      (error && error.message ? error.message : ''), 'applied-refresh-failed', true);
+    setStatus('The change was saved, but updated details could not load. Do not confirm it again. Retry the refresh or reload this page.', 'applied-refresh-failed', true);
     active.retry.focus();
   }
 
@@ -337,14 +342,13 @@
     if (!active || !active.applied) return Promise.resolve(false);
     var callback = active.onApplied;
     active.retry.disabled = true;
-    setStatus('Approval applied durably at revision ' + active.applied.revision +
-      '. Verifying that exact authoritative revision…', 'pending', false);
+    setStatus('The change was saved. Loading the updated appointment…', 'pending', false);
     return Promise.resolve(callback && callback(active.applied)).then(function (result) {
       if (!active) return false;
       if (!verifiedRefresh(result, active.applied)) {
-        throw new Error('The refreshed projection did not prove the exact applied revision and digest.');
+        throw new Error('The updated appointment could not be confirmed.');
       }
-      setStatus('Authoritative server state refreshed at revision ' + active.applied.revision + '.', 'success', false);
+      setStatus('The updated appointment is ready.', 'success', false);
       active.retry.hidden = true;
       active.reload.hidden = true;
       global.setTimeout(close, 500);
@@ -358,7 +362,7 @@
   function approve() {
     if (!active || !active.preview || active.approve.disabled) return;
     if (!global.crypto || typeof global.crypto.randomUUID !== 'function') {
-      setStatus('Secure idempotency identity is unavailable. No approval was sent.', 'error', true);
+      setStatus('This browser could not prepare a safe save. Reload before continuing.', 'error', true);
       return;
     }
     if (!active.idempotencyKey) active.idempotencyKey = 'm22-part5-human-' + global.crypto.randomUUID();
@@ -371,31 +375,40 @@
       reason: reason,
     };
     active.approve.disabled = true;
-    setStatus('Atomically rechecking current authority and applying this human approval…', 'pending', false);
+    var requestOwner=active,headers={Accept:'application/json','Content-Type':'application/json','Idempotency-Key':active.idempotencyKey};
+    if(active.directory.simulated)headers['X-NorthStar-Demo-Revision']=String(active.preview.demoWorkspaceRevision);
+    setStatus('Checking the latest appointment and saving your confirmed change…', 'pending', false);
     jsonRequest('/api/v1/canonical/appointments/' + encodeURIComponent(active.appointmentId) + '/mutation-approvals', {
       method: 'POST', credentials: 'same-origin', cache: 'no-store',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': active.idempotencyKey },
+      headers: headers,
       body: JSON.stringify(payload),
     }).then(function (body) {
-      if (!active) return;
+      if (active!==requestOwner) return;
       active.applied = appliedAuthority(body);
       active.cancel.hidden = true;
       active.closeButton.hidden = true;
       active.back.hidden = true;
       return refreshApplied();
     }).catch(function (error) {
-      if (!active) return;
+      if (active!==requestOwner) return;
       if (active.applied) { showRefreshFailure(error); return; }
+      if ([409, 410, 428].includes(error.status)) {
+        back();
+        setStatus(error.message, 'error', true);
+        return;
+      }
       setStatus(error.message, 'error', true);
       active.approve.disabled = false;
-      if ([409, 410, 428].includes(error.status)) active.back.hidden = false;
     });
   }
 
   function back() {
     if (!active) return;
     active.preview = null;
+    active.previewAttempt = null;
     active.idempotencyKey = null;
+    active.review.replaceChildren();
+    active.approve.disabled = true;
     active.form.hidden = false;
     active.review.hidden = true;
     active.back.hidden = true;
@@ -440,9 +453,9 @@
     var endDate = document.createElement('input'); endDate.type = 'date'; endDate.required = true;
     var endTime = document.createElement('input'); endTime.type = 'time'; endTime.required = true;
     startDate.value = proposal.date || existingStart && existingStart.date || '';
-    startTime.value = proposal.time || existingStart && existingStart.time || '09:00';
+    startTime.value = proposal.time || existingStart && existingStart.time || '';
     endDate.value = proposal.endDate || existingEnd && existingEnd.date || startDate.value;
-    endTime.value = proposal.endTime || existingEnd && existingEnd.time || '10:00';
+    endTime.value = proposal.endTime || existingEnd && existingEnd.time || '';
     if (active.preserveElapsedDuration) {
       endDate.readOnly = true;
       endTime.readOnly = true;
@@ -480,7 +493,7 @@
       (targets || []).filter(function (entry) { return entry.kind !== 'unassigned'; }).forEach(function (entry) {
         var kind = entry.kind === 'profile' ? 'worker' : 'crew';
         var option = el('option', '', displayProjection().text(entry.label,
-          entry.kind === 'profile' ? 'Employee name unavailable' : 'Crew name unavailable') + ' — ' + kind + ' — ' + entry.id);
+          entry.kind === 'profile' ? 'Employee name unavailable' : 'Crew name unavailable') + ' — ' + kind);
         option.value = entry.kind + ':' + entry.id;
         select.appendChild(option);
       });
@@ -615,13 +628,13 @@
     var appointmentId = record && (record.appointmentId || record.id);
     if (!current || !directory || directory.canMutate !== true || !ACTION_LABELS[action] || !appointmentId ||
         !Number.isSafeInteger(current.revision) || !/^[0-9a-f]{64}$/.test(current.digest || '')) {
-      throw new Error('Current operator scheduling authority is unavailable. Refresh before acting.');
+      throw new Error('Scheduling changes are unavailable. Refresh before continuing.');
     }
     var allowed = Array.isArray(record.allowedActions) ? record.allowedActions : options.allowedActions;
     if (Array.isArray(allowed) && !allowed.includes(action)) throw new Error('That action is not available for the current appointment state.');
     var timeZone = options.timeZone || current.timeZone || record.timeZone;
     if (!global.NorthStarSchedulingTime || !global.NorthStarSchedulingTime.isValidTimeZone(timeZone)) {
-      throw new Error('Current workspace IANA time-zone authority is unavailable.');
+      throw new Error('The business time zone is unavailable. Review business settings before scheduling.');
     }
 
     var layer = el('div', 'm22-dialog-layer');
@@ -638,9 +651,9 @@
     appendTerm(terms, 'Customer', value(record.customer && record.customer.name, 'Customer name unavailable'));
     appendTerm(terms, 'Target', targetLabel(targetForAuthority(current), directory));
     appendTerm(terms, 'Schedule', formatInstant(current.scheduledStart, timeZone) + ' to ' + formatInstant(current.scheduledEnd, timeZone));
-    appendTerm(terms, 'States', current.targetState + ' · ' + current.scheduleState + ' · ' + current.dispatchState + (current.needsReview ? ' · needs review' : ''));
-    appendTerm(terms, 'Revision', String(current.revision));
+    appendTerm(terms, 'Review', current.needsReview ? 'More scheduling information needs review.' : 'Review the recorded appointment before changing it.');
     currentSummary.appendChild(terms); body.appendChild(currentSummary);
+    if(directory.simulated)body.appendChild(el('p','','Simulated scheduling only. No real worker is assigned and no customer is contacted. Enter both the start and end; staffing and availability still need review.'));
     if (current.dispatchState === 'dispatched' && ['reassign', 'unassign', 'reschedule'].includes(action)) {
       body.appendChild(el('p', 'm22-dispatch-warning', 'If approved, this action revokes current dispatch and requires a new human dispatch approval.'));
     }
@@ -651,9 +664,9 @@
     var cancel = el('button', '', 'Cancel'); cancel.type = 'button'; cancel.addEventListener('click', close);
     var footerActions = el('div', 'm22-record-actions');
     var backButton = el('button', '', 'Change proposal'); backButton.type = 'button'; backButton.hidden = true; backButton.addEventListener('click', back);
-    var previewButton = el('button', '', 'Create non-capability preview'); previewButton.type = 'button'; previewButton.dataset.kind = 'approve'; previewButton.addEventListener('click', requestPreview);
-    var approveButton = el('button', '', 'Approve current preview'); approveButton.type = 'button'; approveButton.dataset.kind = 'approve'; approveButton.hidden = true; approveButton.addEventListener('click', approve);
-    var retryButton = el('button', '', 'Retry authoritative refresh'); retryButton.type = 'button'; retryButton.hidden = true; retryButton.addEventListener('click', refreshApplied);
+    var previewButton = el('button', '', 'Preview change'); previewButton.type = 'button'; previewButton.dataset.kind = 'approve'; previewButton.addEventListener('click', requestPreview);
+    var approveButton = el('button', '', 'Confirm change'); approveButton.type = 'button'; approveButton.dataset.kind = 'approve'; approveButton.hidden = true; approveButton.addEventListener('click', approve);
+    var retryButton = el('button', '', 'Refresh saved appointment'); retryButton.type = 'button'; retryButton.hidden = true; retryButton.addEventListener('click', refreshApplied);
     var reloadButton = el('button', '', 'Reload page'); reloadButton.type = 'button'; reloadButton.hidden = true; reloadButton.addEventListener('click', function () { global.location.reload(); });
     footerActions.append(backButton, previewButton, approveButton, retryButton, reloadButton); footer.append(cancel, footerActions);
     var status = el('p', 'm22-dialog-status', 'Review the current state and prepare a proposal.'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); status.tabIndex = -1;
@@ -663,6 +676,7 @@
       back: backButton, previewButton: previewButton, approve: approveButton,
       retry: retryButton, reload: reloadButton, cancel: cancel, closeButton: closeButton,
       record: record, current: current, directory: directory, action: action,
+      demoWorkspaceRevision:record.demoWorkspaceRevision||directory.demoWorkspaceRevision,previewAttempt:null,
       appointmentId: appointmentId, title: appointmentTitle, timeZone: timeZone,
       returnFocus: options.returnFocus || document.activeElement,
       onApplied: options.onApplied, keydown: trap, preview: null, idempotencyKey: null,
@@ -677,7 +691,7 @@
     var reasonWrapper = el('div', 'm22-dialog-field');
     var reasonLabel = el('label', '', 'Human approval reason');
     var reason = document.createElement('textarea'); reason.maxLength = 1000; reason.required = true;
-    reason.value = value(options.reason, 'Human-approved ' + action + ' from ' + value(options.source, 'operator scheduling') + '.');
+    reason.value = typeof options.reason === 'string' ? options.reason : '';
     reasonLabel.appendChild(reason); reasonWrapper.appendChild(reasonLabel); form.appendChild(reasonWrapper); active.reason = reason;
     document.addEventListener('keydown', trap);
     reason.focus();

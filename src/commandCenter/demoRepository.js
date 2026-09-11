@@ -539,7 +539,8 @@ class DemoCommandCenterRepository {
       const lockedRow = locked.rows[0] || null;
       if (!lockedRow) fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
       assertRowAuthority(lockedRow, token);
-      if(scheduling)now=date(this.clock());
+      const sourceOperation=input.operation==='material_plan'&&input.plan?.confirmationVersion==='estimate-material-plan-v3'||input.operation==='estimate_adopt'&&input.adoption?.confirmationVersion==='estimate-material-adoption-v3';
+      if(sourceOperation)now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
       if (date(lockedRow.expires_at).getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
       }
@@ -637,6 +638,8 @@ class DemoCommandCenterRepository {
         nextSimulationCount = 0;
         lastSimulatedAt = null;
       }
+      async function validateSourceAtCommit(){if(!sourceOperation)return;const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');const candidate=input.operation==='material_plan'?nextState.materialPlans?.[input.estimateId]?.[0]:nextState.estimateRevisions?.[input.estimateId]?.[0]?.materialPlan;if(candidate?.action==='save'&&candidate.calculationVersion==='estimate-material-plan-v3'){const w=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const selected=demoCanonicalItems(w).find(i=>i.ids.estimate===input.estimateId);require('../estimating/materialSourceContract').checkSaved(candidate.inputs,candidate.currency,{now:moment,serviceKey:selected?.snapshot?.service?.key||null},input.operation==='estimate_adopt');}}
+      await validateSourceAtCommit();
       const nextRevision = current.revision + 1;
       const nextMutationCount = current.mutationCount + 1;
       const responseDigest = sha256({ state: nextState, revision: nextRevision });
@@ -664,6 +667,7 @@ class DemoCommandCenterRepository {
           if(!preview||date(preview.response.expiresAt)<=committedAt)fail(410,'DEMO_SCHEDULE_PREVIEW_EXPIRED','This preview expired. Review the times again.');
         }
       }
+      await validateSourceAtCommit();
       await client.query('COMMIT');
       open = false;
       return { record: recordFromRow(updated.rows[0], token, true), replayed: false, ...(scheduling?{schedulingResponse}:{}) };

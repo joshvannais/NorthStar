@@ -1407,7 +1407,7 @@ function createCanonicalRouter(options) {
       const item=await getCanonicalGraph(client,requestContext(req),req.params.estimateId);if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
       const input={...actorInput(req),estimateId:item.ids.estimate};const review=buildRevisionReview(item,await readRevisions(client,input));review.decisions=await readSelectedDecisions(client,input);const plans=await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate});
       const body=materialPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')throw Object.assign(new Error('Enter a material plan to calculate.'),{status:400});materialPlan.checkBasis(body,review,plans.current);
-      return {result:materialPlan.calculate(body.inputs,body.currency,body.confirmationVersion),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
+      const result=materialPlan.calculate(body.inputs,body.currency,body.confirmationVersion);if(body.confirmationVersion===materialPlan.V3){const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;result.sourceAssessment=require('../estimating/materialSourceContract').assess(body.inputs,body.currency,{now,serviceKey:review.materialSourceContext.serviceKey});}return {result,sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
     });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Material planning is unavailable. Refresh and try again.'}});}
   });
 
@@ -1422,7 +1422,7 @@ function createCanonicalRouter(options) {
       const review=buildRevisionReview(item,await readRevisions(client,input));
       review.decisions=await readSelectedDecisions(client,input);
       const plans=await readPlans(client,input),body=adoption.normalize({...req.body,confirmed:true});
-      adoption.checkBasis(body,review,plans.current);
+      adoption.checkBasis(body,review,plans.current);if(plans.current.calculationVersion===materialPlan.V3){const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;require('../estimating/materialSourceContract').checkSaved(plans.current.inputs,plans.current.currency,{now,serviceKey:review.materialSourceContext.serviceKey},true);}
       return {result:adoption.calculate(item,plans.current,body.confirmationVersion),sourcePins:review.pins,planId:plans.current.id,planDigest:plans.current.digest,decisionBasis:review.decisions.writeBasis};
     });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
   });

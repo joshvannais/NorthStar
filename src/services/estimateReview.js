@@ -40,6 +40,7 @@ function buildEstimateReview(item, options = {}) {
       businessProfileId: item.businessProfileAuthorityId, businessProfileVersion: item.businessProfileInputVersion,
       businessProfileHash: item.businessProfileInputHash },
     recordedAt: item.snapshotCreatedAt || null,
+    materialSourceContext: { serviceKey: item.snapshot.service?.key || null },
     currency: item.estimate && item.estimate.currency || null,
     approval: 'not_recorded_here',
     approvalMessage: 'Approval is not recorded here. A person needs to confirm the job and price before preparing a customer quote.',

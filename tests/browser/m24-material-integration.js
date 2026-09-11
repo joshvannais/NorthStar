@@ -41,7 +41,7 @@ const arg=n=>process.argv.find(x=>x.startsWith('--'+n+'=')).slice(n.length+3),en
     const preview=await NorthStarAccountSession.fetch(route+'/material-plan-preview',{method:'POST',headers,body:JSON.stringify(b)});if(!preview.ok)throw Error('later preview '+preview.status);const result=(await preview.json()).data.result;inputs.sourceAssessment=result.sourceAssessment;inputs.availabilityAssessment=result.availabilityAssessment;
     headers['Idempotency-Key']=crypto.randomUUID();const saved=await NorthStarAccountSession.fetch(route+'/material-plans',{method:'POST',headers,body:JSON.stringify(b)});if(!saved.ok)throw Error('later save '+saved.status);
   },{id:graph.ids.estimate,demo});
-  await p.goto(origin+prefix+'/polaris?kind=customer&id='+graph.ids.customer);await p.waitForLoadState('networkidle');
+  await Promise.all([p.waitForURL('**/polaris?kind=*&id=*'),p.locator('#cdBtnAskPolaris').click()]);await p.waitForLoadState('networkidle');
   await p.locator('#polarisMaterialSection').waitFor({state:'visible',timeout:15000});
   await p.locator('#polarisMaterialDetails > summary').focus();await p.keyboard.press('Enter');
   await p.locator('#polarisMaterialStatus').getByText('Saved Material Review Loaded',{exact:true}).waitFor();
@@ -64,6 +64,7 @@ const arg=n=>process.argv.find(x=>x.startsWith('--'+n+'=')).slice(n.length+3),en
   assert.equal(await p.locator('#polarisMaterialBody').innerText(),'');
   await p.locator('#polarisMaterialRefresh').click();await p.locator('#polarisMaterialStatus').getByText('Saved Material Review Loaded',{exact:true}).waitFor();assert.doesNotMatch(await p.locator('#polarisMaterialBody').innerText(),/USD 33.00/);
   assert.deepEqual(mutations,[]);
+  await p.goBack();await p.goBack();await p.waitForLoadState('networkidle');assert.ok(new URL(p.url()).pathname===prefix);await p.evaluate(id=>{CustomerDetail.close();CustomerDetail.open(id);},graph.ids.customer);await p.locator('#cdCapellaReview').getByText('USD '+prepared.cost,{exact:true}).waitFor();assert.match(await p.locator('#cdCapellaReview').innerText(),new RegExp(expected.replace('-','').replace('.','\\.')));
   ledger.cases.push(tag+' actual v4 save/adoption plus renewed human approval; drawer/Polaris exact comparison and keyboard open/refresh with zero read POSTs');await c.close();
  }
  assert.deepEqual(ledger.errors,[]);ledger.pass=true;

@@ -32,11 +32,8 @@
       var source = adopted.currentSourceAssessment, availability = adopted.currentAvailabilityAssessment;
       if (adopted.inputs && adopted.inputs.sourceAssessment) notes.push('Saved Source Review: ' + date(adopted.inputs.sourceAssessment.asOfDate) + '. Current Date Check: ' + date(source && source.asOfDate) + '.');
       notes.push(!source ? 'Cost source details were not recorded with this plan.' : source.lines.some(function(l) { return l.flags.length; }) ? 'Some cost sources need review. Open the material plan for its dated cautions.' : 'Cost sources are human-recorded; supplier prices are not independently verified.');
-      if (availability) availability.lines.forEach(function(line) {
-        if (line.currentStatus !== 'reported_shortage') return;
-        var costLine=review.financialCosts && review.financialCosts.material && review.financialCosts.material.lines && review.financialCosts.material.lines.find(function(r){return r.lineId===line.lineId;});
-        if(costLine) notes.push('Reported shortage: ' + costLine.material + ' — ' + line.shortage + ' ' + costLine.unitLabel + '. Confirm supplies before arranging the work.');
-      });
+      var shortages=availability ? availability.lines.filter(function(line){return line.currentStatus==='reported_shortage';}).length : 0;
+      if(shortages) notes.push('Reported shortages affect ' + shortages + (shortages===1?' material.':' materials.') + ' Review the quantities and units in the material plan before arranging supplies.');
       notes.push(!availability ? 'Availability evidence was not recorded with this plan.' : availability.lines.some(function(l) { return l.flags.length; }) ? 'Some availability evidence needs review. Check the material plan before arranging supplies.' : 'Recorded availability is not a reservation or a purchase confirmation.');
     }
     var risk = review.riskReview;
@@ -55,7 +52,7 @@
     host.append(list);
     var limitation=doc.createElement('p'); limitation.textContent=model.notes.find(function(n){return /matching scope|direct costs are missing|profit forecast|shortfall/.test(n);}) || 'Review the recorded basis and cautions before relying on these costs.'; host.append(limitation);
     var notes=doc.createElement('details'), summary=doc.createElement('summary'); summary.textContent='Basis And Cautions'; notes.append(summary);
-    model.notes.forEach(function(note) { var p=doc.createElement('p'); p.textContent=note; notes.append(p); }); host.append(notes);
+    model.notes.filter(function(note){return note!==limitation.textContent;}).forEach(function(note) { var p=doc.createElement('p'); p.textContent=note; notes.append(p); }); host.append(notes);
   }
   return {project:project,render:render,text:text,amount:amount};
 });

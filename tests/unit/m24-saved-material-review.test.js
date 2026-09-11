@@ -9,3 +9,5 @@ test.each([['Fence','10','ft','10','2.00','22.00'],['Roofing','100','ft2','5','1
  for(const currency of ['USD','CAD','EUR']){const inputs={lines:[{lineId:'11111111-1111-4111-8111-111111111111',material:name,quantity,unit,wastePercent,unitPrice,sourceType:'my_estimate',sourceNote:'Illustrative human input, not a verified market price',priceDate:null}]};
  const result=material.calculate(inputs,currency,material.V2);expect(result.total).toBe(total);expect(result.currency).toBe(currency);expect(result.lines[0].unit).toBe(unit);}
 });
+
+test('twenty reported shortages remain one concise summary, with details owned by the material plan',()=>{const r=fixture();r.adoptedMaterialPlan.currentAvailabilityAssessment.lines=Array.from({length:20},()=>({flags:[],currentStatus:'reported_shortage'}));const p=project(r);expect(p.notes.filter(n=>n.startsWith('Reported shortages'))).toEqual(['Reported shortages affect 20 materials. Review the quantities and units in the material plan before arranging supplies.']);expect(p.notes.length).toBeLessThanOrEqual(7);});

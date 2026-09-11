@@ -123,11 +123,12 @@
     }
     var contract = global.NorthStarSchedulingTime;
     if (!contract) throw new Error('The scheduling time zone is unavailable. Refresh before choosing times.');
+    if(!active.startDate.value||!active.startTime.value||(!active.preserveElapsedDuration&&(!active.endDate.value||!active.endTime.value)))throw new Error('Enter both the start and end date and time.');
     var start = contract.resolveWallTime(active.startDate.value, active.startTime.value, active.timeZone);
     var end = active.preserveElapsedDuration ? null
       : contract.resolveWallTime(active.endDate.value, active.endTime.value, active.timeZone);
     if (start.status === 'gap' || end && end.status === 'gap') {
-      throw new Error('That wall clock falls in a daylight-saving gap. Choose a valid local time.');
+      throw new Error('The clocks skip that time for daylight saving. Choose another local time.');
     }
     function candidate(resolution, select, label) {
       var previous = select.value;
@@ -163,7 +164,7 @@
     } else {
       selectedEnd = candidate(end, active.endOccurrence, 'end');
     }
-    if (!selectedStart || !selectedEnd) throw new Error('Choose the explicit daylight-saving occurrence for each ambiguous wall clock.');
+    if (!selectedStart || !selectedEnd) throw new Error('That time occurs twice when the clocks change. Choose its first or second occurrence.');
     if (selectedEnd.epochMilliseconds <= selectedStart.epochMilliseconds) throw new Error('Schedule end must be after schedule start.');
     return {
       start: selectedStart.rfc3339 || selectedStart.raw,

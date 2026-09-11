@@ -681,7 +681,7 @@ class CalendarRenderer {
     var note = document.createElement('p');
     note.className = 'cal-context-note';
     if (!operator || operator.canMutate !== true || !overview) {
-      note.textContent = operator && operator.simulated ? 'Demo schedule changes are paused. Saved times remain available.' : operator && operator.canRead
+      note.textContent = operator && operator.simulated ? 'Demo schedule changes are paused. Saved appointment details remain available.' : operator && operator.canRead
         ? 'Calendar changes require current owner, admin, or dispatcher access.'
         : 'Scheduling controls are unavailable for this account.';
       this.newEventArea.appendChild(note);
@@ -694,7 +694,7 @@ class CalendarRenderer {
     var create = document.createElement('button');
     create.type = 'button';
     create.className = 'cal-new-event-btn';
-    create.textContent = 'Create scheduled work';
+    create.textContent = 'Schedule Existing Work';
     if (!unscheduled) {
       create.disabled = true;
       create.setAttribute('aria-describedby', 'calendarCreateReason');
@@ -771,7 +771,7 @@ class CalendarRenderer {
       contextNote.className = 'cal-context-note';
       contextNote.textContent = hasContextMatch
         ? 'Showing the exact scheduling record carried from the selected customer.'
-        : 'The selected customer has no scheduling record in this view. Use Create scheduled work when an authorized unscheduled record is available.';
+        : 'The selected customer has no scheduling record in this view. Use Schedule Existing Work when an authorized unscheduled record is available.';
       this.authorityBoard.appendChild(contextNote);
     }
     records.forEach(function(record) {
@@ -808,7 +808,7 @@ class CalendarRenderer {
       if (!operator.canMutate) {
         var readOnly = document.createElement('p');
         readOnly.className = 'm22-overview-read-only';
-        readOnly.textContent = operator.simulated ? 'Demo schedule changes are paused. Saved times remain available.' : 'You can view this appointment. Editing is unavailable for this account.';
+        readOnly.textContent = operator.simulated ? 'Demo schedule changes are paused. Saved appointment details remain available.' : 'You can view this appointment. Editing is unavailable for this account.';
         actions.appendChild(readOnly);
       }
       item.append(recordTitle, states, actions); list.appendChild(item);
@@ -945,7 +945,7 @@ class CalendarModal {
       '<div class="cal-modal-header"><h2 id="calModalTitle">Schedule Details</h2><button type="button" class="cal-modal-close" onclick="window.calModal.close()" aria-label="Close schedule details">×</button></div>' +
       '<div class="cal-modal-body"><p><strong>' + escapeCalendarMarkup(event.title || 'Customer name unavailable') + '</strong></p>' +
       '<p>' + escapeCalendarMarkup(event.serviceType || 'Service not recorded') + '</p><p>Start: ' + escapeCalendarMarkup(startText) + '</p><p>End: ' + escapeCalendarMarkup(endText) + '</p>' +
-      '<p>' + (demo ? 'Simulated schedule. Editing is not available in this demo.' : 'This schedule is available to view. Editing requires current scheduling access.') + '</p></div></div></div>');
+      '<p>' + (demo ? 'This appointment is available to view. Scheduling changes are not available for this record in the demo.' : 'This schedule is available to view. Editing requires current scheduling access.') + '</p></div></div></div>');
     document.querySelector('#calModalOverlay .cal-modal-close').focus();
     return true;
   }

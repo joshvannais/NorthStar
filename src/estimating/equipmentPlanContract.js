@@ -19,7 +19,7 @@ function validate(inputs){
   if(!Array.isArray(l.requirements)||l.requirements.length>12||!Array.isArray(l.knowledgePins)||l.knowledgePins.length>12||new Set(l.knowledgePins).size!==l.knowledgePins.length||!l.knowledgePins.every(v=>UUID.test(v)))fail('Review the requirements and company references.');
   for(const q of l.requirements){
    if(!exact(q,REQUIREMENT)||!UUID.test(q.requirementId)||requirements.has(q.requirementId)||!text(q.label,120)||!['numeric','categorical'].includes(q.kind)||!['at_least','at_most','equals'].includes(q.operator)||!(q.value===null||text(q.value,240))||!text(q.unit,80,true)||!['recorded_job','caller_assertion','owner_entry'].includes(q.origin)||!(q.scopeKey===null||text(q.scopeKey,120))||!(q.specificationIndex===null||Number.isInteger(q.specificationIndex)&&q.specificationIndex>=0&&q.specificationIndex<48))fail('Review each requirement, its unit and source.');
-   requirements.add(q.requirementId);if(q.kind==='numeric'&&q.value!==null&&number(q.value)===null)fail('Use a nonnegative number with no more than six decimal places.');if(q.kind==='categorical'&&q.operator!=='equals')fail('Text requirements use an exact match.');if(q.origin!=='recorded_job'&&q.scopeKey!==null)fail('Choose the correct source for this requirement.');
+   requirements.add(q.requirementId);if(requirements.size>12)fail('Use no more than 12 requirements across this equipment plan.');if(q.kind==='numeric'&&q.value!==null&&number(q.value)===null)fail('Use a nonnegative number with no more than six decimal places.');if(q.kind==='categorical'&&q.operator!=='equals')fail('Text requirements use an exact match.');if(q.origin!=='recorded_job'&&q.scopeKey!==null)fail('Choose the correct source for this requirement.');
   }
  }
  return inputs;

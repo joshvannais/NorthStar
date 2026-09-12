@@ -1,0 +1,4 @@
+'use strict';
+const source=()=>({kind:'owner_estimate',referenceId:null,digest:null,note:'Owner planning estimate',effectiveOn:null,endsOn:null});
+function fixture(serviceKey='fence'){return{serviceKey,lines:[{lineId:'installation',label:'Installation Package',kind:'package',quantity:null,unit:null,rate:null,amount:'1500.00',scope:'Work described in the selected estimate',includes:[],period:null,source:source()}],payments:{mode:'share',balanceId:'balance',stages:[{stageId:'deposit',label:'Proposed Deposit',kind:'deposit',value:'25.00'},{stageId:'balance',label:'Final Balance',kind:'balance',value:'75.00'}]},overhead:{method:'fixed',amount:'100.00',percent:null,period:null,source:source(),coverage:{status:'disjoint',explanation:'Owner declares separate office expense, not field labor or travel.',included:[]}}};}
+module.exports={fixture,source};

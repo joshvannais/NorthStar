@@ -433,6 +433,8 @@
 
     var adoption = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(material-adoptions|material-adoption-preview|cost-adoptions|cost-adoption-preview)$/.exec(url.pathname);
     if(method==='POST'&&adoption){var adoptionHeaders=new Headers(options&&options.headers||{});adoptionHeaders.set('X-NorthStar-Demo-Intent','material-adoption');return nativeFetch('/api/demo/command-center/estimates/'+encodeURIComponent(adoption[1])+'/'+adoption[2],Object.assign({},options||{},{headers:adoptionHeaders,credentials:'same-origin'}));}
+    var pricingPlan = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(pricing-plans|pricing-plan-preview)$/.exec(url.pathname);
+    if(method==='POST'&&pricingPlan){var pricingHeaders=new Headers(options&&options.headers||{});pricingHeaders.set('X-NorthStar-Demo-Intent','pricing-plan');return nativeFetch('/api/demo/command-center/estimates/'+encodeURIComponent(pricingPlan[1])+'/'+pricingPlan[2],Object.assign({},options||{},{headers:pricingHeaders,credentials:'same-origin'}));}
     var travelPlan = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(travel-plans|travel-plan-preview)$/.exec(url.pathname);
     if(method==='POST'&&travelPlan){var travelHeaders=new Headers(options&&options.headers||{});travelHeaders.set('X-NorthStar-Demo-Intent','travel-plan');return nativeFetch('/api/demo/command-center/estimates/'+encodeURIComponent(travelPlan[1])+'/'+travelPlan[2],Object.assign({},options||{},{headers:travelHeaders,credentials:'same-origin'}));}
     var laborPlan = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(labor-plans|labor-plan-preview)$/.exec(url.pathname);

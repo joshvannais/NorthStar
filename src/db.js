@@ -1294,6 +1294,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   await require('./estimating/equipmentCostDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/equipmentReadinessDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/travelPlanDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./estimating/pricingPlanDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/materialPlanDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/materialAdoptionDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   const wrongRelationOwners = await client.query(
@@ -1350,6 +1351,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_labor_plans'
            AND relation.relname <> 'canonical_travel_plans'
+           AND relation.relname <> 'canonical_pricing_plans'
            AND relation.relname <> 'canonical_travel_fences'
            AND relation.relname <> 'canonical_material_plans'
            AND relation.relname <> 'canonical_estimate_revisions'
@@ -1660,7 +1662,7 @@ async function runMigrations(options = {}) {
     // Bound the 057â€“066 candidates' complete migration transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
-    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql'].includes(migrations[migrations.length - 1]?.file)) {
+    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql'].includes(migrations[migrations.length - 1]?.file)) {
       const settings = await client.query(
         "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
       );

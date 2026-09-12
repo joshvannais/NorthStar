@@ -1,4 +1,6 @@
 'use strict';
+const laborPlan=require('../estimating/laborPlanContract');
+const laborPlanPolicy=require('../estimating/laborPlanPolicy');
 
 const express = require('express');
 const db = require('../db');
@@ -14,6 +16,7 @@ const adoption = require('../estimating/materialAdoptionContract');
 const adoptionPolicy = require('../estimating/materialAdoptionPolicy');
 const {buildRevisionReview} = require('../estimating/estimateRevisionReview');
 const {readRevisions,readSelectedDecisions,mutateAdoption} = require('../estimating/materialAdoptionRepository');
+const {readPlans:readLaborPlans,mutatePlan:mutateLaborPlan}=require('../estimating/laborPlanRepository');
 const {readPlans,mutatePlan} = require('../estimating/materialPlanRepository');
 
 const audit = require('../audit/client');
@@ -1393,6 +1396,24 @@ function createCanonicalRouter(options) {
     }
   });
 
+  router.post('/estimates/:estimateId/labor-plans', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'This labor plan could not be read. Check your entries.'}});
+    try {const result=await mutateLaborPlan(resolvePool(dependencies.poolProvider),{...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')},req.body);return res.status(result.replayed?200:201).json({success:true,data:result});}
+    catch(error){return res.status(error.status||503).json({success:false,error:{category:error.status===503&&error.code==='LABOR_PLAN_PAUSED'?'labor_paused':undefined,message:error.status?error.message:'Labor plans are unavailable. Try again.'}});}
+  });
+  router.post('/estimates/:estimateId/labor-plan-preview', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'This labor plan could not be read. Check your entries.'}});
+    try {const result=await withBroadCanonicalRead(req,dependencies,async(client,operator)=>{
+      if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Labor planning is available to current owners and administrators.'),{status:403});
+      const item=await getCanonicalGraph(client,requestContext(req),req.params.estimateId);if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      const input={...actorInput(req),estimateId:item.ids.estimate};const review=buildRevisionReview(item,await readRevisions(client,input));review.decisions=await readSelectedDecisions(client,input);const plans=await readLaborPlans(client,{...actorInput(req),estimateId:item.ids.estimate});
+      const body=laborPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')throw Object.assign(new Error('Enter a labor plan to calculate.'),{status:400});laborPlan.checkBasis(body,review,plans.current);
+      const result=laborPlan.calculate(body.inputs,body.currency,body.confirmationVersion);const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;result.assessment=laborPlan.assess(body.inputs,now);return {result,sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
+    });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Labor planning is unavailable. Refresh and try again.'}});}
+  });
+
   router.post('/estimates/:estimateId/material-plans', dependencies.auth, requireCanonicalContext, async function(req,res) {
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'This material plan could not be read. Check your entries.'}});
@@ -1470,6 +1491,7 @@ function createCanonicalRouter(options) {
         review.approval = review.decisions.status; review.approvalMessage = review.decisions.message;
         review.riskReview = buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
+        review.laborPlans=laborPlan.project(await readLaborPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&laborPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!laborPlanPolicy.mutationsEnabled);
         review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);
         review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled&&operator.canMutate===true;
         review.adoptionPaused=!adoptionPolicy.mutationsEnabled;

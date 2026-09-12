@@ -4,6 +4,7 @@ const contract=require('../estimating/equipmentReadinessContract');
 function extra(basis,proposal,now=new Date()){
  if(!basis||basis.notRecorded===true)return {hardConflicts:[],reviewReasons:[],digest:basis?.digest||'none'};
  const hardConflicts=[],reviewReasons=basis.sourceChanged?[{code:'equipment_readiness_changed'}]:[];
+ if(basis.adopted){const included=extra(basis.adopted,proposal,now);hardConflicts.push(...included.hardConflicts);reviewReasons.push(...included.reviewReasons);}
  if(basis.inputs){const assessed=contract.evaluate(basis.inputs,basis.evidence,now,proposal);for(const line of assessed.lines){for(const code of line.hard)hardConflicts.push({code:'equipment_'+code,lineId:line.lineId});for(const code of line.review)reviewReasons.push({code:'equipment_'+code,lineId:line.lineId});}}
  return {hardConflicts,reviewReasons,digest:basis.digest};
 }
@@ -21,14 +22,26 @@ function demoBasis(state,item,proposal,now=new Date()){
  const saved=require('../commandCenter/demoScheduling').validateState(state).history.find(h=>h.appointmentId===item.ids.appointment)?.response.scheduleAuthority;
  const sameInstant=(a,b)=>a===null&&b===null||a!==null&&b!==null&&Date.parse(a)===Date.parse(b);
  if(proposal.target.kind==='unassigned'&&saved?.targetState==='assigned'&&saved.scheduleState===(proposal.scheduledStart===null?'unscheduled':'scheduled')&&sameInstant(saved.scheduledStart,proposal.scheduledStart)&&sameInstant(saved.scheduledEnd,proposal.scheduledEnd))return {notRecorded:true,digest:'none'};
- const plan=state.equipmentPlans?.[item.ids.estimate]?.[0],ready=state.equipmentReadinessPlans?.[item.ids.estimate]?.[0];
+ const plan=state.equipmentPlans?.[item.ids.estimate]?.[0],selected=state.estimateRevisions?.[item.ids.estimate]?.[0],pin=selected?.componentManifest?.equipment?.equipmentBasis;
+ function build(plan,historical=false){
+ const ready=historical?(state.equipmentReadinessPlans?.[item.ids.estimate]||[]).find(r=>r.action==='save'&&r.inputs.equipmentBasis.planId===plan.id&&r.inputs.equipmentBasis.revision===plan.revision&&r.inputs.equipmentBasis.digest===plan.digest):state.equipmentReadinessPlans?.[item.ids.estimate]?.[0];
  if(!plan)return {notRecorded:true,digest:'none'};
  if(plan.action!=='save')return {notRecorded:false,sourceChanged:true,digest:sha256([plan.id,plan.digest,ready?.digest||null])};
  const current={planId:plan.id,revision:plan.revision,digest:plan.digest},sourceChanged=ready?.action!=='save'||sha256(ready.inputs.equipmentBasis)!==sha256(current);
  const inputs=sourceChanged?{equipmentBasis:current,replacement:null,assessment:null,lines:plan.inputs.lines.map(l=>({lineId:l.lineId,required:true,notRequiredReason:'',quantity:null,start:null,end:null,timeZone:item.snapshot.businessProfile?.company?.timeZone||'UTC',location:'',source:{kind:'my_observation',label:'',reference:'',observedAt:null,validUntil:null,quantity:null,start:null,end:null,condition:'unknown',restrictions:'',location:'',leadTime:null,leadTimeUnit:null},maintenance:{dueAt:null,meterKey:null,threshold:null,unit:null,reference:''},alternatives:[]}))}:ready.inputs;
- const evidence=require('../commandCenter/demoEquipmentReadiness').rawSources(state,item,null,now),workforce=require('../commandCenter/demoWorkforce'),candidate=workforce.candidate(workforce.read(state),proposal.target);
+ const evidence=require('../commandCenter/demoEquipmentReadiness').rawSources(state,item,null,now,historical?plan:null),workforce=require('../commandCenter/demoWorkforce'),candidate=workforce.candidate(workforce.read(state),proposal.target);
  for(const fact of evidence.lines){if(fact.declaredCheckout)fact.declaredCheckout.targetMatches=!!candidate&&candidate.members.some(m=>m.profileId===fact.declaredCheckout.operatorId);}
  const payload={notRecorded:false,sourceChanged,inputs,evidence,readinessPin:ready?{id:ready.id,revision:ready.revision,digest:ready.digest}:null};
  return {...payload,digest:sha256(payload)};
+ }
+ const payload=build(plan);
+ if(pin){
+  const adopted=(state.equipmentPlans?.[item.ids.estimate]||[]).find(p=>p.id===pin.planId&&p.revision===pin.revision&&p.digest===pin.digest&&sha256(p.sourcePins)===sha256(pin.sourcePins)&&p.action==='save');
+  if(!adopted)contract.fail('The equipment included in this estimate cannot be reviewed. Refresh the estimate and equipment records before scheduling.',409);
+  payload.adoptionPin={id:selected.id,revision:selected.revision,digest:selected.digest,equipmentBasis:pin};
+  if(adopted.id!==plan?.id||plan?.action!=='save'){payload.adopted=build(adopted,true);payload.notRecorded=false;payload.sourceChanged=true;}
+ }
+ return {...payload,digest:sha256(payload)};
+
 }
 module.exports={extra,merge,read,demoBasis};

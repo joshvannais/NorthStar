@@ -77,6 +77,7 @@ const output=process.argv.find(a=>a.startsWith('--output='))?.slice(9);assert.ok
   }finally{await factClient.query('ROLLBACK');await factClient.query('SELECT pg_advisory_unlock_shared(230004,4)');factClient.release();}
   schedule=await schedulingPreview('assign',target);assert.equal(schedule.status,201,JSON.stringify(schedule.body));assert.ok(schedule.body.data.conflicts.hardConflicts.some(c=>c.code==='equipment_recorded_checkout'));approval=await approve(schedule);assert.equal(approval.status,409);await live.record('check_in');
   evidence.cases.push('Actual initialized execution and046 checkout resolve exact canonical same-work association; another job remains blocked through mounted approval');
+  evidence.adoptedLineage=await require('../helpers/m24-readiness-adopted')(f,live,read,post);
   evidence.schedulingExpiry=[];for(const mode of ['preview','approval'])evidence.schedulingExpiry.push(await require('../helpers/m24-readiness-expiry').schedulingFenceExpiry(f,live,appointment,mode));
 
 

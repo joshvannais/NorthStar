@@ -52,3 +52,9 @@ The ordinary drawer uses compact native disclosures, paired desktop/stacked mobi
 | 3 | Recorded readiness/alternatives and actual selected-estimate/scheduling consumers | No external availability, reservation or maintenance clearance |
 
 Part 4 acceptance remains conditional on independent review and separately authorized release verification. The three-slice count is unchanged.
+
+## Adopted equipment remains a scheduling basis
+
+Planning withdrawal or replacement does not remove equipment still included in the latest adopted estimate. Scheduling resolves its exact Equipment Plan id/revision/digest/source pins and current source/operational evidence alongside the current planning basis until a deliberate replacement adoption changes the component. Missing exact adopted lineage rejects with refresh guidance. The union of both bases and their comparison assets is fenced in deterministic order before mutation-authorizing evidence reads, including absent ledgers; ordinary GET discovery remains read-only. Each basis is assessed separately, without adding alternative quantities/costs together or transferring approval. Current private publication filters apply to historical plan inputs as well. Existing assigned-to-unassigned cleanup and immutable replay behavior remain unchanged.
+
+The latest matching saved readiness for a still-adopted historical plan supplies its reported constraints; its old assessment is not treated as current. Current source/ledger facts are re-evaluated, planning divergence remains visible, and a missing historical readiness record yields unknown requirements alongside the asset evidence. The two practice-hold messages say linked work record rather than implying an initialized execution merely because a job matches.

@@ -208,12 +208,12 @@ BEGIN
  RETURN fact;
 END $$;
 REVOKE ALL ON FUNCTION public.canonical_equipment_readiness_asset_fact(uuid,uuid,uuid,jsonb,jsonb,boolean,timestamptz) FROM PUBLIC;
-CREATE FUNCTION public.canonical_equipment_readiness_evidence(org UUID,estimate UUID,inputs_value JSONB,lock_value BOOLEAN DEFAULT FALSE) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+CREATE FUNCTION public.canonical_equipment_readiness_plan_evidence(org UUID,estimate UUID,inputs_value JSONB,lock_value BOOLEAN,plan_value UUID) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE plan public.canonical_equipment_plans%ROWTYPE;ep public.canonical_estimates%ROWTYPE;sources JSONB;asset JSONB;l JSONB;fact JSONB;result JSONB:='[]';state_value JSONB;payload JSONB;ledger public.canonical_equipment_ledgers%ROWTYPE;count_value BIGINT;last_record TIMESTAMPTZ;last_observed TIMESTAMPTZ;last_reset BOOLEAN;current_job BOOLEAN;cost_basis JSONB;at_value TIMESTAMPTZ;comparison_inputs JSONB;candidate JSONB;original_line JSONB;candidate_line JSONB;candidate_sources JSONB;alternative_facts JSONB:='[]';
 BEGIN
  IF current_setting('transaction_isolation') NOT IN ('repeatable read','serializable') THEN RAISE EXCEPTION 'Protected equipment review required' USING ERRCODE='42501';END IF;
  SELECT * INTO ep FROM public.canonical_estimates WHERE organization_id=org AND id=estimate;IF NOT FOUND THEN RAISE EXCEPTION 'Estimate unavailable' USING ERRCODE='P0002';END IF;
- SELECT * INTO plan FROM public.canonical_equipment_plans WHERE organization_id=org AND estimate_id=estimate ORDER BY revision DESC LIMIT 1;
+ SELECT * INTO plan FROM public.canonical_equipment_plans WHERE organization_id=org AND estimate_id=estimate AND (plan_value IS NULL OR id=plan_value) ORDER BY revision DESC LIMIT 1;
  IF plan.id IS NULL OR plan.action<>'save' THEN IF inputs_value IS NOT NULL THEN RAISE EXCEPTION 'Equipment plan changed' USING ERRCODE='40001';END IF; RETURN jsonb_build_object('equipmentBasis',NULL,'lines','[]'::jsonb,'digest',public.canonical_completion_digest(jsonb_build_object('equipment',plan.id,'action',plan.action)));END IF;
  IF inputs_value IS NOT NULL THEN PERFORM public.canonical_equipment_readiness_validate(inputs_value);PERFORM public.canonical_equipment_readiness_replacement(org,estimate,inputs_value);IF inputs_value->'equipmentBasis' IS DISTINCT FROM jsonb_build_object('planId',plan.id,'revision',plan.revision,'digest',plan.digest) THEN RAISE EXCEPTION 'Equipment plan changed' USING ERRCODE='40001';END IF;
  IF jsonb_array_length(inputs_value->'lines')<>jsonb_array_length(plan.inputs->'lines') OR EXISTS(SELECT 1 FROM jsonb_array_elements(inputs_value->'lines') r WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(plan.inputs->'lines') p WHERE p->>'lineId'=r->>'lineId')) THEN RAISE EXCEPTION 'Readiness must cover the saved equipment plan' USING ERRCODE='22023';END IF;
@@ -243,6 +243,10 @@ BEGIN
  END LOOP;END LOOP;
  payload:=jsonb_build_object('equipmentBasis',jsonb_build_object('planId',plan.id,'revision',plan.revision,'digest',plan.digest),'equipmentSourceDigest',sources->>'digest','lines',result,'alternatives',alternative_facts);
  RETURN payload||jsonb_build_object('digest',public.canonical_completion_digest(payload));
+END $$;
+REVOKE ALL ON FUNCTION public.canonical_equipment_readiness_plan_evidence(uuid,uuid,jsonb,boolean,uuid) FROM PUBLIC;
+CREATE FUNCTION public.canonical_equipment_readiness_evidence(org UUID,estimate UUID,inputs_value JSONB,lock_value BOOLEAN DEFAULT FALSE) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
+ RETURN public.canonical_equipment_readiness_plan_evidence(org,estimate,inputs_value,lock_value,NULL);
 END $$;
 CREATE FUNCTION public.canonical_equipment_readiness_sources(org UUID,actor UUID,role_value TEXT,session_value UUID,estimate UUID,inputs_value JSONB) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Current equipment reviewer required' USING ERRCODE='42501';END IF;
@@ -541,15 +545,15 @@ REVOKE ALL ON FUNCTION public.canonical_equipment_readiness_evidence(uuid,uuid,j
 
 -- Internal scheduling evidence shares the same selected equipment/046 fold. It
 -- returns no recommendation authority of its own and never reserves an asset.
-CREATE FUNCTION public.canonical_equipment_readiness_schedule_basis(org UUID,assignment UUID,target_kind TEXT,target_id UUID,start_value TIMESTAMPTZ,end_value TIMESTAMPTZ,zone_value TEXT,lock_value BOOLEAN DEFAULT FALSE) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+CREATE FUNCTION public.canonical_equipment_readiness_schedule_plan_basis(org UUID,assignment UUID,target_kind TEXT,target_id UUID,start_value TIMESTAMPTZ,end_value TIMESTAMPTZ,zone_value TEXT,lock_value BOOLEAN,plan_value UUID) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE schedule public.canonical_schedule_assignments%ROWTYPE;estimate_value UUID;plan public.canonical_equipment_plans%ROWTYPE;ready public.canonical_equipment_readiness_plans%ROWTYPE;inputs_value JSONB;evidence JSONB;facts JSONB;f JSONB;payload JSONB;changed BOOLEAN;target_profiles UUID[];at_value TIMESTAMPTZ;
 BEGIN
  SELECT * INTO schedule FROM public.canonical_schedule_assignments WHERE organization_id=org AND id=assignment;
  IF NOT FOUND THEN RAISE EXCEPTION 'Assignment unavailable' USING ERRCODE='P0002';END IF;
  SELECT e.id INTO estimate_value FROM public.canonical_estimates e JOIN public.canonical_appointments a ON a.organization_id=e.organization_id AND a.operation_id=e.operation_id AND a.graph_id=e.graph_id WHERE a.organization_id=org AND a.id=schedule.appointment_id;
  IF estimate_value IS NULL THEN RETURN jsonb_build_object('notRecorded',TRUE,'digest','none');END IF;
- SELECT * INTO plan FROM public.canonical_equipment_plans WHERE organization_id=org AND estimate_id=estimate_value ORDER BY revision DESC LIMIT 1;
- SELECT * INTO ready FROM public.canonical_equipment_readiness_plans WHERE organization_id=org AND estimate_id=estimate_value ORDER BY revision DESC LIMIT 1;
+ SELECT * INTO plan FROM public.canonical_equipment_plans WHERE organization_id=org AND estimate_id=estimate_value AND (plan_value IS NULL OR id=plan_value) ORDER BY revision DESC LIMIT 1;
+ SELECT * INTO ready FROM public.canonical_equipment_readiness_plans WHERE organization_id=org AND estimate_id=estimate_value AND (plan_value IS NULL OR (action='save' AND inputs->'equipmentBasis'=jsonb_build_object('planId',plan.id,'revision',plan.revision,'digest',plan.digest))) ORDER BY revision DESC LIMIT 1;
  IF plan.id IS NULL THEN RETURN jsonb_build_object('notRecorded',TRUE,'digest','none');END IF;
  IF plan.action<>'save' THEN RETURN jsonb_build_object('sourceChanged',TRUE,'notRecorded',FALSE,'digest',public.canonical_completion_digest(jsonb_build_array(plan.id,plan.digest,ready.digest)));END IF;
  changed:=ready.id IS NULL OR ready.action<>'save' OR ready.inputs->'equipmentBasis' IS DISTINCT FROM jsonb_build_object('planId',plan.id,'revision',plan.revision,'digest',plan.digest);
@@ -557,7 +561,7 @@ BEGIN
  ELSE
  SELECT jsonb_build_object('equipmentBasis',jsonb_build_object('planId',plan.id,'revision',plan.revision,'digest',plan.digest),'replacement',NULL,'assessment',NULL,'lines',jsonb_agg(jsonb_build_object('lineId',l->>'lineId','required',TRUE,'notRequiredReason','','quantity',NULL,'start',NULL,'end',NULL,'timeZone',zone_value,'location','','source',jsonb_build_object('kind','my_observation','label','','reference','','observedAt',NULL,'validUntil',NULL,'quantity',NULL,'start',NULL,'end',NULL,'condition','unknown','restrictions','','location','','leadTime',NULL,'leadTimeUnit',NULL),'maintenance',jsonb_build_object('dueAt',NULL,'meterKey',NULL,'threshold',NULL,'unit',NULL,'reference',''),'alternatives','[]'::jsonb) ORDER BY ordinal)) INTO inputs_value FROM jsonb_array_elements(plan.inputs->'lines') WITH ORDINALITY a(l,ordinal);
  END IF;
- evidence:=public.canonical_equipment_readiness_evidence(org,estimate_value,NULL,lock_value);
+ evidence:=public.canonical_equipment_readiness_plan_evidence(org,estimate_value,NULL,lock_value,plan_value);
  IF target_kind='profile' THEN target_profiles:=ARRAY[target_id];ELSIF target_kind='crew' THEN SELECT COALESCE(array_agg(profile_id ORDER BY profile_id),ARRAY[]::uuid[]) INTO target_profiles FROM public.workforce_crew_members WHERE organization_id=org AND crew_id=target_id;ELSE target_profiles:=ARRAY[]::uuid[];END IF;
  facts:='[]';FOR f IN SELECT value FROM jsonb_array_elements(evidence->'lines') LOOP
  f:=jsonb_set(f,'{targetMatches}',to_jsonb(COALESCE((f#>>'{state,operator}')::uuid=ANY(target_profiles),FALSE)));facts:=facts||jsonb_build_array(f);
@@ -566,11 +570,42 @@ BEGIN
  at_value:=clock_timestamp();payload:=jsonb_build_object('notRecorded',FALSE,'sourceChanged',changed,'inputs',inputs_value,'evidence',evidence,'assessedAt',at_value,'readinessPin',jsonb_build_object('id',ready.id,'revision',ready.revision,'digest',ready.digest),'sourcePins',public.canonical_estimate_decision_source(org,estimate_value));
  RETURN payload||jsonb_build_object('digest',public.canonical_completion_digest(payload-'assessedAt'));
 END $$;
+REVOKE ALL ON FUNCTION public.canonical_equipment_readiness_schedule_plan_basis(uuid,uuid,text,uuid,timestamptz,timestamptz,text,boolean,uuid) FROM PUBLIC;
+CREATE FUNCTION public.canonical_equipment_readiness_schedule_basis(org UUID,assignment UUID,target_kind TEXT,target_id UUID,start_value TIMESTAMPTZ,end_value TIMESTAMPTZ,zone_value TEXT,lock_value BOOLEAN DEFAULT FALSE) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE estimate_value UUID;current_plan public.canonical_equipment_plans%ROWTYPE;adopted_plan public.canonical_equipment_plans%ROWTYPE;selected public.canonical_estimate_revisions%ROWTYPE;pin JSONB;payload JSONB;asset_value UUID;
+BEGIN
+ SELECT e.id INTO estimate_value FROM public.canonical_schedule_assignments s JOIN public.canonical_appointments a ON a.organization_id=s.organization_id AND a.id=s.appointment_id JOIN public.canonical_estimates e ON e.organization_id=a.organization_id AND e.operation_id=a.operation_id AND e.graph_id=a.graph_id WHERE s.organization_id=org AND s.id=assignment;
+ SELECT * INTO current_plan FROM public.canonical_equipment_plans WHERE organization_id=org AND estimate_id=estimate_value ORDER BY revision DESC LIMIT 1;
+ SELECT * INTO selected FROM public.canonical_estimate_revisions WHERE organization_id=org AND estimate_id=estimate_value ORDER BY revision DESC LIMIT 1;
+ pin:=selected.component_manifest#>'{equipment,equipmentBasis}';
+ IF pin IS NOT NULL AND pin<>'null'::jsonb THEN
+ SELECT * INTO adopted_plan FROM public.canonical_equipment_plans WHERE organization_id=org AND estimate_id=estimate_value AND id::text=pin->>'planId' AND revision::text=pin->>'revision' AND digest=pin->>'digest' AND source_pins=pin->'sourcePins' AND action='save';
+ IF adopted_plan.id IS NULL THEN RAISE EXCEPTION 'Included equipment basis unavailable; refresh the estimate and equipment review' USING ERRCODE='40001';END IF;
+ END IF;
+ -- Acquire the union in one order before either source snapshot, including absent ledgers.
+ IF lock_value THEN
+ PERFORM public.canonical_material_supporting_authority_read_lock();
+ FOR asset_value IN SELECT DISTINCT asset_id::uuid FROM (
+ SELECT l->>'assetId' asset_id FROM public.canonical_equipment_plans p CROSS JOIN LATERAL jsonb_array_elements(p.inputs->'lines') l WHERE p.organization_id=org AND p.id IN (current_plan.id,adopted_plan.id) AND p.action='save'
+ UNION SELECT a->>'assetId' FROM public.canonical_equipment_readiness_plans r CROSS JOIN LATERAL jsonb_array_elements(r.inputs->'lines') l CROSS JOIN LATERAL jsonb_array_elements(l->'alternatives') a WHERE r.organization_id=org AND r.estimate_id=estimate_value AND r.action='save' AND r.inputs#>>'{equipmentBasis,planId}' IN (current_plan.id::text,adopted_plan.id::text)
+ ) assets WHERE asset_id IS NOT NULL ORDER BY 1 LOOP
+ PERFORM 1 FROM public.tenant_assets WHERE organization_id=org AND id=asset_value FOR SHARE;
+ PERFORM public.canonical_equipment_readiness_fence(org,asset_value);
+ END LOOP;END IF;
+ payload:=public.canonical_equipment_readiness_schedule_plan_basis(org,assignment,target_kind,target_id,start_value,end_value,zone_value,FALSE,NULL);
+ IF adopted_plan.id IS NOT NULL THEN
+ payload:=payload||jsonb_build_object('adoptionPin',jsonb_build_object('id',selected.id,'revision',selected.revision,'digest',selected.digest,'equipmentBasis',pin));
+ IF adopted_plan.id IS DISTINCT FROM current_plan.id OR current_plan.action IS DISTINCT FROM 'save' THEN
+ payload:=payload||jsonb_build_object('notRecorded',FALSE,'sourceChanged',TRUE,'adopted',public.canonical_equipment_readiness_schedule_plan_basis(org,assignment,target_kind,target_id,start_value,end_value,zone_value,FALSE,adopted_plan.id));
+ END IF;END IF;
+ RETURN payload||jsonb_build_object('digest',public.canonical_completion_digest((payload-'digest'-'assessedAt')||CASE WHEN payload ? 'adopted' THEN jsonb_build_object('adopted',(payload->'adopted')-'assessedAt') ELSE '{}'::jsonb END));
+END $$;
 CREATE FUNCTION public.canonical_equipment_readiness_schedule_result(basis JSONB,proposal JSONB,at_value TIMESTAMPTZ) RETURNS JSONB LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE assessed JSONB;l JSONB;code_value TEXT;hard JSONB:='[]';review JSONB:='[]';
+DECLARE assessed JSONB;l JSONB;code_value TEXT;hard JSONB:='[]';review JSONB:='[]';included JSONB;
 BEGIN
  IF basis->'notRecorded'='true'::jsonb THEN RETURN jsonb_build_object('hardConflicts',hard,'reviewReasons',review,'digest',basis->>'digest');END IF;
  IF basis->'sourceChanged'='true'::jsonb THEN review:=review||jsonb_build_array(jsonb_build_object('code','equipment_readiness_changed'));END IF;
+ IF basis ? 'adopted' THEN included:=public.canonical_equipment_readiness_schedule_result(basis->'adopted',proposal,at_value);hard:=hard||(included->'hardConflicts');review:=review||(included->'reviewReasons');END IF;
  IF basis->'inputs' IS NOT NULL THEN
  assessed:=public.canonical_equipment_readiness_assess(basis->'inputs',basis->'evidence',at_value,proposal);
  FOR l IN SELECT value FROM jsonb_array_elements(assessed->'lines') LOOP

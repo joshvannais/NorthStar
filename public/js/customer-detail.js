@@ -1,13 +1,13 @@
 /**
- * CustomerDetail â€” Universal Customer Record Drawer
+ * CustomerDetail — Universal Customer Record Drawer
  *
  * The single, shared customer detail component for the entire NorthStar platform.
  * Leads, Communications, and Command Center all use this same component.
  *
  * Usage:
- *   CustomerDetail.open(customerId)     â€” fetch all data, render drawer
- *   CustomerDetail.close()              â€” close drawer, return focus
- *   CustomerDetail.selectTranscript(id) â€” switch transcript view
+ *   CustomerDetail.open(customerId)     — fetch all data, render drawer
+ *   CustomerDetail.close()              — close drawer, return focus
+ *   CustomerDetail.selectTranscript(id) — switch transcript view
  *
  * Injects its own drawer HTML into document.body on first open().
  * Uses canonical Polaris APIs and demo-msg transcript styling from index.html.
@@ -26,7 +26,7 @@ window.CustomerDetail = (function() {
   var _backgroundState = [];
   var _sourceContext = { source: 'customer', communicationId: null };
 
-  // â”€â”€ Helpers â”€â”€
+  // ── Helpers ──
 
   function $(id) { return document.getElementById(id); }
 
@@ -93,13 +93,13 @@ window.CustomerDetail = (function() {
 
   function fmtCurrency(n) {
     if (n == null || n === '' || typeof n === 'boolean' || !Number.isFinite(Number(n))) {
-      return 'Unavailable â€” no amount is available to this account.';
+      return 'Unavailable — no amount is available to this account.';
     }
     return '$' + Math.round(Number(n)).toLocaleString();
   }
 
   function fmtDate(val) {
-    if (!val) return 'Unavailable â€” no interaction date is recorded.';
+    if (!val) return 'Unavailable — no interaction date is recorded.';
     try {
       var d = new Date(val);
       if (isNaN(d.getTime())) return String(val);
@@ -157,7 +157,7 @@ window.CustomerDetail = (function() {
     return '<span class="badge ' + cls + '">' + label + '</span>';
   }
 
-  // â”€â”€ Drawer Injection â”€â”€
+  // ── Drawer Injection ──
 
   function injectDrawerHTML() {
     if (_injected) return;
@@ -355,7 +355,7 @@ window.CustomerDetail = (function() {
     _injected = true;
   }
 
-  // â”€â”€ Shared Transcript Rendering â”€â”€
+  // ── Shared Transcript Rendering ──
 
   function renderTranscript(transcript, customerName) {
     var simulated = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active;
@@ -409,8 +409,8 @@ window.CustomerDetail = (function() {
       var direction = describe(communication.direction, '', 'direction');
       var occurredAt = communicationDate(communication);
       var title = document.createElement('h4');
-      title.textContent = capitalizeFirst(channel) + (direction ? ' Â· ' + capitalizeFirst(direction) : '') +
-        ' Â· ' + fmtDate(occurredAt);
+      title.textContent = capitalizeFirst(channel) + (direction ? ' · ' + capitalizeFirst(direction) : '') +
+        ' · ' + fmtDate(occurredAt);
       var summary = document.createElement('p');
       summary.textContent = describe(communication.subject || communication.summary,
         'No conversation summary has been recorded.', 'subject');
@@ -443,7 +443,7 @@ window.CustomerDetail = (function() {
       ? ' prior communication is available.' : ' prior communications are available.');
   }
 
-  // â”€â”€ Data Fetching â”€â”€
+  // ── Data Fetching ──
 
   function _authHeaders() {
     return {};
@@ -524,7 +524,7 @@ window.CustomerDetail = (function() {
         _commIdToTranscript[c.id] = transcript;
       }
     }
-    // Transcript selection â€” strict priority:
+    // Transcript selection — strict priority:
     // 1. Newest type==="call" comm with a valid transcript payload
     // 2. Newest any-type comm with a valid transcript payload
     // 3. Otherwise null (empty-state: "No transcript available.")
@@ -676,17 +676,17 @@ window.CustomerDetail = (function() {
     $('cdFullJobDescription').textContent = long ? full : '';
   }
 
-  // â”€â”€ POLARIS Intelligence â”€â”€
+  // ── POLARIS Intelligence ──
 
   function generatePolarisIntel(data) {
     var canon = data.intelligence;
     var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(canon);
     if (!presentation) return {
       summary: 'Polaris advice is unavailable because the required job information could not be loaded.',
-      price: 'Unavailable â€” no price is available to this account.',
+      price: 'Unavailable — no price is available to this account.',
       confidenceLabel: 'Confidence unavailable', confidenceClass: '',
       confidencePct: 'supporting inputs are incomplete',
-      revenue: 'Unavailable â€” no revenue amount is available to this account.',
+      revenue: 'Unavailable — no revenue amount is available to this account.',
       action: 'Record the missing customer and work inputs before acting.', isCanonical: false
     };
     return {
@@ -701,7 +701,7 @@ window.CustomerDetail = (function() {
     };
   }
 
-  // â”€â”€ Render Pricing Breakdown â”€â”€
+  // ── Render Pricing Breakdown ──
 
   function renderPricingBreakdown(estimates) {
     var est = estimates && estimates.length ? estimates[0] : null;
@@ -778,7 +778,7 @@ window.CustomerDetail = (function() {
     return html;
   }
 
-  // â”€â”€ Public API â”€â”€
+  // ── Public API ──
 
   function open(customerId, options) {
     if (!customerId) return;
@@ -940,7 +940,7 @@ window.CustomerDetail = (function() {
   function materialResult(result, target) {
     function text(label, value) { var row=document.createElement('p');row.textContent=label+': '+value;row.style.overflowWrap='anywhere';target.appendChild(row); }
     if (result.lines) {
-      result.lines.forEach(function(line,index){var section=document.createElement('section');var title=document.createElement('h4');title.textContent='Material '+(index+1)+' â€” '+line.material;section.appendChild(title);materialResult(line,section);target.appendChild(section);});
+      result.lines.forEach(function(line,index){var section=document.createElement('section');var title=document.createElement('h4');title.textContent='Material '+(index+1)+' — '+line.material;section.appendChild(title);materialResult(line,section);target.appendChild(section);});
       text('Plan Total',decisionMoney(result.total,result.currency));if(result.sourceAssessment)materialSourceAssessment(result.sourceAssessment,target);if(result.availabilityAssessment)materialAvailabilityAssessment(result.availabilityAssessment,target,result.lines);return;
     }
     text('Required Quantity',result.quantity+' '+result.unitLabel);
@@ -954,7 +954,7 @@ window.CustomerDetail = (function() {
   function materialSourceAssessment(assessment,target) {
     var labels={date_missing:'Date Not Recorded',end_date_missing:'No End Date Recorded',not_effective:'Not Effective Yet',expired:'Past Recorded End Date',place_unknown:'Place Not Recorded',service_mismatch:'Different Service',applicability_unconfirmed:'Confirm Job Applicability',conflict:'Conflicting Prices'};
     var p=document.createElement('p');p.textContent='Source Review: '+assessment.asOfDate+' (UTC)';target.appendChild(p);
-    assessment.lines.forEach(function(row,index){var el=document.createElement('p');el.textContent='Material '+(index+1)+': '+(row.flags.length?row.flags.map(function(f){return labels[f]||'Review Source';}).join(' Â· '):'Within Recorded Dates â€” Human-Recorded');target.appendChild(el);});
+    assessment.lines.forEach(function(row,index){var el=document.createElement('p');el.textContent='Material '+(index+1)+': '+(row.flags.length?row.flags.map(function(f){return labels[f]||'Review Source';}).join(' · '):'Within Recorded Dates — Human-Recorded');target.appendChild(el);});
   }
   function materialSource(line,target) {
     var e=line.evidence,section=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Cost Source';section.appendChild(summary);target.appendChild(section);
@@ -975,9 +975,9 @@ window.CustomerDetail = (function() {
   function materialAvailabilityAssessment(a,target,lines){
     var section=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Reported Availability';section.appendChild(summary);target.appendChild(section);
     var note=document.createElement('p');note.textContent='Reviewed '+a.asOfDate+' (UTC). Reported quantities are not reserved or independently verified.';section.appendChild(note);
-    a.lines.forEach(function(row,i){var p=document.createElement('p');p.textContent='Material '+(i+1)+': '+({unknown:'Current Availability Unknown',reported_shortage:'Reported Shortage',reported_sufficient:'Reported Quantity Covers This Plan'}[row.currentStatus]);section.appendChild(p);if(row.reportedQuantity!==null){var q=document.createElement('p');var unit=lines&&lines[i]&&lines[i].unitLabel||'Units Unknown';q.textContent='Required: '+row.requiredQuantity+' '+unit+' Â· Reported: '+row.reportedQuantity+' '+unit+' Â· Shortage: '+row.shortage+' '+unit;section.appendChild(q);}if(row.flags.length){var f=document.createElement('p');var labels={unknown:'No Availability Evidence',date_missing:'Checked Date Unknown',end_date_missing:'End Date Unknown',expired:'Expired Evidence',place_unknown:'Location Unknown',quantity_unknown:'Quantity Unknown',applicability_unconfirmed:'Confirm Job Applicability'};f.textContent=row.flags.map(function(k){return labels[k]||'Review Availability';}).join(' Â· ');section.appendChild(f);}});
+    a.lines.forEach(function(row,i){var p=document.createElement('p');p.textContent='Material '+(i+1)+': '+({unknown:'Current Availability Unknown',reported_shortage:'Reported Shortage',reported_sufficient:'Reported Quantity Covers This Plan'}[row.currentStatus]);section.appendChild(p);if(row.reportedQuantity!==null){var q=document.createElement('p');var unit=lines&&lines[i]&&lines[i].unitLabel||'Units Unknown';q.textContent='Required: '+row.requiredQuantity+' '+unit+' · Reported: '+row.reportedQuantity+' '+unit+' · Shortage: '+row.shortage+' '+unit;section.appendChild(q);}if(row.flags.length){var f=document.createElement('p');var labels={unknown:'No Availability Evidence',date_missing:'Checked Date Unknown',end_date_missing:'End Date Unknown',expired:'Expired Evidence',place_unknown:'Location Unknown',quantity_unknown:'Quantity Unknown',applicability_unconfirmed:'Confirm Job Applicability'};f.textContent=row.flags.map(function(k){return labels[k]||'Review Availability';}).join(' · ');section.appendChild(f);}});
   }
-  function materialAvailabilityDetails(line,target){var section=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Availability Evidence';section.appendChild(summary);target.appendChild(section);function row(label,value){var p=document.createElement('p');p.style.overflowWrap='anywhere';p.textContent=label+': '+value;section.appendChild(p);}var e=line.availability;if(!e||e.kind==='unknown')row('Availability','Unknown');else{row('Source',{my_observation:'My Observation',company_record:'Company Record',supplier_statement:'Supplier Statement'}[e.kind]);if(e.kind==='my_observation'&&!e.reference)row('Observation Scope','This observation is for this material line, not a company-wide stock total.');if(e.issuer)row('Source Name',e.issuer);if(e.reference)row('Reference',e.reference);row('Checked On',e.observedOn||'Unknown');row('Valid Through',e.validThrough||'Unknown');row('Location',e.location||'Unknown');row('Reported Quantity',e.availableQuantity===null?'Unknown':e.availableQuantity+' '+({ea:'Items',ft:'Feet',m:'Metres',ft2:'Square Feet',m2:'Square Metres',m3:'Cubic Metres',ft3:'Cubic Feet',yd3:'Cubic Yards',kg:'Kilograms',lb:'Pounds',l:'Litres',gal:'US Liquid Gallons'}[line.unit]));row('Reported Lead Time',e.leadTimeDays===null?'Unknown':e.leadTimeDays+' Calendar Days After Ordering');if(e.exceptionReason)row('Review Note',e.exceptionReason);}if(line.replacement)row('Alternative Selection',line.replacement.reason+' â€” Suitability Reviewed By The Company');}
+  function materialAvailabilityDetails(line,target){var section=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Availability Evidence';section.appendChild(summary);target.appendChild(section);function row(label,value){var p=document.createElement('p');p.style.overflowWrap='anywhere';p.textContent=label+': '+value;section.appendChild(p);}var e=line.availability;if(!e||e.kind==='unknown')row('Availability','Unknown');else{row('Source',{my_observation:'My Observation',company_record:'Company Record',supplier_statement:'Supplier Statement'}[e.kind]);if(e.kind==='my_observation'&&!e.reference)row('Observation Scope','This observation is for this material line, not a company-wide stock total.');if(e.issuer)row('Source Name',e.issuer);if(e.reference)row('Reference',e.reference);row('Checked On',e.observedOn||'Unknown');row('Valid Through',e.validThrough||'Unknown');row('Location',e.location||'Unknown');row('Reported Quantity',e.availableQuantity===null?'Unknown':e.availableQuantity+' '+({ea:'Items',ft:'Feet',m:'Metres',ft2:'Square Feet',m2:'Square Metres',m3:'Cubic Metres',ft3:'Cubic Feet',yd3:'Cubic Yards',kg:'Kilograms',lb:'Pounds',l:'Litres',gal:'US Liquid Gallons'}[line.unit]));row('Reported Lead Time',e.leadTimeDays===null?'Unknown':e.leadTimeDays+' Calendar Days After Ordering');if(e.exceptionReason)row('Review Note',e.exceptionReason);}if(line.replacement)row('Alternative Selection',line.replacement.reason+' — Suitability Reviewed By The Company');}
   var _laborPlanDraft = null;
   function renderLaborPlan(review,parent) {
     var plans=review.laborPlans,root=document.createElement('details');root.id='cdLaborPlan';parent.appendChild(root);
@@ -986,14 +986,14 @@ window.CustomerDetail = (function() {
     function para(text,target){return el('p',text,target);}
     function button(text,fn,target){var b=el('button',text,target);b.type='button';b.className='btn btn-secondary';b.onclick=fn;return b;}
     function money(v){return decisionMoney(v,review.currency);}
-    function showResult(result,target){para(result.complete?'Labor Cost: '+money(result.total):'Labor Cost Incomplete â€” Known Cost Subtotal: '+money(result.knownCostSubtotal),target);para('Total Worker-Hours: '+result.workerHours+'. Project duration is not inferred from combined task time.',target);result.lines.forEach(function(l){para(l.task+': '+l.workerHours+' worker-hours'+(l.elapsedHours!==null?' Â· '+l.elapsedHours+' hours of work time':'')+' Â· '+(l.total===null?'Needs '+l.missing.join(' And '):money(l.total)),target);});}
+    function showResult(result,target){para(result.complete?'Labor Cost: '+money(result.total):'Labor Cost Incomplete — Known Cost Subtotal: '+money(result.knownCostSubtotal),target);para('Total Worker-Hours: '+result.workerHours+'. Project duration is not inferred from combined task time.',target);result.lines.forEach(function(l){para(l.task+': '+l.workerHours+' worker-hours'+(l.elapsedHours!==null?' · '+l.elapsedHours+' hours of work time':'')+' · '+(l.total===null?'Needs '+l.missing.join(' And '):money(l.total)),target);});}
     function showCautions(result,target){var names={date_unknown:'Date Not Recorded',not_yet_effective:'Date Is In The Future',freshness_unknown:'Freshness Unknown',expired:'Source Has Expired',applicability_unknown:'Location Or Applicability Not Recorded'};(result.assessment&&result.assessment.cautions||[]).forEach(function(c){var line=draft.inputs.lines.find(function(l){return l.lineId===c.lineId;});para((line?line.task:'Task')+' — '+(c.source==='quantitySource'?'Work-Time Source':'Cost Source')+': '+c.codes.map(function(k){return names[k];}).join('; '),target);});}
     if(!plans||plans.contract!=='estimate-labor-plan-v1'||JSON.stringify(plans.sourcePins)!==JSON.stringify(review.pins)||plans.simulated!==review.simulated){para('Labor planning is unavailable. Refresh this estimate.');return;}
     var current=plans.current,basis=JSON.stringify([review.pins,current&&current.digest,plans.decisionBasis]);
-    if(current&&current.action==='save'){showResult(current.result,root);if(!current.sourceBasisCurrent)para('This plan was saved for an earlier estimate. Review it before using it again.');var evidence=el('details'),es=el('summary','Saved Sources',evidence);current.inputs.lines.forEach(function(line){para(line.task,evidence);['quantitySource','rateSource'].forEach(function(k){var s=line[k];para((k==='quantitySource'?'Work Time: ':'Hourly Cost: ')+(s.kind==='my_estimate'?'My Estimate':s.kind==='company_reference'?'Company Reference':'Published Reference')+(s.reference?' â€” '+s.reference:'')+(s.effectiveOn?' Â· Effective '+s.effectiveOn:' Â· Date Not Recorded')+(s.endsOn?' Â· Ends '+s.endsOn:' Â· Freshness Unknown')+(s.geography?' Â· '+s.geography:''),evidence);if(s.note)para(s.note,evidence);});});if(current.currentAssessment.cautions.length)para('Some source dates or applicability need review. These are recorded assumptions, not verified payroll or market rates.',evidence);}
+    if(current&&current.action==='save'){showResult(current.result,root);if(!current.sourceBasisCurrent)para('This plan was saved for an earlier estimate. Review it before using it again.');var evidence=el('details'),es=el('summary','Saved Sources',evidence);current.inputs.lines.forEach(function(line){para(line.task,evidence);['quantitySource','rateSource'].forEach(function(k){var s=line[k];para((k==='quantitySource'?'Work Time: ':'Hourly Cost: ')+(s.kind==='my_estimate'?'My Estimate':s.kind==='company_reference'?'Company Reference':'Published Reference')+(s.reference?' — '+s.reference:'')+(s.effectiveOn?' · Effective '+s.effectiveOn:' · Date Not Recorded')+(s.endsOn?' · Ends '+s.endsOn:' · Freshness Unknown')+(s.geography?' · '+s.geography:''),evidence);if(s.note)para(s.note,evidence);});});if(current.currentAssessment.cautions.length)para('Some source dates or applicability need review. These are recorded assumptions, not verified payroll or market rates.',evidence);}
     else para(current?'The labor plan was withdrawn. Its history is retained.':'No labor plan has been saved.');
-    if(plans.history.length){var history=el('details');el('summary','Labor Plan History',history);plans.history.forEach(function(p){para((p.action==='save'?'Saved':'Withdrawn')+' Â· '+new Date(p.createdAt).toLocaleString()+' Â· '+p.actorName,history);para(p.reason,history);if(p.result)showResult(p.result,history);});}
-    para('On-site task costs only. Saving a plan does not change the estimate, customer price, schedule or anyoneâ€™s pay.');
+    if(plans.history.length){var history=el('details');el('summary','Labor Plan History',history);plans.history.forEach(function(p){para((p.action==='save'?'Saved':'Withdrawn')+' · '+new Date(p.createdAt).toLocaleString()+' · '+p.actorName,history);para(p.reason,history);if(p.result)showResult(p.result,history);});}
+    para('On-site task costs only. Saving a plan does not change the estimate, customer price, schedule or anyone’s pay.');
     if(!plans.canMutate){para(plans.mutationsPaused?'New labor plans are paused. Saved plans remain available.':review.isCurrent===false?'Choose the current estimate to plan labor.':'Labor plans are available to current owners and administrators.');return;}
     function emptySource(){return {kind:'my_estimate',reference:'',note:'',effectiveOn:null,endsOn:null,geography:''};}
     function emptyLine(){return {lineId:crypto.randomUUID(),task:'',basis:'worker_hours',workerHours:'',people:null,elapsedHours:null,quantity:null,unit:null,hoursPerUnit:null,rateMode:'base_burden',hourlyCost:null,burdenPercent:null,quantitySource:emptySource(),rateSource:emptySource()};}
@@ -1029,7 +1029,7 @@ window.CustomerDetail = (function() {
     function send(preview){if(!form.reportValidity()||!reviewPinsMatch(review,_currentData&&_currentData.canonical))return;if(!preview&&(!draft.confirmed||draft.action==='save'&&!draft.result)){status.textContent='Calculate the labor cost and confirm the plan before saving.';status.focus();return;}var generation=_openSequence,attempt=preview?{body:body()}:draft.request||(draft.request={body:JSON.parse(JSON.stringify(body())),key:crypto.randomUUID(),demoRevision:review.demoWorkspaceRevision}),headers={'Content-Type':'application/json'};if(!preview)headers['Idempotency-Key']=attempt.key;if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(preview?review.demoWorkspaceRevision:attempt.demoRevision);var disabled=Array.prototype.map.call(form.elements,function(e){var v=e.disabled;e.disabled=true;return v;});status.textContent=preview?'Calculating labor cost.':'Saving labor plan.';
       window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/'+encodeURIComponent(review.pins.estimateId)+(preview?'/labor-plan-preview':'/labor-plans'),{method:'POST',headers:headers,body:JSON.stringify(attempt.body)}).then(function(response){return response.json().catch(function(){return{};}).then(function(b){if(!response.ok)throw{status:response.status,message:b.error&&b.error.message};return b;});}).then(function(b){if(generation!==_openSequence||_laborPlanDraft!==draft||_estimateReview!==review)return;if(preview){if(!b.success||JSON.stringify(b.data.sourcePins)!==JSON.stringify(review.pins)||!b.data.decisionBasis||b.data.decisionBasis.revision!==plans.decisionBasis.revision||b.data.decisionBasis.digest!==plans.decisionBasis.digest)throw{status:409};draft.result=b.data.result;draft.confirmed=false;confirm.checked=false;draft.request=null;results.replaceChildren();showResult(draft.result,results);showCautions(draft.result,results);status.textContent=draft.result.assessment.cautions.length?'Review the source limitations, explain your assumptions and confirm.':'Review the calculation and confirm to save.';}else{_laborPlanDraft=null;refreshEstimateReview('labor-saved');}}).catch(function(e){if(generation!==_openSequence||_laborPlanDraft!==draft||_estimateReview!==review)return;var known=[400,401,403,404,409,410,413,429,503].indexOf(e.status)>=0;status.textContent=e.status===400?'Check the task numbers, cost basis and source confirmation. Calculate again before saving.':e.status===401?'Sign in again before saving.':e.status===403?'Your current account cannot save labor plans.':e.status===409?'This estimate or review changed. Refresh, calculate again and confirm.':e.status===410?'This demo session expired. Refresh to start again.':e.status===429?'The labor-plan limit was reached. Saved history remains available. In the demo, resetting clears saved practice work.':e.status===413?'Shorten the task and source notes before trying again.':e.status===503?'Labor planning is unavailable. Refresh to read the saved plan.':e.status===404?'This estimate is unavailable. Choose a current estimate.':'The save result is unconfirmed. Retry this same attempt before editing the plan.';if(known){draft.confirmed=false;confirm.checked=false;draft.result=null;draft.request=null;results.replaceChildren();}}).finally(function(){if(generation===_openSequence&&_laborPlanDraft===draft&&_estimateReview===review){Array.prototype.forEach.call(form.elements,function(e,i){e.disabled=disabled[i];});status.focus();}});
     }
-    var actions=el('div',null,form);actions.style.cssText='display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:0.75rem;';if(draft.action==='save')button('Calculate Labor Cost',function(){send(true);},actions);button(draft.action==='save'?'Save Labor Plan':'Confirm Labor Withdrawal',function(){send(false);},actions);button('Cancel Labor Plan',function(){_laborPlanDraft=null;rerender('cdLaborStart');},actions);
+    var actions=el('div',null,form);actions.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;margin-top:0.75rem;';if(draft.action==='save')button('Calculate Labor Cost',function(){send(true);},actions);button(draft.action==='save'?'Save Labor Plan':'Confirm Labor Withdrawal',function(){send(false);},actions);button('Cancel Labor Plan',function(){_laborPlanDraft=null;rerender('cdLaborStart');},actions);
   }
 
   function renderMaterialPlan(review,parent) {
@@ -1039,13 +1039,13 @@ window.CustomerDetail = (function() {
     if(!plans||plans.contract!=='estimate-material-plan-v4'||JSON.stringify(plans.sourcePins)!==JSON.stringify(review.pins)||plans.simulated!==review.simulated){para('Material planning is unavailable. Refresh this estimate.');return;}
     var current=plans.current;
     if(current&&current.action==='save'){
-      para('Latest Material Plan â€” '+materialLines(current).length+' material'+(materialLines(current).length===1?'':'s'));
+      para('Latest Material Plan — '+materialLines(current).length+' material'+(materialLines(current).length===1?'':'s'));
       materialResult(current.result,root);materialLines(current).forEach(function(line){materialSource(line,root);materialAvailabilityDetails(line,root);});if(current.currentSourceAssessment&&!sameSourceFlags(current.currentSourceAssessment,current.inputs.sourceAssessment))materialSourceAssessment(current.currentSourceAssessment,root);
       if(current.currentAvailabilityAssessment)materialAvailabilityAssessment(current.currentAvailabilityAssessment,root,current.result.lines);
-      para(!current.sourceBasisCurrent?'This plan was saved for a different estimate in this jobâ€™s history.':current.expectedDecisionRevision===0&&plans.decisionBasis.revision===0?'No human scope and price decision was recorded when this plan was saved.':current.decisionBasisCurrent?'Saved with the selected estimateâ€™s current scope and price decision.':'The scope and price decision has changed since this plan was saved. Review the plan again before using it.');
+      para(!current.sourceBasisCurrent?'This plan was saved for a different estimate in this job’s history.':current.expectedDecisionRevision===0&&plans.decisionBasis.revision===0?'No human scope and price decision was recorded when this plan was saved.':current.decisionBasisCurrent?'Saved with the selected estimate’s current scope and price decision.':'The scope and price decision has changed since this plan was saved. Review the plan again before using it.');
       para('Saving or editing a material plan does not automatically change an estimate or customer price. Availability has not been verified.');
     }else para(current?'The material plan was withdrawn. Its history remains available.':'No material plan has been saved for this estimate.');
-    if(plans.history.length){var history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Material Plan History';history.appendChild(summary);plans.history.forEach(function(e){var entry=document.createElement('details'),heading=document.createElement('summary');heading.textContent=(e.action==='save'?'Saved Material Plan':'Withdrew Material Plan')+' â€” '+e.actorName+' â€” '+new Date(e.createdAt).toLocaleString()+(e.result?' â€” '+decisionMoney(e.result.total,e.currency):'');entry.appendChild(heading);var reason=document.createElement('p');reason.textContent=e.reason;entry.appendChild(reason);if(e.result){materialResult(e.result,entry);materialLines(e).forEach(function(line){materialSource(line,entry);materialAvailabilityDetails(line,entry);});}history.appendChild(entry);});if(plans.truncated){var note=document.createElement('p');note.textContent='Showing the latest 20 entries. Earlier history is retained.';history.appendChild(note);}root.appendChild(history);}
+    if(plans.history.length){var history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Material Plan History';history.appendChild(summary);plans.history.forEach(function(e){var entry=document.createElement('details'),heading=document.createElement('summary');heading.textContent=(e.action==='save'?'Saved Material Plan':'Withdrew Material Plan')+' — '+e.actorName+' — '+new Date(e.createdAt).toLocaleString()+(e.result?' — '+decisionMoney(e.result.total,e.currency):'');entry.appendChild(heading);var reason=document.createElement('p');reason.textContent=e.reason;entry.appendChild(reason);if(e.result){materialResult(e.result,entry);materialLines(e).forEach(function(line){materialSource(line,entry);materialAvailabilityDetails(line,entry);});}history.appendChild(entry);});if(plans.truncated){var note=document.createElement('p');note.textContent='Showing the latest 20 entries. Earlier history is retained.';history.appendChild(note);}root.appendChild(history);}
     if(!plans.canMutate){para(plans.mutationsPaused?'New material plans are paused. Saved plans and history remain available.':'Material plans are read-only here. Saved plans and history remain available.');return;}
     function evidenceFor(line){return {kind:line.sourceType==='entered_price'?'company_record':'my_estimate',issuer:null,reference:null,effectiveOn:line.priceDate||null,validThrough:null,countryCode:null,region:null,locality:null,serviceKey:review.materialSourceContext&&review.materialSourceContext.serviceKey||null,materialSpecification:null,statedUnit:line.unit,statedCurrency:review.currency,statedUnitPrice:line.unitPrice,appliesToReviewedJob:false,exceptionReason:null};}
     function emptyLine(){return {lineId:crypto.randomUUID(),material:'',quantity:'',unit:'ea',wastePercent:'',unitPrice:'',sourceType:'my_estimate',sourceNote:'',priceDate:null};}
@@ -1105,7 +1105,7 @@ window.CustomerDetail = (function() {
       });
       var add=button('Add Material',function(){invalidate();var line=emptyLine();draft.inputs.lines.push(line);render();focusField('cdPlanMaterial-'+line.lineId);},form);add.disabled=!!draft.alternative||draft.inputs.lines.length>=20;
     }
-    if(draft.alternative){var chosen=draft.inputs.lines[draft.alternative.index],why=field('Why This Alternative Meets The Jobâ€™s Needs','cdAlternativeReason',chosen.replacement.reason);why.required=true;why.maxLength=500;why.oninput=function(){chosen.replacement.reason=why.value;invalidate();};var suitableLabel=document.createElement('label'),suitable=document.createElement('input');suitable.type='checkbox';suitable.required=true;suitable.id='cdAlternativeSuitable';suitable.checked=chosen.replacement.suitabilityConfirmed;suitableLabel.style.cssText='display:flex;align-items:flex-start;gap:.65rem;margin-top:.75rem;';suitable.style.marginTop='.25rem';suitableLabel.append(suitable,document.createTextNode('I reviewed this alternativeâ€™s suitability for this job. NorthStar has not verified interchangeability.'));form.appendChild(suitableLabel);suitable.onchange=function(){chosen.replacement.suitabilityConfirmed=suitable.checked;invalidate();};}
+    if(draft.alternative){var chosen=draft.inputs.lines[draft.alternative.index],why=field('Why This Alternative Meets The Job’s Needs','cdAlternativeReason',chosen.replacement.reason);why.required=true;why.maxLength=500;why.oninput=function(){chosen.replacement.reason=why.value;invalidate();};var suitableLabel=document.createElement('label'),suitable=document.createElement('input');suitable.type='checkbox';suitable.required=true;suitable.id='cdAlternativeSuitable';suitable.checked=chosen.replacement.suitabilityConfirmed;suitableLabel.style.cssText='display:flex;align-items:flex-start;gap:.65rem;margin-top:.75rem;';suitable.style.marginTop='.25rem';suitableLabel.append(suitable,document.createTextNode('I reviewed this alternative’s suitability for this job. NorthStar has not verified interchangeability.'));form.appendChild(suitableLabel);suitable.onchange=function(){chosen.replacement.suitabilityConfirmed=suitable.checked;invalidate();};}
     var reason=field('Reason For This Plan Change','cdPlanReason',draft.reason);reason.maxLength=2000;reason.required=true;reason.oninput=function(){draft.reason=reason.value;draft.confirmed=false;confirm.checked=false;draft.request=null;};
     var result=document.createElement('div');result.id='cdPlanResult';result.setAttribute('aria-live','polite');form.appendChild(result);if(draft.result)materialResult(draft.result,result);
     var comparison;
@@ -1130,7 +1130,7 @@ window.CustomerDetail = (function() {
     var label=document.createElement('label');label.textContent='Estimate history';label.style.cssText='display:block;margin-bottom:0.75rem;';
     var select=document.createElement('select');select.id='cdEstimateRevisionSelect';select.style.cssText='display:block;max-width:100%;padding:0.65rem;color:#172033;background:white;color-scheme:light;';
     function option(value,text){var o=document.createElement('option');o.value=String(value);o.textContent=text;select.appendChild(o);}
-    (review.revisionHistory||[]).forEach(function(entry){var date=new Date(entry.createdAt);option(entry.revision,(entry.revision===review.currentRevision?'Current estimate':'Earlier estimate')+(Number.isFinite(date.getTime())?' â€” '+date.toLocaleString():''));});
+    (review.revisionHistory||[]).forEach(function(entry){var date=new Date(entry.createdAt);option(entry.revision,(entry.revision===review.currentRevision?'Current estimate':'Earlier estimate')+(Number.isFinite(date.getTime())?' — '+date.toLocaleString():''));});
     option(1,'Original estimate'+(review.currentRevision===1?' (current)':''));select.value=String(review.selectedRevision);
     select.onchange=function(){_selectedEstimateRevision=Number(select.value);_laborPlanDraft=null;_decisionDraft=null;_materialPlanDraft=null;_adoptionDraft=null;refreshEstimateReview('revision-selected');};label.appendChild(select);parent.appendChild(label);
     if(!review.isCurrent){var note=document.createElement('p');note.textContent='Viewing an earlier estimate. Select the current estimate to make changes.';parent.appendChild(note);}
@@ -1148,7 +1148,7 @@ window.CustomerDetail = (function() {
     function redraw(){root.remove();renderMaterialAdoption(review,parent);}
     if(!_adoptionDraft){button('Use material plan in estimate',function(){_adoptionDraft={basis:basis,reason:'',confirmed:false,result:null,request:null};redraw();$('cdAdoptionReason').focus();},'cdAdoptionStart');return;}
     var draft=_adoptionDraft,form=document.createElement('form');form.id='cdAdoptionForm';root.appendChild(form);
-    var intro=document.createElement('p');intro.textContent='Replace this estimateâ€™s material cost with the saved plan. The original estimate stays in history. Review the job and price again afterward.';form.appendChild(intro);
+    var intro=document.createElement('p');intro.textContent='Replace this estimate’s material cost with the saved plan. The original estimate stays in history. Review the job and price again afterward.';form.appendChild(intro);
     var label=document.createElement('label');label.textContent='Reason for using this plan';label.style.display='block';
     var reason=document.createElement('textarea');reason.id='cdAdoptionReason';reason.required=true;reason.maxLength=2000;reason.value=draft.reason;reason.style.cssText='display:block;width:100%;box-sizing:border-box;padding:0.65rem;color:#172033;background:white;';label.appendChild(reason);form.appendChild(label);
     var result=document.createElement('p');result.id='cdAdoptionResult';form.appendChild(result);
@@ -1408,7 +1408,7 @@ window.CustomerDetail = (function() {
     $('cdNeutralContext').textContent = neutral.join(' ');
     if (sourceValues.risk && sourceValues.risk.emergency) $('cdAttentionSection').appendChild($('cdWorkRisk'));
     else $('cdNeutralContext').parentElement.insertBefore($('cdWorkRisk'),$('cdNeutralContext'));
-    $('cdChargeHeading').textContent = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active ? 'Original charges Â· fictional example' : 'Original charge details';
+    $('cdChargeHeading').textContent = window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active ? 'Original charges · fictional example' : 'Original charge details';
     $('cdStage').textContent = stageLabel(data.stage);
     $('cdProb').textContent = data.closeProbability != null
       ? data.closeProbability + '%'
@@ -1420,7 +1420,7 @@ window.CustomerDetail = (function() {
     $('cdPolSummary').textContent = intel.summary;
     $('cdDemoBadge').hidden = !(window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active);
     var originalRange = data.intelligence && data.intelligence.preliminaryRange;
-    $('cdPolRange').textContent = originalRange && originalRange.low != null && originalRange.high != null ? 'Original range: ' + fmtCurrency(originalRange.low) + ' â€“ ' + fmtCurrency(originalRange.high) : 'Original range not recorded';
+    $('cdPolRange').textContent = originalRange && originalRange.low != null && originalRange.high != null ? 'Original range: ' + fmtCurrency(originalRange.low) + ' – ' + fmtCurrency(originalRange.high) : 'Original range not recorded';
     $('cdPolPrice').textContent = intel.price;
     $('cdPolConfidence').textContent = intel.confidenceLabel + ' (' + intel.confidencePct + ')';
     $('cdPolAction').textContent = intel.action;

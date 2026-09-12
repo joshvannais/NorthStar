@@ -18,4 +18,3 @@ if(demo)assert.equal(calls.filter(r=>r.path.startsWith('/api/v1/')).length,0);
 ledger.cases.push({tag,passed:true,committed503IdenticalReplay:true,rejectionPartitions:['unknown429','temporary429','session429','capacity429','knownPaused503','unavailable404','oversize413','stale409'],attempts,privateCalls:calls.filter(r=>r.path.startsWith('/api/v1/')).length});await c.close();}
 assert.deepEqual(ledger.errors,[]);ledger.pass=true;
 }catch(e){ledger.error=e.stack;process.exitCode=1;}finally{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));if(f)await f.cleanup();fs.writeFileSync(path.join(out,'ledger.json'),JSON.stringify(ledger,null,2));console.log(JSON.stringify(ledger));}})();
-

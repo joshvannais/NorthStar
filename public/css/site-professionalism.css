@@ -1819,3 +1819,11 @@ html body #cdCustomerDrawer .drawer-review-actions > button { margin: 0; min-hei
   html body #cdCustomerDrawer .drawer-review-actions { display: grid; grid-template-columns: minmax(0,1fr); }
   html body #cdCustomerDrawer .drawer-review-actions > button { width: 100%; }
 }
+
+/* Travel planning uses the existing drawer type scale and progressive disclosures. */
+html body #cdCustomerDrawer .drawer-travel-plan > :is(p,h4) { margin: 8px 0; }
+html body #cdCustomerDrawer .drawer-travel-plan .drawer-pricing-category { padding: 8px 0; }
+html body #cdCustomerDrawer .drawer-travel-plan .drawer-pricing-category > :is(p,h4) { margin: 6px 0; }
+html body #cdCustomerDrawer .drawer-travel-actions { display:flex;flex-wrap:wrap;gap:12px;margin-top:16px; }
+html body #cdCustomerDrawer .drawer-travel-actions > button { margin:0; }
+@media(max-width:600px) { html body #cdCustomerDrawer .drawer-travel-actions { display:grid;grid-template-columns:1fr; } }

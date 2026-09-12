@@ -722,7 +722,8 @@ async function evaluateInTransaction(client, input) {
     workloadSetTruncated: workload.truncated,
   };
   const equipment=require('./equipmentReadiness'),equipmentBasis=await equipment.read(client,input),equipmentResult=equipment.extra(equipmentBasis,input.proposal);
-  const result = equipment.merge(evaluateConflictEvidence(evaluatorInput),equipmentResult);
+  const travel=require('./travelReadiness'),travelBasis=await travel.read(client,input),travelResult=travel.extra(travelBasis,input.proposal);
+  const result = travel.merge(equipment.merge(evaluateConflictEvidence(evaluatorInput),equipmentResult),travelResult);
   const evidence = stableValue({
     assignment: {
       id: assignment.id, revision: Number(assignment.revision), digest: digest(assignment.canonical_digest),
@@ -749,6 +750,7 @@ async function evaluateInTransaction(client, input) {
   });
   const evaluationDigest = sha256({
     ...(equipmentBasis.notRecorded?{}:{equipmentEvidenceDigest:equipmentResult.digest}),
+    ...(travelBasis.notRecorded?{}:{travelEvidenceDigest:travelResult.digest}),
     assignmentId: assignment.id,
     evaluationVersion: EVALUATION_VERSION,
     evidence,

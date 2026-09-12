@@ -573,7 +573,7 @@
               <section id="polarisMaterialSection" class="polaris-selected-context" hidden>
                 <details id="polarisMaterialDetails">
                   <summary>Saved Cost Review</summary>
-                  <p>Read the selected estimate and its material basis. General conversation retains the original estimate context.</p>
+                  <p>Read the selected estimate and its recorded cost basis. General conversation retains the original estimate context.</p>
                   <label for="polarisMaterialRevision">Estimate History</label>
                   <select id="polarisMaterialRevision" aria-label="Estimate History"></select>
                   <button type="button" class="polaris-clear-btn" id="polarisMaterialRefresh">Refresh Saved Cost Review</button>
@@ -765,7 +765,7 @@
         });
       }
       function respondToSavedMaterialQuery(message) {
-        if (!/^(?:show|review|refresh)\s+(?:(?:the|my|saved|recorded|current|selected)\s+)*(?:materials?|material costs?|labor|labour|labor costs?|labour costs?|equipment|equipment costs?|worker.hours|cost basis|direct costs?|profit inputs?)[?.!]*$/i.test(message.trim())) return false;
+        if (!/^(?:show|review|refresh)\s+(?:(?:the|my|saved|recorded|current|selected)\s+)*(?:materials?|material costs?|labor|labour|labor costs?|labour costs?|equipment|equipment costs?|travel|travel costs?|logistics|worker.hours|cost basis|direct costs?|profit inputs?)[?.!]*$/i.test(message.trim())) return false;
         loadMaterialReview(true);
         return true;
       }

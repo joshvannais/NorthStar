@@ -1400,7 +1400,7 @@ function createCanonicalRouter(options) {
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'This labor plan could not be read. Check your entries.'}});
     try {const result=await mutateLaborPlan(resolvePool(dependencies.poolProvider),{...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')},req.body);return res.status(result.replayed?200:201).json({success:true,data:result});}
-    catch(error){return res.status(error.status||503).json({success:false,error:{message:error.status?error.message:'Labor plans are unavailable. Try again.'}});}
+    catch(error){return res.status(error.status||503).json({success:false,error:{category:error.status===503&&error.code==='LABOR_PLAN_PAUSED'?'labor_paused':undefined,message:error.status?error.message:'Labor plans are unavailable. Try again.'}});}
   });
   router.post('/estimates/:estimateId/labor-plan-preview', dependencies.auth, requireCanonicalContext, async function(req,res) {
     res.set('Cache-Control','no-store');

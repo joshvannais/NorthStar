@@ -21,3 +21,7 @@ Exact candidate-derived pause identities and whether actually executed belong to
 ## Evidence and boundaries
 
 Focused tests cover arithmetic/rounding/missingness, JS/SQL source assessment, current access and concurrent saves, immutable histories and source binding, ordinary paid/demo browser tasks and fresh required reads, actual pause/forward recovery and bounded startup failure. Every failure remains in the packet with source attribution. Browser engines do not establish physical Safari/device or live provider evidence. Original financial/operational snapshots, material and human decision histories are checked unchanged. No broad previous corpus was repeated. Full Part3 acceptance follows Slice2 and independent review; no completion is claimed here.
+
+## Reviewed save failures
+
+An ambiguous HTTP503 or network failure does not prove that a save rolled back. The drawer retains its identical key, body, calculation and confirmation so an unchanged retry can recover the receipt. Only the allowlisted labor_paused response category paired with503 proves the explicit policy rejection; it clears confirmation and directs the user to saved history. This category is emitted only for LABOR_PLAN_PAUSED by the two labor-save routes. Unknown429 responses use neutral wait/history guidance; they do not assert a twenty-plan limit or prescribe reset. Known rejection still invalidates the attempted review. No authority, replay, ledger or migration rule changed in this correction.

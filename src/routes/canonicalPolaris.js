@@ -1432,6 +1432,20 @@ function createCanonicalRouter(options) {
     });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Material planning is unavailable. Refresh and try again.'}});}
   });
 
+  router.post('/estimates/:estimateId/cost-adoption-preview', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check this estimate and material plan before continuing.'}});
+    try {const result=await withBroadCanonicalRead(req,dependencies,async(client,operator)=>{
+      if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Estimate changes are available to current owners and administrators.'),{status:403});
+      const input={...actorInput(req),estimateId:req.params.estimateId};
+      const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
+      if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      const selection=await readRevisions(client,input),review=buildRevisionReview(item,selection);review.decisions=await readSelectedDecisions(client,input);
+      const composition=require('../estimating/costAdoptionContract'),body=composition.normalize({...req.body,confirmed:true}),data=body.changedComponent==='labor'?await readLaborPlans(client,input):await readPlans(client,input),plan=data.current;
+      composition.checkBasis(body,review,selection,plan);const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;
+      return composition.preview(item,selection,review,plan,body.changedComponent,now);
+    });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{category:error.status===503&&error.code==='ESTIMATE_ADOPTION_PAUSED'?'adoption_paused':undefined,message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
+  });
   router.post('/estimates/:estimateId/material-adoption-preview', dependencies.auth, requireCanonicalContext, async function(req,res) {
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check this estimate and material plan before continuing.'}});
@@ -1445,18 +1459,18 @@ function createCanonicalRouter(options) {
       const plans=await readPlans(client,input),body=adoption.normalize({...req.body,confirmed:true});
       adoption.checkBasis(body,review,plans.current);if([materialPlan.V3,materialPlan.V4].includes(plans.current.calculationVersion)){const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;materialPlan.checkEvidence(plans.current.inputs,plans.current.currency,plans.current.calculationVersion,{now,serviceKey:review.materialSourceContext.serviceKey},true);}
       return {result:adoption.calculate(item,plans.current,body.confirmationVersion),sourcePins:review.pins,planId:plans.current.id,planDigest:plans.current.digest,decisionBasis:review.decisions.writeBasis};
-    });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
+    });return res.json({success:true,data:result});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{category:error.status===503&&error.code==='ESTIMATE_ADOPTION_PAUSED'?'adoption_paused':undefined,message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
   });
-  router.post('/estimates/:estimateId/material-adoptions', dependencies.auth, requireCanonicalContext, async function(req,res) {
+  router.post(['/estimates/:estimateId/material-adoptions','/estimates/:estimateId/cost-adoptions'], dependencies.auth, requireCanonicalContext, async function(req,res) {
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check this estimate and material plan before continuing.'}});
     try {const input={...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')};
       const result=await mutateAdoption(resolvePool(dependencies.poolProvider),input,req.body,async(client,receipt)=>{
         const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
         if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
-        adoption.calculate(item,receipt.materialPlan,receipt.calculationVersion);
+        if(receipt.calculationVersion===require('../estimating/costAdoptionContract').VERSION)require('../estimating/costAdoptionContract').calculate(item,{material:receipt.materialPlan,labor:receipt.laborPlan});else adoption.calculate(item,receipt.materialPlan,receipt.calculationVersion);
       });return res.status(result.replayed?200:201).json({success:true,data:result});
-    }catch(error){return res.status(error.status||503).json({success:false,error:{message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
+    }catch(error){return res.status(error.status||503).json({success:false,error:{category:error.status===503&&error.code==='ESTIMATE_ADOPTION_PAUSED'?'adoption_paused':undefined,message:error.status?error.message:'Estimate changes are unavailable. Refresh and try again.'}});}
   });
 
   router.post('/estimates/:estimateId/decisions', dependencies.auth, requireCanonicalContext, async function (req, res) {
@@ -1492,6 +1506,7 @@ function createCanonicalRouter(options) {
         review.riskReview = buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
         review.laborPlans=laborPlan.project(await readLaborPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&laborPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!laborPlanPolicy.mutationsEnabled);
+        review.costComponents=require('../estimating/costAdoptionContract').components(await readRevisions(client,input,selected));
         review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);
         review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled&&operator.canMutate===true;
         review.adoptionPaused=!adoptionPolicy.mutationsEnabled;

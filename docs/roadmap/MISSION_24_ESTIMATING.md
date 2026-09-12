@@ -92,3 +92,6 @@ The [whole-plan contract](../architecture/MISSION_24_MULTI_MATERIAL_PLANS.md) ex
 ### Part2 Slice7 — integration and exit review
 
 The designated seven-slice plan concludes with [material consumer integration and acceptance](../architecture/MISSION_24_MATERIAL_INTEGRATION.md). Slices5/6 provide human-recorded cost sources/freshness and reported availability/alternatives; live supplier/inventory authority is not claimed. Slice7 fixes renewed v4 CAPELLA comparison and connects the selected Polaris saved-material read. Part2 acceptance still requires the exact independent verdict and released-source verification. No eighth slice or Operations expansion is implied; the separately assigned owner Operations demo follows Part2 acceptance before Part3.
+
+## Part3 Slice2 implementation package
+[Composed estimate costs](../operations/MISSION_24_COST_COMPOSITION.md) supplies deliberate bidirectional material/labor adoption into one immutable estimate revision chain, renewed human review and selected private Polaris/CAPELLA integration. This is the second of the two approved Labor Intelligence slices; no slice or phase is added. Independent review and released acceptance must establish Part3 completion. Later equipment/travel, pricing and customer quote ownership remains unchanged.

@@ -40,7 +40,7 @@ function buildCapellaReview(review, snapshot) {
   const childRevision = review.pins?.revision;
   // A child estimate must use its own supported cost basis, never the original snapshot.
   const direct = childRevision
-    ? MATERIAL_ADOPTION_VERSIONS.includes(childRevision.calculationVersion) ? priceCents(review.financialCosts?.knownDirectCosts) : null
+    ? [...MATERIAL_ADOPTION_VERSIONS,require('./costAdoptionContract').VERSION].includes(childRevision.calculationVersion) ? priceCents(review.financialCosts?.knownDirectCosts) : null
     : snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'knownDirectCosts') ? recordedCents(snapshot.knownDirectCosts) : null;
   if (price === null) return unavailable('price_unavailable', 'The saved price cannot be compared. Review the scope and price again.');
   if (direct === null) return unavailable('costs_unavailable', 'Recorded direct costs are incomplete or unavailable. Confirm the missing costs before relying on this comparison.');

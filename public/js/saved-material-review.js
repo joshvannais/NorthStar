@@ -23,7 +23,7 @@
     var facts = [ ['Estimate', (review.selectedRevision || 1) + (review.isCurrent === false ? ' — Earlier Review' : ' — Current Review')],
       ['Recorded', date(review.recordedAt)], ['Included Material Cost', amount(total, review.currency)] ];
     if (adopted) facts.push(['Included Materials', String(adopted.inputs && Array.isArray(adopted.inputs.lines) ? adopted.inputs.lines.length : 1)]);
-    var notes = [adopted ? 'This estimate includes the saved material plan. Other costs and original price guidance keep their recorded basis.' : 'Material cost comes from the original estimate. A later saved plan is included only after it is used in an estimate.'];
+    var notes = [adopted ? 'This estimate includes the saved material plan. Other included costs and original price guidance keep the basis shown in this review.' : 'Material cost comes from the original estimate. A later saved plan is included only after it is used in an estimate.'];
     if (current && current.action === 'save' && (!adopted || current.id !== adopted.id)) {
       facts.push(['Latest Saved Plan', amount(current.result && current.result.total, current.currency)]);
       notes.push('The latest saved plan is separate from the material costs included in this estimate.');
@@ -36,6 +36,13 @@
       if(shortages) notes.push('Reported shortages affect ' + shortages + (shortages===1?' material.':' materials.') + ' Review the quantities and units in the material plan before arranging supplies.');
       notes.push(!availability ? 'Availability evidence was not recorded with this plan.' : availability.lines.some(function(l) { return l.flags.length; }) ? 'Some availability evidence needs review. Check the material plan before arranging supplies.' : 'Recorded availability is not a reservation or a purchase confirmation.');
     }
+    var labor=review.adoptedLaborPlan, latestLabor=review.laborPlans&&review.laborPlans.current;
+    var laborRow=review.rows.find(function(r){return r.label==='Recorded labor cost';});
+    facts.push(['Included Labor Cost',amount(labor?review.financialCosts&&review.financialCosts.knownInternalLaborCost:laborRow&&laborRow.sourceState==='recorded'?laborRow.amount:null,review.currency)]);
+    notes.push(labor?'Labor costs use the included saved task plan.':'Labor costs retain the original estimate basis.');
+    if(labor){facts.push(['Included Worker-Hours',labor.result.workerHours]);notes.push('Task source information is human-recorded. Combined worker-hours do not establish project duration.');if(labor.currentAssessment&&labor.currentAssessment.cautions.length)notes.push('Some included labor source dates or applicability need review.');}
+    if(latestLabor&&latestLabor.action==='save'&&(!labor||latestLabor.id!==labor.id)){facts.push(['Latest Saved Labor Plan',amount(latestLabor.result&&latestLabor.result.total,review.currency)]);notes.push('The latest labor plan is separate from the costs included in this estimate.');}
+    if(latestLabor&&latestLabor.action==='withdraw')notes.push('The latest labor plan was withdrawn. Earlier estimates keep their included labor history.');
     var risk = review.riskReview;
     if (risk && ['compared','shortfall'].indexOf(risk.state) >= 0) {
       facts.push(['Reviewed Price Before Tax', amount(risk.priceBeforeTax, review.currency)], ['Recorded Direct Costs', amount(risk.recordedDirectCosts, review.currency)], ['Remaining After Direct Costs', amount(risk.remainingAfterDirectCosts, review.currency)]);

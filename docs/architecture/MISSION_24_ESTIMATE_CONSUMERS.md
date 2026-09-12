@@ -103,3 +103,8 @@ Source reconciliation searched original estimate/snapshot joins and calculator c
 ## Part2 Slice7 selected material integration
 
 [The current consumer and exit map](MISSION_24_MATERIAL_INTEGRATION.md) adds the selected Polaris saved-material read and fixes CAPELLA v4 renewed-review cost selection. Historical entries above retain their original source dates. General provider context and original aggregate feeds remain original; no private material receipts are added to the provider protocol or worker views. Current/historical review uses the existing owner/admin read and isolated demo adapter. Independent and release acceptance remain separate.
+
+### Part3 Slice2 composed-cost adoption
+The selected drawer review and Polaris Saved Cost Review now consume `estimate-cost-adoption-v1` through the same private selected estimate read. Both included material and labor components resolve immutable source plans; current unadopted plans are separate. CAPELLA uses the selected complete direct total and a newly matching human price decision. See [the composition contract](../operations/MISSION_24_COST_COMPOSITION.md).
+
+The original canonical graph, lead/customer summaries, Communications, Command Center aggregates, Calendar/Operations/worker consumers remain original-source readers. This package does not project current composed private labor economics into those summaries, change their permissions, duplicate jobs/appointments, or alter provider context. Existing source-qualified summary labels remain. Demo original graph/history is preserved, while the shared selected review follows the isolated new revision chain. Fresh entry and final return/header navigation remain mandatory evidence.

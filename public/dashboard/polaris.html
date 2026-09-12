@@ -572,11 +572,11 @@
               <div class="polaris-native-card-host" id="polarisNativeCardHost" aria-live="polite"></div>
               <section id="polarisMaterialSection" class="polaris-selected-context" hidden>
                 <details id="polarisMaterialDetails">
-                  <summary>Saved Material Review</summary>
+                  <summary>Saved Cost Review</summary>
                   <p>Read the selected estimate and its material basis. General conversation retains the original estimate context.</p>
                   <label for="polarisMaterialRevision">Estimate History</label>
                   <select id="polarisMaterialRevision" aria-label="Estimate History"></select>
-                  <button type="button" class="polaris-clear-btn" id="polarisMaterialRefresh">Refresh Saved Material Review</button>
+                  <button type="button" class="polaris-clear-btn" id="polarisMaterialRefresh">Refresh Saved Cost Review</button>
                   <p id="polarisMaterialStatus" role="status"></p>
                   <div id="polarisMaterialBody"></div>
                 </details>
@@ -719,7 +719,7 @@
         }
         enableMaterialReview();
         document.getElementById('polarisMaterialDetails').open = true;
-        status.textContent = 'Loading Saved Material Review…';
+        status.textContent = 'Loading Saved Cost Review…';
         body.replaceChildren();
         var estimate;
         if (demo) {
@@ -754,7 +754,7 @@
           }
           select.value=materialRevision===null?'':String(materialRevision);
           NorthStarSavedMaterialReview.render(body, model);
-          status.textContent='Saved Material Review Loaded';
+          status.textContent='Saved Cost Review Loaded';
           if (reply) addMessage('assistant',NorthStarSavedMaterialReview.text(model),'sent');
         }).catch(function(error) {
           if (!current()) return;
@@ -765,7 +765,7 @@
         });
       }
       function respondToSavedMaterialQuery(message) {
-        if (!/^(?:show|review|refresh)\s+(?:(?:the|my|saved|recorded|current|selected)\s+)*(?:materials?|material costs?|cost basis|direct costs?|profit inputs?)[?.!]*$/i.test(message.trim())) return false;
+        if (!/^(?:show|review|refresh)\s+(?:(?:the|my|saved|recorded|current|selected)\s+)*(?:materials?|material costs?|labor|labour|labor costs?|labour costs?|worker.hours|cost basis|direct costs?|profit inputs?)[?.!]*$/i.test(message.trim())) return false;
         loadMaterialReview(true);
         return true;
       }
@@ -1262,7 +1262,7 @@
         })[0];
 
         if (/profit|margin/.test(normalized)) {
-          return 'Open the selected customer’s Saved Material Review to compare recorded costs. Additional expenses may be missing; recorded estimates are not a profit forecast.';
+          return 'Open the selected customer’s Saved Cost Review to compare recorded costs. Additional expenses may be missing; recorded estimates are not a profit forecast.';
         }
         if (/pipeline|revenue|value/.test(normalized)) {
           return 'The original demo estimates cover ' + graphs.length + ' records totaling ' + currency(total) + '. The largest original estimate is ' + top.customer.name + ' — ' + top.lead.serviceLabel + ' at ' + currency(top.estimate.customerPrice) + '.';

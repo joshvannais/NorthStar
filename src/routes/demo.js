@@ -413,17 +413,25 @@ router.post('/command-center/estimates/:estimateId/material-plan-preview',async 
  }catch(e){return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Demo material planning is unavailable.'}});}
 });
 
-router.post('/command-center/estimates/:estimateId/material-adoptions',async function(req,res){
+router.post(['/command-center/estimates/:estimateId/material-adoptions','/command-center/estimates/:estimateId/cost-adoptions'],async function(req,res){
  res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'material-adoption'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check this estimate and material plan.'}});
- try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'estimate_adopt',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),adoption:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});}catch(e){return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Demo estimate changes are unavailable.'}});}
+ try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'estimate_adopt',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),adoption:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});}catch(e){return res.status(e.status||503).json({success:false,error:{category:e.status===503&&e.code==='ESTIMATE_ADOPTION_PAUSED'?'adoption_paused':undefined,message:e.status?e.message:'Demo estimate changes are unavailable.'}});}
 });
+router.post('/command-center/estimates/:estimateId/cost-adoption-preview',async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'material-adoption'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check this estimate and material plan.'}});
+ try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
+ const selection=selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[]),review=buildRevisionReview(item,selection,{simulated:true});review.decisions=projectSelectedDemoDecisions(record.state.estimateDecisions?.[item.ids.estimate]||[],review,true);
+ const composition=require('../estimating/costAdoptionContract'),body=composition.normalize({...req.body,confirmed:true}),plan=(body.changedComponent==='labor'?record.state.laborPlans:record.state.materialPlans)?.[item.ids.estimate]?.[0];composition.checkBasis(body,review,selection,plan);const now=(await commandCenterRepository.pool().query('SELECT clock_timestamp() now')).rows[0].now;return res.json({success:true,data:composition.preview(item,selection,review,plan,body.changedComponent,now)});
+ }catch(e){return res.status(e.status||503).json({success:false,error:{category:e.status===503&&e.code==='ESTIMATE_ADOPTION_PAUSED'?'adoption_paused':undefined,message:e.status?e.message:'Demo estimate changes are unavailable.'}});}
+});
+
 router.post('/command-center/estimates/:estimateId/material-adoption-preview',async function(req,res){
  res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'material-adoption'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check this estimate and material plan.'}});
  try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
  const review=buildRevisionReview(item,selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(record.state.estimateDecisions?.[item.ids.estimate]||[],review,true);
  const plan=record.state.materialPlans?.[item.ids.estimate]?.[0],body=adoption.normalize({...req.body,confirmed:true});adoption.checkBasis(body,review,plan);if([materialPlan.V3,materialPlan.V4].includes(plan.calculationVersion)){const now=(await commandCenterRepository.pool().query('SELECT clock_timestamp() now')).rows[0].now;materialPlan.checkEvidence(plan.inputs,plan.currency,plan.calculationVersion,{now,serviceKey:review.materialSourceContext.serviceKey},true);}
  return res.json({success:true,data:{result:adoption.calculate(item,plan,body.confirmationVersion),sourcePins:review.pins,planId:plan.id,planDigest:plan.digest,decisionBasis:review.decisions.writeBasis}});
- }catch(e){return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Demo estimate changes are unavailable.'}});}
+ }catch(e){return res.status(e.status||503).json({success:false,error:{category:e.status===503&&e.code==='ESTIMATE_ADOPTION_PAUSED'?'adoption_paused':undefined,message:e.status?e.message:'Demo estimate changes are unavailable.'}});}
 });
 
 router.post('/command-center/estimates/:estimateId/decisions', async function(req,res) {
@@ -451,7 +459,8 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     review.approval=review.decisions.status;review.approvalMessage=review.decisions.message;review.demoWorkspaceRevision=record.revision;
     review.riskReview=buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
-    const labor=record.state.laborPlans?.[item.ids.estimate]||[];review.laborPlans=laborPlan.project({current:labor[0]||null,history:labor,total:labor.length},review,review.isCurrent&&laborPlanPolicy.mutationsEnabled,true,!laborPlanPolicy.mutationsEnabled);
+    const labor=record.state.laborPlans?.[item.ids.estimate]||[];review.costComponents=require('../estimating/costAdoptionContract').components(selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[],selected));
+    review.laborPlans=laborPlan.project({current:labor[0]||null,history:labor,total:labor.length},review,review.isCurrent&&laborPlanPolicy.mutationsEnabled,true,!laborPlanPolicy.mutationsEnabled);
     const plans=record.state.materialPlans?.[item.ids.estimate]||[];review.materialPlans=materialPlan.project({current:plans[0]||null,history:plans,total:plans.length},review,review.isCurrent&&materialPlanPolicy.mutationsEnabled,true,!materialPlanPolicy.mutationsEnabled);
     review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled;review.adoptionPaused=!adoptionPolicy.mutationsEnabled;
     return res.json({ success: true, data: review });

@@ -5,8 +5,8 @@ function failure(error) {
   if (error?.status) return error;
   const status = error?.code === '42501' ? 403 : error?.code === 'P0002' ? 404 :
     ['40001', '40P01', '23505'].includes(error?.code) ? 409 : ['22023', '22P02'].includes(error?.code) ? 400 : error?.code === '54000' ? 429 : 503;
-  return Object.assign(new Error(status === 409 ? 'The estimate or material plan changed. Refresh and review it again.' :
-    status === 403 ? 'Your current account cannot change this estimate.' : status === 400 ? 'Review the material plan and confirmation before continuing.' :
+  return Object.assign(new Error(status === 409 ? 'The estimate or cost plan changed. Refresh and review it again.' :
+    status === 403 ? 'Your current account cannot change this estimate.' : status === 400 ? 'Review the cost plan and confirmation before continuing.' :
     'Estimate changes are unavailable. Saved estimates remain available.'), { status, code: 'ESTIMATE_ADOPTION_UNAVAILABLE' });
 }
 function args(input) { return [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId, input.estimateId]; }
@@ -19,7 +19,7 @@ async function readSelectedDecisions(client, input, selected = null) {
   catch (error) { throw failure(error); }
 }
 async function mutateAdoption(pool, input, raw, prepare) {
-  if (!policy.mutationsEnabled) throw Object.assign(new Error('New estimate changes are paused. Saved estimates remain available.'), { status: 503 });
+  if (!policy.mutationsEnabled) throw Object.assign(new Error('New estimate changes are paused. Saved estimates remain available.'), { status: 503,code:'ESTIMATE_ADOPTION_PAUSED' });
   const body = contract.normalize(raw), client = await pool.connect(); let discard = false;
   try {
     await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');

@@ -68,6 +68,7 @@ function calculate(item, plan, version=VERSION) {
 }
 
 function normalize(body) {
+  if(body?.confirmationVersion==='estimate-cost-adoption-v1')return require('./costAdoptionContract').normalize(body);
   if (!body || typeof body !== 'object' || Array.isArray(body) ||
       Object.keys(body).length !== FIELDS.length || !FIELDS.every(key => Object.hasOwn(body, key)) ||
       !body.sourcePins || typeof body.sourcePins !== 'object' || Array.isArray(body.sourcePins) ||

@@ -431,7 +431,7 @@
       });
     }
 
-    var adoption = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(material-adoptions|material-adoption-preview)$/.exec(url.pathname);
+    var adoption = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(material-adoptions|material-adoption-preview|cost-adoptions|cost-adoption-preview)$/.exec(url.pathname);
     if(method==='POST'&&adoption){var adoptionHeaders=new Headers(options&&options.headers||{});adoptionHeaders.set('X-NorthStar-Demo-Intent','material-adoption');return nativeFetch('/api/demo/command-center/estimates/'+encodeURIComponent(adoption[1])+'/'+adoption[2],Object.assign({},options||{},{headers:adoptionHeaders,credentials:'same-origin'}));}
     var laborPlan = /^\/api\/v1\/canonical\/estimates\/([a-f0-9-]+)\/(labor-plans|labor-plan-preview)$/.exec(url.pathname);
     if(method==='POST'&&laborPlan){var planHeaders=new Headers(options&&options.headers||{});planHeaders.set('X-NorthStar-Demo-Intent','labor-plan');return nativeFetch('/api/demo/command-center/estimates/'+encodeURIComponent(laborPlan[1])+'/'+laborPlan[2],Object.assign({},options||{},{headers:planHeaders,credentials:'same-origin'}));}

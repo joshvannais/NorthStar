@@ -68,6 +68,7 @@ function calculate(item, plan, version=VERSION) {
 }
 
 function normalize(body) {
+  if(body?.confirmationVersion==='estimate-cost-adoption-v3')return require('./travelCostComposition').normalize(body);
   if(body?.confirmationVersion==='estimate-cost-adoption-v2')return require('./equipmentCostComposition').normalize(body);
   if(body?.confirmationVersion==='estimate-cost-adoption-v1')return require('./costAdoptionContract').normalize(body);
   if (!body || typeof body !== 'object' || Array.isArray(body) ||

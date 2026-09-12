@@ -598,12 +598,14 @@ async function recommendInTransaction(client, input) {
     const equipment=require('./equipmentReadiness'),equipmentProposal=proposal||{target:{kind:candidate.kind,id:candidate.id},scheduledStart:null,scheduledEnd:null};
     const equipmentBasis=await equipment.read(client,{...input,expectedTimeZone:profile.timeZone,proposal:equipmentProposal});
     if(equipmentBasis.notRecorded!==true)conflicts=equipment.merge(conflicts,equipment.extra(equipmentBasis,equipmentProposal));
+    const travel=require('./travelReadiness'),travelBasis=await travel.read(client,{...input,expectedTimeZone:profile.timeZone,proposal:equipmentProposal});
+    if(travelBasis.notRecorded!==true)conflicts=travel.merge(conflicts,travel.extra(travelBasis,equipmentProposal));
     evaluatedCandidates.push({
       kind: candidate.kind,
       id: candidate.id,
       label: candidate.label,
       homeLocationId: candidate.homeLocationId,
-      authority: {...candidateAuthorityPins(candidate),...(equipmentBasis.notRecorded===true?{}:{equipmentEvidenceDigest:equipmentBasis.digest})},
+      authority: {...candidateAuthorityPins(candidate),...(equipmentBasis.notRecorded===true?{}:{equipmentEvidenceDigest:equipmentBasis.digest}),...(travelBasis.notRecorded===true?{}:{travelEvidenceDigest:travelBasis.digest})},
       conflicts,
     });
   }

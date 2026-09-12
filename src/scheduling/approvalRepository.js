@@ -171,6 +171,10 @@ async function currentEvaluations(client, input, assignment) {
       conflict.data = {...merged, id: digest, digest};
     }
   }
+  if (input.scheduledStart === null) {
+    const travel=require('./travelReadiness'),basis=await travel.read(client,input);
+    if(basis.notRecorded!==true){const addition=travel.extra(basis,input.proposal),merged=travel.merge(conflict.data,addition),digest=sha256(stableValue({originalDigest:conflict.data.digest,travelDigest:addition.digest,hardConflicts:merged.hardConflicts,reviewReasons:merged.reviewReasons}));conflict.data={...merged,id:digest,digest};}
+  }
   const recommendation = await recommendInTransaction(client, {
     organizationId: input.organizationId,
     actorUserId: input.actorUserId,

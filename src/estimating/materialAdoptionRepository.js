@@ -22,7 +22,7 @@ async function mutateAdoption(pool, input, raw, prepare) {
   if (!policy.mutationsEnabled) throw Object.assign(new Error('New estimate changes are paused. Saved estimates remain available.'), { status: 503,code:'ESTIMATE_ADOPTION_PAUSED' });
   const body = contract.normalize(raw), client = await pool.connect(); let discard = false,locked=false;
   try {
-    if(body.confirmationVersion==='estimate-cost-adoption-v2'){await client.query("SET statement_timeout='10000ms'");await client.query("SET lock_timeout='2000ms'");await client.query('SELECT pg_advisory_lock_shared(230004,4)');locked=true;}
+    if(['estimate-cost-adoption-v2','estimate-cost-adoption-v3'].includes(body.confirmationVersion)){await client.query("SET statement_timeout='10000ms'");await client.query("SET lock_timeout='2000ms'");await client.query('SELECT pg_advisory_lock_shared(230004,4)');locked=true;}
     await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
     await client.query("SET LOCAL statement_timeout='10000ms'");
     await client.query("SET LOCAL lock_timeout='2000ms'");

@@ -503,17 +503,19 @@ class DemoCommandCenterRepository {
   }
 
   async readOperations(token, selector = {}) {
-    await this.read(token); // Preserve existing bounded session admission/migration.
+    const admitted = await this.read(token); // Preserve bounded admission/migration and the unsaved initial basis.
     const client = await this.pool().connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       await client.query("SET LOCAL statement_timeout='5s'");
       const result=await client.query('SELECT id,tenant_id,token_hash,state,revision,simulation_count,mutation_count,last_simulated_at,expires_at,clock_timestamp() now FROM demo_command_center_sessions WHERE token_hash=$1',[token.tokenHash]);
-      const row=result.rows[0]; assertRowAuthority(row,token);
-      let now=date(row.now);
-      if(date(row.expires_at)<=now)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
-      const record=recordFromRow(row,token,true);
-      const workspace=buildDemoWorkspace({tenantId:record.tenantId,sessionId:record.sessionId,state:record.state,revision:record.revision,simulationCount:record.simulationCount,persisted:true,expiresAt:record.expiresAt});
+      const row=result.rows[0];
+      if(row)assertRowAuthority(row,token);
+      else if(admitted.persisted)fail(409,'DEMO_STATE_CHANGED','This demo changed. Refresh before reviewing its work.');
+      let now=date(row?row.now:(await client.query('SELECT clock_timestamp() now')).rows[0].now);
+      const record=row?recordFromRow(row,token,true):admitted;
+      if(date(record.expiresAt)<=now||date(token.expiresAt)<=now)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+      const workspace=buildDemoWorkspace({tenantId:record.tenantId,sessionId:record.sessionId,state:record.state,revision:record.revision,simulationCount:record.simulationCount,persisted:record.persisted,expiresAt:record.expiresAt});
       let appointmentId=selector.appointmentId;
       if(selector.executionId)appointmentId=demoOperations.ledger(record.state).events.find(e=>e.work.execution.id===selector.executionId)?.appointmentId;
       if(selector.executionId&&!appointmentId)fail(404,'DEMO_WORK_NOT_FOUND','That saved work is unavailable. Choose a job from Operations.');
@@ -524,7 +526,7 @@ class DemoCommandCenterRepository {
           return{appointmentId:id,title:graph.work.title||graph.polaris.snapshot.service.label,executionId:work?.execution.id||null};
         })};
       now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);
-      if(date(row.expires_at)<=now)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+      if(date(record.expiresAt)<=now||date(token.expiresAt)<=now)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
       await client.query('COMMIT');return selector.review?{review:data,demoWorkspaceRevision:record.revision}:data;
     } catch(error) { await client.query('ROLLBACK').catch(()=>{});throw error; }
     finally {client.release();}

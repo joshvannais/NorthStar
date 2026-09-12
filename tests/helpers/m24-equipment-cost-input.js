@@ -1,0 +1,6 @@
+'use strict';
+const cost=require('../../src/estimating/equipmentCostPlanContract');
+const charge=amount=>({amount,scope:'equipment_only',split:null});
+function inputs(plan){return{serviceKey:plan.inputs.serviceKey,equipmentBasis:cost.reference(plan),lines:plan.inputs.lines.map(l=>({lineId:l.lineId,access:l.accessBasis,method:'economic_recovery',notApplicableReason:null,plannedHours:'8',rental:null,allocation:{period:'year',usableHours:'600',pool:charge('12000.00'),includedCategories:['capital_recovery'],additionalCosts:[]},operating:{mode:'all_in',allIn:{status:'not_applicable',rate:null},fuelEnergy:null,consumables:null,maintenance:null},fees:[],source:{kind:'my_estimate',issuer:'',reference:'',note:'Declared illustrative equipment allocation.',effectiveOn:null,endsOn:null,geography:''}})),assessment:null};}
+function body(review){return{action:'save',expectedRevision:review.equipmentCostPlans.current?.revision||0,expectedDigest:review.equipmentCostPlans.current?.digest||'none',sourcePins:review.pins,expectedDecisionRevision:review.decisions.writeBasis.revision,expectedDecisionDigest:review.decisions.writeBasis.digest,inputs:inputs(review.equipmentPlans.current),currency:review.currency,reason:'Review the declared equipment cost assumptions.',confirmed:true,confirmationVersion:cost.VERSION};}
+module.exports={charge,inputs,body};

@@ -43,6 +43,11 @@
     if(labor){facts.push(['Included Worker-Hours',labor.result.workerHours]);notes.push('Task source information is human-recorded. Combined worker-hours do not establish project duration.');if(labor.currentAssessment&&labor.currentAssessment.cautions.length)notes.push('Some included labor source dates or applicability need review.');}
     if(latestLabor&&latestLabor.action==='save'&&(!labor||latestLabor.id!==labor.id)){facts.push(['Latest Saved Labor Plan',amount(latestLabor.result&&latestLabor.result.total,review.currency)]);notes.push('The latest labor plan is separate from the costs included in this estimate.');}
     if(latestLabor&&latestLabor.action==='withdraw')notes.push('The latest labor plan was withdrawn. Earlier estimates keep their included labor history.');
+    var equipment=review.adoptedEquipmentCostPlan,latestEquipment=review.equipmentCostPlans&&review.equipmentCostPlans.current,equipmentRow=review.rows.find(function(r){return r.label==='Recorded equipment cost';});
+    facts.push(['Included Equipment Cost',amount(equipment?review.financialCosts&&review.financialCosts.knownEquipmentCost:equipmentRow&&equipmentRow.sourceState==='recorded'?equipmentRow.amount:null,review.currency)]);
+    notes.push(equipment?'Equipment costs use the included declared allocation. This does not verify ownership, supplier prices, suitability or availability.':'Equipment costs retain the original estimate basis.');
+    if(latestEquipment&&latestEquipment.action==='save'&&(!equipment||latestEquipment.id!==equipment.id)){facts.push(['Latest Saved Equipment Costs',amount(latestEquipment.result&&latestEquipment.result.total,review.currency)]);notes.push('The latest equipment costs are separate from the costs included in this estimate.');}
+    if(latestEquipment&&latestEquipment.action==='withdraw')notes.push('The equipment cost plan was withdrawn. Earlier estimates retain their included costs.');
     var risk = review.riskReview;
     if (risk && ['compared','shortfall'].indexOf(risk.state) >= 0) {
       facts.push(['Reviewed Price Before Tax', amount(risk.priceBeforeTax, review.currency)], ['Recorded Direct Costs', amount(risk.recordedDirectCosts, review.currency)], ['Remaining After Direct Costs', amount(risk.remainingAfterDirectCosts, review.currency)]);

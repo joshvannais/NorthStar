@@ -765,7 +765,7 @@
         });
       }
       function respondToSavedMaterialQuery(message) {
-        if (!/^(?:show|review|refresh)\s+(?:(?:the|my|saved|recorded|current|selected)\s+)*(?:materials?|material costs?|labor|labour|labor costs?|labour costs?|worker.hours|cost basis|direct costs?|profit inputs?)[?.!]*$/i.test(message.trim())) return false;
+        if (!/^(?:show|review|refresh)\s+(?:(?:the|my|saved|recorded|current|selected)\s+)*(?:materials?|material costs?|labor|labour|labor costs?|labour costs?|equipment|equipment costs?|worker.hours|cost basis|direct costs?|profit inputs?)[?.!]*$/i.test(message.trim())) return false;
         loadMaterialReview(true);
         return true;
       }

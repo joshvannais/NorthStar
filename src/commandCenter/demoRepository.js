@@ -1,5 +1,8 @@
 'use strict';
 const equipmentPlan=require('../estimating/equipmentPlanContract');
+const equipmentCost=require('../estimating/equipmentCostPlanContract');
+const equipmentCostPolicy=require('../estimating/equipmentCostPlanPolicy');
+const equipmentComposition=require('../estimating/equipmentCostComposition');
 const equipmentPlanPolicy=require('../estimating/equipmentPlanPolicy');
 const demoEquipment=require('./demoEquipmentPlans');
 const laborPlan=require('../estimating/laborPlanContract');
@@ -192,7 +195,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -234,6 +237,7 @@ function mutationInput(input) {
   if(input.operation==='estimate_adopt'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'ESTIMATE_ADOPTION_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.adoption=adoption.normalize(input.adoption);}
   if(input.operation==='labor_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'LABOR_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=laborPlan.normalize(input.plan);}
   if(input.operation==='equipment_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'EQUIPMENT_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=equipmentPlan.normalize(input.plan);}
+  if(input.operation==='equipment_cost'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'EQUIPMENT_COST_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=equipmentCost.normalize(input.plan);}
   if(input.operation==='material_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'MATERIAL_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=materialPlan.normalize(input.plan);}
   normalized.requestDigest = sha256({
     operation: normalized.operation,
@@ -243,6 +247,7 @@ function mutationInput(input) {
     ...(normalized.operation==='estimate_adopt'?{estimateId:normalized.estimateId,adoption:normalized.adoption}:{}),
     ...(normalized.operation==='labor_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation==='equipment_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
+    ...(normalized.operation==='equipment_cost'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation==='material_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation.startsWith('schedule_')?{appointmentId:normalized.appointmentId,scheduleBody:normalized.scheduleBody}:{}),
     ...(normalized.operation==='work_action'?{appointmentId:normalized.appointmentId,operations:normalized.operations}:{}),
@@ -550,6 +555,7 @@ class DemoCommandCenterRepository {
     if(input.operation==='estimate_adopt'&&!adoptionPolicy.mutationsEnabled)fail(503,'ESTIMATE_ADOPTION_PAUSED','New estimate changes are paused. Saved estimates remain available.');
     if(input.operation==='labor_plan'&&!laborPlanPolicy.mutationsEnabled)fail(503,'LABOR_PLAN_PAUSED','New labor plans are paused. Saved plans remain available.');
     if(input.operation==='equipment_plan'&&!equipmentPlanPolicy.mutationsEnabled)fail(503,'EQUIPMENT_PLAN_PAUSED','New equipment plans are paused. Saved plans remain available.');
+    if(input.operation==='equipment_cost'&&!equipmentCostPolicy.mutationsEnabled)fail(503,'EQUIPMENT_COST_PAUSED','New equipment costs are paused. Refresh to check saved history.');
     if(input.operation==='material_plan'&&!materialPlanPolicy.mutationsEnabled)fail(503,'MATERIAL_PLAN_PAUSED','New material plans are paused. Saved plans remain available.');
     if(input.operation==='estimate_review' && !decisionPolicy.mutationsEnabled) fail(503,'ESTIMATE_DECISION_PAUSED','New decisions are paused. Saved reviews remain available.');
     const admitted = admission(rawAdmission);
@@ -594,7 +600,7 @@ class DemoCommandCenterRepository {
       if (!lockedRow) fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
       assertRowAuthority(lockedRow, token);
       const sourceOperation=input.operation==='material_plan'&&['estimate-material-plan-v3','estimate-material-plan-v4'].includes(input.plan?.confirmationVersion)||input.operation==='estimate_adopt'&&['estimate-material-adoption-v3','estimate-material-adoption-v4','estimate-cost-adoption-v1'].includes(input.adoption?.confirmationVersion);
-      if(sourceOperation || operations || ['labor_plan','equipment_plan'].includes(input.operation))now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
+      if(sourceOperation || operations || ['labor_plan','equipment_plan','equipment_cost'].includes(input.operation)||input.operation==='estimate_adopt'&&input.adoption.confirmationVersion==='estimate-cost-adoption-v2')now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
       if (date(lockedRow.expires_at).getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
       }
@@ -630,6 +636,7 @@ class DemoCommandCenterRepository {
         if(input.operation==='estimate_adopt'&&(current.state.estimateRevisions?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='labor_plan'&&(current.state.laborPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='equipment_plan'&&(current.state.equipmentPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return {record:current,replayed:true};}
+        if(input.operation==='equipment_cost'&&(current.state.equipmentCostPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='material_plan'&&(current.state.materialPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='estimate_review' && (current.state.estimateDecisions?.[input.estimateId] || []).some(event=>event.requestKey===input.idempotencyHash)) {
           await client.query('COMMIT'); open=false; return {record:current,replayed:true};
@@ -665,12 +672,18 @@ class DemoCommandCenterRepository {
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
         const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'ESTIMATE_ADOPTION_UNAVAILABLE','That demo estimate is unavailable.');
         const histories=current.state.estimateRevisions||{},history=histories[input.estimateId]||[];
-        const result=demoAdopt(item,history,current.state.estimateDecisions?.[input.estimateId]||[],current.state.materialPlans?.[input.estimateId]?.[0],input.adoption,input.idempotencyHash,now,current.state.laborPlans?.[input.estimateId]?.[0]);
+        const result=demoAdopt(item,history,current.state.estimateDecisions?.[input.estimateId]||[],current.state.materialPlans?.[input.estimateId]?.[0],input.adoption,input.idempotencyHash,now,current.state.laborPlans?.[input.estimateId]?.[0],current.state.equipmentCostPlans?.[input.estimateId]?.[0]);
         nextState=stableValue({...current.state,estimateRevisions:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
       } else if(input.operation==='labor_plan'){
         if(!laborPlanPolicy.mutationsEnabled)fail(503,'LABOR_PLAN_PAUSED','New labor plans are paused. Saved plans remain available.');
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'LABOR_PLAN_UNAVAILABLE','That demo estimate is unavailable.');
         const review=buildRevisionReview(item,selectDemoRevision(item,current.state.estimateRevisions?.[input.estimateId]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(current.state.estimateDecisions?.[input.estimateId]||[],review,true);const histories=current.state.laborPlans||{},history=histories[input.estimateId]||[];const result=laborPlan.demoPlan(history,review,input.plan,input.idempotencyHash,now);nextState=stableValue({...current.state,laborPlans:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
+      } else if(input.operation==='equipment_cost'){
+        if(!equipmentCostPolicy.mutationsEnabled)fail(503,'EQUIPMENT_COST_PAUSED','New equipment costs are paused. Refresh to check saved history.');
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt}),item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'EQUIPMENT_COST_UNAVAILABLE','That demo estimate is unavailable.');
+        const selection=selectDemoRevision(item,current.state.estimateRevisions?.[input.estimateId]||[]),review=buildRevisionReview(item,selection,{simulated:true});review.decisions=projectSelectedDemoDecisions(current.state.estimateDecisions?.[input.estimateId]||[],review,true);
+        const histories=current.state.equipmentCostPlans||{},history=histories[input.estimateId]||[],plan=current.state.equipmentPlans?.[input.estimateId]?.[0];
+        const result=equipmentCost.demoPlan(history,review,input.plan,input.idempotencyHash,now,plan,demoEquipment.sources(current.state,item,plan?.inputs),equipmentComposition.outsideBasis(selection,{...item,sourcePins:selection.originalPins}));nextState=stableValue({...current.state,equipmentCostPlans:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
       } else if(input.operation==='equipment_plan'){
         if(!equipmentPlanPolicy.mutationsEnabled)fail(503,'EQUIPMENT_PLAN_PAUSED','New equipment plans are paused. Saved plans remain available.');
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'EQUIPMENT_PLAN_UNAVAILABLE','That demo estimate is unavailable.');
@@ -714,6 +727,14 @@ class DemoCommandCenterRepository {
         lastSimulatedAt = null;
       }
       async function validateSourceAtCommit(){if(input.operation==='equipment_plan'){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');const candidate=nextState.equipmentPlans?.[input.estimateId]?.[0];if(candidate?.action==='save'){const w=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const item=demoCanonicalItems(w).find(i=>i.ids.estimate===input.estimateId);equipmentPlan.requireReview(candidate.inputs,demoEquipment.sources(current.state,item,candidate.inputs),moment);}}if(input.operation==='labor_plan'){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');const candidate=nextState.laborPlans?.[input.estimateId]?.[0];if(candidate?.action==='save')laborPlan.checkEvidence(candidate.inputs,candidate.inputs.serviceKey,moment);}if(!sourceOperation)return;const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');if(input.operation==='estimate_adopt'&&input.adoption.confirmationVersion==='estimate-cost-adoption-v1'){const event=nextState.estimateRevisions?.[input.estimateId]?.[0];const w=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const item=demoCanonicalItems(w).find(i=>i.ids.estimate===input.estimateId);const assessment=require('../estimating/costAdoptionContract').assessment({material:event.materialPlan,labor:event.laborPlan},item.snapshot.service.key,moment);if(sha256(assessment)!==sha256(input.adoption.assessment))fail(409,'COST_REVIEW_CHANGED','Source information changed. Refresh and review again.');if(input.adoption.changedComponent==='labor')return;}const candidate=input.operation==='material_plan'?nextState.materialPlans?.[input.estimateId]?.[0]:nextState.estimateRevisions?.[input.estimateId]?.[0]?.materialPlan;if(candidate?.action==='save'&&['estimate-material-plan-v3','estimate-material-plan-v4'].includes(candidate.calculationVersion)){const w=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const selected=demoCanonicalItems(w).find(i=>i.ids.estimate===input.estimateId);materialPlan.checkEvidence(candidate.inputs,candidate.currency,candidate.calculationVersion,{now:moment,serviceKey:selected?.snapshot?.service?.key||null},input.operation==='estimate_adopt');}}
+      async function validateEquipmentCostAtCommit(){
+        const costWrite=input.operation==='equipment_cost',adoptWrite=input.operation==='estimate_adopt'&&input.adoption.confirmationVersion==='estimate-cost-adoption-v2';if(!costWrite&&!adoptWrite)return;
+        const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
+        const w=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt}),item=demoCanonicalItems(w).find(i=>i.ids.estimate===input.estimateId),selection=selectDemoRevision(item,current.state.estimateRevisions?.[input.estimateId]||[]),equipmentBasis=current.state.equipmentPlans?.[input.estimateId]?.[0];
+        if(costWrite){const candidate=nextState.equipmentCostPlans?.[input.estimateId]?.[0];if(candidate?.action==='save')equipmentCost.checkEvidence(candidate.inputs,candidate.currency,equipmentBasis,demoEquipment.sources(current.state,item,equipmentBasis?.inputs),equipmentComposition.outsideBasis(selection,{...item,sourcePins:selection.originalPins}),moment);}
+        else{const event=nextState.estimateRevisions?.[input.estimateId]?.[0],review=buildRevisionReview(item,selection,{simulated:true});review.decisions=projectSelectedDemoDecisions(current.state.estimateDecisions?.[input.estimateId]||[],review,true);const chosen=input.adoption.changedComponent==='equipment'?event.equipmentCostPlan:input.adoption.changedComponent==='labor'?event.laborPlan:event.materialPlan;equipmentComposition.checkEvidence(item,selection,review,input.adoption,chosen,moment);if(input.adoption.changedComponent==='equipment')equipmentCost.checkEquipmentBasis(chosen.inputs,equipmentBasis,demoEquipment.sources(current.state,item,equipmentBasis?.inputs),moment);}
+      }
+      await validateEquipmentCostAtCommit();
       await validateSourceAtCommit();
       const nextRevision = current.revision + 1;
       const nextMutationCount = current.mutationCount + 1;
@@ -749,6 +770,7 @@ class DemoCommandCenterRepository {
           if(!preview||date(preview.response.expiresAt)<=committedAt)fail(410,'DEMO_SCHEDULE_PREVIEW_EXPIRED','This preview expired. Review the times again.');
         }
       }
+      await validateEquipmentCostAtCommit();
       await validateSourceAtCommit();
       if (operations) {
         const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);

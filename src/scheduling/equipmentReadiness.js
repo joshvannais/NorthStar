@@ -18,7 +18,9 @@ async function read(client,input){
  return (await client.query('SELECT public.canonical_equipment_readiness_schedule_read($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) result',[input.organizationId,input.actorUserId,input.actorAccessRole,input.authSessionId,input.appointmentId,t.kind,t.id,p.scheduledStart,p.scheduledEnd,input.expectedTimeZone])).rows[0].result;
 }
 function demoBasis(state,item,proposal,now=new Date()){
- if(proposal.target.kind==='unassigned')return {notRecorded:true,digest:'none'};
+ const saved=require('../commandCenter/demoScheduling').validateState(state).history.find(h=>h.appointmentId===item.ids.appointment)?.response.scheduleAuthority;
+ const sameInstant=(a,b)=>a===null&&b===null||a!==null&&b!==null&&Date.parse(a)===Date.parse(b);
+ if(proposal.target.kind==='unassigned'&&saved?.targetState==='assigned'&&saved.scheduleState===(proposal.scheduledStart===null?'unscheduled':'scheduled')&&sameInstant(saved.scheduledStart,proposal.scheduledStart)&&sameInstant(saved.scheduledEnd,proposal.scheduledEnd))return {notRecorded:true,digest:'none'};
  const plan=state.equipmentPlans?.[item.ids.estimate]?.[0],ready=state.equipmentReadinessPlans?.[item.ids.estimate]?.[0];
  if(!plan)return {notRecorded:true,digest:'none'};
  if(plan.action!=='save')return {notRecorded:false,sourceChanged:true,digest:sha256([plan.id,plan.digest,ready?.digest||null])};

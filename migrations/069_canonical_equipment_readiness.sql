@@ -589,7 +589,7 @@ CREATE FUNCTION public.canonical_schedule_part4_review_authority(org UUID,assign
 DECLARE prior JSONB;basis JSONB;extra JSONB;hard JSONB;review JSONB;digest_value TEXT;recommendation TEXT;state_value TEXT;
 BEGIN
  prior:=public.canonical_equipment_readiness_schedule_legacy(org,assignment,target_kind,target_id,start_value,end_value,zone_value);
- IF target_kind='unassigned' THEN RETURN prior;END IF;
+ IF target_kind='unassigned' AND EXISTS(SELECT 1 FROM public.canonical_schedule_assignments s WHERE s.organization_id=org AND s.id=assignment AND s.target_state='assigned' AND s.schedule_state=CASE WHEN start_value IS NULL THEN 'unscheduled' ELSE 'scheduled' END AND s.scheduled_start IS NOT DISTINCT FROM start_value AND s.scheduled_end IS NOT DISTINCT FROM end_value) THEN RETURN prior;END IF;
  basis:=public.canonical_equipment_readiness_schedule_basis(org,assignment,target_kind,target_id,start_value,end_value,zone_value,TRUE);
  IF basis->'notRecorded'='true'::jsonb THEN RETURN prior;END IF;
  extra:=public.canonical_equipment_readiness_schedule_result(basis,jsonb_build_object('scheduledStart',start_value,'scheduledEnd',end_value),clock_timestamp());
@@ -611,7 +611,234 @@ BEGIN
  IF NOT (role_value IN ('owner','admin') OR role_value='member' AND authority->>'operationalRole'='dispatcher') THEN RAISE EXCEPTION 'Current scheduling operator required' USING ERRCODE='42501';END IF;
  SELECT s.id INTO assignment FROM public.canonical_schedule_assignments s JOIN public.canonical_appointments a ON a.organization_id=s.organization_id AND a.id=s.appointment_id WHERE s.organization_id=org AND s.appointment_id=appointment AND EXISTS(SELECT 1 FROM public.canonical_transcripts t WHERE t.organization_id=a.organization_id AND t.operation_id=a.operation_id AND t.graph_id=a.graph_id AND public.canonical_labor_transcript_source_normalized(t.source) IN ('lead','retell','voice'));
  IF assignment IS NULL THEN RAISE EXCEPTION 'Appointment unavailable' USING ERRCODE='P0002';END IF;
- IF target_kind='unassigned' THEN RETURN jsonb_build_object('notRecorded',TRUE,'digest','none');END IF;
+ IF target_kind='unassigned' AND EXISTS(SELECT 1 FROM public.canonical_schedule_assignments s WHERE s.organization_id=org AND s.id=assignment AND s.target_state='assigned' AND s.schedule_state=CASE WHEN start_value IS NULL THEN 'unscheduled' ELSE 'scheduled' END AND s.scheduled_start IS NOT DISTINCT FROM start_value AND s.scheduled_end IS NOT DISTINCT FROM end_value) THEN RETURN jsonb_build_object('notRecorded',TRUE,'digest','none');END IF;
  RETURN public.canonical_equipment_readiness_schedule_basis(org,assignment,target_kind,target_id,start_value,end_value,zone_value,FALSE);
 END $$;
 REVOKE ALL ON FUNCTION public.canonical_equipment_readiness_schedule_read(uuid,uuid,text,uuid,uuid,text,uuid,timestamptz,timestamptz,text) FROM PUBLIC;
+
+-- Exact 035 preview successor: recheck current actor after equipment fence waits.
+CREATE OR REPLACE FUNCTION public.canonical_schedule_create_mutation_preview(
+  organization_id_value UUID,appointment_id_value UUID,actor_user_id_value UUID,
+  actor_access_role_value TEXT,auth_session_id_value UUID,csrf_token_value TEXT,
+  expected_revision_value BIGINT,expected_digest_value TEXT,expected_time_zone_value TEXT,
+  action_code_value TEXT,target_kind_value TEXT,target_id_value UUID,
+  scheduled_start_value TIMESTAMPTZ,scheduled_end_value TIMESTAMPTZ,submitted_schedule_value JSONB,
+  appointment_status_value TEXT,reason_value TEXT,conflict_evaluation_value JSONB,
+  conflict_digest_value TEXT,warning_digests_value JSONB,review_reason_digests_value JSONB,
+  recommendation_digest_value TEXT,recommendation_authority_digest_value TEXT,request_digest_value TEXT
+)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp
+AS $function$
+DECLARE
+  assignment_record public.canonical_schedule_assignments%ROWTYPE;
+  time_authority JSONB;
+  current_target_kind TEXT;
+  current_target_id UUID;
+  proposed_schedule_state TEXT;
+  proposed_dispatch_state TEXT;
+  preview_id_value UUID := gen_random_uuid();
+  created_at_value TIMESTAMPTZ;
+  expires_at_value TIMESTAMPTZ;
+  preview_digest_value TEXT;
+  trusted_request_digest_value TEXT;
+  trusted_hard_conflicts_value JSONB;
+  trusted_review_authority_value JSONB;
+  trusted_conflict_evaluation_value JSONB;
+BEGIN
+  PERFORM 1 FROM public.organizations WHERE id=organization_id_value FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Canonical schedule organization is unavailable'
+      USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_actor_unauthorized';
+  END IF;
+  time_authority := public.canonical_schedule_part4_actor_authority(
+    organization_id_value,actor_user_id_value,actor_access_role_value,auth_session_id_value,
+    csrf_token_value,expected_time_zone_value
+  );
+  SELECT assignment.* INTO assignment_record
+    FROM public.canonical_schedule_assignments assignment
+    JOIN public.canonical_appointments appointment
+      ON appointment.organization_id=assignment.organization_id AND appointment.id=assignment.appointment_id
+    JOIN public.canonical_transcripts transcript
+      ON transcript.organization_id=appointment.organization_id AND transcript.operation_id=appointment.operation_id
+   WHERE assignment.organization_id=organization_id_value AND assignment.appointment_id=appointment_id_value
+     AND transcript.source NOT IN ('simulation','demo')
+   FOR SHARE OF assignment;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Canonical appointment is unavailable'
+      USING ERRCODE='42501',CONSTRAINT='canonical_schedule_part4_scope_unavailable';
+  END IF;
+  IF assignment_record.revision<>expected_revision_value
+     OR rtrim(assignment_record.canonical_digest)<>expected_digest_value THEN
+    RAISE EXCEPTION 'Canonical schedule preview is stale'
+      USING ERRCODE='40001',CONSTRAINT='canonical_schedule_part4_preview_stale';
+  END IF;
+  IF assignment_record.appointment_status<>appointment_status_value THEN
+    RAISE EXCEPTION 'Appointment compatibility status changed'
+      USING ERRCODE='40001',CONSTRAINT='canonical_schedule_part4_preview_stale';
+  END IF;
+  IF action_code_value NOT IN ('assign','reassign','unassign','schedule','reschedule','dispatch')
+     OR appointment_status_value NOT IN ('preferred','scheduled','cancelled','completed')
+     OR NOT public.canonical_schedule_part4_reason_valid(reason_value)
+     OR NOT public.canonical_schedule_part4_schedule_contract_valid(
+       scheduled_start_value,scheduled_end_value,submitted_schedule_value,expected_time_zone_value
+     ) THEN
+    RAISE EXCEPTION 'Mutation preview violates the canonical public contract'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+  END IF;
+  IF scheduled_start_value IS NULL THEN
+    proposed_schedule_state := 'unscheduled';
+  ELSE
+    proposed_schedule_state := 'scheduled';
+  END IF;
+  trusted_request_digest_value := public.canonical_schedule_part4_preview_request_digest(
+    organization_id_value,appointment_id_value,actor_user_id_value,auth_session_id_value,
+    expected_revision_value,expected_digest_value,expected_time_zone_value,action_code_value,
+    target_kind_value,target_id_value,scheduled_start_value,scheduled_end_value,
+    submitted_schedule_value,appointment_status_value,reason_value
+  );
+  IF request_digest_value<>trusted_request_digest_value THEN
+    RAISE EXCEPTION 'Mutation preview request digest diverges from canonical inputs'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_request_digest_divergent';
+  END IF;
+  request_digest_value := trusted_request_digest_value;
+  current_target_kind := CASE WHEN assignment_record.target_state='unassigned' THEN 'unassigned'
+    WHEN assignment_record.workforce_profile_id IS NOT NULL THEN 'profile' ELSE 'crew' END;
+  current_target_id := COALESCE(assignment_record.workforce_profile_id,assignment_record.workforce_crew_id);
+  IF NOT public.canonical_schedule_part4_target_current(organization_id_value,target_kind_value,target_id_value) THEN
+    RAISE EXCEPTION 'Proposed assignment target is inactive or unavailable'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+  END IF;
+  IF action_code_value='assign' THEN
+    IF current_target_kind<>'unassigned' OR target_kind_value NOT IN ('profile','crew')
+       OR proposed_schedule_state<>assignment_record.schedule_state
+       OR scheduled_start_value IS DISTINCT FROM assignment_record.scheduled_start
+       OR scheduled_end_value IS DISTINCT FROM assignment_record.scheduled_end THEN
+      RAISE EXCEPTION 'Assign transition is invalid' USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+    END IF;
+  ELSIF action_code_value='reassign' THEN
+    IF current_target_kind='unassigned' OR target_kind_value NOT IN ('profile','crew')
+       OR (target_kind_value=current_target_kind AND target_id_value=current_target_id)
+       OR proposed_schedule_state<>assignment_record.schedule_state
+       OR scheduled_start_value IS DISTINCT FROM assignment_record.scheduled_start
+       OR scheduled_end_value IS DISTINCT FROM assignment_record.scheduled_end THEN
+      RAISE EXCEPTION 'Reassign transition is invalid' USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+    END IF;
+  ELSIF action_code_value='unassign' THEN
+    IF current_target_kind='unassigned' OR target_kind_value<>'unassigned'
+       OR proposed_schedule_state<>assignment_record.schedule_state
+       OR scheduled_start_value IS DISTINCT FROM assignment_record.scheduled_start
+       OR scheduled_end_value IS DISTINCT FROM assignment_record.scheduled_end THEN
+      RAISE EXCEPTION 'Unassign transition is invalid' USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+    END IF;
+  ELSIF action_code_value='schedule' THEN
+    IF assignment_record.schedule_state<>'unscheduled' OR proposed_schedule_state<>'scheduled'
+       OR target_kind_value<>current_target_kind OR target_id_value IS DISTINCT FROM current_target_id THEN
+      RAISE EXCEPTION 'Schedule transition is invalid' USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+    END IF;
+  ELSIF action_code_value='reschedule' THEN
+    IF assignment_record.schedule_state<>'scheduled' OR proposed_schedule_state<>'scheduled'
+       OR target_kind_value<>current_target_kind OR target_id_value IS DISTINCT FROM current_target_id
+       OR (scheduled_start_value IS NOT DISTINCT FROM assignment_record.scheduled_start
+         AND scheduled_end_value IS NOT DISTINCT FROM assignment_record.scheduled_end) THEN
+      RAISE EXCEPTION 'Reschedule transition is invalid' USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+    END IF;
+  ELSIF action_code_value='dispatch' THEN
+    IF current_target_kind='unassigned' OR assignment_record.schedule_state<>'scheduled'
+       OR assignment_record.dispatch_state='dispatched' OR assignment_record.appointment_status IN ('cancelled','completed')
+       OR target_kind_value<>current_target_kind OR target_id_value IS DISTINCT FROM current_target_id
+       OR proposed_schedule_state<>assignment_record.schedule_state
+       OR scheduled_start_value IS DISTINCT FROM assignment_record.scheduled_start
+       OR scheduled_end_value IS DISTINCT FROM assignment_record.scheduled_end THEN
+      RAISE EXCEPTION 'Dispatch transition is invalid' USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'Approval action is invalid' USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_transition_invalid';
+  END IF;
+  proposed_dispatch_state := CASE WHEN action_code_value='dispatch' THEN 'dispatched'
+    WHEN assignment_record.dispatch_state='dispatched' AND action_code_value IN ('reassign','unassign','reschedule') THEN 'revoked'
+    ELSE assignment_record.dispatch_state END;
+  trusted_review_authority_value := public.canonical_schedule_part4_review_authority(
+    organization_id_value,assignment_record.id,target_kind_value,target_id_value,
+    scheduled_start_value,scheduled_end_value,expected_time_zone_value
+  );
+  trusted_hard_conflicts_value := trusted_review_authority_value->'hardConflicts';
+  IF jsonb_typeof(conflict_evaluation_value)<>'object'
+     OR conflict_evaluation_value->>'assignmentId'<>assignment_record.id::TEXT
+     OR conflict_evaluation_value->>'assignmentRevision'<>assignment_record.revision::TEXT
+     OR conflict_evaluation_value->>'assignmentDigest'<>rtrim(assignment_record.canonical_digest)
+     OR conflict_evaluation_value->>'appointmentId'<>appointment_id_value::TEXT THEN
+    RAISE EXCEPTION 'Conflict preview evidence diverges'
+      USING ERRCODE='23514',CONSTRAINT='canonical_schedule_part4_evidence_stale';
+  END IF;
+  -- Preview lifetime starts only after all current authority/conflict rows have
+  -- been locked and validated; it is exactly fifteen database-clock minutes.
+  created_at_value := clock_timestamp();
+  expires_at_value := created_at_value+INTERVAL '15 minutes';
+  conflict_digest_value := trusted_review_authority_value->>'conflictDigest';
+  warning_digests_value := trusted_review_authority_value->'warningDigests';
+  review_reason_digests_value := trusted_review_authority_value->'reviewReasonDigests';
+  recommendation_digest_value := trusted_review_authority_value->>'recommendationDigest';
+  recommendation_authority_digest_value := trusted_review_authority_value->>'recommendationAuthorityDigest';
+  trusted_conflict_evaluation_value := jsonb_build_object(
+    'id',conflict_digest_value,'assignmentId',assignment_record.id,
+    'appointmentId',appointment_id_value,'evaluationVersion','m22-conflict-v1',
+    'assignmentRevision',assignment_record.revision,
+    'assignmentDigest',rtrim(assignment_record.canonical_digest),
+    'proposal',jsonb_build_object(
+      'target',jsonb_build_object('kind',target_kind_value,'id',target_id_value),
+      'scheduledStart',scheduled_start_value,'scheduledEnd',scheduled_end_value,
+      'submittedScheduledStart',submitted_schedule_value->'scheduledStart',
+      'submittedScheduledEnd',submitted_schedule_value->'scheduledEnd',
+      'timeZone',expected_time_zone_value,'appointmentStatus',appointment_status_value),
+    'status',trusted_review_authority_value->>'status',
+    'hardConflicts',trusted_hard_conflicts_value,
+    'warnings',trusted_review_authority_value->'warnings',
+    'needsReview',(trusted_review_authority_value->>'needsReview')::BOOLEAN,
+    'reviewReasons',trusted_review_authority_value->'reviewReasons',
+    'digest',conflict_digest_value,'evaluatedAt',created_at_value,
+    'persisted',FALSE,'grantsMutation',FALSE
+  );
+  conflict_evaluation_value := trusted_conflict_evaluation_value;
+  preview_digest_value := public.canonical_schedule_part4_preview_digest(
+    preview_id_value,organization_id_value,assignment_record.id,appointment_id_value,actor_user_id_value,
+    auth_session_id_value,expected_revision_value,expected_digest_value,expected_time_zone_value,
+    action_code_value,target_kind_value,target_id_value,scheduled_start_value,scheduled_end_value,
+    proposed_schedule_state,proposed_dispatch_state,appointment_status_value,reason_value,
+    conflict_digest_value,warning_digests_value,review_reason_digests_value,recommendation_digest_value,
+    recommendation_authority_digest_value,request_digest_value,created_at_value,expires_at_value
+  );
+  PERFORM public.canonical_schedule_part4_actor_authority(organization_id_value,actor_user_id_value,actor_access_role_value,auth_session_id_value,csrf_token_value,expected_time_zone_value);
+  INSERT INTO public.canonical_schedule_mutation_previews(
+    id,organization_id,assignment_id,appointment_id,actor_user_id,actor_access_role,auth_session_id,
+    expected_revision,expected_digest,expected_time_zone,action_code,proposed_target_kind,proposed_target_id,
+    proposed_scheduled_start,proposed_scheduled_end,proposed_schedule_state,proposed_dispatch_state,
+    proposed_appointment_status,submitted_schedule,reason,conflict_evaluation,conflict_digest,
+    warning_digests,review_reason_digests,recommendation_digest,recommendation_authority_digest,
+    request_digest,preview_digest,created_at,expires_at,transaction_id
+  ) VALUES (
+    preview_id_value,organization_id_value,assignment_record.id,appointment_id_value,actor_user_id_value,
+    actor_access_role_value,auth_session_id_value,expected_revision_value,expected_digest_value,
+    expected_time_zone_value,action_code_value,target_kind_value,target_id_value,scheduled_start_value,
+    scheduled_end_value,proposed_schedule_state,proposed_dispatch_state,appointment_status_value,
+    submitted_schedule_value,reason_value,conflict_evaluation_value,conflict_digest_value,
+    warning_digests_value,review_reason_digests_value,recommendation_digest_value,
+    recommendation_authority_digest_value,request_digest_value,preview_digest_value,created_at_value,
+    expires_at_value,txid_current()
+  );
+  RETURN jsonb_build_object('success',TRUE,'data',jsonb_build_object(
+    'id',preview_id_value,'appointmentId',appointment_id_value,'assignmentId',assignment_record.id,
+    'action',action_code_value,'proposal',jsonb_build_object(
+      'target',jsonb_build_object('kind',target_kind_value,'id',target_id_value),
+      'scheduledStart',scheduled_start_value,'scheduledEnd',scheduled_end_value,
+      'scheduleState',proposed_schedule_state,'dispatchState',proposed_dispatch_state,
+      'appointmentStatus',appointment_status_value,'timeZone',expected_time_zone_value
+    ),
+    'conflicts',conflict_evaluation_value,'warningDigests',warning_digests_value,
+    'reviewReasonDigests',review_reason_digests_value,'recommendationDigest',recommendation_digest_value,
+    'recommendationAuthorityDigest',recommendation_authority_digest_value,
+    'previewDigest',preview_digest_value,'createdAt',created_at_value,'expiresAt',expires_at_value,
+    'expiresInSeconds',900,'grantsMutation',FALSE,'persisted',TRUE
+  ));
+END
+$function$;

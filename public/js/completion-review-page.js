@@ -118,7 +118,9 @@
     try {
       var response = await request(readPath()); if (token !== generation) return false;
       if (!response.ok) {
-        if ([401, 403, 404].includes(response.status)) { outcome = null; status('restricted', 'This completion review is not available to the current signed-in account.'); lock(); return false; }
+        if ([401, 403, 404].includes(response.status)) { outcome = null; status('restricted', location.pathname.indexOf('/demo')===0
+          ? 'This completion review is not available in this demo. Choose a job from Operations.'
+          : 'This completion review is not available to the current signed-in account.'); lock(); return false; }
         throw new Error('READ_UNAVAILABLE');
       }
       var value = contract.validate(response.body.data, {demo:location.pathname.indexOf('/demo')===0});

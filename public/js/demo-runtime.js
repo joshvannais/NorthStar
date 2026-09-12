@@ -392,6 +392,10 @@
   }
 
   var operationsReads=new Map(),operationsRequests=new Map();
+  function ownerReadFetch(url,options) {
+    // Establish the shared account-free session before concurrent owner reads.
+    return loadWorkspace(false).then(function(){return nativeFetch(url,options);});
+  }
   function transport(input, options) {
     var url = requestPath(input);
     var method = methodOf(options, input);
@@ -399,11 +403,11 @@
       return Promise.resolve(jsonResponse({ error: readonlyMessage, code: 'demo_external_request_blocked' }, 403));
     }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
-    if(method==='GET'&&url.pathname==='/api/v1/operational-overview')return nativeFetch('/api/demo/command-center/operations/overview'+url.search,options);
+    if(method==='GET'&&url.pathname==='/api/v1/operational-overview')return ownerReadFetch('/api/demo/command-center/operations/overview'+url.search,options);
     var ownerRead=/^\/api\/v1\/field-executions\/owner-work(?:\/appointments\/([a-f0-9-]+))?$/.exec(url.pathname);
-    if(method==='GET'&&ownerRead)return nativeFetch('/api/demo/command-center/operations'+(ownerRead[1]?'/appointments/'+ownerRead[1]:''),options);
+    if(method==='GET'&&ownerRead)return ownerReadFetch('/api/demo/command-center/operations'+(ownerRead[1]?'/appointments/'+ownerRead[1]:''),options);
     var ownerReview=/^\/api\/v1\/field-executions\/([a-f0-9-]+)\/completion-review$/.exec(url.pathname);
-    if(method==='GET'&&ownerReview)return nativeFetch('/api/demo/command-center/operations/executions/'+ownerReview[1]+'/completion-review',options).then(async function(response){
+    if(method==='GET'&&ownerReview)return ownerReadFetch('/api/demo/command-center/operations/executions/'+ownerReview[1]+'/completion-review',options).then(async function(response){
       if(response.ok){var envelope=await response.clone().json();operationsReads.set(ownerReview[1],{appointmentId:envelope.data.execution.appointmentId,revision:envelope.demoWorkspaceRevision});}return response;
     });
     var ownerDecision=/^\/api\/v1\/field-executions\/([a-f0-9-]+)\/completion-actions$/.exec(url.pathname);

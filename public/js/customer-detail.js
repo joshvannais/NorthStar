@@ -1026,7 +1026,7 @@ window.CustomerDetail = (function() {
         field(row,'Requirement',prefix,q.label,function(v){q.label=v;}).required=true;
         field(row,'Source',prefix+'-origin',q.origin,function(v){q.origin=v;q.scopeKey=null;q.value=null;rerender(prefix+'-origin');},[['owner_entry','My Requirement'],['caller_assertion','Caller Reported'],['recorded_job','Recorded Job Fact']]);
         if(q.origin==='recorded_job'){var facts=Object.keys(plans.sources.scope).filter(function(k){return ['string','number','boolean'].includes(typeof plans.sources.scope[k]);});field(row,'Recorded Job Fact',prefix+'-fact',q.scopeKey||'',function(v){q.scopeKey=v||null;q.value=v?String(plans.sources.scope[v]):null;rerender(prefix+'-fact');},[['','Choose A Recorded Fact']].concat(facts.map(function(k){return[k,k.replace(/([A-Z])/g,' $1').replace(/^./,function(c){return c.toUpperCase();})+': '+String(plans.sources.scope[k])];})));}
-        field(row,'Comparison',prefix+'-kind',q.kind,function(v){q.kind=v;q.value=null;q.operator='equals';rerender(prefix+'-kind');},[['numeric','Number'],['categorical','Exact Text']]);
+        field(row,'Comparison',prefix+'-kind',q.kind,function(v){q.kind=v;if(q.origin!=='recorded_job')q.value=null;q.operator='equals';rerender(prefix+'-kind');},[['numeric','Number'],['categorical','Exact Text']]);
         var value=field(row,'Required Value (Blank If Unknown)',prefix+'-value',q.value,function(v){q.value=v||null;});value.readOnly=q.origin==='recorded_job';
         field(row,'Unit',prefix+'-unit',q.unit,function(v){q.unit=v;});
         field(row,'Requirement Rule',prefix+'-rule',q.operator,function(v){q.operator=v;},q.kind==='numeric'?[['at_least','At Least'],['at_most','At Most'],['equals','Exactly']]:[['equals','Exactly']]);

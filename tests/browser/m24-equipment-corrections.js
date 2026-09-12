@@ -15,7 +15,22 @@ await keyboardChoice('cdEquipmentRequirement-0-0-origin','End');assert.equal(awa
 const factOptions=await p.locator('#cdEquipmentRequirement-0-0-fact option').count();assert.ok(factOptions>1);
 await keyboardChoice('cdEquipmentRequirement-0-0-fact','End');assert.notEqual(await p.locator('#cdEquipmentRequirement-0-0-fact').inputValue(),'');
 await keyboardChoice('cdEquipmentRequirement-0-0-kind','End');assert.equal(await p.locator('#cdEquipmentRequirement-0-0-kind').inputValue(),'categorical');
-await p.screenshot({path:path.join(out,tag+'-requirement-keyboard.png')});
+await p.keyboard.press('Tab');
+const reviewPath=(demo?'/api/demo/command-center':'/api/v1/canonical')+'/estimates/'+graph.ids.estimate+'/review';
+const recorded=await p.evaluate(async route=>(await(await fetch(route)).json()).data,reviewPath);
+const scope=recorded.equipmentPlans.sources.scope,entries=Object.entries(scope),numeric=entries.find(([k,v])=>/^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$/.test(String(v))),categorical=entries.find(([k,v])=>typeof v==='string'&&!/time.?zone/i.test(k)&&!/^\d/.test(v));
+assert.ok(numeric,'ordinary source contains numeric fact');assert.ok(categorical,'ordinary source contains categorical fact');
+await p.locator('#cdEquipmentRequirement-0-0').fill('Recorded Job Requirement');await p.locator('#cdEquipmentReason').fill('Review recorded equipment requirements');
+await p.locator('#cdEquipmentRequirement-0-0-fact').selectOption(categorical[0]);await focused('cdEquipmentRequirement-0-0-fact');
+// Switch Number then Exact Text; the recorded categorical source remains intact through both.
+await keyboardChoice('cdEquipmentRequirement-0-0-kind','Home');await keyboardChoice('cdEquipmentRequirement-0-0-kind','End');await p.keyboard.press('Tab');
+assert.equal(await p.locator('#cdEquipmentRequirement-0-0-value').inputValue(),String(categorical[1]));assert.equal(await p.locator('#cdEquipmentRequirement-0-0-value').getAttribute('readonly'),'');
+async function preview(expected){assert.deepEqual(await p.locator('#cdEquipmentPlan form :invalid').evaluateAll(es=>es.map(e=>e.id)),[]);const [r]=await Promise.all([p.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/equipment-plan-preview')),click('Preview Equipment Review')]);const b=await r.json();assert.equal(r.status(),expected,JSON.stringify(b));await p.waitForFunction(()=>!document.querySelector('#cdEquipmentReason').disabled);return b;}
+let result=await preview(200);assert.equal(result.data.result.lines[0].requirements[0].required,String(categorical[1]));assert.equal(result.data.result.lines[0].requirements[0].origin,'recorded_job');
+await keyboardChoice('cdEquipmentRequirement-0-0-kind','Home');await p.keyboard.press('Tab');assert.equal(await p.locator('#cdEquipmentRequirement-0-0-value').inputValue(),String(categorical[1]));await preview(400);assert.match(await p.locator('#cdEquipmentPlan').innerText(),/Check the equipment, requirements and units/);assert.equal(await p.locator('#cdEquipmentConfirm').isChecked(),false);
+await p.locator('#cdEquipmentRequirement-0-0-fact').selectOption(numeric[0]);await focused('cdEquipmentRequirement-0-0-fact');await keyboardChoice('cdEquipmentRequirement-0-0-kind','End');await keyboardChoice('cdEquipmentRequirement-0-0-kind','Home');await p.keyboard.press('Tab');assert.equal(await p.locator('#cdEquipmentRequirement-0-0-value').inputValue(),String(numeric[1]));result=await preview(200);assert.equal(result.data.result.lines[0].requirements[0].required,String(numeric[1]));assert.doesNotMatch(await p.locator('#cdEquipmentPlan').innerText(),/estimate or sources changed/);
+await p.screenshot({path:path.join(out,tag+'-recorded-preview.png')});
+
 // Add six requirements on first item, six on second through actual controls.
 for(let n=1;n<6;n++)await click('Add Requirement');await click('Add Equipment');
 const summaries=p.getByText('Job Requirements',{exact:true});await summaries.nth(1).click();
@@ -25,7 +40,7 @@ assert.equal(await p.locator('#cdEquipmentPlan').evaluate(e=>Array.from(e.queryS
 assert.match(await p.locator('#cdEquipmentPlan').innerText(),/12 requirements across this plan/);
 await p.getByRole('button',{name:'Remove Requirement',exact:true}).last().click();assert.equal(await p.getByRole('button',{name:'Add Requirement',exact:true}).count(),2);
 await click('Cancel Equipment Plan');assert.equal(await p.evaluate(()=>document.activeElement.id),'cdEquipmentStart');
-assert.equal(calls.filter(r=>r.method==='POST').length,0);if(demo)assert.equal(calls.filter(r=>r.path.startsWith('/api/v1/')).length,0);
-ledger.cases.push({tag,passed:true,keyboard:['Source','Recorded Job Fact','Comparison'],totalBound:12,posts:0});await c.close();}
+assert.equal(calls.filter(r=>r.method==='POST').length,3);assert.ok(calls.filter(r=>r.method==='POST').every(r=>r.path.endsWith('/equipment-plan-preview')));if(demo)assert.equal(calls.filter(r=>r.path.startsWith('/api/v1/')).length,0);
+ledger.cases.push({tag,passed:true,keyboard:['Source','Recorded Job Fact','Comparison'],totalBound:12,posts:3,previews:['categorical200','invalidNumeric400','numeric200']});await c.close();}
 assert.deepEqual(ledger.errors,[]);ledger.pass=true;
 }catch(e){ledger.error=e.stack;process.exitCode=1;}finally{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));if(f)await f.cleanup();fs.writeFileSync(path.join(out,'ledger.json'),JSON.stringify(ledger,null,2));console.log(JSON.stringify(ledger));}})();

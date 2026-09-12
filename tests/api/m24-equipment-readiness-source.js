@@ -1,0 +1,17 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
+const base='a2f1de845a1bdc43bb7b556d7067b2d67aa89f9a',root=path.resolve(__dirname,'../..'),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const output=process.argv.find(v=>v.startsWith('--output='))?.slice(9);assert.ok(output&&!fs.existsSync(output));
+const git=(...args)=>execFileSync('git',args,{cwd:root});
+const oldFiles=git('ls-tree','-r','--name-only',base,'migrations').toString('utf8').trim().split('\n').filter(p=>p.endsWith('.sql'));
+assert.equal(oldFiles.length,66);const preserved=oldFiles.map(file=>{const old=git('show',base+':'+file),current=fs.readFileSync(path.join(root,file));assert.deepEqual(current,old,file);return{file,sha256:hash(current)};});
+function routine(text,marker){const start=text.indexOf(marker);assert.ok(start>=0);const end=text.indexOf('END $$;',start);assert.ok(end>start);return text.slice(start,end+7);}
+const old=routine(git('show',base+':migrations/046_m23_equipment_operations.sql').toString('utf8'),'CREATE FUNCTION public.equipment_operation_mutate('),current=routine(fs.readFileSync(path.join(root,'migrations/069_canonical_equipment_readiness.sql'),'utf8'),'CREATE OR REPLACE FUNCTION public.equipment_operation_mutate(');
+const added=[" PERFORM public.canonical_equipment_readiness_fence(org,asset_value);\n"," PERFORM public.equipment_actor(org,actor,role_value,session_value,csrf,TRUE,FALSE);\n"];
+assert.equal(current.split(added[0]).length-1,1);assert.equal(current.split(added[1]).length-1,2);
+const stripped=current.replace('CREATE OR REPLACE FUNCTION','CREATE FUNCTION').replace(added[0],'').split(added[1]).join('');assert.equal(stripped,old,'046 successor must differ only by one fence and two post-wait actor checks');
+function previewRoutine(text){const start=text.lastIndexOf('CREATE OR REPLACE FUNCTION public.canonical_schedule_create_mutation_preview(');assert.ok(start>=0);const end=text.indexOf('$function$;',text.indexOf('AS $function$',start));assert.ok(end>start);return text.slice(start,end+11);}
+const previewOld=previewRoutine(git('show',base+':migrations/035_schedule_human_preview_approval.sql').toString('utf8')),previewNew=previewRoutine(fs.readFileSync(path.join(root,'migrations/069_canonical_equipment_readiness.sql'),'utf8'));
+const previewCheck='  PERFORM public.canonical_schedule_part4_actor_authority(organization_id_value,actor_user_id_value,actor_access_role_value,auth_session_id_value,csrf_token_value,expected_time_zone_value);\n';assert.equal(previewNew.split(previewCheck).length-1,1);assert.equal(previewNew.replace(previewCheck,''),previewOld);assert.ok(previewNew.includes(previewCheck+'  INSERT INTO public.canonical_schedule_mutation_previews('));
+fs.writeFileSync(output,JSON.stringify({pass:true,base,preserved,successor:{oldSha256:hash(old),newSha256:hash(current),onlyChanges:['CREATE OR REPLACE syntax','one existing-key fence touch','actor recheck before historical replay','actor recheck before new event'],strippedEqualsOriginal:true},previewSuccessor:{oldSha256:hash(previewOld),newSha256:hash(previewNew),onlyChange:'Actor recheck immediately before preview INSERT',strippedEqualsOriginal:true},newMigrationSha256:hash(fs.readFileSync(path.join(root,'migrations/069_canonical_equipment_readiness.sql')))},null,2));
+console.log('66 prior migrations byte-identical; exact046 successor delta verified.');

@@ -330,7 +330,7 @@ for(const [suffix,operation] of [['mutation-previews','schedule_preview'],['muta
   }catch(error){
    const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:503;
    const messages={400:'Check the appointment, start and end times, reason and acknowledgements.',403:'This demo cannot change that appointment.',404:'That demo appointment is unavailable.',409:'The demo changed. Refresh and review the appointment again.',410:'This session or preview expired. Refresh and review again.',428:'Refresh the appointment before reviewing a change.',429:'This demo reached its action limit. Saved schedules remain available.',503:'Scheduling changes are unavailable. Refresh to check the saved appointment.'};
-   return res.status(status).json({success:false,error:{message:messages[status]||'The scheduling request could not be completed.'}});
+   return res.status(status).json({success:false,error:{message:messages[status]||'The scheduling request could not be completed.',...(status===503&&error.code==='DEMO_SCHEDULE_PAUSED'?{code:'DEMO_SCHEDULE_PAUSED'}:{})}});
   }
  });
 }
@@ -393,6 +393,19 @@ router.get('/command-center/canonical/surfaces/:surface', function (req, res) {
   return demoCanonicalProjection(req, res, false);
 });
 
+router.post('/command-center/estimates/:estimateId/equipment-readiness-plans',async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'equipment-readiness'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the equipment readiness entries.'}});
+ try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'equipment_ready',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),plan:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});}catch(e){return res.status(e.status||503).json({success:false,error:{category:e.code==='EQUIPMENT_READINESS_PAUSED'?'equipment_readiness_paused':e.category,message:e.status?e.message:'Demo equipment readiness is unavailable. Refresh to check saved history.'}});}
+});
+router.post('/command-center/estimates/:estimateId/equipment-readiness-preview',async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'equipment-readiness'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the equipment readiness entries.'}});
+ try{const record=await commandCenterRepository.read(commandCenterToken(req,res)),item=demoCanonicalItems(demoWorkspace(record)).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
+ const c=require('../estimating/equipmentReadinessContract'),d=require('../commandCenter/demoEquipmentReadiness'),review=buildRevisionReview(item,selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(record.state.estimateDecisions?.[item.ids.estimate]||[],review,true);
+ const body=c.normalize({...req.body,confirmed:true}),current=record.state.equipmentReadinessPlans?.[item.ids.estimate]?.[0];if(body.action!=='save')return res.status(400).json({success:false,error:{message:'Enter equipment readiness to review.'}});c.checkBasis(body,review,current);d.replacementCheck(record.state,item,body.inputs);
+ const now=(await commandCenterRepository.pool().query('SELECT clock_timestamp() now')).rows[0].now,result=c.evaluate(body.inputs,d.rawSources(record.state,item,body.inputs,now),now);
+ return res.json({success:true,data:{result,assessment:c.assessment(result),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis}});
+ }catch(e){return res.status(e.status||503).json({success:false,error:{category:e.category,message:e.status?e.message:'Demo equipment readiness is unavailable. Refresh and try again.'}});}
+});
 router.post('/command-center/estimates/:estimateId/equipment-cost-plans',async function(req,res){
  res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'equipment-cost'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the equipment cost entries.'}});
  try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'equipment_cost',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),plan:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});}catch(e){return res.status(e.status||503).json({success:false,error:{category:e.code==='EQUIPMENT_COST_PAUSED'?'equipment_cost_paused':e.code==='EQUIPMENT_COST_OVERLAP'?'cost_overlap':undefined,message:e.status?e.message:'Demo equipment costs are unavailable. Refresh to check saved history.'}});}
@@ -487,6 +500,7 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     review.materialReview = buildMaterialReview(review, item.snapshot);
     const labor=record.state.laborPlans?.[item.ids.estimate]||[];review.costComponents=require('../estimating/costAdoptionContract').components(selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[],selected));
     review.equipmentPlans=await demoEquipment.project(record.state,item,review);
+    review.equipmentReadiness=await require('../commandCenter/demoEquipmentReadiness').project(record.state,item,review);
     const costSelection=selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[],selected);review.equipmentCostComponents=require('../estimating/equipmentCostComposition').components(costSelection);if(costSelection.selected?.calculationVersion==='estimate-cost-adoption-v2')review.costComponents=review.equipmentCostComponents;
     const equipmentCosts=record.state.equipmentCostPlans?.[item.ids.estimate]||[],costPolicy=require('../estimating/equipmentCostPlanPolicy');review.equipmentCostPlans=require('../estimating/equipmentCostPlanContract').project({current:equipmentCosts[0]||null,history:equipmentCosts,total:equipmentCosts.length},review,review.isCurrent&&costPolicy.mutationsEnabled,true,!costPolicy.mutationsEnabled);
     review.equipmentOutsideBasis=require('../estimating/equipmentCostComposition').outsideBasis(costSelection,{...item,sourcePins:costSelection.originalPins});

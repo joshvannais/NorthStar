@@ -1421,6 +1421,28 @@ function createCanonicalRouter(options) {
     });return res.json({success:true,data:result});}catch(error){return res.status(error.status||503).json({success:false,error:{message:error.status?error.message:'Equipment sources are unavailable. Refresh and try again.'}});}
   });
 
+  router.post('/estimates/:estimateId/equipment-readiness-preview',dependencies.auth,requireCanonicalContext,async function(req,res){
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the equipment readiness entries.'}});
+    try{const data=await withEquipmentCanonicalRead(req,dependencies,async(client,operator)=>{
+      if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Equipment readiness is available to current owners and administrators.'),{status:403});
+      const input={...actorInput(req),estimateId:req.params.estimateId},item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
+      if(!item)throw Object.assign(new Error('This estimate is unavailable.'),{status:404});
+      const c=require('../estimating/equipmentReadinessContract'),repository=require('../estimating/equipmentReadinessRepository');
+      const review=buildRevisionReview(item,await readRevisions(client,input));review.decisions=await readSelectedDecisions(client,input);
+      const plans=await repository.readPlans(client,input),body=c.normalize({...req.body,confirmed:true});
+      if(body.action!=='save')throw Object.assign(new Error('Enter equipment readiness to review.'),{status:400});c.checkBasis(body,review,plans.current);
+      const evidence=await repository.readSources(client,input,body.inputs),now=(await client.query('SELECT clock_timestamp() now')).rows[0].now,result=c.evaluate(body.inputs,evidence,now);
+      return{result,assessment:c.assessment(result),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
+    });return res.json({success:true,data});}catch(error){return res.status(error.status||503).json({success:false,error:{category:error.category,message:error.status?error.message:'Equipment evidence is unavailable. Refresh and try again.'}});}
+  });
+  router.post('/estimates/:estimateId/equipment-readiness-plans',dependencies.auth,requireCanonicalContext,async function(req,res){
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the equipment readiness entries.'}});
+    try{const data=await require('../estimating/equipmentReadinessRepository').mutatePlan(resolvePool(dependencies.poolProvider),{...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')},req.body);return res.status(data.replayed?200:201).json({success:true,data});}
+    catch(error){return res.status(error.status||503).json({success:false,error:{category:error.code==='EQUIPMENT_READINESS_PAUSED'?'equipment_readiness_paused':error.category,message:error.status?error.message:'Equipment readiness is unavailable. Refresh to check saved history.'}});}
+  });
+
   router.post('/estimates/:estimateId/equipment-cost-preview',dependencies.auth,requireCanonicalContext,async function(req,res){
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the equipment cost entries.'}});
@@ -1564,6 +1586,7 @@ function createCanonicalRouter(options) {
         const costSelection=await readRevisions(client,input,selected);review.equipmentCostComponents=require('../estimating/equipmentCostComposition').components(costSelection);review.costComponents=costSelection.selected?.calculationVersion==='estimate-cost-adoption-v2'?review.equipmentCostComponents:require('../estimating/costAdoptionContract').components(costSelection);
         const equipmentCostPolicy=require('../estimating/equipmentCostPlanPolicy');review.equipmentCostPlans=require('../estimating/equipmentCostPlanContract').project(await require('../estimating/equipmentCostPlanRepository').readPlans(client,input),review,review.isCurrent&&equipmentCostPolicy.mutationsEnabled&&operator.canMutate===true,false,!equipmentCostPolicy.mutationsEnabled);
         review.equipmentOutsideBasis=require('../estimating/equipmentCostComposition').outsideBasis(costSelection,{...item,sourcePins:buildEstimateReview(item).pins});
+        const readinessRepository=require('../estimating/equipmentReadinessRepository');review.equipmentReadiness=await readinessRepository.project(client,await readinessRepository.readPlans(client,input),review,input,false);review.equipmentReadiness.canMutate=review.equipmentReadiness.canMutate&&operator.canMutate===true;
         review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);
         review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled&&operator.canMutate===true;
         review.adoptionPaused=!adoptionPolicy.mutationsEnabled;

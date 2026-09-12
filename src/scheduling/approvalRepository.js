@@ -161,6 +161,16 @@ async function currentEvaluations(client, input, assignment) {
       expectedTimeZone: input.expectedTimeZone,
       proposal: input.proposal,
     });
+  if (input.scheduledStart === null) {
+    const equipment = require('./equipmentReadiness');
+    const basis = await equipment.read(client, input);
+    if (basis.notRecorded !== true) {
+      const addition = equipment.extra(basis, input.proposal);
+      const merged = equipment.merge(conflict.data, addition);
+      const digest = sha256(stableValue({originalDigest: conflict.data.digest, equipmentDigest: addition.digest, hardConflicts: merged.hardConflicts, reviewReasons: merged.reviewReasons}));
+      conflict.data = {...merged, id: digest, digest};
+    }
+  }
   const recommendation = await recommendInTransaction(client, {
     organizationId: input.organizationId,
     actorUserId: input.actorUserId,
@@ -178,10 +188,34 @@ async function currentEvaluations(client, input, assignment) {
   };
 }
 
+// Paused builds still check current actor, session and CSRF before reporting the pause.
+// These are the actor rows/conditions from 035; the protected mutation helpers remain withheld.
+async function enforceRecoveryPolicy(client,input) {
+  if(require('./mutationPolicy').mutationsEnabled)return;
+  const rows=await client.query(`SELECT m.role,m.status membership_status,p.operational_role,u.status account_status,
+    s.status session_status,s.access_expires_at,s.csrf_token_hash,sub.status subscription_status,
+    sub.trial_started_at,sub.trial_ends_at,o.status onboarding_status,b.raw_profile #>> '{company,timeZone}' time_zone
+    FROM organization_memberships m JOIN workforce_profiles p ON p.organization_id=m.organization_id AND p.membership_id=m.id
+    JOIN users u ON u.organization_id=m.organization_id AND u.id=m.user_id
+    JOIN auth_sessions s ON s.organization_id=m.organization_id AND s.membership_id=m.id AND s.user_id=m.user_id AND s.id=$3
+    JOIN subscriptions sub ON sub.organization_id=m.organization_id JOIN organization_onboarding o ON o.organization_id=m.organization_id
+    JOIN canonical_business_profiles b ON b.organization_id=o.organization_id AND b.id=o.active_business_profile_id AND b.is_active=TRUE
+    WHERE m.organization_id=$1 AND m.user_id=$2 FOR SHARE OF m,p,u,s,sub,o,b`,[input.organizationId,input.actorUserId,input.authSessionId]);
+  const a=rows.rows[0],clock=(await client.query('SELECT clock_timestamp() now')).rows[0].now;
+  const csrf=typeof input.csrfToken==='string'?input.csrfToken:'',csrfBytes=Buffer.byteLength(csrf),now=new Date(clock).getTime();
+  const trial=a&&a.subscription_status==='trialing'&&a.trial_started_at&&a.trial_ends_at&&new Date(a.trial_ends_at).getTime()===new Date(a.trial_started_at).getTime()+14*86400000&&new Date(a.trial_ends_at).getTime()>now;
+  if(rows.rowCount!==1||!a||a.membership_status!=='active'||a.account_status!=='active'||a.role!==input.actorAccessRole||
+     !(['owner','admin'].includes(a.role)||a.role==='member'&&a.operational_role==='dispatcher')||a.session_status!=='active'||
+     !a.access_expires_at||new Date(a.access_expires_at).getTime()<=now||csrfBytes<32||csrfBytes>512||require('node:crypto').createHash('sha256').update(csrf,'utf8').digest('hex')!==trimDigest(a.csrf_token_hash)||
+     !(a.subscription_status==='active'||trial)||a.onboarding_status!=='complete')fail(403,'M22_APPROVAL_FORBIDDEN','Your current account cannot make this scheduling change.');
+  fail(503,'M22_SCHEDULING_PAUSED','New scheduling changes are paused. Refresh to check the saved appointment and dispatch status.');
+}
+
 async function createPreviewInTransaction(client, input) {
   // Match the trusted database entry boundary's lock order before Part 2/3
   // reads. This avoids lock upgrades after the evaluators acquire row shares.
   await lockMutationAuthority(client, input.organizationId);
+  await enforceRecoveryPolicy(client,input);
   const assignment = await assignmentPins(client, input);
   const evidence = await currentEvaluations(client, input, assignment);
   const warningDigests = entryDigests(evidence.conflict.data.warnings);
@@ -213,7 +247,10 @@ async function createMutationPreview(pool, input) {
   }
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const client = await pool.connect();
+    let sourceFence=false,discard=false;
     try {
+      await client.query("SET lock_timeout='2000ms'");await client.query("SET statement_timeout='10000ms'");
+      await client.query('SELECT pg_advisory_lock_shared(230004,4)');sourceFence=true;
       await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
       await client.query("SET LOCAL statement_timeout='10000ms'");
       await client.query("SET LOCAL lock_timeout='2000ms'");
@@ -226,7 +263,8 @@ async function createMutationPreview(pool, input) {
       if (error && ['40001', '40P01'].includes(error.code) && attempt < 2) continue;
       throw mapDatabaseError(error);
     } finally {
-      client.release();
+      if(sourceFence)await client.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(()=>{discard=true;});
+      await client.query('RESET ALL').catch(()=>{discard=true;});client.release(discard);
     }
   }
   fail(409, 'M22_APPROVAL_STALE', 'Scheduling authority changed; request a new preview.');
@@ -287,6 +325,7 @@ async function idempotencyReplay(client, input) {
 
 async function applyApprovalInTransaction(client, input) {
   await lockMutationAuthority(client, input.organizationId);
+  await enforceRecoveryPolicy(client,input);
   const replay = await idempotencyReplay(client, input);
   if (replay) {
     const replayResult = await client.query(
@@ -333,7 +372,10 @@ async function approveMutation(pool, input) {
   }
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const client = await pool.connect();
+    let sourceFence=false,discard=false;
     try {
+      await client.query("SET lock_timeout='2000ms'");await client.query("SET statement_timeout='10000ms'");
+      await client.query('SELECT pg_advisory_lock_shared(230004,4)');sourceFence=true;
       await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
       await client.query("SET LOCAL statement_timeout='10000ms'");
       await client.query("SET LOCAL lock_timeout='2000ms'");
@@ -346,7 +388,8 @@ async function approveMutation(pool, input) {
       if (error && ['40001', '40P01'].includes(error.code) && attempt < 2) continue;
       throw mapDatabaseError(error);
     } finally {
-      client.release();
+      if(sourceFence)await client.query('SELECT pg_advisory_unlock_shared(230004,4)').catch(()=>{discard=true;});
+      await client.query('RESET ALL').catch(()=>{discard=true;});client.release(discard);
     }
   }
   fail(409, 'M22_APPROVAL_STALE', 'Scheduling authority changed; request a new preview.');

@@ -645,6 +645,26 @@ BEGIN
  IF adopted.id IS DISTINCT FROM latest.id OR latest.action IS DISTINCT FROM 'save' THEN payload:=payload||jsonb_build_object('notRecorded',FALSE,'sourceChanged',TRUE,'adopted',public.canonical_travel_schedule_plan(adopted,sources));END IF;END IF;
  RETURN payload||jsonb_build_object('digest',public.canonical_completion_digest(payload));
 END $$;
+-- Target home is a current company association, never a live vehicle/worker location.
+CREATE FUNCTION public.canonical_travel_schedule_target(org UUID,target_kind TEXT,target_id UUID,basis JSONB) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE home TEXT;target_pin JSONB;payload JSONB:=basis;
+BEGIN
+ IF target_kind='profile' THEN
+ SELECT profile.home_location_id,jsonb_build_object('kind',target_kind,'id',profile.id,'homeLocationId',profile.home_location_id,'updatedAt',profile.updated_at,'membershipUpdatedAt',membership.updated_at,'userUpdatedAt',account.updated_at)
+ INTO home,target_pin FROM public.workforce_profiles profile
+ JOIN public.organization_memberships membership ON membership.organization_id=profile.organization_id AND membership.id=profile.membership_id
+ JOIN public.users account ON account.organization_id=membership.organization_id AND account.id=membership.user_id
+ WHERE profile.organization_id=org AND profile.id=target_id AND membership.status='active' AND account.status='active';
+ ELSIF target_kind='crew' THEN
+ SELECT crew.home_location_id,jsonb_build_object('kind',target_kind,'id',crew.id,'homeLocationId',crew.home_location_id,'updatedAt',crew.updated_at)
+ INTO home,target_pin FROM public.workforce_crews crew WHERE crew.organization_id=org AND crew.id=target_id;
+ END IF;
+ IF payload->'sources' IS NOT NULL THEN payload:=jsonb_set(payload,'{sources,targetOrigin}',COALESCE(to_jsonb(home),'null'::jsonb));END IF;
+ IF payload->'adopted' IS NOT NULL THEN payload:=jsonb_set(payload,'{adopted,sources,targetOrigin}',COALESCE(to_jsonb(home),'null'::jsonb));END IF;
+ payload:=(payload-'digest')||jsonb_build_object('targetBasis',COALESCE(target_pin,jsonb_build_object('kind',target_kind,'id',target_id,'homeLocationId',NULL)));
+ RETURN payload||jsonb_build_object('digest',public.canonical_completion_digest(payload));
+END $$;
+REVOKE ALL ON FUNCTION public.canonical_travel_schedule_target(uuid,text,uuid,jsonb) FROM PUBLIC;
 CREATE FUNCTION public.canonical_travel_schedule_read(org UUID,actor UUID,role_value TEXT,session_value UUID,appointment UUID,target_kind TEXT,target_id UUID,start_value TIMESTAMPTZ,end_value TIMESTAMPTZ,zone_value TEXT) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB;assignment UUID;payload JSONB;
 BEGIN
@@ -654,7 +674,7 @@ BEGIN
  SELECT s.id INTO assignment FROM public.canonical_schedule_assignments s JOIN public.canonical_appointments a ON a.organization_id=s.organization_id AND a.id=s.appointment_id WHERE s.organization_id=org AND s.appointment_id=appointment AND EXISTS(SELECT 1 FROM public.canonical_transcripts t WHERE t.organization_id=a.organization_id AND t.operation_id=a.operation_id AND t.graph_id=a.graph_id AND public.canonical_labor_transcript_source_normalized(t.source) IN ('lead','retell','voice'));
  IF assignment IS NULL THEN RAISE EXCEPTION 'Appointment unavailable' USING ERRCODE='P0002';END IF;
  IF target_kind='unassigned' AND EXISTS(SELECT 1 FROM public.canonical_schedule_assignments s WHERE s.organization_id=org AND s.id=assignment AND s.target_state='assigned' AND s.schedule_state=CASE WHEN start_value IS NULL THEN 'unscheduled' ELSE 'scheduled' END AND s.scheduled_start IS NOT DISTINCT FROM start_value AND s.scheduled_end IS NOT DISTINCT FROM end_value) THEN RETURN jsonb_build_object('notRecorded',TRUE,'digest','none');END IF;
- payload:=public.canonical_travel_schedule_basis(org,assignment);
+ payload:=public.canonical_travel_schedule_target(org,target_kind,target_id,public.canonical_travel_schedule_basis(org,assignment));
  PERFORM public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,NULL,FALSE);
  RETURN payload;
 END $$;
@@ -694,7 +714,8 @@ BEGIN
  IF jsonb_typeof(sources#>'{serviceArea,maxTravelMinutes}')='number' AND minutes>(sources#>>'{serviceArea,maxTravelMinutes}')::numeric THEN review:=review||jsonb_build_array(jsonb_build_object('code','travel_exceeds_declared_time','lineId',v->'lineId'));END IF;
  IF jsonb_typeof(sources->'bufferMinutes')='number' AND minutes>(sources->>'bufferMinutes')::numeric THEN review:=review||jsonb_build_array(jsonb_build_object('code','travel_buffer_review','lineId',v->'lineId'));END IF;
  END IF;
- review:=review||jsonb_build_array(jsonb_build_object('code','travel_target_origin_unknown','lineId',v->'lineId'),jsonb_build_object('code','travel_driving_route_unverified','lineId',v->'lineId'));
+ IF sources->>'targetOrigin' IS NULL OR v#>>'{origin,kind}' IS DISTINCT FROM 'business_location' OR sources->>'targetOrigin' IS DISTINCT FROM v#>>'{origin,sourceId}' OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(sources->'locations') x WHERE x=v->'origin') THEN review:=review||jsonb_build_array(jsonb_build_object('code','travel_target_origin_unknown','lineId',v->'lineId'));END IF;
+ review:=review||jsonb_build_array(jsonb_build_object('code','travel_driving_route_unverified','lineId',v->'lineId'));
  END LOOP;
  IF source_caution THEN review:=review||jsonb_build_array(jsonb_build_object('code','travel_source_needs_review'));END IF;
  FOR v IN SELECT value FROM jsonb_array_elements(inputs->'access') LOOP source_value:=v->'source';
@@ -717,7 +738,7 @@ BEGIN
  IF estimate_value IS NOT NULL THEN PERFORM public.canonical_travel_fence(org,estimate_value);END IF;END IF;
  prior:=public.canonical_travel_schedule_equipment_authority(org,assignment,target_kind,target_id,start_value,end_value,zone_value);
  IF COALESCE(cleanup,FALSE) THEN RETURN prior;END IF;
- basis:=public.canonical_travel_schedule_basis(org,assignment);
+ basis:=public.canonical_travel_schedule_target(org,target_kind,target_id,public.canonical_travel_schedule_basis(org,assignment));
  IF basis->'notRecorded'='true'::jsonb THEN RETURN prior;END IF;
  extra:=public.canonical_travel_schedule_result(basis,start_value,end_value,clock_timestamp());
  hard:=public.canonical_schedule_part4_stable_entries((prior->'hardConflicts')||(extra->'hardConflicts'));review:=public.canonical_schedule_part4_stable_entries((prior->'reviewReasons')||(extra->'reviewReasons'));

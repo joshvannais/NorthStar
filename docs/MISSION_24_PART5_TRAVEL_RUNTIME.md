@@ -41,3 +41,14 @@ An old reader is incompatible with new travel/v3 history. Recovery must use curr
 ## Verification ownership
 
 Focused tests cover rational arithmetic/rounding and component orders; SQL/JS agreement; source revocation, saved references and old replay; actual scheduling, equipment-046 and revision interleavings with absent/existing fences and expiry-after-wait; startup contention/rollback and old SQL/routine/ACL preservation; populated paid/demo upgrade, pause and forward resume; rendered entry, incomplete-to-measured continuation, coverage, selected review/local query, consent, uncertain retry, rejected errors, keyboard, themes and final navigation. Failed harness attempts remain evidence with corrected accounting, not relabeled product failures or passing runs. Independent review and separately authorized public release acceptance remain required.
+
+
+## PR212 independent correction boundaries
+
+Changing a hauling volume or payload unit clears that dimension's group measurements and every ordered load quantity, capacity and existing contents measurement. The other dimension and ownership/source details remain; calculation and consent are invalidated. No conversion or historical rewrite occurs.
+
+The demo route preserves the allowlisted permanent travel-history limit separately from an unknown 429. Saved history remains readable; a deliberate demo reset removes its saved practice work and history. No reset or retry is automatic. Uncertain saves retain the exact request/key.
+
+Scheduling reads and mutation review bind the proposed current worker/crew home-location association to the exact saved business-location source. Active tenant membership/user checks apply to worker resolution; existing scheduling authority and crew eligibility remain enforced independently. Matching means only a recorded company association, never a physical position or verified driving route. Missing, changed, unmatched and unassigned origins remain uncertain. Current and still-adopted travel both use this basis; the current target association is included in the scheduling digest. Existing outer scheduling authority checks and preview/approval invalidation remain intact. Only the new unreleased070 private helper changes; all67 applied SQL files and public signatures remain unchanged.
+
+Correction recovery builds must be derived from the corrected source. The prior691c902/c0c0e66 populated executions remain predecessor evidence, not corrected-source execution.

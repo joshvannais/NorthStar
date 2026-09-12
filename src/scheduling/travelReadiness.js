@@ -21,7 +21,7 @@ function extra(basis,proposal,now=new Date()){
   const minutes=t.time.value===null?null:Number(t.time.value)*(t.time.unit==='hour'?60:1);
   if(minutes===null)reviewReasons.push({code:'travel_duration_unknown',lineId:t.lineId});
   else{facts.push({lineId:t.lineId,kind:'declared_travel_minutes',minutes});if(Number.isFinite(policy.maxTravelMinutes)&&minutes>policy.maxTravelMinutes)reviewReasons.push({code:'travel_exceeds_declared_time',lineId:t.lineId});if(Number.isFinite(buffer)&&minutes>buffer)reviewReasons.push({code:'travel_buffer_review',lineId:t.lineId});}
-  if(!source.targetOrigin||o.kind!=='business_location'||source.targetOrigin!==o.sourceId)reviewReasons.push({code:'travel_target_origin_unknown',lineId:t.lineId});
+  if(!source.targetOrigin||o.kind!=='business_location'||source.targetOrigin!==o.sourceId||!(source.locations||[]).some(l=>sha256(safeLocation(l))===sha256(safeLocation(o))))reviewReasons.push({code:'travel_target_origin_unknown',lineId:t.lineId});
   // Road route evidence is not produced by this declared planning feature.
   reviewReasons.push({code:'travel_driving_route_unverified',lineId:t.lineId});
  }
@@ -51,7 +51,7 @@ function fromHistory(history,selected,sources,current,proposal){
 }
 function safeLocation(l){return {kind:l.kind,label:'',sourceId:l.sourceId,sourceDigest:l.sourceDigest,latitude:l.latitude,longitude:l.longitude};}
 function safeSource(s){return {effectiveOn:s.effectiveOn,endsOn:s.endsOn,geography:s.geography.trim()?'Recorded':''};}
-function safePlan(plan,sources){
+function safePlan(plan,sources,targetOrigin=null){
  if(!plan)return {notRecorded:true,digest:'none'};
  const pin={id:plan.id,revision:plan.revision,digest:plan.digest};
  if(plan.action!=='save')return {notRecorded:false,sourceChanged:true,planPin:pin};
@@ -59,7 +59,7 @@ function safePlan(plan,sources){
  const sourceRows=[...inputs.logistics,...inputs.hauls,...inputs.hauls.filter(h=>h.detail?.density).map(h=>({lineId:h.lineId,source:h.detail.density.source})),...(inputs.stagePlan?.resources||[]).map(x=>({...x,lineId:x.resourceId})),...(inputs.stagePlan?.stages||[]).map(x=>({...x,lineId:x.stageId}))];
  return {notRecorded:false,sourceChanged:plan.evidence?.digest!==sources.digest,planPin:pin,
  inputs:{serviceKey:inputs.serviceKey,trips:inputs.trips.map(t=>({lineId:t.lineId,origin:safeLocation(t.origin),destination:safeLocation(t.destination),distance:t.distance,time:t.time,source:safeSource(t.source)})),logistics:sourceRows.map(l=>({lineId:l.lineId,source:safeSource(l.source)})),access:inputs.access.map(a=>({lineId:a.lineId,status:a.status,start:a.start,end:a.end,appliesToJob:a.appliesToJob,source:safeSource(a.source)})),hauls:[],stagePlan:null},
- sources:{serviceKey:sources.serviceKey,locations:sources.locations.map(safeLocation),serviceArea:{maxRadiusMiles:sources.serviceArea?.maxRadiusMiles??null,maxTravelMinutes:sources.serviceArea?.maxTravelMinutes??null},bufferMinutes:sources.bufferMinutes??null,targetOrigin:null},
+ sources:{serviceKey:sources.serviceKey,locations:sources.locations.map(safeLocation),serviceArea:{maxRadiusMiles:sources.serviceArea?.maxRadiusMiles??null,maxTravelMinutes:sources.serviceArea?.maxTravelMinutes??null},bufferMinutes:sources.bufferMinutes??null,targetOrigin},
  haulingNeedsReview:!operations.bindLoads(inputs.hauls,inputs.loadBindings,inputs.trips).complete||resources.unknown.some(x=>x.kind==='haul_equipment_unknown'||x.kind==='resource_source_changed'&&inputs.hauls.length>0),stagesNeedReview:!!inputs.stagePlan&&(operations.stages(inputs.stagePlan).feasibleElapsedMinutes===null||resources.needsReview)};
 }
 async function read(client,input){const p=input.proposal,t=p.target;return (await client.query('SELECT public.canonical_travel_schedule_read($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) result',[input.organizationId,input.actorUserId,input.actorAccessRole,input.authSessionId,input.appointmentId,t.kind,t.id,p.scheduledStart,p.scheduledEnd,input.expectedTimeZone])).rows[0].result;}
@@ -67,8 +67,12 @@ function demoBasis(state,item,proposal,now=new Date()){
  const saved=require('../commandCenter/demoScheduling').validateState(state).history.find(h=>h.appointmentId===item.ids.appointment)?.response.scheduleAuthority;
  if(cleanup(saved,proposal))return {notRecorded:true,digest:'none'};
  const history=state.travelPlans?.[item.ids.estimate]||[],selected=state.estimateRevisions?.[item.ids.estimate]?.[0],sources=require('../commandCenter/demoTravel').sources(state,item);
- const raw=fromHistory(history,selected,sources,saved,proposal),latest=history[0],payload=safePlan(latest,sources);
- if(raw.adoptionPin){payload.adoptionPin=raw.adoptionPin;if(raw.adopted){const p=history.find(x=>x.id===raw.adoptionPin.travel.id);payload.adopted=safePlan(p,sources);payload.notRecorded=false;payload.sourceChanged=true;}}
+ const workforce=require('../commandCenter/demoWorkforce'),evidence=workforce.read(state),target=proposal.target;
+ const eligible=workforce.candidate(evidence,target),record=eligible?(target.kind==='profile'?evidence.members.find(m=>m.profileId===target.id):evidence.crews.find(c=>c.id===target.id)):null;
+ const targetOrigin=record?.homeLocationId??null;
+ const raw=fromHistory(history,selected,sources,saved,proposal),latest=history[0],payload=safePlan(latest,sources,targetOrigin);
+ payload.targetBasis={kind:target.kind,id:target.id,homeLocationId:targetOrigin,evidenceDigest:evidence?.digest??null};
+ if(raw.adoptionPin){payload.adoptionPin=raw.adoptionPin;if(raw.adopted){const p=history.find(x=>x.id===raw.adoptionPin.travel.id);payload.adopted=safePlan(p,sources,targetOrigin);payload.notRecorded=false;payload.sourceChanged=true;}}
  return {...payload,digest:sha256(payload)};
 }
 module.exports={extra,merge,cleanup,fromHistory,safePlan,read,demoBasis};

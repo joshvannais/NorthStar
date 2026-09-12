@@ -1,4 +1,6 @@
 'use strict';
+const equipmentPlan=require('../estimating/equipmentPlanContract');
+const demoEquipment=require('../commandCenter/demoEquipmentPlans');
 const laborPlan=require('../estimating/laborPlanContract');
 const laborPlanPolicy=require('../estimating/laborPlanPolicy');
 const adoption = require('../estimating/materialAdoptionContract');
@@ -391,6 +393,17 @@ router.get('/command-center/canonical/surfaces/:surface', function (req, res) {
   return demoCanonicalProjection(req, res, false);
 });
 
+router.post('/command-center/estimates/:estimateId/equipment-plans',async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'equipment-plan'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the equipment plan entries.'}});
+ try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'equipment_plan',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),plan:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});}catch(e){return res.status(e.status||503).json({success:false,error:{category:e.status===503&&e.code==='EQUIPMENT_PLAN_PAUSED'?'equipment_paused':undefined,message:e.status?e.message:'Demo equipment plans are unavailable.'}});}
+});
+router.post('/command-center/estimates/:estimateId/equipment-plan-preview',async function(req,res){
+ res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'equipment-plan'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the equipment plan entries.'}});
+ try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
+ const review=buildRevisionReview(item,selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(record.state.estimateDecisions?.[item.ids.estimate]||[],review,true);const current=(record.state.equipmentPlans?.[item.ids.estimate]||[])[0]||null;const body=equipmentPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')return res.status(400).json({success:false,error:{message:'Enter a equipment plan to calculate.'}});equipmentPlan.checkBasis(body,review,current);const now=(await commandCenterRepository.pool().query('SELECT clock_timestamp() now')).rows[0].now;const result=equipmentPlan.evaluate(body.inputs,demoEquipment.sources(record.state,item,body.inputs),now);return res.json({success:true,data:{result,assessment:equipmentPlan.assessment(result),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis}});
+ }catch(e){return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Demo equipment planning is unavailable.'}});}
+});
+
 router.post('/command-center/estimates/:estimateId/labor-plans',async function(req,res){
  res.set('Cache-Control','no-store');if(!mutationBoundary(req,res,'labor-plan'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the labor plan entries.'}});
  try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'labor_plan',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),plan:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});return res.status(result.replayed?200:201).json({success:true,data:{replayed:result.replayed}});}catch(e){return res.status(e.status||503).json({success:false,error:{category:e.status===503&&e.code==='LABOR_PLAN_PAUSED'?'labor_paused':undefined,message:e.status?e.message:'Demo labor plans are unavailable.'}});}
@@ -460,6 +473,7 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     review.riskReview=buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
     const labor=record.state.laborPlans?.[item.ids.estimate]||[];review.costComponents=require('../estimating/costAdoptionContract').components(selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[],selected));
+    review.equipmentPlans=await demoEquipment.project(record.state,item,review);
     review.laborPlans=laborPlan.project({current:labor[0]||null,history:labor,total:labor.length},review,review.isCurrent&&laborPlanPolicy.mutationsEnabled,true,!laborPlanPolicy.mutationsEnabled);
     const plans=record.state.materialPlans?.[item.ids.estimate]||[];review.materialPlans=materialPlan.project({current:plans[0]||null,history:plans,total:plans.length},review,review.isCurrent&&materialPlanPolicy.mutationsEnabled,true,!materialPlanPolicy.mutationsEnabled);
     review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled;review.adoptionPaused=!adoptionPolicy.mutationsEnabled;

@@ -1,4 +1,6 @@
 'use strict';
+const equipmentPlan=require('../estimating/equipmentPlanContract');
+const equipmentPlanRepository=require('../estimating/equipmentPlanRepository');
 const laborPlan=require('../estimating/laborPlanContract');
 const laborPlanPolicy=require('../estimating/laborPlanPolicy');
 
@@ -114,10 +116,10 @@ function requestContext(req) {
 }
 
 function validateCustomerIdFilter(raw, keyPresent) {
-  if (!keyPresent) return null;                             // absent — no filter
+  if (!keyPresent) return null;                             // absent â€” no filter
   if (typeof raw !== 'string') return failClosed();         // arrays, objects, numbers, booleans
   if (raw.length === 0) return failClosed();                // empty string
-  if (raw !== raw.trim()) return failClosed();              // leading/trailing whitespace — not canonical
+  if (raw !== raw.trim()) return failClosed();              // leading/trailing whitespace â€” not canonical
   if (UUID.test(raw) && raw.length === 36) return raw;      // valid, exact length, no coercion
   return failClosed();                                      // partial, overlong, anything else
 
@@ -851,6 +853,11 @@ async function withBroadCanonicalRead(req, dependencies, operation, denial) {
   });
 }
 
+async function withEquipmentCanonicalRead(req,dependencies,operation){
+ return equipmentPlanRepository.withReadSnapshot(resolvePool(dependencies.poolProvider),client=>
+  withBroadSchedulingReadSnapshot(client,actorInput(req),operation,{operatorDirectory:dependencies.operatorDirectory}));
+}
+
 async function canonicalStatus(req, dependencies) {
   try {
     return await withBroadCanonicalRead(req, dependencies, async function (client) {
@@ -1396,6 +1403,24 @@ function createCanonicalRouter(options) {
     }
   });
 
+  router.post('/estimates/:estimateId/equipment-plans', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the equipment entries.'}});
+    try{const result=await equipmentPlanRepository.mutatePlan(resolvePool(dependencies.poolProvider),{...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')},req.body);return res.status(result.replayed?200:201).json({success:true,data:result});}
+    catch(error){return res.status(error.status||503).json({success:false,error:{category:error.code==='EQUIPMENT_PLAN_PAUSED'?'equipment_paused':undefined,message:error.status?error.message:'Equipment planning is unavailable. Refresh to check saved history.'}});}
+  });
+  router.post('/estimates/:estimateId/equipment-plan-preview', dependencies.auth, requireCanonicalContext, async function(req,res) {
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the equipment entries.'}});
+    try{const result=await withEquipmentCanonicalRead(req,dependencies,async(client,operator)=>{
+      if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Equipment planning is available to current owners and administrators.'),{status:403});
+      const input={...actorInput(req),estimateId:req.params.estimateId};const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);if(!item)throw Object.assign(new Error('This estimate is unavailable.'),{status:404});
+      const review=buildRevisionReview(item,await readRevisions(client,input));review.decisions=await readSelectedDecisions(client,input);const plans=await equipmentPlanRepository.readPlans(client,input),body=equipmentPlan.normalize({...req.body,confirmed:true});if(body.action!=='save')throw Object.assign(new Error('Enter equipment to review.'),{status:400});equipmentPlan.checkBasis(body,review,plans.current);
+      const raw=await equipmentPlanRepository.readSources(client,input,body.inputs),sources=equipmentPlanRepository.presentSources(raw,input),now=(await client.query('SELECT clock_timestamp() now')).rows[0].now,result=equipmentPlan.evaluate(body.inputs,sources,now);
+      return {result,assessment:equipmentPlan.assessment(result),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
+    });return res.json({success:true,data:result});}catch(error){return res.status(error.status||503).json({success:false,error:{message:error.status?error.message:'Equipment sources are unavailable. Refresh and try again.'}});}
+  });
+
   router.post('/estimates/:estimateId/labor-plans', dependencies.auth, requireCanonicalContext, async function(req,res) {
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'This labor plan could not be read. Check your entries.'}});
@@ -1488,7 +1513,7 @@ function createCanonicalRouter(options) {
     const failure = (status, message) => res.status(status).json({ success: false, error: { code: 'ESTIMATE_REVIEW_UNAVAILABLE', message } });
     if (!UUID.test(req.params.estimateId)) return failure(404, 'That estimate is unavailable.');
     try {
-      const review = await withBroadCanonicalRead(req, dependencies, async (client, operator) => {
+      const review = await withEquipmentCanonicalRead(req, dependencies, async (client, operator) => {
         if (!operator || !operator.actor || !['owner', 'admin'].includes(operator.actor.accessRole)) {
           const denied = new Error('Estimate review requires a current owner or administrator.');
           denied.statusCode = 403; throw denied;
@@ -1506,6 +1531,7 @@ function createCanonicalRouter(options) {
         review.riskReview = buildCapellaReview(review, item.snapshot);
     review.materialReview = buildMaterialReview(review, item.snapshot);
         review.laborPlans=laborPlan.project(await readLaborPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&laborPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!laborPlanPolicy.mutationsEnabled);
+        const equipmentInput={...actorInput(req),estimateId:item.ids.estimate};review.equipmentPlans=await equipmentPlanRepository.project(client,await equipmentPlanRepository.readPlans(client,equipmentInput),review,await equipmentPlanRepository.readSources(client,equipmentInput),equipmentInput,false);review.equipmentPlans.canMutate=review.equipmentPlans.canMutate&&operator.canMutate===true;
         review.costComponents=require('../estimating/costAdoptionContract').components(await readRevisions(client,input,selected));
         review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);
         review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled&&operator.canMutate===true;

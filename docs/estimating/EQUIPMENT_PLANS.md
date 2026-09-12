@@ -1,0 +1,27 @@
+# Mission24 Part4 — Equipment
+
+Part4 has exactly three planned slices. Slice1 records job-specific equipment identity, configuration, requirements and source review. Slice2 owns equipment cost allocation and estimate composition. Slice3 owns availability, condition, maintenance, alternatives and downstream scheduling integration. This package implements only Slice1; matching a recorded requirement never establishes safe use, availability or certification.
+
+## Source and authority contract
+
+The selected estimate review contains an Equipment Plan disclosure shared by paid and demo customer drawers. Up to12 equipment items each contain an existing exact asset identity or proposed equipment description, declared access basis, up to12 explicit numeric or categorical requirements, selected published company references, and reviewer notes. Empty identity fields remain unknown. Numeric comparison uses nonnegative decimal strings with six-place precision and exactly equal unit strings. There is no unit conversion, fuzzy model matching, prose interpretation or industry expertise inference. A matching source must retain the exact reviewed configuration and supported attachment evidence. Private company guidance is displayed as guidance; it is not converted into machine-certified capability.
+
+The existing public equipment registry and tenant asset records remain authoritative. No registry import or provider activation is added. The source function resolves current equipment and latest private publications within the protected estimate snapshot. The existing shared knowledge projector enforces canonical document integrity, publication/applicability and sensitivity boundaries. Source choices bind to the preview digest and explicit acknowledgment. A changed source, estimate or human decision invalidates that acknowledgment. A new revision never alters an old record or changes equipment costs, customer price, schedule, assignment or operational permissions.
+
+The released equipment actor helper uses row locks for reads. Consequently, only the affected estimate review/preview compose its existing supporting-authority fence before a REPEATABLE READ transaction without SQL READ ONLY; current operator, estimate, equipment and knowledge remain in that single snapshot. The adapter performs no data writes. Mutations use SERIALIZABLE, current owner/admin/session/CSRF authority, exact source and current decision pins, and immutable save/revise/withdraw history. Historical replay retains its original result after source expiry, but current actor authority is checked first. Ambiguous save responses preserve the exact request and key; known rejected attempts invalidate consent. Raw private source documents are withheld from ordinary mutation responses. Historical display removes withdrawn private publication content while retaining immutable stored evidence; current source-change notices distinguish history from present evidence.
+
+## Shared demo
+
+New/reset sessions receive versioned, explicitly simulated equipment and a published synthetic company reference. They use the same validation, requirement evaluator, knowledge projector, review UI and history projector. The finite Practice Auger reference demonstrates an exact150mm specification comparison; it is not research about a real manufacturer, actual tenant inventory or verified availability. Existing sessions retain their exact graph/history and have no equipment sources silently added. They can still record unknown/proposed equipment. No paid endpoint grants authority to demo identities, and no customer/provider contact occurs.
+
+## Persistence and recovery
+
+Additive067 creates an immutable equipment plan ledger and protected functions, and extends the existing demo operation admission CHECK with equipment_plan. All64 prior SQL files remain unchanged. The existing startup tighter-of-inherited5s lock/20s statement caps include067. CHECK replacement requires an ACCESS EXCLUSIVE lock on the demo mutation table and revalidation; the new ledger introduces retained equipment history. Production table sizes, external writers, backup/restore readiness and an online cutoff require a separate concrete release assessment. No production action is authorized by this package.
+
+Candidate-compatible recovery disables equipment plan mutations while preserving current reads and history. A second policy-only recovery additionally pauses human decisions. These are application pauses, not physical restoration. Reverting to a reader that omits equipment plans is not an honest history-preserving recovery. The sealed handoff must identify precisely which source trees were actually executed versus prepared.
+
+## Acceptance and remaining ownership
+
+Focused validation covers same-unit comparisons, unknowns, current source revocation and private withdrawal, tenant/current-role/replay/concurrency, exact financial and operational preservation, fresh/persisted paid-demo navigation, consent/cancel focus and responsive themes, populated upgrade, timeout rollback, pause and forward resume. Source-controlled tests and the external immutable packet retain failed setup/harness attempts. No test result in this document is an approval or a release claim.
+
+Equipment cost adoption, finance/depreciation/utilization, stock/availability, maintenance eligibility, scheduling and alternatives remain in Slices2/3. Future travel, pricing, learning and customer quotes retain their separate roadmap ownership. Part4 and Mission24 are not complete.

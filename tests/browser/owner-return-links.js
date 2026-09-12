@@ -4,8 +4,8 @@ process.env.NODE_ENV='test';process.env.AUTH_ACCESS_SECRET='owner-return-links-d
 for(const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','RETELL_API_KEY','STRIPE_SECRET_KEY'])delete process.env[key];
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture'),{session}=require('../helpers/owner-operations-demo-session'),{resolveBrowserRuntime}=require('../helpers/playwright-runtime');
 const arg=n=>process.argv.find(v=>v.startsWith('--'+n+'=')).slice(n.length+3),engine=arg('browser'),out=path.resolve(arg('output'));assert.ok(!fs.existsSync(out));fs.mkdirSync(out,{recursive:true});
-(async()=>{let f,server,browser,page;const ledger={engine,cases:[],errors:[]};try{
- f=await createDatabaseFixture();server=f.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const origin='http://127.0.0.1:'+server.address().port;
+(async()=>{let f,server,browser,page;const ledger={engine,cases:[],errors:[]},received=[];try{
+ f=await createDatabaseFixture();server=require('http').createServer((req,res)=>{if(req.url.startsWith('/api/demo/command-center/operations'))received.push({path:req.url,cookieHash:req.headers.cookie?require('crypto').createHash('sha256').update(req.headers.cookie).digest('hex'):null});f.app(req,res);}).listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const origin='http://127.0.0.1:'+server.address().port;
  // Preexisting completed fixtures are local setup, never claimed as fresh/zero-write creation.
  const saved=session(f.app),id=await saved.setup();
  for(const [family,body]of [['initialize',{}],['transition',{action:'start'}]])assert.equal((await saved.act(id,family,body)).status,201);
@@ -19,7 +19,7 @@ const arg=n=>process.argv.find(v=>v.startsWith('--'+n+'=')).slice(n.length+3),en
   const demo=scenario!=='completed-paid',prefix=demo?'/demo':'/dashboard',context=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});await context.addInitScript(t=>localStorage.setItem('northstar-theme',t),theme);
   if(scenario==='completed-demo'){const at=saved.cookie.indexOf('=');await context.addCookies([{name:saved.cookie.slice(0,at),value:saved.cookie.slice(at+1),url:origin}]);}
   if(!demo)await context.addCookies(Object.entries(paid.actor.session.cookies).map(([name,value])=>({name,value,url:origin,sameSite:'Lax',httpOnly:name!=='northstar_csrf'})));
-  const writes=[],responses=[],ownerCookieHashes=[],headerReads=[];ledger.currentContext={scenario,width,writes,responses,ownerCookieHashes};await context.route('**/*',r=>{if(!['GET','HEAD','OPTIONS'].includes(r.request().method())){writes.push({path:new URL(r.request().url()).pathname,method:r.request().method()});return r.abort();}return r.continue();});
+  const receivedStart=received.length,writes=[],responses=[],ownerCookieHashes=[],headerReads=[];ledger.currentContext={scenario,width,writes,responses,ownerCookieHashes};await context.route('**/*',r=>{if(!['GET','HEAD','OPTIONS'].includes(r.request().method())){writes.push({path:new URL(r.request().url()).pathname,method:r.request().method()});return r.abort();}return r.continue();});
   page=await context.newPage();page.on('pageerror',e=>ledger.errors.push(e.message));page.on('response',r=>{const p=new URL(r.url()).pathname;if(p.startsWith('/api/'))responses.push({path:p,status:r.status()});});
   page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/demo/command-center/operations'))headerReads.push(r.allHeaders().then(headers=>{const cookie=headers.cookie;ownerCookieHashes.push(cookie?require('crypto').createHash('sha256').update(cookie).digest('hex'):null);}));});
   const execution=scenario.startsWith('fresh')?'11111111-1111-4111-8111-111111111111':demo?savedDetail.execution.id:paid.execution.id;
@@ -37,9 +37,9 @@ const arg=n=>process.argv.find(v=>v.startsWith('--'+n+'=')).slice(n.length+3),en
    links.push({host,selector,destination,loaded:true});
   }
   await page.screenshot({path:path.join(out,tag+'-final-return.png'),fullPage:true});
-  await Promise.all(headerReads);const privateReads=responses.filter(r=>r.path.startsWith('/api/v1/'));assert.deepEqual(writes,[]);if(demo){assert.deepEqual(privateReads,[]);assert.ok(ownerCookieHashes.length>0);assert.ok(ownerCookieHashes.every(h=>h!==null&&h===ownerCookieHashes[0]));}
+  await Promise.all(headerReads);const serverReceived=received.slice(receivedStart);ledger.currentContext.serverReceived=serverReceived;const privateReads=responses.filter(r=>r.path.startsWith('/api/v1/'));assert.deepEqual(writes,[]);if(demo){assert.deepEqual(privateReads,[]);assert.ok(serverReceived.length>0);assert.ok(serverReceived.every(r=>r.cookieHash!==null&&r.cookieHash===serverReceived[0].cookieHash));}
   assert.ok(responses.some(r=>r.path===(demo?'/api/demo/command-center/operations':'/api/v1/field-executions/owner-work')&&r.status===200));
-  ledger.cases.push({tag,links,writes,privateReads,responses,ownerCookieHashes,assertedAfterFinalNavigation:true});await context.close();
+  ledger.cases.push({tag,links,writes,privateReads,responses,ownerCookieHashes,serverReceived,assertedAfterFinalNavigation:true});await context.close();
  }
  assert.deepEqual((await f.ownerPool.query('SELECT * FROM demo_command_center_sessions WHERE id=$1',[savedRow.id])).rows[0],savedRow);
  ledger.persistedRowUnchanged=true;assert.deepEqual(ledger.errors,[]);

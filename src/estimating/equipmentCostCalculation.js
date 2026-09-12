@@ -6,6 +6,8 @@ const {stableValue}=require('../services/businessProfileAdapter');
 const VERSION='estimate-equipment-cost-plan-v1';
 const MAX=99999999999999n, SCALE=1000000n;
 const CATEGORIES=['capital_recovery','debt_service','interest','insurance','maintenance','operating','fuel_energy','consumables'];
+const OPERATING_CATEGORIES=['fuel_energy','consumables','maintenance'];
+function categoriesOverlap(a,b){return a===b||(a==='operating'&&OPERATING_CATEGORIES.includes(b))||(b==='operating'&&OPERATING_CATEGORIES.includes(a));}
 const LINE_KEYS=['lineId','access','method','notApplicableReason','plannedHours','rental','allocation','operating','fees','source'];
 function fail(message='Review the equipment cost entries.'){throw Object.assign(new Error(message),{status:400,code:'EQUIPMENT_COST_INVALID'});}
 function exact(v,keys){return v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));}
@@ -54,7 +56,7 @@ function calculateLine(l,index){
  if(l.notApplicableReason!==null)fail('Remove the not-applicable explanation when entering equipment costs.');
  const hours=quantity(l.plannedHours),missing=[],outside=[],charged=new Set();let sum=rational(0n);
  function include(c,n=1n,d=1n){if(c!==null&&n!==null)sum=add(sum,rational(c*n,d));}
- function category(k){if(!CATEGORIES.includes(k)||charged.has(k))fail('A cost category cannot be charged more than once.');charged.add(k);}
+ function category(k,custom=false){if(!custom&&!CATEGORIES.includes(k))fail('Choose a supported cost category.');if([...charged].some(existing=>categoriesOverlap(existing,k)))throw Object.assign(new Error('A cost category cannot be charged more than once. Operating expenses include fuel or energy, consumables and maintenance.'),{status:400,code:'EQUIPMENT_COST_OVERLAP'});charged.add(k);}
  if(l.method==='rental'){
   if(l.allocation!==null||!exact(l.rental,['unit','quantity','minimumQuantity','charge'])||!['hour','day','week','month','job'].includes(l.rental.unit))fail('Choose the rental billing unit and quantity.');
   const r=l.rental,q=quantity(r.quantity),minimum=quantity(r.minimumQuantity);
@@ -87,15 +89,13 @@ function calculateLine(l,index){
  }
  if(op.mode==='all_in'){
   if([op.fuelEnergy,op.consumables,op.maintenance].some(v=>v!==null))fail('An all-in operating rate cannot add separate operating rates.');
-  if(op.allIn?.status==='known'&&['operating','fuel_energy','consumables','maintenance'].some(k=>charged.has(k)))fail('Operating costs already in the pool cannot be charged again.');
   operatingRate(op.allIn,'Equipment operating cost','operating');
  }else if(op.mode==='separate'){
   if(op.allIn!==null)fail('Separate operating rates cannot include an all-in rate.');
-  if(charged.has('operating')&&[op.fuelEnergy,op.consumables,op.maintenance].some(v=>v?.status==='known'))fail('The equipment pool already includes operating costs.');
   operatingRate(op.fuelEnergy,'Fuel or energy','fuel_energy');operatingRate(op.consumables,'Consumables','consumables');operatingRate(op.maintenance,'Maintenance','maintenance');
  }else fail('Choose all-in or separate operating costs.');
  if(!Array.isArray(l.fees)||l.fees.length>4)fail('Add no more than four separate equipment-only job fees.');
- for(const fee of l.fees){if(!exact(fee,['category','label','amount'])||!text(fee.label,160)||!text(fee.category,80)||charged.has(fee.category)||['operator','travel','delivery','tax','deposit','overhead','capital_recovery','debt_service'].includes(fee.category))fail('Use distinct, nonrefundable equipment-only fees.');charged.add(fee.category);const c=money(fee.amount);if(c===null)missing.push(fee.label);include(c);}
+ for(const fee of l.fees){if(!exact(fee,['category','label','amount'])||!text(fee.label,160)||!text(fee.category,80)||['operator','travel','delivery','tax','deposit','overhead','capital_recovery','debt_service'].includes(fee.category))fail('Use distinct, nonrefundable equipment-only fees.');category(fee.category,true);const c=money(fee.amount);if(c===null)missing.push(fee.label);include(c);}
  const cents=round(sum);if(cents>MAX)fail('This equipment cost is too large. Review its hours and rates.');
  const complete=missing.length===0&&outside.length===0;
  return{lineId:l.lineId,index:index+1,total:complete?decimal(cents):null,knownCostSubtotal:decimal(cents),complete,missing:[...new Set(missing)],outsideCoverage:outside,exactKnownCents:{numerator:String(sum.n),denominator:String(sum.d)}};
@@ -107,4 +107,4 @@ function calculate(inputs,currency){
  const complete=lines.every(l=>l.complete);
  return stableValue({contract:VERSION,currency,lines,total:complete?decimal(subtotal):null,knownCostSubtotal:decimal(subtotal),complete,rounding:'Each equipment line is rounded to cents before adding.'});
 }
-module.exports={VERSION,calculate,calculateLine,quantity,money,decimal,source,exact,text,fail};
+module.exports={categoriesOverlap,VERSION,calculate,calculateLine,quantity,money,decimal,source,exact,text,fail};

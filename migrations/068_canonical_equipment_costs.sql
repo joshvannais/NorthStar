@@ -49,6 +49,12 @@ BEGIN
  END LOOP;
  IF v->>'effectiveOn' IS NOT NULL AND v->>'endsOn' IS NOT NULL AND v->>'endsOn'<v->>'effectiveOn' THEN RAISE EXCEPTION 'Equipment date order invalid' USING ERRCODE='22023';END IF;
 END $$;
+-- One symmetric structured rule for pool, separate period, operating and fee categories.
+CREATE FUNCTION public.canonical_equipment_cost_categories_overlap(existing TEXT[],candidate TEXT) RETURNS BOOLEAN
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS $$
+ SELECT candidate=ANY(existing) OR (candidate='operating' AND existing&&ARRAY['fuel_energy','consumables','maintenance']) OR (candidate IN ('fuel_energy','consumables','maintenance') AND 'operating'=ANY(existing))
+$$;
+REVOKE ALL ON FUNCTION public.canonical_equipment_cost_categories_overlap(text[],text) FROM PUBLIC;
 CREATE FUNCTION public.canonical_equipment_cost_validate(v JSONB) RETURNS VOID
 LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE l JSONB;a JSONB;c JSONB;o JSONB;k TEXT;category TEXT;required TEXT;forbidden TEXT;ids TEXT[]:=ARRAY[]::TEXT[];categories TEXT[];q NUMERIC;minimum NUMERIC;hours NUMERIC;
@@ -79,12 +85,12 @@ BEGIN
    required:=CASE WHEN l->>'method'='economic_recovery' THEN 'capital_recovery' ELSE 'debt_service' END;
    forbidden:=CASE WHEN required='capital_recovery' THEN 'debt_service' ELSE 'capital_recovery' END;
    FOR c IN SELECT value FROM jsonb_array_elements(a->'includedCategories') LOOP
-    category:=c#>>'{}';IF jsonb_typeof(c) IS DISTINCT FROM 'string' OR category NOT IN ('capital_recovery','debt_service','interest','insurance','maintenance','operating','fuel_energy','consumables') OR category=ANY(categories) THEN RAISE EXCEPTION 'Equipment category invalid' USING ERRCODE='22023';END IF;categories:=array_append(categories,category);
+    category:=c#>>'{}';IF jsonb_typeof(c) IS DISTINCT FROM 'string' OR category NOT IN ('capital_recovery','debt_service','interest','insurance','maintenance','operating','fuel_energy','consumables') OR public.canonical_equipment_cost_categories_overlap(categories,category) THEN RAISE EXCEPTION 'Equipment category invalid' USING ERRCODE='22023';END IF;categories:=array_append(categories,category);
    END LOOP;
    IF NOT required=ANY(categories) OR forbidden=ANY(categories) THEN RAISE EXCEPTION 'Equipment recovery duplicate invalid' USING ERRCODE='22023';END IF;
    PERFORM public.canonical_equipment_cost_charge(a->'pool');
    FOR c IN SELECT value FROM jsonb_array_elements(a->'additionalCosts') LOOP
-    category:=c->>'category';IF public.canonical_field_evidence_object_keys_exact(c,ARRAY['category','label','charge']) IS NOT TRUE OR public.canonical_labor_plan_text(c->'label',160) IS NOT TRUE OR category IS NULL OR category NOT IN ('capital_recovery','debt_service','interest','insurance','maintenance','operating','fuel_energy','consumables') OR category=forbidden OR category=ANY(categories) THEN RAISE EXCEPTION 'Equipment period category invalid' USING ERRCODE='22023';END IF;categories:=array_append(categories,category);PERFORM public.canonical_equipment_cost_charge(c->'charge');
+    category:=c->>'category';IF public.canonical_field_evidence_object_keys_exact(c,ARRAY['category','label','charge']) IS NOT TRUE OR public.canonical_labor_plan_text(c->'label',160) IS NOT TRUE OR category IS NULL OR category NOT IN ('capital_recovery','debt_service','interest','insurance','maintenance','operating','fuel_energy','consumables') OR category=forbidden OR public.canonical_equipment_cost_categories_overlap(categories,category) THEN RAISE EXCEPTION 'Equipment period category invalid' USING ERRCODE='22023';END IF;categories:=array_append(categories,category);PERFORM public.canonical_equipment_cost_charge(c->'charge');
    END LOOP;
   ELSE RAISE EXCEPTION 'Equipment method invalid' USING ERRCODE='22023';END IF;
   o:=l->'operating';
@@ -96,13 +102,13 @@ BEGIN
    c:=o->k;category:=CASE k WHEN 'allIn' THEN 'operating' WHEN 'fuelEnergy' THEN 'fuel_energy' ELSE k END;
    IF public.canonical_field_evidence_object_keys_exact(c,ARRAY['status','rate']) IS NOT TRUE OR COALESCE(c->>'status','') NOT IN ('known','not_applicable','unknown') THEN RAISE EXCEPTION 'Equipment operating status invalid' USING ERRCODE='22023';END IF;
    IF c->>'status'='known' THEN
-    IF category=ANY(categories) OR 'operating'=ANY(categories) OR (k='allIn' AND categories&&ARRAY['fuel_energy','consumables','maintenance']) THEN RAISE EXCEPTION 'Equipment operating duplicated' USING ERRCODE='22023';END IF;
+    IF public.canonical_equipment_cost_categories_overlap(categories,category) THEN RAISE EXCEPTION 'Equipment operating duplicated' USING ERRCODE='22023';END IF;
     categories:=array_append(categories,category);PERFORM public.canonical_equipment_cost_charge(c->'rate');
    ELSIF c->'rate' IS DISTINCT FROM 'null'::jsonb THEN RAISE EXCEPTION 'Equipment unknown rate invalid' USING ERRCODE='22023';END IF;
   END LOOP;
   FOR c IN SELECT value FROM jsonb_array_elements(l->'fees') LOOP
    category:=c->>'category';
-   IF public.canonical_field_evidence_object_keys_exact(c,ARRAY['category','label','amount']) IS NOT TRUE OR public.canonical_labor_plan_text(c->'label',160) IS NOT TRUE OR public.canonical_labor_plan_text(c->'category',80) IS NOT TRUE OR category=ANY(categories) OR category IN ('operator','travel','delivery','tax','deposit','overhead','capital_recovery','debt_service') THEN RAISE EXCEPTION 'Equipment fee invalid' USING ERRCODE='22023';END IF;
+   IF public.canonical_field_evidence_object_keys_exact(c,ARRAY['category','label','amount']) IS NOT TRUE OR public.canonical_labor_plan_text(c->'label',160) IS NOT TRUE OR public.canonical_labor_plan_text(c->'category',80) IS NOT TRUE OR public.canonical_equipment_cost_categories_overlap(categories,category) OR category IN ('operator','travel','delivery','tax','deposit','overhead','capital_recovery','debt_service') THEN RAISE EXCEPTION 'Equipment fee invalid' USING ERRCODE='22023';END IF;
    categories:=array_append(categories,category);PERFORM public.canonical_equipment_cost_money(c->'amount');
   END LOOP;
  END LOOP;

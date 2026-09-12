@@ -1435,7 +1435,7 @@ function createCanonicalRouter(options) {
       const raw=await equipmentPlanRepository.readSources(client,input,plans.current?.inputs),sources=equipmentPlanRepository.presentSources(raw,input),now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;
       const equipmentResult=c.checkEquipmentBasis(body.inputs,plans.current,sources,now),outsideBasis=composition.outsideBasis(selection,{...item,sourcePins:buildEstimateReview(item).pins});c.checkCoverage(body.inputs,outsideBasis);
       return{result:c.calculate(body.inputs,body.currency),assessment:c.assess(body.inputs,equipmentResult,now),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis,outsideBasis};
-    });return res.json({success:true,data});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{message:error.status?error.message:'Equipment costs are unavailable. Refresh and try again.'}});}
+    });return res.json({success:true,data});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{category:error.code==='EQUIPMENT_COST_OVERLAP'?'cost_overlap':undefined,message:error.status?error.message:'Equipment costs are unavailable. Refresh and try again.'}});}
   });
   router.post('/estimates/:estimateId/equipment-cost-plans',dependencies.auth,requireCanonicalContext,async function(req,res){
     res.set('Cache-Control','no-store');
@@ -1447,7 +1447,7 @@ function createCanonicalRouter(options) {
         const c=require('../estimating/equipmentCostPlanContract');c.checkEvidence(body.inputs,body.currency,plans.current,equipmentPlanRepository.presentSources(raw,input),require('../estimating/equipmentCostComposition').outsideBasis(selection,{...item,sourcePins:buildEstimateReview(item).pins}),now);
         if(raw.digest!==receipt.evidence?.digest)throw Object.assign(new Error('Equipment sources changed. Calculate again before confirming.'),{status:409});
       });return res.status(data.replayed?200:201).json({success:true,data});
-    }catch(error){return res.status(error.status||503).json({success:false,error:{category:error.code==='EQUIPMENT_COST_PAUSED'?'equipment_cost_paused':undefined,message:error.status?error.message:'Equipment costs are unavailable. Refresh to check saved history.'}});}
+    }catch(error){return res.status(error.status||503).json({success:false,error:{category:error.code==='EQUIPMENT_COST_PAUSED'?'equipment_cost_paused':error.code==='EQUIPMENT_COST_OVERLAP'?'cost_overlap':undefined,message:error.status?error.message:'Equipment costs are unavailable. Refresh to check saved history.'}});}
   });
   router.post('/estimates/:estimateId/labor-plans', dependencies.auth, requireCanonicalContext, async function(req,res) {
     res.set('Cache-Control','no-store');

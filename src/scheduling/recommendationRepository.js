@@ -564,7 +564,8 @@ async function recommendInTransaction(client, input) {
   const globalEvidenceIncomplete = loadedCandidates.truncated || memberEvidence.truncated ||
     enriched.skillTruncated || enriched.availabilityTruncated || schedules.truncated || workload.truncated ||
     !proposalScheduleAvailable;
-  const evaluatedCandidates = loadedCandidates.rows.map(function (candidate) {
+  const evaluatedCandidates = [];
+  for (const candidate of loadedCandidates.rows) {
     const proposal = proposalScheduleAvailable ? {
       target: { kind: candidate.kind, id: candidate.id },
       scheduledStart: scheduleInput.scheduledStart,
@@ -573,7 +574,7 @@ async function recommendInTransaction(client, input) {
       submittedScheduledEnd: scheduleInput.scheduledEnd,
       timeZone: profile.timeZone,
     } : null;
-    const conflicts = proposal ? evaluateConflictEvidence({
+    let conflicts = proposal ? evaluateConflictEvidence({
       proposal,
       businessProfile: profile.rawProfile,
       appointment: { serviceId, locationId: destinationLocationId },
@@ -594,15 +595,18 @@ async function recommendInTransaction(client, input) {
       workloadSetTruncated: workload.truncated,
       workloadAuthorityMissing: workload.missing,
     }) : unscheduledConflict();
-    return {
+    const equipment=require('./equipmentReadiness'),equipmentProposal=proposal||{target:{kind:candidate.kind,id:candidate.id},scheduledStart:null,scheduledEnd:null};
+    const equipmentBasis=await equipment.read(client,{...input,expectedTimeZone:profile.timeZone,proposal:equipmentProposal});
+    if(equipmentBasis.notRecorded!==true)conflicts=equipment.merge(conflicts,equipment.extra(equipmentBasis,equipmentProposal));
+    evaluatedCandidates.push({
       kind: candidate.kind,
       id: candidate.id,
       label: candidate.label,
       homeLocationId: candidate.homeLocationId,
-      authority: candidateAuthorityPins(candidate),
+      authority: {...candidateAuthorityPins(candidate),...(equipmentBasis.notRecorded===true?{}:{equipmentEvidenceDigest:equipmentBasis.digest})},
       conflicts,
-    };
-  });
+    });
+  }
   const recommendation = boundEvaluation(evaluateRecommendationCandidates({
     businessProfile: profile.rawProfile,
     destinationLocationId,

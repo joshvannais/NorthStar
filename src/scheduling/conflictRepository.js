@@ -721,7 +721,8 @@ async function evaluateInTransaction(client, input) {
     workloadSchedules: workload.rows,
     workloadSetTruncated: workload.truncated,
   };
-  const result = evaluateConflictEvidence(evaluatorInput);
+  const equipment=require('./equipmentReadiness'),equipmentBasis=await equipment.read(client,input),equipmentResult=equipment.extra(equipmentBasis,input.proposal);
+  const result = equipment.merge(evaluateConflictEvidence(evaluatorInput),equipmentResult);
   const evidence = stableValue({
     assignment: {
       id: assignment.id, revision: Number(assignment.revision), digest: digest(assignment.canonical_digest),
@@ -747,6 +748,7 @@ async function evaluateInTransaction(client, input) {
     skillAuthorityKnown: evaluatorInput.skillAuthorityKnown,
   });
   const evaluationDigest = sha256({
+    ...(equipmentBasis.notRecorded?{}:{equipmentEvidenceDigest:equipmentResult.digest}),
     assignmentId: assignment.id,
     evaluationVersion: EVALUATION_VERSION,
     evidence,

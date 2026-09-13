@@ -35,4 +35,19 @@ function createProductionTaxAcquisition(environment=process.env,{getRegistry=()=
  acquire.isCurrent=result=>{const pack=current();return result&&result.candidates?.every(c=>c.sourceRegistryDigest===digest(pack)&&Boolean(eligible(pack,publicContext(c.context))));};
  return acquire;
 }
-module.exports={validateRegistry,createProductionTaxAcquisition};
+// Read-only status uses the same current factory, registry and clock; never transport.
+function createTaxAcquisitionStatus(environment=process.env,{getRegistry=()=>registry,getAcquire,clock=()=>new Date()}={}){
+ return contexts=>{
+  if(environment.TAX_SOURCE_ACQUISITION_ENABLED!=='true')return {acquisitionEnabled:false,acquisitionState:'disabled'};
+  try{
+   const pack=validateRegistry(getRegistry());if(!pack.entries.length)return {acquisitionEnabled:false,acquisitionState:'empty'};
+   if(typeof getAcquire!=='function'||typeof getAcquire()!=='function')return {acquisitionEnabled:false,acquisitionState:'disconnected'};
+   const inputs=(contexts||[]).map(publicContext),today=clock().toISOString().slice(0,10);
+   const matched=inputs.map(c=>pack.entries.find(e=>digest(publicContext(e.context))===digest(c)));
+   const current=matched.filter(e=>e&&e.review.reviewedOn<=today&&e.review.expiresOn>=today).length;
+   const state=inputs.length&&current===inputs.length?'matched':current?'partial':matched.some(Boolean)?'expired':'unmatched';
+   return {acquisitionEnabled:true,acquisitionState:state};
+  }catch(_){return {acquisitionEnabled:false,acquisitionState:'unavailable'};}
+ };
+}
+module.exports={validateRegistry,createProductionTaxAcquisition,createTaxAcquisitionStatus};

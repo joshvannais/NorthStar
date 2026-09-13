@@ -223,6 +223,7 @@ const productionSupportCaseOutboxWorker = new SupportCaseOutboxWorker({
 const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
 // No reviewed live acquisition adapter is enabled by this local integration.
 const productionTaxResearchWorker = new (require('./estimating/taxResearchWorker').TaxResearchWorker)({getPool:()=>db.getPool(), acquire:require('./estimating/taxSourceBinding').createProductionTaxAcquisition(process.env)});
+app.locals.taxAcquisitionStatus = require('./estimating/taxSourceBinding').createTaxAcquisitionStatus(process.env,{getAcquire:()=>productionTaxResearchWorker.acquire});
 const productionTaxPreparationWorker = new (require('./estimating/taxPreparationWorker').TaxPreparationWorker)({getPool:()=>db.getPool(),onPrepared:org=>productionTaxResearchWorker.enqueue(org)});
 const productionHomepageDemoAdmissionHousekeepingWorker = new HomepageDemoAdmissionHousekeepingWorker();
 const productionPolarisRuntime = createProductionOpenAIRuntime(process.env);

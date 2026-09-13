@@ -16,7 +16,7 @@ function authorityPin(s){return stableValue({sourcePins:s.sourcePins,pricingPin:
 function preview(inputs,currency,sources,now){
  if(sources.asOfDate!==new Date(now).toISOString().slice(0,10))changed('The review date changed. Refresh and calculate the terms again.');
  if(!sources.pricingPin||!sources.pricing?.result||sources.pricingCurrent!==true||currency!==sources.currency)changed('Save a current pricing plan before reviewing commercial terms.');
- const result=math.calculate(inputs,currency,{pricing:sources.pricing.result,serviceKey:sources.serviceKey,simulated:sources.simulated,validatedRules:sources.validatedRules});
+ const result=math.calculate(inputs,currency,{pricing:sources.pricing.result,serviceKey:sources.serviceKey,...(sources.simulated?{taxServiceKey:sources.taxServiceKey}:{}),simulated:sources.simulated,validatedRules:sources.validatedRules});
  return stableValue({result,evidenceDigest:sources.digest,authorityPin:authorityPin(sources)});
 }
 function checkBasis(b,review,current){require('./pricingPlanContract').checkBasis(b,review,current);}

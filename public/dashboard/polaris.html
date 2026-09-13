@@ -576,7 +576,7 @@
               <section id="polarisMaterialSection" class="polaris-selected-context" hidden>
                 <details id="polarisMaterialDetails">
                   <summary>Saved Cost Review</summary>
-                  <p>Read the selected estimate and its recorded cost basis. General conversation retains the original estimate context.</p>
+                  <p>Read the selected estimate and its recorded cost basis. Questions use the selected estimate; original intake facts remain identified separately.</p>
                   <label for="polarisMaterialRevision">Estimate History</label>
                   <select id="polarisMaterialRevision" aria-label="Estimate History"></select>
                   <button type="button" class="polaris-clear-btn" id="polarisMaterialRefresh">Refresh Saved Cost Review</button>
@@ -776,7 +776,7 @@
         if (this.open && !document.getElementById('polarisMaterialStatus').textContent) loadMaterialReview(false);
       });
       document.getElementById('polarisMaterialRefresh').addEventListener('click',function() { loadMaterialReview(false); });
-      document.getElementById('polarisMaterialRevision').addEventListener('change',function() { materialRevision=this.value===''?null:Number(this.value); loadMaterialReview(false); });
+      document.getElementById('polarisMaterialRevision').addEventListener('change',function() { materialRevision=this.value===''?null:Number(this.value); groundedSequence++;groundedAttempt=null;hideTyping();setLoading(false);loadMaterialReview(false); });
 
       function selectedQuery() {
         var query = new URLSearchParams(window.location.search);
@@ -1323,7 +1323,8 @@
       }
 
       var groundedAttempt=null, groundedSequence=0, groundedResponses=0;
-      function sendPaidMessage(message, requestKey) {
+      function sendPaidMessage(message, requestKey, isRetry) {
+        if(isRetry&&(!groundedAttempt||groundedAttempt.idempotencyKey!==requestKey)){addMessage('assistant','The selected estimate or question changed. Ask a new question using the current selection.','error');return;}
         var key=requestKey||idempotencyKey(),selection=activeSelection?Object.freeze({kind:activeSelection.kind,identifier:activeSelection.identifier}):null;
         if(!selection||!activeCanonicalBacking){addMessage('assistant','Select a current job or customer before asking about its details.','error',key);return;}
         var generation=contextGeneration,backing=activeCanonicalBacking,sequence=++groundedSequence;
@@ -1333,7 +1334,7 @@
         var url=demo?'/api/demo/command-center/polaris/messages-v2':'/api/v1/canonical/polaris/assistant/messages-v2';
         var headers={'Content-Type':'application/json'};if(demo)headers['X-NorthStar-Demo-Intent']='polaris-conversation';
         showTyping();setLoading(true);
-        function current(){return sequence===groundedSequence&&generation===contextGeneration&&sameActiveSelection(selection,activeSelection)&&backing===activeCanonicalBacking;}
+        function current(){return sequence===groundedSequence&&generation===contextGeneration&&sameActiveSelection(selection,activeSelection)&&backing===activeCanonicalBacking&&(materialRevision===undefined?null:materialRevision)===request.selectedRevision;}
         window.NorthStarAccountSession.fetch(url,{method:'POST',headers:headers,body:JSON.stringify(request)}).then(function(response){return response.json().catch(function(){return{};}).then(function(payload){return{status:response.status,payload:payload};});}).then(function(result){
           if(!current())return;
           if(result.status>=200&&result.status<300&&result.payload.data){
@@ -1373,7 +1374,7 @@
           if (el) el.remove();
           messages.splice(errorIndex, 1);
         }
-        sendPaidMessage(text, requestKey);
+        sendPaidMessage(text, requestKey, true);
       }
 
       function setLoading(loading) {

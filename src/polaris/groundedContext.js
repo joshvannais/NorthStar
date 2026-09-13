@@ -11,9 +11,9 @@ function handoffBasis(review) {
   return { decisionBasis: review.decisions?.writeBasis || null, plans: Object.fromEntries(['materialPlans','laborPlans','equipmentPlans','travelPlans','equipmentCostPlans','pricingPlans','pricingPolicies','commercialTerms'].map(key => [key, review[key]?.current?.digest || null])) };
 }
 function build({message, card, review = null, knowledge = null, authority }) {
-  const evidence = [{ id: 'recorded_scope', label: 'Recorded Scope', value: card.answer, source: card.authority }];
-  evidence.push(...card.evidence.map(e => ({ id: 'fact:' + e.id, label: e.label, value: e.value, source: e.source })));
-  evidence.push(...card.unknowns.filter(e => !review || e.code !== 'customer_price_missing').map(e => ({ id: 'unknown:' + e.code, label: 'Not Recorded', value: e.label, source: { evidenceId: 'recorded_scope' } })));
+  const evidence = [{ id: 'recorded_scope', label: 'Original Recorded Scope', value: card.answer, source: card.authority }];
+  evidence.push(...card.evidence.map(e => ({ id: 'fact:' + e.id, label: 'Original Record: ' + e.label, value: e.value, source: e.source })));
+  evidence.push(...card.unknowns.filter(e => !review || e.code !== 'customer_price_missing').map(e => ({ id: 'unknown:' + e.code, label: 'Original Record: Not Recorded', value: e.label, source: { evidenceId: 'recorded_scope' } })));
   if (knowledge) for (const [i, item] of knowledge.projection.items.entries()) {
     evidence.push({ id: 'knowledge:' + i, label: 'Published Business Guidance', value: item,
       source: knowledge.projection.sources[item.sourceIndex] });
@@ -52,6 +52,7 @@ function build({message, card, review = null, knowledge = null, authority }) {
     basisDigest: digest(stableBasis({ authority, card, review, knowledge })),
     service: card.subtitle,
     sourceLimits: ['Recorded facts and published declarations are not independent verification.',
+      'Original record facts and missing details describe the intake record; selected estimate costs and review may have changed later.',
       'Missing technical details can be supplied later by the owner or estimator.'],
   };
 }

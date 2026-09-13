@@ -44,3 +44,14 @@ Before live canary: enumerate exact entitled provider identity/version and synth
 Before tax checkpoint closure: obtain the intended actual jurisdiction/service/date/registration context (not inferred from founder address), authoritative source access/license basis, independently reviewed deterministic coverage and source refresh/revocation evidence. No real coverage pack is presently established by these tests. Owner-recorded treatment and simulated rules do not close this checkpoint.
 
 No Part8 quote/send authority, Mission25 learning, new workforce credential authority, provider activation or production release is implied. Final local candidate still requires independent audit and a separate migration074 release-risk disposition.
+
+
+## Local Recovery And Review Evidence Boundaries
+
+The populated rehearsal retains original paid/demo material histories, canonical financial rows, v1 provider usage, new v2 usage, provisional call events and immutable research candidates. Generation-only and combined generation/call/research source pauses are exercised as separate builds. Historical model answers are process-local: after a restart the recorded attempt returns unavailable rather than charging or generating again; a deliberate new question can proceed within the same caps. Durable call-event exact replay remains available under renewed current authority. No old reader rollback is assumed.
+
+Concurrent knowledge publication removal and target suspension can wait for the existing delivery transaction, then receive the existing serialization conflict. Tests preserve that rejection and prove no partial publication/configuration before an explicit current-state read and new deliberate action. A successful earlier delivery is not described as a successful concurrent revocation. Naturally expired leases cannot invoke transport or acknowledge completion.
+
+Synthetic publication rehearsal exports an actual immutable candidate, builds and verifies the offline artifact, then explicitly inserts a synthetic rule using only the disposable migration-owner role. Existing preparation notices the new rule digest; unknown owner dates and operating location remain missing. Supplying a consistent fixture collection basis/date permits its narrow context match without claiming complete business readiness. This is neither real source validation nor an automatic production publisher.
+
+Ordinary history selection invalidates pending conversation display/actions and stale retry ownership. Original intake facts and unknowns are qualified separately from selected estimate costs. A changed plan cannot populate an old proposal: the visible notice opens its parent disclosure and receives keyboard focus. The industry question examples are reviewed desired-answer fixtures against actual synthetic scopes, not proof of model quality or universal expertise.

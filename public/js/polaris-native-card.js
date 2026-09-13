@@ -362,15 +362,24 @@
       });
       evidence.appendChild(evidenceList);
     } else {
-      evidence.appendChild(child('p', 'polaris-native-card-empty', 'No displayable canonical evidence is recorded.'));
+      evidence.appendChild(child('p', 'polaris-native-card-empty', 'No supporting details are recorded yet.'));
     }
     article.appendChild(evidence);
 
     var unknowns = section('Unknowns', 'polaris-unknowns-' + identity);
     if (card.unknowns.length) {
       var unknownList = child('ul', 'polaris-native-card-list');
+      // Group display text only. The validated card retains every unknown identity.
+      var notices = [];
       card.unknowns.forEach(function (entry) {
-        unknownList.appendChild(child('li', 'polaris-native-card-unknown', entry.label || entry));
+        var label = entry.label || entry;
+        var notice = notices.find(function (item) { return item.label === label; });
+        if (notice) notice.count += 1;
+        else notices.push({ label: label, count: 1 });
+      });
+      notices.forEach(function (notice) {
+        unknownList.appendChild(child('li', 'polaris-native-card-unknown', notice.label +
+          (notice.count > 1 ? ' (' + notice.count + ' unresolved items)' : '')));
       });
       unknowns.appendChild(unknownList);
     } else {
@@ -378,11 +387,12 @@
     }
     article.appendChild(unknowns);
 
-    var confidence = section('Confidence', 'polaris-confidence-' + identity);
+    var confidence = section('Recorded-Detail Confidence', 'polaris-confidence-' + identity);
     var confidenceText = card.confidence.value === null || card.confidence.value === undefined
       ? 'Unknown' : Math.round(Number(card.confidence.value) * 100) + '% — ' + text(card.confidence.level, 'unknown');
     confidence.appendChild(child('p', 'polaris-native-card-confidence', confidenceText));
     confidence.appendChild(child('p', 'polaris-native-card-basis', card.confidence.basis || 'No confidence basis is recorded.'));
+    confidence.appendChild(child('p', 'polaris-native-card-confidence-scope', 'This describes the recorded details, not price accuracy.'));
     article.appendChild(confidence);
 
     var footer = child('footer', 'polaris-native-card-footer');

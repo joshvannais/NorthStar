@@ -790,6 +790,7 @@ window.CustomerDetail = (function() {
       communicationId: typeof options.communicationId === 'string' ? options.communicationId : null
     };
 
+    if(window.NorthStarCommercialTerms)window.NorthStarCommercialTerms.reset();
     _decisionDraft = null; _pricingPlanDraft = null; _pricingPolicyDraft = null; _laborPlanDraft = null; _travelPlanDraft = null; _equipmentPlanDraft = null; _equipmentCostDraft=null; _materialPlanDraft = null; _adoptionDraft = null; _selectedEstimateRevision = null; _estimateReview = null;
     // Ensure drawer HTML is injected
     injectDrawerHTML();
@@ -1353,7 +1354,7 @@ window.CustomerDetail = (function() {
     if(!plans||plans.contract!=='estimate-pricing-policy-v1'||JSON.stringify(plans.sourcePins)!==JSON.stringify(review.pins)||plans.simulated!==review.simulated){el('p','Pricing policies are unavailable. Refresh this estimate.');return;}
     function resultView(result,target){renderPricingPolicyResult(result,target,review.currency);}
     function pricingCautions(a,target){if(!a||!a.cautions)return;a.cautions.forEach(function(c){var names={date_unknown:'Source Date Not Recorded',freshness_unknown:'End Date Not Known',not_yet_effective:'Source Is Not Yet Effective',expired:'Source Has Expired'};el('p',c.reasons.map(function(r){return names[r]||'Review Source';}).join('; '),target);});}
-    function show(plan,target){if(plan.action==='withdraw'){el('p','This policy was withdrawn. Saved history remains available.',target);return;}el('p',plan.current?'Saved policy comparison — it does not approve the price.':'Earlier Policy — Review Current Pricing And Price Approval Before Using It.',target);resultView(plan.result,target);pricingCautions(plan.currentAssessment,target);}
+    function show(plan,target){if(plan.action==='withdraw'){el('p','This policy was withdrawn. Saved history remains available.',target);return;}el('p',plan.current?'Saved policy comparison — it does not approve the price.':'Earlier Policy — Review Current Pricing And Price Approval Before Using It.',target);resultView(plan===plans.current&&plan.commercialApprovalCurrent?review.pricingPolicyCheck.result:plan.result,target);pricingCautions(plan.currentAssessment,target);}
     if(plans.simulated)el('p','Simulated Pricing Policy — No Customer Price Is Approved Or Sent.');
     if(plans.current)show(plans.current,root);else el('p','Compare a saved pricing proposal with your cost and minimum-price policy.');
     if(plans.history.length){var h=el('details');el('summary','Policy History',h);plans.history.forEach(function(p){var d=el('details',null,h);el('summary',(p.action==='save'?'Saved Policy':'Withdrawn Policy')+' — '+(p.actorName||'Company Reviewer'),d);show(p,d);});}
@@ -1750,6 +1751,7 @@ window.CustomerDetail = (function() {
       }); root.insertBefore(list,$('cdCapellaRefresh'));
     }
     paragraph(risk.limitation);
+    var commercial=review.commercialTerms;if(commercial){var terms=document.createElement('details');terms.id='cdCapellaCommercial';var title=document.createElement('summary');title.textContent='Commercial Approval';terms.appendChild(title);var note=document.createElement('p');note.textContent=commercial.approvalState==='commercial_approved'?'The current full commercial approval uses the net price before tax. Tax collected is excluded from this cost comparison.':commercial.approvalState==='scope_price_only'?'The current review covers scope and price only. Full commercial terms and tax treatment have not been approved together.':'No current full commercial approval is recorded.';terms.appendChild(note);if(commercial.binding&&commercial.customerSummary){var payable=document.createElement('p');payable.textContent='Total Payable: '+decisionMoney(commercial.customerSummary.total,review.currency)+' · Tax: '+decisionMoney(commercial.customerSummary.tax,review.currency);terms.appendChild(payable);}root.insertBefore(terms,$('cdCapellaRefresh'));}
     var policy=review.pricingPolicyCheck;if(policy){var section=document.createElement('details');section.id='cdCapellaPolicy';var summary=document.createElement('summary');summary.textContent='Pricing Policy Check';section.appendChild(summary);var message=document.createElement('p');message.textContent=policy.message;section.appendChild(message);if(policy.result)renderPricingPolicyResult(policy.result,section,review.currency);root.insertBefore(section,$('cdCapellaRefresh'));}
     var readiness=review.equipmentReadiness&&review.equipmentReadiness.current;if(readiness&&readiness.action==='save'&&(readiness.currentSourcesChanged||readiness.result&&readiness.result.status==='blocked'))paragraph('Equipment readiness needs attention. This cost comparison does not establish that the equipment can be used for the job.');
   }
@@ -1802,6 +1804,7 @@ window.CustomerDetail = (function() {
         renderLaborPlan(review, root);
         renderPricingPlan(review, root);
         renderPricingPolicy(review, root);
+        if(window.NorthStarCommercialTerms)window.NorthStarCommercialTerms.render(review,root,{money:decisionMoney,refresh:function(){refreshEstimateReview('commercial-saved');},isCurrent:function(){return current()&&review===_estimateReview;}});
         renderTravelPlan(review);
         renderEquipmentPlan(review, root);
         renderMaterialAdoption(review, root);

@@ -1,0 +1,6 @@
+'use strict';
+function source(overrides={}){return {kind:'owner_recorded',note:'Arithmetic fixture reviewed externally; not real tax coverage.',reference:'Fixture source',effectiveOn:'2026-01-01',endsOn:'2026-12-31',jurisdiction:'Fixture jurisdiction',location:'Fixture work location',serviceKey:'fence',collectionBasis:'Recorded fixture collection basis',acknowledged:true,ruleId:null,ruleDigest:null,...overrides};}
+function group(lineIds=['a'],overrides={}){return {groupId:'tax',label:'Recorded Treatment',lineIds,behavior:'exclusive',treatment:'taxable',ratePercent:'10',source:source(),...overrides};}
+function fixture(amounts=['100.00']){const lines=amounts.map((amount,i)=>({lineId:String.fromCharCode(97+i),label:`Charge ${i+1}`,amount,includedIn:null}));return {value:{transactionDate:'2026-09-13',adjustments:[],fees:[],taxGroups:[group(lines.map(l=>l.lineId))],payments:{mode:'none',balanceId:null,stages:[]}},context:{serviceKey:'fence',simulated:true,validatedRules:[],pricing:{lines}}};}
+function adjustment(lineIds=['a'],overrides={}){return {adjustmentId:'discount',label:'Recorded Discount',kind:'order_discount',method:'fixed',amount:'10.00',percent:null,lineIds,reason:'Explicit recorded price change.',...overrides};}
+module.exports={source,group,fixture,adjustment};

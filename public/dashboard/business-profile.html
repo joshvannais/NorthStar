@@ -387,6 +387,7 @@
 
         <!-- Section: Financial -->
         <div class="bp-section" id="section-financial">
+          <section class="bp-card" id="taxPreparation" aria-label="Tax Preparation"></section>
           <div class="bp-card">
             <h3 id="financialConfigurationHeading">Pricing and Internal Costs</h3>
             <div class="bp-section-desc">Set your pricing preferences, internal costs and default price ranges. Review and approve each customer price before sharing it.</div>
@@ -2494,15 +2495,17 @@
       // its own optimistic-concurrency token.
       renderFinancialConfiguration(p);
 
+      // Missing optional preferences remain unknown; they must not block the profile.
+      var polaris = p.polaris && typeof p.polaris === 'object' ? p.polaris : {};
       // Polaris
-      setSelect('pol-responseStyle', p.polaris.responseStyle);
-      setSelect('pol-detailLevel', p.polaris.detailLevel);
-      setSelect('pol-recommendationStyle', p.polaris.recommendationStyle);
-      setCheck('pol-showCalculations', p.polaris.showCalculations);
-      setCheck('pol-showConfidence', p.polaris.showConfidence);
-      setCheck('pol-showExecutiveReasoning', p.polaris.showExecutiveReasoning);
-      setCheck('pol-conciseMode', p.polaris.conciseMode);
-      setCheck('pol-executiveMode', p.polaris.executiveMode);
+      setSelect('pol-responseStyle', polaris.responseStyle);
+      setSelect('pol-detailLevel', polaris.detailLevel);
+      setSelect('pol-recommendationStyle', polaris.recommendationStyle);
+      setCheck('pol-showCalculations', polaris.showCalculations);
+      setCheck('pol-showConfidence', polaris.showConfidence);
+      setCheck('pol-showExecutiveReasoning', polaris.showExecutiveReasoning);
+      setCheck('pol-conciseMode', polaris.conciseMode);
+      setCheck('pol-executiveMode', polaris.executiveMode);
 
       // Provider-neutral voice and business knowledge. Legacy provider data is
       // intentionally not rendered or rewritten by this form.
@@ -3473,9 +3476,10 @@
   <script src="/js/nav-component.js"></script>
   <script src="/js/knowledge-management.js"></script>
   <script src="/js/workspace-form-state.js"></script>
-  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn', role: '#businessProfileRole', reload: '#reloadProfileBtn, #reloadOperationalConfigurationBtn, #reloadFinancialConfigurationBtn, #reloadVoiceAssistantBtn, #reloadProfileReadinessBtn', durable: '.bp-section input, .bp-section textarea, .bp-section select', ignore: '[data-knowledge-management], #assetCatalogueContainer, .equipment-dialog' });</script>
+  <script>NorthStarFormState.create({ root: '#mainContent', save: '#saveBtn, #saveOperationalConfigurationBtn, #saveFinancialConfigurationBtn, #saveVoiceAssistantBtn, #saveProfileReadinessBtn', role: '#businessProfileRole', reload: '#reloadProfileBtn, #reloadOperationalConfigurationBtn, #reloadFinancialConfigurationBtn, #reloadVoiceAssistantBtn, #reloadProfileReadinessBtn', durable: '.bp-section input, .bp-section textarea, .bp-section select', ignore: '[data-knowledge-management], #assetCatalogueContainer, .equipment-dialog, #taxPreparation' });</script>
   <script>NavComponent.init("business-profile");</script>
   <link rel="stylesheet" href="/css/equipment.css">
   <script src="/js/equipment.js"></script>
+  <script src="/js/tax-preparation.js"></script>
 </body>
 </html>

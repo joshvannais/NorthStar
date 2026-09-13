@@ -1,0 +1,17 @@
+'use strict';
+const p=require('../../src/estimating/taxPreparation');
+const raw={headquarters:{street:'Fixture Address',city:'Fixture City',state:'Fixture Region',country:'Fixture Country'},services:[{id:'fence',name:'Fence'}]};
+const context={id:'c',country:'Fixture Country',region:'Fixture Region',locality:'Fixture City',jurisdiction:'Fixture Jurisdiction',serviceKey:'fence',classification:'Fixture Class',registration:'registered',registrationReference:'Private Fixture Registration',collectionBasis:'Fixture Basis',exemptionReference:'',effectiveOn:'2026-01-01',endsOn:'2026-12-31',sourceNote:'Synthetic fixture only',sourceReference:'Fixture Reference',acknowledged:true};
+const input=()=>p.preparationInput(raw,{contexts:[context]});
+const rule=()=>({id:'rule',digest:'a'.repeat(64),version:p.VERSION,validation:'validated',simulated:true,active:true,country:context.country,region:context.region,locality:context.locality,jurisdiction:context.jurisdiction,serviceKey:context.serviceKey,classification:context.classification,registration:context.registration,collectionBasis:context.collectionBasis,effectiveOn:'2026-01-01',endsOn:'2026-12-31'});
+describe('No-network tax preparation source match',()=>{
+ test('no shipped validated coverage is unsupported, not a guessed zero rate',()=>{const r=p.evaluate(input().inputs,[],'2026-09-13');expect(r.state).toBe('unsupported');expect(r.coverage[0].rule).toBeNull();expect(r).not.toHaveProperty('ratePercent');});
+ test('unrelated profile changes do not change preparation identity',()=>{expect(p.preparationInput({...raw,voiceAssistant:{name:'Changed'},company:{taxId:'private'},canonicalPricing:{taxRatePercent:7}} ,{contexts:[context]}).digest).toBe(input().digest);});
+ test('service and collection changes each invalidate preparation identity',()=>{expect(p.preparationInput({...raw,services:[{id:'roof',name:'Roof'}]},{contexts:[context]}).digest).not.toBe(input().digest);expect(p.preparationInput(raw,{contexts:[{...context,registrationReference:'Revised'}]}).digest).not.toBe(input().digest);});
+ test('synthetic matching is isolated from paid sources',()=>{expect(p.evaluate(input().inputs,[rule()],'2026-09-13',{simulated:true}).state).toBe('matched');expect(p.evaluate(input().inputs,[rule()],'2026-09-13',{simulated:false}).state).toBe('unsupported');});
+ test.each(['2025-12-31','2027-01-01'])('dates outside source applicability %s remain unresolved',date=>{expect(p.evaluate(input().inputs,[rule()],date,{simulated:true}).state).toBe('missing_inputs');});
+ test('ambiguous coverage and unknown end date cannot become validated',()=>{expect(p.evaluate(input().inputs,[rule(),{...rule(),id:'second'}],'2026-09-13',{simulated:true}).coverage[0].state).toBe('conflicting_coverage');expect(p.evaluate(input().inputs,[{...rule(),endsOn:null}],'2026-09-13',{simulated:true}).state).toBe('unsupported');});
+ test('owner cannot add validation fields to private declarations',()=>{expect(()=>p.normalize({contexts:[{...context,validation:'validated'}]})).toThrow();});
+ test('private registration is never copied into preparation status/result',()=>{const r=p.evaluate(input().inputs,[],'2026-09-13');expect(JSON.stringify(r)).not.toContain(context.registrationReference);expect(p.status(r).message).toMatch(/not available/);});
+ test('missing old profiles remain missing rather than manufacturing setup',()=>{const i=p.preparationInput({},undefined);expect(p.evaluate(i.inputs,[],'2026-09-13').missing).toEqual(['operating_location','services','collection_context']);});
+});

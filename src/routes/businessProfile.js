@@ -666,6 +666,15 @@ router.get('/profileReadiness', requireTenantAccess, async function (req, res) {
   }
 });
 
+router.get('/tax-preparation',requireTenantAccess,async function(req,res){
+ res.set('Cache-Control','no-store');let client;
+ try{client=await db.getPool().connect();await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');await client.query("SET LOCAL statement_timeout='10000ms'");await client.query("SET LOCAL lock_timeout='2000ms'");const data=await require('../estimating/taxPreparationRepository').read(client,require('../scheduling/operatorDirectory').actorInput(req));await client.query('ROLLBACK');return res.json({success:true,data:{...data,mutationsPaused:!require('../estimating/commercialWritePolicy').mutationsEnabled||!require('../estimating/commercialWritePolicy').preparationEnabled,simulated:false}});}
+ catch(e){if(client)await client.query('ROLLBACK').catch(()=>{});return res.status(e.status||503).json({success:false,error:{message:e.status?e.message:'Tax preparation is unavailable. Refresh to check saved setup.'}});}finally{if(client)client.release();}
+});
+router.post('/tax-preparation',requireAccountMutation,requirePermission('settings','update'),async function(req,res){
+ res.set('Cache-Control','no-store');if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the tax setup entries.'}});
+ try{const input={...require('../scheduling/operatorDirectory').actorInput(req),csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')};const data=await require('../estimating/taxPreparationRepository').mutate(db.getPool(),input,req.body);return res.status(data.replayed?200:201).json({success:true,data});}catch(e){return res.status(e.status||503).json({success:false,error:{category:e.code==='COMMERCIAL_PAUSED'?'commercial_paused':undefined,message:e.status?e.message:'Tax setup is unavailable. Refresh to check saved history.'}});}
+});
 router.get('/:section', requireTenantAccess, async function (req, res) {
   const section = req.params.section;
   if (!VALID_SECTIONS.has(section)) {

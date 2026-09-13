@@ -1865,3 +1865,8 @@ html body #cdCustomerDrawer .drawer-policy-facts dd { text-align: right; font-we
 #cdCommercialTerms .drawer-review-actions, #taxPreparation .drawer-review-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 #cdCommercialTerms p, #taxPreparation p { overflow-wrap: anywhere; }
 @media (max-width: 640px) { #cdCommercialTerms label:not(.drawer-decision-confirmation), #taxPreparation label:not(.drawer-decision-confirmation) { grid-template-columns: 1fr; gap: 6px; } #cdCommercialTerms .drawer-review-actions > *, #taxPreparation .drawer-review-actions > * { width: 100%; margin: 0; } }
+
+/* Independent collection setup controls retain the profile spacing rhythm. */
+#taxPreparation > p { margin: 0 0 10px; }
+#taxPreparation > details { margin: 12px 0; }
+#taxPreparation > button { margin: 8px 8px 0 0; }

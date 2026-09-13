@@ -1,0 +1,7 @@
+'use strict';
+const {createConnectedCallAdapter}=require('../../src/polaris/connectedCall');
+const raw=Buffer.from(JSON.stringify({name:'northstar_job_guidance',call:{call_id:'fixture-call',agent_id:'fixture-agent'},args:{question:'What access is recorded?'}}));
+const context=()=>({callId:'fixture-call',agentId:'fixture-agent',audience:'caller',expiresAt:Date.now()+60000,state:'active',evidence:[{id:'scope',value:'Access is unknown'}]});
+const answer={questions:[{text:'What site access is available?',evidenceIds:['scope']}],explanations:[],proposalIds:[],requestedCard:'none'};
+test('caller cancellation after generation suppresses recording and forwards native abort signal',async()=>{const c=new AbortController(),before=context(),record=jest.fn();const handle=createConnectedCallAdapter({verifyRaw:()=>true,loadCurrent:async()=>before,record,generate:async({signal})=>{expect(signal).toBe(c.signal);c.abort();return answer;}});await expect(handle(raw,'fixture',{signal:c.signal})).rejects.toMatchObject({statusCode:503});expect(record).not.toHaveBeenCalled();});
+test('late source change suppresses provisional output before recording',async()=>{const before=context(),record=jest.fn(),loadCurrent=jest.fn().mockResolvedValueOnce(before).mockResolvedValueOnce({...before,evidence:[]});const handle=createConnectedCallAdapter({verifyRaw:()=>true,loadCurrent,record,generate:async()=>answer});await expect(handle(raw,'fixture')).rejects.toMatchObject({statusCode:409});expect(record).not.toHaveBeenCalled();});

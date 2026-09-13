@@ -1,0 +1,50 @@
+'use strict';
+const fs=require('node:fs'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+process.env.NODE_ENV='test';process.env.AUTH_ACCESS_SECRET='connected-knowledge-local-secret-at-least-thirty-two';
+for(const k of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','RETELL_API_KEY'])delete process.env[k];
+const {createEstimateReviewFixture}=require('../helpers/m24-estimate-review-fixture');
+const knowledge=require('../../src/knowledge/repository');
+const {KnowledgeSynchronizationRepository:Repository}=require('../../src/knowledge/synchronizationRepository');
+const {KnowledgeSynchronizationWorker:Worker}=require('../../src/knowledge/synchronizationWorker');
+const {completeKnowledge,approveAndPublish,lifecycleTarget}=require('../helpers/m24-connected-knowledge');
+const {BEGIN,END,createRetellProjectionTransport}=require('../../src/knowledge/retellProjectionTransport');
+const output=process.argv.find(x=>x.startsWith('--output='))?.slice(9);assert.ok(output&&!fs.existsSync(output));
+const result={pass:false,cases:[],providerMode:'Local abort-aware transport fixture; actual repository locks and outbox'};
+const defer=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
+async function waitForLock(pool){for(let i=0;i<60;i++){const rows=(await pool.query("SELECT locktype,mode FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE a.datname=current_database() AND NOT l.granted")).rows;if(rows.length)return rows;await new Promise(r=>setTimeout(r,25));}throw new Error('Expected actual repository lock wait was not observed');}
+(async()=>{let f,release;try{
+ f=await createEstimateReviewFixture();const actors={organizationId:f.org,owner:f.actors.owner.actorUserId,admin:f.actors.admin.actorUserId};
+ const input={organizationId:f.org,actorUserId:actors.owner,providerKey:'intercepted.voice-provider',consumer:'voice_runtime',audience:'customer',capabilities:['identity','services'],maximumEntries:8,maximumBytes:8192,staleAfterSeconds:300};
+ const repo=new Repository(f.runtimePool),configured=await repo.configureTarget(input),facts=await completeKnowledge(knowledge,f.runtimePool,actors,'concurrent');
+ const base='Reviewed fixture instructions.\n'+BEGIN+END+'\nRetain instructions.';
+ const binding={organizationId:f.org,targetId:configured.target.id,targetRevision:configured.target.targetRevision,llmId:'local',llmVersion:0,exclusive:true,basePromptDigest:crypto.createHash('sha256').update(base).digest('hex')};
+ let remote={llm_id:'local',version:0,general_prompt:base},updates=0,entered=defer();release=defer();
+ const transport=createRetellProjectionTransport({resolveBinding:async()=>binding,client:{llm:{retrieve:async()=>structuredClone(remote),update:async(id,body,{signal})=>{updates++;entered.resolve();await release.promise;assert.equal(signal.aborted,false);remote={...remote,general_prompt:body.general_prompt};return structuredClone(remote);}}}});
+ const worker=new Worker({repository:repo,transports:{'intercepted.voice-provider':transport},batchSize:1});
+ const tombstone=await knowledge.createKnowledgeTombstone(f.runtimePool,lifecycleTarget(facts.identity,actors,'Remove caller-visible identity while delivery is in progress'));
+ const delivery=worker.drainOnce();await entered.promise;
+ assert.deepEqual(await repo.claimJobs({batchSize:1,leaseSeconds:5}),[]);
+ const removal=approveAndPublish(knowledge,f.runtimePool,tombstone,actors,facts.identityPublication).then(value=>({value}),error=>({error}));
+ result.revocationWait=await waitForLock(f.ownerPool);release.resolve();
+ const first=await delivery;assert.equal(first.succeeded,1);const removed=await removal;if(removed.error){
+ assert.equal(removed.error.code,'knowledge_workflow_conflict');result.revocationRejection={code:removed.error.code,message:removed.error.message};
+ const publications=(await f.ownerPool.query('SELECT * FROM canonical_knowledge_publications WHERE entry_id=$1 ORDER BY publication_number DESC',[facts.identity.id])).rows;
+ assert.equal(publications.length,1);assert.equal(publications[0].id,facts.identityPublication.id);
+ const review=(await f.ownerPool.query('SELECT * FROM canonical_knowledge_review_events WHERE version_id=$1 ORDER BY event_sequence DESC LIMIT 1',[tombstone.version.id])).rows[0];
+ await knowledge.publishKnowledgeVersion(f.runtimePool,{organizationId:f.org,actorUserId:actors.owner,entryId:tombstone.id,versionId:tombstone.version.id,versionNumber:tombstone.version.number,canonicalDigest:tombstone.version.canonicalDigest,expectedReviewEventId:review.id,expectedPublicationId:publications[0].id,expectedPublicationNumber:Number(publications[0].publication_number),reason:'Deliberate publication after reading unchanged prior publication and current approval'});
+ }
+ result.cases.push('same-target competing claim cannot deliver; actual source removal waits for existing delivery locks, safely rejects serialization conflict without partial publication; after explicit current read a deliberate publication creates the tombstone');
+ entered=defer();release=defer();const secondDelivery=worker.drainOnce();await entered.promise;
+ const suspension=repo.configureTarget({...input,status:'suspended',expectedTargetRevision:configured.target.targetRevision}).then(value=>({value}),error=>({error}));
+ result.targetWait=await waitForLock(f.ownerPool);release.resolve();const second=await secondDelivery;assert.equal(second.succeeded,1);
+ const suspensionResult=await suspension;let suspended=suspensionResult.value;if(suspensionResult.error){assert.equal(suspensionResult.error.code,'knowledge_sync_conflict');result.targetRejection={code:suspensionResult.error.code,message:suspensionResult.error.message};const current=await repo.getTargetState({organizationId:f.org,actorUserId:actors.owner,targetId:configured.target.id});assert.equal(current.target.status,'active');assert.equal(current.target.targetRevision,configured.target.targetRevision);suspended=await repo.configureTarget({...input,status:'suspended',expectedTargetRevision:current.target.targetRevision});}assert.equal(suspended.target.status,'suspended');assert.ok(!remote.general_prompt.includes('Company concurrent'));
+ assert.equal((await worker.drainOnce()).claimed,0);assert.equal(updates,2);
+ result.cases.push('actual target suspension waits, safely rejects concurrent state without partial change; a new current-state suspension prevents further claims; no invented concurrent revocation-success');
+ const active=await repo.configureTarget({...input,status:'active',expectedTargetRevision:suspended.target.targetRevision});
+ const job=(await repo.claimJobs({batchSize:1,leaseSeconds:5}))[0];assert.ok(job);
+ await f.ownerPool.query('SELECT pg_sleep(5.1)');let called=false;
+ const stale=await repo.executeClaimWithAuthority({...job,leaseSeconds:5},async()=>{called=true;return {accepted:true,observedProjectionDigest:job.projectionDigest};});
+ assert.equal(stale.ownershipLost,true);assert.equal(called,false);
+ const state=await repo.getTargetState({organizationId:f.org,actorUserId:actors.owner,targetId:active.target.id});result.finalState=state;
+ result.cases.push('naturally expired five-second lease cannot invoke transport or acknowledge stale completion');result.pass=true;
+}catch(e){result.error={message:e.message,code:e.code,stack:e.stack};process.exitCode=1;}finally{release?.resolve();if(f)await f.cleanup();fs.writeFileSync(output,JSON.stringify(result,null,2));console.log(JSON.stringify(result));}})();

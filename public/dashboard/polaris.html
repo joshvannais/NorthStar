@@ -12,6 +12,9 @@
   <script src="/js/polaris-trusted-presentation.js"></script>
   <script src="/js/polaris-native-card.js"></script>
   <script src="/js/saved-material-review.js"></script>
+  <script src="/js/polaris-grounded-conversation.js"></script>
+  <link rel="stylesheet" href="/css/pre-m23-p3.css">
+  <link rel="stylesheet" href="/css/execution-links.css">
   <link rel="stylesheet" href="/css/polaris-native-card.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Polaris — NorthStar</title>
@@ -573,7 +576,7 @@
               <section id="polarisMaterialSection" class="polaris-selected-context" hidden>
                 <details id="polarisMaterialDetails">
                   <summary>Saved Cost Review</summary>
-                  <p>Read the selected estimate and its recorded cost basis. General conversation retains the original estimate context.</p>
+                  <p>Read the selected estimate and its recorded cost basis. Questions use the selected estimate; original intake facts remain identified separately.</p>
                   <label for="polarisMaterialRevision">Estimate History</label>
                   <select id="polarisMaterialRevision" aria-label="Estimate History"></select>
                   <button type="button" class="polaris-clear-btn" id="polarisMaterialRefresh">Refresh Saved Cost Review</button>
@@ -773,7 +776,7 @@
         if (this.open && !document.getElementById('polarisMaterialStatus').textContent) loadMaterialReview(false);
       });
       document.getElementById('polarisMaterialRefresh').addEventListener('click',function() { loadMaterialReview(false); });
-      document.getElementById('polarisMaterialRevision').addEventListener('change',function() { materialRevision=this.value===''?null:Number(this.value); loadMaterialReview(false); });
+      document.getElementById('polarisMaterialRevision').addEventListener('change',function() { materialRevision=this.value===''?null:Number(this.value); groundedSequence++;groundedAttempt=null;hideTyping();setLoading(false);loadMaterialReview(false); });
 
       function selectedQuery() {
         var query = new URLSearchParams(window.location.search);
@@ -846,10 +849,10 @@
         var requestsDot = document.getElementById('polarisRequestsStatusDot');
         localLabel.textContent = localState === 'available' ? 'Available' : 'Unavailable';
         providerLabel.textContent = providerState === 'configured' ? 'Configured - not verified' :
-          providerState === 'local' ? 'Local demo' : providerState === 'error' ? 'Unavailable' : 'Unavailable';
+          providerState === 'responded' ? 'Response Received — Not Independently Verified' : providerState === 'local' ? 'Not Connected' : 'Unavailable';
         requestsLabel.textContent = String(Number(sent) || 0) + ' sent';
         localDot.style.background = localState === 'available' ? 'var(--success)' : 'var(--warning)';
-        providerDot.style.background = providerState === 'local' ? 'var(--success)' : 'var(--warning)';
+        providerDot.style.background = providerState === 'responded' ? 'var(--success)' : 'var(--warning)';
         requestsDot.style.background = 'var(--neutral-400)';
       }
 
@@ -1046,6 +1049,8 @@
             if (!renderCards([NorthStarPolarisCard.buildDemoCard(graph, selectedAtRequest)])) {
               document.getElementById('polarisSelectedContextTitle').textContent = 'Selected record unavailable';
               document.getElementById('polarisSelectedContextSummary').textContent = 'The saved customer details could not be read. Refresh and try again.';
+            } else {
+              activeCanonicalBacking = Object.freeze({ selected: selectedContract(selectedAtRequest), demoGraph: graph });
             }
           }).catch(function() {
             if (generation !== contextGeneration || !sameActiveSelection(selectedAtRequest, activeSelection)) return;
@@ -1182,6 +1187,7 @@
 
         // Scroll to bottom
         smoothScrollToBottom();
+        return body;
       }
 
       function smoothScrollToBottom() {
@@ -1316,64 +1322,30 @@
           value.slice(16, 20) + '-' + value.slice(20);
       }
 
-      function sendPaidMessage(message, requestKey) {
-        var key = requestKey || idempotencyKey();
-        var messageSelection = activeSelection ? Object.freeze({
-          kind: activeSelection.kind,
-          identifier: activeSelection.identifier
-        }) : null;
-        var messageBacking = activeCanonicalBacking;
-        var messageAuthority = activeAccountAuthority;
-        var messageGeneration = contextGeneration;
-        if (!messageAuthority || (messageSelection && !messageBacking)) {
-          showStructuredContractUnavailable();
-          addMessage('assistant', 'Polaris needs the current selected record before it can answer safely. No data was changed.',
-            'error', key, null);
-          return;
-        }
-        showTyping();
-        setLoading(true);
-        var request = {
-          schemaVersion: MESSAGE_SCHEMA,
-          idempotencyKey: key,
-          message: message
-        };
-        if (messageSelection) request.selected = selectedContract(messageSelection);
-        requestJson('POST', '/api/v1/canonical/polaris/assistant/messages', request, function(error, status, payload) {
-          hideTyping();
-          setLoading(false);
-          input.focus();
-          if (!error && status >= 200 && status < 300 && payload && payload.data) {
-            try {
-              if (messageGeneration !== contextGeneration || !sameActiveSelection(messageSelection, activeSelection) ||
-                  (messageBacking && activeCanonicalBacking !== messageBacking)) {
-                throw new Error('stale_message_response');
-              }
-              var data = NorthStarPolarisCard.validateAssistantResponse(payload.data, {
-                requestId: key,
-                selected: selectedContract(messageSelection),
-                authority: messageAuthority,
-                messageResponse: true,
-                canonicalBacking: messageBacking
-              });
-              if (data.cards.length && !renderCards(data.cards)) throw new Error('structured_response_rejected');
-              addMessage('assistant', data.answer.text, 'sent', key);
-              loadAssistantStatus();
-            } catch (_contractError) {
-              showStructuredContractUnavailable();
-              addMessage('assistant', 'Polaris could not confirm this answer. Refresh the selected record and try again. No data was changed.', 'error', key, null);
-            }
-            return;
+      var groundedAttempt=null, groundedSequence=0, groundedResponses=0;
+      function sendPaidMessage(message, requestKey, isRetry) {
+        if(isRetry&&(!groundedAttempt||groundedAttempt.idempotencyKey!==requestKey)){addMessage('assistant','The selected estimate or question changed. Ask a new question using the current selection.','error');return;}
+        var key=requestKey||idempotencyKey(),selection=activeSelection?Object.freeze({kind:activeSelection.kind,identifier:activeSelection.identifier}):null;
+        if(!selection||!activeCanonicalBacking){addMessage('assistant','Select a current job or customer before asking about its details.','error',key);return;}
+        var generation=contextGeneration,backing=activeCanonicalBacking,sequence=++groundedSequence;
+        var request=groundedAttempt&&groundedAttempt.idempotencyKey===key?groundedAttempt:{schemaVersion:'northstar.polaris.message-request.v2',idempotencyKey:key,message:message,selected:selectedContract(selection),selectedRevision:materialRevision===undefined?null:materialRevision};
+        groundedAttempt=request;
+        var demo=window.NorthStarDemoRuntime&&window.NorthStarDemoRuntime.active===true;
+        var url=demo?'/api/demo/command-center/polaris/messages-v2':'/api/v1/canonical/polaris/assistant/messages-v2';
+        var headers={'Content-Type':'application/json'};if(demo)headers['X-NorthStar-Demo-Intent']='polaris-conversation';
+        showTyping();setLoading(true);
+        function current(){return sequence===groundedSequence&&generation===contextGeneration&&sameActiveSelection(selection,activeSelection)&&backing===activeCanonicalBacking&&(materialRevision===undefined?null:materialRevision)===request.selectedRevision;}
+        window.NorthStarAccountSession.fetch(url,{method:'POST',headers:headers,body:JSON.stringify(request)}).then(function(response){return response.json().catch(function(){return{};}).then(function(payload){return{status:response.status,payload:payload};});}).then(function(result){
+          if(!current())return;
+          if(result.status>=200&&result.status<300&&result.payload.data){
+            var data=window.NorthStarGroundedConversation.validate(result.payload.data,request);
+            groundedResponses++;setStatus('available','responded',groundedResponses);
+            var root=addMessage('assistant','', 'sent',key);window.NorthStarGroundedConversation.render(root,data,current);groundedAttempt=null;return;
           }
-          var messageText = payload && payload.error && payload.error.message;
-          var errorCode = payload && payload.error && payload.error.code;
-          var retryable = [
-            'POLARIS_PROVIDER_UNAVAILABLE', 'POLARIS_PROVIDER_TIMEOUT',
-            'POLARIS_REQUEST_TIMEOUT', 'POLARIS_RATE_LIMIT'
-          ].indexOf(errorCode) >= 0;
-          addMessage('assistant', messageText || 'Conversation is unavailable. Saved customer intelligence remains read-only.',
-            'error', key, retryable ? message : null);
-        });
+          var error=result.payload.error||{},retry=result.status===503||result.status===504;
+          if(!retry)groundedAttempt=null;
+          addMessage('assistant',error.message||'Conversation could not be completed. Review the selected record before trying again.','error',key,retry?message:null);
+        }).catch(function(){if(current())addMessage('assistant','The response could not be confirmed. Retry this same question or review the saved record.','error',key,message);}).finally(function(){if(sequence===groundedSequence){hideTyping();setLoading(false);if(current()&&(document.activeElement===sendBtn||document.activeElement===input||document.activeElement===document.body))input.focus();}});
       }
 
       function sendMessage() {
@@ -1384,7 +1356,7 @@
         input.value = '';
         resetInputHeight();
         if (respondToSavedMaterialQuery(message)) return;
-        if (respondToAccountFreeDemoChat(message)) return;
+
         if (window.NorthStarEquipment && window.NorthStarEquipment.isEquipmentRequest(message)) {
           window.NorthStarEquipment.open({ entryPath: 'polaris', message: message });
           return;
@@ -1395,14 +1367,14 @@
       function retryLastMessage(text, requestKey, errorId) {
         if (isLoading || !conversationAllowed) return;
         if (respondToSavedMaterialQuery(text)) return;
-        if (respondToAccountFreeDemoChat(text)) return;
+
         var errorIndex = messages.findIndex(function(message) { return message.id === errorId; });
         if (errorIndex >= 0 && messages[errorIndex].role === 'assistant' && messages[errorIndex].status === 'error') {
           var el = document.getElementById(errorId);
           if (el) el.remove();
           messages.splice(errorIndex, 1);
         }
-        sendPaidMessage(text, requestKey);
+        sendPaidMessage(text, requestKey, true);
       }
 
       function setLoading(loading) {
@@ -1420,6 +1392,7 @@
       // ── Clear Conversation ──
 
       function clearConversation() {
+        groundedSequence++;groundedAttempt=null;
         if (messages.length === 0) return;
 
         // Remove all message elements
@@ -1518,5 +1491,11 @@
   <script>NavComponent.init("polaris");</script>
   <link rel="stylesheet" href="/css/equipment.css">
   <script src="/js/equipment.js"></script>
+  <script src="/js/presentation-format.js"></script>
+  <script src="/js/polaris-engine.js"></script>
+  <script src="/js/transcript-renderer.js"></script>
+  <script src="/js/navigation-launcher.js"></script>
+  <script src="/js/commercial-terms.js"></script>
+  <script src="/js/customer-detail.js"></script>
 </body>
 </html>

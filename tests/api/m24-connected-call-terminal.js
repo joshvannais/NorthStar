@@ -1,0 +1,33 @@
+'use strict';
+const fs=require('node:fs'),assert=require('node:assert/strict'),crypto=require('node:crypto'),express=require('express'),request=require('supertest');
+process.env.NODE_ENV='test';process.env.AUTH_ACCESS_SECRET='local-connected-fixture-secret-at-least-thirty-two';
+for(const k of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','RETELL_API_KEY'])delete process.env[k];
+const {createEstimateReviewFixture}=require('../helpers/m24-estimate-review-fixture');
+const authority=require('../../src/services/organizationAuthority'),voices=require('../../src/services/voiceSessionAuthority');
+const {createConnectedCallRouter}=require('../../src/routes/connectedCall');
+const output=process.argv.find(a=>a.startsWith('--output='))?.slice(9);assert.ok(output&&!fs.existsSync(output));
+const result={cases:[],pass:false};
+(async()=>{let f;try{
+ f=await createEstimateReviewFixture();const agent='fixture-connected-agent',call='fixture-connected-call';
+ const ownership=await authority.bindIntegrationOwner(f.ownerPool,{organizationId:f.org,provider:'retell',externalIntegrationId:agent,userId:f.actors.owner.actorUserId});
+ const profile=await authority.getActiveBusinessProfile(f.runtimePool,f.org);
+ await voices.createSession(f.runtimePool,{organizationId:f.org,externalSessionId:call,providerSessionId:call,provider:'retell',integrationOwnershipId:ownership.id,profileId:profile.id,profileVersion:profile.versionLabel,profileHash:profile.profileHash});
+ await voices.appendEvent(f.runtimePool,{organizationId:f.org,externalSessionId:call,externalEventId:'caller-scope',eventType:'transcript',payload:{text:'The existing fence needs replacing.'}});
+ result.current=await require('../../src/polaris/connectedCallRepository').createConnectedCallRepository(()=>f.runtimePool).loadCurrent({callId:call,agentId:agent});
+ const secret=crypto.randomBytes(32);const sign=raw=>crypto.createHmac('sha256',secret).update(raw).digest('hex');
+ const app=express();let generated=0;
+ app.locals.connectedCallGenerate=async({context})=>{generated++;const fact=context.evidence.find(e=>e.id.startsWith('call_'));assert.ok(fact);return{questions:[{text:'Does the existing fence need removal?',evidenceIds:[fact.id]}],explanations:[],proposalIds:[],requestedCard:'none'};};
+ app.use(createConnectedCallRouter({getPool:()=>f.runtimePool,verifyRaw:(raw,sig)=>sig===sign(raw)}));
+ const raw=JSON.stringify({name:'northstar_job_guidance',call:{call_id:call,agent_id:agent},args:{question:'What should we clarify?'},organizationId:crypto.randomUUID()});
+ const send=(body=raw,signature=sign(body))=>request(app).post('/api/retell/tools/job-guidance').set('Content-Type','application/json').set('X-Retell-Signature',signature).send(body);
+ let response=await send();result.first={status:response.status,body:response.body};assert.equal(response.status,200);assert.equal(response.body.status,'provisional');assert.equal(response.body.bookingConfirmed,false);
+ response=await send();assert.equal(response.status,200);assert.equal(generated,1);assert.equal((await f.ownerPool.query("SELECT count(*)::int n FROM canonical_voice_session_events WHERE event_type='grounded_tool'")).rows[0].n,1);
+ result.cases.push('mounted raw signed fixture uses exact active call/ownership, records one provisional event and replays without another generation');
+ assert.equal((await send(raw+' ',sign(raw))).status,403);
+ const ingestion=require('../../src/services/canonicalRetellIngestion');const payload={event:'call_ended',call:{call_id:call,agent_id:agent,from_number:'+15555550123',transcript_object:[{role:'agent',words:'What would you like replaced?'},{role:'user',words:'I need a 100-foot cedar fence replaced. My name is Casey.'}],call_analysis:{customer_name:'Casey Local Fixture',service_requested:'fence'}}};
+const beforeCount=(await f.ownerPool.query('SELECT count(*)::int n FROM canonical_estimates WHERE organization_id=$1',[f.org])).rows[0].n;
+async function terminal(p){const c=await f.runtimePool.connect();try{await c.query('BEGIN');const r=await ingestion.ingestRetellPayload(p,{transactionClient:c});if(r.status!==201)await c.query('ROLLBACK');else await c.query('COMMIT');return r;}finally{c.release();}}
+const first=await terminal(payload);result.terminal=first;assert.equal(first.status,201,JSON.stringify(first));const again=await terminal({...payload,event:'call_analyzed'});result.replayedTerminal=again;assert.equal(again.status,201);assert.equal(again.body.operationId,first.body.operationId);assert.equal((await f.ownerPool.query('SELECT count(*)::int n FROM canonical_estimates WHERE organization_id=$1',[f.org])).rows[0].n,beforeCount+1);
+const voice=await voices.getSession(f.runtimePool,f.org,call);result.voice=voice;assert.equal(voice.canonicalOperationId,first.body.operationId);assert.equal(voice.status,'completed');assert.equal((await f.ownerPool.query("SELECT count(*)::int n FROM canonical_voice_session_events WHERE event_type='grounded_tool'")).rows[0].n,1);assert.equal((await send()).status,403);assert.equal(generated,1);result.cases.push('provisional guidance remains on exact voice session; ordinary ended/analyzed terminal events produce one canonical estimate graph and late tool response is unavailable');
+ result.pass=true;
+}catch(e){result.error={message:e.message,stack:e.stack};process.exitCode=1;}finally{if(f)await f.cleanup();fs.writeFileSync(output,JSON.stringify(result,null,2));console.log(JSON.stringify(result));}})();

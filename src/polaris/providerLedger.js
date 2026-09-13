@@ -105,10 +105,10 @@ function validateReservationInput(input) {
   const userId = exactUuid(input.userId, 'userId');
   const requestId = exactUuid(input.requestId, 'requestId');
   if (typeof input.fingerprint !== 'string' || !FINGERPRINT.test(input.fingerprint) ||
-      input.model !== MODEL || input.schemaVersion !== RESPONSE_SCHEMA) {
+      input.model !== MODEL || ![RESPONSE_SCHEMA, 'northstar.polaris.grounded-conversation.v2'].includes(input.schemaVersion)) {
     throw contractError('POLARIS_USAGE_CONTRACT_INVALID', 'The model or schema reservation is unsupported.', 500);
   }
-  return Object.freeze({ organizationId, userId, requestId, fingerprint: input.fingerprint });
+  return Object.freeze({ organizationId, userId, requestId, fingerprint: input.fingerprint, schemaVersion: input.schemaVersion });
 }
 
 function validateUsage(usage) {
@@ -149,7 +149,7 @@ function createProviderUsageLedger(options = {}) {
     try {
       result = await queryable(poolProvider).query(
         `SELECT * FROM public.polaris_provider_reserve_usage($1,$2,$3,$4,$5,$6,$7)`,
-        [authority.organizationId, authority.userId, authority.requestId, authority.fingerprint, MODEL, RESPONSE_SCHEMA,
+        [authority.organizationId, authority.userId, authority.requestId, authority.fingerprint, MODEL, authority.schemaVersion,
           RESERVED_COST_NANO_USD]
       );
     } catch (error) {

@@ -17,6 +17,7 @@ window.CustomerDetail = (function() {
   var _openSequence = 0;
   var _reviewSequence = 0;
   var _estimateReview = null;
+  var _groundedReview = null;
   var _decisionDraft = null;
   var _overlayEl = null;
   var _drawerEl = null;
@@ -785,6 +786,7 @@ window.CustomerDetail = (function() {
     var generation = ++_openSequence;
     if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear($('cdExecutionRecords'));
     options = options || {};
+    _groundedReview = options.groundedReview || null;
     _sourceContext = {
       source: options.source === 'leads' || options.source === 'communications' ? options.source : 'customer',
       communicationId: typeof options.communicationId === 'string' ? options.communicationId : null
@@ -792,6 +794,7 @@ window.CustomerDetail = (function() {
 
     if(window.NorthStarCommercialTerms)window.NorthStarCommercialTerms.reset();
     _decisionDraft = null; _pricingPlanDraft = null; _pricingPolicyDraft = null; _laborPlanDraft = null; _travelPlanDraft = null; _equipmentPlanDraft = null; _equipmentCostDraft=null; _materialPlanDraft = null; _adoptionDraft = null; _selectedEstimateRevision = null; _estimateReview = null;
+    if(_groundedReview&&_groundedReview.target&&Number.isSafeInteger(_groundedReview.target.selectedRevision))_selectedEstimateRevision=_groundedReview.target.selectedRevision;
     // Ensure drawer HTML is injected
     injectDrawerHTML();
     _returnFocus = document.activeElement && typeof document.activeElement.focus === 'function'
@@ -1883,6 +1886,28 @@ window.CustomerDetail = (function() {
           _decisionDraft.basis = decisionReviewBasis(review);
         }
         _estimateReview = review; renderEstimateDecision(review); renderCapellaReview(review);
+        if(_groundedReview){
+          var handoff=_groundedReview;_groundedReview=null;
+          function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object'){var out={};Object.keys(value).sort().forEach(function(k){out[k]=stable(value[k]);});return out;}return value;}
+          function handoffWarning(text){var notice=document.createElement('p');notice.id='cdGroundedReviewNotice';notice.textContent=text;notice.setAttribute('role','status');notice.tabIndex=-1;root.appendChild(notice);for(var ancestor=notice;ancestor;ancestor=ancestor.parentElement)if(ancestor.tagName==='DETAILS')ancestor.open=true;notice.focus();notice.scrollIntoView({block:'nearest'});}
+          var target=handoff.target, currentHandoffBasis={decisionBasis:review.decisions&&review.decisions.writeBasis||null,plans:{}};
+          ['materialPlans','laborPlans','equipmentPlans','travelPlans','equipmentCostPlans','pricingPlans','pricingPolicies','commercialTerms'].forEach(function(key){currentHandoffBasis.plans[key]=review[key]&&review[key].current&&review[key].current.digest||null;});
+          if(!target||target.estimateId!==selected.ids.estimate||target.selectedRevision!==review.selectedRevision||JSON.stringify(stable(target.handoffBasis))!==JSON.stringify(stable(currentHandoffBasis))||JSON.stringify(stable(target.sourcePins))!==JSON.stringify(stable(review.pins))){handoffWarning('The estimate changed since this conversation. Review its current details before making changes.');}
+          else {
+            var proposal=handoff.proposal;
+            if(proposal&&proposal.change){
+              var saved=review.laborPlans&&review.laborPlans.current,change=proposal.change;
+              var line=saved&&saved.inputs&&saved.inputs.lines[change.index];
+              if(proposal.editor!=='labor'||!review.laborPlans||!review.laborPlans.canMutate||!saved||saved.digest!==proposal.planDigest||!line||line.lineId!==change.lineId||line.basis!=='worker_hours'||change.field!=='workerHours'||change.source!=='explicit_user_assumption'||line.workerHours!==change.previous||! /^(0|[1-9][0-9]{0,8})(\.[0-9]{1,6})?$/.test(change.value)){handoffWarning('The proposed task changed. Review the current labor plan before entering a new assumption.');return;}
+              var proposedInputs=JSON.parse(JSON.stringify(saved.inputs));proposedInputs.assessment=null;proposedInputs.lines[change.index].workerHours=change.value;proposedInputs.lines[change.index].quantitySource={kind:'my_estimate',reference:'',note:'Work time proposed by the reviewer in Polaris; requires review.',effectiveOn:null,endsOn:null,geography:''};
+              _laborPlanDraft={estimateId:review.pins.estimateId,basis:JSON.stringify([review.pins,saved.digest,review.laborPlans.decisionBasis]),action:'save',inputs:proposedInputs,reason:'',confirmed:false,result:null,request:null,explanation:''};
+              var laborRoot=$('cdLaborPlan'),laborParent=laborRoot.parentElement;laborRoot.remove();renderLaborPlan(review,laborParent);
+            }
+            var ids={capella:'cdCapellaReview',estimate_review:'cdEstimateReview',material:'cdMaterialPlan',labor:'cdLaborPlan',equipment:'cdEquipmentPlan',travel:'cdTravelPlan'},destination=$(ids[handoff.editor]);
+            if(destination){for(var ancestor=destination;ancestor;ancestor=ancestor.parentElement)if(ancestor.tagName==='DETAILS')ancestor.open=true;destination.tabIndex=-1;destination.focus();destination.scrollIntoView({block:'nearest'});}
+          }
+        }
+
       }).catch(function(error) {
         if (!current()) return;
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?

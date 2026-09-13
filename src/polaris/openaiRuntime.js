@@ -263,6 +263,25 @@ function createOpenAIRuntime(options = {}) {
     if (!enabled || !configured) {
       throw contractError('POLARIS_CREDENTIAL_DISABLED', 'Polaris conversation is not configured for this account.', 503);
     }
+    if (inputEnvelope && ['grounded_conversation','caller_guidance'].includes(inputEnvelope.purpose)) {
+      if (options.groundedEnabled === false) throw contractError('POLARIS_V2_DISABLED', 'Conversation is not connected. Your saved records remain available.', 503);
+      const grounded = require('./groundedConversation');
+      if (!inputEnvelope.authority || !inputEnvelope.untrustedInput || !inputEnvelope.untrustedInput.selected ||
+          !inputEnvelope.groundedContext || !Array.isArray(inputEnvelope.groundedContext.evidence)) {
+        throw contractError('POLARIS_SELECTED_RECORD_REQUIRED', 'Select one customer, lead, or work record before starting a conversation.', 400);
+      }
+      // Complete proposal fields/pins stay server-owned. The model can choose a
+      // catalog ID; it has no reason to receive private editor state or sessions.
+      const input = JSON.stringify({ ...inputEnvelope,
+        authority: { organizationId: opaqueTenantIdentifier(inputEnvelope.authority), role: inputEnvelope.authority.role },
+        groundedContext: { ...inputEnvelope.groundedContext,
+          proposals: inputEnvelope.groundedContext.proposals.map(({ id, editor, label, evidenceIds }) => ({ id, editor, label, evidenceIds })) },
+      });
+      if (Buffer.byteLength(grounded.INSTRUCTIONS + input, 'utf8') > MAX_ASSEMBLED_INPUT_BYTES) {
+        throw contractError('POLARIS_INPUT_TOO_LARGE', 'The selected Polaris context exceeds the safe request limit.', 413);
+      }
+      return input;
+    }
     if (inputEnvelope && inputEnvelope.purpose === 'equipment_identifiers') {
       require('../equipment/contract').text(inputEnvelope.message, 1500);
       if (!inputEnvelope.authority) throw providerResponseError();
@@ -286,18 +305,20 @@ function createOpenAIRuntime(options = {}) {
   async function respond(inputEnvelope, respondOptions = {}) {
     const input = preflight(inputEnvelope);
     const equipment = inputEnvelope.purpose === 'equipment_identifiers';
+    const caller = inputEnvelope.purpose === 'caller_guidance';
+    const grounded = ['grounded_conversation','caller_guidance'].includes(inputEnvelope.purpose) ? require('./groundedConversation') : null;
     const body = Object.freeze({
       model: MODEL,
-      instructions: equipment ? EQUIPMENT_INSTRUCTIONS : INSTRUCTIONS,
+      instructions: grounded ? grounded.INSTRUCTIONS + (caller ? ' Speak to the caller naturally using only caller-safe published facts. Ask simple relevant clarifying questions, defer technical unknowns to the owner, never claim an approved price, booking, verified availability or safety. No internal costing or governance narration.' : '') : equipment ? EQUIPMENT_INSTRUCTIONS : INSTRUCTIONS,
       input,
       reasoning: Object.freeze({ effort: 'low' }),
       text: Object.freeze({
         verbosity: 'low',
         format: Object.freeze({
           type: 'json_schema',
-          name: equipment ? 'northstar_equipment_literal_identifiers_v1' : FORMAT_NAME,
+          name: grounded ? grounded.FORMAT_NAME : equipment ? 'northstar_equipment_literal_identifiers_v1' : FORMAT_NAME,
           strict: true,
-          schema: equipment ? EQUIPMENT_SCHEMA : RESPONSE_JSON_SCHEMA,
+          schema: grounded ? grounded.RESPONSE_JSON_SCHEMA : equipment ? EQUIPMENT_SCHEMA : RESPONSE_JSON_SCHEMA,
         }),
       }),
       store: false,
@@ -317,7 +338,7 @@ function createOpenAIRuntime(options = {}) {
           response = await getClient().responses.create(body, { signal: boundary.signal });
           break;
         } catch (error) {
-          if (boundary.signal.aborted || attemptCount >= 2 || !retryable(error)) throw error;
+          if (boundary.signal.aborted || attemptCount >= (caller ? 1 : 2) || !retryable(error)) throw error;
           const retryAfter = retryAfterBoundary(error);
           const delay = retryAfter === null
             ? 250 + Math.round(Math.max(0, Math.min(1, random())) * 250)
@@ -340,6 +361,10 @@ function createOpenAIRuntime(options = {}) {
       }
       let parsed;
       try { parsed = JSON.parse(responseText(response)); } catch (_error) { throw providerResponseError(); }
+      if (grounded) {
+        return Object.freeze({ response: grounded.projectResponse(parsed, inputEnvelope),
+          usage: parseUsage(response, attemptCount, startedAt, 'completed') });
+      }
       if (equipment) {
         let identifiers;
         try { identifiers = require('../equipment/contract').literalIdentifiers(parsed, inputEnvelope.message); }
@@ -462,6 +487,7 @@ function createProductionOpenAIRuntime(environment = process.env, options = {}) 
   return createOpenAIRuntime({
     configured,
     enabled,
+    groundedEnabled: environment.POLARIS_GROUNDED_V2_ENABLED === 'true',
     clientFactory,
     logger: options.logger,
   });

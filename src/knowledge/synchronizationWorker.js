@@ -91,9 +91,10 @@ class KnowledgeSynchronizationWorker {
           this.leaseSeconds,
           Math.ceil(this.transportTimeoutMs / 1000) + 5
         ),
-      }, async verified => {
+      }, async (verified, authorityClient) => {
         const controller = new AbortController();
         const request = Object.freeze({
+          attemptCount: verified.attemptCount,
           audience: verified.audience,
           canonicalProjection: verified.canonicalProjection,
           capabilities: Object.freeze([...verified.capabilities]),
@@ -112,6 +113,7 @@ class KnowledgeSynchronizationWorker {
           return normalizeTransportResult(await Promise.race([
             Promise.resolve().then(() => transport.applyProjection(request, {
               signal: controller.signal,
+              authorityClient,
             })),
             timeoutPromise(this.transportTimeoutMs, controller),
           ]));

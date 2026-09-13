@@ -1009,6 +1009,91 @@ function createCanonicalRouter(options) {
       }
     });
 
+  async function loadGroundedCurrent(req, request) {
+    const { AccountRepository } = require('../accounts/repository');
+    const { contractError, buildCustomerIntelligenceCard } = require('../polaris/assistantContract');
+    const build = require('../polaris/groundedContext');
+    return equipmentPlanRepository.withReadSnapshot(resolvePool(dependencies.poolProvider), async client => {
+      const a = actorInput(req);
+      const row = await new AccountRepository(client).sessionAuthority(a.authSessionId, a.actorUserId);
+      if (!row || row.organization_id !== a.organizationId || row.membership_id !== a.membershipId ||
+          row.role !== a.actorAccessRole || row.user_status !== 'active' || row.membership_status !== 'active' ||
+          row.session_status !== 'active' || new Date(row.access_expires_at) <= new Date(row.server_now)) {
+        throw contractError('POLARIS_ACCESS_CHANGED', 'Your access changed. Sign in again before continuing.', 401);
+      }
+      requireProviderEntitlement({ plan: row.plan_type, role: row.role });
+      const subscription = require('../polaris/groundedEligibility').requireCurrentSubscription(row);
+      if (!hasPermission(row.role, 'ai', 'read') || !hasPermission(row.role, request.selected.kind === 'work' ? 'calendar' : 'leads', 'read')) {
+        throw contractError('POLARIS_SELECTED_RECORD_FORBIDDEN', 'This record is unavailable with your current access.', 403);
+      }
+      const item = await dependencies.assistantContextLoader(client, requestContext(req), request.selected.id);
+      if (!item || !selectedMatchesItem(item, request.selected)) throw contractError('POLARIS_SELECTED_RECORD_NOT_FOUND', 'The selected record is unavailable. Refresh and select another record.', 404);
+      const authority = { organizationId: row.organization_id, userId: row.user_id, role: row.role,
+        sessionId: row.session_id, membershipId: row.membership_id, expiresAt: row.access_expires_at,
+        plan: row.plan_type, subscription };
+      const card = buildCustomerIntelligenceCard(item, request.selected);
+      let review = null;
+      if (['owner', 'admin'].includes(row.role)) {
+        review = await withBroadSchedulingReadSnapshot(client, a, (sameClient, operator) => assembleCapellaReview(sameClient, operator, Object.assign(Object.create(req), {
+          params: { ...req.params, estimateId: item.ids.estimate },
+          query: request.selectedRevision === null ? {} : { revision: request.selectedRevision },
+        })), { operatorDirectory: dependencies.operatorDirectory });
+      } else if (request.selectedRevision !== null) {
+        throw contractError('POLARIS_SELECTED_RECORD_FORBIDDEN', 'Estimate history requires an owner or administrator.', 403);
+      }
+      const knowledge = await require('../knowledge/repository').previewPublishedKnowledgeProjection(client, {
+        organizationId: row.organization_id, actorUserId: row.user_id, consumer: 'northstar_assistant',
+        audience: ['owner', 'admin'].includes(row.role) ? 'internal' : 'customer',
+        capabilities: ['identity', 'services', 'customer_guidance'], maximumEntries: 4, maximumBytes: 8192,
+      });
+      const now = (await client.query('SELECT clock_timestamp() now')).rows[0].now;
+      if (new Date(row.access_expires_at) <= new Date(now)) throw contractError('POLARIS_ACCESS_CHANGED', 'Your session expired. Sign in again before continuing.', 401);
+      require('../polaris/groundedEligibility').requireCurrentSubscription(row, now);
+      const groundedContext = build.build({ message:request.message, authority, card, review, knowledge });
+      groundedContext.reviewTarget = review ? { customerId: item.ids.customer, estimateId: item.ids.estimate, selectedRevision: review.selectedRevision, sourcePins: review.pins, handoffBasis: build.handoffBasis(review) } : null;
+      return build.stableBasis({ authority, card, review, knowledge, groundedContext });
+    });
+  }
+
+  router.post('/polaris/assistant/messages-v2', dependencies.auth, requireCanonicalContext,
+    dependencies.permission('ai', 'read'), requireAssistantEntitlement, dependencies.assistantRateLimit, async (req, res) => {
+      const c = require('../polaris/groundedConversation');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25000); timer.unref?.();
+      const abort = () => { if (!res.writableEnded) controller.abort(); };
+      req.once('aborted', abort); res.once('close', abort);
+      try {
+        const request = c.validateRequest(req.body);
+        if (!require('../polaris/connectedPolicy').generationEnabled) throw Object.assign(new Error('New conversations are paused. Your saved records remain available.'), { code: 'POLARIS_GENERATION_PAUSED', statusCode: 503 });
+        const before = await loadGroundedCurrent(req, request), basis = c.digest(before);
+        if (!dependencies.assistantRuntime || dependencies.assistantRuntime.kind !== 'openai') throw Object.assign(new Error('Conversation is not connected. Your saved records remain available.'), { code: 'POLARIS_CREDENTIAL_DISABLED', statusCode: 503 });
+        const envelope = { purpose: 'grounded_conversation', schemaVersion: c.VERSION, requestId: request.idempotencyKey,
+          authority: before.authority, untrustedInput: { message: request.message, selected: request.selected }, groundedContext: before.groundedContext };
+        dependencies.assistantRuntime.preflight(envelope);
+        const fingerprint = c.digest({ request, authority: before.authority, basis });
+        const data = await dependencies.assistantIdempotency.execute({ key: request.idempotencyKey,
+          organizationId: before.authority.organizationId, userId: before.authority.userId,
+          operation: 'polaris_message_v2', fingerprint }, async signal => {
+          const reservation = await dependencies.assistantUsageLedger.reserve({ organizationId: before.authority.organizationId,
+            userId: before.authority.userId, requestId: request.idempotencyKey, fingerprint,
+            model: 'gpt-5.6-luna', schemaVersion: c.VERSION });
+          try {
+            const result = await dependencies.assistantRuntime.respond(envelope, { signal });
+            await dependencies.assistantUsageLedger.reconcile(reservation, result.usage);
+            if (c.digest(await loadGroundedCurrent(req, request)) !== basis) throw Object.assign(new Error('The selected record or sources changed. Refresh before asking again.'), { code: 'POLARIS_CONTEXT_CHANGED', statusCode: 409 });
+            return result.response;
+          } catch (error) {
+            if (error.polarisUsage) await dependencies.assistantUsageLedger.reconcile(reservation, error.polarisUsage);
+            throw error;
+          }
+        }, { signal: controller.signal });
+        if (!require('../polaris/connectedPolicy').generationEnabled) throw Object.assign(new Error('New conversations are paused. Your saved records remain available.'), { code: 'POLARIS_GENERATION_PAUSED', statusCode: 503 });
+        if (c.digest(await loadGroundedCurrent(req, request)) !== basis) throw Object.assign(new Error('The selected record or sources changed. Refresh before asking again.'), { code: 'POLARIS_CONTEXT_CHANGED', statusCode: 409 });
+        return res.json({ success: true, data, requestId: req.requestId || request.idempotencyKey });
+      } catch (error) { return handleEndpointError(res, require('../polaris/groundedErrors').present(error), req); }
+      finally { clearTimeout(timer); req.removeListener('aborted', abort); res.removeListener('close', abort); }
+    });
+
   router.post('/polaris/assistant/messages', dependencies.auth, requireCanonicalContext,
     dependencies.permission('ai', 'read'), requireAssistantEntitlement,
     dependencies.assistantRateLimit, async function (req, res) {

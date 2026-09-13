@@ -1870,3 +1870,15 @@ html body #cdCustomerDrawer .drawer-policy-facts dd { text-align: right; font-we
 #taxPreparation > p { margin: 0 0 10px; }
 #taxPreparation > details { margin: 12px 0; }
 #taxPreparation > button { margin: 8px 8px 0 0; }
+
+/* CAPELLA ephemeral scenario analysis uses existing typography and form controls. */
+.capella-scenario-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}
+.capella-scenario-form label{display:flex;flex-direction:column;gap:.4rem;margin:.75rem 0}
+.capella-scenario-form input:not([type=checkbox]),.capella-scenario-form select,.capella-scenario-form textarea{width:100%;min-width:0;box-sizing:border-box;font:inherit}
+.capella-scenario-form .capella-scenario-check{display:flex;flex-direction:row;align-items:flex-start;gap:.65rem}
+.capella-scenario-check input{flex:none;margin-top:.25rem}
+.capella-scenario-form fieldset{min-width:0;padding:1rem;border:1px solid var(--border-color,#777);border-radius:.5rem}
+#cdScenarioResults section{min-width:0;overflow-wrap:anywhere}
+
+.capella-scenario-grid{align-items:start}
+.capella-scenario-form input:not([type=checkbox]),.capella-scenario-form select,.capella-scenario-form textarea{min-height:44px;padding:.65rem;border:1px solid #9ca3af;border-radius:.35rem;background:#fff;color:#172033;color-scheme:light}

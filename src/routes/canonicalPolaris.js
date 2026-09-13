@@ -1647,12 +1647,7 @@ function createCanonicalRouter(options) {
     } catch(error) { return res.status(error.status || 503).json({success:false,error:{code:error.code || 'ESTIMATE_DECISION_UNAVAILABLE',message:error.status ? error.message : 'The review could not be saved. Try again.'}}); }
   });
 
-  router.get('/estimates/:estimateId/review', dependencies.auth, requireCanonicalContext, async function (req, res) {
-    res.set('Cache-Control', 'no-store');
-    const failure = (status, message) => res.status(status).json({ success: false, error: { code: 'ESTIMATE_REVIEW_UNAVAILABLE', message } });
-    if (!UUID.test(req.params.estimateId)) return failure(404, 'That estimate is unavailable.');
-    try {
-      const review = await withEquipmentCanonicalRead(req, dependencies, async (client, operator) => {
+  async function assembleCapellaReview(client,operator,req) {
         if (!operator || !operator.actor || !['owner', 'admin'].includes(operator.actor.accessRole)) {
           const denied = new Error('Estimate review requires a current owner or administrator.');
           denied.statusCode = 403; throw denied;
@@ -1688,7 +1683,24 @@ function createCanonicalRouter(options) {
         review.adoptionPaused=!adoptionPolicy.mutationsEnabled;
         const comparisonPage=await listCanonicalGraphPage(client,requestContext(req),{limit:50});
         review.groundedRecommendations=require('../polaris/groundedRecommendations').build(review,item,{candidates:comparisonPage.items,hasMore:comparisonPage.hasMore});
+        review.capellaScenarios=require('../estimating/capellaScenarios').basis(review,item);
         return review;
+  }
+
+  router.post('/estimates/:estimateId/capella-scenarios',dependencies.auth,requireCanonicalContext,async function(req,res){
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the scenario entries.'}});
+    try{const data=await withEquipmentCanonicalRead(req,dependencies,async(client,operator)=>{const review=await assembleCapellaReview(client,operator,req);if(!review)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});return require('../estimating/capellaScenarios').calculate(review.capellaScenarios,req.body);});return res.json({success:true,data});}
+    catch(e){const status=[400,401,403,404,409,413,429,503].includes(e.status||e.statusCode)?(e.status||e.statusCode):503;return res.status(status).json({success:false,error:{message:e.code&&e.code.startsWith('CAPELLA_')?e.message:status===400?'Check the scenario amounts, source and date range.':status===403?'Scenario analysis is available to current owners and administrators.':'Scenario analysis could not be loaded. Refresh and try again.'}});}
+  });
+
+  router.get('/estimates/:estimateId/review', dependencies.auth, requireCanonicalContext, async function (req, res) {
+    res.set('Cache-Control', 'no-store');
+    const failure = (status, message) => res.status(status).json({ success: false, error: { code: 'ESTIMATE_REVIEW_UNAVAILABLE', message } });
+    if (!UUID.test(req.params.estimateId)) return failure(404, 'That estimate is unavailable.');
+    try {
+      const review = await withEquipmentCanonicalRead(req, dependencies, async (client, operator) => {
+        return assembleCapellaReview(client,operator,req);
       });
       if (!review) return failure(404, 'That estimate is unavailable.');
       return res.json({ success: true, data: review });

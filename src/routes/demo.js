@@ -540,13 +540,7 @@ router.post('/command-center/estimates/:estimateId/decisions', async function(re
   }catch(error){return commandCenterFailure(req,res,error);}
 });
 
-router.get('/command-center/estimates/:estimateId/review', async function (req, res) {
-  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
-  try {
-    const token = commandCenterToken(req, res);
-    const record = await commandCenterRepository.read(token);
-    const item = demoCanonicalItems(demoWorkspace(record)).find(value => value.ids.estimate === req.params.estimateId);
-    if (!item) return res.status(404).json({ success: false, error: { message: 'That demo estimate is unavailable.' } });
+async function assembleDemoCapellaReview(record,item,req){
     const selected=req.query.revision===undefined?null:Number(req.query.revision);
     const review=buildRevisionReview(item,selectDemoRevision(item,record.state.estimateRevisions?.[item.ids.estimate]||[],selected),{simulated:true});
     const history=record.state.estimateDecisions?.[req.params.estimateId] || [];
@@ -573,6 +567,21 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled;review.adoptionPaused=!adoptionPolicy.mutationsEnabled;
     const candidates=demoCanonicalItems(demoWorkspace(record)).sort((a,b)=>Date.parse(b.snapshotCreatedAt)-Date.parse(a.snapshotCreatedAt)||a.ids.estimate.localeCompare(b.ids.estimate));
     review.groundedRecommendations=require('../polaris/groundedRecommendations').build(review,item,{candidates:candidates.slice(0,50),hasMore:candidates.length>50});
+    review.capellaScenarios=require('../estimating/capellaScenarios').basis(review,item);
+    return review;
+}
+router.post('/command-center/estimates/:estimateId/capella-scenarios',async function(req,res){
+ res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'capella-scenarios'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the scenario entries.'}});
+ try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(x=>x.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});const review=await assembleDemoCapellaReview(record,item,req);return res.json({success:true,data:require('../estimating/capellaScenarios').calculate(review.capellaScenarios,req.body)});}catch(e){const status=[400,401,403,404,409,410,413,429,503].includes(e.status)?e.status:503;return res.status(status).json({success:false,error:{message:e.code&&e.code.startsWith('CAPELLA_')?e.message:status===400?'Check the scenario amounts, source and date range.':'Scenario analysis could not be loaded. Refresh and try again.'}});}
+});
+router.get('/command-center/estimates/:estimateId/review', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  try {
+    const token = commandCenterToken(req, res);
+    const record = await commandCenterRepository.read(token);
+    const item = demoCanonicalItems(demoWorkspace(record)).find(value => value.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({ success: false, error: { message: 'That demo estimate is unavailable.' } });
+    const review=await assembleDemoCapellaReview(record,item,req);
     return res.json({ success: true, data: review });
   } catch (_error) {
     return res.status(_error.status===404?404:503).json({ success: false, error: { message: _error.status===404?'That demo estimate is unavailable.':'Demo estimate review could not be loaded. Try again.' } });

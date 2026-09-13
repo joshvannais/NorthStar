@@ -12,7 +12,7 @@ function validateRegistry(value){
   const context=publicContext(e.context);if(Object.keys(e.context).length!==6)invalid();const key=digest(context);if(keys.has(key))invalid();keys.add(key);
   if(!e.review||Object.keys(e.review).sort().join('|')!==['accessBasis','expiresOn','reviewedBy','reviewedOn'].sort().join('|')||typeof e.review.reviewedBy!=='string'||!e.review.reviewedBy.trim()||e.review.reviewedBy.length>200||typeof e.review.accessBasis!=='string'||!e.review.accessBasis.trim()||e.review.accessBasis.length>2000||!day(e.review.reviewedOn)||!day(e.review.expiresOn)||e.review.expiresOn<e.review.reviewedOn)invalid();
   if(!Array.isArray(e.documents)||!e.documents.length||e.documents.length>8)invalid();for(const d of e.documents){
-   if(!d||Object.keys(d).sort().join('|')!==['url','allowedOrigins','effectiveOn','endsOn','coverage','exclusions'].sort().join('|')||!Array.isArray(d.allowedOrigins)||!d.allowedOrigins.length||d.allowedOrigins.length>4)invalid();
+   if(!d||Object.keys(d).sort().join('|')!==['url','allowedOrigins','effectiveOn','endsOn','coverage','exclusions',...(Object.hasOwn(d,'documentType')?['documentType']:[])].sort().join('|')||Object.hasOwn(d,'documentType')&&d.documentType!=='pdf'||!Array.isArray(d.allowedOrigins)||!d.allowedOrigins.length||d.allowedOrigins.length>4)invalid();
    for(const origin of d.allowedOrigins){let u;try{u=new URL(origin);}catch(_){invalid();}if(u.origin!==origin||u.protocol!=='https:'||u.port&&u.port!=='443')invalid();}
    approvedUrl(d.url,new Set(d.allowedOrigins));for(const k of ['effectiveOn','endsOn'])if(d[k]!==null&&!day(d[k]))invalid();if(d.effectiveOn&&d.endsOn&&d.endsOn<d.effectiveOn)invalid();for(const k of ['coverage','exclusions'])if(typeof d[k]!=='string'||d[k].length>2000)invalid();
   }

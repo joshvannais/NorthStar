@@ -43,10 +43,16 @@ function createTaxSourceAcquisition({ transport, allowedOrigins, clock = () => n
       const endsOn = source.endsOn === null ? null : day(source.endsOn);
       if (effectiveOn && endsOn && endsOn < effectiveOn) invalid('Source dates conflict.');
       if (typeof source.coverage !== 'string' || source.coverage.length > 2000 || typeof source.exclusions !== 'string' || source.exclusions.length > 2000) invalid('Source coverage needs review.');
+      let document;
+      if(Object.hasOwn(source,'document')){
+        const d=source.document;
+        if(!d||Object.keys(d).sort().join('|')!==['version','contentType','finalUrl','rawBytes','rawDocumentDigest','extractedTextDigest','pages','extractionVersion'].sort().join('|')||d.version!=='tax-document-provenance-v1'||d.contentType!=='application/pdf'||d.finalUrl!==source.url||!Number.isInteger(d.rawBytes)||d.rawBytes<5||d.rawBytes>262144||!Number.isInteger(d.pages)||d.pages<1||d.pages>8||!/^[a-f0-9]{64}$/.test(d.rawDocumentDigest)||d.extractedTextDigest!==hash(source.content)||d.extractionVersion!=='pdfjs-dist@6.3.289/text-v1')invalid('Document source evidence needs review.');
+        document={...d};
+      }
       return { version: VERSION, state: 'candidate', context,
         url: approvedUrl(source.url, allowedOrigins), contentDigest: hash(source.content), fetchedOn,
         effectiveOn, endsOn, coverage: source.coverage, exclusions: source.exclusions,
-        excerpt: source.content, reviewRequired: true };
+        excerpt: source.content, reviewRequired: true,...(document?{document}:{}) };
     });
     const result = { version: VERSION, state: candidates.length ? 'candidate' : 'unsupported', context, candidates };
     if (Buffer.byteLength(JSON.stringify(result), 'utf8') > 60000) invalid('The combined source evidence exceeds the review limit.');

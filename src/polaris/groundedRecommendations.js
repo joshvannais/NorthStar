@@ -5,29 +5,52 @@ const {buildEstimateReview}=require('../services/estimateReview');
 const policy=require('./groundedRecommendationPolicy');
 const VERSION='NorthStarGroundedRecommendations/v1';
 const UNKNOWN=/^(unknown|unavailable|not recorded|not sure|unsure|n\/a)$/i;
-const UNITS={linearFeet:'ft',sqft:'sq_ft',squareFeet:'sq_ft',acres:'acre',laborHours:'person_hour',hours:'hour',tonnage:'ton',seer:'SEER'};
-// Explicit recursive types: no coercion, fuzzy matching, discarded fields, or guessed units.
+const UNITS={linearFeet:'ft',sqft:'sq_ft',squareFeet:'sq_ft',acres:'acre',laborHours:'person_hour',hours:'hour',squares:'roofing_square',seer:'SEER'};
+// Existing scope keys, not universal industry completeness or a new input schema.
+// Plumbing/electrical intake categories alone do not define comparable job quantities.
+const COMPARISON_REQUIRED=Object.freeze({
+ fence:{categories:['jobType','material'],quantity:'linearFeet'},
+ roofing:{categories:['jobType','material'],quantity:'squares'},
+ hvac:{categories:['jobType','systemType'],quantity:'tonnage'},
+ concrete:{categories:['jobType'],quantity:'squareFeet'}
+});
+const QUANTITATIVE=new Set([...Object.keys(UNITS),'height','width','length','depth','tonnage','quantity','capacity','weight','volume','distance','duration','pitch','stories','existingLayers','existingAge']);
+const CATEGORICAL=new Set(['jobType','material','systemType','fixture','symptoms','finish','model','manufacturer','configuration','series','engine','attachments','terrain','access','timeline','urgency','type','fuelType','thermostat','deckCondition','leakSeverity','breakerBehavior']);
+const NUMERIC_TEXT=/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+const DECIMAL_TEXT=/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/;
+function unitFor(key,container){const supplied=container[key+'Unit'];if(supplied!==undefined&&(typeof supplied!=='string'||!supplied.trim()||UNKNOWN.test(supplied.trim())))return null;
+ // Contradictory explicit units cannot override the unit-bearing source key.
+ if(UNITS[key]&&supplied!==undefined&&supplied!==UNITS[key])return null;
+ return UNITS[key]||supplied||null;
+}
+function measurement(v,key,container){const unit=unitFor(key,container);if(!unit)return null;
+ if(typeof v==='number'&&Number.isFinite(v)&&v>=0)return {type:'measurement_number',value:v,unit};
+ if(typeof v==='string'&&DECIMAL_TEXT.test(v)&&Number.isFinite(Number(v)))return {type:'measurement_text',value:v,unit};
+ return null;
+}
+// Preserve source type and lexical value. No numeric-string coercion or unit inference.
 function typedScope(scope){
  if(!scope||typeof scope!=='object'||Array.isArray(scope)||!Object.keys(scope).length)return null;
  let count=0;
  function read(v,key,container,depth){
   if(++count>128||depth>4||v===null||v===undefined)return null;
+  if(QUANTITATIVE.has(key))return measurement(v,key,container);
   if(typeof v==='boolean')return {type:'boolean',value:v};
-  if(typeof v==='number'){
-   if(!Number.isFinite(v)||v<0)return null;
-   const unit=UNITS[key]||container[key+'Unit'];
-   if(typeof unit!=='string'||!unit.trim()||UNKNOWN.test(unit))return null;
-   return {type:'measurement',value:v,unit};
+  if(typeof v==='number')return measurement(v,key,container);
+  if(typeof v==='string'){
+   if(!v.trim()||UNKNOWN.test(v.trim())||v.length>500)return null;
+   if(!CATEGORICAL.has(key)&&NUMERIC_TEXT.test(v.trim()))return measurement(v,key,container);
+   return {type:'text',value:v};
   }
-  if(typeof v==='string')return v.trim()&&!UNKNOWN.test(v.trim())&&v.length<=500?{type:'text',value:v}:null;
   if(Array.isArray(v)){if(v.length>24)return null;const values=v.map(x=>read(x,key,container,depth+1));return values.every(Boolean)?{type:'array',value:values}:null;}
   if(typeof v==='object'){const value={};for(const k of Object.keys(v).sort()){if(k.length>100)return null;value[k]=read(v[k],k,v,depth+1);if(!value[k])return null;}return Object.keys(value).length?{type:'object',value}:null;}
   return null;
  }
  return read(scope,'scope',scope,0);
 }
-function comparisonKey(item){const s=item?.snapshot?.service,currency=item?.estimate?.currency;
- if(s?.supported!==true||typeof s.key!=='string'||!s.key.trim()||UNKNOWN.test(s.key)||!(/^[A-Z]{3}$/).test(currency||''))return null;
+function comparisonKey(item){const s=item?.snapshot?.service,currency=item?.estimate?.currency,required=COMPARISON_REQUIRED[s?.key];
+ if(s?.supported!==true||!required||!(/^[A-Z]{3}$/).test(currency||'')||!s.scope)return null;
+ if(!required.categories.every(k=>typeof s.scope[k]==='string'&&s.scope[k].trim()&&!UNKNOWN.test(s.scope[k].trim()))||!measurement(s.scope[required.quantity],required.quantity,s.scope))return null;
  const scope=typedScope(s.scope);return scope?sha256({service:s.key,currency,scope}):null;
 }
 function comparisons(item,candidates=[],hasMore=false){
@@ -62,7 +85,7 @@ function build(review,item,options={}){
   // Only explicitly selected publications that remain in the CURRENT authorized source projection.
   const selectedPublications=new Set((equipment.inputs?.lines||[]).flatMap(l=>l.knowledgePins||[]));
   for(const k of (review.equipmentPlans?.sources?.knowledge||[]).filter(k=>selectedPublications.has(k.publicationId)).slice(0,12))at('publication:'+k.publicationId,'Selected Company Reference','reviewed_source',{publicationId:k.publicationId,digest:k.digest||k.publicationDigest||null,label:k.label||'Selected Company Reference',content:k.content,freshness:'unknown'});
-  for(const l of lines)if(l.research&&l.research.state==='reviewed')at('equipment-reference:'+l.lineId,equipment.currentSourcesChanged?'Earlier Equipment Reference â€” Sources Changed':'Reviewed Equipment Reference','reviewed_source',{recordedAt:l.research.reviewedAt||null,validUntil:l.research.freshUntil||null,freshness:!l.research.freshUntil?'unknown':Date.parse(l.research.freshUntil)<=Date.parse(now)?'expired':'recorded_end_date',limitations:'Recorded requirements only; not safety, availability or certification clearance.'});
+  for(const l of lines)if(l.research&&l.research.state==='reviewed')at('equipment-reference:'+l.lineId,equipment.currentSourcesChanged?'Earlier Equipment Reference - Sources Changed':'Reviewed Equipment Reference','reviewed_source',{recordedAt:l.research.reviewedAt||null,validUntil:l.research.freshUntil||null,freshness:!l.research.freshUntil?'unknown':Date.parse(l.research.freshUntil)<=Date.parse(now)?'expired':'recorded_end_date',limitations:'Recorded requirements only; not safety, availability or certification clearance.'});
  }
  for(const [id,p]of [['current_material',review.materialPlans?.current],['included_material',review.adoptedMaterialPlan]])if(save(p)){
   const availability=p.currentAvailabilityAssessment?.lines||[],cost=p.currentSourceAssessment?.lines||[];
@@ -73,8 +96,8 @@ function build(review,item,options={}){
  if(policyCheck&&['changed','incomplete'].includes(policyCheck.state))add('policy_review',1,'Review The Pricing Policy','The saved policy cannot yet support a current complete comparison. Review its sources and the selected price.','policy',[selected]);
  if(policyCheck?.state==='compared'&&[policyCheck.result?.proposed,policyCheck.result?.reviewed].some(x=>x?.status==='below'))add('policy_floor',0,'Review The Price Below Policy','The recorded proposal or reviewed price is below the saved policy threshold. Review the exact comparison and any required exception before approval.','policy',[selected]);
  if(review.commercialTerms?.approvalState!=='commercial_approved')add('approval',2,'Review Price And Terms','A current full commercial approval is not recorded for this basis. Review price, terms and tax treatment before preparing customer output.','commercial',[selected]);
- if(!comparisonKey(item))add('scope',2,'Confirm Comparison Details','A matching earlier estimate needs a supported service and complete typed quantities and units. Ask the owner or estimator for missing technical details.','costs',[selected]);
+ if(!comparisonKey(item))add('scope',2,'Confirm Comparison Details','Matching earlier estimates need the job type, relevant measurements and their units. Ask the owner or estimator to confirm missing details.','costs',[selected]);
  const dedup=Array.from(new Map(rows.sort((a,b)=>a.priority-b.priority||a.id.localeCompare(b.id)).map(x=>[x.id,x])).values());
- return stableValue({contract:VERSION,state:'ready',simulated:review.simulated===true,assessedAt:now,basisDigest:sha256(review),selectedRevision:review.selectedRevision,historical:review.isCurrent===false,items:dedup.slice(0,8),omitted:Math.max(0,dedup.length-8),sources,comparisons:comparisons(item,options.candidates,options.hasMore),message:'Suggestions from saved facts and calculations. No model-generated analysis or market-price verification.'});
+ return stableValue({contract:VERSION,state:'ready',simulated:review.simulated===true,assessedAt:now,basisDigest:sha256(review),selectedRevision:review.selectedRevision,historical:review.isCurrent===false,items:dedup.slice(0,8),omitted:Math.max(0,dedup.length-8),sources,comparisons:comparisons(item,options.candidates,options.hasMore),message:'Suggestions based on saved facts and calculations. Source information may still need review.'});
 }
-module.exports={VERSION,typedScope,comparisonKey,comparisons,build};
+module.exports={VERSION,COMPARISON_REQUIRED,typedScope,comparisonKey,comparisons,build};

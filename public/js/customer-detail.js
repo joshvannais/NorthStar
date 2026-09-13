@@ -1690,17 +1690,17 @@ window.CustomerDetail = (function() {
     if(!(data.items||[]).length)node('p','No additional suggestion was identified from the available saved facts. This does not establish safety, availability or price accuracy.');
     if(data.omitted)node('p','Showing the highest-priority suggestions. Review the remaining details in the sections below.');
     var sources=node('details',null);node('summary','Sources And Assumptions',sources);
-    node('p','Recorded facts, owner declarations and calculations have different limits. Published reference text is supporting information, not a verified operating rule.',sources);
+    node('p','Recorded facts, owner declarations and calculations have different limits. A published reference may help explain the job, but does not establish safe use or job suitability.',sources);
     (data.sources||[]).forEach(function(source){var entry=node('div',null,sources);node('strong',source.label,entry);var kind={calculated_result:'Calculated From Saved Facts',owner_declaration:'Owner-Recorded Information',reviewed_source:'Reviewed Source'}[source.kind]||'Recorded Information';node('p',kind,entry);
       if(source.recordedAt){var d=new Date(source.recordedAt);if(Number.isFinite(d.getTime()))node('p','Recorded '+d.toLocaleDateString(),entry);}
-      if(source.freshness)node('p',source.freshness==='unknown'?'Current freshness is not established.':source.freshness==='expired'?'The recorded source end date has passed.':'A source end date is recorded; this is not independent verification.',entry);
+      if(source.freshness)node('p',source.freshness==='unknown'?'Check whether this source is still current.':source.freshness==='expired'?'The recorded source end date has passed.':'A source end date is recorded; this is not independent verification.',entry);
       if(source.limitations)node('p',source.limitations,entry);
       // Only text values, never raw object keys, HTML, URLs or executable source instructions.
       if(source.content){var excerpts=[];function collect(v,depth){if(depth>3||excerpts.length>=6)return;if(typeof v==='string'&&v.trim())excerpts.push(v.slice(0,1200));else if(Array.isArray(v))v.forEach(function(x){collect(x,depth+1);});else if(v&&typeof v==='object')Object.keys(v).forEach(function(k){collect(v[k],depth+1);});}collect(source.content,0);excerpts.forEach(function(text){node('blockquote',text,entry);});}
     });
     var comparison=node('details',null);node('summary','Earlier Recorded Estimates',comparison);var c=data.comparisons||{};
     node('p','Original recorded estimates only — not completed-job costs, current revisions or verified market prices.',comparison);
-    if(!(c.examples||[]).length)node('p',c.state==='scope_unavailable'?'Comparable scope and units are not fully recorded.':'No matching earlier estimate was found in this bounded search.',comparison);
+    if(!(c.examples||[]).length)node('p',c.state==='scope_unavailable'?'The measurements and units needed for a comparison are not fully recorded.':'No matching earlier estimate was found among the records checked.',comparison);
     (c.examples||[]).forEach(function(example){node('p',new Date(example.recordedAt).toLocaleDateString()+' · '+(example.amount===null?'Original Price Unavailable':decisionMoney(example.amount,example.currency)),comparison);});
     if(c.truncated)node('p','Only the most recent 50 records were examined. Additional records were not compared.',comparison);
   }

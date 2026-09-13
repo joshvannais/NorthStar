@@ -1838,3 +1838,17 @@ html body #cdCustomerDrawer #cdPricingPlan button { margin: 8px 8px 8px 0; }
 html body #cdCustomerDrawer #cdPricingPlan .drawer-review-actions > button { margin: 0; }
 html body #cdCustomerDrawer #cdPricingPlan :is(input,select,button,summary):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 @media(max-width:640px) { html body #cdCustomerDrawer #cdPricingPlan label:not(.drawer-decision-confirmation) { width: 100%; margin-right: 0; } }
+
+/* Policy inputs use the existing proposal scale; supporting arithmetic stays expandable. */
+html body #cdCustomerDrawer #cdPolicyPlan p { margin: 8px 0 12px; line-height: 1.5; }
+html body #cdCustomerDrawer #cdPolicyPlan details { margin: 8px 0; }
+html body #cdCustomerDrawer #cdPolicyPlan label:not(.drawer-decision-confirmation) { display: inline-flex; flex-direction: column; vertical-align: top; box-sizing: border-box; width: calc(50% - 8px); gap: 6px; margin: 8px 8px 8px 0; font: inherit; }
+html body #cdCustomerDrawer #cdPolicyPlan label:not(.drawer-decision-confirmation) > :is(input,select) { display: block; width: 100%; min-width: 0; min-height: 44px; box-sizing: border-box; padding: .65rem; color: #172033; background: white; color-scheme: light; font: inherit; border: 1px solid #9ca3af; border-radius: .35rem; }
+html body #cdCustomerDrawer #cdPolicyPlan button { margin: 8px 8px 8px 0; }
+html body #cdCustomerDrawer #cdPolicyPlan .drawer-review-actions > button { margin: 0; }
+html body #cdCustomerDrawer #cdPolicyPlan :is(input,select,button,summary):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+html body #cdCustomerDrawer .drawer-policy-facts { margin: 8px 0; }
+html body #cdCustomerDrawer .drawer-policy-facts > div { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; padding: 6px 0; }
+html body #cdCustomerDrawer .drawer-policy-facts :is(dt,dd) { margin: 0; font: inherit; overflow-wrap: anywhere; }
+html body #cdCustomerDrawer .drawer-policy-facts dd { text-align: right; font-weight: 600; }
+@media(max-width:640px) { html body #cdCustomerDrawer #cdPolicyPlan label:not(.drawer-decision-confirmation) { width: 100%; margin-right: 0; } }

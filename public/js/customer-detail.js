@@ -790,7 +790,7 @@ window.CustomerDetail = (function() {
       communicationId: typeof options.communicationId === 'string' ? options.communicationId : null
     };
 
-    _decisionDraft = null; _pricingPlanDraft = null; _laborPlanDraft = null; _travelPlanDraft = null; _equipmentPlanDraft = null; _equipmentCostDraft=null; _materialPlanDraft = null; _adoptionDraft = null; _selectedEstimateRevision = null; _estimateReview = null;
+    _decisionDraft = null; _pricingPlanDraft = null; _pricingPolicyDraft = null; _laborPlanDraft = null; _travelPlanDraft = null; _equipmentPlanDraft = null; _equipmentCostDraft=null; _materialPlanDraft = null; _adoptionDraft = null; _selectedEstimateRevision = null; _estimateReview = null;
     // Ensure drawer HTML is injected
     injectDrawerHTML();
     _returnFocus = document.activeElement && typeof document.activeElement.focus === 'function'
@@ -1330,6 +1330,75 @@ window.CustomerDetail = (function() {
     var actions=el('div',null,form);actions.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;margin-top:0.75rem;';if(draft.action==='save')button('Calculate Travel Cost',function(){send(true);},actions);button(draft.action==='save'?'Save Travel Plan':'Confirm Travel Withdrawal',function(){send(false);},actions);button('Cancel Travel Plan',function(){_travelPlanDraft=null;rerender('cdTravelStart');},actions);
   }
 
+  function renderPricingPolicyResult(result,target,currency) {
+    function p(value){var n=document.createElement('p');n.textContent=value;target.appendChild(n);}
+    if(!result){p('Saved policy details are unavailable.');return;}
+    function value(x){return x===null||x===undefined?'Not Yet Known':(String(x).charAt(0)==='-'?'−':'')+decisionMoney(String(x).replace(/^−|^-/,'') ,currency);}
+    var dl=document.createElement('dl');dl.className='drawer-policy-facts';target.appendChild(dl);
+    function row(label,text){var group=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=text;group.append(dt,dd);dl.appendChild(group);}
+    row('Policy Threshold',value(result.threshold));
+    [['Proposed Charge',result.proposed],['Reviewed Price',result.reviewed]].forEach(function(item){var r=item[1];if(!r){row(item[0],'Not Recorded');return;}row(item[0],value(r.price));row(item[0]+' — Difference From Threshold',value(r.thresholdDifference));if(result.threshold===null&&r.fixedFloorDifference!==null)row(item[0]+' — Partial Minimum Check',value(r.fixedFloorDifference));});
+    var details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Cost And Rate Details';details.appendChild(summary);target.appendChild(details);dl=document.createElement('dl');dl.className='drawer-policy-facts';details.appendChild(dl);
+    [['Recorded Direct Costs',result.directCosts],['Gross Overhead',result.overhead.gross],['Already Included Overhead',result.overhead.alreadyIncluded],['Additional Overhead',result.overhead.incremental],['Additional Contingency',result.allowance],['Costs With Allowance',result.policyCost],['Calculated Price Threshold',result.calculatedThreshold],['Minimum Price',result.minimum]].forEach(function(r){row(r[0],value(r[1]));});
+    [['Proposed Charge',result.proposed],['Reviewed Price',result.reviewed]].forEach(function(item){var r=item[1];if(!r)return;row(item[0]+' — After Costs And Allowance',value(r.remaining));[['Markup',r.achievedMarkup],['Margin',r.achievedMargin]].forEach(function(x){row(item[0]+' — '+x[0],x[1]?(x[1].approximate?'Approximately ':'')+x[1].value+'%':'Not Available');});});
+    var explanation=document.createElement('p');explanation.textContent='Markup needs known, nonzero costs; margin needs a known, nonzero price.';details.appendChild(explanation);
+    p('Recorded costs and declared allowances only. This is not a net-profit forecast or price approval.');
+  }
+  var _pricingPolicyDraft=null;
+  function renderPricingPolicy(review,parent) {
+    var existing=$('cdPolicyPlan');if(existing)existing.remove();
+    var root=document.createElement('details');root.id='cdPolicyPlan';root.className='drawer-labor-plan';parent.appendChild(root);
+    function el(tag,text,target){var n=document.createElement(tag);if(text)n.textContent=text;(target||root).appendChild(n);return n;}
+    el('summary','Pricing Policy');var plans=review.pricingPolicies;
+    if(!plans||plans.contract!=='estimate-pricing-policy-v1'||JSON.stringify(plans.sourcePins)!==JSON.stringify(review.pins)||plans.simulated!==review.simulated){el('p','Pricing policies are unavailable. Refresh this estimate.');return;}
+    function resultView(result,target){renderPricingPolicyResult(result,target,review.currency);}
+    function pricingCautions(a,target){if(!a||!a.cautions)return;a.cautions.forEach(function(c){var names={date_unknown:'Source Date Not Recorded',freshness_unknown:'End Date Not Known',not_yet_effective:'Source Is Not Yet Effective',expired:'Source Has Expired'};el('p',c.reasons.map(function(r){return names[r]||'Review Source';}).join('; '),target);});}
+    function show(plan,target){if(plan.action==='withdraw'){el('p','This policy was withdrawn. Saved history remains available.',target);return;}el('p',plan.current?'Saved policy comparison — it does not approve the price.':'Earlier Policy — Review Current Pricing And Price Approval Before Using It.',target);resultView(plan.result,target);pricingCautions(plan.currentAssessment,target);}
+    if(plans.simulated)el('p','Simulated Pricing Policy — No Customer Price Is Approved Or Sent.');
+    if(plans.current)show(plans.current,root);else el('p','Compare a saved pricing proposal with your cost and minimum-price policy.');
+    if(plans.history.length){var h=el('details');el('summary','Policy History',h);plans.history.forEach(function(p){var d=el('details',null,h);el('summary',(p.action==='save'?'Saved Policy':'Withdrawn Policy')+' — '+(p.actorName||'Company Reviewer'),d);show(p,d);});}
+    function button(label,fn,target,id){var b=el('button',label,target);b.type='button';b.className='btn btn-secondary';if(id)b.id=id;b.onclick=fn;return b;}
+    if(!plans.canMutate){el('p',plans.mutationsPaused?'New pricing policies are paused. Refresh to check saved history.':'Select the current estimate with an authorized account to review pricing.');return;}
+    var basisKey=JSON.stringify([review.pins,plans.decisionBasis,plans.current&&plans.current.digest,plans.sources.digest]);
+    if(_pricingPolicyDraft&&_pricingPolicyDraft.basisKey!==basisKey){_pricingPolicyDraft.result=null;_pricingPolicyDraft.request=null;_pricingPolicyDraft.confirmed=false;_pricingPolicyDraft.basisKey=basisKey;_pricingPolicyDraft.changed=true;}
+    function source(){return{kind:'owner_estimate',referenceId:null,digest:null,note:'',effectiveOn:null,endsOn:null};}
+    function empty(){return{serviceKey:plans.serviceKey,method:'unknown',percent:null,contingency:{method:'unknown',amount:null,percent:null,coverage:{status:'unknown',explanation:''}},minimum:{method:'none',amount:null},source:source()};}
+    function rerender(id){var opens={};root.querySelectorAll('details[data-policy-section]').forEach(function(d){opens[d.dataset.policySection]=d.open;});renderPricingPolicy(review,parent);var mounted=$('cdPolicyPlan');if(mounted){mounted.open=true;mounted.querySelectorAll('details[data-policy-section]').forEach(function(d){if(Object.prototype.hasOwnProperty.call(opens,d.dataset.policySection))d.open=opens[d.dataset.policySection];});var focus=id&&$(id);if(focus)focus.focus();}}
+    function start(action){_pricingPolicyDraft={action:action,inputs:plans.current&&plans.current.action==='save'&&plans.current.inputs?JSON.parse(JSON.stringify(plans.current.inputs)):empty(),reason:'',confirmed:false,result:null,request:null,basisKey:basisKey};_pricingPolicyDraft.inputs.serviceKey=plans.serviceKey;rerender(action==='withdraw'?'cdPolicyReason':'cdPolicyMethod');}
+    if(!_pricingPolicyDraft){if(plans.sources.pricingPin)button(plans.current&&plans.current.action==='save'?'Revise Pricing Policy':'Add Pricing Policy',function(){start('save');},root,'cdPolicyStart');if(plans.current&&plans.current.action==='save')button('Withdraw Pricing Policy',function(){start('withdraw');},root,'cdPolicyWithdraw');if(!plans.sources.pricingPin)el('p','Save a current pricing plan before adding or revising this policy. You can still withdraw an existing policy.');return;}
+    root.open=true;var draft=_pricingPolicyDraft,generation=_openSequence,form=el('form'),status=el('p',draft.changed?'The estimate or sources changed. Calculate again and review before confirming.':'',form);status.id='cdPolicyStatus';status.tabIndex=-1;status.setAttribute('role','status');
+    function invalidate(){draft.result=null;draft.request=null;draft.confirmed=false;if(confirm)confirm.checked=false;if(results)results.replaceChildren();}
+    function field(target,label,id,value,set,options){var group=el('label',null,target);group.htmlFor=id;el('span',label,group);var n=el(options?'select':'input',null,group);n.id=id;if(options)options.forEach(function(o){var option=el('option',o[1],n);option.value=o[0];});n.value=value===null?'':value;n.addEventListener(options?'change':'input',function(){invalidate();set(n.value);});return n;}
+    function nullable(v){return v.trim()===''?null:v.trim();}
+    function money(v){v=nullable(v);return v!==null&&/^\d+(\.\d{1,2})?$/.test(v)?v.split('.')[0]+'.'+((v.split('.')[1]||'')+'00').slice(0,2):v;}
+    function details(target,label,id){var d=el('details',null,target);d.dataset.policySection=id;el('summary',label,d);return d;}
+    function sourceFields(target,value,id){var box=details(target,'Source And Dates',id);var options=[['owner_estimate','My Estimate']].concat(plans.sources.references.map(function(r){return[r.kind+':'+r.referenceId,r.label];}));field(box,'Source',id+'-kind',value.kind==='owner_estimate'?'owner_estimate':value.kind+':'+value.referenceId,function(v){var r=plans.sources.references.find(function(x){return x.kind+':'+x.referenceId===v;});value.kind=r?r.kind:'owner_estimate';value.referenceId=r?r.referenceId:null;value.digest=r?r.digest:null;rerender(id+'-kind');},options);field(box,'Source Note',id+'-note',value.note,function(v){value.note=v;});field(box,'Effective Date',id+'-effective',value.effectiveOn,function(v){value.effectiveOn=nullable(v);}).type='date';field(box,'Known End Date',id+'-end',value.endsOn,function(v){value.endsOn=nullable(v);}).type='date';el('p','Leave unknown dates blank. A saved reference does not verify a selling price.',box);}
+    if(draft.action==='save'){
+      var v=draft.inputs,c=v.contingency,m=v.minimum;
+      el('p','Markup is based on costs; margin is based on the price.',form);
+      field(form,'Pricing Method','cdPolicyMethod',v.method,function(x){v.method=x;v.percent=null;rerender('cdPolicyMethod');},[['unknown','Not Yet Chosen'],['markup','Markup On Costs'],['target_margin','Target Margin On Price']]);
+      if(v.method!=='unknown')field(form,v.method==='markup'?'Markup (%)':'Target Margin (%)','cdPolicyPercent',v.percent,function(x){v.percent=money(x);});
+      var box=details(form,'Additional Contingency','allowance');
+      field(box,'Allowance Method','cdPolicyAllowance',c.method,function(x){c.method=x;c.amount=null;c.percent=null;rerender('cdPolicyAllowance');},[['unknown','Not Yet Known'],['none','No Additional Allowance'],['fixed','Fixed Amount'],['percent','Percentage Of Costs And Overhead']]);
+      if(c.method==='fixed')field(box,'Additional Amount','cdPolicyAmount',c.amount,function(x){c.amount=money(x);});
+      if(c.method==='percent')field(box,'Allowance (%)','cdPolicyAllowancePercent',c.percent,function(x){c.percent=money(x);});
+      el('p','Include only additional uncertainty. Do not repeat expenses already in the recorded costs or overhead. This is your declaration, not a verified expense split.',box);
+      field(box,'Expense Coverage','cdPolicyCoverage',c.coverage.status,function(x){c.coverage.status=x;rerender('cdPolicyCoverage');},[['unknown','Not Yet Reviewed'],['declared_separate','Reviewed As Additional Only']]);
+      field(box,'What This Allowance Covers','cdPolicyExplanation',c.coverage.explanation,function(x){c.coverage.explanation=x;});
+      field(form,'Minimum Price','cdPolicyMinimum',m.method,function(x){m.method=x;m.amount=null;rerender('cdPolicyMinimum');},[['none','No Separate Minimum'],['fixed','Fixed Minimum']]);
+      if(m.method==='fixed')field(form,'Minimum Amount','cdPolicyFloor',m.amount,function(x){m.amount=money(x);});
+      sourceFields(form,v.source,'cdPolicySource');
+    }
+    field(form,'Reason For This Change','cdPolicyReason',draft.reason,function(v){draft.reason=v;}).required=true;
+    var results=el('div',null,form);if(draft.result){resultView(draft.result,results);pricingCautions(draft.assessment,results,draft.inputs);}
+    var label=el('label',null,form);label.className='drawer-decision-confirmation';var confirm=el('input',null,label);confirm.type='checkbox';confirm.id='cdPolicyConfirm';confirm.checked=draft.confirmed;el('span',draft.action==='withdraw'?'I reviewed withdrawing this policy. Saved history and the approved price remain unchanged.':'I reviewed the policy, additional-only allowance, minimum and source limitations. This does not approve or send a customer price.',label);confirm.onchange=function(){draft.confirmed=confirm.checked;};
+    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Policy',function(){send(true);},actions,'cdPolicyCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Policy',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPolicySave';button('Cancel',function(){_pricingPolicyDraft=null;rerender('cdPolicyStart');},actions,'cdPolicyCancel');
+    form.onsubmit=function(e){e.preventDefault();if(!draft.confirmed||draft.action==='save'&&!draft.result){status.textContent=draft.action==='withdraw'?'Review and confirm the withdrawal before saving.':'Calculate the policy, then review and confirm it.';status.focus();return;}send(false);};
+    function send(preview){if(!form.reportValidity())return;var attempt=!preview&&draft.request;if(!attempt){attempt={key:crypto.randomUUID(),workspaceRevision:review.demoWorkspaceRevision,body:{action:draft.action,expectedRevision:plans.current?plans.current.revision:0,expectedDigest:plans.current?plans.current.digest:'none',sourcePins:review.pins,expectedDecisionRevision:plans.decisionBasis.revision,expectedDecisionDigest:plans.decisionBasis.digest,inputs:draft.action==='withdraw'?null:JSON.parse(JSON.stringify(draft.inputs)),currency:review.currency,reason:draft.reason,confirmed:true,confirmationVersion:plans.contract,evidenceDigest:draft.evidenceDigest||plans.sources.digest,pricingPin:plans.sources.pricingPin}};if(!preview)draft.request=attempt;}
+      var headers={'Content-Type':'application/json','Idempotency-Key':attempt.key};if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(attempt.workspaceRevision);var disabled=Array.prototype.map.call(form.elements,function(x){var d=x.disabled;x.disabled=true;return d;});status.textContent=preview?'Calculating Policy…':'Saving Pricing Policy…';
+      window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/'+encodeURIComponent(review.pins.estimateId)+(preview?'/pricing-policy-preview':'/pricing-policies'),{method:'POST',headers:headers,body:JSON.stringify(attempt.body)}).then(function(response){return response.json().catch(function(){return{};}).then(function(b){if(!response.ok)throw{status:response.status,category:b.error&&b.error.category};return b;});}).then(function(b){if(generation!==_openSequence||draft!==_pricingPolicyDraft||review!==_estimateReview)return;if(preview){if(!b.success||JSON.stringify(b.data.sourcePins)!==JSON.stringify(review.pins)||!b.data.decisionBasis||b.data.decisionBasis.revision!==plans.decisionBasis.revision||b.data.decisionBasis.digest!==plans.decisionBasis.digest)throw{status:409};draft.result=b.data.result;draft.assessment=b.data.assessment;draft.evidenceDigest=b.data.evidenceDigest;draft.request=null;draft.confirmed=false;confirm.checked=false;results.replaceChildren();resultView(draft.result,results);pricingCautions(draft.assessment,results,draft.inputs);status.textContent='Review the policy amounts and source dates, including any unknowns, then confirm to save.';}else{_pricingPolicyDraft=null;refreshEstimateReview('pricing-saved');}}).catch(function(e){if(generation!==_openSequence||draft!==_pricingPolicyDraft||review!==_estimateReview)return;var paused=e.status===503&&e.category==='pricing_policy_paused',known=[400,401,403,404,409,410,413,429].indexOf(e.status)>=0||paused;status.textContent=e.status===400?'Check the policy percentage, additional-only allowance and minimum. Calculate again.':e.status===401?'Sign in again before saving.':e.status===403?'Your current account cannot save pricing policies.':e.status===404?'This estimate is unavailable. Choose a current estimate.':e.status===409?'The estimate, proposal or sources changed. Refresh, calculate again and confirm.':e.status===410?'This demo session expired. Refresh to start again.':e.status===413?'Shorten the pricing entries and source notes before trying again.':e.status===429?(e.category==='pricing_policy_history_limit'?'This demo has reached its pricing history limit. Saved history remains available. Deliberately resetting removes its saved practice work.':'Saving is currently limited. Check saved history and try later.'):paused?'New pricing policies are paused. Refresh to check saved history.':preview?'Pricing could not be calculated. Try calculating again.':'The save result is unconfirmed. Retry this same attempt without changing entries, or refresh to check saved history.';if(known||preview)invalidate();}).finally(function(){if(generation===_openSequence&&draft===_pricingPolicyDraft&&review===_estimateReview){Array.prototype.forEach.call(form.elements,function(x,i){x.disabled=disabled[i];});status.focus();}});
+    }
+  }
   var _pricingPlanDraft=null;
   function renderPricingPlan(review,parent) {
     var existing=$('cdPricingPlan');if(existing)existing.remove();
@@ -1681,6 +1750,7 @@ window.CustomerDetail = (function() {
       }); root.insertBefore(list,$('cdCapellaRefresh'));
     }
     paragraph(risk.limitation);
+    var policy=review.pricingPolicyCheck;if(policy){var section=document.createElement('details');section.id='cdCapellaPolicy';var summary=document.createElement('summary');summary.textContent='Pricing Policy Check';section.appendChild(summary);var message=document.createElement('p');message.textContent=policy.message;section.appendChild(message);if(policy.result)renderPricingPolicyResult(policy.result,section,review.currency);root.insertBefore(section,$('cdCapellaRefresh'));}
     var readiness=review.equipmentReadiness&&review.equipmentReadiness.current;if(readiness&&readiness.action==='save'&&(readiness.currentSourcesChanged||readiness.result&&readiness.result.status==='blocked'))paragraph('Equipment readiness needs attention. This cost comparison does not establish that the equipment can be used for the job.');
   }
 
@@ -1731,6 +1801,7 @@ window.CustomerDetail = (function() {
         renderMaterialReview(review, root);
         renderLaborPlan(review, root);
         renderPricingPlan(review, root);
+        renderPricingPolicy(review, root);
         renderTravelPlan(review);
         renderEquipmentPlan(review, root);
         renderMaterialAdoption(review, root);

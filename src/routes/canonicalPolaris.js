@@ -1443,6 +1443,32 @@ function createCanonicalRouter(options) {
     catch(error){return res.status(error.status||503).json({success:false,error:{category:error.code==='EQUIPMENT_READINESS_PAUSED'?'equipment_readiness_paused':error.category,message:error.status?error.message:'Equipment readiness is unavailable. Refresh to check saved history.'}});}
   });
 
+  router.post('/estimates/:estimateId/pricing-plan-preview',dependencies.auth,requireCanonicalContext,async function(req,res){
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the pricing entries.'}});
+    try{const data=await withEquipmentCanonicalRead(req,dependencies,async(client,operator)=>{
+      if(!operator?.actor||!['owner','admin'].includes(operator.actor.accessRole))throw Object.assign(new Error('Pricing planning is available to current owners and administrators.'),{status:403});
+      const input={...actorInput(req),estimateId:req.params.estimateId},item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
+      if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      const c=require('../estimating/pricingPlanContract'),repository=require('../estimating/pricingPlanRepository');
+      const selection=await readRevisions(client,input),review=buildRevisionReview(item,selection);review.decisions=await readSelectedDecisions(client,input);
+      const costs=await repository.readPlans(client,input),body=c.normalize({...req.body,confirmed:true});if(!require('../estimating/pricingPlanPolicy').mutationsEnabled)throw Object.assign(new Error('New pricing plans are paused. Refresh to check saved history.'),{status:503,code:'PRICING_PLAN_PAUSED'});
+      if(body.action!=='save')throw Object.assign(new Error('Enter proposed charges to calculate.'),{status:400});c.checkBasis(body,review,costs.current);
+      const raw=await repository.readSources(client,input);
+      const sources=repository.presentSources(raw,input);await client.query('SELECT public.canonical_travel_write_authority($1,$2,$3,$4,$5)',[input.organizationId,input.actorUserId,input.actorAccessRole,input.authSessionId,req.get('X-CSRF-Token')]);const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;return{...c.preview(body.inputs,body.currency,sources,now),sourcePins:review.pins,decisionBasis:review.decisions.writeBasis};
+    });return res.json({success:true,data});}catch(error){return res.status(error.status||error.statusCode||503).json({success:false,error:{category:error.code==='PRICING_PLAN_PAUSED'?'pricing_paused':undefined,message:error.status?error.message:'Pricing plans are unavailable. Refresh and try again.'}});}
+  });
+  router.post('/estimates/:estimateId/pricing-plans',dependencies.auth,requireCanonicalContext,async function(req,res){
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the pricing entries.'}});
+    try{const input={...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')};
+      const data=await require('../estimating/pricingPlanRepository').mutatePlan(resolvePool(dependencies.poolProvider),input,req.body,async(client,body,receipt,now)=>{
+        const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+        const r=require('../estimating/pricingPlanRepository'),raw=await r.readSources(client,input),sources=r.presentSources(raw,input);const calculated=require('../estimating/pricingPlanContract').preview(body.inputs,body.currency,sources,now);if(require('../services/businessProfileAdapter').sha256(calculated.result)!==require('../services/businessProfileAdapter').sha256(receipt.result))throw Object.assign(new Error('Pricing calculation changed. Calculate again.'),{status:409});
+        if(raw.digest!==receipt.evidence?.digest)throw Object.assign(new Error('Pricing sources changed. Calculate again before confirming.'),{status:409});
+      });return res.status(data.replayed?200:201).json({success:true,data});
+    }catch(error){return res.status(error.status||503).json({success:false,error:{category:error.code==='PRICING_PLAN_PAUSED'?'pricing_paused':error.code==='PRICING_PLAN_OVERLAP'?'cost_overlap':undefined,message:error.status?error.message:'Pricing plans are unavailable. Refresh to check saved history.'}});}
+  });
   router.post('/estimates/:estimateId/travel-plan-preview',dependencies.auth,requireCanonicalContext,async function(req,res){
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the travel entries.'}});
@@ -1541,6 +1567,7 @@ function createCanonicalRouter(options) {
       const input={...actorInput(req),estimateId:req.params.estimateId};
       const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
       if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      if(!adoptionPolicy.mutationsEnabled)throw Object.assign(new Error('New estimate changes are paused. Refresh to check saved history.'),{status:503,code:'ESTIMATE_ADOPTION_PAUSED'});
       const selection=await readRevisions(client,input),review=buildRevisionReview(item,selection);review.decisions=await readSelectedDecisions(client,input);
       const composition=req.body?.confirmationVersion==='estimate-cost-adoption-v3'?require('../estimating/travelCostComposition'):req.body?.confirmationVersion==='estimate-cost-adoption-v2'?require('../estimating/equipmentCostComposition'):require('../estimating/costAdoptionContract'),body=composition.normalize({...req.body,confirmed:true}),data=body.changedComponent==='travel'?await require('../estimating/travelPlanRepository').readPlans(client,input):body.changedComponent==='equipment'?await require('../estimating/equipmentCostPlanRepository').readPlans(client,input):body.changedComponent==='labor'?await readLaborPlans(client,input):await readPlans(client,input),plan=data.current;
       composition.checkBasis(body,review,selection,plan);const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;
@@ -1557,6 +1584,7 @@ function createCanonicalRouter(options) {
       const input={...actorInput(req),estimateId:req.params.estimateId};
       const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
       if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      if(!adoptionPolicy.mutationsEnabled)throw Object.assign(new Error('New estimate changes are paused. Refresh to check saved history.'),{status:503,code:'ESTIMATE_ADOPTION_PAUSED'});
       const review=buildRevisionReview(item,await readRevisions(client,input));
       review.decisions=await readSelectedDecisions(client,input);
       const plans=await readPlans(client,input),body=adoption.normalize({...req.body,confirmed:true});
@@ -1614,6 +1642,7 @@ function createCanonicalRouter(options) {
         const equipmentCostPolicy=require('../estimating/equipmentCostPlanPolicy');review.equipmentCostPlans=require('../estimating/equipmentCostPlanContract').project(await require('../estimating/equipmentCostPlanRepository').readPlans(client,input),review,review.isCurrent&&equipmentCostPolicy.mutationsEnabled&&operator.canMutate===true,false,!equipmentCostPolicy.mutationsEnabled);
         review.equipmentOutsideBasis=require('../estimating/equipmentCostComposition').outsideBasis(costSelection,{...item,sourcePins:buildEstimateReview(item).pins});
         review.travelCostComponents=require('../estimating/travelCostComposition').components(costSelection);if(costSelection.selected?.calculationVersion==='estimate-cost-adoption-v3')review.costComponents=review.travelCostComponents;
+        {const r=require('../estimating/pricingPlanRepository'),c=require('../estimating/pricingPlanContract'),p=require('../estimating/pricingPlanPolicy'),raw=await r.readSources(client,{...input,selectedRevision:review.selectedRevision});review.pricingPlans=c.project(await r.readPlans(client,input),review,r.presentSources(raw,input),operator.canMutate===true&&p.mutationsEnabled,false,!p.mutationsEnabled,new Date());}
         {const r=require('../estimating/travelPlanRepository'),c=require('../estimating/travelPlanContract'),p=require('../estimating/travelPlanPolicy');review.travelPlans=c.project(await r.readPlans(client,input),review,review.isCurrent&&p.mutationsEnabled&&operator.canMutate===true,false,!p.mutationsEnabled);const travelSources=await r.readSources(client,input);review.travelPlans.sources=r.presentSources(travelSources,input);for(const plan of [review.travelPlans.current,...review.travelPlans.history,review.adoptedTravelPlan].filter(Boolean))if(plan.action==='save')plan.resourceReview=require('../estimating/travelResourceBasis').review(plan.inputs,travelSources);}
         const readinessRepository=require('../estimating/equipmentReadinessRepository');review.equipmentReadiness=await readinessRepository.project(client,await readinessRepository.readPlans(client,input),review,input,false);review.equipmentReadiness.canMutate=review.equipmentReadiness.canMutate&&operator.canMutate===true;
         review.materialPlans=materialPlan.project(await readPlans(client,{...actorInput(req),estimateId:item.ids.estimate}),review,review.isCurrent&&materialPlanPolicy.mutationsEnabled&&operator.canMutate===true,false,!materialPlanPolicy.mutationsEnabled);

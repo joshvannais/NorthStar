@@ -1827,3 +1827,14 @@ html body #cdCustomerDrawer .drawer-travel-plan .drawer-pricing-category > :is(p
 html body #cdCustomerDrawer .drawer-travel-actions { display:flex;flex-wrap:wrap;gap:12px;margin-top:16px; }
 html body #cdCustomerDrawer .drawer-travel-actions > button { margin:0; }
 @media(max-width:600px) { html body #cdCustomerDrawer .drawer-travel-actions { display:grid;grid-template-columns:1fr; } }
+
+/* Pricing proposals share drawer typography and keep technical fields progressive. */
+html body #cdCustomerDrawer #cdPricingPlan > p,
+html body #cdCustomerDrawer #cdPricingPlan form p { margin: 8px 0 12px; line-height: 1.5; }
+html body #cdCustomerDrawer #cdPricingPlan details { margin: 8px 0; }
+html body #cdCustomerDrawer #cdPricingPlan label:not(.drawer-decision-confirmation) { display: inline-flex; flex-direction: column; vertical-align: top; box-sizing: border-box; width: calc(50% - 8px); gap: 6px; margin: 8px 8px 8px 0; font: inherit; }
+html body #cdCustomerDrawer #cdPricingPlan label:not(.drawer-decision-confirmation) > :is(input,select) { display: block; width: 100%; min-width: 0; min-height: 44px; box-sizing: border-box; padding: .65rem; color: #172033; background: white; color-scheme: light; font: inherit; border: 1px solid #9ca3af; border-radius: .35rem; }
+html body #cdCustomerDrawer #cdPricingPlan button { margin: 8px 8px 8px 0; }
+html body #cdCustomerDrawer #cdPricingPlan .drawer-review-actions > button { margin: 0; }
+html body #cdCustomerDrawer #cdPricingPlan :is(input,select,button,summary):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+@media(max-width:640px) { html body #cdCustomerDrawer #cdPricingPlan label:not(.drawer-decision-confirmation) { width: 100%; margin-right: 0; } }

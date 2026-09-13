@@ -158,8 +158,8 @@
   function confidenceBasis(card) {
     var evidenceCount = card.evidence.length;
     if (card.confidence.value === null) return 'Confidence was not recorded for these details.';
-    return evidenceCount + ' recorded detail confidence ' +
-      plural(evidenceCount, 'value', 'values') + '.';
+    return 'Based on confidence recorded for ' + evidenceCount + ' supporting ' +
+      plural(evidenceCount, 'detail', 'details') + '.';
   }
 
   function evidenceValue(entry) {

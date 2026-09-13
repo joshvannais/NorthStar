@@ -61,6 +61,8 @@
       facts.push(['Reviewed Price Before Tax', amount(risk.priceBeforeTax, review.currency)], ['Recorded Direct Costs', amount(risk.recordedDirectCosts, review.currency)], ['Remaining After Direct Costs', amount(risk.remainingAfterDirectCosts, review.currency)]);
       notes.push(risk.state === 'shortfall' ? 'The reviewed price is below recorded direct costs. Additional expenses may increase the shortfall.' : 'Additional expenses may reduce the amount remaining. This is not a profit forecast.');
     } else notes.push(risk && risk.state === 'costs_unavailable' ? 'Some direct costs are missing. A complete cost comparison is unavailable.' : 'A matching scope and price review is needed before comparing the reviewed price with costs.');
+    var pricing=review.pricingPlans&&review.pricingPlans.current;
+    if(pricing&&pricing.action==='save'){if(pricing.sourceBasisCurrent&&pricing.result){facts.push(['Proposed Before-Tax Charge',amount(pricing.result.proposedBeforeTax,review.currency)],['Proposed Additional Overhead',amount(pricing.result.overhead.incremental,review.currency)]);notes.push('This pricing plan is a saved proposal. It does not change the separate human-reviewed price or create an invoice.');}else notes.push('A saved pricing proposal belongs to an earlier estimate or has unavailable sources. Review the pricing plan before using it.');}
     if (review.simulated) notes.push('This review uses the simulated business records.');
     return {facts:facts,notes:notes};
   }

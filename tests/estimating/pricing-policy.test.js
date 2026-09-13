@@ -1,0 +1,13 @@
+'use strict';
+const c=require('../../src/estimating/pricingPolicyContract'),{fixture}=require('../helpers/m24-policy-input');
+const basis=()=>({directCosts:'100.00',overhead:{gross:'0.00',alreadyIncluded:'0.00',incremental:'0.00',overlapResolved:true},proposedBeforeTax:'140.00',reviewedPrice:'160.00'});
+describe('Pricing policy bounded domains and presentation',()=>{
+ test('none is explicit zero; unknown coverage does not become zero',()=>{const v=fixture('fence');v.contingency={method:'none',amount:null,percent:null,coverage:{status:'unknown',explanation:''}};expect(c.calculate(v,'USD',basis()).policyCost).toBeNull();v.contingency.coverage={status:'declared_separate',explanation:'No additional allowance.'};expect(c.calculate(v,'USD',basis()).policyCost).toBe('100.00');});
+ test('unknown method and minimum amount preserve incompleteness',()=>{const v=fixture('fence');v.method='unknown';v.percent=null;expect(c.calculate(v,'USD',basis()).threshold).toBeNull();v.method='markup';v.percent='25.00';v.minimum.amount=null;expect(c.calculate(v,'USD',basis()).threshold).toBeNull();});
+ test('maximum bounded amount works at zero target without allowance',()=>{const v=fixture('fence'),b=basis();b.directCosts='999999999999.99';v.method='target_margin';v.percent='0.00';v.contingency.method='none';v.contingency.amount=null;v.minimum={method:'none',amount:null};expect(c.calculate(v,'USD',b).threshold).toBe('999999999999.99');});
+ test.each(['USD','CAD','EUR'])('supported currency %s uses exact amounts, never conversion',currency=>{expect(c.calculate(fixture('fence'),currency,basis()).currency).toBe(currency);});
+ test('incompatible overhead cannot be supplied as incremental expense',()=>{const b=basis();b.overhead.incremental='1.00';expect(()=>c.calculate(fixture('fence'),'USD',b)).toThrow(/overhead/);});
+ test('negative ties round away from zero and no negative zero',()=>{expect(c.ratio(-1n,2000000n)).toEqual({value:'-0.0001',approximate:true});expect(c.ratio(-1n,10000000n)).toEqual({value:'0.0000',approximate:true});expect(c.ratio(1n,2000000n)).toEqual({value:'0.0001',approximate:true});});
+ test('single policy source produces one current caution, not duplicated notices',()=>{expect(c.dateAssessment(fixture('fence'),'2026-09-13').cautions).toEqual([{index:0,reasons:['date_unknown','freshness_unknown']}]);});
+ test('current comparison carries source-date limitation; stale policy suppresses result',()=>{const p={action:'save',current:true,result:{threshold:'150.00'},currentAssessment:{cautions:[{}]}};expect(c.policyCheck({current:p}).message).toMatch(/Source dates need review/);p.current=false;expect(c.policyCheck({current:p}).result).toBeUndefined();expect(c.policyCheck({current:p}).state).toBe('changed');});
+});

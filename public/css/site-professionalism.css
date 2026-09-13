@@ -1953,3 +1953,19 @@ html body .customer-drawer #cdPricingActions > button { margin:0 !important; }
 
 html body .customer-drawer .drawer-result-note { font-size:12px;line-height:1.5;margin:12px 0 0; }
 html body :is(.polaris-surface-card-shell,.polaris-intelligence-card[data-polaris-card]) .polaris-card-status { color:var(--polaris-card-accent); }
+
+/* Customer-card close control: existing header spacing and theme tokens. */
+html body .customer-drawer .drawer-close-btn {
+  width:44px;height:44px;min-width:44px;min-height:44px;padding:0;
+  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  border-radius:50%;border:1px solid color-mix(in srgb,var(--theme-text) 16%,transparent);
+  background:color-mix(in srgb,var(--theme-surface-soft) 65%,transparent);
+  color:var(--theme-text);box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+html body .customer-drawer .drawer-close-btn:hover {
+  background:var(--theme-surface-soft);border-color:color-mix(in srgb,var(--theme-text) 32%,transparent);
+}
+html body .customer-drawer .drawer-close-btn:focus-visible {
+  outline:2px solid var(--theme-text);outline-offset:3px;
+}
+html body .customer-drawer .drawer-close-btn svg {display:block;pointer-events:none;}

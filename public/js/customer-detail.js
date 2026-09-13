@@ -167,7 +167,7 @@ window.CustomerDetail = (function() {
     html += '<div class="customer-drawer" id="cdCustomerDrawer" role="dialog" aria-modal="true" aria-labelledby="cdDrawerTitle" aria-describedby="cdContextSummary cdMissingSummary cdPolarisActionReason" aria-hidden="true" tabindex="-1" hidden>';
     html += '  <div class="drawer-header">';
     html += '    <h2 id="cdDrawerTitle">Customer Details</h2>';
-    html += '    <button class="drawer-close drawer-close-btn" id="cdDrawerClose" type="button" aria-label="Close customer details">&times;</button>';
+    html += '    <button class="drawer-close drawer-close-btn" id="cdDrawerClose" type="button" aria-label="Close customer details"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m7 7 10 10M17 7 7 17"/></svg></button>';
     html += '  </div>';
     html += '  <div class="drawer-body" id="cdDrawerBody">';
     html += '    <p class="drawer-context-summary" id="cdContextSummary">Loading the selected customer context.</p>';
@@ -836,7 +836,7 @@ window.CustomerDetail = (function() {
 
   function decisionMoney(value, currency) {
     if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(value)) return 'Unavailable';
-    var parts = value.split('.'); return currency + ' ' + parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + parts[1];
+    var parts = value.split('.'); return (currency === 'USD' ? '$' : currency + ' ') + parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + parts[1];
   }
 
   function decisionReviewBasis(review) {
@@ -851,8 +851,29 @@ window.CustomerDetail = (function() {
     if (target) target.focus();
   }
 
+  var _relocatedReviewActions = [];
+  var _activeReviewActions = null;
+  function restoreReviewActions() {
+    _relocatedReviewActions.forEach(function(entry){if(entry.home.isConnected)entry.home.replaceWith(entry.button);});
+    _relocatedReviewActions=[];
+  }
+  function positionPricingReviewActions() {
+    restoreReviewActions();
+    var choices=[{plan:'cdPricingPlan',actions:'cdPricingActions'},{plan:'cdPolicyPlan',actions:'cdPolicyActions'}];
+    var eligible=choices.filter(function(choice){var plan=$(choice.plan);return plan&&plan.open&&$(choice.actions);});
+    var owner=eligible.find(function(choice){return choice.actions===_activeReviewActions;})||eligible[eligible.length-1];
+    if(!owner){_activeReviewActions=null;return;}
+    _activeReviewActions=owner.actions;var actions=$(owner.actions);
+    ['cdEstimateReviewRefresh','cdDecisionReviewAction'].forEach(function(id){var button=$(id);if(!button)return;var home=document.createComment('review action home');button.before(home);_relocatedReviewActions.push({button:button,home:home});actions.appendChild(button);});
+  }
+  function bindReviewActions(root,actions) {
+    function activate(){_activeReviewActions=actions.id;positionPricingReviewActions();}
+    root.addEventListener('focusin',function(event){if(event.target.id!=='cdEstimateReviewRefresh'&&event.target.id!=='cdDecisionReviewAction')activate();});
+    root.addEventListener('toggle',function(event){if(event.target!==root)return;if(root.open)activate();else positionPricingReviewActions();});
+    queueMicrotask(positionPricingReviewActions);
+  }
   function renderEstimateDecision(review) {
-    var root = $('cdEstimateDecision'); root.replaceChildren();
+    restoreReviewActions(); var root = $('cdEstimateDecision'); root.replaceChildren();
     var state = review.decisions;
     if (!state) { root.textContent = 'Decision history is unavailable. Refresh before approving this estimate.'; return; }
     function text(value) { var p = document.createElement('p'); p.style.margin = '0 0 0.75rem'; p.textContent = value; root.appendChild(p); return p; }
@@ -872,6 +893,7 @@ window.CustomerDetail = (function() {
       history.appendChild(list); if (state.truncated) { var note = document.createElement('p'); note.textContent = 'Showing the 20 most recent decisions out of ' + state.total + '.'; history.appendChild(note); } root.appendChild(history);
     }
     if (_decisionDraft && _decisionDraft.estimateId === review.pins.estimateId && state.canApprove) renderDecisionForm();
+    positionPricingReviewActions();
   }
 
   function beginEstimateDecision(action) {
@@ -941,10 +963,15 @@ window.CustomerDetail = (function() {
     if (!plan || !plan.inputs) return [];
     return ['estimate-material-plan-v2','estimate-material-plan-v3','estimate-material-plan-v4'].indexOf(plan.calculationVersion)>=0 ? plan.inputs.lines : [plan.inputs];
   }
+  function resultPair(target,label,value,emphasis) {
+    var list=document.createElement('dl'),row=document.createElement('div'),term=document.createElement('dt'),detail=document.createElement('dd');
+    list.className='drawer-result-pair'+(emphasis?' drawer-result-total':'');term.textContent=label;detail.textContent=value;
+    row.appendChild(term);row.appendChild(detail);list.appendChild(row);target.appendChild(list);return list;
+  }
   function materialResult(result, target) {
-    function text(label, value) { var row=document.createElement('p');row.textContent=label+': '+value;row.style.overflowWrap='anywhere';target.appendChild(row); }
+    function text(label, value) { resultPair(target,label,value,label==='Plan Total'||label==='Material Cost'); }
     if (result.lines) {
-      result.lines.forEach(function(line,index){var section=document.createElement('section');var title=document.createElement('h4');title.textContent='Material '+(index+1)+' — '+line.material;section.appendChild(title);materialResult(line,section);target.appendChild(section);});
+      result.lines.forEach(function(line,index){var section=document.createElement('section');section.className='drawer-result-group';var title=document.createElement('h4');title.textContent=line.material;section.appendChild(title);materialResult(line,section);target.appendChild(section);});
       text('Plan Total',decisionMoney(result.total,result.currency));if(result.sourceAssessment)materialSourceAssessment(result.sourceAssessment,target);if(result.availabilityAssessment)materialAvailabilityAssessment(result.availabilityAssessment,target,result.lines);return;
     }
     text('Required Quantity',result.quantity+' '+result.unitLabel);
@@ -952,7 +979,7 @@ window.CustomerDetail = (function() {
     text('Planned Quantity',result.plannedQuantity+' '+result.unitLabel);
     text('Price Per Unit',decisionMoney(result.unitPrice,result.currency));
     text('Material Cost',decisionMoney(result.total,result.currency));
-    text('Rounding',result.rounding);
+    var note=document.createElement('p');note.className='drawer-result-note';note.textContent=result.rounding;target.appendChild(note);
   }
   function sameSourceFlags(a,b){return !!a&&!!b&&a.lines.length===b.lines.length&&a.lines.every(function(row,i){var other=b.lines[i];return row.lineId===other.lineId&&row.evidenceDigest===other.evidenceDigest&&JSON.stringify(row.flags)===JSON.stringify(other.flags);});}
   function materialSourceAssessment(assessment,target) {
@@ -1132,7 +1159,7 @@ window.CustomerDetail = (function() {
     if(!plans||plans.contract!=='estimate-equipment-plan-v1'||JSON.stringify(plans.sourcePins)!==JSON.stringify(review.pins)||plans.simulated!==review.simulated){para('Equipment planning is unavailable. Refresh this estimate.');return;}
     var labels={needs_information:'Needs Information',matches_reviewed_requirements:'Recorded Requirements Match',matches_reviewed_requirement:'Matches Reviewed Specification',conflicts_with_requirement:'Requirement Does Not Match'};
     var flags={asset_unavailable:'This equipment record is unavailable.',configuration_changed:'The equipment configuration changed.',source_needs_review:'The equipment source needs review.',identity_incomplete:'Complete the equipment identity and configuration.',reviewed_source_unavailable:'A current reviewed specification is unavailable.',company_reference_unavailable:'A selected company reference is no longer available.'};
-    function showResult(result,target){result.lines.forEach(function(l){var section=el('div',null,target);el('h4',l.task+' — '+labels[l.status],section);l.requirements.forEach(function(q){para(q.label+': '+(q.required===null?'Not Recorded':q.required+(q.unit?' '+q.unit:''))+' — '+labels[q.status],section);if(q.specification)para('Reviewed Specification: '+q.specification.value+(q.specification.unit?' '+q.specification.unit:''),section);});l.flags.forEach(function(f){para(flags[f]||'Review the equipment information.',section);});if(l.ownerReview)para(l.ownerReview,section);var refs=el('details',null,section);el('summary','Equipment Sources',refs);para('Access Basis: '+({unknown:'Unknown',owned:'Owned',rented:'Rented',financed:'Financed'}[l.accessBasis])+' — Recorded By The Reviewer',refs);if(l.research){if(l.research.reviewedAt)para('Reviewed '+new Date(l.research.reviewedAt).toLocaleDateString(),refs);if(l.research.freshUntil)para('Source Review Ends '+new Date(l.research.freshUntil).toLocaleDateString(),refs);(l.research.sources||[]).forEach(function(s){para(s.title+(s.publisher?' — '+s.publisher:''),refs);});}l.companyReferences.forEach(function(k){el('h5',k.label,refs);showKnowledge(k.content,refs);});});}
+    function showResult(result,target){result.lines.forEach(function(l){var section=el('section',null,target);section.className='drawer-result-group';el('h4',l.task,section);var identity=l.identity||{};para([identity.manufacturer,identity.model,identity.modelYear,identity.series,identity.engine,identity.configuration,identity.attachments].filter(Boolean).join(' \u00b7 ')||'Equipment Identity Not Recorded',section);para(labels[l.status],section);l.requirements.forEach(function(q){var comparison=el('section',null,section);comparison.className='drawer-equipment-comparison';el('h5',q.label,comparison);resultPair(comparison,'Job Requirement',q.required===null?'Not Recorded':q.required+(q.unit?' '+q.unit:''));resultPair(comparison,'Recorded Specification',q.specification?q.specification.value+(q.specification.unit?' '+q.specification.unit:''):'Not Recorded');para(labels[q.status],comparison);});l.flags.forEach(function(f){para(flags[f]||'Review the equipment information.',section);});if(l.ownerReview)para(l.ownerReview,section);var refs=el('details',null,section);el('summary','Equipment Sources',refs);para('Access Basis: '+({unknown:'Unknown',owned:'Owned',rented:'Rented',financed:'Financed'}[l.accessBasis])+' — Recorded By The Reviewer',refs);if(l.research){if(l.research.reviewedAt)para('Reviewed '+new Date(l.research.reviewedAt).toLocaleDateString(),refs);if(l.research.freshUntil)para('Source Review Ends '+new Date(l.research.freshUntil).toLocaleDateString(),refs);(l.research.sources||[]).forEach(function(s){para(s.title+(s.publisher?' — '+s.publisher:''),refs);});}l.companyReferences.forEach(function(k){el('h5',k.label,refs);showKnowledge(k.content,refs);});});}
     function showKnowledge(value,target,key){
       if(key==='generation'||key==='state'||/(?:^id$|Id$|Ids$|Key$|Keys$|Digest$|Version$|^version$|^sourceRecordId$|^jsonPointer$)/.test(key||''))return;
       if(key==='needsReview'){if(Array.isArray(value)&&value.length)para('Some company information needs review. Confirm the relevant details before relying on this reference.',target);return;}
@@ -1226,10 +1253,10 @@ window.CustomerDetail = (function() {
     function show(plan,target){
       if(plan.action!=='save'){el('p','This travel plan was withdrawn. Saved history remains available.',target);return;}
       var result=plan.result;
-      el('p',result.complete?'Travel Cost: '+decisionMoney(result.total,review.currency):'Travel Cost Incomplete — Known Cost Subtotal: '+decisionMoney(result.knownCostSubtotal,review.currency),target);
+      resultPair(target,result.complete?'Travel Cost':'Known Travel Subtotal',decisionMoney(result.complete?result.total:result.knownCostSubtotal,review.currency),true);if(!result.complete)el('p','Travel costs are incomplete.',target);
       if(result.outsideCoverageRequired&&result.outsideCoverageRequired.length){var recorded=review.adoptedTravelPlan&&review.adoptedTravelPlan.id===plan.id&&review.adoptedTravelPlan.digest===plan.digest&&review.coverageAssessment&&Array.isArray(review.coverageAssessment.travelOutside)&&result.outsideCoverageRequired.every(function(id){return review.coverageAssessment.travelOutside.some(function(row){return row.travelLineId===id;});});el('p',recorded?'Other vehicle costs have a recorded allocation in this estimate’s retained equipment costs. The allocation is not charged again.':'Other vehicle costs are declared as included elsewhere. Review their exact equipment allocation before using this plan in a new estimate.',target);}
-      plan.inputs.trips.forEach(function(trip,index){var line=el('div',null,target);line.className='drawer-pricing-category';el('h4',trip.purpose,line);el('p','Trip Cost: '+(result.trips[index].complete?decisionMoney(result.trips[index].total,review.currency):'Incomplete'),line);el('p',trip.origin.label+' → '+trip.destination.label,line);el('p',(trip.distance.value===null?'Distance Not Recorded':trip.distance.value+' '+(trip.distance.unit==='mi'?'Miles':'Kilometres')+(trip.distance.basis==='straight_line'?' In A Straight Line':' Per Leg'))+' · '+(trip.time.value===null?'Travel Time Not Recorded':trip.time.value+' '+(trip.time.unit==='hour'?'Hours':'Minutes')+' Per Leg'),line);el('p',trip.trips+' '+(trip.trips===1?'Trip':'Trips')+' · '+trip.vehicles+' '+(trip.vehicles===1?'Vehicle':'Vehicles')+' · '+(trip.people===null?'Traveling Headcount Not Recorded':trip.people+' People In The Traveling Group')+(trip.returnIncluded?' · Matching Return Included':''),line);});
-      result.logistics.forEach(function(cost,index){el('p',plan.inputs.logistics[index].label+': '+(cost.complete?decisionMoney(cost.total,review.currency):'Cost Incomplete'),target);});
+      plan.inputs.trips.forEach(function(trip,index){var line=el('div',null,target);line.className='drawer-result-group';el('h4',trip.purpose,line);resultPair(line,'Trip Cost',result.trips[index].complete?decisionMoney(result.trips[index].total,review.currency):'Incomplete',true);el('p',trip.origin.label+' → '+trip.destination.label,line);el('p',(trip.distance.value===null?'Distance Not Recorded':trip.distance.value+' '+(trip.distance.unit==='mi'?'Miles':'Kilometres')+(trip.distance.basis==='straight_line'?' In A Straight Line':' Per Leg'))+' · '+(trip.time.value===null?'Travel Time Not Recorded':trip.time.value+' '+(trip.time.unit==='hour'?'Hours':'Minutes')+' Per Leg'),line);el('p',trip.trips+' '+(trip.trips===1?'Trip':'Trips')+' · '+trip.vehicles+' '+(trip.vehicles===1?'Vehicle':'Vehicles')+' · '+(trip.people===null?'Traveling Headcount Not Recorded':trip.people+' People In The Traveling Group')+(trip.returnIncluded?' · Matching Return Included':''),line);});
+      result.logistics.forEach(function(cost,index){resultPair(target,plan.inputs.logistics[index].label,cost.complete?decisionMoney(cost.total,review.currency):'Cost Incomplete');});
       if(result.hauling&&result.hauling.groups.length){var hauling=el('details',null,target);el('summary','Loads And Disposal',hauling);result.hauling.groups.forEach(function(group,index){var input=plan.inputs.hauls[index];el('p',input.label+': '+(group.additionalLoads===null?'Load Count Needs More Information':group.additionalLoads+' Additional Loads'),hauling);(group.cautions||[]).forEach(function(text){el('p',text,hauling);});});}
       if(plan.inputs.stagePlan){var stages=el('details',null,target);el('summary','Planned Work Stages',stages);plan.inputs.stagePlan.stages.forEach(function(stage){el('p',stage.label+': '+(stage.duration===null?'Time Not Recorded':stage.duration+' '+(stage.unit==='hour'?'Hours':'Minutes')),stages);});el('p','Declared stage times do not establish worker qualifications, resource availability or a confirmed appointment.',stages);}
       renderTravelResourceReview(target,plan.resourceReview,result.stagePlan);
@@ -1350,7 +1377,7 @@ window.CustomerDetail = (function() {
   }
   var _pricingPolicyDraft=null;
   function renderPricingPolicy(review,parent) {
-    var existing=$('cdPolicyPlan');if(existing)existing.remove();
+    restoreReviewActions();queueMicrotask(positionPricingReviewActions);var existing=$('cdPolicyPlan');if(existing)existing.remove();
     var root=document.createElement('details');root.id='cdPolicyPlan';root.className='drawer-labor-plan';parent.appendChild(root);
     function el(tag,text,target){var n=document.createElement(tag);if(text)n.textContent=text;(target||root).appendChild(n);return n;}
     el('summary','Pricing Policy');var plans=review.pricingPolicies;
@@ -1396,7 +1423,7 @@ window.CustomerDetail = (function() {
     field(form,'Reason For This Change','cdPolicyReason',draft.reason,function(v){draft.reason=v;}).required=true;
     var results=el('div',null,form);if(draft.result){resultView(draft.result,results);pricingCautions(draft.assessment,results,draft.inputs);}
     var label=el('label',null,form);label.className='drawer-decision-confirmation';var confirm=el('input',null,label);confirm.type='checkbox';confirm.id='cdPolicyConfirm';confirm.checked=draft.confirmed;el('span',draft.action==='withdraw'?'I reviewed withdrawing this policy. Saved history and the approved price remain unchanged.':'I reviewed the policy, additional-only allowance, minimum and source limitations. This does not approve or send a customer price.',label);confirm.onchange=function(){draft.confirmed=confirm.checked;};
-    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Policy',function(){send(true);},actions,'cdPolicyCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Policy',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPolicySave';button('Cancel',function(){_pricingPolicyDraft=null;rerender('cdPolicyStart');},actions,'cdPolicyCancel');
+    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Policy',function(){send(true);},actions,'cdPolicyCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Policy',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPolicySave';actions.id='cdPolicyActions';bindReviewActions(root,actions);button('Cancel',function(){_pricingPolicyDraft=null;rerender('cdPolicyStart');},actions,'cdPolicyCancel');
     form.onsubmit=function(e){e.preventDefault();if(!draft.confirmed||draft.action==='save'&&!draft.result){status.textContent=draft.action==='withdraw'?'Review and confirm the withdrawal before saving.':'Calculate the policy, then review and confirm it.';status.focus();return;}send(false);};
     function send(preview){if(!form.reportValidity())return;var attempt=!preview&&draft.request;if(!attempt){attempt={key:crypto.randomUUID(),workspaceRevision:review.demoWorkspaceRevision,body:{action:draft.action,expectedRevision:plans.current?plans.current.revision:0,expectedDigest:plans.current?plans.current.digest:'none',sourcePins:review.pins,expectedDecisionRevision:plans.decisionBasis.revision,expectedDecisionDigest:plans.decisionBasis.digest,inputs:draft.action==='withdraw'?null:JSON.parse(JSON.stringify(draft.inputs)),currency:review.currency,reason:draft.reason,confirmed:true,confirmationVersion:plans.contract,evidenceDigest:draft.evidenceDigest||plans.sources.digest,pricingPin:plans.sources.pricingPin}};if(!preview)draft.request=attempt;}
       var headers={'Content-Type':'application/json','Idempotency-Key':attempt.key};if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(attempt.workspaceRevision);var disabled=Array.prototype.map.call(form.elements,function(x){var d=x.disabled;x.disabled=true;return d;});status.textContent=preview?'Calculating Policy…':'Saving Pricing Policy…';
@@ -1405,7 +1432,7 @@ window.CustomerDetail = (function() {
   }
   var _pricingPlanDraft=null;
   function renderPricingPlan(review,parent) {
-    var existing=$('cdPricingPlan');if(existing)existing.remove();
+    restoreReviewActions();queueMicrotask(positionPricingReviewActions);var existing=$('cdPricingPlan');if(existing)existing.remove();
     var root=document.createElement('details');root.id='cdPricingPlan';root.className='drawer-labor-plan';parent.appendChild(root);
     function el(tag,text,target){var n=document.createElement(tag);if(text)n.textContent=text;(target||root).appendChild(n);return n;}
     el('summary','Pricing Plan');var plans=review.pricingPlans;
@@ -1454,7 +1481,7 @@ window.CustomerDetail = (function() {
     field(form,'Reason For This Change','cdPricingReason',draft.reason,function(v){draft.reason=v;}).required=true;
     var results=el('div',null,form);if(draft.result){resultView(draft.result,results);pricingCautions(draft.assessment,results,draft.inputs);}
     var label=el('label',null,form);label.className='drawer-decision-confirmation';var confirm=el('input',null,label);confirm.type='checkbox';confirm.id='cdPricingConfirm';confirm.checked=draft.confirmed;el('span',draft.action==='withdraw'?'I reviewed withdrawing this pricing proposal. Saved history and the separate approved price remain unchanged.':'I reviewed the proposed charge, payment timing, overhead allocation and source limitations. This does not approve or send a customer price.',label);confirm.onchange=function(){draft.confirmed=confirm.checked;};
-    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Pricing',function(){send(true);},actions,'cdPricingCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Proposal',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPricingSave';button('Cancel',function(){_pricingPlanDraft=null;rerender('cdPricingStart');},actions,'cdPricingCancel');
+    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Pricing',function(){send(true);},actions,'cdPricingCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Proposal',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPricingSave';actions.id='cdPricingActions';bindReviewActions(root,actions);button('Cancel',function(){_pricingPlanDraft=null;rerender('cdPricingStart');},actions,'cdPricingCancel');
     form.onsubmit=function(e){e.preventDefault();if(!draft.confirmed||draft.action==='save'&&!draft.result){status.textContent=draft.action==='withdraw'?'Review and confirm the withdrawal before saving.':'Calculate pricing, then review and confirm the proposal.';status.focus();return;}send(false);};
     function send(preview){if(!form.reportValidity())return;var attempt=!preview&&draft.request;if(!attempt){attempt={key:crypto.randomUUID(),workspaceRevision:review.demoWorkspaceRevision,body:{action:draft.action,expectedRevision:plans.current?plans.current.revision:0,expectedDigest:plans.current?plans.current.digest:'none',sourcePins:review.pins,expectedDecisionRevision:plans.decisionBasis.revision,expectedDecisionDigest:plans.decisionBasis.digest,inputs:draft.action==='withdraw'?null:JSON.parse(JSON.stringify(draft.inputs)),currency:review.currency,reason:draft.reason,confirmed:true,confirmationVersion:plans.contract,evidenceDigest:draft.evidenceDigest||plans.sources.digest}};if(!preview)draft.request=attempt;}
       var headers={'Content-Type':'application/json','Idempotency-Key':attempt.key};if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(attempt.workspaceRevision);var disabled=Array.prototype.map.call(form.elements,function(x){var d=x.disabled;x.disabled=true;return d;});status.textContent=preview?'Calculating Pricing…':'Saving Pricing Proposal…';
@@ -1789,7 +1816,7 @@ window.CustomerDetail = (function() {
     var actions=el('div',null,form);actions.className='drawer-review-actions';var calculate=el('button','Calculate Scenarios',actions);calculate.type='submit';calculate.id='cdScenarioCalculate';calculate.className='btn btn-primary';calculate.disabled=!basis.enabled||draft.stale===true;var clear=el('button','Clear Analysis',actions);clear.type='button';clear.className='btn btn-secondary';clear.onclick=function(){_capellaScenarioDraft={key:draft.key,digest:draft.digest,stale:draft.stale===true,price:'',open:true,scenarios:{},result:null};renderCapellaReview(review);var d=$('cdCapellaScenarios');d.open=true;d.querySelector('summary').focus();};
     var results=el('div',null,details);results.id='cdScenarioResults';
     function invalidate(){draft.edit=(draft.edit||0)+1;draft.result=null;results.replaceChildren();status.textContent=draft.stale?'The estimate or sources changed. Refresh the review before calculating again.':'Assumptions changed. Calculate again to update the comparison.';}
-    function show(r){results.replaceChildren();el('p',r.priceLabel,results);var rows=el('div',null,results);rows.className='capella-scenario-grid';[{kind:'Base',result:r.base}].concat(r.scenarios).forEach(function(s){var box=el('section',null,rows);el('h4',s.kind.charAt(0).toUpperCase()+s.kind.slice(1),box);var list=el('dl',null,box);[['Modeled Costs',s.result.modeledCosts],['Net Price Before Tax',s.result.netBeforeTax],['Remaining After Modeled Costs',s.result.remaining],['Break-Even Net Price',s.result.breakEven],['Shortfall',s.result.shortfall]].forEach(function(row){el('dt',row[0],list);var n=row[1];el('dd',typeof n==='string'&&n[0]==='-'?'-'+decisionMoney(n.slice(1),basis.currency):decisionMoney(n,basis.currency),list);});el('p','Margin: '+(s.result.margin?s.result.margin.value+'%':'Unavailable')+' · Markup: '+(s.result.markup?s.result.markup.value+'%':'Unavailable'),box);if(s.result.policy){el('p','Policy Allowance: '+decisionMoney(s.result.policy.allowance,basis.currency)+' · Policy Budget: '+decisionMoney(s.result.policy.policyBudget,basis.currency),box);el('p','Policy Threshold: '+decisionMoney(s.result.policy.threshold,basis.currency)+' · '+({below:'Below Policy',at:'At Policy',above:'Above Policy',unavailable:'Policy Comparison Unavailable'}[s.result.policy.comparison&&s.result.policy.comparison.status]||'Policy Comparison Unavailable'),box);}else el('p','A current policy comparison is unavailable for this basis.',box);(s.cautions||[]).forEach(function(t){el('p',t,box);});});el('p','Each additional '+decisionMoney('1.00',basis.currency)+' of modeled cost reduces the amount remaining by '+decisionMoney('1.00',basis.currency)+'. Each additional '+decisionMoney('1.00',basis.currency)+' of net price increases it by the same amount. These are arithmetic relationships, not forecasts.',results);el('p',r.limitation,results);}
+    function show(r){results.replaceChildren();el('p',r.priceLabel,results);var rows=el('div',null,results);rows.className='capella-scenario-grid';[{kind:'Base',result:r.base}].concat(r.scenarios).forEach(function(s){var box=el('section',null,rows);el('h4',s.kind.charAt(0).toUpperCase()+s.kind.slice(1),box);var list=el('dl',null,box);[['Modeled Costs',s.result.modeledCosts],['Net Price Before Tax',s.result.netBeforeTax],['Remaining After Modeled Costs',s.result.remaining],['Break-Even Net Price',s.result.breakEven],['Shortfall',s.result.shortfall]].forEach(function(row){var pair=el('div',null,list);el('dt',row[0],pair);var n=row[1];el('dd',typeof n==='string'&&n[0]==='-'?'-'+decisionMoney(n.slice(1),basis.currency):decisionMoney(n,basis.currency),pair);});el('p','Margin: '+(s.result.margin?s.result.margin.value+'%':'Unavailable')+' · Markup: '+(s.result.markup?s.result.markup.value+'%':'Unavailable'),box);if(s.result.policy){el('p','Policy Allowance: '+decisionMoney(s.result.policy.allowance,basis.currency)+' · Policy Budget: '+decisionMoney(s.result.policy.policyBudget,basis.currency),box);el('p','Policy Threshold: '+decisionMoney(s.result.policy.threshold,basis.currency)+' · '+({below:'Below Policy',at:'At Policy',above:'Above Policy',unavailable:'Policy Comparison Unavailable'}[s.result.policy.comparison&&s.result.policy.comparison.status]||'Policy Comparison Unavailable'),box);}else el('p','A current policy comparison is unavailable for this basis.',box);(s.cautions||[]).forEach(function(t){el('p',t,box);});});el('p','Each additional '+decisionMoney('1.00',basis.currency)+' of modeled cost reduces the amount remaining by '+decisionMoney('1.00',basis.currency)+'. Each additional '+decisionMoney('1.00',basis.currency)+' of net price increases it by the same amount. These are arithmetic relationships, not forecasts.',results);el('p',r.limitation,results);}
     if(draft.result)show(draft.result);
     form.onsubmit=function(e){e.preventDefault();var generation=_openSequence,input={basisDigest:basis.digest,priceBasis:draft.price,scenarios:Object.keys(draft.scenarios).filter(function(k){return draft.scenarios[k].active;}).map(function(k){var v=draft.scenarios[k];return{kind:v.kind,directChange:v.directChange,overheadChange:v.overheadChange,priceChange:v.priceChange,overheadSeparate:v.overheadSeparate,source:v.source};})};var body=JSON.stringify(input),edit=draft.edit||0;calculate.disabled=true;status.textContent='Calculating Scenarios…';draft.result=null;results.replaceChildren();
       window.NorthStarAccountSession.fetch('/api/v1/canonical/estimates/'+encodeURIComponent(review.pins.estimateId)+'/capella-scenarios?revision='+encodeURIComponent(review.selectedRevision),{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(function(response){return response.json().catch(function(){return{};}).then(function(b){if(!response.ok)throw{status:response.status,message:b.error&&b.error.message};return b.data;});}).then(function(r){if(generation!==_openSequence||review!==_estimateReview||draft!==_capellaScenarioDraft)return;if(edit!==(draft.edit||0))return;if(r.basisDigest!==basis.digest)throw{status:409};draft.result=r;show(r);status.textContent='Calculated From Your Unsaved Assumptions. The Estimate Has Not Changed.';}).catch(function(error){if(generation!==_openSequence||review!==_estimateReview||draft!==_capellaScenarioDraft||edit!==(draft.edit||0))return;draft.result=null;results.replaceChildren();if(error.status===409){draft.stale=true;Object.keys(draft.scenarios).forEach(function(k){draft.scenarios[k].overheadSeparate=false;var check=form.querySelector('#cdScenario-'+k+'-coverage');if(check)check.checked=false;});}status.textContent=error.status===409?'The estimate or sources changed. Refresh the review before calculating again.':error.status===413?'Shorten the assumption notes before calculating again.':error.status===401?'Sign in again to calculate scenarios.':error.status===403?'Your current account cannot calculate scenarios.':error.status===404?'This estimate is unavailable. Choose an available estimate.':error.status===410?'This demo session expired. Refresh to start again.':error.status===429?'Scenario analysis is temporarily limited. Wait and try again.':error.status===400&&error.message?error.message:'Scenario analysis is unavailable. Refresh or try calculating again; no estimate changes were saved.';}).finally(function(){if(generation===_openSequence&&review===_estimateReview&&draft===_capellaScenarioDraft){calculate.disabled=!basis.enabled||draft.stale===true;if(edit===(draft.edit||0))status.focus();}});
@@ -1828,7 +1855,7 @@ window.CustomerDetail = (function() {
   }
 
   function refreshEstimateReview(focusReason) {
-    var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
+    restoreReviewActions();var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
     var restoreFocus = focusReason === 'capella-refresh' || focusReason === 'adoption-saved' || focusReason === 'revision-selected' || focusReason === 'labor-saved' || focusReason === 'travel-saved' || focusReason === 'material-saved' || focusReason === 'decision-saved' || focusReason === 'review-refresh' || document.activeElement === button || $('cdEstimateDecision').contains(document.activeElement);
@@ -1885,7 +1912,7 @@ window.CustomerDetail = (function() {
           _decisionDraft.confirmed = false; _decisionDraft.request = null; _decisionDraft.basisChanged = true;
           _decisionDraft.basis = decisionReviewBasis(review);
         }
-        _estimateReview = review; renderEstimateDecision(review); renderCapellaReview(review);
+        _estimateReview = review; renderEstimateDecision(review); renderCapellaReview(review);positionPricingReviewActions();
         if(_groundedReview){
           var handoff=_groundedReview;_groundedReview=null;
           function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object'){var out={};Object.keys(value).sort().forEach(function(k){out[k]=stable(value[k]);});return out;}return value;}

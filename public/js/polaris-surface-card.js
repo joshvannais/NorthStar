@@ -115,11 +115,11 @@
       surface: surface,
       detailed: DETAILED_SURFACES.indexOf(surface) >= 0,
       title: 'Polaris intelligence is unavailable',
-      summary: 'No role-authorized projection is available for this destination.',
+      summary: 'No information you can access is available for this page.',
       confidence: confidence,
       confidenceExplanation: confidence === null
-        ? 'Confidence is unavailable because no supporting Polaris score is present in the current role-authorized inputs.'
-        : 'This score comes from the latest role-authorized Polaris snapshot and its supporting evidence.',
+        ? 'Confidence is unavailable because these records do not include a Polaris score.'
+        : 'This score reflects the latest saved Polaris assessment and its supporting information.',
       evidence: evidence(graph, 6),
       missing: missing(graph),
       risks: [],
@@ -153,10 +153,10 @@
       return ['booked', 'scheduled'].indexOf(safeString(item && item.lead && item.lead.status).toLowerCase()) >= 0 ||
         Boolean(item && item.work && item.work.scheduledStart);
     }).length;
-    result.title = values.length ? values.length + ' role-authorized lead records' : 'No lead records available';
+    result.title = values.length ? values.length + ' lead records you can access' : 'No lead records available';
     result.summary = values.length
       ? attention + ' need review or follow-up; ' + booked + ' have a recorded booking or appointment.'
-      : 'Polaris cannot evaluate lead priority until a role-authorized lead graph is recorded.';
+      : 'Polaris needs an accessible lead record before it can help prioritize follow-up.';
     result.risks = riskEntries(graph).concat(attention ? [attention + ' lead records currently carry an attention state.'] : []);
     result.opportunities = booked ? [booked + ' lead records have a recorded next step or appointment.'] : [];
     result.recommendations = recommendations(graph, result.objects[1] && result.objects[1].href);
@@ -186,14 +186,14 @@
     var result = baseProjection('polaris', workspace, graph);
     if (requested.requested && !graph) {
       result.title = 'Requested Polaris detail is unavailable';
-      result.summary = 'The requested customer, lead, or work object was not present in this role-authorized tenant projection. No fallback object is shown.';
+      result.summary = 'The requested customer, lead, or job is unavailable to your account. No other record has been substituted.';
       result.missing = ['Confirm that the object still exists and that the signed-in role can read it.'];
       result.objects = [];
       return result;
     }
     if (!graph) {
       result.title = 'No Polaris detail is available';
-      result.summary = 'Polaris needs a role-authorized customer, lead, communication, work item, and supporting facts before rendering complete detail.';
+      result.summary = 'Complete details require accessible customer, lead, conversation and job records with supporting information.';
       result.missing = ['No connected work record is present in the current workspace.'];
       return result;
     }
@@ -201,7 +201,7 @@
     var service = safeString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType));
     result.title = customer + ' · ' + service;
     result.summary = safeString(graph.lead && graph.lead.summary,
-      'Complete role-authorized Polaris detail is available for the selected record.');
+      'Polaris details you can access are available for the selected record.');
     result.risks = riskEntries(graph);
     if (graph.work && !graph.work.scheduledStart) result.risks.push('No appointment time is recorded for this work item.');
     if (graph.estimate && finiteNumber(graph.estimate.customerPrice) !== null) {
@@ -228,13 +228,13 @@
     }));
     result.title = 'Conversation and follow-up intelligence';
     result.summary = values.length
-      ? withConversation + ' of ' + values.length + ' role-authorized records include conversation evidence; ' + followUp + ' need follow-up or more information.'
-      : 'No role-authorized communication record is available for intent or follow-up analysis.';
+      ? withConversation + ' of ' + values.length + ' accessible records include conversation evidence; ' + followUp + ' need follow-up or more information.'
+      : 'No conversation record you can access is available for reviewing caller intent or follow-up.';
     result.evidence = unique(result.evidence.concat(intents.map(function (intent) { return 'Captured intent: ' + intent + '.'; })));
     result.missing = unique(result.missing.concat(withConversation < values.length
       ? [(values.length - withConversation) + ' records do not include readable conversation evidence.'] : []));
     result.risks = riskEntries(graph).concat(followUp ? [followUp + ' conversations have an unresolved follow-up state.'] : []);
-    result.opportunities = intents.length ? ['Recorded caller intent can guide the next role-authorized response.'] : [];
+    result.opportunities = intents.length ? ['Recorded caller intent can help you plan an appropriate response.'] : [];
     result.recommendations = recommendations(graph, result.objects[1] && result.objects[1].href);
     return result;
   }
@@ -254,14 +254,14 @@
       keys[key] = true;
     });
     result.title = 'Schedule, capacity, and attention intelligence';
-    result.summary = scheduled.length + ' role-authorized work items have an appointment time; ' + unscheduled + ' do not.';
+    result.summary = scheduled.length + ' accessible jobs have an appointment time; ' + unscheduled + ' do not.';
     result.evidence = scheduled.slice(0, 4).map(function (item) {
       return safeString(item.customer && item.customer.name, 'Customer') + ' is scheduled for ' +
         new Date(item.work.scheduledStart).toLocaleString() +
         (item.work.assignedTo ? ' with ' + item.work.assignedTo + '.' : ' with no recorded assignee.');
     }).concat(result.evidence.slice(0, 2));
     result.missing = unique(result.missing.concat([
-      'Travel-time and route feasibility require complete location, duration, and map-routing inputs; this projection does not infer them.',
+      'Travel time and route feasibility are unknown without complete locations, durations and route information.',
     ]));
     result.risks = conflicts ? [conflicts + ' same-time assignment collisions need review.'] : [];
     if (unscheduled) result.risks.push(unscheduled + ' work items do not have a recorded appointment time.');
@@ -281,14 +281,14 @@
     result.title = 'Call capture and provider readiness';
     result.summary = configuration && safeString(configuration.status)
       ? configuration.status
-      : 'Provider connection, routing health, and live-number readiness are not included in this role-authorized Command Center projection and are not inferred.';
+      : 'These records do not confirm the phone connection, call routing or readiness to receive live calls.';
     result.evidence = captured ? [captured + ' voice communication records are present in this workspace.'].concat(result.evidence.slice(0, 2)) : [];
     result.missing = unique(result.missing.concat(configuration
       ? []
-      : ['A reviewed provider connection and call-routing authority is required before readiness or performance can be stated.']));
+      : ['Confirm the phone connection and call routing before relying on readiness or performance.']));
     result.risks = captured ? [] : ['No voice communication record is available in the current view.'];
     result.opportunities = captured ? ['Captured conversations can support follow-up and scheduling review.'] : [];
-    result.recommendations = [{ label: 'Verify the current number and routing authority on this page before relying on call capture.', priority: 'review' }];
+    result.recommendations = [{ label: 'Verify the current number and call routing before relying on call capture.', priority: 'review' }];
     return result;
   }
 
@@ -301,8 +301,8 @@
     var members = supplement && Array.isArray(supplement.members) ? supplement.members : [];
     result.title = 'Workload, coverage, and ownership intelligence';
     result.summary = values.length
-      ? assigned.length + ' of ' + values.length + ' role-authorized work records have a named owner; ' + unassigned + ' are unassigned.'
-      : 'No role-authorized work records are available for workload or ownership analysis.';
+      ? assigned.length + ' of ' + values.length + ' accessible jobs have a named owner; ' + unassigned + ' are unassigned.'
+      : 'No job records you can access are available for reviewing workload or assignments.';
     result.evidence = unique(assigned.slice(0, 4).map(function (item) {
       return safeString(item.work.assignedTo) + ' owns ' + safeString(item.work.title, 'a recorded work item') + '.';
     }).concat(members.slice(0, 3).map(function (member) {
@@ -311,7 +311,7 @@
     })));
     result.missing = unique(result.missing.concat(supplement
       ? []
-      : ['The workforce authority was unavailable, so roster and access coverage are not inferred.']));
+      : ['Team information could not be loaded. The roster and access permissions are unknown.']));
     result.risks = unassigned ? [unassigned + ' work records need explicit ownership.'] : [];
     result.opportunities = members.length ? [members.length + ' active workforce records are available for coverage review.'] : [];
     result.recommendations = [{ label: unassigned ? 'Assign each unowned work item before dispatch.' : 'Review current coverage before changing assignments.', priority: unassigned ? 'high' : 'review' }];
@@ -328,7 +328,7 @@
     result.title = 'Knowledge and configuration readiness';
     result.summary = configuration
       ? 'The isolated demo exposes reviewed voice style and escalation guidance without a provider connection claim.'
-      : 'Knowledge configuration, escalation rules, and provider authority are not included in this role-authorized projection and are not inferred.';
+      : 'These records do not confirm the receptionist instructions, escalation rules or permission to use connected services.';
     result.evidence = factCount ? [factCount + ' supporting facts are available across the current workspace.'] : [];
     if (configuration) {
       result.evidence.push('Voice style: ' + safeString(configuration.voiceStyle, 'not specified') + '.');
@@ -336,10 +336,10 @@
     }
     result.missing = unique(result.missing.concat(configuration
       ? [safeString(configuration.providerConnection)]
-      : ['A reviewed knowledge/configuration authority and provider connection state are required before readiness can be stated.']));
-    result.risks = configuration ? [] : ['Changes should not be made from an incomplete configuration projection.'];
+      : ['Review the receptionist instructions and connected services before relying on readiness.']));
+    result.risks = configuration ? [] : ['Check the missing settings before making changes.'];
     result.opportunities = factCount ? ['Recorded facts can improve page-specific Polaris explanations after configuration review.'] : [];
-    result.recommendations = [{ label: 'Review knowledge, escalation, and provider authority before enabling new behavior.', priority: 'review' }];
+    result.recommendations = [{ label: 'Review receptionist instructions, escalation rules and connection permissions before enabling new behavior.', priority: 'review' }];
     return result;
   }
 
@@ -360,7 +360,7 @@
     result.title = 'Business Profile completeness and downstream readiness';
     result.summary = items.length
       ? ready.length + ' of ' + items.length + ' recognized profile areas are reviewed or ready; ' + attention.length + ' need attention.'
-      : 'The role-authorized Business Profile readiness authority was unavailable, so completeness is not inferred.';
+      : 'Your Business Profile could not be checked. Its completeness is unknown.';
     result.evidence = ready.slice(0, 5).map(function (item) { return item.label + ' is recorded as ' + titleCase(item.state) + '.'; });
     result.missing = attention.length
       ? attention.slice(0, 6).map(function (item) {
@@ -382,14 +382,14 @@
     var enabled = known ? notificationKeys.filter(function (key) { return supplement[key] === true; }) : [];
     result.title = 'Operational configuration attention';
     result.summary = known
-      ? enabled.length + ' recognized notification or routing preferences are enabled in the current role-authorized settings response.'
-      : 'The role-authorized settings response was unavailable, so no preference state is inferred.';
+      ? enabled.length + ' notification or routing preferences are enabled in your current settings.'
+      : 'Your settings could not be loaded. Saved preferences are unknown.';
     result.evidence = enabled.map(function (key) { return titleCase(key) + ' is enabled.'; });
     result.missing = unique(result.missing.concat(known
       ? []
       : ['Load the account preferences before evaluating configuration attention.']));
     result.risks = known && supplement.securityEmailMandatory === true && !safeString(supplement.securityEmailAddress)
-      ? ['A mandatory security email destination is not present in the returned settings authority.'] : [];
+      ? ['A required security email address is missing from the loaded settings.'] : [];
     result.opportunities = known ? ['Current preferences can be reviewed against actual operating needs.'] : [];
     result.recommendations = [{ label: 'Review configuration changes against current roles, notifications, and operating policy.', priority: 'review' }];
     return result;
@@ -410,11 +410,11 @@
     });
     result.title = 'Integration connection and coverage intelligence';
     result.summary = providers.length
-      ? providers.length + ' catalogue entries are visible; ' + connected.length + ' have reviewed connected authority. No other entry is treated as connected.'
-      : 'The role-authorized integration catalogue was unavailable, so no provider connection or readiness is inferred.';
+      ? providers.length + ' catalogue entries are visible; ' + connected.length + ' are recorded as connected. Other entries are not assumed to be connected.'
+      : 'Your integrations could not be loaded. Connection and readiness are unknown.';
     result.evidence = providers.slice(0, 7).map(function (provider) {
       return safeString(provider.name, 'Provider') + ': ' + safeString(provider.presentation && provider.presentation.label,
-        'connection authority unavailable') + '.';
+        'connection information unavailable') + '.';
     });
     result.missing = providers.filter(function (provider) {
       return connected.indexOf(provider) < 0;
@@ -423,9 +423,9 @@
     });
     if (!providers.length) result.missing.push('Load the integration catalogue before evaluating provider coverage.');
     result.risks = providers.length && !connected.length
-      ? ['No reviewed connected provider authority is present in the returned catalogue.'] : [];
+      ? ['No connected service is confirmed in the loaded integrations.'] : [];
     result.opportunities = connected.length ? [connected.length + ' reviewed provider connections can support the capabilities shown by their own authorities.'] : [];
-    result.recommendations = [{ label: 'Review each provider authority before claiming connection, sync, or readiness.', priority: 'review' }];
+    result.recommendations = [{ label: 'Check each integration before relying on its connection, updates or readiness.', priority: 'review' }];
     return result;
   }
 
@@ -434,7 +434,7 @@
     var result = baseProjection(surface, workspace, graph);
     result.title = titleCase(surface) + ' intelligence';
     result.summary = graph
-      ? 'The latest role-authorized customer, lead, work, and Polaris graph informs this destination.'
+      ? 'This page uses the latest customer, lead, job and Polaris records you can access.'
       : 'No connected work record is available for this page.';
     result.risks = riskEntries(graph);
     result.opportunities = graph ? ['Open complete Polaris detail to inspect the supporting record.'] : [];
@@ -521,7 +521,7 @@
     section.setAttribute('aria-live', 'polite');
     var status = document.createElement('p');
     status.className = 'polaris-surface-loading';
-    status.textContent = 'Loading role-authorized Polaris intelligence…';
+    status.textContent = 'Loading Polaris information…';
     section.appendChild(status);
     var header = directChildHeader(main);
     if (header) header.insertAdjacentElement('afterend', section);
@@ -538,13 +538,13 @@
       surface: surface,
       detailed: DETAILED_SURFACES.indexOf(surface) >= 0,
       title: 'Polaris intelligence unavailable',
-      summary: 'The page did not receive a valid role-authorized workspace projection. No tenant, customer, provider, or demo data is shown.',
-      confidenceExplanation: 'Confidence is unavailable because the required authorized inputs did not load.',
+      summary: 'Your business information could not be loaded. No customer or connected-service details are shown.',
+      confidenceExplanation: 'Confidence is unavailable because the required information did not load.',
       evidence: [],
-      missing: ['Reload after confirming this role can access the destination.'],
-      risks: ['Do not act on an incomplete intelligence projection.'],
+      missing: ['Check that your account has access, then reload this page.'],
+      risks: ['Review the missing information before acting.'],
       opportunities: [],
-      recommendations: [{ label: 'Review access and retry the role-authorized page.', priority: 'review' }],
+      recommendations: [{ label: 'Check access and reload this page.', priority: 'review' }],
       objects: [],
     });
     container.dataset.state = 'unavailable';

@@ -24,7 +24,7 @@ const arg=n=>process.argv.find(v=>v.startsWith('--'+n+'=')).slice(n.length+3),en
   page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/demo/command-center/operations'))headerReads.push(r.allHeaders().then(headers=>{const cookie=headers.cookie;ownerCookieHashes.push(cookie?require('crypto').createHash('sha256').update(cookie).digest('hex'):null);}));});
   const execution=scenario.startsWith('fresh')?'11111111-1111-4111-8111-111111111111':demo?savedDetail.execution.id:paid.execution.id;
   const tag=scenario+'-'+width,links=[];
-  const routes=[['operations','.operations-brand',prefix],['operations','.operations-back',prefix],['completion-review','.completion-brand',prefix],['completion-review','.completion-back',prefix+'/operations']];if(scenario==='fresh-completion')routes.unshift(routes.pop());
+  const routes=[['operations','.operations-command-center',prefix],['completion-review','.completion-brand',prefix],['completion-review','.completion-back',prefix+'/operations']];if(scenario==='fresh-completion')routes.unshift(routes.pop());
   for(const [host,selector,destination]of routes){
    await page.goto(origin+prefix+'/'+host+(host==='completion-review'?'?executionId='+execution:''));
    if(host==='operations')await page.getByText('Current Work Loaded.',{exact:true}).waitFor();

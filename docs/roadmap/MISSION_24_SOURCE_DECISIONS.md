@@ -59,3 +59,8 @@ Local artifact root is the retained workspace listed above. Hashes identify the 
 | `m24-p1-s5-scope-4ec690b/NEXT_IMPLEMENTATION_PLAN.md` | `96c53c966a126910bc2caa55b16ae1fca10f91e254b8fca08c0c6879502dd52a` |
 
 The plan's Part1 exit matrix and recommendation to proceed toPart2 after acceptance are implementation planning, not a new founder-authored phase list. Root approved this bounded documentation scope; no source statement claims the quote runtime, Part1 completion or later phase acceptance. The separate image concept adds no code/design implementation authority.
+
+
+## Part6 Slice3 additive commercial authority
+
+[Commercial runtime and open onboarding integration checkpoint](../MISSION_24_PART6_SLICE3_COMMERCIAL_RUNTIME.md) records exact net/tax/payable composition, separate full human approval, private durable preparation and its remaining authoritative research/validation dependency. It does not add a Part6 slice or claim automatic tax coverage, payment or quote delivery.

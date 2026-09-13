@@ -274,7 +274,7 @@ function createIdempotencyRegistry(options = {}) {
 
   function scopeKey(scope) {
     if (!scope || typeof scope !== 'object' || !UUID.test(scope.key || '') || !UUID.test(scope.organizationId || '') ||
-        !UUID.test(scope.userId || '') || scope.operation !== MESSAGE_OPERATION ||
+        !UUID.test(scope.userId || '') || ![MESSAGE_OPERATION, 'polaris_message_v2'].includes(scope.operation) ||
         typeof scope.fingerprint !== 'string' || !FINGERPRINT.test(scope.fingerprint)) {
       throw contractError('POLARIS_IDEMPOTENCY_SCOPE_INVALID', 'The idempotency scope is invalid.', 500);
     }

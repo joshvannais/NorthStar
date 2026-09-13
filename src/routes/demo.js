@@ -570,6 +570,17 @@ async function assembleDemoCapellaReview(record,item,req){
     review.capellaScenarios=require('../estimating/capellaScenarios').basis(review,item);
     return review;
 }
+router.post('/command-center/polaris/messages-v2', require('../polaris/demoGrounded').createHandler({
+ boundary:mutationBoundary,getToken:commandCenterToken,repository:commandCenterRepository,getPool:()=>db.getPool(),sourceHash:durableSourceHash,
+ loadContext:async(record,request)=>{
+  const workspace=demoWorkspace(record),item=demoCanonicalItems(workspace).find(x=>require('../polaris/assistantContract').selectedMatchesItem(x,request.selected));
+  if(!item)throw Object.assign(new Error('That demo record is unavailable. Refresh and select another record.'),{statusCode:404,code:'POLARIS_SELECTED_RECORD_NOT_FOUND'});
+  const review=await assembleDemoCapellaReview(record,item,{params:{estimateId:item.ids.estimate},query:request.selectedRevision===null?{}:{revision:request.selectedRevision}});
+  const card=require('../polaris/assistantContract').buildCustomerIntelligenceCard(item,request.selected),authority={organizationId:workspace.tenant.id,userId:workspace.viewer.id,role:'owner',sessionId:record.sessionId,revision:record.revision,expiresAt:record.expiresAt};
+  const build=require('../polaris/groundedContext'),groundedContext=build.build({message:request.message,authority,card,review});groundedContext.reviewTarget={customerId:item.ids.customer,estimateId:item.ids.estimate,selectedRevision:review.selectedRevision,sourcePins:review.pins,handoffBasis:build.handoffBasis(review)};return build.stableBasis({authority,card,review,groundedContext});
+ }
+}));
+
 router.post('/command-center/estimates/:estimateId/capella-scenarios',async function(req,res){
  res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'capella-scenarios'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the scenario entries.'}});
  try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(x=>x.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});const review=await assembleDemoCapellaReview(record,item,req);return res.json({success:true,data:require('../estimating/capellaScenarios').calculate(review.capellaScenarios,req.body)});}catch(e){const status=[400,401,403,404,409,410,413,429,503].includes(e.status)?e.status:503;return res.status(status).json({success:false,error:{message:e.code&&e.code.startsWith('CAPELLA_')?e.message:status===400?'Check the scenario amounts, source and date range.':'Scenario analysis could not be loaded. Refresh and try again.'}});}

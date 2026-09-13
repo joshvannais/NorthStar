@@ -1,0 +1,34 @@
+'use strict';
+const fs=require('node:fs'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+process.env.NODE_ENV='test';process.env.AUTH_ACCESS_SECRET='local-connected-fixture-secret-at-least-thirty-two';
+for(const k of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','RETELL_API_KEY'])delete process.env[k];
+const {createEstimateReviewFixture}=require('../helpers/m24-estimate-review-fixture');
+const repo=require('../../src/estimating/taxPreparationRepository');
+const {TaxPreparationWorker}=require('../../src/estimating/taxPreparationWorker');
+const {TaxResearchWorker}=require('../../src/estimating/taxResearchWorker');
+const {createTaxSourceAcquisition}=require('../../src/estimating/taxSourceAcquisition');
+const output=process.argv.find(a=>a.startsWith('--output='))?.slice(9);assert.ok(output&&!fs.existsSync(output));const result={cases:[],pass:false};
+(async()=>{let f;try{
+ f=await createEstimateReviewFixture();const actor=f.actors.owner;
+ const client=await f.runtimePool.connect();let read;try{await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');read=await repo.read(client,actor);await client.query('ROLLBACK');}finally{client.release();}
+ const service=read.services[0].id;
+ const body={expectedRevision:0,expectedDigest:'none',expectedProfileVersion:read.expectedProfileVersion,inputs:{contexts:[{id:'fixture-context',country:'US',region:'XX',locality:'',jurisdiction:'Fixture jurisdiction',serviceKey:service,classification:'fixture',registration:'registered',registrationReference:'PRIVATE-REGISTRATION-NOT-FOR-TRANSPORT',collectionBasis:'External review needed',exemptionReference:'',effectiveOn:null,endsOn:null,sourceNote:'Progressive fixture information',sourceReference:'Owner record',acknowledged:true}]},reason:'Record private test setup without fabricated tax coverage',confirmed:true,confirmationVersion:read.version};
+ await repo.mutate(f.runtimePool,{...actor,idempotencyKey:crypto.randomUUID()},body);
+ const preparation=new TaxPreparationWorker({getPool:()=>f.runtimePool,batchSize:5});await preparation.tick();
+ const research=new TaxResearchWorker({getPool:()=>f.runtimePool});assert.equal((await research.tick()).adapterUnavailable,true);
+ let jobs=(await f.ownerPool.query('SELECT * FROM canonical_tax_research_jobs WHERE organization_id=$1',[f.org])).rows;assert.equal(jobs.length,1);assert.equal(jobs[0].attempts,0);assert.ok(!JSON.stringify(jobs[0].public_context).includes('PRIVATE'));
+ await research.tick();assert.equal((await f.ownerPool.query('SELECT count(*)::int n FROM canonical_tax_research_jobs WHERE organization_id=$1',[f.org])).rows[0].n,1);
+ result.cases.push('actual owner setup/preparation -> older unsupported backfill, dedupe and missing-adapter pending state without consuming attempts');
+ let acquired,changedRead;research.batchSize=1;
+ research.acquire=createTaxSourceAcquisition({allowedOrigins:new Set(['https://official.example']),transport:{acquire:async context=>{acquired=context;
+ const c=await f.runtimePool.connect();try{await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ');changedRead=await repo.read(c,actor);await c.query('ROLLBACK');}finally{c.release();}
+ const revised=structuredClone(body);revised.expectedRevision=changedRead.current.revision;revised.expectedDigest=changedRead.current.digest;revised.expectedProfileVersion=changedRead.expectedProfileVersion;revised.inputs.contexts[0].jurisdiction='Changed fixture jurisdiction';
+ await repo.mutate(f.runtimePool,{...actor,idempotencyKey:crypto.randomUUID()},revised);
+ return [{url:'https://official.example/fixture',content:'Synthetic source requires independent review.',effectiveOn:null,endsOn:null,coverage:'Fixture only',exclusions:'No validated tax treatment'}];}}});
+ assert.equal((await research.tick()).processed,1);assert.ok(!JSON.stringify(acquired).includes('PRIVATE'));
+ const candidates=(await f.ownerPool.query('SELECT * FROM canonical_tax_research_candidates WHERE organization_id=$1',[f.org])).rows;assert.equal(candidates.length,1);assert.equal(candidates[0].disposition,'stale');assert.equal((await f.ownerPool.query('SELECT count(*)::int n FROM canonical_tax_profiles WHERE organization_id=$1',[f.org])).rows[0].n,2);assert.equal((await f.ownerPool.query('SELECT count(*)::int n FROM canonical_tax_rule_versions')).rows[0].n,0);
+ await assert.rejects(f.runtimePool.query('INSERT INTO canonical_tax_rule_versions DEFAULT VALUES'),e=>e.code==='42501');
+ await assert.rejects(f.ownerPool.query('DELETE FROM canonical_tax_research_candidates'),e=>e.code==='23514');
+ result.cases.push('actual tax setup changes during acquisition outside transaction; stale candidate retained immutably, current setup preserved, no validated rules or publication grant');
+ result.pass=true;
+}catch(e){result.error={message:e.message,stack:e.stack};process.exitCode=1;}finally{if(f)await f.cleanup();fs.writeFileSync(output,JSON.stringify(result,null,2));console.log(JSON.stringify(result));}})();

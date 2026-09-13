@@ -94,6 +94,7 @@ class KnowledgeSynchronizationWorker {
       }, async verified => {
         const controller = new AbortController();
         const request = Object.freeze({
+          attemptCount: verified.attemptCount,
           audience: verified.audience,
           canonicalProjection: verified.canonicalProjection,
           capabilities: Object.freeze([...verified.capabilities]),

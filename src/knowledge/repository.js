@@ -80,6 +80,9 @@ async function withTransaction(pool, operation) {
 }
 
 async function withReadTransaction(pool, operation) {
+  // A protected caller may already own the same snapshot. Do not reconnect a
+  // PoolClient or commit/release its transaction while assembling current facts.
+  if (pool && typeof pool.query === 'function' && typeof pool.release === 'function') return operation(pool);
   if (!pool || typeof pool.connect !== 'function') {
     throw new TypeError('Knowledge repository requires a PostgreSQL pool');
   }

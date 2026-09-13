@@ -73,6 +73,7 @@ app.use(correlationId);
 // The two signed Retell entry points must receive bounded raw bytes before the
 // global JSON parser. The boundary router owns only those exact paths.
 app.use(createRetellWebhookBoundaryRouter());
+app.use(require('./routes/connectedCall').createConnectedCallRouter({getPool:()=>db.getPool()}));
 // Mission 22 Part 3 recommendations are a read-only, non-capability POST with
 // an exact 64 KiB unambiguous JSON contract. Own its received bytes before the
 // broader application parser consumes the stream.
@@ -220,9 +221,14 @@ const productionSupportCaseOutboxWorker = new SupportCaseOutboxWorker({
   supportRecipient: config.support.recipient,
 });
 const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
-const productionTaxPreparationWorker = new (require('./estimating/taxPreparationWorker').TaxPreparationWorker)({getPool:()=>db.getPool()});
+// No reviewed live acquisition adapter is enabled by this local integration.
+const productionTaxResearchWorker = new (require('./estimating/taxResearchWorker').TaxResearchWorker)({getPool:()=>db.getPool()});
+const productionTaxPreparationWorker = new (require('./estimating/taxPreparationWorker').TaxPreparationWorker)({getPool:()=>db.getPool(),onPrepared:org=>productionTaxResearchWorker.enqueue(org)});
 const productionHomepageDemoAdmissionHousekeepingWorker = new HomepageDemoAdmissionHousekeepingWorker();
 const productionPolarisRuntime = createProductionOpenAIRuntime(process.env);
+// A separate, reviewed activation is required for publicly funded generation.
+// Local tests inject a transport on their own Express application only.
+app.locals.demoGroundedRuntime = process.env.POLARIS_DEMO_GENERATION_ENABLED === 'true' ? productionPolarisRuntime : null;
 const productionPolarisUsageLedger = createProviderUsageLedger({
   poolProvider: function () { return db.getPool(); },
 });
@@ -309,6 +315,12 @@ async function start(options) {
   productionSupportCaseOutboxWorker.start();
   productionDemoHousekeepingWorker.start();
   productionTaxPreparationWorker.start();
+  productionTaxResearchWorker.start();
+  // Explicitly installed transports only; no agent or provider is activated here.
+  if(app.locals.connectedKnowledgeTransports instanceof Map&&app.locals.connectedKnowledgeTransports.size){
+    app.locals.connectedKnowledgeWorker=new (require('./knowledge/synchronizationWorker').KnowledgeSynchronizationWorker)({pool:db.getPool(),transports:app.locals.connectedKnowledgeTransports,batchSize:3});
+    app.locals.connectedKnowledgeWorker.start();
+  }
   productionHomepageDemoAdmissionHousekeepingWorker.start();
 
 
@@ -351,6 +363,8 @@ async function start(options) {
     productionSupportCaseOutboxWorker.stop();
     productionDemoHousekeepingWorker.stop();
     productionTaxPreparationWorker.stop();
+    productionTaxResearchWorker.stop();
+    app.locals.connectedKnowledgeWorker?.stop();
     productionHomepageDemoAdmissionHousekeepingWorker.stop();
     voiceWebhook.shutdown();
   });

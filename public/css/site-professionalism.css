@@ -1882,3 +1882,74 @@ html body #cdCustomerDrawer .drawer-policy-facts dd { text-align: right; font-we
 
 .capella-scenario-grid{align-items:start}
 .capella-scenario-form input:not([type=checkbox]),.capella-scenario-form select,.capella-scenario-form textarea{min-height:44px;padding:.65rem;border:1px solid #9ca3af;border-radius:.35rem;background:#fff;color:#172033;color-scheme:light}
+/* Shared Polaris treatment follows the existing conversation card. */
+:root {
+  --polaris-card-background: linear-gradient(145deg, color-mix(in srgb, #7c3aed 13%, var(--neutral-50)), var(--neutral-50) 48%);
+  --polaris-card-border: color-mix(in srgb, #7c3aed 62%, var(--neutral-200));
+  --polaris-card-ink: var(--neutral-900);
+  --polaris-card-accent: #6d28d9;
+  --polaris-card-rule: color-mix(in srgb, #7c3aed 24%, var(--neutral-200));
+  --polaris-card-shadow: 0 12px 32px rgba(76,29,149,.13);
+}
+html[data-theme="dark"] {
+  --polaris-card-background: linear-gradient(145deg, rgba(109,40,217,.24), var(--neutral-50) 48%);
+  --polaris-card-border: #8b5cf6;
+  --polaris-card-accent: #c4b5fd;
+  --polaris-card-shadow: 0 12px 34px rgba(0,0,0,.3);
+}
+
+/* Approved shared card themes; retain each host's existing type hierarchy. */
+html body :is(.polaris-native-card,.polaris-surface-card-shell,.polaris-intelligence-card[data-polaris-card],.polaris-card),
+html[data-theme="dark"] body :is(.polaris-native-card,.polaris-surface-card-shell,.polaris-intelligence-card[data-polaris-card],.polaris-card),
+html body .customer-drawer .drawer-polaris-insight,
+html[data-theme="dark"] body .customer-drawer .drawer-polaris-insight {
+  background:var(--polaris-card-background);border:1px solid var(--polaris-card-border);
+  color:var(--polaris-card-ink);box-shadow:var(--polaris-card-shadow);
+}
+html body .polaris-card::before { background:transparent; }
+html body :is(.polaris-surface-card-shell,.polaris-intelligence-card[data-polaris-card]) :is(.polaris-card-summary,.polaris-card-kicker,.polaris-card-heading h2,.polaris-card-section h3,.polaris-card-link),
+html body .customer-drawer .drawer-polaris-insight :is(.drawer-work-facts,.drawer-fact-value,.drawer-polaris-context,.drawer-original-range,.drawer-polaris-basis,.drawer-estimate-basis,.drawer-unpriced-categories,.drawer-polaris-item-label,.drawer-polaris-item-value),
+html body .customer-drawer .drawer-polaris-insight > h3,
+html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing :is(summary,h4,label,p,.drawer-pricing-category-header,.drawer-pricing-item,.drawer-pricing-category-detail,.drawer-unpriced-categories),
+html body .customer-drawer .drawer-polaris-insight .drawer-polaris-pricing #cdPricingBreakdown,
+html body .customer-drawer .drawer-polaris-subsection .drawer-work-detail :is(h4,p),
+html body .customer-drawer .drawer-polaris-subsection > summary { color:var(--polaris-card-ink); }
+html body .customer-drawer .drawer-polaris-insight .drawer-fact-label { color:var(--neutral-600); }
+html body .customer-drawer .drawer-polaris-insight :is(.drawer-polaris-subsection,.drawer-pricing-category,.drawer-pricing-item,.drawer-polaris-pricing),
+html body .customer-drawer .drawer-polaris-analysis .drawer-work-detail { border-color:var(--polaris-card-rule); }
+html body :is(.polaris-surface-card-shell,.polaris-intelligence-card[data-polaris-card]) :is(.polaris-card-kicker,.polaris-card-section h3,.polaris-card-link) { color:var(--polaris-card-accent); }
+html body .customer-drawer .drawer-capella-review {
+  background:linear-gradient(145deg,#f2dfb3,#fffaf0 72%);border:1px solid #b58c32;color:#473617;
+}
+html[data-theme="dark"] body .customer-drawer .drawer-capella-review {
+  background:linear-gradient(145deg,#443315,#151410 72%);border:1px solid #c29a44;color:#fff0cf;
+}
+html body .customer-drawer .drawer-capella-review dl > div {
+  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:.5rem 1rem;
+}
+html body .customer-drawer .drawer-capella-review dd { text-align:right;white-space:nowrap;overflow-wrap:normal; }
+html body .customer-drawer .drawer-capella-review dt { min-width:0;overflow-wrap:anywhere; }
+html body .customer-drawer .drawer-capella-review .btn-secondary { background:transparent;color:inherit;border-color:#b58c32; }
+html body .customer-drawer .drawer-capella-review .btn-primary { background:#d4af37;color:#211a0b;border-color:#b58c32; }
+html body .customer-drawer .drawer-result-group { margin:16px 0;padding:16px;border:1px solid var(--polaris-card-rule);border-radius:12px;min-width:0; }
+html body .customer-drawer .drawer-result-group h4 { margin:0 0 12px; }
+html body .customer-drawer .drawer-result-pair { margin:0;padding:6px 0; }
+html body .customer-drawer .drawer-result-pair > div { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:baseline; }
+html body .customer-drawer .drawer-result-pair dt { overflow-wrap:anywhere; }
+html body .customer-drawer .drawer-result-pair dd { margin:0;text-align:right;overflow-wrap:anywhere; }
+html body .customer-drawer .drawer-result-total { border-top:1px solid var(--polaris-card-rule);margin-top:8px;padding-top:12px;font-weight:700; }
+html body .customer-drawer :is(#cdTravelPlan,#cdTravelResults,.drawer-result-group) { min-width:0;max-width:100%;box-sizing:border-box; }
+html body .customer-drawer #cdTravelPlan :is(p,details,section,div) { min-width:0;overflow-wrap:anywhere; }
+
+html body .customer-drawer .drawer-polaris-analysis > summary { color:var(--polaris-card-ink); }
+html body .customer-drawer .drawer-equipment-comparison { padding:12px 0;border-top:1px solid var(--polaris-card-rule); }
+html body .customer-drawer .drawer-equipment-comparison h5 { font-size:inherit;margin:0 0 8px; }
+html body .customer-drawer #cdPricingActions > button { margin:0 !important; }
+
+@media(min-width:1100px) {
+  html body .customer-drawer #cdPricingActions { display:grid;grid-template-columns:repeat(5,minmax(0,1fr)); }
+  html body .customer-drawer #cdPricingActions > button { min-width:0;padding-left:12px;padding-right:12px; }
+}
+
+html body .customer-drawer .drawer-result-note { font-size:12px;line-height:1.5;margin:12px 0 0; }
+html body :is(.polaris-surface-card-shell,.polaris-intelligence-card[data-polaris-card]) .polaris-card-status { color:var(--polaris-card-accent); }

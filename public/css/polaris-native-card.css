@@ -26,10 +26,10 @@
 }
 .polaris-native-card {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, #7c3aed 62%, var(--neutral-200));
+  border: 1px solid var(--polaris-card-border);
   border-radius: 16px;
   color: var(--neutral-900);
-  background: linear-gradient(145deg, color-mix(in srgb, #7c3aed 13%, var(--neutral-50)), var(--neutral-50) 48%);
+  background: var(--polaris-card-background);
   box-shadow: 0 12px 32px rgba(76, 29, 149, .13);
 }
 .polaris-native-card-header {

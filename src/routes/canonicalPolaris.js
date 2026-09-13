@@ -1686,6 +1686,8 @@ function createCanonicalRouter(options) {
     review.travelCoverageChoices=require('../estimating/travelCostComposition').coverageChoices(review);
         review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled&&operator.canMutate===true;
         review.adoptionPaused=!adoptionPolicy.mutationsEnabled;
+        const comparisonPage=await listCanonicalGraphPage(client,requestContext(req),{limit:50});
+        review.groundedRecommendations=require('../polaris/groundedRecommendations').build(review,item,{candidates:comparisonPage.items,hasMore:comparisonPage.hasMore});
         return review;
       });
       if (!review) return failure(404, 'That estimate is unavailable.');

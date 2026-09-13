@@ -1674,6 +1674,37 @@ window.CustomerDetail = (function() {
     formButton('Preview Estimate Costs',function(){send(true);});formButton('Save New Estimate',function(){send(false);});formButton('Cancel Estimate Change',function(){_adoptionDraft=null;redraw();var start=$({material:'cdAdoptionStart',labor:'cdLaborAdoptionStart',equipment:'cdEquipmentCostAdoptionStart',travel:'cdTravelAdoptionStart'}[component]);if(start)start.focus();});form.onsubmit=function(e){e.preventDefault();};
   }
 
+  function renderGroundedRecommendations(review, parent) {
+    var data=review.groundedRecommendations;if(!data)return;
+    var root=document.createElement('details');root.id='cdGroundedRecommendations';root.className='drawer-labor-plan';parent.appendChild(root);
+    function node(tag,text,target){var n=document.createElement(tag);if(text!==null)n.textContent=text;(target||root).appendChild(n);return n;}
+    node('summary','Review Suggestions');node('p',data.message);
+    if(data.state!=='ready')return;
+    if(data.historical)node('p','Earlier Estimate — Actions Are Read-Only. Current source cautions are shown separately from saved history.');
+    if(data.simulated)node('p','Simulated company and job facts.');
+    var targets={costs:'cdEstimateCostRows',materials:'cdMaterialReview',labor:'cdLaborPlan',equipment:'cdEquipmentPlan',equipment_cost:'cdEquipmentCosts',readiness:'cdEquipmentReadiness',travel:'cdTravelPlan',pricing:'cdPricingPlan',policy:'cdPolicyPlan',commercial:'cdCommercialTerms'};
+    (data.items||[]).forEach(function(item){var box=node('details',null);node('summary',item.title,box);node('p',item.reason,box);
+      if(item.action&&targets[item.action]){var actionLabels={costs:'Review Cost Details',materials:'Review Materials',labor:'Review Labor',equipment:'Review Equipment',equipment_cost:'Review Equipment Costs',readiness:'Review Readiness',travel:'Review Travel',pricing:'Review Pricing',policy:'Review Pricing Policy',commercial:'Review Price And Terms'};var b=node('button',actionLabels[item.action],box);b.type='button';b.className='btn btn-secondary';b.addEventListener('click',function(){if(_estimateReview!==review)return;var destination=document.getElementById(targets[item.action]);if(!destination)return;for(var p=destination;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;var focus=destination.matches('select,input,button,[tabindex]')?destination:destination.querySelector('summary,button,input,select');if(focus){focus.focus();focus.scrollIntoView({block:'nearest'});}});}
+      var labels=(item.sourceIds||[]).map(function(id){return(data.sources||[]).find(function(x){return x.id===id;});}).filter(Boolean).map(function(x){return x.label;});if(labels.length)node('p','Basis: '+labels.join(' · '),box);
+    });
+    if(!(data.items||[]).length)node('p','No additional suggestion was identified from the available saved facts. This does not establish safety, availability or price accuracy.');
+    if(data.omitted)node('p','Showing the highest-priority suggestions. Review the remaining details in the sections below.');
+    var sources=node('details',null);node('summary','Sources And Assumptions',sources);
+    node('p','Recorded facts, owner declarations and calculations have different limits. Published reference text is supporting information, not a verified operating rule.',sources);
+    (data.sources||[]).forEach(function(source){var entry=node('div',null,sources);node('strong',source.label,entry);var kind={calculated_result:'Calculated From Saved Facts',owner_declaration:'Owner-Recorded Information',reviewed_source:'Reviewed Source'}[source.kind]||'Recorded Information';node('p',kind,entry);
+      if(source.recordedAt){var d=new Date(source.recordedAt);if(Number.isFinite(d.getTime()))node('p','Recorded '+d.toLocaleDateString(),entry);}
+      if(source.freshness)node('p',source.freshness==='unknown'?'Current freshness is not established.':source.freshness==='expired'?'The recorded source end date has passed.':'A source end date is recorded; this is not independent verification.',entry);
+      if(source.limitations)node('p',source.limitations,entry);
+      // Only text values, never raw object keys, HTML, URLs or executable source instructions.
+      if(source.content){var excerpts=[];function collect(v,depth){if(depth>3||excerpts.length>=6)return;if(typeof v==='string'&&v.trim())excerpts.push(v.slice(0,1200));else if(Array.isArray(v))v.forEach(function(x){collect(x,depth+1);});else if(v&&typeof v==='object')Object.keys(v).forEach(function(k){collect(v[k],depth+1);});}collect(source.content,0);excerpts.forEach(function(text){node('blockquote',text,entry);});}
+    });
+    var comparison=node('details',null);node('summary','Earlier Recorded Estimates',comparison);var c=data.comparisons||{};
+    node('p','Original recorded estimates only — not completed-job costs, current revisions or verified market prices.',comparison);
+    if(!(c.examples||[]).length)node('p',c.state==='scope_unavailable'?'Comparable scope and units are not fully recorded.':'No matching earlier estimate was found in this bounded search.',comparison);
+    (c.examples||[]).forEach(function(example){node('p',new Date(example.recordedAt).toLocaleDateString()+' · '+(example.amount===null?'Original Price Unavailable':decisionMoney(example.amount,example.currency)),comparison);});
+    if(c.truncated)node('p','Only the most recent 50 records were examined. Additional records were not compared.',comparison);
+  }
+
   function renderMaterialReview(review, parent) {
     var details = document.createElement('details'); details.id = 'cdMaterialReview';
     var summary = document.createElement('summary'); summary.textContent = 'Material basis'; details.appendChild(summary);
@@ -1787,7 +1818,7 @@ window.CustomerDetail = (function() {
         paragraph(review.basisMessage);
         var date = new Date(review.recordedAt);
         paragraph(Number.isFinite(date.getTime()) ? 'Estimate information recorded ' + date.toLocaleString() + '.' : 'The date of this estimate is unavailable.');
-        var list = document.createElement('div'); list.className = 'drawer-pricing-category';
+        var list = document.createElement('div'); list.className = 'drawer-pricing-category';list.id='cdEstimateCostRows';list.tabIndex=-1;
         (review.rows || []).forEach(function(row) {
           var rowNode = document.createElement('div'); rowNode.className = 'drawer-pricing-item';
           var term = document.createElement('span'), detail = document.createElement('span');
@@ -1800,6 +1831,7 @@ window.CustomerDetail = (function() {
           else detail.textContent = row.sourceState==='not_applicable'?'Not applicable':'Unavailable';
           rowNode.appendChild(term); rowNode.appendChild(detail); list.appendChild(rowNode);
         }); root.appendChild(list);
+        renderGroundedRecommendations(review, root);
         renderMaterialReview(review, root);
         renderLaborPlan(review, root);
         renderPricingPlan(review, root);

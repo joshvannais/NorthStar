@@ -571,6 +571,8 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
     const plans=record.state.materialPlans?.[item.ids.estimate]||[];review.materialPlans=materialPlan.project({current:plans[0]||null,history:plans,total:plans.length},review,review.isCurrent&&materialPlanPolicy.mutationsEnabled,true,!materialPlanPolicy.mutationsEnabled);
     review.travelCoverageChoices=require('../estimating/travelCostComposition').coverageChoices(review);
     review.canAdopt=review.isCurrent&&adoptionPolicy.mutationsEnabled;review.adoptionPaused=!adoptionPolicy.mutationsEnabled;
+    const candidates=demoCanonicalItems(demoWorkspace(record)).sort((a,b)=>Date.parse(b.snapshotCreatedAt)-Date.parse(a.snapshotCreatedAt)||a.ids.estimate.localeCompare(b.ids.estimate));
+    review.groundedRecommendations=require('../polaris/groundedRecommendations').build(review,item,{candidates:candidates.slice(0,50),hasMore:candidates.length>50});
     return res.json({ success: true, data: review });
   } catch (_error) {
     return res.status(_error.status===404?404:503).json({ success: false, error: { message: _error.status===404?'That demo estimate is unavailable.':'Demo estimate review could not be loaded. Try again.' } });

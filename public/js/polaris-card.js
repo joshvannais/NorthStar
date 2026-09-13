@@ -44,7 +44,7 @@
     section.appendChild(element('h3', '', 'Prioritized recommendations'));
     var list = element('ol', 'polaris-card-list');
     var entries = Array.isArray(values) ? values : [];
-    if (!entries.length) entries = [{ label: 'No recommendation is available until more role-authorized inputs are recorded.' }];
+    if (!entries.length) entries = [{ label: 'No recommendation is available yet. More accessible supporting information is needed.' }];
     entries.forEach(function (entry) {
       var label = safeText(entry && typeof entry === 'object' ? entry.label : entry);
       if (!label) return;
@@ -93,10 +93,10 @@
     return {
       surface: input.surface,
       title: safeText(input.title) || 'Polaris intelligence is unavailable',
-      summary: safeText(input.summary) || 'No role-authorized summary can be calculated from the current inputs.',
+      summary: safeText(input.summary) || 'A summary is unavailable from the information you can access.',
       confidence: Number.isFinite(numericConfidence) ? Math.max(0, Math.min(100, numericConfidence)) : null,
       confidenceExplanation: safeText(input.confidenceExplanation) || 'Confidence is unavailable because supporting inputs are incomplete.',
-      evidence: safeItems(input.evidence, 'No supporting evidence is recorded for this projection.'),
+      evidence: safeItems(input.evidence, 'No supporting evidence is recorded for this assessment.'),
       missing: safeItems(input.missing, 'No missing-input explanation was supplied.'),
       risks: safeItems(input.risks, 'No specific risk is supported by the current inputs.'),
       opportunities: safeItems(input.opportunities, 'No specific opportunity is supported by the current inputs.'),

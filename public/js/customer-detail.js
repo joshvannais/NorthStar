@@ -852,15 +852,25 @@ window.CustomerDetail = (function() {
   }
 
   var _relocatedReviewActions = [];
+  var _activeReviewActions = null;
   function restoreReviewActions() {
     _relocatedReviewActions.forEach(function(entry){if(entry.home.isConnected)entry.home.replaceWith(entry.button);});
     _relocatedReviewActions=[];
   }
   function positionPricingReviewActions() {
     restoreReviewActions();
-    var plan=$('cdPricingPlan'),actions=$('cdPricingActions');
-    if(!plan||!plan.open||!actions)return;
+    var choices=[{plan:'cdPricingPlan',actions:'cdPricingActions'},{plan:'cdPolicyPlan',actions:'cdPolicyActions'}];
+    var eligible=choices.filter(function(choice){var plan=$(choice.plan);return plan&&plan.open&&$(choice.actions);});
+    var owner=eligible.find(function(choice){return choice.actions===_activeReviewActions;})||eligible[eligible.length-1];
+    if(!owner){_activeReviewActions=null;return;}
+    _activeReviewActions=owner.actions;var actions=$(owner.actions);
     ['cdEstimateReviewRefresh','cdDecisionReviewAction'].forEach(function(id){var button=$(id);if(!button)return;var home=document.createComment('review action home');button.before(home);_relocatedReviewActions.push({button:button,home:home});actions.appendChild(button);});
+  }
+  function bindReviewActions(root,actions) {
+    function activate(){_activeReviewActions=actions.id;positionPricingReviewActions();}
+    root.addEventListener('focusin',function(event){if(event.target.id!=='cdEstimateReviewRefresh'&&event.target.id!=='cdDecisionReviewAction')activate();});
+    root.addEventListener('toggle',function(event){if(event.target!==root)return;if(root.open)activate();else positionPricingReviewActions();});
+    queueMicrotask(positionPricingReviewActions);
   }
   function renderEstimateDecision(review) {
     restoreReviewActions(); var root = $('cdEstimateDecision'); root.replaceChildren();
@@ -1367,7 +1377,7 @@ window.CustomerDetail = (function() {
   }
   var _pricingPolicyDraft=null;
   function renderPricingPolicy(review,parent) {
-    var existing=$('cdPolicyPlan');if(existing)existing.remove();
+    restoreReviewActions();queueMicrotask(positionPricingReviewActions);var existing=$('cdPolicyPlan');if(existing)existing.remove();
     var root=document.createElement('details');root.id='cdPolicyPlan';root.className='drawer-labor-plan';parent.appendChild(root);
     function el(tag,text,target){var n=document.createElement(tag);if(text)n.textContent=text;(target||root).appendChild(n);return n;}
     el('summary','Pricing Policy');var plans=review.pricingPolicies;
@@ -1413,7 +1423,7 @@ window.CustomerDetail = (function() {
     field(form,'Reason For This Change','cdPolicyReason',draft.reason,function(v){draft.reason=v;}).required=true;
     var results=el('div',null,form);if(draft.result){resultView(draft.result,results);pricingCautions(draft.assessment,results,draft.inputs);}
     var label=el('label',null,form);label.className='drawer-decision-confirmation';var confirm=el('input',null,label);confirm.type='checkbox';confirm.id='cdPolicyConfirm';confirm.checked=draft.confirmed;el('span',draft.action==='withdraw'?'I reviewed withdrawing this policy. Saved history and the approved price remain unchanged.':'I reviewed the policy, additional-only allowance, minimum and source limitations. This does not approve or send a customer price.',label);confirm.onchange=function(){draft.confirmed=confirm.checked;};
-    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Policy',function(){send(true);},actions,'cdPolicyCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Policy',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPolicySave';button('Cancel',function(){_pricingPolicyDraft=null;rerender('cdPolicyStart');},actions,'cdPolicyCancel');
+    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Policy',function(){send(true);},actions,'cdPolicyCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Policy',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPolicySave';actions.id='cdPolicyActions';bindReviewActions(root,actions);button('Cancel',function(){_pricingPolicyDraft=null;rerender('cdPolicyStart');},actions,'cdPolicyCancel');
     form.onsubmit=function(e){e.preventDefault();if(!draft.confirmed||draft.action==='save'&&!draft.result){status.textContent=draft.action==='withdraw'?'Review and confirm the withdrawal before saving.':'Calculate the policy, then review and confirm it.';status.focus();return;}send(false);};
     function send(preview){if(!form.reportValidity())return;var attempt=!preview&&draft.request;if(!attempt){attempt={key:crypto.randomUUID(),workspaceRevision:review.demoWorkspaceRevision,body:{action:draft.action,expectedRevision:plans.current?plans.current.revision:0,expectedDigest:plans.current?plans.current.digest:'none',sourcePins:review.pins,expectedDecisionRevision:plans.decisionBasis.revision,expectedDecisionDigest:plans.decisionBasis.digest,inputs:draft.action==='withdraw'?null:JSON.parse(JSON.stringify(draft.inputs)),currency:review.currency,reason:draft.reason,confirmed:true,confirmationVersion:plans.contract,evidenceDigest:draft.evidenceDigest||plans.sources.digest,pricingPin:plans.sources.pricingPin}};if(!preview)draft.request=attempt;}
       var headers={'Content-Type':'application/json','Idempotency-Key':attempt.key};if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(attempt.workspaceRevision);var disabled=Array.prototype.map.call(form.elements,function(x){var d=x.disabled;x.disabled=true;return d;});status.textContent=preview?'Calculating Policy…':'Saving Pricing Policy…';
@@ -1422,7 +1432,7 @@ window.CustomerDetail = (function() {
   }
   var _pricingPlanDraft=null;
   function renderPricingPlan(review,parent) {
-    restoreReviewActions();var existing=$('cdPricingPlan');if(existing)existing.remove();
+    restoreReviewActions();queueMicrotask(positionPricingReviewActions);var existing=$('cdPricingPlan');if(existing)existing.remove();
     var root=document.createElement('details');root.id='cdPricingPlan';root.className='drawer-labor-plan';parent.appendChild(root);
     function el(tag,text,target){var n=document.createElement(tag);if(text)n.textContent=text;(target||root).appendChild(n);return n;}
     el('summary','Pricing Plan');var plans=review.pricingPlans;
@@ -1471,7 +1481,7 @@ window.CustomerDetail = (function() {
     field(form,'Reason For This Change','cdPricingReason',draft.reason,function(v){draft.reason=v;}).required=true;
     var results=el('div',null,form);if(draft.result){resultView(draft.result,results);pricingCautions(draft.assessment,results,draft.inputs);}
     var label=el('label',null,form);label.className='drawer-decision-confirmation';var confirm=el('input',null,label);confirm.type='checkbox';confirm.id='cdPricingConfirm';confirm.checked=draft.confirmed;el('span',draft.action==='withdraw'?'I reviewed withdrawing this pricing proposal. Saved history and the separate approved price remain unchanged.':'I reviewed the proposed charge, payment timing, overhead allocation and source limitations. This does not approve or send a customer price.',label);confirm.onchange=function(){draft.confirmed=confirm.checked;};
-    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Pricing',function(){send(true);},actions,'cdPricingCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Proposal',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPricingSave';actions.id='cdPricingActions';root.addEventListener('toggle',positionPricingReviewActions);queueMicrotask(positionPricingReviewActions);button('Cancel',function(){_pricingPlanDraft=null;rerender('cdPricingStart');},actions,'cdPricingCancel');
+    var actions=el('div',null,form);actions.className='drawer-review-actions';if(draft.action==='save')button('Calculate Pricing',function(){send(true);},actions,'cdPricingCalculate');var save=el('button',draft.action==='withdraw'?'Confirm Withdrawal':'Save Pricing Proposal',actions);save.type='submit';save.className='btn btn-primary';save.id='cdPricingSave';actions.id='cdPricingActions';bindReviewActions(root,actions);button('Cancel',function(){_pricingPlanDraft=null;rerender('cdPricingStart');},actions,'cdPricingCancel');
     form.onsubmit=function(e){e.preventDefault();if(!draft.confirmed||draft.action==='save'&&!draft.result){status.textContent=draft.action==='withdraw'?'Review and confirm the withdrawal before saving.':'Calculate pricing, then review and confirm the proposal.';status.focus();return;}send(false);};
     function send(preview){if(!form.reportValidity())return;var attempt=!preview&&draft.request;if(!attempt){attempt={key:crypto.randomUUID(),workspaceRevision:review.demoWorkspaceRevision,body:{action:draft.action,expectedRevision:plans.current?plans.current.revision:0,expectedDigest:plans.current?plans.current.digest:'none',sourcePins:review.pins,expectedDecisionRevision:plans.decisionBasis.revision,expectedDecisionDigest:plans.decisionBasis.digest,inputs:draft.action==='withdraw'?null:JSON.parse(JSON.stringify(draft.inputs)),currency:review.currency,reason:draft.reason,confirmed:true,confirmationVersion:plans.contract,evidenceDigest:draft.evidenceDigest||plans.sources.digest}};if(!preview)draft.request=attempt;}
       var headers={'Content-Type':'application/json','Idempotency-Key':attempt.key};if(review.simulated)headers['X-NorthStar-Demo-Revision']=String(attempt.workspaceRevision);var disabled=Array.prototype.map.call(form.elements,function(x){var d=x.disabled;x.disabled=true;return d;});status.textContent=preview?'Calculating Pricing…':'Saving Pricing Proposal…';

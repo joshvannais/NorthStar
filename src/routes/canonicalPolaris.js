@@ -1078,7 +1078,9 @@ function createCanonicalRouter(options) {
             userId: before.authority.userId, requestId: request.idempotencyKey, fingerprint,
             model: 'gpt-5.6-luna', schemaVersion: c.VERSION });
           try {
-            const result = await dependencies.assistantRuntime.respond(envelope, { signal });
+            const result = await dependencies.assistantRuntime.respond(envelope, { signal, revalidate: async () => {
+              if (!require('../polaris/connectedPolicy').generationEnabled || c.digest(await loadGroundedCurrent(req, request)) !== basis) throw Object.assign(new Error('The selected record or access changed. Refresh before asking again.'), { code: 'POLARIS_CONTEXT_CHANGED', statusCode: 409 });
+            } });
             await dependencies.assistantUsageLedger.reconcile(reservation, result.usage);
             if (c.digest(await loadGroundedCurrent(req, request)) !== basis) throw Object.assign(new Error('The selected record or sources changed. Refresh before asking again.'), { code: 'POLARIS_CONTEXT_CHANGED', statusCode: 409 });
             return result.response;

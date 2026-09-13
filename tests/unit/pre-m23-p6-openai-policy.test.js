@@ -529,14 +529,6 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
 
   test.each([
     ['missing token details', { input_tokens: 120, output_tokens: 80, total_tokens: 200 }],
-    ['implicit cache write', {
-      input_tokens: 120, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 120 },
-      output_tokens: 80, total_tokens: 200,
-    }],
-    ['cache read', {
-      input_tokens: 120, input_tokens_details: { cached_tokens: 120, cache_write_tokens: 0 },
-      output_tokens: 80, total_tokens: 200,
-    }],
     ['inconsistent total', {
       input_tokens: 120, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
       output_tokens: 80, total_tokens: 199,
@@ -623,7 +615,7 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
     });
   });
 
-  test('retries one explicit transient response only when the bounded delay fits', async () => {
+  test('does not retry a transient response inside one reservation', async () => {
     const module = requirePlanned(optionalModule('../../src/polaris/openaiRuntime'), 'OpenAI runtime');
     const inputEnvelope = envelope();
     const delays = [];
@@ -642,11 +634,9 @@ describe('Pre-Mission-23 P6 official OpenAI Responses contract', () => {
       sleeper: async milliseconds => { delays.push(milliseconds); },
       random: () => 0,
     });
-    const result = await runtime.respond(inputEnvelope, { signal: new AbortController().signal });
-    expect(client.responses.create).toHaveBeenCalledTimes(2);
-    expect(delays).toHaveLength(1);
-    expect(result.response.provider.requestsSent).toBe(2);
-    expect(result.usage.attemptCount).toBe(2);
+    await expect(runtime.respond(inputEnvelope, { signal: new AbortController().signal })).rejects.toMatchObject({code:'POLARIS_PROVIDER_UNAVAILABLE'});
+    expect(client.responses.create).toHaveBeenCalledTimes(1);
+    expect(delays).toHaveLength(0);
   });
 
   test.each([

@@ -23,7 +23,7 @@ function createProductionCallGenerate(environment=process.env,{getPool,runtime}=
   try{
    // Admission transaction released. Recheck after its locks before any network.
    if(stopped||controller.signal.aborted||digest(await repo.loadCurrent(identity))!==basis||!policy.callGuidanceEnabled||!policy.generationEnabled)unavailable();
-   const result=await runtime.respond(envelope,{signal:controller.signal});const outcome=await settle(result.usage);
+   const result=await runtime.respond(envelope,{signal:controller.signal,revalidate:async()=>{if(stopped||controller.signal.aborted||!policy.callGuidanceEnabled||!policy.generationEnabled||digest(await repo.loadCurrent(identity))!==basis)unavailable();}});const outcome=await settle(result.usage);
    if(outcome.state!=='completed'||controller.signal.aborted||!policy.callGuidanceEnabled||!policy.generationEnabled||digest(await repo.loadCurrent(identity))!==basis)unavailable();
    return {questions:result.response.questions,explanations:result.response.explanations,proposalIds:[],requestedCard:'none'};
   }catch(e){if(!settled)await settle(e.polarisUsage).catch(()=>{});throw e;}finally{clearTimeout(timer);controller.abort();signal?.removeEventListener('abort',abort);controllers.delete(controller);}

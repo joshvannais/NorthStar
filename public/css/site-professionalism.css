@@ -1852,3 +1852,16 @@ html body #cdCustomerDrawer .drawer-policy-facts > div { display: grid; grid-tem
 html body #cdCustomerDrawer .drawer-policy-facts :is(dt,dd) { margin: 0; font: inherit; overflow-wrap: anywhere; }
 html body #cdCustomerDrawer .drawer-policy-facts dd { text-align: right; font-weight: 600; }
 @media(max-width:640px) { html body #cdCustomerDrawer #cdPolicyPlan label:not(.drawer-decision-confirmation) { width: 100%; margin-right: 0; } }
+
+/* Commercial review follows the existing estimate controls. */
+#cdCommercialTerms, #taxPreparation { min-width: 0; }
+#cdCommercialTerms form, #taxPreparation form { display: grid; gap: 12px; }
+#cdCommercialTerms details, #taxPreparation details { margin-block: 12px; }
+#cdCommercialTerms summary, #taxPreparation summary { cursor: pointer; min-height: 44px; }
+#cdCommercialTerms label:not(.drawer-decision-confirmation), #taxPreparation label:not(.drawer-decision-confirmation) { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); align-items: center; gap: 12px; margin-block: 12px; }
+#cdCommercialTerms input:not([type=checkbox]), #cdCommercialTerms select, #taxPreparation input:not([type=checkbox]), #taxPreparation select { min-width: 0; width: 100%; min-height: 44px; font: inherit; color: var(--neutral-900); background: var(--neutral-50); border: 1px solid var(--neutral-300); border-radius: var(--radius-sm); padding: 8px; box-sizing: border-box; }
+#cdCommercialTerms .drawer-decision-confirmation, #taxPreparation .drawer-decision-confirmation { display: grid; grid-template-columns: 20px minmax(0,1fr); align-items: start; gap: 12px; margin-block: 12px; }
+#cdCommercialTerms input[type=checkbox], #taxPreparation input[type=checkbox] { width: 18px; height: 18px; margin: 2px 0 0; }
+#cdCommercialTerms .drawer-review-actions, #taxPreparation .drawer-review-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+#cdCommercialTerms p, #taxPreparation p { overflow-wrap: anywhere; }
+@media (max-width: 640px) { #cdCommercialTerms label:not(.drawer-decision-confirmation), #taxPreparation label:not(.drawer-decision-confirmation) { grid-template-columns: 1fr; gap: 6px; } #cdCommercialTerms .drawer-review-actions > *, #taxPreparation .drawer-review-actions > * { width: 100%; margin: 0; } }

@@ -220,6 +220,7 @@ const productionSupportCaseOutboxWorker = new SupportCaseOutboxWorker({
   supportRecipient: config.support.recipient,
 });
 const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
+const productionTaxPreparationWorker = new (require('./estimating/taxPreparationWorker').TaxPreparationWorker)({getPool:()=>db.getPool()});
 const productionHomepageDemoAdmissionHousekeepingWorker = new HomepageDemoAdmissionHousekeepingWorker();
 const productionPolarisRuntime = createProductionOpenAIRuntime(process.env);
 const productionPolarisUsageLedger = createProviderUsageLedger({
@@ -307,6 +308,7 @@ async function start(options) {
   productionEmailOutboxWorker.start();
   productionSupportCaseOutboxWorker.start();
   productionDemoHousekeepingWorker.start();
+  productionTaxPreparationWorker.start();
   productionHomepageDemoAdmissionHousekeepingWorker.start();
 
 
@@ -348,6 +350,7 @@ async function start(options) {
     productionEmailOutboxWorker.stop();
     productionSupportCaseOutboxWorker.stop();
     productionDemoHousekeepingWorker.stop();
+    productionTaxPreparationWorker.stop();
     productionHomepageDemoAdmissionHousekeepingWorker.stop();
     voiceWebhook.shutdown();
   });

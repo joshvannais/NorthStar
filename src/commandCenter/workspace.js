@@ -589,6 +589,7 @@ function createInitialDemoState(tenantId, createdAt, options = {}) {
     workspace: seededWorkspace,
     schedulingWorkforce: require('./demoWorkforce').create(seededWorkspace,createdAt),
     operationsSchedulingBasis: require('./demoOperationsBasis').create(seededWorkspace,graphs,createdAt),
+    taxPreparationBasis: require('./demoTaxPreparation').create(seededWorkspace.businessProfile,createdAt),
     travelExamples: require('./demoTravel').createExamples(seededWorkspace,graphs),
     equipmentBasis: require('./demoEquipmentReadiness').createEquipmentBasis(seed,createdAt),
     equipmentReadinessBasis: require('./demoEquipmentReadiness').create(seed,createdAt,graphs,seededWorkspace.team),

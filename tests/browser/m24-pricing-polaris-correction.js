@@ -25,7 +25,7 @@ assert.ok(!fs.existsSync(out));fs.mkdirSync(out,{recursive:true});
   assert.match(result.text,/No supporting details are recorded yet\./);assert.match(result.text,/Recorded-Detail Confidence/);assert.match(result.text,/not price accuracy/);assert.doesNotMatch(result.text,/canonical evidence/);
   const invalid=JSON.parse(before);invalid.confidence.value=2;assert.throws(()=>native.validateCustomerIntelligenceCard(invalid));
   await p.locator('#m213-render-fixture').scrollIntoViewIfNeeded();await p.screenshot({path:path.join(out,tag+'-empty.png')});
-  const populated=fixture.messageResponse({idempotencyKey:'benign-populated-render'},false).cards[0];populated.unknowns=card.unknowns;populated.confidence.value=1;populated.confidence.level='high';
+  const populated=fixture.messageResponse({idempotencyKey:'benign-populated-render'},false).cards[0];populated.unknowns=card.unknowns;populated.evidence.forEach(e=>{e.confidence=1;});populated.confidence.value=1;populated.confidence.level='high';
   const actual=trusted.projectTrustedDisplay([populated],selected,'canonical_overview').cards[0];
   await p.evaluate(card=>NorthStarPolarisCard.renderCustomerIntelligenceCard(document.getElementById('m213-render-fixture'),card),actual);
   const text=await p.locator('#m213-render-fixture').innerText();assert.match(text,/100%/);assert.match(text,/Recorded-Detail Confidence/);assert.match(text,/not price accuracy/);

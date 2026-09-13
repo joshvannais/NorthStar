@@ -1567,6 +1567,7 @@ function createCanonicalRouter(options) {
       const input={...actorInput(req),estimateId:req.params.estimateId};
       const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
       if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      if(!adoptionPolicy.mutationsEnabled)throw Object.assign(new Error('New estimate changes are paused. Refresh to check saved history.'),{status:503,code:'ESTIMATE_ADOPTION_PAUSED'});
       const selection=await readRevisions(client,input),review=buildRevisionReview(item,selection);review.decisions=await readSelectedDecisions(client,input);
       const composition=req.body?.confirmationVersion==='estimate-cost-adoption-v3'?require('../estimating/travelCostComposition'):req.body?.confirmationVersion==='estimate-cost-adoption-v2'?require('../estimating/equipmentCostComposition'):require('../estimating/costAdoptionContract'),body=composition.normalize({...req.body,confirmed:true}),data=body.changedComponent==='travel'?await require('../estimating/travelPlanRepository').readPlans(client,input):body.changedComponent==='equipment'?await require('../estimating/equipmentCostPlanRepository').readPlans(client,input):body.changedComponent==='labor'?await readLaborPlans(client,input):await readPlans(client,input),plan=data.current;
       composition.checkBasis(body,review,selection,plan);const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;
@@ -1583,6 +1584,7 @@ function createCanonicalRouter(options) {
       const input={...actorInput(req),estimateId:req.params.estimateId};
       const item=await getCanonicalGraph(client,requestContext(req),input.estimateId);
       if(!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+      if(!adoptionPolicy.mutationsEnabled)throw Object.assign(new Error('New estimate changes are paused. Refresh to check saved history.'),{status:503,code:'ESTIMATE_ADOPTION_PAUSED'});
       const review=buildRevisionReview(item,await readRevisions(client,input));
       review.decisions=await readSelectedDecisions(client,input);
       const plans=await readPlans(client,input),body=adoption.normalize({...req.body,confirmed:true});

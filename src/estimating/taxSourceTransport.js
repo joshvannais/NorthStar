@@ -34,29 +34,41 @@ function createTaxSourceTransport({ documents, allowedOrigins, lookup = dns.look
     const pinned = addresses[0];
     if (signal?.aborted) unavailable('Source retrieval was interrupted.');
     return new Promise((resolve, reject) => {
-      const req = request(url, { method: 'GET', signal, timeout: timeoutMs,
-        headers: { Accept: pdf?'application/pdf':'text/plain,text/html,application/json', 'User-Agent': 'NorthStar-Source-Review/1' },
-        lookup: (_host, _options, callback) => callback(null, pinned.address, pinned.family),
-      }, res => {
-        if ([301,302,303,307,308].includes(res.statusCode)) {
-          res.resume();
-          if (redirects >= 2 || typeof res.headers.location !== 'string') return reject(new Error('Source redirect limit reached.'));
-          let next; try { next = approvedUrl(new URL(res.headers.location, url).href, allowedOrigins); } catch (e) { return reject(e); }
-          fetchDocument(next, signal, redirects + 1, pdf).then(resolve, reject); return;
+      let response, settling=false, closedResolve;
+      const closed=new Promise(done=>{closedResolve=done;});
+      const finish=async(error,result,next)=>{
+        if(settling)return;settling=true;
+        response?.destroy();req.destroy();
+        await closed;
+        signal.removeEventListener('abort',onAbort);
+        if(signal.aborted)return reject(new Error('Source retrieval was interrupted.'));
+        if(error)return reject(error);
+        if(next){fetchDocument(next,signal,redirects+1,pdf).then(resolve,reject);return;}
+        resolve(result);
+      };
+      const onAbort=()=>finish(new Error('Source retrieval was interrupted.'));
+      const req=request(url,{method:'GET',signal,timeout:timeoutMs,
+        headers:{Accept:pdf?'application/pdf':'text/plain,text/html,application/json','User-Agent':'NorthStar-Source-Review/1'},
+        lookup:(_host,_options,callback)=>callback(null,pinned.address,pinned.family)},res=>{
+        response=res;
+        res.on('error',error=>finish(error));
+        res.on('aborted',()=>finish(new Error('Source response was interrupted.')));
+        if([301,302,303,307,308].includes(res.statusCode)){
+          if(redirects>=2||typeof res.headers.location!=='string')return finish(new Error('Source redirect limit reached.'));
+          let next;try{next=approvedUrl(new URL(res.headers.location,url).href,allowedOrigins);}catch(error){return finish(error);}
+          return finish(null,null,next);
         }
-        if (res.statusCode !== 200 || !(pdf?/^application\/pdf(?:;|$)/i:/^(text\/(plain|html)|application\/json)(?:;|$)/i).test(res.headers['content-type'] || '')) {
-          res.resume(); reject(new Error('The source returned unsupported content.')); return;
-        }
-        if (res.headers['content-encoding'] && res.headers['content-encoding'] !== 'identity') {
-          res.resume(); reject(new Error('Compressed source responses are unsupported.')); return;
-        }
-        let size = 0; const chunks = [];
-        const limit=pdf?262144:32768;
-        res.on('data', chunk => { size += chunk.length; if (size > limit) { req.destroy(new Error('Source response exceeds the review limit.')); } else chunks.push(chunk); });
-        res.on('end', () => { if (size <= limit) resolve(pdf?{url:url.href,bytes:Buffer.concat(chunks)}:{ url: url.href, content: Buffer.concat(chunks).toString('utf8') }); });
-        res.on('error', reject);
+        if(res.statusCode!==200||!(pdf?/^application\/pdf(?:;|$)/i:/^(text\/(plain|html)|application\/json)(?:;|$)/i).test(res.headers['content-type']||''))return finish(new Error('The source returned unsupported content.'));
+        if(res.headers['content-encoding']&&res.headers['content-encoding']!=='identity')return finish(new Error('Compressed source responses are unsupported.'));
+        let size=0;const chunks=[],limit=pdf?262144:32768;
+        res.on('data',chunk=>{if(settling)return;size+=chunk.length;if(size>limit)return finish(new Error('Source response exceeds the review limit.'));chunks.push(chunk);});
+        res.on('end',()=>{if(!settling)finish(null,pdf?{url:url.href,bytes:Buffer.concat(chunks)}:{url:url.href,content:Buffer.concat(chunks).toString('utf8')});});
       });
-      req.on('timeout', () => req.destroy(new Error('Source retrieval timed out.'))); req.on('error', reject); req.end();
+      req.once('close',()=>{closedResolve();if(!settling)finish(new Error('Source request closed before completion.'));});
+      req.on('error',error=>finish(error));
+      req.on('timeout',()=>finish(new Error('Source retrieval timed out.')));
+      signal.addEventListener('abort',onAbort,{once:true});
+      if(signal.aborted)onAbort();else req.end();
     });
   }
   return { async acquire(input, { signal } = {}) {
@@ -84,7 +96,7 @@ function createTaxSourceTransport({ documents, allowedOrigins, lookup = dns.look
         coverage: source.coverage || '', exclusions: source.exclusions || '' });
     }
     return results;
-    } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+    } finally { controller.abort(); clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   } };
 }
 module.exports = { publicAddress, createTaxSourceTransport };

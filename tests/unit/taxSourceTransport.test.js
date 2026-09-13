@@ -4,7 +4,7 @@ const {createTaxSourceTransport}=require('../../src/estimating/taxSourceTranspor
 const context={country:'US',region:'XX',locality:'',jurisdiction:'',serviceKey:'fixture',classification:''};
 function fixture(responses,options={}){
  const calls=[],lookups=[];let destroyed=0,aborted=0;
- const request=(url,config,callback)=>{const req=new EventEmitter();calls.push({url:url.href,config});req.destroy=error=>{destroyed++;req.emit('error',error);};req.end=()=>queueMicrotask(()=>{const item=responses.shift();if(item.hang){config.signal.addEventListener('abort',()=>{aborted++;req.destroy(new Error('Native request aborted'));},{once:true});return;}const res=new EventEmitter();res.statusCode=item.status||200;res.headers=item.headers||{'content-type':'text/plain'};res.resume=()=>{};callback(res);queueMicrotask(()=>{if(item.body)res.emit('data',Buffer.from(item.body));res.emit('end');});});return req;};
+ const request=(url,config,callback)=>{const req=new EventEmitter();calls.push({url:url.href,config});req.destroy=error=>{if(req.destroyed)return;req.destroyed=true;destroyed++;if(error)req.emit('error',error);queueMicrotask(()=>req.emit('close'));};req.end=()=>queueMicrotask(()=>{const item=responses.shift();if(item.hang){config.signal.addEventListener('abort',()=>{aborted++;req.destroy(new Error('Native request aborted'));},{once:true});return;}const res=new EventEmitter();res.statusCode=item.status||200;res.headers=item.headers||{'content-type':'text/plain'};res.resume=()=>{};res.destroy=()=>{res.destroyed=true;};callback(res);queueMicrotask(()=>{if(item.body)res.emit('data',Buffer.from(item.body));res.emit('end');});});return req;};
  const lookup=async host=>{lookups.push(host);return options.addresses?.[lookups.length-1]||[{address:'8.8.8.8',family:4}];};
  const transport=createTaxSourceTransport({documents:()=>options.documents||[{url:'https://official.example/source'}],allowedOrigins:new Set(['https://official.example','https://other.example']),lookup,request,timeoutMs:100});
  return {transport,calls,lookups,counts:()=>({destroyed,aborted})};
@@ -31,7 +31,7 @@ test('oversize stream destroys native request instead of retaining extra bytes',
  const f=fixture([{body:'x'.repeat(32769)}]);await expect(f.transport.acquire(context)).rejects.toThrow(/review limit/);expect(f.counts().destroyed).toBe(1);
 });
 test('single acquisition deadline aborts a native hung redirect request',async()=>{
- const f=fixture([{status:302,headers:{location:'/next'}},{hang:true}]);await expect(f.transport.acquire(context)).rejects.toThrow(/aborted/);expect(f.counts()).toEqual({destroyed:1,aborted:1});expect(f.calls[0].config.signal).toBe(f.calls[1].config.signal);
+ const f=fixture([{status:302,headers:{location:'/next'}},{hang:true}]);await expect(f.transport.acquire(context)).rejects.toThrow(/interrupted/);expect(f.counts()).toEqual({destroyed:2,aborted:1});expect(f.calls[0].config.signal).toBe(f.calls[1].config.signal);
 });
 
 test('one acquisition deadline spans two documents and aborts the second native request',async()=>{

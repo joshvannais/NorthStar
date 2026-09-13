@@ -15,7 +15,7 @@ function simplePdf(pages=1,text=''){
 }
 function transport(body=pdf,{reviewed=true,type='application/pdf',timeoutMs=8000}={}){
  let destroyed=0;
- const request=(url,options,callback)=>{const req=new EventEmitter();req.destroy=e=>{destroyed++;req.emit('error',e);};req.end=()=>queueMicrotask(()=>{const res=new EventEmitter();res.statusCode=200;res.headers={'content-type':type};res.resume=()=>{};callback(res);queueMicrotask(()=>{res.emit('data',body);res.emit('end');});});return req;};
+ const request=(url,options,callback)=>{const req=new EventEmitter();req.destroy=e=>{if(req.destroyed)return;req.destroyed=true;destroyed++;if(e)req.emit('error',e);queueMicrotask(()=>req.emit('close'));};req.end=()=>queueMicrotask(()=>{const res=new EventEmitter();res.statusCode=200;res.headers={'content-type':type};res.resume=()=>{};res.destroy=()=>{res.destroyed=true;};callback(res);queueMicrotask(()=>{res.emit('data',body);res.emit('end');});});return req;};
  return {counts:()=>destroyed,reader:createTaxSourceTransport({documents:()=>[{url:'https://portal.ct.gov/fixture.pdf',...(reviewed?{documentType:'pdf'}:{}),effectiveOn:'1999-04-07',endsOn:null}],allowedOrigins:new Set(['https://portal.ct.gov']),request,lookup:async()=>[{address:'8.8.8.8',family:4}],timeoutMs})};
 }
 test('actual recorded official PDF fits bounds and extracts dated regulation text',async()=>{const r=await extractPdf(pdf,{signal:AbortSignal.timeout(8000)});expect(pdf.length).toBe(19395);expect(r.pages).toBe(4);expect(r.text).toContain('tree removal');expect(r.text).toContain('April 7, 1999');expect(Buffer.byteLength(r.text)).toBeLessThanOrEqual(32768);expect(r.extractionVersion).toBe('pdfjs-dist@6.3.289/text-v1');});

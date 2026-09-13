@@ -465,3 +465,74 @@ BEGIN
  RETURN counts;
 END $$;
 REVOKE ALL ON FUNCTION public.connected_reasoning_retire(),public.canonical_tax_research_status(uuid,uuid,uuid) FROM PUBLIC;
+
+
+-- Call admission has no fabricated user. It shares037 monthly accounting/lock order.
+CREATE TABLE public.canonical_call_provider_requests(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid NOT NULL REFERENCES public.organizations(id),
+ voice_session_id uuid NOT NULL REFERENCES public.canonical_voice_sessions(id),request_hash text NOT NULL CHECK(request_hash ~ '^[a-f0-9]{64}$'),basis text NOT NULL CHECK(basis ~ '^[a-f0-9]{64}$'),
+ month_start date NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),lease_until timestamptz NOT NULL,
+ state text NOT NULL DEFAULT 'reserved' CHECK(state IN('reserved','completed','failed','unknown')),
+ reserved_cost_nano_usd bigint NOT NULL DEFAULT 20000000 CHECK(reserved_cost_nano_usd=20000000),actual_cost_nano_usd bigint CHECK(actual_cost_nano_usd BETWEEN 0 AND 20000000),
+ settled_at timestamptz,usage jsonb,UNIQUE(voice_session_id,request_hash),
+ CHECK((state='reserved' AND settled_at IS NULL AND actual_cost_nano_usd IS NULL) OR (state<>'reserved' AND settled_at IS NOT NULL AND actual_cost_nano_usd IS NOT NULL))
+);
+CREATE INDEX canonical_call_provider_current ON public.canonical_call_provider_requests(organization_id,created_at,state);
+CREATE FUNCTION public.canonical_call_provider_retire() RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE item public.canonical_call_provider_requests%ROWTYPE;count_value integer:=0;
+BEGIN
+ PERFORM pg_advisory_xact_lock(19000037::bigint);
+ FOR item IN SELECT * FROM public.canonical_call_provider_requests WHERE state='reserved' AND lease_until<=clock_timestamp() ORDER BY lease_until,id LIMIT 200 FOR UPDATE LOOP
+  -- Preserve conservative charge on unknown/expired results. Never refund a timeout.
+  UPDATE public.polaris_provider_monthly_usage SET reserved_cost_nano_usd=reserved_cost_nano_usd-item.reserved_cost_nano_usd,reconciled_cost_nano_usd=reconciled_cost_nano_usd+item.reserved_cost_nano_usd,failed_requests=failed_requests+1,updated_at=clock_timestamp() WHERE organization_id=item.organization_id AND month_start=item.month_start;
+  IF NOT FOUND AND item.month_start >= (date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')-interval '12 months')::date THEN RAISE EXCEPTION 'Call accounting unavailable' USING ERRCODE='55000';END IF;
+  UPDATE public.canonical_call_provider_requests SET state='unknown',actual_cost_nano_usd=reserved_cost_nano_usd,settled_at=clock_timestamp(),usage='{"outcome":"expired_unknown"}'::jsonb WHERE id=item.id;
+  count_value:=count_value+1;
+ END LOOP;
+ DELETE FROM public.canonical_call_provider_requests WHERE id IN(SELECT id FROM public.canonical_call_provider_requests WHERE state<>'reserved' AND settled_at<clock_timestamp()-interval '90 days' ORDER BY settled_at,id LIMIT 200);
+ RETURN count_value;
+END $$;
+CREATE FUNCTION public.canonical_call_provider_reserve(session_value uuid,request_value text,basis_value text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE org uuid;s public.canonical_voice_sessions%ROWTYPE;existing public.canonical_call_provider_requests%ROWTYPE;moment timestamptz;month_value date;monthly public.polaris_provider_monthly_usage%ROWTYPE;project_spend numeric;project_cap numeric;identifier uuid;
+BEGIN
+ IF request_value IS NULL OR request_value !~ '^[a-f0-9]{64}$' OR basis_value IS NULL OR basis_value !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'Call admission invalid' USING ERRCODE='22023';END IF;
+ SELECT organization_id INTO org FROM public.canonical_voice_sessions WHERE id=session_value;IF org IS NULL THEN RAISE EXCEPTION 'Call unavailable' USING ERRCODE='42501';END IF;
+ PERFORM pg_advisory_xact_lock(19000037::bigint);
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text,19000037));
+ PERFORM public.canonical_call_provider_retire();
+ SELECT * INTO s FROM public.canonical_voice_sessions WHERE id=session_value AND organization_id=org FOR UPDATE;moment:=clock_timestamp();
+ IF s.status<>'active' OR s.provider<>'retell' OR s.canonical_operation_id IS NOT NULL OR s.started_at+interval '2 hours'<=moment OR NOT EXISTS(SELECT 1 FROM public.canonical_integration_ownership i WHERE i.id=s.integration_ownership_id AND i.organization_id=org AND i.provider='retell' AND i.status='active') OR NOT EXISTS(SELECT 1 FROM public.canonical_business_profiles p WHERE p.id=s.business_profile_id AND p.organization_id=org AND p.is_active AND p.normalized_profile_hash=s.business_profile_hash) OR NOT EXISTS(SELECT 1 FROM public.subscriptions WHERE organization_id=org AND status='active' AND plan_type IN('Growth','Complete')) THEN RAISE EXCEPTION 'Call authority unavailable' USING ERRCODE='42501';END IF;
+ SELECT * INTO existing FROM public.canonical_call_provider_requests WHERE voice_session_id=session_value AND request_hash=request_value;
+ IF FOUND THEN IF existing.basis<>basis_value THEN RAISE EXCEPTION 'Call request changed' USING ERRCODE='40001';END IF;RETURN jsonb_build_object('id',existing.id,'admitted',false,'state',existing.state,'organizationId',org);END IF;
+ IF (SELECT count(*) FROM public.canonical_call_provider_requests WHERE voice_session_id=session_value)>=32 OR EXISTS(SELECT 1 FROM public.canonical_call_provider_requests WHERE voice_session_id=session_value AND state='reserved') OR (SELECT count(*) FROM public.canonical_call_provider_requests WHERE organization_id=org AND state='reserved')>=2 OR (SELECT count(*) FROM public.canonical_call_provider_requests WHERE organization_id=org AND created_at>=(moment AT TIME ZONE 'UTC')::date AT TIME ZONE 'UTC')>=10 OR (SELECT count(*) FROM public.canonical_call_provider_requests WHERE created_at>=(moment AT TIME ZONE 'UTC')::date AT TIME ZONE 'UTC')>=100 THEN RETURN jsonb_build_object('admitted',false,'state','limited');END IF;
+ month_value:=date_trunc('month',moment AT TIME ZONE 'UTC')::date;
+ SELECT * INTO monthly FROM public.polaris_provider_monthly_usage WHERE organization_id=org AND month_start=month_value FOR UPDATE;
+ IF NOT FOUND OR monthly.collected_subscription_revenue_cents<=0 OR monthly.reserved_cost_nano_usd+monthly.reconciled_cost_nano_usd+20000000>monthly.collected_subscription_revenue_cents::numeric*2000000 THEN RETURN jsonb_build_object('admitted',false,'state','limited');END IF;
+ SELECT COALESCE(sum(reserved_cost_nano_usd+reconciled_cost_nano_usd),0) INTO project_spend FROM public.polaris_provider_monthly_usage WHERE month_start=month_value;
+ SELECT greatest(100000000000::numeric,COALESCE(sum(m.collected_subscription_revenue_cents::numeric*2000000),0)*1.10) INTO project_cap FROM public.polaris_provider_monthly_usage m JOIN public.subscriptions subscription ON subscription.organization_id=m.organization_id WHERE m.month_start=month_value AND subscription.status='active' AND subscription.plan_type IN('Growth','Complete');
+ IF project_spend+20000000>project_cap THEN RETURN jsonb_build_object('admitted',false,'state','limited');END IF;
+ -- No provider transport runs under this transaction. Post-wait JS reload is additional authority.
+ IF s.started_at+interval '2 hours'<=clock_timestamp() THEN RAISE EXCEPTION 'Call expired' USING ERRCODE='42501';END IF;
+ INSERT INTO public.canonical_call_provider_requests(organization_id,voice_session_id,request_hash,basis,month_start,lease_until) VALUES(org,session_value,request_value,basis_value,month_value,clock_timestamp()+interval '25 seconds') RETURNING id INTO identifier;
+ UPDATE public.polaris_provider_monthly_usage SET reserved_cost_nano_usd=reserved_cost_nano_usd+20000000,updated_at=clock_timestamp() WHERE organization_id=org AND month_start=month_value;
+ RETURN jsonb_build_object('id',identifier,'admitted',true,'state','reserved','organizationId',org);
+END $$;
+CREATE FUNCTION public.canonical_call_provider_reconcile(reservation_value uuid,value jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE org uuid;item public.canonical_call_provider_requests%ROWTYPE;cost_value bigint:=20000000;input_value integer:=0;output_value integer:=0;state_value text:='unknown';safe boolean:=false;
+BEGIN
+ IF value IS NULL OR octet_length(value::text)>4096 THEN value:='{}'::jsonb;END IF;
+ SELECT organization_id INTO org FROM public.canonical_call_provider_requests WHERE id=reservation_value;IF org IS NULL THEN RAISE EXCEPTION 'Call reservation unavailable' USING ERRCODE='55000';END IF;
+ PERFORM pg_advisory_xact_lock(19000037::bigint);PERFORM pg_advisory_xact_lock(hashtextextended(org::text,19000037));
+ SELECT * INTO item FROM public.canonical_call_provider_requests WHERE id=reservation_value FOR UPDATE;
+ IF item.state<>'reserved' THEN IF item.state='unknown' OR item.usage IS NOT DISTINCT FROM value THEN RETURN jsonb_build_object('state',item.state,'alreadySettled',true);END IF;RAISE EXCEPTION 'Call reconciliation changed' USING ERRCODE='40001';END IF;
+ IF item.lease_until>clock_timestamp() AND public.canonical_field_evidence_object_keys_exact(value,ARRAY['costNanoUsd','inputTokens','outputTokens','outcome']) IS TRUE AND value->>'costNanoUsd' ~ '^(0|[1-9][0-9]{0,8})$' AND value->>'inputTokens' ~ '^(0|[1-9][0-9]{0,4})$' AND value->>'outputTokens' ~ '^(0|[1-9][0-9]{0,3})$' AND value->>'outcome' IN('completed','refused','incomplete','failed') THEN
+  safe:=(value->>'costNanoUsd')::bigint<=20000000 AND (value->>'inputTokens')::int<=16000 AND (value->>'outputTokens')::int<=8192;
+ END IF;
+ IF safe THEN cost_value:=(value->>'costNanoUsd')::bigint;input_value:=(value->>'inputTokens')::int;output_value:=(value->>'outputTokens')::int;state_value:=CASE WHEN value->>'outcome'='completed' THEN 'completed' ELSE 'failed' END;END IF;
+ UPDATE public.polaris_provider_monthly_usage SET reserved_cost_nano_usd=reserved_cost_nano_usd-item.reserved_cost_nano_usd,reconciled_cost_nano_usd=reconciled_cost_nano_usd+cost_value,input_tokens=input_tokens+input_value,output_tokens=output_tokens+output_value,completed_requests=completed_requests+CASE WHEN state_value='completed' THEN 1 ELSE 0 END,failed_requests=failed_requests+CASE WHEN state_value='completed' THEN 0 ELSE 1 END,updated_at=clock_timestamp() WHERE organization_id=org AND month_start=item.month_start;
+ IF NOT FOUND AND item.month_start >= (date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')-interval '12 months')::date THEN RAISE EXCEPTION 'Call accounting unavailable' USING ERRCODE='55000';END IF;
+ UPDATE public.canonical_call_provider_requests SET state=state_value,actual_cost_nano_usd=cost_value,settled_at=clock_timestamp(),usage=value WHERE id=item.id;
+ RETURN jsonb_build_object('state',state_value,'alreadySettled',false);
+END $$;
+REVOKE ALL ON TABLE public.canonical_call_provider_requests FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_call_provider_reserve(uuid,text,text),public.canonical_call_provider_reconcile(uuid,jsonb),public.canonical_call_provider_retire() FROM PUBLIC;

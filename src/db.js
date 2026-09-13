@@ -1357,6 +1357,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname <> 'canonical_pricing_plans'
            AND relation.relname <> 'canonical_pricing_policy_plans'
            AND relation.relname NOT LIKE 'demo_polaris_provider_%'
+           AND relation.relname NOT LIKE 'canonical_call_provider_%'
            AND relation.relname NOT LIKE 'canonical_tax_%'
            AND relation.relname NOT LIKE 'canonical_commercial_%'
            AND relation.relname <> 'canonical_travel_fences'

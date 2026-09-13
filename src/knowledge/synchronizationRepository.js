@@ -1050,7 +1050,26 @@ class KnowledgeSynchronizationRepository {
         }, client);
         if (!verified) return { ownershipLost: true };
 
-        const finalization = await operation(verified);
+        // Keep the existing ten-second cap, now as a remaining whole-delivery
+        // budget as well. PostgreSQL cancels an overdue statement; a Promise race
+        // alone must not leave a borrowed-client query running during finalize.
+        const deadline = Date.now() + 10000;
+        const originalQuery = client.query;
+        const nativeQuery = originalQuery.bind(client);
+        let querying = false;
+        client.query = async (...args) => {
+          const remaining = deadline - Date.now();
+          if (querying || remaining <= 0) fail('knowledge_sync_transport_timeout', 'Knowledge delivery deadline exceeded', 503);
+          querying = true;
+          try {
+            await nativeQuery("SELECT set_config('statement_timeout',$1,true)", [Math.min(10000, remaining) + 'ms']);
+            const value = await nativeQuery(...args);
+            if (Date.now() >= deadline) fail('knowledge_sync_transport_timeout', 'Knowledge delivery deadline exceeded', 503);
+            return value;
+          } finally { querying = false; }
+        };
+        try {
+        const finalization = await operation(verified, client);
         if (!finalization || typeof finalization !== 'object' || Array.isArray(finalization)) {
           fail(
             'knowledge_sync_malformed_response',
@@ -1058,7 +1077,7 @@ class KnowledgeSynchronizationRepository {
             503
           );
         }
-        return this.finalizeJob({
+        return await this.finalizeJob({
           organizationId,
           id,
           claimToken,
@@ -1066,6 +1085,7 @@ class KnowledgeSynchronizationRepository {
           observedProjectionDigest: finalization.observedProjectionDigest,
           diagnosticCategory: finalization.diagnosticCategory,
         }, client);
+        } finally { client.query = originalQuery; }
       }, 'READ COMMITTED');
     } catch (error) {
       throw mapDatabaseError(error);

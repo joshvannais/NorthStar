@@ -10,12 +10,12 @@ for(const k of ['OPENAI_API_KEY','RETELL_API_KEY','STRIPE_SECRET_KEY'])delete pr
  else{
  db=require(path.join(source,'src/db'));assert.equal(await db.initDatabase(),true);
  const express=require('express'),actual=require(path.join(source,'src/server')).app;
- const runtime=require(path.join(source,'src/polaris/openaiRuntime')).createOpenAIRuntime({enabled:true,configured:true,client:{responses:{create:async()=>({id:'fixture-response',status:'completed',output_text:JSON.stringify({questions:[{text:'What access should the owner confirm before work starts?',evidenceIds:['recorded_scope']}],explanations:[],proposalIds:[],requestedCard:'capella'}),usage:{input_tokens:100,output_tokens:50,total_tokens:150,input_tokens_details:{cached_tokens:0,cache_write_tokens:0}}})}}});
+ const runtime=require(path.join(source,'src/polaris/openaiRuntime')).createOpenAIRuntime({enabled:true,configured:true,client:{responses:{create:async body=>{const envelope=JSON.parse(body.input),caller=envelope.purpose==='caller_guidance';return{id:'fixture-response',status:'completed',output_text:JSON.stringify({questions:[{text:'What access should the owner confirm before work starts?',evidenceIds:[caller?envelope.groundedContext.evidence.find(e=>e.id.startsWith('call_')).id:'recorded_scope']}],explanations:[],proposalIds:[],requestedCard:caller?'none':'capella'}),usage:{input_tokens:100,output_tokens:50,total_tokens:150,input_tokens_details:{cached_tokens:0,cache_write_tokens:0}}};}}}});
  // Router is mounted at its normal canonical prefix; the path filter prevents bypassing financial raw-body middleware.
  app=express();const canonical=require(path.join(source,'src/routes/canonicalPolaris')).createCanonicalRouter({assistantRuntime:runtime});
  app.use((req,res,next)=>{if(req.path.startsWith('/api/v1/canonical/polaris/assistant/'))express.json()(req,res,()=>{const old=req.url;req.url=req.url.slice('/api/v1/canonical'.length);canonical(req,res,()=>{req.url=old;next();});});else next();});
  app.locals.demoGroundedRuntime=runtime;actual.locals.demoGroundedRuntime=runtime;
- app.locals.connectedCallGenerate=async({context})=>({questions:[{text:'What access should the owner confirm?',evidenceIds:[context.evidence.find(e=>e.id.startsWith('call_')).id]}],explanations:[],proposalIds:[],requestedCard:'none'});
+ app.locals.connectedCallGenerate=require(path.join(source,'src/polaris/callGenerationBinding')).createProductionCallGenerate({POLARIS_CALL_GUIDANCE_ENABLED:'true',POLARIS_GROUNDED_V2_ENABLED:'true'},{getPool:()=>db.getPool(),runtime});
  app.use(require(path.join(source,'src/routes/connectedCall')).createConnectedCallRouter({getPool:()=>db.getPool(),verifyRaw:(_raw,sig)=>sig==='local-recovery-fixture'}));app.use(actual);
  }
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));process.send({ready:true,origin:'http://127.0.0.1:'+server.address().port,...metadata});

@@ -263,7 +263,8 @@ function createOpenAIRuntime(options = {}) {
     if (!enabled || !configured) {
       throw contractError('POLARIS_CREDENTIAL_DISABLED', 'Polaris conversation is not configured for this account.', 503);
     }
-    if (inputEnvelope && inputEnvelope.purpose === 'grounded_conversation') {
+    if (inputEnvelope && ['grounded_conversation','caller_guidance'].includes(inputEnvelope.purpose)) {
+      if (options.groundedEnabled === false) throw contractError('POLARIS_V2_DISABLED', 'Conversation is not connected. Your saved records remain available.', 503);
       const grounded = require('./groundedConversation');
       if (!inputEnvelope.authority || !inputEnvelope.untrustedInput || !inputEnvelope.untrustedInput.selected ||
           !inputEnvelope.groundedContext || !Array.isArray(inputEnvelope.groundedContext.evidence)) {
@@ -304,10 +305,11 @@ function createOpenAIRuntime(options = {}) {
   async function respond(inputEnvelope, respondOptions = {}) {
     const input = preflight(inputEnvelope);
     const equipment = inputEnvelope.purpose === 'equipment_identifiers';
-    const grounded = inputEnvelope.purpose === 'grounded_conversation' ? require('./groundedConversation') : null;
+    const caller = inputEnvelope.purpose === 'caller_guidance';
+    const grounded = ['grounded_conversation','caller_guidance'].includes(inputEnvelope.purpose) ? require('./groundedConversation') : null;
     const body = Object.freeze({
       model: MODEL,
-      instructions: grounded ? grounded.INSTRUCTIONS : equipment ? EQUIPMENT_INSTRUCTIONS : INSTRUCTIONS,
+      instructions: grounded ? grounded.INSTRUCTIONS + (caller ? ' Speak to the caller naturally using only caller-safe published facts. Ask simple relevant clarifying questions, defer technical unknowns to the owner, never claim an approved price, booking, verified availability or safety. No internal costing or governance narration.' : '') : equipment ? EQUIPMENT_INSTRUCTIONS : INSTRUCTIONS,
       input,
       reasoning: Object.freeze({ effort: 'low' }),
       text: Object.freeze({
@@ -336,7 +338,7 @@ function createOpenAIRuntime(options = {}) {
           response = await getClient().responses.create(body, { signal: boundary.signal });
           break;
         } catch (error) {
-          if (boundary.signal.aborted || attemptCount >= 2 || !retryable(error)) throw error;
+          if (boundary.signal.aborted || attemptCount >= (caller ? 1 : 2) || !retryable(error)) throw error;
           const retryAfter = retryAfterBoundary(error);
           const delay = retryAfter === null
             ? 250 + Math.round(Math.max(0, Math.min(1, random())) * 250)
@@ -485,6 +487,7 @@ function createProductionOpenAIRuntime(environment = process.env, options = {}) 
   return createOpenAIRuntime({
     configured,
     enabled,
+    groundedEnabled: environment.POLARIS_GROUNDED_V2_ENABLED === 'true',
     clientFactory,
     logger: options.logger,
   });

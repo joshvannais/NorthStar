@@ -15,8 +15,8 @@ function createConnectedCallRepository(getPool){
   if(!session||session.integration_ownership_id!==ownership.id||session.provider!=='retell'||session.provider_session_id!==identity.callId||session.status!=='active'||session.canonical_operation_id)denied();
   const now=(await client.query('SELECT clock_timestamp() now')).rows[0].now;
   const expiresAt=new Date(session.started_at).getTime()+2*60*60*1000;if(expiresAt<=new Date(now).getTime())denied();
-  const subscription=(await client.query('SELECT status subscription_status,trial_started_at,trial_ends_at,clock_timestamp() server_now FROM subscriptions WHERE organization_id=$1',[ownership.organizationId])).rows[0];
-  if(!canPerformExternal(projectSubscription(subscription)))denied();
+  const subscription=(await client.query('SELECT plan_type,status subscription_status,trial_started_at,trial_ends_at,clock_timestamp() server_now FROM subscriptions WHERE organization_id=$1',[ownership.organizationId])).rows[0];
+  if(!canPerformExternal(projectSubscription(subscription))||!['Growth','Complete'].includes(subscription?.plan_type))denied();
   const profile=await getActiveBusinessProfile(client,ownership.organizationId);
   if(profile.id!==session.business_profile_id||profile.profileHash!==session.business_profile_hash)denied(409);
   let projection;await client.query('SAVEPOINT caller_knowledge');
@@ -28,7 +28,7 @@ function createConnectedCallRepository(getPool){
   // Exact same-call transcript facts remain untrusted data, never authorization.
   for(const turn of turns){const text=turn.payload&&turn.payload.text;if(typeof text==='string'&&text.length<=1500)evidence.push({id:'call_'+turn.id,label:'This Caller’s Recorded Words',value:text,source:{voiceSessionId:session.id,eventId:turn.id}});}
   if(expiresAt<=new Date((await client.query('SELECT clock_timestamp() now')).rows[0].now).getTime())denied();
-  return {organizationId:ownership.organizationId,voiceSessionId:session.id,callId:identity.callId,agentId:identity.agentId,audience:'caller',state:'active',expiresAt,ownershipId:ownership.id,profile:{id:profile.id,hash:profile.profileHash},subscription:{state:subscription.subscription_status,trialEnd:subscription.trial_ends_at},evidence};
+  return {organizationId:ownership.organizationId,voiceSessionId:session.id,callId:identity.callId,agentId:identity.agentId,audience:'caller',state:'active',expiresAt,ownershipId:ownership.id,profile:{id:profile.id,hash:profile.profileHash},subscription:{plan:subscription.plan_type,state:subscription.subscription_status,trialEnd:subscription.trial_ends_at},evidence};
  }
  async function loadCurrent(identity){return transaction(false,client=>current(client,identity));}
  async function readRecorded({identity,key,basis}){return transaction(false,async client=>{const context=await current(client,identity);if(digest(context)!==basis)denied(409);const row=(await client.query("SELECT payload FROM canonical_voice_session_events WHERE organization_id=$1 AND voice_session_id=$2 AND external_event_id=$3 AND event_type='grounded_tool'",[context.organizationId,context.voiceSessionId,'grounded:'+key])).rows[0];if(!row){const count=(await client.query("SELECT count(*)::int n FROM canonical_voice_session_events WHERE organization_id=$1 AND voice_session_id=$2 AND event_type='grounded_tool'",[context.organizationId,context.voiceSessionId])).rows[0].n;if(count>=32)denied(429);}return row?.payload?.response||null;});}

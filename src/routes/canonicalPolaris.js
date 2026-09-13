@@ -1022,6 +1022,7 @@ function createCanonicalRouter(options) {
         throw contractError('POLARIS_ACCESS_CHANGED', 'Your access changed. Sign in again before continuing.', 401);
       }
       requireProviderEntitlement({ plan: row.plan_type, role: row.role });
+      const subscription = require('../polaris/groundedEligibility').requireCurrentSubscription(row);
       if (!hasPermission(row.role, 'ai', 'read') || !hasPermission(row.role, request.selected.kind === 'work' ? 'calendar' : 'leads', 'read')) {
         throw contractError('POLARIS_SELECTED_RECORD_FORBIDDEN', 'This record is unavailable with your current access.', 403);
       }
@@ -1029,7 +1030,7 @@ function createCanonicalRouter(options) {
       if (!item || !selectedMatchesItem(item, request.selected)) throw contractError('POLARIS_SELECTED_RECORD_NOT_FOUND', 'The selected record is unavailable. Refresh and select another record.', 404);
       const authority = { organizationId: row.organization_id, userId: row.user_id, role: row.role,
         sessionId: row.session_id, membershipId: row.membership_id, expiresAt: row.access_expires_at,
-        plan: row.plan_type };
+        plan: row.plan_type, subscription };
       const card = buildCustomerIntelligenceCard(item, request.selected);
       let review = null;
       if (['owner', 'admin'].includes(row.role)) {
@@ -1047,6 +1048,7 @@ function createCanonicalRouter(options) {
       });
       const now = (await client.query('SELECT clock_timestamp() now')).rows[0].now;
       if (new Date(row.access_expires_at) <= new Date(now)) throw contractError('POLARIS_ACCESS_CHANGED', 'Your session expired. Sign in again before continuing.', 401);
+      require('../polaris/groundedEligibility').requireCurrentSubscription(row, now);
       const groundedContext = build.build({ message:request.message, authority, card, review, knowledge });
       groundedContext.reviewTarget = review ? { customerId: item.ids.customer, estimateId: item.ids.estimate, selectedRevision: review.selectedRevision, sourcePins: review.pins, handoffBasis: build.handoffBasis(review) } : null;
       return build.stableBasis({ authority, card, review, knowledge, groundedContext });

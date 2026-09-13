@@ -222,10 +222,11 @@ const productionSupportCaseOutboxWorker = new SupportCaseOutboxWorker({
 });
 const productionDemoHousekeepingWorker = new DemoCommandCenterHousekeepingWorker();
 // No reviewed live acquisition adapter is enabled by this local integration.
-const productionTaxResearchWorker = new (require('./estimating/taxResearchWorker').TaxResearchWorker)({getPool:()=>db.getPool()});
+const productionTaxResearchWorker = new (require('./estimating/taxResearchWorker').TaxResearchWorker)({getPool:()=>db.getPool(), acquire:require('./estimating/taxSourceBinding').createProductionTaxAcquisition(process.env)});
 const productionTaxPreparationWorker = new (require('./estimating/taxPreparationWorker').TaxPreparationWorker)({getPool:()=>db.getPool(),onPrepared:org=>productionTaxResearchWorker.enqueue(org)});
 const productionHomepageDemoAdmissionHousekeepingWorker = new HomepageDemoAdmissionHousekeepingWorker();
 const productionPolarisRuntime = createProductionOpenAIRuntime(process.env);
+app.locals.connectedCallGenerate=require('./polaris/callGenerationBinding').createProductionCallGenerate(process.env,{getPool:()=>db.getPool(),runtime:productionPolarisRuntime});
 // A separate, reviewed activation is required for publicly funded generation.
 // Local tests inject a transport on their own Express application only.
 app.locals.demoGroundedRuntime = process.env.POLARIS_DEMO_GENERATION_ENABLED === 'true' ? productionPolarisRuntime : null;
@@ -316,6 +317,7 @@ async function start(options) {
   productionDemoHousekeepingWorker.start();
   productionTaxPreparationWorker.start();
   productionTaxResearchWorker.start();
+  app.locals.connectedKnowledgeTransports=require('./knowledge/providerBindings').createProductionKnowledgeTransports(process.env,{getPool:()=>db.getPool()});
   // Explicitly installed transports only; no agent or provider is activated here.
   if(app.locals.connectedKnowledgeTransports instanceof Map&&app.locals.connectedKnowledgeTransports.size){
     app.locals.connectedKnowledgeWorker=new (require('./knowledge/synchronizationWorker').KnowledgeSynchronizationWorker)({pool:db.getPool(),transports:app.locals.connectedKnowledgeTransports,batchSize:3});
@@ -364,6 +366,7 @@ async function start(options) {
     productionDemoHousekeepingWorker.stop();
     productionTaxPreparationWorker.stop();
     productionTaxResearchWorker.stop();
+    app.locals.connectedCallGenerate?.stop();
     app.locals.connectedKnowledgeWorker?.stop();
     productionHomepageDemoAdmissionHousekeepingWorker.stop();
     voiceWebhook.shutdown();

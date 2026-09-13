@@ -21,7 +21,7 @@ function build({message, card, review = null, knowledge = null, authority }) {
   const facts = [], proposals = [], allowedCards = [];
   if (review) {
     const b = review.capellaScenarios;
-    facts.push({ label: 'Selected Estimate', value: review.selectedRevision, unit: 'revision' });
+    facts.push({ label: 'Selected Estimate', value: review.isCurrent ? 'Current Estimate' : 'Earlier Estimate From Saved History', unit: null });
     if (b) {
       facts.push({ label: 'Known Direct Costs', value: b.directCosts, unit: b.currency });
       facts.push({ label: 'Additional Overhead', value: b.overhead?.incremental ?? null, unit: b.currency });

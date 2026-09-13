@@ -34,7 +34,9 @@ function createHandler({ boundary, getToken, repository, loadContext, getPool, s
         }
         const reconcile = usage => getPool().query('SELECT public.demo_polaris_provider_reconcile($1,$2,$3)', [row.id, token.tokenHash, usage]);
         try {
-          const result = await runtime.respond(envelope, { signal });
+          const result = await runtime.respond(envelope, { signal, revalidate: async () => {
+            if (!require('./connectedPolicy').generationEnabled || c.digest(await current()) !== basis) fail('POLARIS_CONTEXT_CHANGED', 'The demo record changed. Refresh before asking again.', 409);
+          } });
           await reconcile(result.usage);
           if (c.digest(await current()) !== basis) fail('POLARIS_CONTEXT_CHANGED', 'The demo record changed. Refresh before asking again.', 409);
           return { ...result.response, simulated: true, contextLabel: 'AI Guidance Using Simulated Job Records' };

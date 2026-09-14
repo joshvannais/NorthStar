@@ -2,7 +2,7 @@
 const https = require('node:https'), dns = require('node:dns').promises, net = require('node:net');
 const { publicContext, approvedUrl } = require('./taxSourceAcquisition');
 const {createHash}=require('node:crypto');
-const {extractPdf}=require('./taxPdfExtraction');
+const {matchReviewedPdf}=require('./taxReviewedPdf');
 function unavailable(message) { throw Object.assign(new Error(message), { code: 'TAX_SOURCE_UNAVAILABLE' }); }
 function abortable(promise, signal) {
   return new Promise((resolve, reject) => {
@@ -84,7 +84,7 @@ function createTaxSourceTransport({ documents, allowedOrigins, lookup = dns.look
       const pdf=source.documentType==='pdf';
       const fetched = await fetchDocument(source.url, controller.signal,0,pdf);
       if(pdf){
-        const parsed=await extractPdf(fetched.bytes,{signal:controller.signal});
+        const parsed=matchReviewedPdf(fetched.bytes,source.reviewedExtraction,{signal:controller.signal});
         fetched.content=parsed.text;
         fetched.document={version:'tax-document-provenance-v1',contentType:'application/pdf',finalUrl:fetched.url,
           rawBytes:fetched.bytes.length,rawDocumentDigest:createHash('sha256').update(fetched.bytes).digest('hex'),

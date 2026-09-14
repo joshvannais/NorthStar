@@ -46,7 +46,7 @@ function createTaxSourceAcquisition({ transport, allowedOrigins, clock = () => n
       let document;
       if(Object.hasOwn(source,'document')){
         const d=source.document;
-        if(!d||Object.keys(d).sort().join('|')!==['version','contentType','finalUrl','rawBytes','rawDocumentDigest','extractedTextDigest','pages','extractionVersion'].sort().join('|')||d.version!=='tax-document-provenance-v1'||d.contentType!=='application/pdf'||d.finalUrl!==source.url||!Number.isInteger(d.rawBytes)||d.rawBytes<5||d.rawBytes>262144||!Number.isInteger(d.pages)||d.pages<1||d.pages>8||!/^[a-f0-9]{64}$/.test(d.rawDocumentDigest)||d.extractedTextDigest!==hash(source.content)||d.extractionVersion!=='pdfjs-dist@6.3.289/text-v1')invalid('Document source evidence needs review.');
+        if(!d||Object.keys(d).sort().join('|')!==['version','contentType','finalUrl','rawBytes','rawDocumentDigest','extractedTextDigest','pages','extractionVersion'].sort().join('|')||d.version!=='tax-document-provenance-v1'||d.contentType!=='application/pdf'||d.finalUrl!==source.url||!Number.isInteger(d.rawBytes)||d.rawBytes<5||d.rawBytes>262144||!Number.isInteger(d.pages)||d.pages<1||d.pages>8||!/^[a-f0-9]{64}$/.test(d.rawDocumentDigest)||d.extractedTextDigest!==hash(source.content)||d.extractionVersion!=='reviewed-pinned-text-v1')invalid('Document source evidence needs review.');
         document={...d};
       }
       return { version: VERSION, state: 'candidate', context,

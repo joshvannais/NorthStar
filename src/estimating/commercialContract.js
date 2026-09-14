@@ -7,7 +7,7 @@ function changed(message='The commercial review changed. Refresh and review the 
 const pin=r=>r?{id:r.id,revision:r.revision,digest:r.digest}:null;
 const same=(a,b)=>sha256(a??null)===sha256(b??null);
 function normalize(b){
- if(!p.exact(b,FIELDS)||!['save','withdraw'].includes(b.action)||![b.expectedRevision,b.expectedDecisionRevision].every(n=>Number.isSafeInteger(n)&&n>=0&&n<=10000)||!p.text(b.expectedDigest,64)||!p.text(b.expectedDecisionDigest,64)||!b.sourcePins||typeof b.sourcePins!=='object'||Array.isArray(b.sourcePins)||!['USD','CAD','EUR'].includes(b.currency)||!p.text(b.reason,2000)||b.confirmed!==true||b.confirmationVersion!==VERSION||typeof b.evidenceDigest!=='string'||!/^[a-f0-9]{64}$/.test(b.evidenceDigest)||b.action==='withdraw'&&b.inputs!==null)math.fail('Review the commercial entries and confirmation.');
+ if(!p.exact(b,FIELDS)||!['save','withdraw'].includes(b.action)||![b.expectedRevision,b.expectedDecisionRevision].every(n=>Number.isSafeInteger(n)&&n>=0&&n<=10000)||!p.text(b.expectedDigest,64)||!p.text(b.expectedDecisionDigest,64)||!b.sourcePins||typeof b.sourcePins!=='object'||Array.isArray(b.sourcePins)||!['USD','CAD','EUR'].includes(b.currency)||!p.text(b.reason,2000)||b.confirmed!==true||![math.LEGACY_VERSION,VERSION].includes(b.confirmationVersion)||typeof b.evidenceDigest!=='string'||!/^[a-f0-9]{64}$/.test(b.evidenceDigest)||b.action==='withdraw'&&b.inputs!==null)math.fail('Review the commercial entries and confirmation.');
  return stableValue({...b,reason:b.reason.trim()});
 }
 // The explicit non-decision basis permits only the wrapper's own resulting decision.
@@ -16,14 +16,14 @@ function authorityPin(s){return stableValue({sourcePins:s.sourcePins,pricingPin:
 function preview(inputs,currency,sources,now){
  if(sources.asOfDate!==new Date(now).toISOString().slice(0,10))changed('The review date changed. Refresh and calculate the terms again.');
  if(!sources.pricingPin||!sources.pricing?.result||sources.pricingCurrent!==true||currency!==sources.currency)changed('Save a current pricing plan before reviewing commercial terms.');
- const result=math.calculate(inputs,currency,{pricing:sources.pricing.result,serviceKey:sources.serviceKey,...(sources.simulated?{taxServiceKey:sources.taxServiceKey}:{}),simulated:sources.simulated,validatedRules:sources.validatedRules});
+ const result=math.calculate(inputs,currency,{pricing:sources.pricing.result,serviceKey:sources.serviceKey,...(sources.simulated?{taxServiceKey:sources.taxServiceKey}:{}),simulated:sources.simulated,asOfDate:sources.asOfDate,validatedRules:sources.validatedRules});
  return stableValue({result,evidenceDigest:sources.digest,authorityPin:authorityPin(sources)});
 }
 function checkBasis(b,review,current){require('./pricingPlanContract').checkBasis(b,review,current);}
 function demoPlan(history,review,raw,key,now,sources){
  const b=normalize(raw),requestDigest=sha256(b),old=history.find(e=>e.requestKey===key);
  if(old){if(old.requestDigest!==requestDigest)changed('This save attempt was already used for different entries.');return {receipt:old,replayed:true};}
- checkBasis(b,review,history[0]);let value=null;
+ if(b.confirmationVersion!==VERSION)math.fail('Refresh to review these terms using the current form.');if(b.action==='save'&&b.inputs?.version!==VERSION)math.fail('Review the current commercial form.');checkBasis(b,review,history[0]);let value=null;
  if(b.action==='save'){if(b.evidenceDigest!==sources.digest)changed();value=preview(b.inputs,b.currency,sources,now);}
  else if(history[0]?.action!=='save')math.fail('There are no saved commercial terms to withdraw.');
  if(history.length>=20)throw Object.assign(new Error('This demo has reached its commercial history limit. Saved history remains available. Resetting clears its practice work.'),{status:429,code:'COMMERCIAL_HISTORY_LIMIT'});
@@ -49,11 +49,12 @@ function comparison(terms,sources){
 }
 const APPROVAL_FIELDS=['termsPin','evidenceDigest','expectedDecisionRevision','expectedDecisionDigest','scopeSummary','reason','confirmed','confirmationVersion','exceptions'];
 function normalizeApproval(b){
- if(!p.exact(b,APPROVAL_FIELDS)||!p.exact(b.termsPin,['id','revision','digest'])||!p.text(b.termsPin.id,80)||!Number.isSafeInteger(b.termsPin.revision)||b.termsPin.revision<1||typeof b.termsPin.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.termsPin.digest)||typeof b.evidenceDigest!=='string'||!/^[a-f0-9]{64}$/.test(b.evidenceDigest)||!Number.isSafeInteger(b.expectedDecisionRevision)||b.expectedDecisionRevision<0||!p.text(b.expectedDecisionDigest,64)||!p.text(b.scopeSummary,4000)||!p.text(b.reason,2000)||b.confirmed!==true||b.confirmationVersion!==VERSION||!p.exact(b.exceptions,['policyReason','policyUnknownAcknowledged','ownerRecordedTaxAcknowledged'])||!p.text(b.exceptions.policyReason,2000,true)||typeof b.exceptions.policyUnknownAcknowledged!=='boolean'||typeof b.exceptions.ownerRecordedTaxAcknowledged!=='boolean')math.fail('Review the full commercial approval and its acknowledgments.');
+ if(!p.exact(b,APPROVAL_FIELDS)||!p.exact(b.termsPin,['id','revision','digest'])||!p.text(b.termsPin.id,80)||!Number.isSafeInteger(b.termsPin.revision)||b.termsPin.revision<1||typeof b.termsPin.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.termsPin.digest)||typeof b.evidenceDigest!=='string'||!/^[a-f0-9]{64}$/.test(b.evidenceDigest)||!Number.isSafeInteger(b.expectedDecisionRevision)||b.expectedDecisionRevision<0||!p.text(b.expectedDecisionDigest,64)||!p.text(b.scopeSummary,4000)||!p.text(b.reason,2000)||b.confirmed!==true||![math.LEGACY_VERSION,VERSION].includes(b.confirmationVersion)||!p.exact(b.exceptions,['policyReason','policyUnknownAcknowledged','ownerRecordedTaxAcknowledged'])||!p.text(b.exceptions.policyReason,2000,true)||typeof b.exceptions.policyUnknownAcknowledged!=='boolean'||typeof b.exceptions.ownerRecordedTaxAcknowledged!=='boolean')math.fail('Review the full commercial approval and its acknowledgments.');
  return stableValue({...b,scopeSummary:b.scopeSummary.trim(),reason:b.reason.trim(),exceptions:{...b.exceptions,policyReason:b.exceptions.policyReason.trim()}});
 }
 function approvalDecision(raw,terms,sources,now){
  const b=normalizeApproval(raw);
+ if(b.confirmationVersion!==VERSION||terms?.confirmationVersion!==b.confirmationVersion)changed('Save and review current commercial terms before approving.');
  if(!same(b.termsPin,pin(terms))||b.evidenceDigest!==sources.digest||!same({revision:b.expectedDecisionRevision,digest:b.expectedDecisionDigest},sources.decisionBasis)||!currentState(terms,sources,null).current)changed();
  const result=preview(terms.inputs,terms.currency,sources,now).result;
  if(!same(result,terms.result))changed();

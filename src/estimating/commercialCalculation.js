@@ -1,7 +1,7 @@
 'use strict';
 const pricing=require('./pricingCalculation');
 const {stableValue}=require('../services/businessProfileAdapter');
-const VERSION='estimate-commercial-terms-v1';
+const LEGACY_VERSION='estimate-commercial-terms-v1',v2=require('./taxApplicability'),VERSION=v2.COMMERCIAL;
 function fail(message='Review the commercial amounts and tax treatment.'){throw Object.assign(new Error(message),{status:400,code:'COMMERCIAL_INPUT_INVALID'});}
 const exact=pricing.exact,text=pricing.text,day=pricing.day;
 function money(v){try{return pricing.money(v);}catch(_){fail('Enter an amount with two decimal places.');}}
@@ -18,7 +18,7 @@ function taxSource(g,context,transactionDate,unknown){const s=g.source;if(!exact
  if(g.treatment==='unknown'||!s.acknowledged||!s.note.trim()||!s.reference.trim()||!s.jurisdiction.trim()||!s.location.trim()||!s.collectionBasis.trim()||s.serviceKey!==(s.kind==='validated'&&context.simulated===true&&Object.prototype.hasOwnProperty.call(context,'taxServiceKey')?context.taxServiceKey:context.serviceKey)||!s.effectiveOn||!transactionDate||transactionDate<s.effectiveOn||s.endsOn&&transactionDate>s.endsOn){unknown.push(g.groupId);return;}
  if(s.kind==='validated'){const rule=(context.validatedRules||[]).find(r=>r.id===s.ruleId&&r.digest===s.ruleDigest);if(!rule||rule.simulated!==context.simulated||rule.jurisdiction!==s.jurisdiction||rule.serviceKey!==s.serviceKey||rule.treatment!==g.treatment||rule.ratePercent!==g.ratePercent||rule.behavior!==g.behavior||transactionDate<rule.effectiveOn||rule.endsOn&&transactionDate>rule.endsOn)fail('Validated tax coverage changed. Refresh and review the available source.');}
 }
-function calculate(v,currency,context){
+function calculateLegacy(v,currency,context){
  if(!['USD','CAD','EUR'].includes(currency)||!exact(v,['transactionDate','adjustments','fees','taxGroups','payments'])||v.transactionDate!==null&&!day(v.transactionDate)||!Array.isArray(v.adjustments)||v.adjustments.length>12||!Array.isArray(v.fees)||!Array.isArray(v.taxGroups)||v.taxGroups.length>12)fail();
  const input=context.pricing?.lines;if(!Array.isArray(input)||!input.length)fail('Save current pricing lines before reviewing commercial terms.');
  const rows=input.filter(l=>!l.includedIn).map(l=>({lineId:l.lineId,label:l.label,kind:'charge',original:money(l.amount),value:money(l.amount)}));if(rows.length+v.fees.length>12)fail('Use at most twelve charge and fee lines.');const ids=new Set(rows.map(r=>r.lineId));if(ids.size!==rows.length)fail();
@@ -33,7 +33,32 @@ function calculate(v,currency,context){
  for(const row of rows)if(!allGroups.has(row.lineId))unknown.push(row.lineId);
  for(const g of v.taxGroups){taxSource(g,context,v.transactionDate,unknown);const eligible=g.lineIds.map(id=>rows.find(r=>r.lineId===id)),base=eligible.some(r=>r.value===null)?null:eligible.reduce((n,r)=>n+r.value,0n);if(base===null||unknown.includes(g.groupId)){groups.push({groupId:g.groupId,label:g.label,behavior:g.behavior,treatment:g.treatment,base:amount(base),net:null,tax:null,total:null,allocations:[]});continue;}const r=rate(g.ratePercent),netValue=g.behavior==='inclusive'?half(base*1000000n,1000000n+r):base,taxValue=g.behavior==='inclusive'?base-netValue:half(base*r,1000000n),payable=netValue+taxValue;amount(payable);const parts=allocate(taxValue,eligible);groups.push({groupId:g.groupId,label:g.label,behavior:g.behavior,treatment:g.treatment,base:amount(base),net:amount(netValue),tax:amount(taxValue),total:amount(payable),allocations:parts.map(p=>({lineId:p.lineId,tax:amount(p.amount)}))});net+=netValue;tax+=taxValue;total+=payable;}
  const complete=!incomplete&&!unknown.length&&groups.length>0;amount(net);amount(tax);amount(total);const payments=payment(v.payments,complete?total:null);
- return stableValue({calculationVersion:VERSION,currency,lines:rows.map(r=>({lineId:r.lineId,label:r.label,kind:r.kind,originalAmount:amount(r.original),adjustedAmount:amount(r.value)})),adjustments,taxGroups:groups,netBeforeTax:complete?amount(net):null,tax:complete?amount(tax):null,total:complete?amount(total):null,complete,unresolvedTax:[...new Set(unknown)],payments,taxAuthority:!complete?'unknown':v.taxGroups.every(g=>g.source.kind==='validated')?'validated':v.taxGroups.some(g=>g.source.kind==='owner_recorded')?'owner_recorded':'unknown'});
+ return stableValue({calculationVersion:LEGACY_VERSION,currency,lines:rows.map(r=>({lineId:r.lineId,label:r.label,kind:r.kind,originalAmount:amount(r.original),adjustedAmount:amount(r.value)})),adjustments,taxGroups:groups,netBeforeTax:complete?amount(net):null,tax:complete?amount(tax):null,total:complete?amount(total):null,complete,unresolvedTax:[...new Set(unknown)],payments,taxAuthority:!complete?'unknown':v.taxGroups.every(g=>g.source.kind==='validated')?'validated':v.taxGroups.some(g=>g.source.kind==='owner_recorded')?'owner_recorded':'unknown'});
 }
 function payment(p,total){if(!exact(p,['mode','balanceId','stages'])||!['none','amount','share'].includes(p.mode)||!Array.isArray(p.stages)||p.stages.length>12)fail('Review the payment schedule.');if(p.mode==='none'){if(p.balanceId!==null||p.stages.length)fail();return [];}const ids=new Set();let sum=0n,deposits=0;const rows=p.stages.map(s=>{if(!exact(s,['stageId','label','kind','value'])||!text(s.stageId,80)||ids.has(s.stageId)||!text(s.label)||!['deposit','milestone','balance'].includes(s.kind))fail('Review the payment stages.');ids.add(s.stageId);if(s.kind==='deposit')deposits++;const n=p.mode==='amount'?money(s.value):rate(s.value);if(n===null)fail();sum+=n;return{stageId:s.stageId,label:s.label,kind:s.kind,amount:total===null?null:p.mode==='amount'?amount(n):amount(total*n/1000000n)};});if(!rows.length||deposits>1||rows.filter(r=>r.kind==='balance').length!==1||rows.at(-1).kind!=='balance'||rows.at(-1).stageId!==p.balanceId)fail('Use one final balance stage.');if(p.mode==='share'&&sum!==1000000n||p.mode==='amount'&&total!==null&&sum!==total)fail('Payment stages must equal the reviewed total including tax.');if(p.mode==='share'&&total!==null)rows.at(-1).amount=amount(money(rows.at(-1).amount)+total-rows.reduce((n,r)=>n+money(r.amount),0n));return rows;}
-module.exports={VERSION,calculate,payment,allocate,money,amount,rate,signed,half,fail};
+
+function calculate(v,currency,context){
+ if(!Object.hasOwn(v||{},'version'))return calculateLegacy(v,currency,context);
+ if(v.version!==VERSION||!exact(v,['version','jobApplicability','transactionDate','adjustments','fees','taxGroups','payments']))fail();
+ v2.facts(v.jobApplicability);if(!day(context.asOfDate))fail('Refresh to review the current source dates.');
+ const fields=['kind','note','reference','legalEffectiveOn','legalEndsOn','reviewedOn','reviewValidThrough','jurisdiction','location','serviceKey','collectionBasis','acknowledged','ruleId','ruleDigest'];
+ const groups=v.taxGroups.map(g=>{
+  const s=g.source;if(!exact(s,fields)||s.legalEffectiveOn!==null&&!day(s.legalEffectiveOn)||s.legalEndsOn!==null&&!day(s.legalEndsOn)||s.reviewedOn!==null&&!day(s.reviewedOn)||s.reviewValidThrough!==null&&!day(s.reviewValidThrough)||s.legalEffectiveOn&&s.legalEndsOn&&s.legalEndsOn<s.legalEffectiveOn||s.reviewedOn&&s.reviewValidThrough&&s.reviewValidThrough<s.reviewedOn)fail('Review the legal dates and source review dates separately.');
+  if(s.kind==='validated'){
+   const r=(context.validatedRules||[]).find(r=>r.id===s.ruleId&&r.digest===s.ruleDigest);
+   if(!r||r.version!==v2.VERSION)fail('Validated tax coverage changed. Refresh and review the available source.');
+   v2.rule(v2.content(r),{simulated:context.simulated===true});
+   if(!['legalEffectiveOn','legalEndsOn','reviewedOn','reviewValidThrough'].every(k=>s[k]===r[k])||!v2.current(r,v.transactionDate,context.asOfDate))fail('The tax source or review dates changed. Refresh and review the available source.');
+   if(!v2.matches(v.jobApplicability,r.applicability)){
+    // Missing owner facts are incomplete, not invented applicability. Known mismatches require review.
+    if(v.jobApplicability.serviceOperation===null||['propertyUse','workContext','customerExemption'].some(k=>v.jobApplicability[k]==='unknown'))return {...g,treatment:'unknown',ratePercent:null,source:{kind:'unknown',note:s.note,reference:s.reference,effectiveOn:s.legalEffectiveOn,endsOn:s.legalEndsOn,jurisdiction:s.jurisdiction,location:s.location,serviceKey:s.serviceKey,collectionBasis:s.collectionBasis,acknowledged:false,ruleId:null,ruleDigest:null}};
+    fail('The recorded job details do not match this tax source. Review the job and its treatment.');
+   }
+  }
+  const {legalEffectiveOn,legalEndsOn,reviewedOn,reviewValidThrough,...rest}=s;return {...g,source:{...rest,effectiveOn:legalEffectiveOn,endsOn:legalEndsOn}};
+ });
+ const rules=(context.validatedRules||[]).map(r=>r.version===v2.VERSION?{...r,effectiveOn:r.legalEffectiveOn,endsOn:r.legalEndsOn}:r);
+ const {version,jobApplicability,...old}=v,result=calculateLegacy({...old,taxGroups:groups},currency,{...context,validatedRules:rules});return stableValue({...result,taxGroups:result.taxGroups.map(g=>({...g,treatment:v.taxGroups.find(original=>original.groupId===g.groupId).treatment})),calculationVersion:VERSION});
+}
+
+module.exports={VERSION,LEGACY_VERSION,calculate,payment,allocate,money,amount,rate,signed,half,fail};

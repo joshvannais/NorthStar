@@ -61,7 +61,7 @@ BEGIN
 END $$;
 
 CREATE OR REPLACE FUNCTION public.canonical_commercial_tax_rules() RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
- SELECT COALESCE(jsonb_agg(content||jsonb_build_object('id',id,'digest',digest) ORDER BY rule_key),'[]'::jsonb) FROM (SELECT DISTINCT ON(rule_key) * FROM public.canonical_tax_rule_versions WHERE version='tax-preparation-v1' OR content->>'version'=version AND public.canonical_commercial_tax_rule_validate(content) ORDER BY rule_key,revision DESC LIMIT 1000) r
+ SELECT COALESCE(jsonb_agg(content||jsonb_build_object('id',id,'digest',digest) ORDER BY rule_key),'[]'::jsonb) FROM (SELECT DISTINCT ON(rule_key) * FROM public.canonical_tax_rule_versions WHERE CASE WHEN version='tax-preparation-v1' THEN content->>'version'=version ELSE content->>'version'=version AND public.canonical_commercial_tax_rule_validate(content) END ORDER BY rule_key,revision DESC LIMIT 1000) r
 $$;
 
 CREATE OR REPLACE FUNCTION public.canonical_commercial_tax_enqueue(org UUID) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$

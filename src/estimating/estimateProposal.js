@@ -22,7 +22,7 @@ function inputsFor(component,evaluation,currency){
   if(!Object.hasOwn(allowed,b.field))fail('This recipe contains an unsupported calculated field.');
   const row=b.line===null?inputs:inputs.lines?.[b.line];if(!row||!Object.hasOwn(row,b.field))fail('This recipe refers to a missing line.');
   const value=evaluation.values[b.step];if(!value)return null;if(value.decimal===null)fail('This quantity needs an explicit rounding rule before calculation.');
-  const expected=allowed[b.field]||(b.field==='unitPrice'?currency+'/'+row.unit:b.field==='hourlyCost'?currency+'/hour':b.field==='amount'?currency:b.field==='hoursPerUnit'?'worker_hour/'+row.unit:row.unit);
+  const expected=allowed[b.field]||(['unitPrice','rate'].includes(b.field)?currency+'/'+row.unit:b.field==='hourlyCost'?currency+'/hour':b.field==='amount'?currency:b.field==='hoursPerUnit'?'worker_hour/'+row.unit:row.unit);
   if(!expected||!recipeEngine.sameUnit(value.unit,expected))fail('The calculated quantity or rate has the wrong unit.');
   let v=value.decimal;
   if(['unitPrice','hourlyCost','amount'].includes(b.field)){const[a,d='']=v.split('.');if(d.length>2)fail('Declare a cost rounded to cents before using it.');v=a+'.'+d.padEnd(2,'0');}

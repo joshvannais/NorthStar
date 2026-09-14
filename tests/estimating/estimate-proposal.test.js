@@ -4,6 +4,19 @@ const recipe=require('../../src/estimating/proposalRecipe'),proposal=require('..
 const now=new Date('2026-09-14T12:00:00Z');
 function fixture(){const record={state:{equipmentBasis:equipment.create('proposal-unit',now.toISOString())},expiresAt:'2026-09-15T12:00:00Z'},item={snapshot:{service:{key:'fence',scope:{linearFeet:146,material:'cedar'}}}},review={pins:{original:'fixture'},currency:'USD',selectedRevision:1,isCurrent:true,pricingPlans:{sources:{serviceKey:'fence',asOfDate:'2026-09-14',references:[],digest:'fixture',basis:{directCosts:null,overheadIncluded:[]}}}};return{record,item,review,body:{version:proposal.VERSION,selectedRevision:null,expectedBasisDigest:null,overrides:[],candidateIds:[]}};}
 function run(f,body=f.body){return repository.demo(f.record,f.review,f.item,body,now);}
+test('pricing rates require currency per measured unit through the full preview',()=>{
+ for(const unit of ['USD/ft','ft','CAD/ft','USD/m']){
+  const f=fixture(),knowledge=f.record.state.equipmentBasis.knowledgeRows.find(k=>JSON.parse(k.canonical_document).content.estimateProposalRecipe);
+  require('../helpers/m24-proposal-rate').transformKnowledge(knowledge,unit);const before=JSON.stringify(f);
+  if(unit==='USD/ft'){const output=run(f),pricing=output.components.find(c=>c.kind==='pricing');assert.equal(pricing.inputs.lines[0].rate,'5');assert.equal(pricing.result.result.proposedBeforeTax,'500.00');}
+  else assert.throws(()=>run(f),e=>e.status===400);
+  assert.equal(JSON.stringify(f),before);
+ }
+});
+test('adjacent typed quantity, unit-price, hourly-cost, amount and productivity bindings retain dimensions',()=>{
+ const cases=[['materials','unitPrice','USD/ft','ft'],['labor','hourlyCost','USD/hour','hour'],['labor','hoursPerUnit','worker_hour/ft','ft'],['pricing','amount','USD','ft'],['pricing','quantity','ft','USD/ft']];
+ for(const[kind,field,good,bad]of cases){const c={kind,inputs:{lines:[{unit:'ft',[field]:'1'}]},bindings:[{line:0,field,step:'v'}]};assert.doesNotThrow(()=>proposal.inputsFor(c,{values:{v:{unit:good,decimal:'5'}}},'USD'));assert.throws(()=>proposal.inputsFor(c,{values:{v:{unit:bad,decimal:'5'}}},'USD'),e=>e.status===400);}
+});
 test('declared simulated recipe uses actual calculators without changing source or history',()=>{const f=fixture(),before=JSON.stringify(f),a=run(f),b=run(f);assert.deepEqual(a,b);assert.equal(JSON.stringify(f),before);assert.equal(a.components.find(c=>c.kind==='materials').result.total,'521.95');assert.equal(a.components.find(c=>c.kind==='labor').result.total,'490.56');assert.equal(a.components.find(c=>c.kind==='travel').result.total,'20.00');assert.equal(a.completeCost,null);assert.equal(a.simulated,true);});
 test('a changed selected decision invalidates the previous basis',()=>{const f=fixture(),a=run(f);f.review.decisions={writeBasis:{revision:1,digest:'changed'}};assert.throws(()=>run(f,{...f.body,expectedBasisDigest:a.basisDigest}),e=>e.status===409);});
 test('typed owner edit recalculates dependent quantities and preserves original record',()=>{const f=fixture(),before=JSON.stringify(f.record),a=run(f);const b=run(f,{...f.body,expectedBasisDigest:a.basisDigest,overrides:[{fieldId:'linearFeet',value:'100',unit:'ft',sourceKind:'owner_assumption',reason:'Owner measured the fence run'}]});assert.equal(b.components.find(c=>c.kind==='materials').result.total,'357.50');assert.equal(b.components.find(c=>c.kind==='labor').result.total,'336.00');assert.equal(JSON.stringify(f.record),before);assert.throws(()=>run(f,{...f.body,overrides:[{fieldId:'linearFeet',value:'100',unit:'ft',sourceKind:'owner_assumption',reason:'Owner measured'}]}));});

@@ -4,7 +4,7 @@ const {parseUnambiguousJson,rawRequestPath,contentTypeAllowed,contentEncodingAll
 const raw=express.raw({inflate:false,limit:32768,type:()=>true});
 const proposalRaw=express.raw({inflate:false,limit:131072,type:()=>true});
 function estimateDecisionBodyBoundary(req,res,next){
- if(req.method==='POST'&&/^\/api\/(?:v1\/canonical|demo\/command-center)\/estimates\/[^/]+\/proposal-preview\/?$/.test(rawRequestPath(req))){
+ if(req.method==='POST'&&/^\/api\/(?:v1\/canonical|demo\/command-center)\/estimates\/[^/]+\/(?:proposal-preview|proposal-adoption-preview|proposal-adoptions)\/?$/.test(rawRequestPath(req))){
   res.set('Cache-Control','no-store');const reject=status=>res.status(status).json({success:false,error:{code:'ESTIMATE_PROPOSAL_INVALID',message:'This prepared estimate could not be read. Check the entries and try again.'}});
   if(!contentTypeAllowed(req)||!contentEncodingAllowed(req))return reject(415);
   return proposalRaw(req,res,error=>{if(error)return reject(error.type==='entity.too.large'?413:400);try{req.body=parseUnambiguousJson(new TextDecoder('utf-8',{fatal:true}).decode(req.body));req.estimateDecisionBodyValidated=true;return next();}catch(_){return reject(400);}});

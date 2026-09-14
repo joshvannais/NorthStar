@@ -581,6 +581,23 @@ router.post('/command-center/polaris/messages-v2', require('../polaris/demoGroun
  }
 }));
 
+router.post('/command-center/estimates/:estimateId/proposal-adoption-preview',async(req,res)=>{
+ res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'proposal-adoption'))return;
+ if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the prepared estimate entries.'}});
+ try{const body=require('../estimating/proposalAdoptionContract').normalize(req.body,{preview:true}),record=await commandCenterRepository.read(commandCenterToken(req,res)),workspace=demoWorkspace(record),item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
+ const now=new Date((await commandCenterRepository.pool().query('SELECT clock_timestamp() now')).rows[0].now),prepared=await require('../commandCenter/demoProposalAdoption').prepare(record,item,body,workspace,now);return res.json({success:true,data:prepared.review});
+ }catch(e){const error=require('../estimating/proposalAdoptionRepository').failure(e);return res.status(error.status).json({success:false,error:{message:error.message,category:error.code}});}
+});
+router.post('/command-center/estimates/:estimateId/proposal-adoptions',async(req,res)=>{
+ res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'proposal-adoption'))return;
+ if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the prepared estimate confirmation.'}});
+ try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'proposal_adopt',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),plan:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)});const rows=result.record.state.proposalAdoptions?.[req.params.estimateId]||[],receipt=rows.find(r=>r.requestKey===require('../services/businessProfileAdapter').sha256(req.get('Idempotency-Key'))&&r.requestDigest===require('../estimating/proposalAdoptionContract').requestDigest(req.body));return res.status(result.replayed?200:201).json({success:true,data:{receipt:require('../commandCenter/demoProposalAdoption').publicReceipt(receipt),replayed:result.replayed,demoWorkspaceRevision:result.record.revision}});
+ }catch(e){const error=require('../estimating/proposalAdoptionRepository').failure(e);return res.status(error.status).json({success:false,error:{message:error.message,category:error.code}});}
+});
+router.get('/command-center/estimates/:estimateId/proposal-adoptions',async(req,res)=>{
+ res.set('Cache-Control','no-store');res.vary('Cookie');try{const record=await commandCenterRepository.read(commandCenterToken(req,res)),item=demoCanonicalItems(demoWorkspace(record)).find(i=>i.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});const history=record.state.proposalAdoptions?.[item.ids.estimate]||[],expose=require('../commandCenter/demoProposalAdoption').publicReceipt;return res.json({success:true,data:{current:expose(history[0]),history:history.slice(0,20).map(expose),total:history.length,truncated:history.length>20}});}catch(e){return commandCenterFailure(req,res,e);}
+});
+
 router.post('/command-center/estimates/:estimateId/proposal-preview',async function(req,res){
  res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'proposal-preview'))return;
  if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the prepared estimate entries.'}});

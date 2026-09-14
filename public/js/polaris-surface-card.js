@@ -44,26 +44,11 @@
   }
 
   function evidence(graph, limit) {
-    var facts = graph && graph.polaris && Array.isArray(graph.polaris.facts) ? graph.polaris.facts : [];
-    return unique(facts.map(function (fact) { return safeString(fact && fact.evidenceText); })).slice(0, limit || 5);
+    return global.NorthStarPolarisCard.describeGraph(graph).evidence.slice(0,limit||6);
   }
 
   function missing(graph) {
-    var value = snapshot(graph);
-    var result = [];
-    if (Array.isArray(value.missingInformation)) {
-      value.missingInformation.forEach(function (entry) {
-        var text = safeString(entry && typeof entry === 'object' ? (entry.reason || entry.label) : entry);
-        if (text) result.push(text);
-      });
-    }
-    if (Array.isArray(value.notCalculated)) {
-      value.notCalculated.forEach(function (entry) {
-        var reason = safeString(entry && entry.reason);
-        if (reason) result.push(titleCase(entry.field) + ' is unavailable: ' + reason);
-      });
-    }
-    return unique(result);
+    return global.NorthStarPolarisCard.describeGraph(graph).missing;
   }
 
   function recommendations(graph, href) {
@@ -135,7 +120,7 @@
 
   function riskEntries(graph) {
     var risk = snapshot(graph).risk || {};
-    if (risk.emergency === true) return [safeString(risk.evidence, 'An emergency signal requires immediate review.')];
+    if (risk.emergency === true) return [{ emergency: true, text: safeString(risk.evidence, '') }];
     if (safeString(risk.signal)) return ['Current risk signal: ' + safeString(risk.signal) + '.'];
     return [];
   }

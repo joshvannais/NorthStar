@@ -246,7 +246,7 @@
       var empty = element('li');
       empty.append(
         element('span', 'demo-priority-rank', '—'),
-        element('div', '', 'No role-authorized customer or work records are available yet.'),
+        element('div', '', 'No customer or work records you can access are available yet.'),
         element('span', 'demo-priority-badge', 'No current signal')
       );
       list.appendChild(empty);
@@ -261,7 +261,7 @@
         element('strong', '', presentationString(graph.customer && graph.customer.name, 'Customer name unavailable') + ' · ' +
           presentationString(graph.lead && graph.lead.serviceLabel, titleCase(graph.lead && graph.lead.serviceType))),
         element('p', '', action ? presentationString(action.label, 'Recommendation unavailable') : presentationString(graph.lead && graph.lead.summary,
-          'Review the current role-authorized record before taking action.'))
+          'Review the current record before taking action.'))
       );
       var badge = element('span', 'demo-priority-badge' + (risk.emergency === true ? ' demo-priority-high' : ''),
         risk.emergency === true ? 'Urgent' : titleCase(graph.lead && graph.lead.status));
@@ -271,27 +271,11 @@
   }
 
   function humanEvidence(graph) {
-    var facts = graph && graph.polaris && Array.isArray(graph.polaris.facts) ? graph.polaris.facts : [];
-    return facts.map(function (fact) { return presentationString(fact && fact.evidenceText, ''); }).filter(Boolean).slice(0, 6);
+    return global.NorthStarPolarisCard.describeGraph(graph).evidence;
   }
 
   function missingInputs(graph) {
-    var value = snapshot(graph);
-    var result = [];
-    if (Array.isArray(value.missingInformation)) {
-      value.missingInformation.forEach(function (entry) {
-        var text = presentationString(entry && typeof entry === 'object' ? (entry.reason || entry.label) : entry, '');
-        if (text) result.push(text);
-      });
-    }
-    if (Array.isArray(value.notCalculated)) {
-      value.notCalculated.forEach(function (entry) {
-        var field = titleCase(entry && entry.field);
-        var reason = presentationString(entry && entry.reason, '');
-        if (reason) result.push(field + ': ' + reason);
-      });
-    }
-    return result;
+    return global.NorthStarPolarisCard.describeGraph(graph).missing;
   }
 
   function renderPolaris(graphs) {
@@ -307,7 +291,7 @@
         surface: 'command-center',
         detailed: true,
         title: 'No current record to prioritize',
-        summary: 'Polaris needs a role-authorized customer, lead, or work record before it can prioritize the day.',
+        summary: 'Polaris needs a customer, lead, or work record you can access before it can prioritize the day.',
         confidenceExplanation: 'Confidence cannot be calculated without a supporting record.',
         evidence: [],
         missing: ['A customer, lead, communication, work item, and supporting scope are not yet available.'],
@@ -324,11 +308,9 @@
       return { label: presentationString(entry.label, 'Recommendation unavailable'), priority: safeString(entry.priority), href: detailHref(graph) };
     });
     var risks = [];
-    if (risk.emergency === true) risks.push(presentationString(risk.evidence, 'An emergency signal requires immediate review.'));
+    if (risk.emergency === true) risks.push({ emergency: true, text: presentationString(risk.evidence, '') });
     else if (presentationString(risk.signal, '')) risks.push('Current risk signal: ' + presentationString(risk.signal, 'Risk detail unavailable') + '.');
     var opportunities = [];
-    if (graph.work && graph.work.scheduledStart) opportunities.push('A scheduled work window is already present for coordinated follow-through.');
-    if (finiteNumber(graph.estimate && graph.estimate.customerPrice) !== null) opportunities.push('A recorded customer-facing estimate is available for review.');
     global.NorthStarPolarisCard.render(container, {
       contract: global.NorthStarPolarisCard.CONTRACT,
       surface: 'command-center',
@@ -367,11 +349,11 @@
     var values = graphs.map(function (graph) { return finiteNumber(graph.estimate && graph.estimate.customerPrice); }).filter(function (value) { return value !== null; });
     var total = values.reduce(function (sum, value) { return sum + value; }, 0);
     grid.append(
-      kpiCard('Connected records', String(graphs.length), graphs.length ? 'Customer, lead, work, and Polaris records in this workspace.' : 'No role-authorized records are available.'),
+      kpiCard('Connected records', String(graphs.length), graphs.length ? 'Customer, lead, work, and Polaris records in this workspace.' : 'No records are available to you yet.'),
       kpiCard('Needs attention', String(attention), attention ? 'Records with urgency, missing inputs, or follow-up state.' : 'No current priority signal is supported.'),
       kpiCard('Scheduled work', String(scheduled), scheduled ? 'Work items with a recorded appointment time.' : 'No appointment time is currently recorded.'),
       kpiCard(mode === 'demo' ? 'Original demo estimate value' : 'Original estimate value', values.length ? formatMoney(total) : 'Unavailable',
-        values.length ? 'Original price guidance, before later cost or human price reviews. This is not earned revenue.' : 'No role-authorized customer price is available.')
+        values.length ? 'Original price guidance, before later cost or human price reviews. This is not earned revenue.' : 'No customer price is available to you yet.')
     );
   }
 
@@ -593,11 +575,11 @@
     byId('commandCenterLeadCount').textContent = graphs.length + (graphs.length === 1 ? ' active lead' : ' active leads');
     if (!graphs.length) {
       var row = document.createElement('tr');
-      var cell = element('td', 'command-center-table-empty', 'No role-authorized lead records are available.');
+      var cell = element('td', 'command-center-table-empty', 'No lead records are available to you yet.');
       cell.colSpan = 5;
       row.appendChild(cell);
       rows.appendChild(row);
-      mobileCards.appendChild(element('p', 'command-center-mobile-empty', 'No role-authorized lead records are available.'));
+      mobileCards.appendChild(element('p', 'command-center-mobile-empty', 'No lead records are available to you yet.'));
       return;
     }
     var visible = graphs.slice(0, 8);
@@ -673,7 +655,7 @@
     var action = first && actionEntries(first)[0];
     byId('commandCenterCoach').textContent = action
       ? presentationString(action.label, 'Recommendation unavailable') + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
-      : 'No prioritized recommendation is available until a role-authorized customer, lead, or work record supplies enough evidence.';
+      : 'No prioritized recommendation is available until a customer, lead, or work record you can access supplies enough evidence.';
     byId('commandCenterWorkspaceStatus').textContent = 'Workspace context';
     byId('commandCenterWorkspaceNote').textContent = mode === 'demo'
       ? 'The demo session is isolated from production, provider, account, and billing data.'
@@ -697,7 +679,7 @@
       actions.append(trial, home);
     } else {
       kicker.textContent = 'Continue operating';
-      title.textContent = 'Move from the daily view into the role-authorized record that needs attention.';
+      title.textContent = 'Move from the daily view into the record that needs attention.';
       var leads = element('a', 'btn btn-primary', 'Review leads');
       leads.href = destination('leads');
       var calendar = element('a', 'btn btn-secondary', 'Open calendar');
@@ -725,14 +707,14 @@
   function load(expected) {
     if (loading) return Promise.resolve(null);
     if (!contract || !contract.routeForPath(global.location.pathname) || !global.NorthStarAccountSession) {
-      setStatus('The shared Command Center contract is unavailable.', 'error');
+      setStatus('Command Center could not load. Refresh and try again.', 'error');
       return Promise.resolve(null);
     }
     loading = true;
     byId('commandCenterRefresh').disabled = true;
     byId('commandCenterContent').setAttribute('aria-busy', 'true');
     byId('commandCenterScheduling').setAttribute('aria-busy', 'true');
-    setStatus('Loading the role-authorized workspace…', 'pending');
+    setStatus('Loading your workspace…', 'pending');
     var endpoint = '/api/v1/command-center/workspace' + (schedulingCursor ? '?cursor=' + encodeURIComponent(schedulingCursor) : '');
     return global.NorthStarAccountSession.fetch(endpoint, {
       method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },

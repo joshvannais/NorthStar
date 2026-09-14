@@ -806,6 +806,8 @@ module.exports = {
   ConflictRepositoryError,
   availabilityResponse,
   evaluateInTransaction,
+  candidateEvidence,
+  attachSkillsAndAvailability,
   evaluateScheduleConflicts,
   replaceAvailability,
 };

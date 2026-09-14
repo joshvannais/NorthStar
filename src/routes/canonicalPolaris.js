@@ -1774,6 +1774,26 @@ function createCanonicalRouter(options) {
         return review;
   }
 
+  router.post('/estimates/:estimateId/proposal-preview',dependencies.auth,requireCanonicalContext,async(req,res)=>{
+    res.set('Cache-Control','no-store');
+    if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the prepared estimate entries.'}});
+    try{
+      const body=require('../estimating/estimateProposal').normalize(req.body);
+      const data=await withEquipmentCanonicalRead(req,dependencies,async(client,operator)=>{
+        const input={...actorInput(req),estimateId:req.params.estimateId};
+        const authority=()=>client.query('SELECT public.canonical_travel_write_authority($1,$2,$3,$4,$5)',[input.organizationId,input.actorUserId,input.actorAccessRole,input.authSessionId,req.get('X-CSRF-Token')]);
+        await authority();
+        const selectedReq=Object.assign(Object.create(req),{query:body.selectedRevision===null?{}:{revision:body.selectedRevision}});
+        const review=await assembleCapellaReview(client,operator,selectedReq);
+        const item=await getCanonicalGraph(client,requestContext(req),req.params.estimateId);
+        if(!review||!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});
+        const result=await require('../estimating/estimateProposalRepository').preview(client,input,review,item,body);
+        await authority();return result;
+      });
+      return res.json({success:true,data});
+    }catch(e){const error=require('../estimating/estimateProposalRepository').failure(e);return res.status(error.status).json({success:false,error:{message:error.message}});}
+  });
+
   router.post('/estimates/:estimateId/capella-scenarios',dependencies.auth,requireCanonicalContext,async function(req,res){
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the scenario entries.'}});

@@ -25,13 +25,12 @@
       render();status.textContent=uncertain?'The previous outcome is unconfirmed. Retry that same update before making another change.':'Current Work Loaded.';
     }catch(e){if(generation===serial)status.textContent=e.status?e.message:'Work details could not be loaded. Refresh and try again.';}}
   function render(){content.replaceChildren();var heading=node('h3',model.title);content.append(heading,node('p',model.execution?states[model.execution.lifecycleState]:'No Work Opened Yet'));
-    if(model.schedulingBasis)content.append(node('p',model.schedulingBasis));
     if(model.unavailable)content.append(node('p',model.unavailable));
     var actions=node('div');actions.className='owner-work-actions';
     if(!uncertain)model.allowedActions.forEach(function(action){var b=button(labels[action],function(){returnFocus=b;open(action);});actions.append(b);});
     if(model.execution){var link=node('a','Completion Review And History');link.href=(demo?'/demo':'/dashboard')+'/completion-review?executionId='+encodeURIComponent(model.execution.id);link.className='operations-button';actions.append(link);}content.append(actions);
     if(uncertain){var retry=button('Retry Same Update',function(){save(uncertain);});content.append(retry);}
-    if(model.evidenceLimit){var limits=node('details');limits.append(node('summary','About These Records'),node('p',model.evidenceLimit));content.append(limits);}
+    if(model.evidenceLimit||model.schedulingBasis){var limits=node('details');limits.append(node('summary','About These Records'));if(model.schedulingBasis)limits.append(node('p',model.schedulingBasis));if(model.evidenceLimit)limits.append(node('p',model.evidenceLimit));content.append(limits);}
     if(model.progress.length){var section=node('details');section.open=true;section.append(node('summary','Progress And Issues'));
       latest(model.progress).forEach(function(record){var d=record.document,article=node('article');article.append(node('p',d.description),node('p',d.reviewState==='owner_confirmed'?'Owner Reviewed':d.reviewState==='disputed'?'Disputed':'Review Required'));
         if(d.quantity)article.append(node('p',d.quantity.completed+' Of '+d.quantity.total+' '+(units[d.quantity.unit]||d.quantity.unit)));

@@ -517,8 +517,8 @@ function buildDemoGraph(input) {
       snapshotCreatedAt: createdAt,
     },
   };
-  graph.projectionDigest = sha256(graph);
-  return graph;
+  // New records share the fictional canonical cost path; saved graphs are read unchanged.
+  return addRecordedCostExample(input.tenantId, graph);
 }
 
 // New/reset examples only: visible fictional dialogue, never a provider call or a
@@ -568,7 +568,7 @@ function initialGraphs(seededWorkspace, createdAt) {
       ],
       businessProfile: seededWorkspace.businessProfile,
     });
-    return withSeededDemoConversation(index === 0 ? addRecordedCostExample(seededWorkspace.tenant.id, graph) : graph);
+    return withSeededDemoConversation(graph);
   });
 }
 

@@ -26,6 +26,17 @@
 @media(max-width:600px){.owner-work{padding:16px}.owner-work-fields{grid-template-columns:1fr}.owner-work-actions>*{width:100%}.owner-work-actions button{min-height:44px}}
 .operations-page *, .operations-page *::before, .operations-page *::after { box-sizing: border-box; }
 .operations-page [hidden] { display: none !important; }
+.operations-page .operations-main{flex:1;min-width:0;width:auto;max-width:1248px;margin:0 auto;padding:32px 24px}
+.operations-page .mobile-header{position:sticky;top:0;z-index:100}
+.operations-page .operations-command-center{text-decoration:none;white-space:nowrap}
+.operations-page .owner-work-actions>label{flex:1;min-width:200px}
+.operations-page .owner-work-actions:empty{display:none}
+.operations-page .owner-work [data-work-content]>p{margin:8px 0;font-size:14px}
+.operations-page .owner-work>p[role=status]{margin:8px 0;color:var(--neutral-600);font-size:13px}
+.operations-page .owner-work details{margin-top:12px}
+.operations-page .owner-work details p{font-size:14px;margin:8px 0}
+.operations-page .operations-boundary{margin-top:24px;border-style:solid;padding:16px 20px}
+@media(max-width:760px){.operations-page .operations-main{width:100%;padding:24px 16px}.operations-page .operations-intro{gap:12px;margin-bottom:16px}.operations-page .operations-intro h1{font-size:32px}}
 .operations-page a { color: var(--brand-700, #785916); }
 .operations-page :is(button, select, a, summary, input, textarea):focus-visible {
   outline: 3px solid var(--brand-500, #b99758);

@@ -4,6 +4,13 @@ for(const host of ['operations','completion-review'])test(host+' loads route con
  const html=fs.readFileSync(path.join(__dirname,'../../public/dashboard/'+host+'.html'),'utf8');
  const contract=html.indexOf('<script src="/js/command-center-contract.js">'),demo=html.indexOf('<script src="/js/demo-runtime.js">');
  expect(contract).toBeGreaterThan(-1);expect(contract).toBeLessThan(demo);
+ if(host==='operations'){
+  expect(html).toContain('class="dashboard-layout"');
+  expect(html.indexOf('/js/auth-session.js')).toBeLessThan(html.indexOf('/js/nav-component.js'));
+  expect(html.indexOf('/js/nav-component.js')).toBeLessThan(html.indexOf("NavComponent.init('operations')"));
+  expect(html).toContain('href="/dashboard">Command Center');
+  expect(html).not.toContain('operations-header');return;
+ }
  const header=html.match(/<header[\s\S]*?<\/header>/)[0];
  const links=[...header.matchAll(/href="([^"]+)"/g)].map(m=>m[1]);
  expect(links).toEqual(host==='operations'?['/dashboard','/dashboard']:['/dashboard','/dashboard/operations']);

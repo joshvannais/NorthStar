@@ -39,6 +39,7 @@
     currentData = null;
     element('operationsRecords').replaceChildren();
     element('operationsSummary').hidden = true;
+    element('operationsPagination').hidden = true;
     element('operationsNext').disabled = true;
     element('operationsPrevious').disabled = true;
     element('operationsPageDescription').textContent = 'No page loaded.';
@@ -134,6 +135,7 @@
     data.records.forEach(function(record) { fragment.appendChild(renderRecord(record, data.scope)); });
     element('operationsRecords').replaceChildren(fragment);
     var page = data.pagination;
+    element('operationsPagination').hidden = page.total === 0;
     element('operationsShown').textContent = String(page.returned);
     element('operationsPending').textContent = String(data.records.filter(function(record) { return record.approval.state === 'pending'; }).length);
     element('operationsConstraints').textContent = String(data.records.reduce(function(total, record) { return total + record.capacity.recordedConstraints; }, 0));
@@ -209,6 +211,8 @@
   }
   function init() {
     if (!element('operationsMain')) return;
+    var home=document.querySelector('.operations-command-center');
+    if(home&&/^\/demo(?:\/|$)/.test(location.pathname))home.href='/demo';
     element('operationsRefresh').addEventListener('click', function() { load(null, 'refresh'); });
     element('operationsFilter').addEventListener('change', function() { load(null, 'refresh'); });
     element('operationsNext').addEventListener('click', function() {

@@ -11,26 +11,19 @@
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/operations.css">
+  <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body class="operations-page">
   <a class="operations-skip" href="#operationsMain">Skip to operational overview</a>
-  <header class="operations-header">
-    <a class="operations-brand" href="/dashboard" aria-label="NorthStar Command Center">
-      <img src="/assets/logo.png" alt="" width="36" height="36"><span>NorthStar</span>
-    </a>
-    <div class="operations-header-actions">
-      <a class="operations-back" href="/dashboard">Command Center</a>
-      <span data-northstar-theme-slot data-northstar-theme-location="desktop" aria-label="Theme controls"></span>
-    </div>
-  </header>
-  <main id="operationsMain" class="operations-main" tabindex="-1">
+  <div class="dashboard-layout">
+  <main id="operationsMain" class="main-content operations-main" tabindex="-1">
     <div class="operations-intro">
       <div>
         <p class="operations-eyebrow">Recorded work</p>
         <h1>Operations</h1>
-        <p class="operations-description">A clear view of recorded work, open issues and readiness for review.</p>
+        <p class="operations-description">Review job progress, issues and completion.</p>
       </div>
-      <span class="operations-read-only">Read-only overview</span>
+      <a class="btn btn-secondary operations-command-center" href="/dashboard">Command Center</a>
     </div>
     <div class="operations-authority">
       <p id="operationsScope">Checking access to your operational view.</p>
@@ -64,7 +57,7 @@
       <div><span class="operations-stat-label">Capacity</span><strong id="operationsCapacity">Unknown</strong><span class="operations-stat-note">Availability is not assessed here.</span></div>
     </section>
     <section id="operationsRecords" class="operations-records" aria-label="Recorded work" aria-busy="true"></section>
-    <nav class="operations-pagination" aria-label="Work pages">
+    <nav id="operationsPagination" hidden class="operations-pagination" aria-label="Work pages">
       <p id="operationsPageDescription">No page loaded.</p>
       <div>
         <button id="operationsPrevious" class="operations-button" type="button" disabled>Previous page</button>
@@ -72,10 +65,14 @@
       </div>
     </nav>
     <aside class="operations-boundary" aria-label="What this view means">
-      <h2>Recorded evidence, not inferred outcomes</h2>
-      <p>Progress and activity do not approve completion. Capacity remains unknown unless separately assessed. Work updates and completion decisions require an explicit review; they do not change appointment times or prices.</p>
+      <h2>Work Review</h2>
+      <p>Completion needs your review. Work updates do not change appointment times or prices. Availability requires a separate assessment.</p>
     </aside>
   </main>
+  </div>
+  <script src="/js/auth-session.js"></script>
+  <script src="/js/nav-component.js"></script>
+  <script>NavComponent.init('operations');</script>
   <script src="/js/operations-overview-contract.js"></script>
   <script src="/js/operations-page.js"></script>
   <script src="/js/scheduling-time-contract.js"></script>

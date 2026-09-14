@@ -1774,6 +1774,32 @@ function createCanonicalRouter(options) {
         return review;
   }
 
+  async function loadProposalAdoption(client,req,selected){
+    return withBroadSchedulingReadSnapshot(client,actorInput(req),async(inner,operator)=>{
+      if(!operator.canMutate||!['owner','admin'].includes(operator.actor?.accessRole))throw Object.assign(new Error('Your current account cannot adopt this estimate.'),{status:403});
+      const selectedReq=Object.assign(Object.create(req),{query:selected===null?{}:{revision:selected}});
+      const review=await assembleCapellaReview(inner,operator,selectedReq),item=await getCanonicalGraph(inner,requestContext(req),req.params.estimateId);
+      if(!review||!item)throw Object.assign(new Error('This estimate is unavailable.'),{status:404});return{review,item};
+    },{operatorDirectory:dependencies.operatorDirectory});
+  }
+  router.post('/estimates/:estimateId/proposal-adoption-preview',dependencies.auth,requireCanonicalContext,async(req,res)=>{
+    res.set('Cache-Control','no-store');if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the prepared estimate entries.'}});
+    const repository=require('../estimating/proposalAdoptionRepository'),input={...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token')};
+    try{const data=await withEquipmentCanonicalRead(req,dependencies,async client=>(await repository.prepare(client,input,req.body,(c,selected)=>loadProposalAdoption(c,req,selected))).review);return res.json({success:true,data});}
+    catch(e){const error=repository.failure(e);return res.status(error.status).json({success:false,error:{message:error.message,category:error.code}});}
+  });
+  router.post('/estimates/:estimateId/proposal-adoptions',dependencies.auth,requireCanonicalContext,async(req,res)=>{
+    res.set('Cache-Control','no-store');if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Check the prepared estimate confirmation.'}});
+    const repository=require('../estimating/proposalAdoptionRepository'),input={...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')};
+    try{const data=await repository.mutate(resolvePool(dependencies.poolProvider),input,req.body,(client,selected)=>loadProposalAdoption(client,req,selected));return res.status(data.replayed?200:201).json({success:true,data});}
+    catch(e){const error=repository.failure(e);return res.status(error.status).json({success:false,error:{message:error.message,category:error.code}});}
+  });
+  router.get('/estimates/:estimateId/proposal-adoptions',dependencies.auth,requireCanonicalContext,async(req,res)=>{
+    res.set('Cache-Control','no-store');const repository=require('../estimating/proposalAdoptionRepository');
+    try{const data=await withEquipmentCanonicalRead(req,dependencies,client=>repository.read(client,{...actorInput(req),estimateId:req.params.estimateId}));return res.json({success:true,data});}
+    catch(e){const error=repository.failure(e);return res.status(error.status).json({success:false,error:{message:error.message}});}
+  });
+
   router.post('/estimates/:estimateId/proposal-preview',dependencies.auth,requireCanonicalContext,async(req,res)=>{
     res.set('Cache-Control','no-store');
     if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the prepared estimate entries.'}});

@@ -2003,3 +2003,40 @@ html body .customer-drawer .prepared-ack span { text-transform:none; }
 html body .customer-drawer .prepared-ack input { width:20px;height:20px;min-height:20px;flex:0 0 20px;margin:2px 0;accent-color:#7c3aed; }
 html body .customer-drawer .prepared-estimate :is(button,input,select,summary):focus-visible { outline:2px solid var(--polaris-card-ink);outline-offset:3px; }
 @media(max-width:640px) { html body .customer-drawer .prepared-estimate { padding:14px; }html body .customer-drawer .prepared-groups,html body .customer-drawer .prepared-fields { grid-template-columns:minmax(0,1fr); }html body .customer-drawer .prepared-row { gap:10px; } }
+
+/* Combined estimate review uses the existing drawer typography and theme. */
+html body .customer-drawer #cdPreparedAdoption fieldset { min-width:0;border:0;padding:0;margin:16px 0; }
+html body .customer-drawer #cdPreparedAdoption legend { font:inherit;font-weight:600;color:inherit;margin-bottom:12px; }
+html body .customer-drawer #cdPreparedAdoption fieldset>label:not(.prepared-ack) { display:block;margin:16px 0 8px; }
+html body .customer-drawer #cdPreparedAdoption textarea { width:100%;min-height:88px;resize:vertical;font:inherit;line-height:1.5;color:var(--theme-text);background:var(--theme-surface);border:1px solid var(--polaris-card-border);border-radius:8px;padding:10px 12px; }
+html body .customer-drawer #cdPreparedAdoption textarea:focus-visible { outline:2px solid var(--polaris-card-ink);outline-offset:3px; }
+html body .customer-drawer #cdPreparedAdoptionResult { margin:16px 0; }
+html body .customer-drawer #cdPreparedAdoption>button { margin:8px 8px 8px 0; }
+
+/* Prepared-estimate decision hierarchy: summary first, details on demand. */
+html body .customer-drawer .prepared-overview { padding:20px 0;margin:4px 0 12px;border-block:1px solid var(--polaris-card-border); }
+html body .customer-drawer .prepared-overview>.prepared-row strong { font-size:1.6rem;line-height:1.2; }
+html body .customer-drawer .prepared-review-trigger { font-weight:600;color:var(--polaris-card-ink); }
+html body .customer-drawer .prepared-total { padding:16px 0; }
+html body .customer-drawer .prepared-total strong { font-size:1.7rem;line-height:1.2; }
+html body .customer-drawer .prepared-save-decision { padding:16px 0 24px; }
+html body .customer-drawer .prepared-save-decision>button { margin:12px 8px 0 0; }
+html body .customer-drawer .prepared-review-settings { padding-block:12px;border-top:1px solid var(--polaris-card-border); }
+html body .customer-drawer .prepared-plan-details { padding-top:12px;border-top:1px solid var(--polaris-card-border); }
+html body .customer-drawer #cdPreparedAdoption { padding:0 4px 8px; }
+@media(max-width:640px){ html body .customer-drawer .prepared-estimate { padding:20px; }html body .customer-drawer .prepared-total strong,html body .customer-drawer .prepared-overview>.prepared-row strong { font-size:1.4rem; }html body .customer-drawer .prepared-save-decision>button { width:100%;margin-right:0; } }
+
+/* Prepared-estimate confirmations form a separate, comfortably spaced group. */
+html body .customer-drawer #cdPreparedAdoption .prepared-ack { min-height:44px;box-sizing:border-box;padding-block:8px;align-items:flex-start; }
+html body .customer-drawer #cdPreparedAdoption fieldset>.prepared-ack { margin-block:24px 16px; }
+html body .customer-drawer #cdPreparedAdoption .prepared-ack input { margin-top:2px; }
+html body .customer-drawer #cdPreparedCostAllocations :is(input,select) { width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;font:inherit;color:var(--theme-text);background:var(--theme-surface);border:1px solid var(--polaris-card-border);border-radius:8px; }
+html body .customer-drawer #cdPreparedCostAllocations label { display:block;margin:16px 0 8px; }
+html body .customer-drawer #cdPreparedCostAllocations fieldset { margin-block:24px; }
+
+html body .customer-drawer #cdPreparedAdoption fieldset>.prepared-actions { margin-top:24px;padding-top:4px; }
+html body .customer-drawer #cdPreparedAdoptionResult h6 { font:inherit;font-weight:650;margin:24px 0 8px;color:inherit; }
+html body .customer-drawer #cdPreparedAdoptionResult .prepared-subtotal { margin-top:12px;padding-top:16px;border-top:1px solid var(--polaris-card-border);font-weight:650; }
+html body .customer-drawer #cdPreparedAdoptionResult .prepared-grand-total { margin-top:8px;padding-block:16px;border-top:1px solid var(--polaris-card-border);font-weight:700; }
+html body .customer-drawer #cdPreparedAdoptionResult .prepared-grand-total strong { font-size:1.1rem; }
+html body .customer-drawer #cdPreparedAdoptionResult .prepared-calculation-details { margin-top:16px; }

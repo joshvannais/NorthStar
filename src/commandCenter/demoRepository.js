@@ -202,7 +202,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['simulate_lead', 'reset', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['proposal_adopt','simulate_lead', 'reset', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -252,11 +252,13 @@ function mutationInput(input) {
   if(input.operation==='pricing_policy'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'PRICING_POLICY_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=pricingPolicyPlan.normalize(input.plan);}
   if(input.operation==='pricing_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'PRICING_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=pricingPlan.normalize(input.plan);}
   if(input.operation==='material_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'MATERIAL_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=materialPlan.normalize(input.plan);}
+  if(input.operation==='proposal_adopt'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'PROPOSAL_ADOPTION_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=require('../estimating/proposalAdoptionContract').normalize(input.plan);}
   normalized.requestDigest = sha256({
     operation: normalized.operation,
     expectedRevision: normalized.expectedRevision,
     scenarioSelection: normalized.scenarioSelection || null,
     ...(normalized.operation==='estimate_review' ? {estimateId:normalized.estimateId,decision:normalized.decision} : {}),
+    ...(normalized.operation==='proposal_adopt'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation==='estimate_adopt'?{estimateId:normalized.estimateId,adoption:normalized.adoption}:{}),
     ...(['commercial_terms','commercial_ok'].includes(normalized.operation)?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation==='tax_profile'?{plan:normalized.plan}:{}),
@@ -564,6 +566,7 @@ class DemoCommandCenterRepository {
 
   async mutate(token, rawInput, rawAdmission) {
     const input = mutationInput(rawInput);
+    const aggregate = input.operation === 'proposal_adopt';
     const operations = input.operation === 'work_action';
     const commercialOperation=['commercial_terms','commercial_ok','tax_profile'].includes(input.operation);
     if(commercialOperation&&(!commercialWrite.mutationsEnabled||input.operation==='tax_profile'&&!commercialWrite.preparationEnabled||input.operation==='commercial_ok'&&!decisionPolicy.mutationsEnabled))fail(503,'COMMERCIAL_PAUSED','New commercial terms and approvals are paused. Refresh to check saved history.');
@@ -585,7 +588,7 @@ class DemoCommandCenterRepository {
     const client = await pool.connect();
     let open = false;
     try {
-      await client.query('BEGIN');
+      await client.query(input.operation==='proposal_adopt'?'BEGIN ISOLATION LEVEL SERIALIZABLE':'BEGIN');
       open = true;
       let now = date(this.clock());
       let locked = await client.query(
@@ -622,7 +625,7 @@ class DemoCommandCenterRepository {
       if (!lockedRow) fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
       assertRowAuthority(lockedRow, token);
       const sourceOperation=input.operation==='material_plan'&&['estimate-material-plan-v3','estimate-material-plan-v4'].includes(input.plan?.confirmationVersion)||input.operation==='estimate_adopt'&&['estimate-material-adoption-v3','estimate-material-adoption-v4','estimate-cost-adoption-v1'].includes(input.adoption?.confirmationVersion);
-      if(sourceOperation || operations || commercialOperation || ['labor_plan','equipment_plan','equipment_cost','pricing_policy'].includes(input.operation)||input.operation==='estimate_adopt'&&['estimate-cost-adoption-v2','estimate-cost-adoption-v3'].includes(input.adoption.confirmationVersion))now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
+      if(sourceOperation || aggregate || operations || commercialOperation || ['labor_plan','equipment_plan','equipment_cost','pricing_policy'].includes(input.operation)||input.operation==='estimate_adopt'&&['estimate-cost-adoption-v2','estimate-cost-adoption-v3'].includes(input.adoption.confirmationVersion))now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
       if (date(lockedRow.expires_at).getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
       }
@@ -633,6 +636,7 @@ class DemoCommandCenterRepository {
         open = false;
         fail(409, 'DEMO_REVISION_CONFLICT', 'The demo was refreshed to the current fictional workspace. Refresh before trying that action again.');
       }
+      if(aggregate)require('../estimating/proposalAdoptionRepository').checkPolicy(input.plan);
       const replay = await client.query(
         `SELECT operation, request_digest, response_revision, response_digest
            FROM demo_command_center_mutations
@@ -643,6 +647,12 @@ class DemoCommandCenterRepository {
         if (replay.rows[0].operation !== input.operation ||
             digest(replay.rows[0].request_digest) !== input.requestDigest) {
           fail(409, 'DEMO_IDEMPOTENCY_CONFLICT', 'That demo action key was already used for a different action.');
+        }
+        if(aggregate){
+          const receipt=require('../estimating/proposalAdoptionContract').checkReplay(current.state.proposalAdoptions?.[input.estimateId]||[],input.plan,input.idempotencyHash);
+          if(!receipt)fail(409,'DEMO_IDEMPOTENCY_CONFLICT','This attempt has no matching saved estimate. Refresh and review history.');
+          const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to continue.');
+          await client.query('COMMIT');open=false;return{record:current,replayed:true};
         }
         if (operations) {
           const moment = date((await client.query('SELECT clock_timestamp() now')).rows[0].now);
@@ -695,7 +705,11 @@ class DemoCommandCenterRepository {
       let operationsResponse;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if (operations) {
+      if(aggregate){
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
+        const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'PROPOSAL_ADOPTION_UNAVAILABLE','That demo estimate is unavailable.');
+        nextState=(await require('./demoProposalAdoption').apply(current,item,input.plan,input.idempotencyHash,workspace,now)).state;
+      }else if (operations) {
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
         const result=await demoOperations.apply(client,workspace,current.state,input,now); nextState=result.state; operationsResponse=result.response;
       } else if(scheduling){
@@ -801,7 +815,7 @@ class DemoCommandCenterRepository {
       const nextRevision = current.revision + 1;
       const nextMutationCount = current.mutationCount + 1;
       const responseDigest = sha256({ state: nextState, revision: nextRevision });
-      if(operations){
+      if(operations||aggregate){
         // Match the existing database JSONB byte limit, including PostgreSQL's
         // representation. Preserve all saved history when another snapshot
         // would exceed the finite demo; never truncate or replace old records.
@@ -844,6 +858,12 @@ class DemoCommandCenterRepository {
           const work=demoOperations.workFor(current.state,input.appointmentId),proposal=work?.completion.find(r=>r.id===command.proposal?.id);
           if(!proposal || date(proposal.expiresAt)<=moment)fail(410,'DEMO_COMPLETION_EXPIRED','This completion request expired. Withdraw it and request a new review.');
         }
+      }
+      if(aggregate){
+        const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to continue.');
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
+        const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId),prepared=await require('./demoProposalAdoption').prepare(current,item,input.plan,workspace,moment);
+        require('../estimating/proposalAdoptionContract').assertCurrent(prepared.review,input.plan,moment);
       }
       await client.query('COMMIT');
       open = false;

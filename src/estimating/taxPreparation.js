@@ -26,8 +26,13 @@ function relevantProfile(raw,declared={version:VERSION,contexts:[]}){
 function preparationInput(raw,declared){const inputs=relevantProfile(raw,declared);return {inputs,digest:sha256(inputs),version:inputs.version};}
 function evaluate(inputs,rules,asOfDate,{simulated=false}={}){
  if(inputs?.version===VERSION){
-  if(!day(asOfDate)||!Array.isArray(rules)||rules.length>1000||inputs.declared?.version!==VERSION)invalid();normalize(inputs.declared);if(rules.some(r=>![LEGACY_VERSION,VERSION].includes(r?.version)))invalid();const eligible=rules.filter(r=>r.version===VERSION).map(r=>{v2.rule(v2.content(r),{simulated});return r;}).filter(r=>v2.current(r,asOfDate,asOfDate)).map(r=>({...r,version:LEGACY_VERSION,effectiveOn:r.legalEffectiveOn,endsOn:r.legalEndsOn||'9999-12-31'}));
-  const old=evaluate({...inputs,version:LEGACY_VERSION,declared:{contexts:inputs.declared.contexts}},eligible,asOfDate,{simulated});return stableValue({...old,version:VERSION,inputDigest:sha256(inputs)});
+  if(!day(asOfDate)||!Array.isArray(rules)||rules.length>1000||inputs.declared?.version!==VERSION)invalid();normalize(inputs.declared);if(rules.some(r=>![LEGACY_VERSION,VERSION].includes(r?.version)))invalid();const eligible=rules.filter(r=>r.version===VERSION).map(r=>{v2.rule(v2.content(r),{simulated});return r;}).filter(r=>r.active&&asOfDate>=r.reviewedOn&&asOfDate<=r.reviewValidThrough);
+  // Company preparation checks current review/context only. Exact legal dates remain
+  // on original rules and are checked against the selected transaction in calculation.
+  const old=evaluate({...inputs,version:LEGACY_VERSION,declared:{contexts:inputs.declared.contexts}},[],asOfDate,{simulated});
+  const coverage=old.coverage.map(row=>{if(row.missing.length)return row;const c=inputs.declared.contexts.find(c=>c.id===row.contextId),matches=eligible.filter(r=>['country','region','locality','jurisdiction','serviceKey','classification','registration','collectionBasis'].every(k=>r[k]===c[k])&&typeof r.id==='string'&&/^[a-f0-9]{64}$/.test(r.digest));return {...row,state:matches.length===1?'matched':matches.length>1?'conflicting_coverage':'unsupported',rule:matches.length===1?{id:matches[0].id,digest:matches[0].digest}:null};});
+  const state=old.missing.length||coverage.some(c=>c.state==='missing_inputs')?'missing_inputs':coverage.length&&coverage.every(c=>c.state==='matched')?'matched':'unsupported';
+  return stableValue({...old,version:VERSION,inputDigest:sha256(inputs),coverage,state});
  }
  if(inputs?.version!==LEGACY_VERSION||!day(asOfDate)||!Array.isArray(rules)||rules.length>1000)invalid();
  const declared=normalize(inputs.declared),missing=[];
@@ -54,7 +59,7 @@ function evaluate(inputs,rules,asOfDate,{simulated=false}={}){
 function status(result){
  if(!result)return {state:'pending',message:'Tax preparation is pending. You can continue setting up your business.'};
  if(result.state==='missing_inputs')return {state:result.state,message:'Add the missing business and collection details to continue tax preparation.'};
- if(result.state==='matched')return {state:result.state,message:result.simulated?'Simulated tax coverage matches these practice details. Review each job’s treatment before approval.':'Recorded tax coverage matches this setup. Review each job’s location, date and treatment before approval.'};
+ if(result.state==='matched')return {state:result.state,message:result.simulated?'Simulated tax coverage matches these practice details. Review each jobâ€™s treatment before approval.':'Recorded tax coverage matches this setup. Review each jobâ€™s location, date and treatment before approval.'};
  return {state:'unsupported',message:'Validated tax coverage is not available for this setup. An owner can record externally reviewed treatment for a job.'};
 }
 module.exports={VERSION,normalize,normalizeMutation,relevantProfile,preparationInput,evaluate,status};

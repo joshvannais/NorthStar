@@ -1969,3 +1969,9 @@ html body .customer-drawer .drawer-close-btn:focus-visible {
   outline:2px solid var(--theme-text);outline-offset:3px;
 }
 html body .customer-drawer .drawer-close-btn svg {display:block;pointer-events:none;}
+
+/* Commercial panel totals have independent theme ink. */
+html body .customer-drawer #cdCommercialTerms .drawer-pricing-item { color:#0f172a; }
+html body .customer-drawer #cdCommercialTerms .drawer-pricing-item > span { color:inherit; }
+
+html[data-theme="dark"] body .customer-drawer #cdCommercialTerms .drawer-pricing-item { color:#f1f2f6; }

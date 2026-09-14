@@ -17,6 +17,7 @@ window.CustomerDetail = (function() {
   var _openSequence = 0;
   var _reviewSequence = 0;
   var _estimateReview = null;
+  var _preparedEstimateState = null;
   var _groundedReview = null;
   var _decisionDraft = null;
   var _overlayEl = null;
@@ -216,9 +217,9 @@ window.CustomerDetail = (function() {
     html += '          </details>';
     html += '          <details class="drawer-polaris-pricing">';
     html += '            <summary>Estimate costs and price review</summary>';
-    html += '            <p>Original price breakdown. Material changes and human price decisions are shown in the estimate review below.</p><div id="cdPricingBreakdown"><p>No estimate details are available to this account.</p></div>';
+    html += '            <details id="cdOriginalPrice"><summary>Original Price Breakdown</summary><p>These are the original recorded amounts.</p><div id="cdPricingBreakdown"><p>No estimate details are available to this account.</p></div></details>';
     html += '            <section class="drawer-review-section" aria-label="Estimate review">';
-    html += '              <h4>Estimate review</h4><div id="cdEstimateReview" role="status" aria-live="polite"></div>';
+    html += '              <div id="cdEstimateReview" role="status" aria-live="polite"></div>';
     html += '              <button type="button" class="btn btn-secondary btn-sm" id="cdEstimateReviewRefresh" style="margin-top:1rem">Refresh estimate review</button>';
     html += '              <div id="cdEstimateDecision" style="margin-top:1rem"></div>';
     html += '              <section id="cdCapellaReview" class="drawer-capella-review" aria-labelledby="cdCapellaTitle" hidden></section>';
@@ -304,13 +305,13 @@ window.CustomerDetail = (function() {
     var neutralContext = document.createElement('p'); neutralContext.id = 'cdNeutralContext'; basisDetails.appendChild(neutralContext);
     panel.querySelector('.drawer-work-details').replaceChildren(scopeSection);
     var travelDetails = document.createElement('details'); travelDetails.className = 'drawer-polaris-subsection'; travelDetails.id = 'cdTravelDetails';
-    var travelTitle = document.createElement('summary'); travelTitle.textContent = 'Travel And Work Time'; travelDetails.append(travelTitle,travelSection);
+    var travelTitle = document.createElement('summary'); travelTitle.textContent = 'Edit Travel And Work Time'; travelDetails.append(travelTitle,travelSection);
     var chargeDetails = document.createElement('details'); chargeDetails.className = 'drawer-polaris-subsection'; chargeDetails.id = 'cdChargeDetails';
     var chargeSummary = document.createElement('summary'); chargeSummary.textContent = 'Original Charge Details'; chargeDetails.append(chargeSummary,charges);
     panel.append(travelDetails,chargeDetails);
     panel.appendChild(basisDetails);
     var priceDetails = panel.querySelector('.drawer-polaris-pricing'); priceDetails.classList.add('drawer-section');
-    priceDetails.querySelector('summary').textContent = 'Price Breakdown And Estimate Review';
+    priceDetails.querySelector('summary').textContent = 'Prepared Estimate And Saved Review';priceDetails.open=true;
     analysis.after(priceDetails);
     panel.appendChild(basisDetails);
     var profileSection = $('cdProfileSection');
@@ -782,6 +783,7 @@ window.CustomerDetail = (function() {
   // ── Public API ──
 
   function open(customerId, options) {
+    if(window.NorthStarPreparedEstimate)window.NorthStarPreparedEstimate.dispose(_preparedEstimateState);_preparedEstimateState=null;
     if (!customerId) return;
     var generation = ++_openSequence;
     if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear($('cdExecutionRecords'));
@@ -1855,6 +1857,7 @@ window.CustomerDetail = (function() {
   }
 
   function refreshEstimateReview(focusReason) {
+    if(window.NorthStarPreparedEstimate)window.NorthStarPreparedEstimate.dispose(_preparedEstimateState);
     restoreReviewActions();var root = $('cdEstimateReview'), button = $('cdEstimateReviewRefresh');
     var selected = _currentData && _currentData.canonical;
     var generation = _openSequence, request = ++_reviewSequence;
@@ -1863,6 +1866,7 @@ window.CustomerDetail = (function() {
     renderCapellaStatus('Loading cost comparison.');
     renderTravelStatus('Loading travel plan.');
     root.replaceChildren(); root.textContent = 'Loading estimate review.'; root.setAttribute('aria-busy', 'true');
+    root.setAttribute('role','status');root.setAttribute('aria-live','polite');
     button.disabled = true;
     function current() { return generation === _openSequence && request === _reviewSequence && _currentData && _currentData.canonical === selected && !_drawerEl.hidden; }
     function unavailable(message) { root.replaceChildren(); root.textContent = message; renderCapellaStatus(message); renderTravelStatus(message); }
@@ -1877,7 +1881,7 @@ window.CustomerDetail = (function() {
         if (!current()) return;
         var review = body && body.success && body.data;
         if (!reviewPinsMatch(review, selected)) { unavailable('The estimate has changed. Close this panel and reopen the customer to review it.'); return; }
-        root.replaceChildren();
+        root.replaceChildren();root.removeAttribute('role');root.removeAttribute('aria-live');
         function paragraph(text) { var node = document.createElement('p'); node.style.margin = '0 0 0.75rem'; node.textContent = text; root.appendChild(node); }
         renderRevisionSelector(review,root);
         if (review.simulated) paragraph('Demo example using fictional company and job information.');
@@ -1898,21 +1902,25 @@ window.CustomerDetail = (function() {
           else detail.textContent = row.sourceState==='not_applicable'?'Not applicable':'Unavailable';
           rowNode.appendChild(term); rowNode.appendChild(detail); list.appendChild(rowNode);
         }); root.appendChild(list);
-        renderGroundedRecommendations(review, root);
-        renderMaterialReview(review, root);
-        renderLaborPlan(review, root);
-        renderPricingPlan(review, root);
-        renderPricingPolicy(review, root);
-        if(window.NorthStarCommercialTerms)window.NorthStarCommercialTerms.render(review,root,{money:decisionMoney,refresh:function(){refreshEstimateReview('commercial-saved');},isCurrent:function(){return current()&&review===_estimateReview;}});
+        var preparedHost=document.createElement('div');root.prepend(preparedHost);
+        var savedDetails=document.createElement('details');savedDetails.id='cdPreparedSaved';var savedTitle=document.createElement('summary');savedTitle.textContent='Saved Estimate';savedDetails.appendChild(savedTitle);Array.from(root.childNodes).filter(function(n){return n!==preparedHost;}).forEach(function(n){savedDetails.appendChild(n);});root.appendChild(savedDetails);
+        var editPlans=document.createElement('details');editPlans.id='cdPreparedManual';var editTitle=document.createElement('summary');editTitle.textContent='Edit Saved Plans';editPlans.appendChild(editTitle);root.appendChild(editPlans);
+        renderGroundedRecommendations(review, editPlans);
+        renderMaterialReview(review, editPlans);
+        renderLaborPlan(review, editPlans);
+        renderPricingPlan(review, editPlans);
+        renderPricingPolicy(review, editPlans);
+        if(window.NorthStarCommercialTerms)window.NorthStarCommercialTerms.render(review,editPlans,{money:decisionMoney,refresh:function(){refreshEstimateReview('commercial-saved');},isCurrent:function(){return current()&&review===_estimateReview;}});
         renderTravelPlan(review);
-        renderEquipmentPlan(review, root);
-        renderMaterialAdoption(review, root);
+        renderEquipmentPlan(review, editPlans);
+        renderMaterialAdoption(review, editPlans);
         (review.missing || []).forEach(paragraph);
         if (_decisionDraft && _decisionDraft.basis !== decisionReviewBasis(review)) {
           _decisionDraft.confirmed = false; _decisionDraft.request = null; _decisionDraft.basisChanged = true;
           _decisionDraft.basis = decisionReviewBasis(review);
         }
         _estimateReview = review; renderEstimateDecision(review); renderCapellaReview(review);positionPricingReviewActions();
+        if(window.NorthStarPreparedEstimate)_preparedEstimateState=window.NorthStarPreparedEstimate.mount(review,preparedHost,_preparedEstimateState,{money:decisionMoney,refresh:function(){refreshEstimateReview('review-refresh');},isCurrent:function(){return current()&&_estimateReview===review;}});
         if(_groundedReview){
           var handoff=_groundedReview;_groundedReview=null;
           function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object'){var out={};Object.keys(value).sort().forEach(function(k){out[k]=stable(value[k]);});return out;}return value;}
@@ -1940,7 +1948,7 @@ window.CustomerDetail = (function() {
         unavailable(error.status === 401 ? 'Sign in again to review this estimate.' : error.status === 403 ?
           'Estimate review is available to current owners and administrators.' : error.status === 404 ?
           'This estimate is no longer available. Reopen the customer to try again.' : 'Estimate review could not be loaded. Try refreshing it.');
-      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if ($('cdCapellaRefresh')) $('cdCapellaRefresh').disabled=false; if (restoreFocus) { if (focusReason === 'capella-refresh' && $('cdCapellaRefresh')) $('cdCapellaRefresh').focus(); else if (focusReason === 'travel-saved') { var travel=$('cdTravelPlan');if(travel){for(var x=travel;x;x=x.parentElement)if(x.tagName==='DETAILS')x.open=true;var action=$('cdTravelStart');if(action)action.focus();else button.focus();}} else if (focusReason === 'labor-saved') { var labor=$('cdLaborPlan');if(labor){for(var x=labor;x;x=x.parentElement)if(x.tagName==='DETAILS')x.open=true;var action=labor.querySelector('#cdLaborStart');if(action)action.focus();else button.focus();}} else if (focusReason === 'material-saved') { var material=$('cdMaterialReview');if(material){material.open=true;var action=material.querySelector('#cdMaterialPlan button');if(action)action.focus();else button.focus();} } else if (focusReason === 'decision-saved' || focusReason === 'adoption-saved') focusDecisionAction('approve'); else if(focusReason==='revision-selected'&&$('cdEstimateRevisionSelect'))$('cdEstimateRevisionSelect').focus(); else button.focus(); } } });
+      }).finally(function() { if (current()) { root.setAttribute('aria-busy', 'false'); button.disabled = false; if ($('cdCapellaRefresh')) $('cdCapellaRefresh').disabled=false; if (restoreFocus) { if (focusReason === 'capella-refresh' && $('cdCapellaRefresh')) $('cdCapellaRefresh').focus(); else if (focusReason === 'travel-saved') { var travel=$('cdTravelPlan');if(travel){for(var x=travel;x;x=x.parentElement)if(x.tagName==='DETAILS')x.open=true;var action=$('cdTravelStart');if(action)action.focus();else button.focus();}} else if (focusReason === 'labor-saved') { var labor=$('cdLaborPlan');if(labor){for(var x=labor;x;x=x.parentElement)if(x.tagName==='DETAILS')x.open=true;var action=labor.querySelector('#cdLaborStart');if(action)action.focus();else button.focus();}} else if (focusReason === 'material-saved') { var material=$('cdMaterialReview');if(material){for(var x=material;x;x=x.parentElement)if(x.tagName==='DETAILS')x.open=true;var action=material.querySelector('#cdMaterialPlan button');if(action)action.focus();else button.focus();} } else if (focusReason === 'decision-saved' || focusReason === 'adoption-saved') focusDecisionAction('approve'); else if(focusReason==='revision-selected'&&$('cdEstimateRevisionSelect')){var selector=$('cdEstimateRevisionSelect');for(var x=selector;x;x=x.parentElement)if(x.tagName==='DETAILS')x.open=true;selector.focus();} else button.focus(); } } });
   }
 
   function populateDrawer(data) {
@@ -2080,6 +2088,7 @@ window.CustomerDetail = (function() {
   }
 
   function close() {
+    if(window.NorthStarPreparedEstimate)window.NorthStarPreparedEstimate.dispose(_preparedEstimateState);_preparedEstimateState=null;
     _openSequence += 1;
     if (window.NorthStarExecutionLinks) window.NorthStarExecutionLinks.clear($('cdExecutionRecords'));
     if ($('cdExecutionRecords')) $('cdExecutionRecords').replaceChildren();

@@ -1,0 +1,16 @@
+'use strict';
+const {resolveDemoScenario:resolve}=require('../../public/js/command-center-contract');
+const {publicScenarioSpace,normalizeSelection}=require('../../src/commandCenter/scenarioSpace');
+const space=publicScenarioSpace(),choices={business:'growing_residential'};
+test('every sampled pending draft is accepted by the unchanged strict engine contract',()=>{for(let i=0;i<100;i++){const v=resolve(space,choices,()=>i/100);expect(normalizeSelection(v)).toEqual(v);}});
+test('emergency triage rules resolve jointly and explicit incompatible choices are rejected',()=>{const v=resolve(space,{...choices,urgency:'safety_emergency'},()=>0.4);expect(v.outcome).toBe('needs_information');expect(v.scheduling).toBe('flexible');expect(['repair_request','inspection']).toContain(v.intent);expect(resolve(space,{...choices,urgency:'safety_emergency',outcome:'estimate_ready'},()=>0)).toBeNull();});
+test('weather-dependent work stays in supported outdoor services',()=>{for(let i=0;i<10;i++)expect(['fence','roofing','concrete']).toContain(resolve(space,{...choices,scheduling:'weather_window'},()=>i/10).service);expect(resolve(space,{...choices,service:'plumbing',scheduling:'weather_window'},()=>0)).toBeNull();});
+test('explicit selection remains exact, a new random draft can differ without modifying the old one',()=>{const first=resolve(space,choices,()=>0),before=JSON.stringify(first);expect(resolve(space,first,()=>0)).toEqual(first);expect(resolve(space,choices,()=>0,first)).not.toEqual(first);expect(JSON.stringify(first)).toBe(before);});
+test('unknown IDs and malformed random sources fail closed',()=>{expect(resolve(space,{...choices,service:'unlisted'},()=>0)).toBeNull();expect(resolve(space,choices,()=>1)).toBeNull();});
+test.each(['fence','roofing','hvac','plumbing','electrical','concrete'])('%s repair intent feeds the actual transcript and extracted fact consistently',service=>{
+ const {buildSimulatedGraph}=require('../../src/commandCenter/workspace'),{DEFAULT_SELECTION}=require('../../src/commandCenter/scenarioSpace');
+ const input={tenantId:'11111111-1111-4111-8111-111111111111',key:'coherence-fixture',scenarioSelection:{...DEFAULT_SELECTION,service,intent:'repair_request'},createdAt:new Date('2026-09-14T12:00:00Z')};const before=JSON.stringify(input),g=buildSimulatedGraph(input);
+ expect(g.polaris.facts.find(f=>f.variable==='jobType').normalizedValue).toBe('repair');expect(g.communication.transcript.some(t=>t.text==='A repair.')).toBe(true);expect(JSON.stringify(input)).toBe(before);
+});
+test('unsupported explicit inspection or replacement does not invent a job capability',()=>{expect(resolve(space,{...choices,service:'hvac',intent:'inspection'},()=>0)).toBeNull();expect(resolve(space,{...choices,service:'electrical',intent:'replacement_planning'},()=>0)).toBeNull();});
+test('shared job-type map agrees with every canonical simulation catalog entry',()=>{const c=require('../../public/js/command-center-contract'),catalog=require('../../src/routes/simulation/scenario-catalog');for(const service of ['fence','roofing','hvac','plumbing','electrical','concrete'])for(const type of catalog[service].jobTypes)expect(c.demoJobType(service,'new_estimate',type)).toBe(type);});

@@ -110,7 +110,46 @@
     return value;
   }
 
+  // Pending demo choices only. Saved selections and replay are never rewritten.
+  function demoJobType(service, intent, current) {
+    var types={fence:['install','replace','repair'],roofing:['replace','repair','inspect'],hvac:['replace','repair','maintain'],plumbing:['repair','replace','inspect'],electrical:['repair','upgrade','inspect'],concrete:['install','replace','repair']}[service];
+    if(!types)return null;
+    var required={repair_request:'repair',inspection:'inspect',replacement_planning:'replace'}[intent];
+    return required?(types.indexOf(required)>=0?required:null):(types.indexOf(current)>=0?current:types[0]);
+  }
+  function resolveDemoScenario(space, choices, random, previous) {
+    if (!space || !Array.isArray(space.dimensions) || space.dimensions.length !== 7) return null;
+    var dimensions = space.dimensions, candidates = [], tuple = {}, count = 0;
+    function visit(index) {
+      if (index === dimensions.length) {
+        count += 1;
+        if (count > 60000) return;
+        if (!demoJobType(tuple.service,tuple.intent,null)) return;
+        // A reported emergency requires triage, not a ready estimate or routine future visit.
+        if (tuple.urgency === 'safety_emergency' &&
+            (['repair_request','inspection'].indexOf(tuple.intent) < 0 || tuple.outcome !== 'needs_information' || tuple.scheduling !== 'flexible')) return;
+        if (tuple.scheduling === 'weather_window' && ['fence','roofing','concrete'].indexOf(tuple.service) < 0) return;
+        candidates.push(Object.assign({}, tuple)); return;
+      }
+      var d = dimensions[index], requested = choices && choices[d.id];
+      if (!d || !Array.isArray(d.options) || d.options.length > 12) return;
+      d.options.forEach(function (option) {
+        if (requested && requested !== 'random' && requested !== option.id) return;
+        tuple[d.id] = option.id; visit(index + 1);
+      });
+    }
+    visit(0);
+    if (count > 60000 || !candidates.length) return null;
+    var alternate = candidates.filter(function (candidate) { return JSON.stringify(candidate) !== JSON.stringify(previous); });
+    if (alternate.length) candidates = alternate;
+    var sample = random();
+    if (!Number.isFinite(sample) || sample < 0 || sample >= 1) return null;
+    return candidates[Math.floor(sample * candidates.length)];
+  }
+
   return Object.freeze({
+    resolveDemoScenario: resolveDemoScenario,
+    demoJobType: demoJobType,
     CONTRACT_VERSION: CONTRACT_VERSION,
     WORKSPACE_CONTRACT: WORKSPACE_CONTRACT,
     ROUTES: ROUTES,

@@ -60,7 +60,7 @@
           if (!candidates.length) node('p', 'No current crew information is available.', details);
           candidates.forEach(function (v) { node('p', v.label + ' — ' + (v.status === 'blocked' ? 'Recorded requirements or schedule conflict' : v.status === 'eligible_for_review' ? 'Review for the recorded job time; not assigned' : 'Requirements or availability need review'), details); });
         } else if (g[0] === 'equipment') {
-          (c.inputs.lines || []).forEach(function (l, i) { row(target, l.task, l.identity && (l.identity.displayName || l.identity.model || l.identity.equipmentType) || 'Equipment details need review'); var result = (c.result.lines || [])[i]; node('p', result && result.status === 'matches_reviewed_requirements' ? 'Recorded specifications match the reviewed requirements. Condition and availability still need review.' : 'Confirm requirements and current equipment information.', target, 'prepared-muted'); if (c.costs && c.costs[i]) row(target, 'Equipment cost', amount(c.costs[i].total)); });
+          (c.inputs.lines || []).forEach(function (l, i) { row(target, l.task, l.identity && (l.identity.displayName || l.identity.model || l.identity.equipmentType) || 'Equipment details need review'); var result = (c.result.lines || [])[i]; node('p', result && result.status === 'matches_reviewed_requirements' ? 'Recorded specifications match the reviewed requirements. Condition and availability still need review.' : 'Confirm requirements and current equipment information.', target, 'prepared-muted'); var cost = (c.costs || []).find(function (v) { return v.lineId === l.lineId; }); row(target, 'Equipment cost', cost ? amount(cost.total) : 'Unavailable'); });
         } else if (g[0] === 'travel') {
           row(target, 'Travel and logistics cost', amount(c.result.total)); node('p', 'Declared costs do not confirm a route, crew availability or arrival time.', target, 'prepared-muted');
         } else {
@@ -68,7 +68,8 @@
           if (price.overhead) { row(target, 'Gross overhead', amount(price.overhead.gross)); row(target, 'Already included', amount(price.overhead.alreadyIncluded)); row(target, 'Additional overhead', amount(price.overhead.incremental)); }
           node('p', 'Complete cost and margin remain unavailable until included costs are reconciled.', target, 'prepared-muted');
         }
-        if (state.data.recipe) { var source = node('details', null, target); node('summary', 'Planning Source', source); node('p', state.data.recipe.label || 'Company planning information', source); node('p', 'Effective ' + state.data.recipe.effectiveOn + ' · Review by ' + state.data.recipe.reviewBy, source); }
+        if (c.origin === 'current_saved_plan') node('p', "Review this saved plan's sources under Edit.", target, 'prepared-muted');
+        else if (state.data.recipe) { var source = node('details', null, target); node('summary', 'Planning Source', source); node('p', state.data.recipe.label || 'Company planning information', source); node('p', 'Effective ' + state.data.recipe.effectiveOn + ' · Review by ' + state.data.recipe.reviewBy, source); }
       });
     }
     function renderQuestions() {

@@ -581,6 +581,18 @@ router.post('/command-center/polaris/messages-v2', require('../polaris/demoGroun
  }
 }));
 
+router.post('/command-center/estimates/:estimateId/proposal-preview',async function(req,res){
+ res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'proposal-preview'))return;
+ if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the prepared estimate entries.'}});
+ try{const body=require('../estimating/estimateProposal').normalize(req.body),record=await commandCenterRepository.read(commandCenterToken(req,res));
+  const item=demoCanonicalItems(demoWorkspace(record)).find(x=>x.ids.estimate===req.params.estimateId);
+  if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});
+  const selectedReq=Object.assign(Object.create(req),{query:body.selectedRevision===null?{}:{revision:body.selectedRevision}});
+  const review=await assembleDemoCapellaReview(record,item,selectedReq);
+  const data=require('../estimating/estimateProposalRepository').demo(record,review,item,body,new Date(),demoWorkspace(record));
+  return res.json({success:true,data});
+ }catch(e){const status=[400,401,403,404,409,410,413,429,503].includes(e.status)?e.status:503;return res.status(status).json({success:false,error:{message:e.code?.startsWith('PROPOSAL_')||e.code==='ESTIMATE_PROPOSAL_INVALID'?e.message:'This prepared estimate is unavailable. Refresh and try again.'}});}
+});
 router.post('/command-center/estimates/:estimateId/capella-scenarios',async function(req,res){
  res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'capella-scenarios'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Check the scenario entries.'}});
  try{const record=await commandCenterRepository.read(commandCenterToken(req,res));const item=demoCanonicalItems(demoWorkspace(record)).find(x=>x.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});const review=await assembleDemoCapellaReview(record,item,req);return res.json({success:true,data:require('../estimating/capellaScenarios').calculate(review.capellaScenarios,req.body)});}catch(e){const status=[400,401,403,404,409,410,413,429,503].includes(e.status)?e.status:503;return res.status(status).json({success:false,error:{message:e.code&&e.code.startsWith('CAPELLA_')?e.message:status===400?'Check the scenario amounts, source and date range.':'Scenario analysis could not be loaded. Refresh and try again.'}});}

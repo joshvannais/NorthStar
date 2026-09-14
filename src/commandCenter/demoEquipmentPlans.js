@@ -14,7 +14,8 @@ function create(seed,createdAt){
  const asset={id:id('asset'),name:'Practice Auger',catalogueState:'active',version:1,assetDigest:sha256(identity),privateConfiguration:identity,research,reviewState:'reviewed',availability:'unknown',simulated:true};
  const document=buildCanonicalKnowledgeDocument({applicability:{},canonicalKey:'organization.operational-capabilities',content:{equipmentNote:'For this simulated business, confirm the required hole diameter and site access before choosing an auger. Ground conditions and underground services still need review.'},entryType:'generated_knowledge',label:'Simulated Equipment Planning Guidance',origin:'human',reviewRequirement:'high_risk',sensitivity:'restricted'});
  const knowledge={entry_id:id('entry'),canonical_key:'organization.operational-capabilities',entry_type:'generated_knowledge',version_id:id('version'),version_number:1,sensitivity:'restricted',review_requirement:'high_risk',canonical_document:document.canonicalDocument,canonical_digest:document.canonicalDigest,publication_id:id('publication'),publication_number:1,publication_digest:document.canonicalDigest};
- return stableValue({version:VERSION,createdAt:reviewedAt,assets:[asset],knowledgeRows:[knowledge]});
+ const proposal=require('./demoProposalRecipe').create(id,reviewedAt,asset);
+ return stableValue({version:VERSION,createdAt:reviewedAt,assets:[asset],knowledgeRows:[knowledge,proposal.knowledge],proposalRecipeBasis:proposal.basis});
 }
 function rawSources(state,item,inputs=null){
  const basis=state.equipmentBasis?.version===VERSION?state.equipmentBasis:null;

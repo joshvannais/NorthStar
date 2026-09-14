@@ -115,4 +115,4 @@ function apply(workspace,state,input,now){
  const result=stableValue({...state,demoScheduling:next});validateState(result);return{state:result,response:entry.response};
 }
 function replay(state,input,now){const value=validateState(state),found=[...value.previews,...value.history].find(p=>p.requestKey===input.idempotencyHash);if(!found)fail(409,'DEMO_SCHEDULE_REPLAY_UNAVAILABLE','This earlier scheduling attempt is unavailable. Refresh the demo.');if(input.operation==='schedule_preview'&&new Date(found.response.expiresAt).getTime()<=now.getTime())fail(410,'DEMO_SCHEDULE_PREVIEW_EXPIRED','This preview expired. Review the appointment again.');return found.response;}
-module.exports={VERSION,validateState,projection,current,apply,replay};
+module.exports={VERSION,validateState,projection,current,apply,replay,evidence};

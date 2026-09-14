@@ -468,6 +468,7 @@ module.exports = {
   encodeOperatorTargetCursor,
   loadSchedulingOperatorDirectory,
   loadSchedulingOperatorTargetPage,
+  loadSchedulingOperatorTargetPageFromSnapshot,
   parseOperatorTargetRequest,
   withBroadSchedulingReadSnapshot,
 };

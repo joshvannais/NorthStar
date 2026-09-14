@@ -30,6 +30,33 @@
     return result;
   }
 
+  // Presentation only: read authorized recorded facts, never rewrite their evidence or history.
+  var FACTS = Object.freeze({customerDistanceMiles:['Distance','miles'],jobType:['Job Type',''],serviceRadiusMiles:['Service Radius','miles'],serviceZone:['Service Area',''],sqft:['Floor Area','square feet'],squareFeet:['Area','square feet'],linearFeet:['Length','ft'],laborHours:['Labor Time','hours'],estimatedDurationHours:['Estimated Duration','hours'],seer:['SEER',''],tonnage:['HVAC Capacity','tons'],squares:['Roof Area','roofing squares']});
+  var GAPS = Object.freeze({vehicleCost:'Vehicle cost needs confirmation for this estimate.',fuelCost:'Fuel cost needs confirmation for this estimate.',callDurationSeconds:'Call duration is not recorded.',travelMinutes:'Travel time needs confirmation.',travelDistanceMiles:'Travel distance needs confirmation.',travelSource:'Confirm how the travel distance and time were determined.',equipmentReference:'Confirm the equipment needed for this job.',knownEquipmentCost:'Equipment cost needs confirmation.',knownDirectMaterialCost:'Material cost needs confirmation.',actualCrewAssignment:'This assessment does not record a crew assignment. Check the current schedule.',appointmentPreference:'Confirm the customer’s preferred appointment time.'});
+  function businessText(value) {
+    var text=safeText(value);
+    return /\b(?:Part\s*\d+|authoritative|input.source|snapshot|projection|role-authorized)\b|\b[a-z]+[A-Z][A-Za-z]*\b|Demo record detail collected|^[\[{]/.test(text)?'':text;
+  }
+  function describeGraph(graph) {
+    var polaris=graph&&graph.polaris||{},snap=polaris.snapshot||{},service=String(graph&&graph.lead&&graph.lead.serviceType||'').toLowerCase();
+    var evidence=[],missing=[],unknown=false;
+    (Array.isArray(polaris.facts)?polaris.facts:[]).forEach(function(fact){
+      if(!fact||typeof fact!=='object')return;
+      var spec=FACTS[fact.variable],value=fact.normalizedValue;
+      if(!spec){unknown=true;return;}
+      if((fact.variable==='seer'||fact.variable==='tonnage')&&service!=='hvac')return;
+      if(fact.variable==='squares'&&service!=='roofing')return;
+      if(value===null||value===undefined||value===''||typeof value==='object'){missing.push(spec[0]+' needs confirmation.');return;}
+      if(spec[1]&&(typeof value!=='number'||!Number.isFinite(value))){missing.push(spec[0]+' needs confirmation.');return;}
+      var text=businessText(value);if(!text){missing.push(spec[0]+' needs confirmation.');return;}
+      evidence.push(spec[0]+': '+text+(spec[1]?' '+spec[1]:'')+(fact.status==='conflicting'?' — Needs confirmation':''));
+    });
+    if(unknown)missing.push('Additional job details need review in the customer record.');
+    (Array.isArray(snap.missingInformation)?snap.missingInformation:[]).forEach(function(entry){var text=businessText(entry&&typeof entry==='object'?(entry.reason||entry.label):entry);missing.push(text||'Review the missing job details before finalizing the estimate.');});
+    (Array.isArray(snap.notCalculated)?snap.notCalculated:[]).forEach(function(entry){if(!entry)return;missing.push(GAPS[entry.field]||businessText(entry.reason)||'Some estimate amounts are unavailable. Review the cost details.');});
+    return {evidence:safeItems(evidence,'No readable job facts are recorded for this assessment.'),missing:safeItems(missing,'No additional details are flagged by this assessment.')};
+  }
+
   function listSection(title, values, fallback) {
     var section = element('section', 'polaris-card-section');
     section.appendChild(element('h3', '', title));
@@ -96,10 +123,10 @@
       summary: safeText(input.summary) || 'A summary is unavailable from the information you can access.',
       confidence: Number.isFinite(numericConfidence) ? Math.max(0, Math.min(100, numericConfidence)) : null,
       confidenceExplanation: safeText(input.confidenceExplanation) || 'Confidence is unavailable because supporting inputs are incomplete.',
-      evidence: safeItems(input.evidence, 'No supporting evidence is recorded for this assessment.'),
-      missing: safeItems(input.missing, 'No missing-input explanation was supplied.'),
-      risks: safeItems(input.risks, 'No specific risk is supported by the current inputs.'),
-      opportunities: safeItems(input.opportunities, 'No specific opportunity is supported by the current inputs.'),
+      evidence: safeItems(Array.isArray(input.evidence)?input.evidence.map(businessText):[], 'No readable job facts are recorded for this assessment.'),
+      missing: safeItems(Array.isArray(input.missing)?input.missing.map(businessText):[], 'Review the job details before finalizing the estimate.'),
+      risks: safeItems(Array.isArray(input.risks) ? input.risks.map(businessText) : [], 'No specific risks identified from available details.'),
+      opportunities: safeItems(input.opportunities),
       recommendations: Array.isArray(input.recommendations) ? input.recommendations : [],
       objects: Array.isArray(input.objects) ? input.objects : [],
       detailed: input.detailed === true || DETAILED_SURFACES.indexOf(input.surface) >= 0,
@@ -135,15 +162,15 @@
 
     if (value.detailed) {
       var details = element('details', 'polaris-card-details');
-      details.appendChild(element('summary', '', 'Evidence, missing inputs, risks, and recommendations'));
+      details.appendChild(element('summary', '', 'Job Details And Next Steps'));
       var grid = element('div', 'polaris-card-detail-grid');
       grid.append(
         listSection('Evidence', value.evidence),
-        listSection('Missing information', value.missing),
+        listSection('To Confirm', value.missing),
         listSection('Risks', value.risks),
-        listSection('Opportunities', value.opportunities),
         recommendationList(value.recommendations)
       );
+      if(value.opportunities.length)grid.appendChild(listSection('Opportunities',value.opportunities));
       details.appendChild(grid);
       container.appendChild(details);
     } else {
@@ -156,6 +183,7 @@
   global.NorthStarPolarisCard = Object.freeze({
     CONTRACT: CONTRACT,
     DETAILED_SURFACES: DETAILED_SURFACES,
+    describeGraph: describeGraph,
     render: render,
   });
 })(window);

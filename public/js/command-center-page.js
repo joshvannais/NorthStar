@@ -271,27 +271,11 @@
   }
 
   function humanEvidence(graph) {
-    var facts = graph && graph.polaris && Array.isArray(graph.polaris.facts) ? graph.polaris.facts : [];
-    return facts.map(function (fact) { return presentationString(fact && fact.evidenceText, ''); }).filter(Boolean).slice(0, 6);
+    return global.NorthStarPolarisCard.describeGraph(graph).evidence;
   }
 
   function missingInputs(graph) {
-    var value = snapshot(graph);
-    var result = [];
-    if (Array.isArray(value.missingInformation)) {
-      value.missingInformation.forEach(function (entry) {
-        var text = presentationString(entry && typeof entry === 'object' ? (entry.reason || entry.label) : entry, '');
-        if (text) result.push(text);
-      });
-    }
-    if (Array.isArray(value.notCalculated)) {
-      value.notCalculated.forEach(function (entry) {
-        var field = titleCase(entry && entry.field);
-        var reason = presentationString(entry && entry.reason, '');
-        if (reason) result.push(field + ': ' + reason);
-      });
-    }
-    return result;
+    return global.NorthStarPolarisCard.describeGraph(graph).missing;
   }
 
   function renderPolaris(graphs) {
@@ -327,8 +311,6 @@
     if (risk.emergency === true) risks.push(presentationString(risk.evidence, 'An emergency signal requires immediate review.'));
     else if (presentationString(risk.signal, '')) risks.push('Current risk signal: ' + presentationString(risk.signal, 'Risk detail unavailable') + '.');
     var opportunities = [];
-    if (graph.work && graph.work.scheduledStart) opportunities.push('A scheduled work window is already present for coordinated follow-through.');
-    if (finiteNumber(graph.estimate && graph.estimate.customerPrice) !== null) opportunities.push('A recorded customer-facing estimate is available for review.');
     global.NorthStarPolarisCard.render(container, {
       contract: global.NorthStarPolarisCard.CONTRACT,
       surface: 'command-center',

@@ -697,6 +697,12 @@
       else if(known)status.textContent='This action was not accepted. Review your choices or refresh the demo.';
       else status.textContent='The result is uncertain. Check saved leads before trying again, or retry this same action.';
       if(known&&error.status!==409&&error.status!==410)controls.forEach(function(c){c.disabled=false;});
+      if(known&&button.dataset.restoredRetry==='true'){
+        button.disabled=true;button.remove();
+        var next=toolbar.querySelector(intent==='reset'?'#demoReset':'#demoSimulateLead');
+        if(error.code==='DEMO_SIMULATION_LIMIT'&&next)next.disabled=true;
+        if(next&&!next.disabled)next.focus();
+      }
       if(!known){button.textContent='Retry Same Action';button.disabled=false;}
       if(error.code==='DEMO_SIMULATION_LIMIT')button.disabled=true;
       global.dispatchEvent(new CustomEvent('northstar:interaction-complete', {
@@ -715,7 +721,7 @@
     identity.append(control('strong',value.tenant.name),control('span','Demo','northstar-demo-badge'));
     var actions=control('div','','northstar-demo-toolbar-actions'),simulate=control('button','Simulated Lead','btn btn-primary'),builder=document.createElement('details'),summary=control('summary','Customize','btn btn-secondary'),reset=control('button','Reset Demo','btn btn-secondary');
     simulate.id='demoSimulateLead';simulate.type=reset.type='button';reset.id='demoReset';builder.className='northstar-demo-scenario-builder';builder.append(summary);
-    var panel=control('div','','northstar-demo-customize-panel'),grid=control('div','','northstar-demo-scenario-grid'),help=control('p','Refresh prepares a new lead. Saved demo work stays until Reset Demo.','northstar-demo-scenario-help'),status=control('p','','northstar-demo-toolbar-status');
+    var panel=control('div','','northstar-demo-customize-panel'),grid=control('div','','northstar-demo-scenario-grid'),help=control('p','Reload the page to prepare a new lead. Saved demo work stays until Reset Demo.','northstar-demo-scenario-help'),status=control('p','','northstar-demo-toolbar-status');
     status.id='northstarDemoStatus';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     var choices={},resolved=null,selects={},remembered=readScenarioPreferences(value),nav=global.performance&&global.performance.getEntriesByType('navigation')[0];
     var returned=false;try {var marker=JSON.parse(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY)||'null');returned=!!(marker&&marker.sessionId===value.session.id);}catch(_){}
@@ -748,9 +754,9 @@
       var pending=JSON.parse(global.sessionStorage.getItem('northstarDemoPendingAction')||'null');
       if(pending&&pending.sessionId===value.session.id&&pending.attempt&&typeof pending.attempt.body==='string'&&pending.attempt.headers&&
         ((pending.intent==='simulate-lead'&&pending.endpoint==='/api/demo/command-center/simulations/leads')||(pending.intent==='reset'&&pending.endpoint==='/api/demo/command-center/reset'))){
-        var retry=control('button','Retry Same Action','btn btn-secondary');retry.type='button';retry._demoAttempt=pending.attempt;
+        var retry=control('button','Retry Same Action','btn btn-secondary');retry.type='button';retry.dataset.restoredRetry='true';retry._demoAttempt=pending.attempt;
         section.querySelectorAll('button,select').forEach(function(c){c.disabled=true;});status.textContent='An earlier action has an uncertain result. Check saved leads or retry that same action.';
-        section.append(retry);retry.addEventListener('click',function(){performMutation(pending.endpoint,pending.intent,{},retry,status);});
+        section.append(retry);retry.addEventListener('click',function(){if(retry._demoAttempt)performMutation(pending.endpoint,pending.intent,{},retry,status);});
       }else if(pending)global.sessionStorage.removeItem('northstarDemoPendingAction');
     }catch(_){}
   }

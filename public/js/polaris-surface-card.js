@@ -120,7 +120,7 @@
 
   function riskEntries(graph) {
     var risk = snapshot(graph).risk || {};
-    if (risk.emergency === true) return ['Emergency reported. '+safeString(risk.evidence, 'Review the job details before proceeding.')];
+    if (risk.emergency === true) return [{ emergency: true, text: safeString(risk.evidence, '') }];
     if (safeString(risk.signal)) return ['Current risk signal: ' + safeString(risk.signal) + '.'];
     return [];
   }

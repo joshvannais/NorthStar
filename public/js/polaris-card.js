@@ -67,7 +67,9 @@
       var raw=safeText(entry&&typeof entry==='object'?(entry.label||entry.text||entry.reason):entry);
       var text=businessText(raw);
       if(!text&&raw&&!/^[\[{]/.test(raw))text=businessText(raw.replace(/\b[a-z]+[A-Z][A-Za-z]*\b/g,'recorded concern').replace(/\bPart\s*\d+\b/g,'this estimate').replace(/\b(?:authoritative|role-authorized)\b/g,'recorded').replace(/\b(?:snapshot|projection|input.source)\b/g,'assessment'));
-      result.push(text||'A concern is recorded. Review the job details before proceeding.');
+      result.push(entry&&typeof entry==='object'&&entry.emergency===true
+        ? 'Emergency reported. '+(text||'Review the job details before proceeding.')
+        : text||'A concern is recorded. Review the job details before proceeding.');
     });
     return safeItems(result,'A concern is recorded. Review the job details before proceeding.');
   }

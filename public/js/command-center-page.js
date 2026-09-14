@@ -308,7 +308,7 @@
       return { label: presentationString(entry.label, 'Recommendation unavailable'), priority: safeString(entry.priority), href: detailHref(graph) };
     });
     var risks = [];
-    if (risk.emergency === true) risks.push('Emergency reported. '+presentationString(risk.evidence, 'Review the job details before proceeding.'));
+    if (risk.emergency === true) risks.push({ emergency: true, text: presentationString(risk.evidence, '') });
     else if (presentationString(risk.signal, '')) risks.push('Current risk signal: ' + presentationString(risk.signal, 'Risk detail unavailable') + '.');
     var opportunities = [];
     global.NorthStarPolarisCard.render(container, {

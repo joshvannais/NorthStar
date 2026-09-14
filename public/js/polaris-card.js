@@ -49,12 +49,27 @@
       if(value===null||value===undefined||value===''||typeof value==='object'){missing.push(spec[0]+' needs confirmation.');return;}
       if(spec[1]&&(typeof value!=='number'||!Number.isFinite(value))){missing.push(spec[0]+' needs confirmation.');return;}
       var text=businessText(value);if(!text){missing.push(spec[0]+' needs confirmation.');return;}
-      evidence.push(spec[0]+': '+text+(spec[1]?' '+spec[1]:'')+(fact.status==='conflicting'?' — Needs confirmation':''));
+      var qualification=fact.status==='collected'?'':fact.status==='inferred'?' — Inferred; needs confirmation':' — Needs confirmation';
+      evidence.push(spec[0]+': '+text+(spec[1]?' '+spec[1]:'')+qualification);
+      if(qualification)missing.push(spec[0]+' needs confirmation'+(fact.status==='inferred'?' because it was inferred':fact.status==='conflicting'?' because recorded details conflict':'')+'.');
     });
     if(unknown)missing.push('Additional job details need review in the customer record.');
     (Array.isArray(snap.missingInformation)?snap.missingInformation:[]).forEach(function(entry){var text=businessText(entry&&typeof entry==='object'?(entry.reason||entry.label):entry);missing.push(text||'Review the missing job details before finalizing the estimate.');});
     (Array.isArray(snap.notCalculated)?snap.notCalculated:[]).forEach(function(entry){if(!entry)return;missing.push(GAPS[entry.field]||businessText(entry.reason)||'Some estimate amounts are unavailable. Review the cost details.');});
     return {evidence:safeItems(evidence,'No readable job facts are recorded for this assessment.'),missing:safeItems(missing,'No additional details are flagged by this assessment.')};
+  }
+
+  function describeRisks(values) {
+    if(values===null||values===undefined||(Array.isArray(values)&&!values.length))return ['No specific risks identified from available details.'];
+    if(!Array.isArray(values))values=[values];
+    var result=[];
+    values.forEach(function(entry){
+      var raw=safeText(entry&&typeof entry==='object'?(entry.label||entry.text||entry.reason):entry);
+      var text=businessText(raw);
+      if(!text&&raw&&!/^[\[{]/.test(raw))text=businessText(raw.replace(/\b[a-z]+[A-Z][A-Za-z]*\b/g,'recorded concern').replace(/\bPart\s*\d+\b/g,'this estimate').replace(/\b(?:authoritative|role-authorized)\b/g,'recorded').replace(/\b(?:snapshot|projection|input.source)\b/g,'assessment'));
+      result.push(text||'A concern is recorded. Review the job details before proceeding.');
+    });
+    return safeItems(result,'A concern is recorded. Review the job details before proceeding.');
   }
 
   function listSection(title, values, fallback) {
@@ -125,7 +140,7 @@
       confidenceExplanation: safeText(input.confidenceExplanation) || 'Confidence is unavailable because supporting inputs are incomplete.',
       evidence: safeItems(Array.isArray(input.evidence)?input.evidence.map(businessText):[], 'No readable job facts are recorded for this assessment.'),
       missing: safeItems(Array.isArray(input.missing)?input.missing.map(businessText):[], 'Review the job details before finalizing the estimate.'),
-      risks: safeItems(Array.isArray(input.risks) ? input.risks.map(businessText) : [], 'No specific risks identified from available details.'),
+      risks: describeRisks(input.risks),
       opportunities: safeItems(input.opportunities),
       recommendations: Array.isArray(input.recommendations) ? input.recommendations : [],
       objects: Array.isArray(input.objects) ? input.objects : [],
@@ -184,6 +199,7 @@
     CONTRACT: CONTRACT,
     DETAILED_SURFACES: DETAILED_SURFACES,
     describeGraph: describeGraph,
+    describeRisks: describeRisks,
     render: render,
   });
 })(window);

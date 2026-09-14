@@ -4,7 +4,7 @@ const {calculateCanonicalPolaris, CALCULATION_VERSION}=require('../services/cano
 const {sha256,stableValue}=require('../services/businessProfileAdapter');
 const {v5:uuidv5}=require('uuid');
 
-// One ordinary new/reset demo job has a complete, explicitly fictional cost example.
+// New/reset and simulated demo jobs share an explicitly fictional cost example.
 // Store the shared calculator's output once; existing saved demo graphs stay unchanged.
 function addRecordedCostExample(tenantId, graph) {
   const scope={...graph.polaris.snapshot.service.scope,laborHours:8,equipmentReference:'fictional-shared-equipment'};

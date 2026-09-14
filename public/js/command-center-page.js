@@ -203,7 +203,7 @@
   function configureMode() {
     var demo = mode === 'demo';
     byId('commandCenterHomeLink').href = demo ? '/demo' : '/dashboard';
-    byId('commandCenterAuthority').textContent = demo ? 'Demo Data' : 'Workspace Data';
+    byId('commandCenterAuthority').textContent = demo ? '' : 'Workspace Data';
     var action = byId('commandCenterHeaderAction');
     action.href = demo ? '/signup' : '/dashboard/settings';
     action.textContent = demo ? 'Start free trial' : 'Workspace settings';
@@ -213,15 +213,7 @@
     });
     var disclosure = byId('commandCenterDisclosure');
     disclosure.replaceChildren();
-    if (demo) {
-      disclosure.append(
-        element('strong', '', 'This is an isolated account-free preview.'),
-        element('span', '', ' No customer, provider, production, account, or billing data is used. Every destination reads one bounded browser session.')
-      );
-      disclosure.hidden = false;
-    } else {
-      disclosure.hidden = true;
-    }
+    disclosure.hidden = true; // The compact simulator owns the single demo identity.
   }
 
   function priorityScore(graph) {

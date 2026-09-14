@@ -627,6 +627,13 @@ function buildSimulatedGraph(input) {
     ? fictionalCustomer.address.distanceMiles : distanceTenths / 10;
   const prepared = pipeline.withDeterministicSeed(seed, () => {
     const scenario = pipeline.generateScenario(selection.service, customerName);
+    const selectedJobType = contract.demoJobType(selection.service, selection.intent, scenario.job.type);
+    if (!selectedJobType) {
+      const error = new Error('Choose a supported service and caller intent.');
+      error.code = 'DEMO_SCENARIO_INVALID'; error.status = 422; throw error;
+    }
+    scenario.job.type = selectedJobType;
+    scenario.job.scope.jobType = selectedJobType;
     if (fictionalCustomer) {
       scenario.customer.phone = fictionalCustomer.phone;
       scenario.customer.email = fictionalCustomer.email;

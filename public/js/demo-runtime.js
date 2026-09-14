@@ -39,6 +39,8 @@
   try {
     var storedToolbarReturn = JSON.parse(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY) || 'null');
     returnToToolbarRequested = Boolean(storedToolbarReturn);
+    var navigationEntry=global.performance&&global.performance.getEntriesByType('navigation')[0];
+    if(navigationEntry&&navigationEntry.type==='reload'&&!returnToToolbarRequested)global.sessionStorage.setItem('northstarDemoDraftRefresh','true');
     if (returnToToolbarRequested) {
       ownToolbarScrollRestoration(storedToolbarReturn.scrollRestoration);
     }
@@ -579,11 +581,12 @@
     }
   }
 
-  function writeScenarioPreferences(value, selection, open) {
+  function writeScenarioPreferences(value, selection, open, extra) {
     if (!value || !value.session || !value.session.id) return;
     try {
       global.sessionStorage.setItem(SCENARIO_PREFERENCES_KEY, JSON.stringify({
         sessionId: value.session.id,
+        version: extra && extra.version, generation: extra && extra.generation, resolved: extra && extra.resolved,
         selection: selection,
         open: Boolean(open),
       }));
@@ -594,12 +597,13 @@
     try { global.sessionStorage.removeItem(SCENARIO_PREFERENCES_KEY); } catch (_storageError) {}
   }
 
-  function requestToolbarReturn(value) {
+  function requestToolbarReturn(value, action) {
     var currentScrollRestoration = global.history && 'scrollRestoration' in global.history
       ? global.history.scrollRestoration : 'auto';
     try {
       global.sessionStorage.setItem(RETURN_TO_TOOLBAR_KEY, JSON.stringify({
         sessionId: value && value.session && value.session.id,
+        action: action || 'simulate-lead',
         scrollRestoration: currentScrollRestoration === 'manual' ? 'manual' : 'auto',
       }));
       ownToolbarScrollRestoration(currentScrollRestoration);
@@ -645,29 +649,39 @@
     });
     global.setTimeout(restoreToolbarScrollMode, 500);
     var announce = document.getElementById('northstarDemoStatus');
-    if (announce) announce.textContent = 'Lead added. Your scenario choices are saved; the builder is ready for another run.';
+    if (announce) announce.textContent = requested&&requested.action==='reset'?'A new demo is ready.':'Lead added. Your choices are ready for another lead.';
   }
 
   function performMutation(endpoint, intent, body, button, status) {
+    var toolbar=document.getElementById('northstarDemoToolbar');
+    var attempt=button._demoAttempt || {headers:mutationHeaders(intent),body:JSON.stringify(body)};
+    if(!button._demoAttempt)try {attempt.preferences=global.sessionStorage.getItem(SCENARIO_PREFERENCES_KEY);}catch(_){}
+    button._demoAttempt=attempt;
+    try {global.sessionStorage.setItem('northstarDemoPendingAction',JSON.stringify({sessionId:workspace.session.id,endpoint:endpoint,intent:intent,attempt:attempt}));}catch(_){}
+    var controls=toolbar?Array.from(toolbar.querySelectorAll('button,select')):[];
+    controls.forEach(function(c){c.disabled=true;});
     button.disabled = true;
-    status.textContent = 'Updating the isolated demo workspace…';
+    status.textContent = intent==='reset'?'Starting a new demo…':'Adding your simulated lead…';
     return nativeFetch(endpoint, {
-      method: 'POST', credentials: 'same-origin', headers: mutationHeaders(intent), body: JSON.stringify(body),
+      method: 'POST', credentials: 'same-origin', headers: attempt.headers, body: attempt.body,
     }).then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok || !payload || payload.success !== true || !payload.data) {
-          throw new Error(payload && payload.error && payload.error.message || 'The demo action could not be completed.');
+          var rejection=new Error('The demo action could not be completed.');
+          rejection.status=response.status;rejection.code=payload&&payload.error&&payload.error.code;throw rejection;
         }
         workspace = payload.data;
+        try {global.sessionStorage.removeItem('northstarDemoPendingAction');}catch(_){}
         try {
           global.sessionStorage.setItem('northstarSessionId', workspace.session.id);
           global.sessionStorage.setItem('northstarDemoNotice', intent === 'reset'
             ? 'A new fictional demo workspace was created for this session.' : 'One demo lead was added across every demo destination.');
           if (intent === 'simulate-lead') {
+            if(attempt.preferences)global.sessionStorage.setItem(SCENARIO_PREFERENCES_KEY,attempt.preferences);
             global.sessionStorage.setItem('northstarOnboardingSimulated', 'true');
             requestToolbarReturn(workspace);
           }
-          if (intent === 'reset') clearScenarioPreferences();
+          if (intent === 'reset') { clearScenarioPreferences(); requestToolbarReturn(workspace, 'reset'); }
         } catch (_storageError) {}
         var action = intent === 'reset' ? 'demo_reset' : 'demo_simulate_lead';
         global.dispatchEvent(new CustomEvent('northstar:interaction-complete', { detail: { action: action } }));
@@ -675,8 +689,16 @@
         global.location.reload();
       });
     }).catch(function (error) {
-      status.textContent = error.message || 'The demo action could not be completed.';
-      button.disabled = false;
+      var known=[400,401,403,404,409,410,413,422,429].indexOf(error.status)>=0;
+      if(known){button._demoAttempt=null;try {global.sessionStorage.removeItem('northstarDemoPendingAction');}catch(_){} }
+      if(error.code==='DEMO_SIMULATION_LIMIT')status.textContent='This demo has reached its 12-lead limit. Saved work is retained. Reset Demo starts over.';
+      else if(error.status===409||error.status===410)status.textContent='This demo changed or expired. Refresh before trying again. Check saved work before starting over.';
+      else if(error.status===429)status.textContent='The demo cannot accept this action now. Your saved work is retained. Try again later.';
+      else if(known)status.textContent='This action was not accepted. Review your choices or refresh the demo.';
+      else status.textContent='The result is uncertain. Check saved leads before trying again, or retry this same action.';
+      if(known&&error.status!==409&&error.status!==410)controls.forEach(function(c){c.disabled=false;});
+      if(!known){button.textContent='Retry Same Action';button.disabled=false;}
+      if(error.code==='DEMO_SIMULATION_LIMIT')button.disabled=true;
       global.dispatchEvent(new CustomEvent('northstar:interaction-complete', {
         detail: { action: intent === 'reset' ? 'demo_reset' : 'demo_simulate_lead' },
       }));
@@ -684,166 +706,53 @@
   }
 
   function installToolbar(value) {
-    if (document.getElementById('northstarDemoToolbar')) return;
-    if (TOOLBAR_EXCLUDED_PATHS.indexOf(path) >= 0) return;
-    var main = document.querySelector('.main-content');
-    if (!main) return;
-    var scenarioSpace = value && value.configuration && value.configuration.scenarioSpace;
-    var scenarioReady = scenarioSpace && scenarioSpace.contract === 'northstar_demo_scenario_space_v1' &&
-      Number.isSafeInteger(scenarioSpace.combinationCount) && scenarioSpace.combinationCount >= 100 &&
-      Array.isArray(scenarioSpace.dimensions) && scenarioSpace.dimensions.length >= 6;
-    var section = control('section', '', 'northstar-demo-toolbar');
-    section.id = 'northstarDemoToolbar';
-    section.setAttribute('aria-label', 'Account-free demo controls');
-    var copy = control('div', '', 'northstar-demo-toolbar-copy');
-    copy.append(control('strong', 'Account-free demo workspace', 'northstar-demo-toolbar-title'));
-    var metadata = control('span', 'Demo Data · ' + value.tenant.name + ' · Shared Across Every Demo Page', 'northstar-demo-toolbar-meta');
-    metadata.id = 'northstarDemoRevision';
-    copy.append(metadata);
-    var builder = document.createElement('details');
-    builder.className = 'northstar-demo-scenario-builder';
-    var rememberedPreferences = readScenarioPreferences(value);
-    builder.open = Boolean(rememberedPreferences && rememberedPreferences.open);
-    var summary = control('summary', scenarioReady
-      ? 'Build a lead scenario · ' + Number(scenarioSpace.combinationCount).toLocaleString() + ' material combinations'
-      : 'Scenario builder unavailable');
-    builder.appendChild(summary);
-    var selections = Object.create(null);
-    var scenarioGrid = control('div', '', 'northstar-demo-scenario-grid');
-    var businessSummary = control('p', '', 'northstar-demo-business-summary');
-    businessSummary.id = 'northstarDemoBusinessSummary';
-    var guidedPresets = control('div', '', 'northstar-demo-presets');
-    guidedPresets.setAttribute('aria-label', 'Guided demo scenarios');
-    guidedPresets.appendChild(control('span', 'Quick scenarios', 'northstar-demo-presets-label'));
-    var presetDefinitions = [
-      { id: 'missed-call', label: 'Urgent missed-call recovery', selection: { business: 'growing_residential', service: 'plumbing', intent: 'repair_request', urgency: 'within_24_hours', context: 'new_customer', scheduling: 'flexible', outcome: 'follow_up' } },
-      { id: 'high-value', label: 'High-value estimate', selection: { business: 'owner_operator', service: 'roofing', intent: 'new_estimate', urgency: 'planning', context: 'new_customer', scheduling: 'weekday_morning', outcome: 'estimate_ready' } },
-      { id: 'schedule-conflict', label: 'Schedule conflict and follow-up', selection: { business: 'multi_crew', service: 'hvac', intent: 'repair_request', urgency: 'this_week', context: 'returning_customer', scheduling: 'after_hours', outcome: 'needs_information' } }
-    ];
-    if (scenarioReady) {
-      scenarioSpace.dimensions.forEach(function (dimension, dimensionIndex) {
-        if (!dimension || typeof dimension.id !== 'string' || typeof dimension.label !== 'string' ||
-            !Array.isArray(dimension.options) || !dimension.options.length) {
-          scenarioReady = false;
-          return;
-        }
-        var field = control('div', '', 'northstar-demo-scenario-field');
-        var id = 'demoScenario-' + dimension.id;
-        var label = control('label', dimension.label);
-        label.htmlFor = id;
-        var select = document.createElement('select');
-        select.id = id;
-        select.dataset.scenarioDimension = dimension.id;
-        dimension.options.forEach(function (definition) {
-          var option = document.createElement('option');
-          option.value = definition.id;
-          option.textContent = definition.label;
-          option.title = definition.description || '';
-          if (scenarioSpace.defaultSelection && scenarioSpace.defaultSelection[dimension.id] === definition.id) {
-            option.selected = true;
-          }
-          select.appendChild(option);
-        });
-        var rememberedValue = rememberedPreferences && rememberedPreferences.selection[dimension.id];
-        if (typeof rememberedValue === 'string' && dimension.options.some(function (definition) {
-          return definition.id === rememberedValue;
-        })) {
-          select.value = rememberedValue;
-        }
-        selections[dimension.id] = select;
-        field.append(label, select);
-        scenarioGrid.appendChild(field);
-        if (dimensionIndex === 0) {
-          select.setAttribute('aria-describedby', 'northstarDemoBusinessSummary northstarDemoScenarioHelp');
-          var updateBusinessSummary = function () {
-            var selected = dimension.options.find(function (candidate) { return candidate.id === select.value; });
-            businessSummary.textContent = selected && selected.description || '';
-          };
-          select.addEventListener('change', updateBusinessSummary);
-          updateBusinessSummary();
-        }
-      });
-    }
-    var scenarioHelp = control('p', scenarioReady
-      ? 'Each choice changes the conversation, record graph, schedule, risk, recommendations, and Polaris evidence—not just the label.'
-      : 'The shared scenario contract could not be verified. No demo mutation is available.',
-    'northstar-demo-scenario-help');
-    scenarioHelp.id = 'northstarDemoScenarioHelp';
-    if (scenarioReady) {
-      presetDefinitions.forEach(function (preset) {
-        var button = control('button', preset.label, 'northstar-demo-preset');
-        button.type = 'button';
-        button.dataset.preset = preset.id;
-        button.addEventListener('click', function () {
-          Object.keys(preset.selection).forEach(function (dimension) {
-            if (!selections[dimension]) return;
-            selections[dimension].value = preset.selection[dimension];
-            selections[dimension].dispatchEvent(new Event('change', { bubbles: true }));
-          });
-          builder.open = true;
-          writeScenarioPreferences(value, preset.selection, true);
-          scenarioHelp.textContent = preset.label + ' is ready. Review any field, then simulate the lead.';
-          var firstSelect = scenarioGrid.querySelector('select');
-          if (firstSelect) firstSelect.focus();
-        });
-        guidedPresets.appendChild(button);
-      });
-    }
-    builder.append(guidedPresets, scenarioGrid, businessSummary, scenarioHelp);
-    var actions = control('div', '', 'northstar-demo-toolbar-actions');
-    var simulate = control('button', 'Simulate Lead', 'btn btn-primary');
-    simulate.id = 'demoSimulateLead';
-    simulate.type = 'button';
-    simulate.dataset.telemetryAction = 'demo_simulate_lead';
-    simulate.setAttribute('data-telemetry-dead-click', '');
-    simulate.disabled = !scenarioReady;
-    var reset = control('button', 'Reset Demo', 'btn btn-secondary');
-    reset.id = 'demoReset';
-    reset.type = 'button';
-    reset.dataset.telemetryAction = 'demo_reset';
-    reset.setAttribute('data-telemetry-dead-click', '');
-    var exit = control('a', 'Exit Demo', 'btn btn-ghost');
-    exit.href = '/';
-    exit.dataset.telemetryAction = 'demo_exit';
-    actions.append(simulate, reset, exit);
-    var status = control('p', '', 'northstar-demo-toolbar-status');
-    status.id = 'northstarDemoStatus';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    try {
-      status.textContent = global.sessionStorage.getItem('northstarDemoNotice') ||
-        'Every destination reads this same isolated demo workspace.';
-      global.sessionStorage.removeItem('northstarDemoNotice');
-    } catch (_storageError) {
-      status.textContent = 'Every destination reads this same isolated demo workspace.';
-    }
-    section.append(copy, builder, actions, status);
-    main.insertBefore(section, main.firstChild);
+    if (document.getElementById('northstarDemoToolbar') || TOOLBAR_EXCLUDED_PATHS.indexOf(path) >= 0) return;
+    var main=document.querySelector('.main-content'), space=value.configuration&&value.configuration.scenarioSpace;
+    var resolver=global.NorthStarCommandCenterContract&&global.NorthStarCommandCenterContract.resolveDemoScenario;
+    if(!main)return;
+    var section=control('section','','northstar-demo-toolbar compact-demo'), identity=control('div','','northstar-demo-identity');
+    section.id='northstarDemoToolbar';section.setAttribute('aria-label','Demo controls');
+    identity.append(control('strong',value.tenant.name),control('span','Demo','northstar-demo-badge'));
+    var actions=control('div','','northstar-demo-toolbar-actions'),simulate=control('button','Simulated Lead','btn btn-primary'),builder=document.createElement('details'),summary=control('summary','Customize','btn btn-secondary'),reset=control('button','Reset Demo','btn btn-secondary');
+    simulate.id='demoSimulateLead';simulate.type=reset.type='button';reset.id='demoReset';builder.className='northstar-demo-scenario-builder';builder.append(summary);
+    var panel=control('div','','northstar-demo-customize-panel'),grid=control('div','','northstar-demo-scenario-grid'),help=control('p','Refresh prepares a new lead. Saved demo work stays until Reset Demo.','northstar-demo-scenario-help'),status=control('p','','northstar-demo-toolbar-status');
+    status.id='northstarDemoStatus';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+    var choices={},resolved=null,selects={},remembered=readScenarioPreferences(value),nav=global.performance&&global.performance.getEntriesByType('navigation')[0];
+    var returned=false;try {var marker=JSON.parse(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY)||'null');returned=!!(marker&&marker.sessionId===value.session.id);}catch(_){}
+    var generation=value.session.workspaceGeneration,compatible=remembered&&remembered.version===2&&remembered.generation===generation;
+    var fresh=nav&&nav.type==='reload'&&!returned;
+    try {fresh=fresh||global.sessionStorage.getItem('northstarDemoDraftRefresh')==='true';global.sessionStorage.removeItem('northstarDemoDraftRefresh');}catch(_){}
+    var business=space&&space.defaultSelection&&space.defaultSelection.business;
+    var active=value.graphs&&value.graphs.find(function(g){return g.scenario&&g.scenario.selection;});if(active)business=active.scenario.selection.business;
+    choices.business=business;
+    var labels={service:'Service Request',intent:'Caller Intent',urgency:'Urgency',context:'Customer Context',scheduling:'Scheduling',outcome:'Outcome'};
+    function persist(){writeScenarioPreferences(value,choices,false,{resolved:resolved,generation:generation,version:2});}
+    function resolve(previous){resolved=resolver&&resolver(space,choices,Math.random,previous);persist();simulate.disabled=!resolved||value.session.simulationCount>=12;var problem='Choose compatible lead details or use Random.';
+      if(choices.service!=='random'&&choices.intent!=='random'&&!global.NorthStarCommandCenterContract.demoJobType(choices.service,choices.intent,null))problem='That service does not support this caller intent in the demo. Choose another intent.';
+      else if(choices.scheduling==='weather_window'&&choices.service!=='random'&&['fence','roofing','concrete'].indexOf(choices.service)<0)problem='Weather-dependent timing is available for outdoor services. Choose another timing option.';
+      else if(choices.urgency==='safety_emergency')problem='An emergency needs a repair or supported inspection request, flexible timing and more information.';
+      status.textContent=!resolved?problem:value.session.simulationCount>=12?'This demo has reached its 12-lead limit. Saved work is retained. Reset Demo starts over.':'';}
+    if(space&&resolver)space.dimensions.forEach(function(d){if(!labels[d.id])return;choices[d.id]=compatible&&!fresh?remembered.selection[d.id]||'random':'random';var field=control('div','','northstar-demo-scenario-field'),label=control('label',labels[d.id]),select=document.createElement('select');select.id='demoScenario-'+d.id;label.htmlFor=select.id;var random=control('option','Random');random.value='random';select.append(random);d.options.forEach(function(o){var opt=control('option',o.label);opt.value=o.id;select.append(opt);});select.value=choices[d.id];if(!select.value)select.value=choices[d.id]='random';selects[d.id]=select;field.append(label,select);grid.append(field);select.addEventListener('change',function(){choices[d.id]=select.value;resolve(null);});});
+    if(compatible&&!fresh&&remembered.resolved&&resolver(space,remembered.resolved,function(){return 0;},null))resolved=remembered.resolved;
+    if(!resolved)resolve(compatible?remembered.resolved:null);else persist();
+    simulate.disabled=!resolved||value.session.simulationCount>=12;
+    if(value.session.simulationCount>=12)status.textContent='This demo has reached its 12-lead limit. Saved work is retained. Reset Demo starts over.';
+    panel.append(control('strong','Customize Lead'),grid,help);builder.append(panel);builder.addEventListener('keydown',function(e){if(e.key==='Escape'){builder.open=false;summary.focus();e.preventDefault();}});
+    actions.append(simulate,builder,reset);section.append(identity,actions,status);main.insertBefore(section,main.firstChild);
+    var confirm=control('div','','northstar-demo-reset-confirm');confirm.hidden=true;confirm.setAttribute('role','group');confirm.setAttribute('aria-label','Confirm demo reset');var cancel=control('button','Cancel','btn btn-secondary'),proceed=control('button','Reset And Start Over','btn btn-secondary');cancel.type=proceed.type='button';confirm.append(control('p','Start over with a new demo business? This removes this demo session’s saved leads, estimates and work history.'),cancel,proceed);section.append(confirm);
+    reset.addEventListener('click',function(){confirm.hidden=false;cancel.focus();});cancel.addEventListener('click',function(){confirm.hidden=true;reset.focus();});confirm.addEventListener('keydown',function(e){if(e.key==='Escape'){cancel.click();e.preventDefault();}});
+    simulate.addEventListener('click',function(){if(!resolved)return;persist();performMutation('/api/demo/command-center/simulations/leads','simulate-lead',{scenario:resolved,expectedRevision:workspace.integrity.revision},simulate,status);});
+    proceed.addEventListener('click',function(){performMutation('/api/demo/command-center/reset','reset',{expectedRevision:workspace.integrity.revision},proceed,status);});
     returnToToolbar(value);
-    var selectedScenario = function () {
-      var selected = {};
-      Object.keys(selections).forEach(function (dimension) { selected[dimension] = selections[dimension].value; });
-      return selected;
-    };
-    var persistScenarioPreferences = function () {
-      writeScenarioPreferences(value, selectedScenario(), builder.open);
-    };
-    builder.addEventListener('toggle', persistScenarioPreferences);
-    Object.keys(selections).forEach(function (dimension) {
-      selections[dimension].addEventListener('change', persistScenarioPreferences);
-    });
-    simulate.addEventListener('click', function () {
-      var selected = selectedScenario();
-      writeScenarioPreferences(value, selected, builder.open);
-      performMutation('/api/demo/command-center/simulations/leads', 'simulate-lead', {
-        scenario: selected, expectedRevision: workspace.integrity.revision,
-      }, simulate, status);
-    });
-    reset.addEventListener('click', function () {
-      performMutation('/api/demo/command-center/reset', 'reset', {
-        expectedRevision: workspace.integrity.revision,
-      }, reset, status);
-    });
+    try {
+      var pending=JSON.parse(global.sessionStorage.getItem('northstarDemoPendingAction')||'null');
+      if(pending&&pending.sessionId===value.session.id&&pending.attempt&&typeof pending.attempt.body==='string'&&pending.attempt.headers&&
+        ((pending.intent==='simulate-lead'&&pending.endpoint==='/api/demo/command-center/simulations/leads')||(pending.intent==='reset'&&pending.endpoint==='/api/demo/command-center/reset'))){
+        var retry=control('button','Retry Same Action','btn btn-secondary');retry.type='button';retry._demoAttempt=pending.attempt;
+        section.querySelectorAll('button,select').forEach(function(c){c.disabled=true;});status.textContent='An earlier action has an uncertain result. Check saved leads or retry that same action.';
+        section.append(retry);retry.addEventListener('click',function(){performMutation(pending.endpoint,pending.intent,{},retry,status);});
+      }else if(pending)global.sessionStorage.removeItem('northstarDemoPendingAction');
+    }catch(_){}
   }
 
   function initializeDocument() {

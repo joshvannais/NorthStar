@@ -3,6 +3,8 @@
 const { buildSimulatedGraph } = require('../../src/commandCenter/workspace');
 const { createInitialDemoState } = require('../../src/commandCenter/workspace');
 const { validateDemoGraphAgainstWorkspace } = require('../../src/commandCenter/demoWorkspaceGenerator');
+const { repairKnownTreeServiceIdentity } = require('../../src/commandCenter/demoRepository');
+const { sha256 } = require('../../src/services/businessProfileAdapter');
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 
@@ -56,5 +58,36 @@ describe('fictional tree estimate intelligence', () => {
     });
     expect(value.polaris.snapshot.service.label).toBe(value.lead.serviceLabel);
     expect(() => validateDemoGraphAgainstWorkspace(value, state.workspace)).not.toThrow();
+  });
+
+  test('repairs only the released tree operation-label mismatch', () => {
+    const state = createInitialDemoState(TENANT, new Date('2032-03-18T14:00:00.000Z'), { seed: 'tree-repair-boundary' });
+    const value = buildSimulatedGraph({
+      tenantId: state.workspace.tenant.id,
+      workspace: state.workspace,
+      key: 'tree-repair-boundary-lead',
+      createdAt: new Date('2032-03-18T15:00:00.000Z'),
+      scenarioSelection: {
+        business: 'growing_residential', service: 'tree', intent: 'tree_removal', urgency: 'this_week',
+        context: 'new_customer', scheduling: 'flexible', outcome: 'estimate_ready',
+      },
+    });
+    const releasedState = JSON.parse(JSON.stringify({ ...state, graphs: [value, ...state.graphs] }));
+    const releasedGraph = releasedState.graphs[0];
+    releasedGraph.polaris.snapshot.service.label = 'Tree removal';
+    releasedGraph.polaris.syntheticCalculation.input.businessProfile.services[0].name = 'Tree removal';
+    releasedGraph.polaris.snapshotDigest = sha256(releasedGraph.polaris.snapshot);
+    delete releasedGraph.projectionDigest;
+    releasedGraph.projectionDigest = sha256(releasedGraph);
+
+    const repaired = repairKnownTreeServiceIdentity(releasedState);
+    expect(repaired.graphs[0].polaris.snapshot.service.label).toBe('Tree service');
+    expect(repaired.graphs[0].polaris.syntheticCalculation.input.businessProfile.services[0].name).toBe('Tree service');
+    expect(() => validateDemoGraphAgainstWorkspace(repaired.graphs[0], repaired.workspace)).not.toThrow();
+
+    const unrelated = JSON.parse(JSON.stringify(releasedState));
+    unrelated.graphs[0].polaris.snapshot.service.label = 'Unrecognized service';
+    unrelated.graphs[0].polaris.syntheticCalculation.input.businessProfile.services[0].name = 'Unrecognized service';
+    expect(repairKnownTreeServiceIdentity(unrelated)).toBeNull();
   });
 });

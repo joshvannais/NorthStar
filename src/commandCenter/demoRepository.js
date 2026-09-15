@@ -47,6 +47,8 @@ const {
   validateDemoWorkspaceFixture,
 } = require('./demoWorkspaceGenerator');
 const { DEFAULT_SELECTION, normalizeSelection } = require('./scenarioSpace');
+const { addRecordedCostExample } = require('./demoEstimateExample');
+const treeBusinessProfiles = require('./demoTreeBusinessProfiles');
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
@@ -120,6 +122,41 @@ function legacyState(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value) &&
     value.schemaVersion === 1 && typeof value.createdAt === 'string' &&
     Number.isFinite(Date.parse(value.createdAt)) && Array.isArray(value.graphs));
+}
+
+// A short-lived release generated otherwise authentic tree graphs with the
+// operation label (for example, "Tree removal") in the canonical service-name
+// field. Repair only that exact, fictional calculator signature. The final
+// state validator still has to accept every graph and workspace reference, so
+// unrelated corruption continues to fail closed.
+function repairKnownTreeServiceIdentity(value) {
+  if (!value || value.schemaVersion !== 2 || !value.workspace || !Array.isArray(value.graphs)) return null;
+  const service = Array.isArray(value.workspace.services)
+    ? value.workspace.services.find(candidate => candidate && candidate.key === 'tree') : null;
+  if (!service || !value.workspace.tenant || typeof value.workspace.tenant.id !== 'string') return null;
+  const operationLabels = new Set(Object.values(treeBusinessProfiles.OPERATIONS || {}).map(item => item && item.label));
+  let repaired = false;
+  const graphs = value.graphs.map(graph => {
+    const calculation = graph && graph.polaris && graph.polaris.syntheticCalculation;
+    const snapshotService = graph && graph.polaris && graph.polaris.snapshot && graph.polaris.snapshot.service;
+    const configuredServices = calculation && calculation.input && calculation.input.businessProfile &&
+      calculation.input.businessProfile.services;
+    const configuredService = Array.isArray(configuredServices)
+      ? configuredServices.find(candidate => candidate && candidate.id === 'tree') : null;
+    const matchesKnownReleaseDefect = graph && graph.source && graph.source.type === 'account_free_demo' &&
+      graph.lead && graph.lead.serviceType === 'tree' && graph.lead.serviceLabel === service.label &&
+      calculation && calculation.contract === 'NorthStarFictionalCostExample/v1' &&
+      snapshotService && snapshotService.key === 'tree' && snapshotService.label !== service.label &&
+      operationLabels.has(snapshotService.label) && configuredService &&
+      configuredService.name === snapshotService.label;
+    if (!matchesKnownReleaseDefect) return graph;
+    repaired = true;
+    return addRecordedCostExample(value.workspace.tenant.id, graph);
+  });
+  if (!repaired) return null;
+  const candidate = stableValue({ ...value, graphs });
+  state(candidate);
+  return candidate;
 }
 
 function workspaceSeedForToken(tokenHash) {
@@ -362,8 +399,10 @@ class DemoCommandCenterRepository {
         WHERE token_hash = $1 AND expires_at > $2`,
       [token.tokenHash, now]
     );
-    if (!initial.rows[0] || !legacyState(initial.rows[0].state)) {
-      return recordFromRow(initial.rows[0] || null, token, Boolean(initial.rows[0]));
+    const initialRow = initial.rows[0] || null;
+    const repairable = initialRow && repairKnownTreeServiceIdentity(initialRow.state);
+    if (!initialRow || (!legacyState(initialRow.state) && !repairable)) {
+      return recordFromRow(initialRow, token, Boolean(initialRow));
     }
     const client = await this.pool().connect();
     let open = false;
@@ -397,7 +436,8 @@ class DemoCommandCenterRepository {
 
   async normalizePersistedRow(client, row, token, now) {
     assertRowAuthority(row, token);
-    if (!legacyState(row.state)) {
+    const repairedState = repairKnownTreeServiceIdentity(row.state);
+    if (!legacyState(row.state) && !repairedState) {
       state(row.state);
       return { row, migrated: false };
     }
@@ -405,21 +445,27 @@ class DemoCommandCenterRepository {
     if (currentRevision >= Number.MAX_SAFE_INTEGER) {
       fail(503, 'DEMO_STATE_INVALID', 'The isolated demo revision is unavailable.');
     }
-    const migratedState = createInitialDemoState(token.tenantId, token.issuedAt, {
+    const migratedState = repairedState || createInitialDemoState(token.tenantId, token.issuedAt, {
       seed: workspaceSeedForToken(token.tokenHash),
     });
-    await client.query(
-      'DELETE FROM demo_command_center_mutations WHERE session_id = $1',
-      [token.sessionId]
-    );
+    if (!repairedState) {
+      await client.query(
+        'DELETE FROM demo_command_center_mutations WHERE session_id = $1',
+        [token.sessionId]
+      );
+    }
     const updated = await client.query(
       `UPDATE demo_command_center_sessions
-          SET state = $2, revision = $3, simulation_count = 0,
-              last_simulated_at = NULL, updated_at = $4
-        WHERE id = $1 AND revision = $5 AND state ->> 'schemaVersion' = '1'
+          SET state = $2, revision = $3,
+              simulation_count = CASE WHEN $6 THEN simulation_count ELSE 0 END,
+              last_simulated_at = CASE WHEN $6 THEN last_simulated_at ELSE NULL END,
+              updated_at = $4
+        WHERE id = $1 AND revision = $5
+          AND (($6 AND state ->> 'schemaVersion' = '2') OR
+               (NOT $6 AND state ->> 'schemaVersion' = '1'))
         RETURNING id, tenant_id, token_hash, state, revision, simulation_count,
                   mutation_count, last_simulated_at, expires_at`,
-      [token.sessionId, migratedState, currentRevision + 1, now, currentRevision]
+      [token.sessionId, migratedState, currentRevision + 1, now, currentRevision, Boolean(repairedState)]
     );
     if (updated.rowCount !== 1) {
       fail(503, 'DEMO_STATE_INVALID', 'The isolated demo state could not be migrated.');
@@ -826,6 +872,9 @@ class DemoCommandCenterRepository {
       await validateSourceAtCommit();
       const nextRevision = current.revision + 1;
       const nextMutationCount = current.mutationCount + 1;
+      // Validate the complete state before the database write. A failed
+      // response must never leave an unreadable demo session committed.
+      nextState = state(nextState);
       const responseDigest = sha256({ state: nextState, revision: nextRevision });
       if(operations||aggregate){
         // Match the existing database JSONB byte limit, including PostgreSQL's
@@ -968,5 +1017,6 @@ module.exports = {
   issueToken,
   normalizeToken,
   nextWorkspaceSeed,
+  repairKnownTreeServiceIdentity,
   workspaceSeedForToken,
 };

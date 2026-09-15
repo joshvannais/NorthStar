@@ -248,9 +248,10 @@ window.CustomerDetail = (function() {
     // Actions
     html += '      <div class="drawer-section">';
     html += '        <h3>Actions</h3>';
-    html += '        <div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    html += '        <div class="drawer-primary-action-list">';
+    html += '          <button type="button" class="btn btn-primary btn-sm drawer-estimate-action" id="cdBtnEstimate" aria-controls="cdEstimateHub" aria-describedby="cdEstimateActionStatus" disabled><span>Estimate</span><span class="drawer-estimate-action-status" id="cdEstimateActionStatus">Loading</span></button>';
     html += '          <button class="btn btn-secondary btn-sm" id="cdBtnAskPolaris" aria-describedby="cdPolarisActionReason" disabled>Ask Polaris</button>';
-    html += '          <button class="btn btn-primary btn-sm" id="cdBtnSchedule" aria-describedby="cdPolarisActionReason">Schedule</button>';
+    html += '          <button class="btn btn-secondary btn-sm" id="cdBtnSchedule" aria-describedby="cdPolarisActionReason">Schedule</button>';
     html += '          <button type="button" class="btn btn-secondary btn-sm" id="cdBtnContact" aria-expanded="false" aria-controls="cdContactMethods">Contact</button>';
     html += '          <div id="cdContactMethods" class="drawer-contact-methods" hidden></div>';
     html += '          <p class="drawer-action-reason" id="cdPolarisActionReason">Actions become available after this customer record finishes loading.</p>';
@@ -2069,6 +2070,9 @@ window.CustomerDetail = (function() {
 
     // Pricing Breakdown
     $('cdPricingBreakdown').innerHTML = renderPricingBreakdown(data.estimates);
+    $('cdBtnEstimate').disabled = true;
+    $('cdBtnEstimate').setAttribute('aria-label', 'Estimate, loading');
+    $('cdEstimateActionStatus').textContent = 'Loading';
     $('cdEstimateReviewRefresh').onclick = function () { refreshEstimateReview('review-refresh'); };
     refreshEstimateReview();
 

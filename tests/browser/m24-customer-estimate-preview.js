@@ -76,7 +76,7 @@ app.get(['/', '/boundary', '/not-ready'], (req, res) => {
   const id = req.path === '/boundary' ? boundaryId : ordinaryId;
   const commercial = req.path === '/not-ready' ? `{approvalState:'not_approved',sources:{pricingCurrent:false}}` : `{approvalState:'commercial_approved',customerSummary:{},binding:{id:'30000000-0000-4000-8000-000000000001',digest:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'},current:{current:true}}`;
   const target = req.path === '/not-ready' ? `<details id="cdEstimateDetails"><summary>Estimate Details</summary><details id="cdPreparedAdoption"><summary>Review And Save</summary></details></details>` : '';
-  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/site-professionalism.css"></head><body><main id="host"></main>${target}<script>window.NorthStarAccountSession={fetch:window.fetch.bind(window)};window.review={simulated:true,demoWorkspaceRevision:7,pins:{estimateId:'${id}'},commercialTerms:${commercial}};</script><script src="/js/customer-estimate-preview.js"></script><script>NorthStarCustomerEstimate.mount(review,document.getElementById('host'));</script></body></html>`);
+  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/site-professionalism.css"></head><body><section class="customer-drawer open"><div class="drawer-primary-actions"><h3>Actions</h3><div class="drawer-primary-action-list"><button type="button" class="btn btn-primary btn-sm drawer-estimate-action" id="cdBtnEstimate" aria-controls="host" aria-describedby="cdEstimateActionStatus" disabled><span>Estimate</span><span class="drawer-estimate-action-status" id="cdEstimateActionStatus">Loading</span></button><button class="btn btn-secondary btn-sm">Ask Polaris</button><button class="btn btn-secondary btn-sm">Schedule</button><button class="btn btn-secondary btn-sm">Contact</button></div></div><main id="host"></main>${target}</section><script>window.NorthStarAccountSession={fetch:window.fetch.bind(window)};window.review={simulated:true,demoWorkspaceRevision:7,pins:{estimateId:'${id}'},commercialTerms:${commercial}};</script><script src="/js/customer-estimate-preview.js"></script><script>NorthStarCustomerEstimate.mount(review,document.getElementById('host'));</script></body></html>`);
 });
 
 let server;
@@ -102,8 +102,13 @@ let browser;
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(origin + test.path);
       await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), test.theme);
+      const entry=page.getByRole('button',{name:'Estimate, ready'});
+      assert.equal(await entry.isVisible(),true);
+      assert.equal(await entry.isEnabled(),true);
+      assert.equal(await page.getByText('Ready',{exact:true}).count(),1);
+      await page.screenshot({ path:path.join(output, test.name + '-entry.png'), fullPage:false });
       const launch = page.getByRole('button', { name:'Preview Customer Estimate' });
-      await launch.click();
+      await entry.click();
       await page.getByRole('dialog', { name:'Customer Estimate Preview' }).waitFor();
       const dialog = page.getByRole('dialog', { name:'Customer Estimate Preview' });
       const close = dialog.getByRole('button', { name:'Close customer estimate preview' });
@@ -159,8 +164,11 @@ let browser;
       await page.goto(origin + '/not-ready');
       const before = requests.length;
       const continueButton = page.getByRole('button', { name:'Continue Estimate' });
+      const entry=page.getByRole('button',{name:'Estimate, needs review'});
+      assert.equal(await entry.isVisible(),true);
+      assert.equal(await entry.isEnabled(),true);
       assert.equal(await continueButton.isVisible(), true);
-      await continueButton.click();
+      await entry.click();
       assert.equal(await page.locator('#cdEstimateDetails').evaluate(node => node.open), true);
       assert.equal(await page.locator('#cdPreparedAdoption').evaluate(node => node.open), true);
       assert.equal(requests.length, before);
@@ -168,7 +176,7 @@ let browser;
       await context.close();
     }
     {
-      const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage();await page.goto(origin+'/');const issue=page.getByRole('button',{name:'Issue Estimate'});await issue.waitFor();await issue.click();await page.getByLabel('Reason for issuing').fill('Owner approved customer-facing estimate');await page.getByLabel(/I reviewed the customer-facing scope/).check();await page.getByRole('button',{name:'Confirm Issue'}).click();const dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'View Issued Estimate'}).count(),1);assert.deepEqual(versionRequests,[{intent:'customer-estimate-issue',revision:'7',body:{reason:'Owner approved customer-facing estimate',confirmed:true,confirmationVersion:'customer-estimate-issue-v1'}}]);const issuedPdfEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download PDF'}).click();const issuedPdf=await issuedPdfEvent,issuedPdfPath=path.join(output,'issued.pdf');await issuedPdf.saveAs(issuedPdfPath);assert.ok(fs.readFileSync(issuedPdfPath).subarray(0,5).toString().startsWith('%PDF-'));const issuedImageEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download image'}).click();const issuedImage=await issuedImageEvent,issuedImagePath=path.join(output,'issued-download.png');await issuedImage.saveAs(issuedImagePath);assert.equal(pngSize(issuedImagePath).width,1600);await page.screenshot({path:path.join(output,'issued-mobile.png'),fullPage:true});ledger.cases.push({name:'explicit-issue-and-view',immutableVersion:true,issuedPdfAndImage:true,universalImageWidth:1600,noDeliveryClaim:true});await context.close();
+      const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage();await page.goto(origin+'/');const issue=page.getByRole('button',{name:'Issue Estimate'});await issue.waitFor();await issue.click();await page.getByLabel('Reason for issuing').fill('Owner approved customer-facing estimate');await page.getByLabel(/I reviewed the customer-facing scope/).check();await page.getByRole('button',{name:'Confirm Issue'}).click();let dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'View Issued Estimate'}).count(),1);assert.deepEqual(versionRequests,[{intent:'customer-estimate-issue',revision:'7',body:{reason:'Owner approved customer-facing estimate',confirmed:true,confirmationVersion:'customer-estimate-issue-v1'}}]);const issuedPdfEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download PDF'}).click();const issuedPdf=await issuedPdfEvent,issuedPdfPath=path.join(output,'issued.pdf');await issuedPdf.saveAs(issuedPdfPath);assert.ok(fs.readFileSync(issuedPdfPath).subarray(0,5).toString().startsWith('%PDF-'));const issuedImageEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download image'}).click();const issuedImage=await issuedImageEvent,issuedImagePath=path.join(output,'issued-download.png');await issuedImage.saveAs(issuedImagePath);assert.equal(pngSize(issuedImagePath).width,1600);await page.screenshot({path:path.join(output,'issued-mobile.png'),fullPage:true});await page.keyboard.press('Escape');const previewsBeforeIssuedEntry=requests.length;await page.getByRole('button',{name:'Estimate, issued'}).click();dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(requests.length,previewsBeforeIssuedEntry);ledger.cases.push({name:'explicit-issue-and-view',immutableVersion:true,issuedTopActionOpensExactVersion:true,issuedTopActionPreviewRequests:0,issuedPdfAndImage:true,universalImageWidth:1600,noDeliveryClaim:true});await context.close();
     }
     for (const recovery of [
       {kind:'pdf',button:'Download PDF',message:'The PDF could not be prepared. Try again.',extension:'.pdf'},

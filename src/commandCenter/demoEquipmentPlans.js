@@ -8,14 +8,22 @@ const VERSION='demo-equipment-basis-v1';
 const NAMESPACE='311d4d87-1275-441f-b054-87c03dcc8bcc';
 function create(seed,createdAt){
  const id=kind=>uuidv5(String(seed)+':equipment:'+kind,NAMESPACE);
- const identity={manufacturer:'Demo Workshop',model:'Practice Auger',modelYear:'2026',series:'Training',engine:'Electric',configuration:'Standard',attachments:'150 mm bit'};
  const reviewedAt=new Date(createdAt).toISOString();
- const research={state:'reviewed',simulated:true,reviewedAt,freshUntil:new Date(new Date(createdAt).getTime()+86400000*30).toISOString(),specifications:[{name:'Bit diameter',value:'150',unit:'mm',sourceOrdinal:1}],sources:[{title:'Simulated Practice Auger Specification',publisher:'Demo Workshop',sourceVersion:VERSION,documentDigest:sha256(identity),accessedAt:reviewedAt}],knowledgeVersionId:id('reference'),knowledgeDigest:sha256({identity,version:VERSION})};
- const asset={id:id('asset'),name:'Practice Auger',catalogueState:'active',version:1,assetDigest:sha256(identity),privateConfiguration:identity,research,reviewState:'reviewed',availability:'unknown',simulated:true};
+ const names={fence:'Practice Auger',roofing:'Practice Roofing Lift',hvac:'Practice HVAC Service Station',plumbing:'Practice Plumbing Service Kit',electrical:'Practice Electrical Test Station',concrete:'Practice Concrete Equipment Set'};
+ const treeModule=require('./demoTreeBusinessProfiles'),treeProfile=treeModule.create(seed);
+ function makeAsset(key,name,identity,publisher,costProfile=null){
+  const research={state:'reviewed',simulated:true,reviewedAt,freshUntil:new Date(new Date(createdAt).getTime()+86400000*30).toISOString(),specifications:[{name:'Company service configuration',value:'1',unit:'profile',sourceOrdinal:1}],sources:[{title:'Simulated '+name+' Profile',publisher,sourceVersion:VERSION,documentDigest:sha256(identity),accessedAt:reviewedAt}],knowledgeVersionId:id(key+'-reference'),knowledgeDigest:sha256({identity,version:VERSION})};
+  return{id:id(key==='fence'?'asset':key+'-asset'),name,catalogueState:'active',version:1,assetDigest:sha256(identity),privateConfiguration:identity,...(costProfile?{simulatedCostProfile:costProfile}:{}),research,reviewState:'reviewed',availability:'available',simulated:true};
+ }
+ const assets=Object.fromEntries(Object.entries(names).map(([serviceKey,name])=>[serviceKey,makeAsset(serviceKey,name,{manufacturer:'Demo Workshop',model:name,modelYear:'2026',series:'Training',engine:'Company profile',configuration:serviceKey+' service configuration',attachments:'Recorded service kit'},'Demo Workshop')]));
+ for(const machine of treeProfile.equipment){
+  const identity={manufacturer:machine.key==='avant_loader'?'Avant':'Simulated Company Fleet',model:machine.name,modelYear:'2026',series:treeProfile.label,engine:'Recorded company configuration',configuration:machine.role,attachments:machine.attachments.join(', ')||'Recorded tree-service configuration'};
+  assets['tree:'+machine.key]=makeAsset('tree-'+machine.key,machine.name,identity,'Simulated Company Fleet',machine);
+ }
  const document=buildCanonicalKnowledgeDocument({applicability:{},canonicalKey:'organization.operational-capabilities',content:{equipmentNote:'For this simulated business, confirm the required hole diameter and site access before choosing an auger. Ground conditions and underground services still need review.'},entryType:'generated_knowledge',label:'Simulated Equipment Planning Guidance',origin:'human',reviewRequirement:'high_risk',sensitivity:'restricted'});
  const knowledge={entry_id:id('entry'),canonical_key:'organization.operational-capabilities',entry_type:'generated_knowledge',version_id:id('version'),version_number:1,sensitivity:'restricted',review_requirement:'high_risk',canonical_document:document.canonicalDocument,canonical_digest:document.canonicalDigest,publication_id:id('publication'),publication_number:1,publication_digest:document.canonicalDigest};
- const proposal=require('./demoProposalRecipe').create(id,reviewedAt,asset);
- return stableValue({version:VERSION,createdAt:reviewedAt,assets:[asset],knowledgeRows:[knowledge,proposal.knowledge],proposalRecipeBasis:proposal.basis});
+ const proposal=require('./demoProposalRecipe').createAll(id,reviewedAt,assets,treeProfile);
+ return stableValue({version:VERSION,createdAt:reviewedAt,assets:Object.values(assets),knowledgeRows:[knowledge,...proposal.knowledgeRows],proposalRecipeBasis:proposal.basis,industryProfiles:{tree:treeProfile}});
 }
 function rawSources(state,item,inputs=null){
  const basis=state.equipmentBasis?.version===VERSION?state.equipmentBasis:null;

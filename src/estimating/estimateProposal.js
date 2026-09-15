@@ -16,6 +16,18 @@ function sourceRecipes(sources){
  // Only the already authorized projection reaches here; no raw knowledge rows.
  return(sources.knowledge||[]).filter(s=>s.content?.estimateProposalRecipe).map(s=>{if(!/^[a-f0-9-]{36}$/i.test(s.publicationId)||!/^[a-f0-9]{64}$/.test(s.canonicalDigest))fail('The company recipe source is unavailable.',409);return{pin:{id:s.publicationId,digest:s.canonicalDigest},label:s.label,recipe:s.content.estimateProposalRecipe};});
 }
+function applicableRecipes(sources,item,overrides=[]){
+ const scope=sources.proposalScope||sources.scope||{};
+ const available=sourceRecipes(sources).filter(entry=>entry.recipe?.serviceKey===item.snapshot.service.key).map(entry=>({...entry,recipe:recipeEngine.normalize(entry.recipe)}));
+ if(available.length<=1)return available;
+ const matching=available.filter(entry=>entry.recipe.applicability.every(rule=>{
+  const field=entry.recipe.fields.find(candidate=>candidate.id===rule.fieldId);
+  const override=field?.type==='category'?overrides.find(candidate=>candidate.fieldId===rule.fieldId):null;
+  const actual=override?override.value:scope[rule.fieldId];
+  return actual===null||actual===undefined||actual===rule.value;
+ }));
+ return matching.length?matching:available;
+}
 function inputsFor(component,evaluation,currency){
  const inputs=stableValue(component.inputs),allowed=FIELDS[component.kind]||{};
  for(const b of component.bindings){
@@ -41,7 +53,7 @@ function calculateComponent(c,inputs,currency,sourceContext,review){
 function build({review,item,sources,now=new Date(),expiresAt=null,simulated=false},raw){
  const body=normalize(raw),moment=new Date(now),selected=review.selectedRevision??null;
  if(body.selectedRevision!==null&&body.selectedRevision!==selected||review.isCurrent===false)fail('The selected estimate changed. Refresh and choose the current estimate.',409);
- const recipes=sourceRecipes(sources),applicable=[];for(const entry of recipes){if(entry.recipe?.serviceKey!==item.snapshot.service.key)continue;const r=recipeEngine.normalize(entry.recipe);applicable.push({...entry,recipe:r});}
+ const applicable=applicableRecipes(sources,item,body.overrides);
  const components={};for(const[k,name]of Object.entries({materials:'materialPlans',labor:'laborPlans',equipment:'equipmentPlans',travel:'travelPlans',pricing:'pricingPlans'})){const p=review[name]?.current;components[k]=p?{id:p.id,revision:p.revision,digest:p.digest,action:p.action}:null;}
  const timeWindow=Math.floor(moment.getTime()/300000);
  const basis={pins:review.pins,selectedRevision:selected,components,decisionBasis:review.decisions?.writeBasis||null,pricingSourceDigest:review.pricingPlans?.sources?.digest||null,pricingPolicyDigest:review.pricingPolicies?.current?.digest||null,pricingPolicySourceDigest:review.pricingPolicies?.sources?.digest||null,sourceDigest:sources.authorityDigest,resourcesDigest:sources.resources?.digest||null,recipes:applicable.map(r=>({pin:r.pin,digest:sha256(r.recipe)})),date:moment.toISOString().slice(0,10),timeWindow};
@@ -108,4 +120,4 @@ function build({review,item,sources,now=new Date(),expiresAt=null,simulated=fals
  result.questions=result.questions.slice(0,12);result.primaryQuestions=result.questions.slice(0,3);
  return stableValue(result);
 }
-module.exports={VERSION,normalize,build,inputsFor};
+module.exports={VERSION,normalize,build,inputsFor,applicableRecipes};

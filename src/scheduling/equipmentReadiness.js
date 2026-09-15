@@ -16,7 +16,9 @@ function merge(result,addition){
 }
 async function read(client,input){
  const p=input.proposal,t=p.target;
- return (await client.query('SELECT public.canonical_equipment_readiness_schedule_read($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) result',[input.organizationId,input.actorUserId,input.actorAccessRole,input.authSessionId,input.appointmentId,t.kind,t.id,p.scheduledStart,p.scheduledEnd,input.expectedTimeZone])).rows[0].result;
+ await client.query('SAVEPOINT equipment_readiness_optional');
+ try{const result=(await client.query('SELECT public.canonical_equipment_readiness_schedule_read($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) result',[input.organizationId,input.actorUserId,input.actorAccessRole,input.authSessionId,input.appointmentId,t.kind,t.id,p.scheduledStart,p.scheduledEnd,input.expectedTimeZone])).rows[0].result;await client.query('RELEASE SAVEPOINT equipment_readiness_optional');return result;}
+ catch(error){await client.query('ROLLBACK TO SAVEPOINT equipment_readiness_optional');await client.query('RELEASE SAVEPOINT equipment_readiness_optional');if(error?.code==='P0002')return{notRecorded:true,digest:'none'};throw error;}
 }
 function demoBasis(state,item,proposal,now=new Date()){
  const saved=require('../commandCenter/demoScheduling').validateState(state).history.find(h=>h.appointmentId===item.ids.appointment)?.response.scheduleAuthority;

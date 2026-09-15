@@ -22,10 +22,10 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
 
     expect(html).not.toContain('id="todayWorkCount"');
     expect(html).toContain('Personal Work Only');
-    expect(html).toContain('Read-only View');
+    expect(html).toContain('Live Job Controls');
     expect(css).toMatch(/\.today-header\s*\{\s*position:\s*sticky;\s*top:\s*0;\s*z-index:\s*300;/);
     expect(css).toMatch(/\.today-page\s*>\s*\.mobile-header\s*\{[\s\S]*position:\s*fixed\s*!important;[\s\S]*top:\s*0\s*!important;/);
-    expect(css).toMatch(/\.today-page\s+\.app-layout\s*\{\s*padding-top:\s*calc\(73px \+ env\(safe-area-inset-top\)\)\s*!important;/);
+    expect(css).toMatch(/\.today-page\s+\.app-layout\s*\{\s*padding-top:\s*calc\(81px \+ env\(safe-area-inset-top\)\)\s*!important;/);
     expect(css).toMatch(/\.today-card-accent\s*\{\s*display:\s*none;/);
     expect(css).toMatch(/\.today-header \.demo-dashboard-brand\s*\{\s*display:\s*none;/);
     expect(css).toMatch(/\.today-header #todayAuthority[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*ellipsis;/);
@@ -131,7 +131,7 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(calendar).toContain('item.dataset.appointmentId = record.appointmentId');
     expect(approval).toContain("displayProjection().text(match.label, target.kind === 'profile' ? 'Employee name unavailable' : 'Crew name unavailable')");
     expect(approval).toContain("displayProjection().text(entry.label,");
-    expect(approval).toContain("displayProjection().text(active.reason.value.trim(), 'Approval reason unavailable')");
+    expect(approval).not.toContain('active.reason');
   });
 
   test('keeps legitimate contractor equals and data labels while neutralizing markup-like labels', () => {
@@ -268,10 +268,10 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(page).not.toContain('Workspace ready');
     expect(page).not.toContain('Session ready');
     expect(page).not.toContain('The isolated workspace is ready.');
-    expect(page).toContain("byId('commandCenterAuthority').textContent = demo ? 'Demo Data' : 'Workspace Data';");
+    expect(page).toContain("byId('commandCenterAuthority').textContent = demo ? '' : 'Workspace Data';");
     expect(page).toContain("byId('commandCenterStatePill').hidden = true;");
     expect(page).toContain('status.hidden = !message');
-    expect(page).toContain("definition.textContent = 'Review current scheduling records in ' + overview.timeZone + '.';");
+    expect(page).toContain("'Review current appointments in your business time zone.'");
     expect(page).not.toContain("definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments");
     expect(page).not.toContain('overview.definitions[schedulingCategory]');
     expect(scheduling).toMatch(/\.m22-authority-heading > div\s*\{\s*display:\s*grid;\s*gap:\s*6px;/);
@@ -340,7 +340,7 @@ describe('Post-Mission 22 employee and Command Center visual corrections', () =>
     expect(page).toContain("element('details', 'command-center-mobile-customer customer-record-card')");
     expect(page).toContain("element('summary', 'command-center-mobile-customer-header')");
     expect(page).not.toContain('card.open = true');
-    for (const label of ['Recorded Value', 'Status', 'Next Action']) expect(page).toContain(`'${label}'`);
+    for (const label of ['Original estimate', 'Status', 'Next Action']) expect(page).toContain(`'${label}'`);
   });
 
   test('splits camel-case owner labels and supplies accessible dark operational colors', () => {

@@ -159,6 +159,27 @@
 .today-card-accent { display: none; }
 .today-card-body { display: grid; gap: 18px; padding: clamp(18px, 4vw, 26px); }
 .today-open-work { justify-self: start; min-height: 44px; }
+.today-job-controls { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.today-job-action {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  color: var(--theme-text);
+  background: var(--theme-surface-soft);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+.today-job-action[data-job-action="start"]:not(:disabled) { border-color: var(--brand-500); background: var(--northstar-brand-gold); color: #17130a; }
+.today-job-action[data-job-action="finish"]:not(:disabled) { border-color: var(--brand-500); }
+.today-job-action:disabled { cursor: not-allowed; opacity: .42; }
+.today-job-control-note { grid-column: 1 / -1; margin: 0; color: var(--theme-muted); font-size: 12px; }
 .today-card-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .today-card-heading > div:first-child { min-width: 0; }
 .today-card-heading h3 { margin: 0; color: var(--theme-text); font-size: clamp(19px, 4vw, 24px); line-height: 1.2; overflow-wrap: anywhere; }
@@ -265,7 +286,7 @@
     z-index: 400 !important;
     width: 100%;
   }
-  .today-page .app-layout { padding-top: calc(73px + env(safe-area-inset-top)) !important; }
+  .today-page .app-layout { padding-top: calc(81px + env(safe-area-inset-top)) !important; }
   .today-main { width: min(calc(100% - 24px), 1040px); padding-top: 28px; }
   .today-card-heading { display: grid; }
   .today-badges { justify-content: flex-start; }
@@ -283,6 +304,7 @@
   .today-scope-note > span { align-self: flex-start; }
   .today-card-body { padding: 16px; }
   .today-open-work { width: 100%; }
+  .today-job-controls { grid-template-columns: 1fr; }
   .today-readonly-badge { align-self: center; }
   .demo-dashboard-footer { padding-bottom: 98px; }
 }

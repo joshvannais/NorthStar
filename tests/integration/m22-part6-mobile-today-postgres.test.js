@@ -338,6 +338,63 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     expect(serialized).not.toContain(IDS.otherTenant);
   });
 
+  test('keeps crew lifecycle control with the lead and honors an explicit owner delegation', async () => {
+    const profileRow = (await runtimePool.query(
+      'SELECT id,raw_profile FROM public.canonical_business_profiles WHERE organization_id=$1 AND is_active=TRUE',
+      [IDS.organization]
+    )).rows[0];
+    const policy = { policies: [], jobControlPolicy: 'direct_assignee_or_crew_lead', jobControlDelegatedProfileIds: [] };
+    const authority = async (actor, session) => {
+      const client = await runtimePool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+        const value = (await client.query(
+          `SELECT public.canonical_job_control_authority($1,$2,'member',$3,$4,TRUE,$5,NULL) AS value`,
+          [IDS.organization, actor, session.sessionId, session.csrfToken, IDS.crewWork]
+        )).rows[0].value;
+        await client.query('COMMIT');
+        return value;
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    };
+    try {
+      await runtimePool.query(
+        `UPDATE public.canonical_business_profiles
+            SET raw_profile=jsonb_set(raw_profile,'{workforce}',$2::jsonb,TRUE)
+          WHERE organization_id=$1 AND id=$3`,
+        [IDS.organization, JSON.stringify(policy), profileRow.id]
+      );
+      await expect(authority(IDS.employee, sessions.employee)).resolves.toMatchObject({ allowed: true, basis: 'crew_lead' });
+      await expect(authority(IDS.teammate, sessions.teammate)).resolves.toMatchObject({ allowed: false, basis: 'crew_member' });
+
+      const memberToday = await require('../../src/scheduling/todayRepository').loadToday(runtimePool, {
+        organizationId: IDS.organization, actorUserId: IDS.teammate, actorAccessRole: 'member',
+        membershipId: IDS.teammate, authSessionId: sessions.teammate.sessionId,
+        onboardingComplete: true, subscriptionMutable: true,
+      });
+      expect(memberToday.records.find(record => record.appointmentId === IDS.crewWork).workCapabilities)
+        .toMatchObject({ actions: [], jobControl: { allowed: false, basis: 'crew_member' } });
+
+      const delegated = { ...policy, jobControlDelegatedProfileIds: [IDS.teammate] };
+      await runtimePool.query(
+        `UPDATE public.canonical_business_profiles
+            SET raw_profile=jsonb_set(raw_profile,'{workforce}',$2::jsonb,TRUE)
+          WHERE organization_id=$1 AND id=$3`,
+        [IDS.organization, JSON.stringify(delegated), profileRow.id]
+      );
+      await expect(authority(IDS.teammate, sessions.teammate)).resolves.toMatchObject({ allowed: true, basis: 'owner_delegation' });
+    } finally {
+      await runtimePool.query(
+        'UPDATE public.canonical_business_profiles SET raw_profile=$2::jsonb WHERE organization_id=$1 AND id=$3',
+        [IDS.organization, JSON.stringify(profileRow.raw_profile), profileRow.id]
+      );
+    }
+  });
+
   test('adds only the current in-scope execution pointer and opaque worker draft scope to Today', async () => {
     const assignment = await pins(runtimePool, IDS.organization, IDS.direct);
     const created = await request(app)
@@ -375,6 +432,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
     });
     expect(direct.workCapabilities).toEqual({
       version: 'm23-part9a-worker-actions-v1', mutable: true, actions: ['start'],
+      jobControl: { allowed: true, basis: 'direct_assignee' },
       materialMovementKinds: [], equipmentKinds: [],
     });
     expect(crew.execution).toBeNull();
@@ -578,6 +636,7 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
       expect(completed.execution).toMatchObject({ lifecycleState: 'in_progress' });
       expect(completed.workCapabilities).toEqual({
         version: 'm23-part9a-worker-actions-v1', mutable: false, actions: [],
+        jobControl: { allowed: true, basis: 'direct_assignee' },
         materialMovementKinds: [], equipmentKinds: [],
       });
     } finally {
@@ -707,6 +766,83 @@ realPostgres('Mission 22 Part 6 mounted mobile crew Today authority', () => {
       await runtimePool.query("UPDATE public.subscriptions SET status='canceled' WHERE id=$1", [subscription.rows[0].id]);
       try { await request(app).get('/api/v1/today').set(sessions.employee.headers).expect(200); }
       finally { await runtimePool.query('UPDATE public.subscriptions SET status=$2 WHERE id=$1', [subscription.rows[0].id, before]); }
+    }
+  });
+
+  test('enforces crew-lead Start Job, Stop Job and Finish Job controls through the mounted mutation routes', async () => {
+    const profileRow = (await runtimePool.query(
+      'SELECT id,raw_profile FROM public.canonical_business_profiles WHERE organization_id=$1 AND is_active=TRUE',
+      [IDS.organization]
+    )).rows[0];
+    const policy = { policies: [], jobControlPolicy: 'direct_assignee_or_crew_lead', jobControlDelegatedProfileIds: [] };
+    try {
+      await runtimePool.query(
+        `UPDATE public.canonical_business_profiles
+            SET raw_profile=jsonb_set(raw_profile,'{workforce}',$2::jsonb,TRUE)
+          WHERE organization_id=$1 AND id=$3`,
+        [IDS.organization, JSON.stringify(policy), profileRow.id]
+      );
+      const assignment = await pins(runtimePool, IDS.organization, IDS.crewWork);
+      let execution = (await readExecutionByAppointment({
+        organizationId: IDS.organization, actorUserId: IDS.employee, actorAccessRole: 'member',
+        authSessionId: sessions.employee.sessionId,
+      }, IDS.crewWork)).data;
+      await request(app).post(`/api/v1/field-executions/${execution.id}/transitions`)
+        .set(sessions.teammate.headers).set('Idempotency-Key', 'm24-job-control-member-start-0001')
+        .send({ expectedRevision: execution.revision, expectedDigest: execution.digest,
+          expectedAssignmentRevision: assignment.revision, expectedAssignmentDigest: assignment.digest,
+          action: 'start', reason: 'Non-lead crew member must not control the crew job.' })
+        .expect(403).expect(response => expect(response.body.error.code).toBe('JOB_CONTROL_FORBIDDEN'));
+      const started = await request(app).post(`/api/v1/field-executions/${execution.id}/transitions`)
+        .set(sessions.employee.headers).set('Idempotency-Key', 'm24-job-control-lead-start-0001')
+        .send({ expectedRevision: execution.revision, expectedDigest: execution.digest,
+          expectedAssignmentRevision: assignment.revision, expectedAssignmentDigest: assignment.digest,
+          action: 'start', reason: 'Crew lead starts the assigned crew job.' })
+        .expect(200);
+      execution = started.body.data;
+      expect(execution.lifecycleState).toBe('in_progress');
+      const stopped = await request(app).post(`/api/v1/field-executions/${execution.id}/transitions`)
+        .set(sessions.employee.headers).set('Idempotency-Key', 'm24-job-control-lead-stop-0001')
+        .send({ expectedRevision: execution.revision, expectedDigest: execution.digest,
+          expectedAssignmentRevision: assignment.revision, expectedAssignmentDigest: assignment.digest,
+          action: 'pause', reason: 'Crew lead stops the assigned crew job.' })
+        .expect(200);
+      execution = stopped.body.data;
+      expect(execution.lifecycleState).toBe('paused');
+      const resumed = await request(app).post(`/api/v1/field-executions/${execution.id}/transitions`)
+        .set(sessions.employee.headers).set('Idempotency-Key', 'm24-job-control-lead-resume-0001')
+        .send({ expectedRevision: execution.revision, expectedDigest: execution.digest,
+          expectedAssignmentRevision: assignment.revision, expectedAssignmentDigest: assignment.digest,
+          action: 'resume', reason: 'Crew lead resumes the assigned crew job.' })
+        .expect(200);
+      execution = resumed.body.data;
+      const transcript = graphIds(IDS.crewWork).transcript;
+      await migrationPool.query('ALTER TABLE public.canonical_transcripts DISABLE TRIGGER USER');
+      try {
+        await migrationPool.query("UPDATE public.canonical_transcripts SET source='lead' WHERE organization_id=$1 AND id=$2", [IDS.organization, transcript]);
+      } finally { await migrationPool.query('ALTER TABLE public.canonical_transcripts ENABLE TRIGGER USER'); }
+      const finishBody = { action: 'propose_completion', expectedExecutionRevision: execution.revision,
+        expectedExecutionDigest: execution.digest, expectedAssignmentRevision: assignment.revision,
+        expectedAssignmentDigest: assignment.digest, reason: 'Crew lead records that field work is finished.',
+        expiresAt: new Date(Date.now() + 60000).toISOString(), gateRequirements: { checklists: [], inspections: [], files: [] } };
+      await request(app).post(`/api/v1/field-executions/${execution.id}/completion-actions`)
+        .set(sessions.teammate.headers).set('Idempotency-Key', 'm24-job-control-member-finish-0001')
+        .send(finishBody).expect(403)
+        .expect(response => expect(response.body.error.code).toBe('JOB_CONTROL_FORBIDDEN'));
+      const finished = await request(app).post(`/api/v1/field-executions/${execution.id}/completion-actions`)
+        .set(sessions.employee.headers).set('Idempotency-Key', 'm24-job-control-lead-finish-0001')
+        .send(finishBody).expect(200);
+      expect(finished.body.data.lifecycleState).toBe('completion_pending');
+      expect(finished.body.completionRecord.recordKind).toBe('proposal');
+    } finally {
+      await migrationPool.query('ALTER TABLE public.canonical_transcripts DISABLE TRIGGER USER');
+      try {
+        await migrationPool.query("UPDATE public.canonical_transcripts SET source='manual' WHERE organization_id=$1 AND id=$2", [IDS.organization, graphIds(IDS.crewWork).transcript]);
+      } finally { await migrationPool.query('ALTER TABLE public.canonical_transcripts ENABLE TRIGGER USER'); }
+      await runtimePool.query(
+        'UPDATE public.canonical_business_profiles SET raw_profile=$2::jsonb WHERE organization_id=$1 AND id=$3',
+        [IDS.organization, JSON.stringify(profileRow.raw_profile), profileRow.id]
+      );
     }
   });
 

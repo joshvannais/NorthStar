@@ -2092,6 +2092,17 @@ html body #cdCustomerDrawer .drawer-card-note#cdAttentionSection { margin-top:16
 html body #cdCustomerDrawer .drawer-card-note:not(#cdAttentionSection) { display:flex;align-items:baseline;gap:10px;margin:12px 0 0;padding:12px 14px; }
 html body #cdCustomerDrawer .drawer-card-note:not(#cdAttentionSection) h3 { margin:0;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap; }
 html body #cdCustomerDrawer .drawer-card-note:not(#cdAttentionSection) .drawer-polaris-item-value { margin:0;font-size:.95rem; }
+html body #cdCustomerDrawer .drawer-profit-kpi { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 18px;align-items:center;margin:12px 0 14px;padding:15px 16px;border:1px solid color-mix(in srgb,#b58c32 48%,var(--neutral-200));border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,#d4af37 10%,var(--theme-surface)),var(--theme-surface));color:var(--neutral-900);box-shadow:0 8px 22px rgba(85,62,14,.08); }
+html body #cdCustomerDrawer .drawer-profit-kpi-heading { min-width:0; }
+html body #cdCustomerDrawer .drawer-profit-kpi-kicker { margin:0 0 3px;color:var(--neutral-600);font-size:.68rem;font-weight:750;letter-spacing:.09em;text-transform:uppercase; }
+html body #cdCustomerDrawer .drawer-profit-kpi h3 { margin:0;font-size:1rem;line-height:1.3; }
+html body #cdCustomerDrawer .drawer-profit-kpi-result { display:grid;justify-items:end;gap:2px;text-align:right; }
+html body #cdCustomerDrawer .drawer-profit-kpi-result strong { font-size:1.25rem;line-height:1.2;color:#8a681d;white-space:nowrap; }
+html[data-theme="dark"] body #cdCustomerDrawer .drawer-profit-kpi-result strong { color:#e1bd59; }
+html body #cdCustomerDrawer .drawer-profit-kpi-result span { color:var(--neutral-600);font-size:.75rem;line-height:1.35; }
+html body #cdCustomerDrawer .drawer-profit-kpi-cost { grid-column:1/-1;margin:4px 0 0;padding-top:8px;border-top:1px solid color-mix(in srgb,#b58c32 26%,var(--neutral-200));color:var(--neutral-600);font-size:.76rem;line-height:1.4; }
+html body #cdCustomerDrawer .drawer-owner-economics { margin-top:18px;padding-top:16px;border-top:1px solid var(--neutral-200); }
+html body #cdCustomerDrawer .drawer-owner-economics h4 { margin:0 0 8px;font-size:.9rem; }
 @media(max-width:640px){html body #cdCustomerDrawer .drawer-primary-action-list{grid-template-columns:1fr 1fr}html body #cdCustomerDrawer #cdBtnEstimate{grid-column:1/-1}.customer-estimate-copy{grid-template-columns:1fr 1fr}.customer-estimate-copy input{grid-column:1/-1}}
 body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-overlay { position:fixed;inset:0;z-index:10050;display:grid;place-items:center;padding:24px;background:rgba(5,7,13,.78);backdrop-filter:blur(10px); }

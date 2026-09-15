@@ -207,19 +207,50 @@ describe('Mission 22 Part 6 mobile crew Today contract', () => {
       version: 'm23-part9a-worker-actions-v1',
       mutable: true,
       actions: base.execution_actions,
+      jobControl: { allowed: true, basis: 'direct_assignee' },
       materialMovementKinds: base.execution_material_kinds,
       equipmentKinds: base.execution_equipment_kinds,
     });
     expect(rowProjection(base, 'America/New_York', false).workCapabilities).toEqual({
       version: 'm23-part9a-worker-actions-v1', mutable: false, actions: [],
+      jobControl: { allowed: true, basis: 'direct_assignee' },
       materialMovementKinds: [], equipmentKinds: [],
     });
     expect(rowProjection({ ...base, execution_id: null, execution_actions: null,
       execution_material_kinds: null, execution_equipment_kinds: null }, 'America/New_York', true)
       .workCapabilities).toEqual({
       version: 'm23-part9a-worker-actions-v1', mutable: true, actions: ['initialize'],
+      jobControl: { allowed: true, basis: 'direct_assignee' },
       materialMovementKinds: [], equipmentKinds: [],
     });
+  });
+
+  test('keeps crew job controls with the lead unless the Business Profile delegates them', () => {
+    const { rowProjection } = require('../../src/scheduling/todayRepository');
+    const base = {
+      appointment_id: 'a1600000-0000-4000-8000-000000000001', job_title: 'Crew job', service_type: 'Tree removal',
+      appointment_status: 'scheduled', schedule_state: 'scheduled', dispatch_state: 'dispatched',
+      scheduled_start: '2026-09-07T13:00:00.000Z', scheduled_end: '2026-09-07T15:00:00.000Z',
+      spans_day_boundary: false, needs_review: false, review_reasons: [],
+      workforce_profile_id: null, workforce_crew_id: 'c1600000-0000-4000-8000-000000000001',
+      actor_profile_id: validInput.membershipId, actor_name: 'Worker', crew_name: 'Tree Crew', teammate_total: 2,
+      revision: 7, canonical_digest: 'a'.repeat(64), last_human_approval_id: 'e1600000-0000-4000-8000-000000000001',
+      human_applied_revision: 7, human_applied_digest: 'a'.repeat(64),
+      execution_id: 'f1600000-0000-4000-8000-000000000001', execution_lifecycle_state: 'in_progress',
+      execution_revision: 3, execution_digest: 'b'.repeat(64), execution_assignment_revision: 7,
+      execution_assignment_digest: 'a'.repeat(64), execution_actions: ['pause','start_timer','record_manual','propose_completion'],
+      execution_material_kinds: [], execution_equipment_kinds: [],
+    };
+    const policy={jobControlPolicy:'direct_assignee_or_crew_lead',jobControlDelegatedProfileIds:[]};
+    const member=rowProjection({...base,teammates:[{profileId:validInput.membershipId,name:'Worker',crewRole:'member'}]},'America/New_York',true,policy);
+    expect(member.workCapabilities.jobControl).toEqual({allowed:false,basis:'crew_member'});
+    expect(member.workCapabilities.actions).toEqual(['start_timer','record_manual']);
+    const lead=rowProjection({...base,teammates:[{profileId:validInput.membershipId,name:'Worker',crewRole:'lead'}]},'America/New_York',true,policy);
+    expect(lead.workCapabilities.actions).toEqual(base.execution_actions);
+    expect(lead.workCapabilities.jobControl).toEqual({allowed:true,basis:'crew_lead'});
+    const delegated=rowProjection({...base,teammates:[{profileId:validInput.membershipId,name:'Worker',crewRole:'member'}]},'America/New_York',true,
+      {...policy,jobControlDelegatedProfileIds:[validInput.membershipId]});
+    expect(delegated.workCapabilities.jobControl).toEqual({allowed:true,basis:'owner_delegation'});
   });
 
   test('keeps hostile source-to-sink proof separate from realistic employee handoff screenshots', () => {

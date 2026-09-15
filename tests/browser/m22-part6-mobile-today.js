@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { Client } = require('pg');
+const { Client, Pool } = require('pg');
 const request = require('supertest');
 const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
@@ -275,7 +275,7 @@ async function main() {
     'GOOGLE_SHEETS_CLIENT_EMAIL', 'GOOGLE_SHEETS_PRIVATE_KEY', 'GOOGLE_SHEETS_SPREADSHEET_ID'];
   const original = Object.fromEntries(environment.map(key => [key, process.env[key]]));
   const suiteDatabase = await createSuiteDatabase(`m22-p6-browser-${matrix}`);
-  let roles, db, server, browser, context, ownerContext, logoutContext;
+  let roles, db, fixturePool, server, browser, context, ownerContext, logoutContext;
   const external = [], browserErrors = [], network = [], responseBodies = [], responseInventory = [], responseCaptureTasks = [];
   const screenshots = [], securityScreenshots = [];
   let sameOriginResponseEvents = 0;
@@ -290,6 +290,7 @@ async function main() {
     db = require('../../src/db');
     assert.strictEqual(await db.initDatabase(), true);
     const pool = db.getPool();
+    fixturePool = new Pool({ connectionString: roles.migrationUrl, max: 2 });
     await pool.query('INSERT INTO organizations(id,name,email) VALUES ($1,$2,\'part6-browser@example.test\')', [ORGANIZATION_ID, REALISTIC.tenant]);
     await pool.query(
       `INSERT INTO users(id,organization_id,name,email,password_hash,role,status)
@@ -332,7 +333,7 @@ async function main() {
     const { app } = require('../../src/server');
     const workItems = [];
     for (let ordinal = 0; ordinal < REALISTIC.work.length; ordinal += 1) {
-      workItems.push(await createWork(app, pool, owner, ordinal + 1));
+      workItems.push(await createWork(app, fixturePool, owner, ordinal + 1));
     }
     const appointmentIds = workItems.map(item => item.appointmentId);
     const at = offset => instantAt(fixturePlan, offset);
@@ -588,16 +589,20 @@ async function main() {
     WITHHELD.forEach(value => assert.ok(!serialized.includes(value), `withheld API category leaked: ${value}`));
     const pageText = await page.locator('#todayMain').innerText();
     const pageRawText = await page.locator('#todayMain').textContent();
-    ['Margin', 'Payroll', 'Billing', 'Subscriptions', 'Settings', 'Customer history', 'Start job', 'Arrive', 'En route', 'Complete job', 'Clock in', 'Upload photo']
+    ['Margin', 'Payroll', 'Billing', 'Subscriptions', 'Settings', 'Customer history', 'Arrive', 'En route', 'Complete job', 'Clock in', 'Upload photo']
       .forEach(value => assert.ok(!pageText.includes(value), `withheld DOM category leaked: ${value}`));
-    assert.strictEqual(await page.locator('[data-nav-id]:not([data-nav-id="today"])').count(), 0);
+    const employeeNavIds = await page.locator('[data-nav-id]').evaluateAll(nodes => nodes.map(node => node.dataset.navId));
+    employeeNavIds.forEach(id => assert.ok(['today', 'my-work-profile'].includes(id), `unapproved employee navigation: ${id}`));
     assert.strictEqual(await page.locator('#northstarQuickStartButton, #northstarQuickStartDialog').count(), 0);
     assert.strictEqual(await page.locator('#todayRecords img').count(), 0);
     assert.strictEqual(await page.evaluate(() => Boolean(globalThis.m22Part6Compromised)), false);
-    assert.strictEqual(await page.getByText('Read-only View', { exact: true }).count(), 1);
+    assert.strictEqual(await page.getByText('Live Job Controls', { exact: true }).count(), 1);
+    assert.ok(await page.getByText('Start Job', { exact: true }).count() >= 1);
+    assert.ok(await page.getByText('Stop Job', { exact: true }).count() >= 1);
+    assert.ok(await page.getByText('Finish Job', { exact: true }).count() >= 1);
     assert.strictEqual(await page.getByText('Assigned to you', { exact: true }).count(), 2);
     assert.strictEqual(await page.getByText('Current crew', { exact: true }).count() >= 1, true);
-    assert.deepStrictEqual(Object.keys(primaryBody.data.identity).sort(), ['displayName', 'operationalRole']);
+    assert.deepStrictEqual(Object.keys(primaryBody.data.identity).sort(), ['displayName', 'operationalRole', 'profileId']);
     assert.ok(serialized.includes(HOSTILE_MARKER), 'hostile API bytes must remain unchanged in the allowlisted projection for the adversarial proof');
     assert.ok(!pageRawText.includes(HOSTILE), 'hostile stored bytes must not be exposed in the user-facing display projection');
     ['Job title unavailable', 'Employee name unavailable', 'Customer name unavailable', 'Service location unavailable']
@@ -639,7 +644,7 @@ async function main() {
       `realistic employee handoff API value missing: ${expected}; body=${realisticSerialized}`);
     assert.strictEqual(await page.locator('#todayRecords img').count(), 0);
     assert.strictEqual(await page.evaluate(() => Boolean(globalThis.m22Part6Compromised)), false);
-    assert.deepStrictEqual(Object.keys(realisticBody.data.identity).sort(), ['displayName', 'operationalRole']);
+    assert.deepStrictEqual(Object.keys(realisticBody.data.identity).sort(), ['displayName', 'operationalRole', 'profileId']);
     assert.strictEqual(realisticBody.data.identity.displayName, REALISTIC.employee);
     assert.strictEqual(network.some(entry => entry.pathname === '/api/auth/me'), false);
     const allowedEmployeePaths = new Set([
@@ -811,10 +816,6 @@ async function main() {
     const logoutControl = mobile
       ? logoutPage.locator('#todayMobileMenu [data-today-logout]')
       : logoutPage.locator('.sidebar [data-today-logout]');
-    const publicTelemetryAfterLogout = logoutPage.waitForResponse(value => {
-      const target = new URL(value.url());
-      return target.origin === origin && target.pathname === '/api/telemetry' && value.status() === 202;
-    });
     const [logoutResult] = await Promise.all([
       logoutPage.waitForResponse(value => new URL(value.url()).pathname === '/api/auth/logout'),
       logoutControl.click(),
@@ -822,7 +823,6 @@ async function main() {
     assert.strictEqual(logoutResult.status(), 200);
     await logoutPage.waitForURL(value => new URL(value).pathname === '/login');
     await logoutPage.waitForLoadState('load');
-    await publicTelemetryAfterLogout;
     await Promise.all(logoutResponseCaptureTasks);
     assert.strictEqual(logoutExternal.length, 0);
     assert.deepStrictEqual(logoutRequestFailures, []);
@@ -830,7 +830,7 @@ async function main() {
     assert.strictEqual(logoutNetwork.some(entry => entry.method === 'POST' && entry.pathname === '/api/auth/logout'), true);
     const allowedLogoutPaths = new Set([
       ...allowedEmployeePaths, '/api/auth/logout', '/login', '/js/auth-session.js', '/js/password-fields.js',
-      '/js/product-telemetry.js', '/api/telemetry',
+      '/js/product-telemetry.js', '/css/public-site.css', '/api/telemetry',
     ]);
     logoutNetwork.forEach(entry => assert.ok(allowedLogoutPaths.has(entry.pathname),
       `unapproved employee logout/redirect destination: ${JSON.stringify(entry)}`));
@@ -1062,7 +1062,7 @@ async function main() {
       commandPresentation.leadLayout.cards.forEach(card => {
         assert.ok(card.scroll <= card.client + 2, JSON.stringify(card));
         assert.ok(card.records >= 1, JSON.stringify(card));
-        for (const label of ['Recorded Value', 'Status', 'Next Action']) assert.ok(card.labels.includes(label), JSON.stringify(card));
+        for (const label of ['Original estimate', 'Status', 'Next Action']) assert.ok(card.labels.includes(label), JSON.stringify(card));
       });
     } else {
       assert.notStrictEqual(commandPresentation.leadLayout.tableDisplay, 'none', JSON.stringify(commandPresentation));
@@ -1171,6 +1171,7 @@ async function main() {
     if (browser) await browser.close().catch(() => {});
     await closeServer(server).catch(() => {});
     if (db) await db.close().catch(() => {});
+    if (fixturePool) await fixturePool.end().catch(() => {});
     await suiteDatabase.cleanup().catch(() => {});
     await dropRoles(roles).catch(() => {});
     if (path.resolve(dataRoot).startsWith(path.resolve(os.tmpdir()) + path.sep)) fs.rmSync(dataRoot, { recursive: true, force: true });

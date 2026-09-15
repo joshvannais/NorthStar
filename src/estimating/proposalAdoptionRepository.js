@@ -16,7 +16,7 @@ async function read(client,input){return(await client.query('SELECT public.canon
 async function prepare(client,input,raw,load){
  const body=contract.normalize(raw,{preview:true});await authority(client,input);checkPolicy(body);
  const {review,item}=await load(client,body.draft.selectedRevision),context=await proposal.loadContext(client,input,review,item),history=await read(client,input);
- const recipe=context.sources.knowledge.find(k=>k.content?.estimateProposalRecipe?.serviceKey===item.snapshot.service.key)?.content.estimateProposalRecipe;
+ const recipe=require('./estimateProposal').applicableRecipes(context.sources,item,body.draft.overrides)[0]?.recipe;
  const inputs=recipe?.components.find(c=>c.kind==='equipment')?.inputs;
  const sources=inputs?equipment.presentSources(await equipment.readSources(client,input,inputs),input):context.sources;
  const prepared=builder.build(context,body,{equipmentSources:sources,history:history.history});

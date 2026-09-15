@@ -62,7 +62,11 @@ const WEEKDAYS = Object.freeze([
 ]);
 const HOURS_FIELDS = new Set(['open', 'close', 'lunch', 'emergency', 'afterHours', 'holiday']);
 const HOLIDAY_FIELDS = new Set(['id', 'name', 'date', 'closed', 'open', 'close']);
-const WORKFORCE_FIELDS = new Set(['policies']);
+const WORKFORCE_FIELDS = new Set([
+  'policies', 'jobControlPolicy', 'jobControlDelegatedProfileIds',
+]);
+const JOB_CONTROL_POLICIES = new Set(['direct_assignee_or_crew_lead']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WORKFORCE_POLICY_FIELDS = new Set(['id', 'name', 'description', 'enabled']);
 const VOICE_ASSISTANT_FIELDS = new Set([
   'name', 'style', 'greeting', 'personality', 'conversationStyle', 'escalationRules',
@@ -483,6 +487,20 @@ function validatePolicies(policies, errors) {
 function validateWorkforce(workforce, errors) {
   if (!isPlainObject(workforce)) return;
   addUnsupportedFieldErrors(workforce, WORKFORCE_FIELDS, 'workforce', 'workforce', errors);
+  if (hasOwn(workforce, 'jobControlPolicy') &&
+      (typeof workforce.jobControlPolicy !== 'string' ||
+       !JOB_CONTROL_POLICIES.has(workforce.jobControlPolicy))) {
+    errors.push('workforce.jobControlPolicy must be direct_assignee_or_crew_lead.');
+  }
+  if (hasOwn(workforce, 'jobControlDelegatedProfileIds')) {
+    const delegated = workforce.jobControlDelegatedProfileIds;
+    if (!Array.isArray(delegated) || delegated.length > 100 ||
+        delegated.some(value => typeof value !== 'string' || !UUID_PATTERN.test(value)) ||
+        new Set(Array.isArray(delegated) ? delegated.map(value => value.toLowerCase()) : []).size !==
+          (Array.isArray(delegated) ? delegated.length : 0)) {
+      errors.push('workforce.jobControlDelegatedProfileIds must contain at most 100 unique workforce profile IDs.');
+    }
+  }
   if (!hasOwn(workforce, 'policies')) return;
   if (!Array.isArray(workforce.policies)) {
     errors.push('workforce.policies must be an array.');

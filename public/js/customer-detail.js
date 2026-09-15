@@ -286,6 +286,17 @@ window.CustomerDetail = (function() {
     var serviceAddress = document.createElement('p'); serviceAddress.id = 'cdServiceAddress'; serviceAddress.className = 'drawer-service-address'; identity.appendChild(serviceAddress);
     var priceBox = $('cdPolPrice').parentElement; priceBox.classList.add('drawer-primary-estimate');
     var range = document.createElement('div'); range.id = 'cdPolRange'; range.className = 'drawer-original-range'; priceBox.appendChild(range);
+    var profitCard = document.createElement('section'); profitCard.id = 'cdOriginalProfitKpi'; profitCard.className = 'drawer-profit-kpi'; profitCard.setAttribute('aria-labelledby','cdOriginalProfitLabel');
+    var profitHeading = document.createElement('div'); profitHeading.className = 'drawer-profit-kpi-heading';
+    var profitKicker = document.createElement('p'); profitKicker.className = 'drawer-profit-kpi-kicker'; profitKicker.textContent = 'Original Polaris Estimate';
+    var profitLabel = document.createElement('h3'); profitLabel.id = 'cdOriginalProfitLabel'; profitLabel.textContent = 'Estimated Profit';
+    profitHeading.append(profitKicker,profitLabel);
+    var profitResult = document.createElement('div'); profitResult.className = 'drawer-profit-kpi-result';
+    var profitValue = document.createElement('strong'); profitValue.id = 'cdOriginalProfitValue'; profitValue.textContent = 'Needs review';
+    var profitMargin = document.createElement('span'); profitMargin.id = 'cdOriginalProfitMargin'; profitMargin.textContent = 'Cost inputs incomplete';
+    profitResult.append(profitValue,profitMargin);
+    var profitCost = document.createElement('p'); profitCost.id = 'cdOriginalOperatingCost'; profitCost.className = 'drawer-profit-kpi-cost'; profitCost.textContent = 'Operating cost needs review.';
+    profitCard.append(profitHeading,profitResult,profitCost);
     var confidenceNode = $('cdPolConfidence'), actionNode = $('cdPolAction');
     $('cdPolarisInsight').querySelector('.drawer-polaris-grid').replaceChildren(priceBox);
     var analysis = panel.querySelector('.drawer-polaris-analysis'); analysis.open = false;
@@ -327,7 +338,7 @@ window.CustomerDetail = (function() {
     var activityTitle=document.createElement('summary');activityTitle.textContent='Activity';activityArea.append(activityTitle,$('cdConversationHistorySection'),$('cdTranscriptDisclosure'),contactDetails);
     analysis.appendChild(attention);panel.appendChild(nextAction);
     priceDetails.appendChild($('cdCapellaReview'));
-    content.prepend(actionSection,estimateHub,polarisSection,priceDetails,workArea,activityArea);
+    content.prepend(actionSection,estimateHub,polarisSection,profitCard,priceDetails,workArea,activityArea);
     $('cdContextSummary').hidden = true;
     [analysis,priceDetails,workArea,activityArea].forEach(function(disclosure){disclosure.addEventListener('toggle',function(){if(!disclosure.open)return;[analysis,priceDetails,workArea,activityArea].forEach(function(other){if(other!==disclosure)other.open=false;});});});
 
@@ -783,7 +794,52 @@ window.CustomerDetail = (function() {
       var recordedTotal = presentation && presentation.customerPrice !== null ? presentation.customerPriceRoundedText : '\u2014';
       html += '<div class="drawer-pricing-item"><span><strong>Original estimate</strong></span><span><strong>' + escapeText(recordedTotal) + '</strong></span></div>';
     }
+    var economics = originalProfitPresentation(values);
+    html += '<section class="drawer-owner-economics" aria-label="Original operating cost and profit">' +
+      '<h4>Operating Cost And Profit</h4>' +
+      '<div class="drawer-pricing-item"><span>Recorded direct costs</span><span>' + escapeText(economics.directCostText) + '</span></div>' +
+      '<div class="drawer-pricing-item"><span>Recorded overhead</span><span>' + escapeText(economics.overheadText) + '</span></div>' +
+      '<div class="drawer-pricing-item"><span><strong>Estimated operating cost</strong></span><span><strong>' + escapeText(economics.operatingCostText) + '</strong></span></div>' +
+      '<div class="drawer-pricing-item"><span><strong>Estimated profit</strong></span><span><strong>' + escapeText(economics.profitText) + '</strong></span></div>' +
+      '<p class="drawer-pricing-category-detail">Owner-only original Polaris calculation. Internal costs and profit are excluded from the customer estimate.</p></section>';
     return html;
+  }
+
+  function originalProfitPresentation(values) {
+    values = values && typeof values === 'object' ? values : {};
+    function amount(value) { return typeof value === 'number' && Number.isFinite(value) ? value : null; }
+    function signedMoney(value) {
+      if (value === null) return 'Needs review';
+      var rounded = Math.round(Math.abs(value));
+      return (value < 0 ? '-$' : '$') + rounded.toLocaleString('en-US');
+    }
+    function percent(value) {
+      if (value === null) return 'Margin needs review';
+      return Number(value).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2}) + '% margin';
+    }
+    var price = amount(values.customerFacingPrice), direct = amount(values.knownDirectCosts), overhead = amount(values.overhead);
+    var gross = amount(values.grossProfit), net = amount(values.netProfit), netMargin = amount(values.netMarginPercent);
+    var operating = direct !== null && overhead !== null ? Math.round((direct + overhead) * 100) / 100 : null;
+    var complete = price !== null && operating !== null && net !== null && netMargin !== null && Math.abs(Math.round((price - operating) * 100) / 100 - net) < 0.011;
+    return {
+      complete: complete,
+      directCostText: signedMoney(direct),
+      overheadText: signedMoney(overhead),
+      operatingCostText: complete ? signedMoney(operating) : 'Needs review',
+      profitText: complete ? signedMoney(net) : 'Needs review',
+      marginText: complete ? percent(netMargin) : gross !== null ? 'Gross before overhead: ' + signedMoney(gross) : 'Cost inputs incomplete',
+      costSummary: complete ? 'Estimated operating cost ' + signedMoney(operating) : direct !== null ? 'Direct costs ' + signedMoney(direct) + ' · overhead needs review' : 'Operating cost needs review.'
+    };
+  }
+
+  function renderOriginalProfitKpi(data) {
+    var presentation = window.PolarisEngine && window.PolarisEngine.selectPresentation(data && data.intelligence);
+    var economics = originalProfitPresentation(presentation && presentation.values);
+    var card = $('cdOriginalProfitKpi');
+    card.dataset.state = economics.complete ? 'calculated' : 'needs-review';
+    $('cdOriginalProfitValue').textContent = economics.profitText;
+    $('cdOriginalProfitMargin').textContent = economics.marginText;
+    $('cdOriginalOperatingCost').textContent = economics.costSummary;
   }
 
   // ── Public API ──
@@ -2066,6 +2122,7 @@ window.CustomerDetail = (function() {
     var originalRange = data.intelligence && data.intelligence.preliminaryRange;
     $('cdPolRange').textContent = originalRange && originalRange.low != null && originalRange.high != null ? 'Original range: ' + fmtCurrency(originalRange.low) + ' – ' + fmtCurrency(originalRange.high) : 'Original range not recorded';
     $('cdPolPrice').textContent = intel.price;
+    renderOriginalProfitKpi(data);
     $('cdPolConfidence').textContent = intel.confidenceLabel + ' (' + intel.confidencePct + ')';
     $('cdPolAction').textContent = intel.action;
 

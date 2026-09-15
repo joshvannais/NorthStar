@@ -26,6 +26,15 @@ function input(overrides = {}) {
 }
 
 describe('Mission 24 Part 8 customer estimate preview', () => {
+  test('keeps estimate access visible in the customer card primary actions', () => {
+    const detail=fs.readFileSync(path.join(__dirname,'../../public/js/customer-detail.js'),'utf8');
+    const css=fs.readFileSync(path.join(__dirname,'../../public/css/site-professionalism.css'),'utf8');
+    expect(detail).toContain('id="cdBtnEstimate"');
+    expect(detail).toContain('aria-controls="cdEstimateHub"');
+    expect(fs.readFileSync(path.join(__dirname,'../../public/js/customer-estimate-preview.js'),'utf8')).toContain("external.onclick=function(){preview.click();}");
+    expect(detail.indexOf('id="cdBtnEstimate"')).toBeLessThan(detail.indexOf('id="cdBtnAskPolaris"'));
+    expect(css).toMatch(/\.drawer-estimate-action\s*\{[^}]*background:#d4af37[^}]*color:#211a0b/s);
+  });
   test('loads the preview controller before every shared customer drawer', () => {
     const root=path.resolve(__dirname,'../..');
     for(const file of ['dashboard.html','demo-dashboard.html','dashboard/command-center.html','dashboard/communications.html','dashboard/leads.html','dashboard/polaris.html']){

@@ -715,6 +715,19 @@
     });
   }
 
+  function pendingActionDisposition(pending, value) {
+    if(!pending||!value||!value.session||pending.sessionId!==value.session.id||!pending.attempt||
+      typeof pending.attempt.body!=='string'||!pending.attempt.headers)return 'discard';
+    var recognized=(pending.intent==='simulate-lead'&&pending.endpoint==='/api/demo/command-center/simulations/leads')||
+      (pending.intent==='reset'&&pending.endpoint==='/api/demo/command-center/reset');
+    if(!recognized)return 'discard';
+    var body;
+    try{body=JSON.parse(pending.attempt.body);}catch(_){return 'discard';}
+    if(Number.isSafeInteger(body&&body.expectedRevision)&&value.integrity&&Number.isSafeInteger(value.integrity.revision)&&
+      value.integrity.revision>body.expectedRevision)return 'advanced';
+    return 'retry';
+  }
+
   function installToolbar(value) {
     if (document.getElementById('northstarDemoToolbar') || TOOLBAR_EXCLUDED_PATHS.indexOf(path) >= 0) return;
     var main=document.querySelector('.main-content'), space=value.configuration&&value.configuration.scenarioSpace;
@@ -757,8 +770,11 @@
     returnToToolbar(value);
     try {
       var pending=JSON.parse(global.sessionStorage.getItem('northstarDemoPendingAction')||'null');
-      if(pending&&pending.sessionId===value.session.id&&pending.attempt&&typeof pending.attempt.body==='string'&&pending.attempt.headers&&
-        ((pending.intent==='simulate-lead'&&pending.endpoint==='/api/demo/command-center/simulations/leads')||(pending.intent==='reset'&&pending.endpoint==='/api/demo/command-center/reset'))){
+      var disposition=pendingActionDisposition(pending,value);
+      if(disposition==='advanced'){
+        global.sessionStorage.removeItem('northstarDemoPendingAction');
+        status.textContent='The workspace changed since an earlier attempt. Review saved leads before adding another.';
+      }else if(disposition==='retry'){
         var retry=control('button','Retry Same Action','btn btn-secondary');retry.type='button';retry.dataset.restoredRetry='true';retry._demoAttempt=pending.attempt;
         section.querySelectorAll('button,select').forEach(function(c){c.disabled=true;});status.textContent='An earlier action has an uncertain result. Check saved leads or retry that same action.';
         section.append(retry);retry.addEventListener('click',function(){if(retry._demoAttempt)performMutation(pending.endpoint,pending.intent,{},retry,status);});
@@ -795,6 +811,7 @@
     getWorkspace: function () { return workspace; },
     loadAccount: loadAccount,
     loadWorkspace: loadWorkspace,
+    pendingActionDisposition: pendingActionDisposition,
   });
   global.NorthStarDemoCommandCenter = global.NorthStarDemoRuntime;
 

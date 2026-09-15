@@ -2063,7 +2063,7 @@ body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-intro { display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:30px 0; }
 .customer-estimate-intro strong { display:block;margin-top:7px;font-size:1.05rem; }
 .customer-estimate-intro p { margin:5px 0 0;line-height:1.5;color:#4b5563; }
-.customer-estimate-document h3 { margin:0 0 14px;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase!important;color:#8a681d; }
+.customer-estimate-document h3 { margin:0 0 14px;font-family:inherit!important;font-size:.72rem;font-weight:800;letter-spacing:.12em;line-height:1.2;text-transform:uppercase!important;color:#8a681d; }
 .customer-estimate-scope { padding:0 0 30px; }
 .customer-estimate-scope p { margin:0;line-height:1.65;white-space:pre-line;overflow-wrap:anywhere; }
 .customer-estimate-costs,.customer-estimate-payments { padding:24px 0;border-top:1px solid #e0d8c6; }
@@ -2075,8 +2075,8 @@ body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-adjustments { padding:4px 0 22px;color:#4b5563; }
 .customer-estimate-adjustments summary { min-height:44px;align-content:center;cursor:pointer;font-weight:650; }
 .customer-estimate-notice { margin:24px 0 0;padding:14px 16px;border-radius:10px;background:#f4f0e7;color:#5b5140;font-size:.8rem;line-height:1.5; }
-.customer-estimate-signature { display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:28px;color:#776b55;font-size:.7rem; }
-.customer-estimate-star { color:#b58c32;font-size:.95rem; }
+.customer-estimate-signature { display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:30px;color:#776b55;font-size:.8rem;font-weight:600; }
+.customer-estimate-mark { width:21px;height:21px;object-fit:cover;object-position:50% 43%;border-radius:4px; }
 .customer-estimate-dialog :is(button,summary):focus-visible { outline:3px solid #7c3aed;outline-offset:3px; }
 @media(max-width:640px){.customer-estimate-overlay{padding:0;place-items:stretch}.customer-estimate-dialog{width:100%;max-height:100vh;border-radius:0;border-inline:0}.customer-estimate-dialog-body{padding:14px}.customer-estimate-document{padding:28px 22px 24px;border-radius:14px}.customer-estimate-header,.customer-estimate-intro{grid-template-columns:1fr;display:grid}.customer-estimate-meta{justify-items:start}.customer-estimate-dialog-actions>*{width:100%}.customer-estimate-dialog-actions p{text-align:left}.customer-estimate-row{gap:14px}.customer-estimate-row span{min-width:0;overflow-wrap:anywhere}}
 html body .customer-drawer #cdPreparedAdoption .prepared-ack input { margin-top:2px; }

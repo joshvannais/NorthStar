@@ -45,6 +45,7 @@ describe('Mission 24 Part 8 customer estimate preview', () => {
       issuer:{name:'Windsor Tree Co.',email:'office@example.com'},customer:{name:'Jordan Blake'},
       work:{title:'Tree removal'},currency:'USD',subtotal:'1475.00',tax:'93.66',total:'1568.66',
       capabilities:{downloadPdf:true,downloadImage:true,accept:false,askQuestion:false},
+      platformSignature:'Powered by NorthStar',
     });
     expect(result.charges).toEqual([{label:'Tree removal and cleanup',kind:'charge',amount:'1400.00'},{label:'Permit coordination',kind:'fee',amount:'75.00'}]);
     expect(result.adjustments).toEqual([{label:'Scheduling adjustment',amount:'-50.00'}]);

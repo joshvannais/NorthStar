@@ -142,7 +142,7 @@ function createCustomerEstimatePreview(input) {
       ? 'Fictional demo estimate for product evaluation. No customer was contacted.'
       : 'Preview only. This estimate has not been issued or sent.',
     capabilities: { downloadPdf: true, downloadImage: true, accept: false, askQuestion: false },
-    platformSignature: 'Prepared with NorthStar',
+    platformSignature: 'Powered by NorthStar',
   }));
 }
 

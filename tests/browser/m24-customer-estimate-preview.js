@@ -28,7 +28,7 @@ const estimate = {
   preparedAt:'2026-09-15T12:30:00.000Z',reference:'EST-2A4C9D118E',state:'preview',
   notice:'Fictional demo estimate for product evaluation. No customer was contacted.',
   capabilities:{downloadPdf:true,downloadImage:true,accept:false,askQuestion:false},
-  platformSignature:'Prepared with NorthStar',
+  platformSignature:'Powered by NorthStar',
 };
 const boundaryEstimate = {
   ...estimate,
@@ -43,6 +43,7 @@ const requests = [];
 const app = express();
 app.use('/css', express.static(path.resolve(__dirname, '../../public/css')));
 app.use('/js', express.static(path.resolve(__dirname, '../../public/js')));
+app.use('/assets', express.static(path.resolve(__dirname, '../../public/assets')));
 app.get('/api/demo/command-center/estimates/:estimateId/customer-estimate-preview', (req, res) => {
   requests.push(req.path);
   res.json({ success:true, data:req.params.estimateId === boundaryId ? boundaryEstimate : estimate });
@@ -89,6 +90,10 @@ let browser;
       assert.equal(await dialog.getByText('$1,568.66', { exact:true }).count(), 1);
       assert.equal(await dialog.getByText('Scheduling adjustment (included)', { exact:true }).count(), 1);
       assert.equal(await dialog.getByText('Connecticut sales tax · Taxable', { exact:true }).count(), 1);
+      assert.equal(await dialog.getByText('Powered by NorthStar', { exact:true }).count(), 1);
+      const mark = dialog.locator('img.customer-estimate-mark');
+      assert.equal(await mark.count(), 1);
+      assert.equal(await mark.evaluate(node => node.complete && node.naturalWidth > 0 && node.naturalHeight > 0), true);
       assert.equal(await dialog.getByRole('button', { name:/accept estimate/i }).count(), 0);
       assert.equal(await dialog.getByRole('button', { name:/ask a question/i }).count(), 0);
       const overflow = await page.evaluate(() => {

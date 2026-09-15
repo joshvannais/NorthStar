@@ -4,7 +4,7 @@
 
 This corrective follow-up traces one current estimate through the mounted estimating authority that exists after Part 8 Slice 2. It validates recorded inputs, material and labor plans, equipment and travel allocations, composed direct costs, proposed pricing, pricing policy, commercial terms, owner approval, private Capella analysis, customer-safe preview, and immutable issue history.
 
-This closes two Slice 2 gaps: estimate access was difficult to find, and an approved demo estimate could not be durably issued because the demo mutation ledger's operation field was too short. This package does not complete Part 8 or Part 9.
+This closes three Slice 2 gaps: estimate access was difficult to find, the prepared-estimate review unnecessarily required a freeform reason before showing the reviewed total, and an approved demo estimate could not be durably issued because the demo mutation ledger's operation field was too short. The streamlined review derives its audit explanation from the owner's confirmed plan selections and cost-coverage review; it does not remove the explicit confirmation or immutable save boundary. This package does not complete Part 8 or Part 9.
 
 ## Remaining Part 8 Slice 3
 

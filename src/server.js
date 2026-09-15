@@ -105,6 +105,14 @@ mountInvestorForecast(app);
 
 // Static assets (CSS, JS)
 app.use('/css', express.static('public/css'));
+// The navigation contract and renderer must always be loaded as one release.
+// A stale contract paired with a newer demo workspace intentionally fails
+// closed, so these two small assets must never outlive the HTML that names
+// their release URL.
+app.get(['/js/command-center-contract.js', '/js/nav-component.js'], (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  next();
+});
 app.use('/js', express.static('public/js'));
 app.use('/assets', express.static('public/assets'));
 app.get('/site.webmanifest', (_req, res) => {

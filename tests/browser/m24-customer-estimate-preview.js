@@ -40,7 +40,25 @@ const boundaryEstimate = {
 };
 
 const requests = [];
+const failures = { pdf:0, brand:0 };
+const dependencyRequests = { pdf:0, brand:0 };
 const app = express();
+app.get('/test/fail-once', (req, res) => {
+  assert.ok(Object.prototype.hasOwnProperty.call(failures, req.query.kind));
+  failures[req.query.kind] = 1;
+  res.sendStatus(204);
+});
+app.get('/js/vendor/pdfmake/pdfmake.min.js', (req, res, next) => {
+  dependencyRequests.pdf += 1;
+  if (failures.pdf > 0) { failures.pdf -= 1; return res.status(503).type('text').send('transient test failure'); }
+  next();
+});
+app.get('/assets/logo.png', (req, res, next) => {
+  if (req.query['customer-estimate-export'] !== '1') return next();
+  dependencyRequests.brand += 1;
+  if (failures.brand > 0) { failures.brand -= 1; return res.status(503).type('text').send('transient test failure'); }
+  next();
+});
 app.use('/css', express.static(path.resolve(__dirname, '../../public/css')));
 app.use('/js', express.static(path.resolve(__dirname, '../../public/js')));
 app.use('/assets', express.static(path.resolve(__dirname, '../../public/assets')));
@@ -125,7 +143,33 @@ let browser;
       ledger.cases.push({name:test.name,pdf:pdf.suggestedFilename(),image:image.suggestedFilename(),boundedContent:true,focusContainedAndRestored:true,noInteractiveCustomerActions:true});
       await context.close();
     }
-    assert.deepEqual(requests, [ordinaryId, ordinaryId, boundaryId].map(id => '/api/demo/command-center/estimates/' + id + '/customer-estimate-preview'));
+    for (const recovery of [
+      {kind:'pdf',button:'Download PDF',message:'The PDF could not be prepared. Try again.',extension:'.pdf'},
+      {kind:'brand',button:'Download image',message:'The image could not be prepared. Try again.',extension:'.png'},
+    ]) {
+      const context = await browser.newContext({ viewport:{width:900,height:780}, acceptDownloads:true });
+      const page = await context.newPage();
+      await page.goto(origin + '/');
+      await page.getByRole('button', { name:'Preview Customer Estimate' }).click();
+      const dialog = page.getByRole('dialog', { name:'Customer estimate preview' });
+      await dialog.waitFor();
+      await dialog.locator('img.customer-estimate-mark').evaluate(node => node.complete && node.naturalWidth > 0);
+      const before = dependencyRequests[recovery.kind];
+      await page.evaluate(kind => fetch('/test/fail-once?kind=' + kind).then(response => response.ok), recovery.kind);
+      const button = dialog.getByRole('button', { name:recovery.button });
+      await button.click();
+      await dialog.getByText(recovery.message, { exact:true }).waitFor();
+      assert.equal(await button.isEnabled(), true);
+      assert.equal(dependencyRequests[recovery.kind], before + 1);
+      const downloadEvent = page.waitForEvent('download');
+      await button.click();
+      const download = await downloadEvent;
+      assert.ok(download.suggestedFilename().endsWith(recovery.extension));
+      assert.equal(dependencyRequests[recovery.kind], before + 2);
+      ledger.cases.push({name:'transient-' + recovery.kind + '-retry',recovered:true,requests:2});
+      await context.close();
+    }
+    assert.deepEqual(requests, [ordinaryId, ordinaryId, boundaryId, ordinaryId, ordinaryId].map(id => '/api/demo/command-center/estimates/' + id + '/customer-estimate-preview'));
     ledger.demoRouteRequests = requests;
     ledger.pass = true;
     fs.writeFileSync(path.join(output, 'RESULT.json'), JSON.stringify(ledger, null, 2));

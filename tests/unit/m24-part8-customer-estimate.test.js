@@ -98,5 +98,11 @@ describe('Mission 24 Part 8 customer estimate preview', () => {
     expect(serialized).toContain('Scheduling adjustment (included)');
     expect(serialized).toContain('Connecticut sales tax · Taxable');
     expect(definition.pageSize).toBe('LETTER');
+    const boundary={...result,charges:[{label:'L'.repeat(200),kind:'charge',amount:'1400.00'}]};
+    const boundaryDefinition=documentRenderer.pdfDefinition(boundary),boundarySerialized=JSON.stringify(boundaryDefinition);
+    expect(boundarySerialized).toContain('L'.repeat(36)+'\u200b');
+    expect(boundarySerialized).not.toContain('L'.repeat(37));
+    const estimateTable=boundaryDefinition.content.find(item => item.table && item.table.widths && item.table.widths[1] === 90);
+    expect(estimateTable.table.body[0][1]).toMatchObject({text:'$1,400.00',alignment:'right',noWrap:true});
   });
 });

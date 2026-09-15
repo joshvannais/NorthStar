@@ -2056,6 +2056,19 @@ html[data-theme="dark"] .customer-estimate-launch { background:linear-gradient(1
 .customer-estimate-issue-form>p { margin:.2rem 0 .9rem;color:var(--neutral-600); }
 .customer-estimate-issue-form>label:not(.drawer-decision-confirmation) { display:grid;gap:.4rem;font-weight:650; }
 .customer-estimate-issue-form input[type="text"] { width:100%;min-height:46px;border:1px solid var(--neutral-300);border-radius:12px;padding:.7rem .8rem;background:var(--theme-surface);color:var(--neutral-900);font:inherit; }
+.customer-estimate-delivery { margin-top:16px;padding-top:14px;border-top:1px solid rgba(181,140,50,.3); }
+.customer-estimate-delivery:empty { display:none; }
+.customer-estimate-delivery-bar { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+.customer-estimate-delivery-bar .btn { margin:0; }
+.customer-estimate-copy { display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-top:12px; }
+.customer-estimate-copy input { min-width:0;padding:10px 12px;border:1px solid var(--neutral-300);border-radius:10px;background:var(--theme-surface);color:var(--neutral-900);font:inherit; }
+.customer-estimate-copy .btn { margin:0;display:grid;place-items:center;text-decoration:none; }
+.customer-estimate-delivery-summary { margin:12px 0 8px!important;font-size:.88rem; }
+.customer-estimate-questions { margin-top:14px; }
+.customer-estimate-questions>summary { min-height:42px;align-content:center;cursor:pointer;font-weight:700; }
+.customer-estimate-question { margin:8px 0;padding:12px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--theme-surface); }
+.customer-estimate-question p { margin:6px 0!important;white-space:pre-wrap; }
+.customer-estimate-question small { color:var(--neutral-600); }
 .drawer-estimate-hub { margin:0 0 18px; }
 .drawer-estimate-hub[hidden] { display:none; }
 .drawer-estimate-hub .customer-estimate-launch { margin:0; }
@@ -2069,6 +2082,17 @@ html body .customer-drawer #cdEstimateDetails>summary { min-height:56px;display:
 html body .customer-drawer #cdEstimateDetails[open]>summary { border-bottom:1px solid var(--neutral-200);margin-bottom:16px; }
 html body .customer-drawer #cdCustomerActivityArea>.drawer-section,
 html body .customer-drawer #cdCustomerWorkArea>.drawer-section { margin-bottom:16px; }
+html body #cdCustomerDrawer .drawer-primary-actions { position:sticky;top:0;z-index:4;margin:0 0 14px;padding:14px 0;background:linear-gradient(var(--theme-surface),var(--theme-surface));border-bottom:1px solid var(--neutral-200); }
+html body #cdCustomerDrawer .drawer-primary-actions>h3 { display:none; }
+html body #cdCustomerDrawer .drawer-primary-action-list { display:grid;grid-template-columns:minmax(0,1.35fr) repeat(3,minmax(0,1fr));gap:8px; }
+html body #cdCustomerDrawer .drawer-primary-action-list>.btn { width:100%;min-width:0;margin:0;padding-inline:10px; }
+html body #cdCustomerDrawer .drawer-action-reason { grid-column:1/-1;margin:2px 0 0;font-size:.8rem;line-height:1.35; }
+html body #cdCustomerDrawer .drawer-polaris-analysis:not([open])+.drawer-polaris-pricing { margin-top:10px; }
+html body #cdCustomerDrawer .drawer-card-note#cdAttentionSection { margin-top:16px; }
+html body #cdCustomerDrawer .drawer-card-note:not(#cdAttentionSection) { display:flex;align-items:baseline;gap:10px;margin:12px 0 0;padding:12px 14px; }
+html body #cdCustomerDrawer .drawer-card-note:not(#cdAttentionSection) h3 { margin:0;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap; }
+html body #cdCustomerDrawer .drawer-card-note:not(#cdAttentionSection) .drawer-polaris-item-value { margin:0;font-size:.95rem; }
+@media(max-width:640px){html body #cdCustomerDrawer .drawer-primary-action-list{grid-template-columns:1fr 1fr}html body #cdCustomerDrawer #cdBtnEstimate{grid-column:1/-1}.customer-estimate-copy{grid-template-columns:1fr 1fr}.customer-estimate-copy input{grid-column:1/-1}}
 body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-overlay { position:fixed;inset:0;z-index:10050;display:grid;place-items:center;padding:24px;background:rgba(5,7,13,.78);backdrop-filter:blur(10px); }
 .customer-estimate-dialog { width:min(900px,100%);max-height:calc(100vh - 48px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border:1px solid rgba(212,175,55,.58);border-radius:22px;background:var(--theme-surface,#fff);box-shadow:0 30px 90px rgba(0,0,0,.35); }

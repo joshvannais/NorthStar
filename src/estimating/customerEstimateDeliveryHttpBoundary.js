@@ -1,0 +1,6 @@
+'use strict';
+const express=require('express');
+const {parseUnambiguousJson,rawRequestPath,contentTypeAllowed,contentEncodingAllowed}=require('../scheduling/recommendationHttpBoundary');
+const raw=express.raw({inflate:false,limit:8192,type:()=>true});
+function customerEstimateDeliveryBodyBoundary(req,res,next){const path=rawRequestPath(req),owned=req.method==='POST'&&(/^\/api\/v1\/canonical\/estimates\/[^/]+\/customer-estimate-links(?:\/[^/]+\/revoke)?\/?$/.test(path)||/^\/api\/demo\/command-center\/estimates\/[^/]+\/customer-estimate-links(?:\/[^/]+\/revoke)?\/?$/.test(path)||/^\/api\/public\/customer-estimates\/[^/]+\/(?:accept|questions)\/?$/.test(path));if(!owned)return next();res.set('Cache-Control','no-store');const reject=status=>res.status(status).json({success:false,error:{category:'CUSTOMER_ESTIMATE_DELIVERY_INVALID',message:'This customer estimate request could not be read.'}});if(!contentTypeAllowed(req)||!contentEncodingAllowed(req))return reject(415);return raw(req,res,error=>{if(error)return reject(error.type==='entity.too.large'?413:400);try{req.body=parseUnambiguousJson(new TextDecoder('utf-8',{fatal:true}).decode(req.body));req.customerEstimateDeliveryBodyValidated=true;return next();}catch(_){return reject(400);}});}
+module.exports={customerEstimateDeliveryBodyBoundary};

@@ -26,6 +26,8 @@ const { approvalBodyBoundary } = require('./scheduling/approvalHttpBoundary');
 const { estimateDecisionBodyBoundary } = require('./estimating/httpBoundary');
 const { executionBodyBoundary } = require('./operations/httpBoundary');
 const { equipmentBodyBoundary } = require('./equipment/httpBoundary');
+const { customerEstimateDeliveryBodyBoundary } = require('./estimating/customerEstimateDeliveryHttpBoundary');
+const { createCustomerEstimateDeliveryRouter, mountCustomerEstimatePage } = require('./routes/customerEstimateDelivery');
 const { createEquipmentRouter } = require('./routes/equipment');
 const { createLegacyAuthorityRetirementRouter } = require('./routes/legacyAuthorityRetirement');
 const canonicalLeadsRoutes = require('./routes/canonicalLeads');
@@ -87,6 +89,7 @@ app.use(estimateDecisionBodyBoundary);
 // unambiguous bytes before the broader application parser consumes them.
 app.use(executionBodyBoundary);
 app.use(equipmentBodyBoundary);
+app.use(customerEstimateDeliveryBodyBoundary);
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {
@@ -202,6 +205,7 @@ Object.entries(pages).forEach(([route, file]) => {
     res.sendFile(path.join(__dirname, '..', file));
   });
 });
+mountCustomerEstimatePage(app);
 
 // --- PostgreSQL Account and Session Authority ---
 // Public signup and recovery commit their bounded email work to PostgreSQL.
@@ -270,6 +274,7 @@ app.use('/api/v1/command-center', createCommandCenterRouter());
 app.use('/api/v1/today', createTodayRouter());
 app.use('/api/v1/operational-overview', createOperationalOverviewRouter());
 app.use('/api/v1', simulationsRoutes);
+app.use('/api/public', createCustomerEstimateDeliveryRouter());
 app.use('/api/v1/canonical', createCanonicalRouter({
   assistantRuntime: productionPolarisRuntime,
   assistantUsageLedger: productionPolarisUsageLedger,

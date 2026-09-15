@@ -65,16 +65,17 @@ BEGIN
  RETURN jsonb_build_object('links',rows_value,'total',total_value,'truncated',total_value>50);
 END$$;
 
-CREATE FUNCTION public.canonical_customer_estimate_delivery_create(org UUID,actor UUID,role_value TEXT,session_value UUID,estimate UUID,csrf TEXT,key_value TEXT,version UUID,token_value TEXT,expiry TIMESTAMPTZ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE authority JSONB;old public.canonical_customer_estimate_delivery_links%ROWTYPE;inserted public.canonical_customer_estimate_delivery_links%ROWTYPE;key_hash TEXT;request_hash TEXT;
+CREATE FUNCTION public.canonical_customer_estimate_delivery_create(org UUID,actor UUID,role_value TEXT,session_value UUID,estimate UUID,csrf TEXT,key_value TEXT,version UUID,token_value TEXT,duration_days INTEGER) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE authority JSONB;old public.canonical_customer_estimate_delivery_links%ROWTYPE;inserted public.canonical_customer_estimate_delivery_links%ROWTYPE;key_hash TEXT;request_hash TEXT;expiry TIMESTAMPTZ;
 BEGIN
  authority:=public.canonical_commercial_lock(org,actor,role_value,session_value,estimate,csrf);
- IF role_value NOT IN('owner','admin') OR key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR token_value!~'^[a-f0-9]{64}$' OR expiry<=clock_timestamp()+interval '15 minutes' OR expiry>clock_timestamp()+interval '30 days' THEN RAISE EXCEPTION 'Estimate link input invalid' USING ERRCODE='22023';END IF;
+ IF role_value NOT IN('owner','admin') OR key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR token_value!~'^[a-f0-9]{64}$' OR duration_days NOT BETWEEN 1 AND 30 THEN RAISE EXCEPTION 'Estimate link input invalid' USING ERRCODE='22023';END IF;
  IF NOT EXISTS(SELECT 1 FROM public.canonical_customer_estimate_versions v WHERE v.organization_id=org AND v.estimate_id=estimate AND v.id=version) THEN RAISE EXCEPTION 'Issued estimate unavailable' USING ERRCODE='P0002';END IF;
- key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');request_hash:=public.canonical_completion_digest(jsonb_build_object('estimate',estimate,'version',version,'tokenHash',token_value,'expiresAt',expiry));
+ key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');request_hash:=public.canonical_completion_digest(jsonb_build_object('estimate',estimate,'version',version,'tokenHash',token_value,'expiresInDays',duration_days));
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':'||actor::text||':estimate-delivery:'||key_hash,0));
  SELECT * INTO old FROM public.canonical_customer_estimate_delivery_links WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN IF old.request_digest<>request_hash THEN RAISE EXCEPTION 'Estimate link attempt changed' USING ERRCODE='23505';END IF;RETURN jsonb_build_object('link',public.customer_estimate_delivery_link_projection(old),'replayed',TRUE);END IF;
+ expiry:=clock_timestamp()+duration_days*interval '1 day';
  INSERT INTO public.canonical_customer_estimate_delivery_links(organization_id,estimate_id,version_id,token_hash,actor_user_id,membership_id,auth_session_id,expires_at,request_key_hash,request_digest,digest)
  VALUES(org,estimate,version,token_value,actor,(authority->>'membershipId')::uuid,session_value,expiry,key_hash,request_hash,public.canonical_completion_digest(jsonb_build_object('organization',org,'estimate',estimate,'version',version,'tokenHash',token_value,'expiresAt',expiry,'actor',actor))) RETURNING * INTO inserted;
  RETURN jsonb_build_object('link',public.customer_estimate_delivery_link_projection(inserted),'replayed',FALSE);
@@ -92,14 +93,15 @@ BEGIN
  RETURN jsonb_build_object('link',public.customer_estimate_delivery_link_projection(link_row),'replayed',FALSE);
 END$$;
 
-CREATE FUNCTION public.demo_customer_estimate_delivery_create(source_token TEXT,tenant UUID,estimate TEXT,version TEXT,document_value JSONB,key_hash TEXT,request_hash TEXT,token_value TEXT,expiry TIMESTAMPTZ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE session_row public.demo_command_center_sessions%ROWTYPE;old public.demo_customer_estimate_delivery_links%ROWTYPE;inserted public.demo_customer_estimate_delivery_links%ROWTYPE;found_document JSONB;
+CREATE FUNCTION public.demo_customer_estimate_delivery_create(source_token TEXT,tenant UUID,estimate TEXT,version TEXT,document_value JSONB,key_hash TEXT,request_hash TEXT,token_value TEXT,duration_days INTEGER) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE session_row public.demo_command_center_sessions%ROWTYPE;old public.demo_customer_estimate_delivery_links%ROWTYPE;inserted public.demo_customer_estimate_delivery_links%ROWTYPE;found_document JSONB;expiry TIMESTAMPTZ;
 BEGIN
- IF source_token!~'^[a-f0-9]{64}$' OR key_hash!~'^[a-f0-9]{64}$' OR request_hash!~'^[a-f0-9]{64}$' OR token_value!~'^[a-f0-9]{64}$' OR expiry<=clock_timestamp()+interval '15 minutes' OR expiry>clock_timestamp()+interval '24 hours' THEN RAISE EXCEPTION 'Demo estimate link input invalid' USING ERRCODE='22023';END IF;
+ IF source_token!~'^[a-f0-9]{64}$' OR key_hash!~'^[a-f0-9]{64}$' OR request_hash!~'^[a-f0-9]{64}$' OR token_value!~'^[a-f0-9]{64}$' OR duration_days<>1 THEN RAISE EXCEPTION 'Demo estimate link input invalid' USING ERRCODE='22023';END IF;
  SELECT * INTO session_row FROM public.demo_command_center_sessions WHERE token_hash=source_token AND tenant_id=tenant AND expires_at>clock_timestamp() FOR SHARE;IF NOT FOUND THEN RAISE EXCEPTION 'Demo session unavailable' USING ERRCODE='P0002';END IF;
  SELECT item INTO found_document FROM jsonb_array_elements(COALESCE(session_row.state->'customerEstimateVersions'->estimate,'[]'::jsonb)) item WHERE item->>'id'=version LIMIT 1;
  IF found_document IS NULL OR found_document->'document' IS DISTINCT FROM document_value OR document_value->>'state'<>'issued' THEN RAISE EXCEPTION 'Issued demo estimate changed' USING ERRCODE='40001';END IF;
  SELECT * INTO old FROM public.demo_customer_estimate_delivery_links WHERE source_token_hash=source_token AND request_key_hash=key_hash;IF FOUND THEN IF old.request_digest<>request_hash THEN RAISE EXCEPTION 'Demo estimate link attempt changed' USING ERRCODE='23505';END IF;RETURN jsonb_build_object('link',jsonb_build_object('id',old.id,'versionId',old.version_id,'createdAt',old.created_at,'expiresAt',old.expires_at,'status',CASE WHEN EXISTS(SELECT 1 FROM public.demo_customer_estimate_delivery_events e WHERE e.link_id=old.id AND e.kind='revoked') THEN 'revoked' WHEN old.expires_at<=clock_timestamp() THEN 'expired' WHEN EXISTS(SELECT 1 FROM public.demo_customer_estimate_delivery_events e WHERE e.link_id=old.id AND e.kind='accepted') THEN 'accepted' ELSE 'active' END),'replayed',TRUE);END IF;
+ expiry:=clock_timestamp()+duration_days*interval '1 day';
  INSERT INTO public.demo_customer_estimate_delivery_links(tenant_id,source_token_hash,estimate_id,version_id,token_hash,document,expires_at,request_key_hash,request_digest,digest)VALUES(tenant,source_token,estimate,version,token_value,document_value,expiry,key_hash,request_hash,public.canonical_completion_digest(jsonb_build_object('tenant',tenant,'estimate',estimate,'version',version,'tokenHash',token_value,'expiresAt',expiry)))RETURNING * INTO inserted;
  RETURN jsonb_build_object('link',jsonb_build_object('id',inserted.id,'versionId',inserted.version_id,'createdAt',inserted.created_at,'expiresAt',inserted.expires_at,'status','active'),'replayed',FALSE);
 END$$;

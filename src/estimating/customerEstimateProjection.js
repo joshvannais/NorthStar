@@ -26,7 +26,7 @@ function publicIssuer(profile) {
   const raw = profile && profile.rawProfile ? profile.rawProfile : profile || {};
   const company = raw.company && typeof raw.company === 'object' ? raw.company : {};
   const headquarters = raw.headquarters && typeof raw.headquarters === 'object' ? raw.headquarters : {};
-  const name = text(company.name, 160, text(raw.company, 160, 'Business name unavailable'));
+  const name = text(company.name, 160, text(raw.company, 160));
   const address = text(headquarters.formatted, 300) || [
     text(headquarters.street, 160), text(headquarters.city, 100),
     [text(headquarters.state, 80), text(headquarters.zip || headquarters.postalCode, 24)].filter(Boolean).join(' '),
@@ -113,7 +113,7 @@ function createCustomerEstimatePreview(input) {
     simulated,
     issuer: publicIssuer(input.profile),
     customer: {
-      name: text(item.customer.name, 200, 'Customer'),
+      name: text(item.customer.name, 200),
       address: text(item.customer.address, 400),
     },
     work: {
@@ -130,6 +130,8 @@ function createCustomerEstimatePreview(input) {
     payments: safePayments(summary.payments),
     preparedAt: text(commercial.binding.createdAt || commercial.current.createdAt || review.recordedAt, 40),
   });
+  if (!contentBasis.issuer.name) unavailable('Add the business name before previewing a customer estimate.');
+  if (!contentBasis.customer.name) unavailable('Add the customer name before previewing this estimate.');
   if (!contentBasis.work.scope) unavailable('The approved customer work scope is unavailable. Review the commercial terms again.');
   const reference = 'EST-' + sha256(contentBasis).slice(0, 10).toUpperCase();
   return Object.freeze(stableValue({

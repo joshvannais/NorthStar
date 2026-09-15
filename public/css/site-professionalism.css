@@ -2052,7 +2052,8 @@ body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-document { box-sizing:border-box;width:min(720px,100%);margin:auto;padding:48px 52px 34px;border:2px solid #b58c32;border-radius:18px;background:#fbfaf7;color:#111827;box-shadow:0 12px 44px rgba(32,27,17,.12);font-family:Inter,"Segoe UI",Arial,sans-serif; }
 .customer-estimate-document * { box-sizing:border-box;color:inherit;font-family:inherit;text-transform:none!important; }
 .customer-estimate-header { display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:24px;border-bottom:1px solid #d9c497; }
-.customer-estimate-brand h2 { margin:4px 0 0;font-size:1.7rem;line-height:1.15; }
+.customer-estimate-brand { min-width:0; }
+.customer-estimate-brand h2 { margin:4px 0 0;font-size:1.7rem;line-height:1.15;overflow-wrap:anywhere; }
 .customer-estimate-kicker,.customer-estimate-label { color:#8a681d!important;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase!important; }
 .customer-estimate-muted,.customer-estimate-contact { color:#69707d!important; }
 .customer-estimate-brand p,.customer-estimate-contact { margin:5px 0 0; }
@@ -2064,9 +2065,10 @@ body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-intro p { margin:5px 0 0;line-height:1.5;color:#4b5563; }
 .customer-estimate-document h3 { margin:0 0 14px;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase!important;color:#8a681d; }
 .customer-estimate-scope { padding:0 0 30px; }
-.customer-estimate-scope p { margin:0;line-height:1.65;white-space:pre-line; }
+.customer-estimate-scope p { margin:0;line-height:1.65;white-space:pre-line;overflow-wrap:anywhere; }
 .customer-estimate-costs,.customer-estimate-payments { padding:24px 0;border-top:1px solid #e0d8c6; }
 .customer-estimate-row { display:flex;justify-content:space-between;gap:24px;padding:9px 0;line-height:1.4; }
+.customer-estimate-row span { min-width:0;overflow-wrap:anywhere; }
 .customer-estimate-row strong { text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums; }
 .customer-estimate-subtotal { margin-top:10px;padding-top:18px;border-top:1px solid #e0d8c6; }
 .customer-estimate-total { margin-top:10px;padding:18px 0 4px;border-top:2px solid #b58c32;font-size:1.2rem; }

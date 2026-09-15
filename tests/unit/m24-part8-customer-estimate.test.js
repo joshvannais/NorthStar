@@ -35,6 +35,7 @@ describe('Mission 24 Part 8 customer estimate preview', () => {
     }
     const paidRoute=fs.readFileSync(path.join(root,'src/routes/canonicalPolaris.js'),'utf8');
     expect(paidRoute).toContain("!['owner', 'admin'].includes(operator.actor && operator.actor.accessRole)");
+    expect(fs.readFileSync(path.join(root,'public/js/vendor/pdfmake/LICENSE'),'utf8')).toContain('The MIT License');
   });
 
   test('creates a simple customer allowlist with dollar-ready totals and no private identifiers or analysis', () => {
@@ -77,20 +78,24 @@ describe('Mission 24 Part 8 customer estimate preview', () => {
     const tax=input();tax.review.commercialTerms.customerSummary.taxAuthority='unknown';expect(()=>createCustomerEstimatePreview(tax)).toThrow(/Resolve the customer tax/);
     const money=input();money.review.commercialTerms.customerSummary.total='1,568.66';expect(()=>createCustomerEstimatePreview(money)).toThrow(/estimate total/);
     const scope=input();scope.review.commercialTerms.customerSummary.scopeSummary=' ';expect(()=>createCustomerEstimatePreview(scope)).toThrow(/work scope/);
+    const issuer=input();issuer.profile.rawProfile.company.name=' ';expect(()=>createCustomerEstimatePreview(issuer)).toThrow(/business name/);
+    const customer=input();customer.item.customer.name=' ';expect(()=>createCustomerEstimatePreview(customer)).toThrow(/customer name/);
   });
 
-  test('formats USD with a dollar sign and builds a selectable multipage-capable PDF payload', () => {
+  test('formats USD with a dollar sign and builds one complete Unicode PDF definition', () => {
     const result=createCustomerEstimatePreview(input());
     expect(documentRenderer.money('1568.66','USD')).toBe('$1,568.66');
     expect(documentRenderer.presentationRows(result).at(-1)).toEqual({label:'Estimated total',amount:'$1,568.66',kind:'total'});
-    const bytes=documentRenderer.pdfBytes(result),text=Buffer.from(bytes).toString('utf8');
-    expect(text.startsWith('%PDF-1.4')).toBe(true);
-    expect(text).toContain('(Windsor Tree Co.) Tj');
-    expect(text).toContain('(Estimated total) Tj');
-    expect(text).toContain('($1,568.66) Tj');
-    expect(text).toContain('/Type /Pages');
-    const long=input();long.review.commercialTerms.customerSummary.scopeSummary=('Remove and dispose of the recorded tree while protecting the property. ').repeat(140);
-    const longPdf=Buffer.from(documentRenderer.pdfBytes(createCustomerEstimatePreview(long))).toString('utf8');
-    expect(longPdf).toMatch(/\/Count [2-9]/);
+    expect(documentRenderer.presentationRows(result)).toEqual(expect.arrayContaining([
+      {label:'Scheduling adjustment (included)',amount:'-$50.00',kind:'adjustment'},
+      {label:'Connecticut sales tax · Taxable',amount:'$93.66',kind:'tax'},
+    ]));
+    const unicode={...result,issuer:{...result.issuer,name:'Café 李 Tree Company'},customer:{...result.customer,name:'José O’Neil 李'}};
+    const definition=documentRenderer.pdfDefinition(unicode),serialized=JSON.stringify(definition);
+    expect(serialized).toContain('Café 李 Tree Company');
+    expect(serialized).toContain('José O’Neil 李');
+    expect(serialized).toContain('Scheduling adjustment (included)');
+    expect(serialized).toContain('Connecticut sales tax · Taxable');
+    expect(definition.pageSize).toBe('LETTER');
   });
 });

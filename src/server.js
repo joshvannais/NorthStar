@@ -109,7 +109,7 @@ app.use('/css', express.static('public/css'));
 // A stale contract paired with a newer demo workspace intentionally fails
 // closed, so these two small assets must never outlive the HTML that names
 // their release URL.
-app.get(['/js/command-center-contract.js', '/js/nav-component.js'], (_req, res, next) => {
+app.get(['/js/command-center-contract.js', '/js/nav-component.js', '/js/demo-runtime.js'], (_req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   next();
 });

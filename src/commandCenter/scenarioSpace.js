@@ -1,5 +1,6 @@
 'use strict';
 
+const industryRegistry=require('./industryRegistry');
 const DIMENSION_ORDER = Object.freeze([
   'business',
   'service',
@@ -70,18 +71,12 @@ const DIMENSIONS = Object.freeze({
   }),
   service: Object.freeze({
     label: 'Service request',
-    options: Object.freeze([
-      option('fence', 'Fence installation', 'Installation, replacement, or repair scope.', { estimate: 6800 }),
-      option('roofing', 'Roof replacement', 'Replacement, repair, inspection, and storm-damage scope.', { estimate: 14800 }),
-      option('hvac', 'HVAC service', 'Repair, replacement, or maintenance scope.', { estimate: 9600 }),
-      option('plumbing', 'Plumbing service', 'Fixture, leak, water-heater, or drain scope.', { estimate: 2850 }),
-      option('electrical', 'Electrical service', 'Repair, upgrade, inspection, or safety scope.', { estimate: 4250 }),
-      option('concrete', 'Concrete installation', 'Driveway, patio, slab, replacement, or repair scope.', { estimate: 11200 }),
-    ]),
+    options: Object.freeze(industryRegistry.definitions.map(service=>option(service.key,service.label,industryRegistry.packs[service.key]?'Fictional tree-work requests. Site, qualifications, resources and price need review.':'Installation, repair or assessment scope.',{estimate:service.estimate}))),
   }),
   intent: Object.freeze({
     label: 'Caller intent',
     options: Object.freeze([
+      ...Object.values(industryRegistry.packs).flatMap(pack=>Object.entries(pack.operations).map(([id,op])=>option(pack.id+'_'+id,op.label,op.questions[0],{customerLine:op.statement,action:op.questions[0]}))),
       option('new_estimate', 'Request a new estimate', 'The caller wants a written estimate for new work.', {
         customerLine: 'A written estimate would be great. I want to understand the full cost before I decide.', action: 'Confirm the complete estimating scope.'
       }),
@@ -220,18 +215,27 @@ const COMBINATION_COUNT = DIMENSION_ORDER.reduce(
   1
 );
 
-function publicScenarioSpace() {
+function publicScenarioSpace(availableServiceKeys) {
   return Object.freeze({
     contract: 'northstar_demo_scenario_space_v1',
+    industryCoverage:industryRegistry.coverage,
     combinationCount: COMBINATION_COUNT,
     defaultSelection: { ...DEFAULT_SELECTION },
     dimensions: DIMENSION_ORDER.map(id => ({
       id,
       label: DIMENSIONS[id].label,
-      options: DIMENSIONS[id].options.map(candidate => ({
+      options: DIMENSIONS[id].options.filter(candidate=>id!=='service'||!availableServiceKeys||availableServiceKeys.includes(candidate.id)).map(candidate => ({
         id: candidate.id,
         label: candidate.label,
         description: candidate.description,
+        ...(id==='service'&&industryRegistry.packs[candidate.id]?{
+          jobTypes:industryRegistry.packs[candidate.id].catalog.jobTypes,
+          intentJobTypes:industryRegistry.packs[candidate.id].intentJobTypes,
+          weatherSensitive:industryRegistry.packs[candidate.id].weatherSensitive,
+          emergencyIntents:industryRegistry.packs[candidate.id].emergencyIntents,
+          emergencyOnlyIntents:industryRegistry.packs[candidate.id].emergencyOnlyIntents,
+          reviewState:industryRegistry.packs[candidate.id].review.state,
+        }:{}),
       })),
     })),
   });

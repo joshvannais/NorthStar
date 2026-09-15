@@ -13,7 +13,9 @@ function question(id, ask) {
   return Object.freeze({ id, ask });
 }
 
+const {packs}=require('../../commandCenter/industryRegistry');
 module.exports = Object.freeze({
+  ...Object.fromEntries(Object.values(packs).map(pack=>[pack.id,pack.catalog])),
   fence: Object.freeze({
     id: 'fence',
     displayName: 'Fence installation',

@@ -111,24 +111,41 @@
   }
 
   // Pending demo choices only. Saved selections and replay are never rewritten.
-  function demoJobType(service, intent, current) {
-    var types={fence:['install','replace','repair'],roofing:['replace','repair','inspect'],hvac:['replace','repair','maintain'],plumbing:['repair','replace','inspect'],electrical:['repair','upgrade','inspect'],concrete:['install','replace','repair']}[service];
+  function demoJobType(service, intent, current, definition) {
+    var types=definition&&definition.jobTypes||{fence:['install','replace','repair'],roofing:['replace','repair','inspect'],hvac:['replace','repair','maintain'],plumbing:['repair','replace','inspect'],electrical:['repair','upgrade','inspect'],concrete:['install','replace','repair']}[service];
     if(!types)return null;
-    var required={repair_request:'repair',inspection:'inspect',replacement_planning:'replace'}[intent];
+    if(intent.indexOf('_')>=0&&!['repair_request','replacement_planning','new_estimate','second_opinion'].includes(intent)&&!(definition&&definition.intentJobTypes&&definition.intentJobTypes[intent]))return null;
+    var required=(definition&&definition.intentJobTypes||{repair_request:'repair',inspection:'inspect',replacement_planning:'replace'})[intent];
     return required?(types.indexOf(required)>=0?required:null):(types.indexOf(current)>=0?current:types[0]);
   }
   function resolveDemoScenario(space, choices, random, previous) {
     if (!space || !Array.isArray(space.dimensions) || space.dimensions.length !== 7) return null;
-    var dimensions = space.dimensions, candidates = [], tuple = {}, count = 0;
+    var dimensions = space.dimensions.slice(), candidates = [], tuple = {}, count = 0;
+    // Select one industry before expanding the remaining choices: bounded work
+    // grows with one profile's choices rather than the entire industry catalog.
+    var serviceIndex=dimensions.findIndex(function(d){return d.id==='service';});
+    var services=serviceIndex>=0&&dimensions[serviceIndex].options;
+    if(!Array.isArray(services)||!services.length||services.length>1000)return null;
+    var requestedService=choices&&choices.service;
+    services=services.filter(function(s){
+      if(requestedService&&requestedService!=='random'&&requestedService!==s.id)return false;
+      if(choices&&choices.intent&&choices.intent!=='random'&&!demoJobType(s.id,choices.intent,null,s))return false;
+      return !(choices&&choices.scheduling==='weather_window'&&!s.weatherSensitive&&['fence','roofing','concrete'].indexOf(s.id)<0);
+    });
+    if(!services.length)return null;
+    var serviceSample=random();if(!Number.isFinite(serviceSample)||serviceSample<0||serviceSample>=1)return null;
+    var selectedService=services[Math.floor(serviceSample*services.length)];
+    dimensions[serviceIndex]=Object.assign({},dimensions[serviceIndex],{options:[selectedService]});
     function visit(index) {
       if (index === dimensions.length) {
         count += 1;
         if (count > 60000) return;
-        if (!demoJobType(tuple.service,tuple.intent,null)) return;
+        if (!demoJobType(tuple.service,tuple.intent,null,selectedService)) return;
+        if((selectedService.emergencyOnlyIntents||[]).indexOf(tuple.intent)>=0&&tuple.urgency!=='safety_emergency')return;
         // A reported emergency requires triage, not a ready estimate or routine future visit.
         if (tuple.urgency === 'safety_emergency' &&
-            (['repair_request','inspection'].indexOf(tuple.intent) < 0 || tuple.outcome !== 'needs_information' || tuple.scheduling !== 'flexible')) return;
-        if (tuple.scheduling === 'weather_window' && ['fence','roofing','concrete'].indexOf(tuple.service) < 0) return;
+            ((selectedService.emergencyIntents||['repair_request','inspection']).indexOf(tuple.intent) < 0 || tuple.outcome !== 'needs_information' || tuple.scheduling !== 'flexible')) return;
+        if (tuple.scheduling === 'weather_window' && !selectedService.weatherSensitive && ['fence','roofing','concrete'].indexOf(tuple.service) < 0) return;
         candidates.push(Object.assign({}, tuple)); return;
       }
       var d = dimensions[index], requested = choices && choices[d.id];

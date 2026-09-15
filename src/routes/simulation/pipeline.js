@@ -126,6 +126,8 @@ function generateScenario(requestedService, customerName) {
 }
 
 function _populateScope(scenario, svc) {
+  const registered=require('../../commandCenter/industryIntelligence').scopeFor(svc.id,scenario.job.type);
+  if(registered){Object.assign(scenario.job.scope,registered);return;}
   const scope = scenario.job.scope;
   scope.jobType = scenario.job.type;
 

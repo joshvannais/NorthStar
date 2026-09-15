@@ -95,6 +95,7 @@ function state(value) {
     const expectedWorkspace = createDemoWorkspaceFixture({
       seedDigest: value.seed,
       anchorTime: createdAt,
+      registryVersion:value.workspace.registryVersion||null,
     });
     if (sha256(expectedWorkspace) !== sha256(value.workspace)) {
       throw new Error('The persisted demo workspace disagrees with its seed authority.');

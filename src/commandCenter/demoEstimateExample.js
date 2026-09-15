@@ -43,7 +43,7 @@ function treeExample(graph,baseScope) {
     crew:{defaultCrewSize:crewSize,averageHourlyRate:averageHourlyCost},
     canonicalPricing:{customerMarkupPercent:0,travelCustomerChargePerMile:1.15,emergencyMultiplier:operation==='storm'?1.18:1,taxRatePercent:0,defaultRangePercent:operation==='visit'?5:12},
     canonicalCosts:{overheadPercent:12,travelCostPerMile:.72,materialCostByService:{[materialKey]:internalMaterial},equipmentCostByReference:{[equipment.key]:internalEquipment}},
-    services:[{id:'tree',name:definition.label,crewSize,equipmentReference:equipment.key,canonicalPricing:{requiredScope:['requestedWork','treeCount','sizeClass','accessClass','conditionClass','disposalChoice'],rangePercent:operation==='visit'?5:12,lineItems:[
+    services:[{id:'tree',name:graph.lead.serviceLabel,crewSize,equipmentReference:equipment.key,canonicalPricing:{requiredScope:['requestedWork','treeCount','sizeClass','accessClass','conditionClass','disposalChoice'],rangePercent:operation==='visit'?5:12,lineItems:[
       {code:'tree-labor',label:definition.laborTask,category:'labor',type:'fixed',amount:laborCharge},
       {code:'tree-materials',label:definition.material,category:'materials',type:'fixed',amount:materialCharge},
       {code:'tree-equipment',label:equipment.name,category:'equipment',type:'fixed',amount:equipmentCharge},

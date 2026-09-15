@@ -203,7 +203,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['proposal_adopt','simulate_lead', 'reset', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['customer_estimate_issue','proposal_adopt','simulate_lead', 'reset', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -254,12 +254,14 @@ function mutationInput(input) {
   if(input.operation==='pricing_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'PRICING_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=pricingPlan.normalize(input.plan);}
   if(input.operation==='material_plan'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'MATERIAL_PLAN_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=materialPlan.normalize(input.plan);}
   if(input.operation==='proposal_adopt'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'PROPOSAL_ADOPTION_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=require('../estimating/proposalAdoptionContract').normalize(input.plan);}
+  if(input.operation==='customer_estimate_issue'){if(typeof input.estimateId!=='string'||!/^[0-9a-f-]{36}$/.test(input.estimateId))fail(400,'CUSTOMER_ESTIMATE_ISSUE_INVALID','Choose a demo estimate.');normalized.estimateId=input.estimateId;normalized.plan=require('../estimating/customerEstimateVersionContract').normalize(input.plan);}
   normalized.requestDigest = sha256({
     operation: normalized.operation,
     expectedRevision: normalized.expectedRevision,
     scenarioSelection: normalized.scenarioSelection || null,
     ...(normalized.operation==='estimate_review' ? {estimateId:normalized.estimateId,decision:normalized.decision} : {}),
     ...(normalized.operation==='proposal_adopt'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
+    ...(normalized.operation==='customer_estimate_issue'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation==='estimate_adopt'?{estimateId:normalized.estimateId,adoption:normalized.adoption}:{}),
     ...(['commercial_terms','commercial_ok'].includes(normalized.operation)?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation==='tax_profile'?{plan:normalized.plan}:{}),
@@ -570,7 +572,9 @@ class DemoCommandCenterRepository {
     const aggregate = input.operation === 'proposal_adopt';
     const operations = input.operation === 'work_action';
     const commercialOperation=['commercial_terms','commercial_ok','tax_profile'].includes(input.operation);
+    const customerEstimateIssue=input.operation==='customer_estimate_issue';
     if(commercialOperation&&(!commercialWrite.mutationsEnabled||input.operation==='tax_profile'&&!commercialWrite.preparationEnabled||input.operation==='commercial_ok'&&!decisionPolicy.mutationsEnabled))fail(503,'COMMERCIAL_PAUSED','New commercial terms and approvals are paused. Refresh to check saved history.');
+    if(customerEstimateIssue&&!require('../estimating/customerEstimateVersionPolicy').mutationsEnabled)fail(503,'CUSTOMER_ESTIMATE_ISSUANCE_PAUSED','New estimate issuance is paused. Saved issued estimates remain available.');
     if (operations && !demoOperationsPolicy.mutationsEnabled) fail(503,'DEMO_OPERATIONS_PAUSED','New work updates are paused. Saved work and completion history remain available.');
     const scheduling = input.operation.startsWith('schedule_');
     if(scheduling&&!demoSchedulingPolicy.mutationsEnabled)fail(503,'DEMO_SCHEDULE_PAUSED','New demo schedule changes are paused. Saved times remain available.');
@@ -667,6 +671,7 @@ class DemoCommandCenterRepository {
           const schedulingResponse=demoScheduling.replay(current.state,input,replayNow);await client.query('COMMIT');open=false;return{record:current,replayed:true,schedulingResponse};
         }
         if(commercialOperation){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');demoCommercial.replay(current.state,input);await client.query('COMMIT');open=false;return{record:current,replayed:true};}
+        if(customerEstimateIssue&&(current.state.customerEstimateVersions?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return{record:current,replayed:true};}
         if(input.operation==='estimate_adopt'&&(current.state.estimateRevisions?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='labor_plan'&&(current.state.laborPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return {record:current,replayed:true};}
         if(input.operation==='equipment_plan'&&(current.state.equipmentPlans?.[input.estimateId]||[]).some(e=>e.requestKey===input.idempotencyHash)){const moment=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);if(date(lockedRow.expires_at)<=moment)fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');await client.query('COMMIT');open=false;return {record:current,replayed:true};}
@@ -728,6 +733,12 @@ class DemoCommandCenterRepository {
         const review=buildRevisionReview(item,selectDemoRevision(item,current.state.estimateRevisions?.[input.estimateId]||[]),{simulated:true});review.decisions=projectSelectedDemoDecisions(current.state.estimateDecisions?.[input.estimateId]||[],review,true);const histories=current.state.laborPlans||{},history=histories[input.estimateId]||[];const result=laborPlan.demoPlan(history,review,input.plan,input.idempotencyHash,now);nextState=stableValue({...current.state,laborPlans:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
       } else if(commercialOperation){
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});nextState=demoCommercial.apply(workspace,current.state,input,now);
+      } else if(customerEstimateIssue){
+        const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt}),context=demoCommercial.context(workspace,current.state,input.estimateId,now),terms=current.state.commercialTerms?.[input.estimateId]||[],approvals=current.state.commercialApprovals?.[input.estimateId]||[],binding=approvals[0]||null;
+        context.review.commercialTerms=require('../estimating/commercialSources').project({current:terms[0]||null,history:terms,total:terms.length,binding},context.review,context.sources,{},true,true,false);
+        const commercial=context.review.commercialTerms||{};if(!commercial.customerSummary||commercial.approvalState!=='commercial_approved'||!commercial.binding||!commercial.current||commercial.current.current!==true)fail(409,'CUSTOMER_ESTIMATE_APPROVAL_CHANGED','The approved demo estimate changed. Refresh and review it again before issuing.');
+        const preview=require('../estimating/customerEstimateProjection').createCustomerEstimatePreview({review:context.review,item:context.item,profile:workspace.configuration.businessProfile,simulated:true}),document=require('../estimating/customerEstimateVersionContract').issuedDocument(preview),history=current.state.customerEstimateVersions?.[input.estimateId]||[],approvalPin={id:commercial.binding.id,digest:commercial.binding.digest},result=require('../estimating/customerEstimateVersionContract').demoIssue(history,input.plan,document,approvalPin,input.idempotencyHash,'Demo reviewer',now),histories=current.state.customerEstimateVersions||{};
+        nextState=stableValue({...current.state,customerEstimateVersions:{...histories,[input.estimateId]:result.replayed?history:[result.receipt,...history]}});
       } else if(input.operation==='pricing_policy'){
         if(!policyWrite.mutationsEnabled)fail(503,'PRICING_POLICY_PAUSED','New pricing policies are paused. Saved plans remain available.');
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'PRICING_POLICY_UNAVAILABLE','That demo estimate is unavailable.');

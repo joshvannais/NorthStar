@@ -308,12 +308,10 @@ window.CustomerDetail = (function() {
     var travelTitle = document.createElement('summary'); travelTitle.textContent = 'Edit Travel And Work Time'; travelDetails.append(travelTitle,travelSection);
     var chargeDetails = document.createElement('details'); chargeDetails.className = 'drawer-polaris-subsection'; chargeDetails.id = 'cdChargeDetails';
     var chargeSummary = document.createElement('summary'); chargeSummary.textContent = 'Original Charge Details'; chargeDetails.append(chargeSummary,charges);
-    panel.append(travelDetails,chargeDetails);
+    analysis.append(travelDetails,chargeDetails);
     panel.appendChild(basisDetails);
     var priceDetails = panel.querySelector('.drawer-polaris-pricing'); priceDetails.classList.add('drawer-section');
-    priceDetails.querySelector('summary').textContent = 'Prepared Estimate And Saved Review';priceDetails.open=true;
-    analysis.after(priceDetails);
-    panel.appendChild(basisDetails);
+    priceDetails.id='cdEstimateDetails';priceDetails.querySelector('summary').textContent = 'Estimate Details';priceDetails.open=false;
     var profileSection = $('cdProfileSection');
     var contactDetails = document.createElement('details'); contactDetails.className = 'drawer-section drawer-customer-background';
     var contactTitle = document.createElement('summary'); contactTitle.textContent = 'Customer History';
@@ -321,8 +319,14 @@ window.CustomerDetail = (function() {
     contactDetails.appendChild($('cdProbabilityRow'));
     panel.querySelector('.drawer-polaris-context').remove();
     var actionSection = $('cdBtnAskPolaris').closest('.drawer-section'); actionSection.classList.add('drawer-primary-actions');
-    content.prepend(actionSection,polarisSection);
-    polarisSection.after($('cdCapellaReview'),attention,nextAction,$('cdExecutionSection'),$('cdTranscriptDisclosure'),contactDetails);
+    var estimateHub=document.createElement('section');estimateHub.id='cdEstimateHub';estimateHub.className='drawer-estimate-hub';estimateHub.hidden=true;
+    var workArea=document.createElement('details');workArea.id='cdCustomerWorkArea';workArea.className='drawer-section drawer-primary-disclosure';
+    var workTitle=document.createElement('summary');workTitle.textContent='Schedule & Work';workArea.append(workTitle,$('cdExecutionSection'));
+    var activityArea=document.createElement('details');activityArea.id='cdCustomerActivityArea';activityArea.className='drawer-section drawer-primary-disclosure';
+    var activityTitle=document.createElement('summary');activityTitle.textContent='Activity';activityArea.append(activityTitle,$('cdConversationHistorySection'),$('cdTranscriptDisclosure'),contactDetails);
+    panel.append(attention,nextAction);
+    priceDetails.appendChild($('cdCapellaReview'));
+    content.prepend(actionSection,estimateHub,polarisSection,priceDetails,workArea,activityArea);
     $('cdContextSummary').hidden = true;
 
     // Event bindings
@@ -1921,7 +1925,7 @@ window.CustomerDetail = (function() {
         }
         _estimateReview = review; renderEstimateDecision(review); renderCapellaReview(review);positionPricingReviewActions();
         if(window.NorthStarPreparedEstimate)_preparedEstimateState=window.NorthStarPreparedEstimate.mount(review,preparedHost,_preparedEstimateState,{money:decisionMoney,refresh:function(){refreshEstimateReview('review-refresh');},isCurrent:function(){return current()&&_estimateReview===review;}});
-        if(window.NorthStarCustomerEstimate){var customerEstimateLaunch=window.NorthStarCustomerEstimate.mount(review,preparedHost);if(customerEstimateLaunch)preparedHost.prepend(customerEstimateLaunch);}
+        var estimateHub=$('cdEstimateHub');if(estimateHub){estimateHub.replaceChildren();estimateHub.hidden=false;if(window.NorthStarCustomerEstimate)window.NorthStarCustomerEstimate.mount(review,estimateHub);}
         if(_groundedReview){
           var handoff=_groundedReview;_groundedReview=null;
           function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object'){var out={};Object.keys(value).sort().forEach(function(k){out[k]=stable(value[k]);});return out;}return value;}

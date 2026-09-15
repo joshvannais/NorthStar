@@ -1854,6 +1854,20 @@ function createCanonicalRouter(options) {
     }
   });
 
+  router.get('/estimates/:estimateId/customer-estimate-versions', dependencies.auth, requireCanonicalContext, async function(req,res){
+    res.set('Cache-Control','no-store');res.vary('Cookie');
+    if(!UUID.test(req.params.estimateId))return res.status(404).json({success:false,error:{message:'That estimate is unavailable.'}});
+    try{const data=await withEquipmentCanonicalRead(req,dependencies,async(client,operator)=>{if(!operator.canMutate||!['owner','admin'].includes(operator.actor&&operator.actor.accessRole))throw Object.assign(new Error('Issued estimates are available to current owners and administrators.'),{status:403});return require('../estimating/customerEstimateVersionRepository').read(client,{...actorInput(req),estimateId:req.params.estimateId});});return res.json({success:true,data});}
+    catch(error){const e=require('../estimating/customerEstimateVersionRepository').failure(error);return res.status(e.status).json({success:false,error:{message:e.message,category:e.code}});}
+  });
+  router.post('/estimates/:estimateId/customer-estimate-versions',dependencies.auth,requireCanonicalContext,async function(req,res){
+    res.set('Cache-Control','no-store');res.vary('Cookie');
+    if(!req.estimateDecisionBodyValidated||!UUID.test(req.params.estimateId))return res.status(400).json({success:false,error:{message:'Review and confirm this customer estimate before issuing it.'}});
+    const input={...actorInput(req),estimateId:req.params.estimateId,csrfToken:req.get('X-CSRF-Token'),idempotencyKey:req.get('Idempotency-Key')};
+    try{const prepared=await withEquipmentCanonicalRead(req,dependencies,async function(client,operator){if(!operator.canMutate||!['owner','admin'].includes(operator.actor&&operator.actor.accessRole))throw Object.assign(new Error('Customer estimates can be issued by current owners and administrators.'),{status:403});const review=await assembleCapellaReview(client,operator,req),item=await getCanonicalGraph(client,requestContext(req),req.params.estimateId);if(!review||!item)throw Object.assign(new Error('That estimate is unavailable.'),{status:404});const commercial=review.commercialTerms||{};if(!commercial.customerSummary||commercial.approvalState!=='commercial_approved'||!commercial.binding||!commercial.current||commercial.current.current!==true)throw Object.assign(new Error('The approved estimate changed. Refresh and review it again before issuing.'),{status:409,code:'CUSTOMER_ESTIMATE_APPROVAL_CHANGED'});const profile=await require('../services/organizationAuthority').getActiveBusinessProfile(client,requestContext(req).organizationId),preview=require('../estimating/customerEstimateProjection').createCustomerEstimatePreview({review,item,profile,simulated:false}),document=require('../estimating/customerEstimateVersionContract').issuedDocument(preview);return{document,approvalPin:{id:commercial.binding.id,digest:commercial.binding.digest}};});const data=await require('../estimating/customerEstimateVersionRepository').issue(resolvePool(dependencies.poolProvider),input,req.body,prepared.document,prepared.approvalPin);return res.status(data.replayed?200:201).json({success:true,data});}
+    catch(error){const e=require('../estimating/customerEstimateVersionRepository').failure(error);return res.status(e.status).json({success:false,error:{message:e.message,category:e.code}});}
+  });
+
   router.get('/estimates/:estimateId/review', dependencies.auth, requireCanonicalContext, async function (req, res) {
     res.set('Cache-Control', 'no-store');
     const failure = (status, message) => res.status(status).json({ success: false, error: { code: 'ESTIMATE_REVIEW_UNAVAILABLE', message } });

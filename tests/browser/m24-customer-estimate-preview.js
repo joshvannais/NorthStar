@@ -6,6 +6,8 @@ const path = require('node:path');
 const express = require('express');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 
+function pngSize(file) { const value=fs.readFileSync(file);assert.equal(value.subarray(1,4).toString(),'PNG');return{width:value.readUInt32BE(16),height:value.readUInt32BE(20)}; }
+
 const arg = name => process.argv.find(value => value.startsWith('--' + name + '=')).slice(name.length + 3);
 const engine = arg('browser');
 const output = path.resolve(arg('output'));
@@ -40,6 +42,7 @@ const boundaryEstimate = {
 };
 
 const requests = [];
+const versionRequests = [];
 const failures = { pdf:0, brand:0 };
 const dependencyRequests = { pdf:0, brand:0 };
 const app = express();
@@ -62,13 +65,18 @@ app.get('/assets/logo.png', (req, res, next) => {
 app.use('/css', express.static(path.resolve(__dirname, '../../public/css')));
 app.use('/js', express.static(path.resolve(__dirname, '../../public/js')));
 app.use('/assets', express.static(path.resolve(__dirname, '../../public/assets')));
+app.use(express.json());
 app.get('/api/demo/command-center/estimates/:estimateId/customer-estimate-preview', (req, res) => {
   requests.push(req.path);
   res.json({ success:true, data:req.params.estimateId === boundaryId ? boundaryEstimate : estimate });
 });
-app.get(['/', '/boundary'], (req, res) => {
+app.get('/api/demo/command-center/estimates/:estimateId/customer-estimate-versions',(req,res)=>res.json({success:true,data:{current:null,history:[],total:0,truncated:false}}));
+app.post('/api/demo/command-center/estimates/:estimateId/customer-estimate-versions',(req,res)=>{versionRequests.push({intent:req.get('X-NorthStar-Demo-Intent'),revision:req.get('X-NorthStar-Demo-Revision'),body:req.body});res.status(201).json({success:true,data:{replayed:false,receipt:{id:'20000000-0000-4000-8000-000000000001',revision:1,previousId:null,actorName:'Demo reviewer',reason:req.body.reason,approvalPin:{id:'30000000-0000-4000-8000-000000000001',digest:'a'.repeat(64)},document:{...estimate,state:'issued',notice:'Fictional demo estimate for product evaluation. No customer was contacted.'},createdAt:'2026-09-15T13:00:00.000Z'}}});});
+app.get(['/', '/boundary', '/not-ready'], (req, res) => {
   const id = req.path === '/boundary' ? boundaryId : ordinaryId;
-  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/site-professionalism.css"></head><body><main id="host"></main><script>window.NorthStarAccountSession={fetch:window.fetch.bind(window)};window.review={simulated:true,pins:{estimateId:'${id}'},commercialTerms:{customerSummary:{}}};</script><script src="/js/customer-estimate-preview.js"></script><script>NorthStarCustomerEstimate.mount(review,document.getElementById('host'));</script></body></html>`);
+  const commercial = req.path === '/not-ready' ? `{approvalState:'not_approved',sources:{pricingCurrent:false}}` : `{approvalState:'commercial_approved',customerSummary:{},binding:{id:'30000000-0000-4000-8000-000000000001',digest:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'},current:{current:true}}`;
+  const target = req.path === '/not-ready' ? `<details id="cdEstimateDetails"><summary>Estimate Details</summary><details id="cdPreparedAdoption"><summary>Review And Save</summary></details></details>` : '';
+  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/site-professionalism.css"></head><body><main id="host"></main>${target}<script>window.NorthStarAccountSession={fetch:window.fetch.bind(window)};window.review={simulated:true,demoWorkspaceRevision:7,pins:{estimateId:'${id}'},commercialTerms:${commercial}};</script><script src="/js/customer-estimate-preview.js"></script><script>NorthStarCustomerEstimate.mount(review,document.getElementById('host'));</script></body></html>`);
 });
 
 let server;
@@ -96,8 +104,8 @@ let browser;
       await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), test.theme);
       const launch = page.getByRole('button', { name:'Preview Customer Estimate' });
       await launch.click();
-      await page.getByRole('dialog', { name:'Customer estimate preview' }).waitFor();
-      const dialog = page.getByRole('dialog', { name:'Customer estimate preview' });
+      await page.getByRole('dialog', { name:'Customer Estimate Preview' }).waitFor();
+      const dialog = page.getByRole('dialog', { name:'Customer Estimate Preview' });
       const close = dialog.getByRole('button', { name:'Close customer estimate preview' });
       const imageButton = dialog.getByRole('button', { name:'Download image' });
       assert.equal(await close.evaluate(node => document.activeElement === node), true);
@@ -114,6 +122,8 @@ let browser;
       assert.equal(await mark.evaluate(node => node.complete && node.naturalWidth > 0 && node.naturalHeight > 0), true);
       assert.equal(await dialog.getByRole('button', { name:/accept estimate/i }).count(), 0);
       assert.equal(await dialog.getByRole('button', { name:/ask a question/i }).count(), 0);
+      const labelFonts = await dialog.locator('.customer-estimate-label,.customer-estimate-kicker').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).fontFamily));
+      assert.equal(new Set(labelFonts).size, 1);
       const overflow = await page.evaluate(() => {
         const nodes = Array.from(document.querySelectorAll('.customer-estimate-document,.customer-estimate-scope p,.customer-estimate-row span'));
         return {page:document.documentElement.scrollWidth <= innerWidth, content:nodes.every(node => node.scrollWidth <= node.clientWidth)};
@@ -135,13 +145,30 @@ let browser;
       const image = await imageEvent;
       const imagePath = path.join(output, test.name + '-download.png');
       await image.saveAs(imagePath);
-      assert.equal(fs.readFileSync(imagePath).subarray(1, 4).toString(), 'PNG');
+      assert.equal(pngSize(imagePath).width,1600);
       await page.keyboard.press('Escape');
       assert.equal(await dialog.count(), 0);
       assert.equal(await launch.evaluate(node => document.activeElement === node), true);
       assert.deepEqual(errors, []);
-      ledger.cases.push({name:test.name,pdf:pdf.suggestedFilename(),image:image.suggestedFilename(),boundedContent:true,focusContainedAndRestored:true,noInteractiveCustomerActions:true});
+      ledger.cases.push({name:test.name,pdf:pdf.suggestedFilename(),image:image.suggestedFilename(),universalImageWidth:1600,boundedContent:true,focusContainedAndRestored:true,consistentSectionLabelFont:true,noInteractiveCustomerActions:true});
       await context.close();
+    }
+    {
+      const context = await browser.newContext({ viewport:{width:390,height:844} });
+      const page = await context.newPage();
+      await page.goto(origin + '/not-ready');
+      const before = requests.length;
+      const continueButton = page.getByRole('button', { name:'Continue Estimate' });
+      assert.equal(await continueButton.isVisible(), true);
+      await continueButton.click();
+      assert.equal(await page.locator('#cdEstimateDetails').evaluate(node => node.open), true);
+      assert.equal(await page.locator('#cdPreparedAdoption').evaluate(node => node.open), true);
+      assert.equal(requests.length, before);
+      ledger.cases.push({name:'needs-review-entry',persistent:true,noPreviewRequest:true});
+      await context.close();
+    }
+    {
+      const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage();await page.goto(origin+'/');const issue=page.getByRole('button',{name:'Issue Estimate'});await issue.waitFor();await issue.click();await page.getByLabel('Reason for issuing').fill('Owner approved customer-facing estimate');await page.getByLabel(/I reviewed the customer-facing scope/).check();await page.getByRole('button',{name:'Confirm Issue'}).click();const dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'View Issued Estimate'}).count(),1);assert.deepEqual(versionRequests,[{intent:'customer-estimate-issue',revision:'7',body:{reason:'Owner approved customer-facing estimate',confirmed:true,confirmationVersion:'customer-estimate-issue-v1'}}]);const issuedPdfEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download PDF'}).click();const issuedPdf=await issuedPdfEvent,issuedPdfPath=path.join(output,'issued.pdf');await issuedPdf.saveAs(issuedPdfPath);assert.ok(fs.readFileSync(issuedPdfPath).subarray(0,5).toString().startsWith('%PDF-'));const issuedImageEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download image'}).click();const issuedImage=await issuedImageEvent,issuedImagePath=path.join(output,'issued-download.png');await issuedImage.saveAs(issuedImagePath);assert.equal(pngSize(issuedImagePath).width,1600);await page.screenshot({path:path.join(output,'issued-mobile.png'),fullPage:true});ledger.cases.push({name:'explicit-issue-and-view',immutableVersion:true,issuedPdfAndImage:true,universalImageWidth:1600,noDeliveryClaim:true});await context.close();
     }
     for (const recovery of [
       {kind:'pdf',button:'Download PDF',message:'The PDF could not be prepared. Try again.',extension:'.pdf'},
@@ -151,7 +178,7 @@ let browser;
       const page = await context.newPage();
       await page.goto(origin + '/');
       await page.getByRole('button', { name:'Preview Customer Estimate' }).click();
-      const dialog = page.getByRole('dialog', { name:'Customer estimate preview' });
+      const dialog = page.getByRole('dialog', { name:'Customer Estimate Preview' });
       await dialog.waitFor();
       await dialog.locator('img.customer-estimate-mark').evaluate(node => node.complete && node.naturalWidth > 0);
       const before = dependencyRequests[recovery.kind];

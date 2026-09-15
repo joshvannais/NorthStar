@@ -1298,6 +1298,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   await require('./estimating/pricingPolicyDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/proposalAdoptionDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/commercialDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./estimating/customerEstimateVersionDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./polaris/connectedDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/materialPlanDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./estimating/materialAdoptionDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
@@ -1362,6 +1363,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_call_provider_%'
            AND relation.relname NOT LIKE 'canonical_tax_%'
            AND relation.relname NOT LIKE 'canonical_commercial_%'
+           AND relation.relname <> 'canonical_customer_estimate_versions'
            AND relation.relname <> 'canonical_travel_fences'
            AND relation.relname <> 'canonical_material_plans'
            AND relation.relname <> 'canonical_estimate_revisions'

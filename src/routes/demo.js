@@ -650,6 +650,17 @@ router.get('/command-center/estimates/:estimateId/customer-estimate-preview', as
   }
 });
 
+router.get('/command-center/estimates/:estimateId/customer-estimate-versions',async function(req,res){
+  res.set('Cache-Control','no-store');res.vary('Cookie');
+  try{const record=await commandCenterRepository.read(commandCenterToken(req,res)),item=demoCanonicalItems(demoWorkspace(record)).find(value=>value.ids.estimate===req.params.estimateId);if(!item)return res.status(404).json({success:false,error:{message:'That demo estimate is unavailable.'}});const history=record.state.customerEstimateVersions?.[req.params.estimateId]||[];return res.json({success:true,data:{current:history[0]||null,history:history.slice(0,50),total:history.length,truncated:history.length>50}});}
+  catch(error){return res.status(error.status===410?410:503).json({success:false,error:{message:error.status===410?'This demo session expired. Refresh to start again.':'Issued demo estimates are unavailable. Refresh and try again.'}});}
+});
+router.post('/command-center/estimates/:estimateId/customer-estimate-versions',async function(req,res){
+  res.set('Cache-Control','no-store');res.vary('Cookie');if(!mutationBoundary(req,res,'customer-estimate-issue'))return;if(!req.estimateDecisionBodyValidated)return res.status(400).json({success:false,error:{message:'Review and confirm this customer estimate before issuing it.'}});
+  try{const result=await commandCenterRepository.mutate(commandCenterToken(req,res),{operation:'customer_estimate_issue',estimateId:req.params.estimateId,expectedRevision:Number(req.get('X-NorthStar-Demo-Revision')),plan:req.body,idempotencyKey:req.get('Idempotency-Key')},{sourceHash:durableSourceHash(req)}),history=result.record.state.customerEstimateVersions?.[req.params.estimateId]||[],receipt=history.find(value=>value.requestKey===sha256(req.get('Idempotency-Key')))||history[0];return res.status(result.replayed?200:201).json({success:true,data:{receipt,replayed:result.replayed,demoWorkspaceRevision:result.record.revision}});}
+  catch(error){const status=[400,403,404,409,410,413,429,503].includes(error.status)?error.status:503;return res.status(status).json({success:false,error:{category:error.code,message:error.status?error.message:'The demo estimate could not be issued. Refresh to check saved history.'}});}
+});
+
 router.get('/command-center/polaris/:kind/:id', async function (req, res) {
   res.set('Cache-Control', 'no-store');
   const idKey = DETAIL_IDENTIFIERS[req.params.kind];

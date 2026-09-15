@@ -1805,8 +1805,8 @@ html body #cdCustomerDrawer .drawer-polaris-analysis .drawer-work-detail { borde
 html body #cdCustomerDrawer .drawer-review-section { margin-top: 24px; }
 html body #cdCustomerDrawer .drawer-review-section > h4 { margin: 0 0 16px; }
 html body #cdCustomerDrawer #cdEstimateRevisionSelect { margin-top: 8px; margin-bottom: 16px; min-height: 44px; }
-html body #cdCustomerDrawer #cdEstimateReview > .drawer-pricing-category { border-bottom: 0; padding-bottom: 0; }
-html body #cdCustomerDrawer #cdEstimateReview > .drawer-pricing-category > .drawer-pricing-item:last-child { border-bottom: 0; }
+html body #cdCustomerDrawer #cdEstimateReview .drawer-pricing-category { border-bottom: 0; padding-bottom: 0; }
+html body #cdCustomerDrawer #cdEstimateReview .drawer-pricing-category > .drawer-pricing-item:last-child { border-bottom: 0; }
 html body #cdCustomerDrawer #cdMaterialReview { margin: 16px 0; border: 0; }
 html body #cdCustomerDrawer #cdMaterialReview[open] > summary { margin-bottom: 8px; }
 html body #cdCustomerDrawer #cdMaterialReview > p { margin: 0 0 12px; }
@@ -2038,6 +2038,32 @@ html[data-theme="dark"] .customer-estimate-launch { background:linear-gradient(1
 .customer-estimate-launch p { margin:0 0 14px;line-height:1.55; }
 .customer-estimate-launch .customer-estimate-kicker { margin:0;color:#8a681d;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase; }
 .customer-estimate-launch-status { min-height:1.35em;margin:10px 0 0!important;font-size:.85rem; }
+.customer-estimate-launch-actions { display:flex;flex-wrap:wrap;gap:.7rem;margin-top:.9rem; }
+.customer-estimate-launch-actions .btn { margin:0; }
+.customer-estimate-version-history { margin-top:.75rem; }
+.customer-estimate-history { border-top:1px solid rgba(181,140,50,.32);padding-top:.8rem; }
+.customer-estimate-history>summary { font-weight:700;cursor:pointer; }
+.customer-estimate-history-row { display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.65rem 0;border-bottom:1px solid rgba(95,103,116,.18); }
+.customer-estimate-history-row .btn { padding:.55rem .8rem;margin:0; }
+.customer-estimate-history-row span { font-size:.82rem;color:var(--neutral-600); }
+.customer-estimate-issue-form { margin-top:1rem;padding:1rem;border:1px solid rgba(181,140,50,.42);border-radius:16px;background:rgba(181,140,50,.07); }
+.customer-estimate-issue-form h5 { margin:0 0 .4rem;font-size:1.05rem; }
+.customer-estimate-issue-form>p { margin:.2rem 0 .9rem;color:var(--neutral-600); }
+.customer-estimate-issue-form>label:not(.drawer-decision-confirmation) { display:grid;gap:.4rem;font-weight:650; }
+.customer-estimate-issue-form input[type="text"] { width:100%;min-height:46px;border:1px solid var(--neutral-300);border-radius:12px;padding:.7rem .8rem;background:var(--theme-surface);color:var(--neutral-900);font:inherit; }
+.drawer-estimate-hub { margin:0 0 18px; }
+.drawer-estimate-hub[hidden] { display:none; }
+.drawer-estimate-hub .customer-estimate-launch { margin:0; }
+.drawer-estimate-hub .customer-estimate-launch[data-state="needs-review"] { background:linear-gradient(135deg,rgba(212,175,55,.09),rgba(255,255,255,.96)); }
+html[data-theme="dark"] .drawer-estimate-hub .customer-estimate-launch[data-state="needs-review"] { background:linear-gradient(135deg,rgba(181,140,50,.18),rgba(24,25,35,.98)); }
+html body .customer-drawer .drawer-primary-disclosure { margin:14px 0;padding:0 16px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--theme-surface); }
+html body #cdCustomerDrawer .drawer-primary-disclosure>summary { min-height:56px;display:flex;align-items:center;cursor:pointer;padding:0;margin:0;font-family:var(--font-body);font-size:16px;font-weight:650;line-height:1.45;color:var(--neutral-900); }
+html body #cdCustomerDrawer .drawer-primary-disclosure[open]>summary { border-bottom:1px solid var(--neutral-200);margin-bottom:16px; }
+html body .customer-drawer #cdEstimateDetails { margin:14px 0;padding:0 16px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--theme-surface); }
+html body .customer-drawer #cdEstimateDetails>summary { min-height:56px;display:flex;align-items:center;cursor:pointer;padding:0;margin:0;font-family:var(--font-body);font-size:16px;font-weight:650;line-height:1.45;color:var(--neutral-900); }
+html body .customer-drawer #cdEstimateDetails[open]>summary { border-bottom:1px solid var(--neutral-200);margin-bottom:16px; }
+html body .customer-drawer #cdCustomerActivityArea>.drawer-section,
+html body .customer-drawer #cdCustomerWorkArea>.drawer-section { margin-bottom:16px; }
 body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-overlay { position:fixed;inset:0;z-index:10050;display:grid;place-items:center;padding:24px;background:rgba(5,7,13,.78);backdrop-filter:blur(10px); }
 .customer-estimate-dialog { width:min(900px,100%);max-height:calc(100vh - 48px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border:1px solid rgba(212,175,55,.58);border-radius:22px;background:var(--theme-surface,#fff);box-shadow:0 30px 90px rgba(0,0,0,.35); }
@@ -2049,12 +2075,12 @@ body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-dialog-body { overflow:auto;padding:28px;background:#e9e8e3; }
 .customer-estimate-dialog-actions { flex-wrap:wrap;border-top:1px solid var(--neutral-200); }
 .customer-estimate-dialog-actions p { flex:1 1 260px;margin:0;color:var(--theme-text-secondary,#5f6470);font-size:.82rem;text-align:right; }
-.customer-estimate-document { box-sizing:border-box;width:min(720px,100%);margin:auto;padding:48px 52px 34px;border:2px solid #b58c32;border-radius:18px;background:#fbfaf7;color:#111827;box-shadow:0 12px 44px rgba(32,27,17,.12);font-family:Inter,"Segoe UI",Arial,sans-serif; }
+.customer-estimate-document { box-sizing:border-box;width:min(720px,100%);margin:auto;padding:48px 52px 34px;border:2px solid #b58c32;border-radius:18px;background:#fbfaf7;color:#111827;box-shadow:0 12px 44px rgba(32,27,17,.12);font-family:var(--font-body,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif); }
 .customer-estimate-document * { box-sizing:border-box;color:inherit;font-family:inherit;text-transform:none!important; }
 .customer-estimate-header { display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:24px;border-bottom:1px solid #d9c497; }
 .customer-estimate-brand { min-width:0; }
 .customer-estimate-brand h2 { margin:4px 0 0;font-size:1.7rem;line-height:1.15;overflow-wrap:anywhere; }
-.customer-estimate-kicker,.customer-estimate-label { color:#8a681d!important;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase!important; }
+.customer-estimate-kicker,.customer-estimate-label { color:#8a681d!important;font-family:var(--font-body,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif)!important;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase!important; }
 .customer-estimate-muted,.customer-estimate-contact { color:#69707d!important; }
 .customer-estimate-brand p,.customer-estimate-contact { margin:5px 0 0; }
 .customer-estimate-meta { display:grid;gap:6px;justify-items:end;font-size:.82rem;white-space:nowrap; }
@@ -2063,7 +2089,7 @@ body.customer-estimate-open { overflow:hidden; }
 .customer-estimate-intro { display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:30px 0; }
 .customer-estimate-intro strong { display:block;margin-top:7px;font-size:1.05rem; }
 .customer-estimate-intro p { margin:5px 0 0;line-height:1.5;color:#4b5563; }
-.customer-estimate-document h3 { margin:0 0 14px;font-family:inherit!important;font-size:.72rem;font-weight:800;letter-spacing:.12em;line-height:1.2;text-transform:uppercase!important;color:#8a681d; }
+.customer-estimate-section-label { margin:0 0 14px!important;line-height:1.2; }
 .customer-estimate-scope { padding:0 0 30px; }
 .customer-estimate-scope p { margin:0;line-height:1.65;white-space:pre-line;overflow-wrap:anywhere; }
 .customer-estimate-costs,.customer-estimate-payments { padding:24px 0;border-top:1px solid #e0d8c6; }

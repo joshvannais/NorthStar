@@ -1,5 +1,5 @@
 'use strict';
-const ENTRIES = new Set(['canonical_call_provider_reserve','canonical_call_provider_reconcile','canonical_call_provider_retire','demo_polaris_provider_reserve', 'demo_polaris_provider_reconcile',
+const ENTRIES = new Set(['canonical_call_provider_reserve','canonical_call_provider_reconcile','canonical_call_provider_retire','canonical_call_provider_canary_reserve','canonical_call_provider_canary_reconcile','demo_polaris_provider_reserve', 'demo_polaris_provider_reconcile',
   'connected_reasoning_retire', 'canonical_tax_research_status', 'canonical_tax_research_enqueue', 'canonical_tax_research_claim', 'canonical_tax_research_finish']);
 async function grantAndVerify(client, runtimeRole) {
   const role = '"' + runtimeRole.replace(/"/g, '""') + '"';

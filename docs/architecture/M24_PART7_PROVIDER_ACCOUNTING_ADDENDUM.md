@@ -1,0 +1,13 @@
+# Mission 24 Part 7 counted-provider and call-canary addendum
+
+This package prepares the remaining provider checkpoint without activating it. The OpenAI input-token count and generation share the existing $0.02 reservation and one 20-second abort boundary. The count request and response receive separate digests and a conservative configured charge ceiling. The generation keeps its provider request identity and measured usage. Combined reconciliation cannot exceed 20,000,000 nanoUSD.
+
+The generation maximum is 13,830,400 nanoUSD: 16,000 cache-write input tokens at 250 nanoUSD each plus 8,192 output tokens at 1,200 nanoUSD each. Therefore the count ceiling must be at most 6,169,600 nanoUSD. Current official OpenAI documentation describes `POST /v1/responses/input_tokens`, its integer `input_tokens` result, and GPT-5.6 Luna token prices, but does not establish a count-endpoint tariff or failed-request charge. Production remains blocked until a dated account-specific tariff record supplies that ceiling and its evidence digest.
+
+Required production configuration is all-or-nothing: count accounting version, maximum count cost, tariff evidence digest, and review date. A partial, malformed, or excessive configuration remains unavailable. This package makes no provider request and changes no deployed flag.
+
+A connected-call canary also requires one exact synthetic binding: organization, Retell agent and version, Retell LLM and version, base-prompt digest, consent record version, exclusive ownership, a 60-second call cap, synthetic-only use, and exactly one generation per call. The signed tool payload still grants no tenant authority. The canonical integration owner, active voice session, profile, subscription, and caller-safe published evidence remain authoritative.
+
+Migration 077 adds the durable canary receipt without rewriting prior rows. It preserves the binding digest, counted accounting version, tariff evidence identity and date, count request/response digests, count token result, count cost ceiling, generation provider request ID, generation usage, and combined charge. Its canary reservation enforces one generation for the entire call under the existing project/tenant lock order. Existing v1, equipment, and pre-canary call receipts remain readable with their current accounting.
+
+Activation still requires an account-specific tariff conclusion and a read-back of one dedicated Retell agent/LLM version whose prompt digest and consent record match the binding. No live call, knowledge PATCH, tax publication, real-caller routing, or private-customer use is authorized by this addendum.

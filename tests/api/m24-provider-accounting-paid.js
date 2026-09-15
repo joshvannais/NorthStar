@@ -11,7 +11,9 @@ const result = { cases: [], pass: false, providerMode: 'injected Responses trans
     await f.ownerPool.query("UPDATE subscriptions SET plan_type='Growth' WHERE organization_id=$1", [f.org]);
     await f.ownerPool.query("INSERT INTO polaris_provider_monthly_usage(organization_id,month_start,collected_subscription_revenue_cents) VALUES($1,date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')::date,10000)", [f.org]);
     let calls = 0, counts = 0, change = null, uncertain = false;
+    const accounting=require('../../src/polaris/providerAccounting'),countAccounting=accounting.parseCountAccounting({POLARIS_INPUT_COUNT_ACCOUNTING_VERSION:accounting.COUNT_ENDPOINT_VERSION,POLARIS_INPUT_COUNT_MAX_COST_NANO_USD:'0',POLARIS_INPUT_COUNT_TARIFF_EVIDENCE_DIGEST:'a'.repeat(64),POLARIS_INPUT_COUNT_TARIFF_REVIEWED_ON:'2026-09-14'});
     const runtime = require('../../src/polaris/openaiRuntime').createOpenAIRuntime({ enabled: true, configured: true,
+      countAccounting,
       countTransport: async body => {
         counts++; assert.equal(body.text.format.name, 'northstar_grounded_conversation_v2');
         assert.equal(f.runtimePool.totalCount, f.runtimePool.idleCount, 'protected loader released all runtime clients before count');
@@ -42,7 +44,7 @@ const result = { cases: [], pass: false, providerMode: 'injected Responses trans
     result.cases.push('actual paid admission before count; released loader clients; count/schema/send and exact replay without count or generation');
     uncertain=true; const uncertainBody={...body,idempotencyKey:crypto.randomUUID()};
     const failed=await send(uncertainBody);result.uncertain={status:failed.status,body:failed.body};assert.equal(failed.status,503);assert.equal(calls,2);assert.equal(counts,2);
-    const saved=(await f.ownerPool.query('SELECT state,actual_cost_nano_usd FROM polaris_provider_requests WHERE request_id=$1',[uncertainBody.idempotencyKey])).rows[0];assert.equal(saved.actual_cost_nano_usd,'20000000');result.uncertainLedger=saved;
+    const saved=(await f.ownerPool.query('SELECT state,actual_cost_nano_usd FROM polaris_provider_requests WHERE request_id=$1',[uncertainBody.idempotencyKey])).rows[0];assert.equal(saved.actual_cost_nano_usd,String(accounting.MAX_GENERATION_COST_NANO_USD));result.uncertainLedger=saved;
     const retry=await send(uncertainBody);assert.ok(retry.status>=400);assert.equal(calls,2);assert.equal(counts,2);uncertain=false;
     result.cases.push('unknown paid transport retains full charge; same key cannot repeat provider request');
     change = () => f.ownerPool.query("UPDATE organization_memberships SET status='revoked',revoked_at=clock_timestamp() WHERE id=$1", [f.actors.owner.actorUserId]);

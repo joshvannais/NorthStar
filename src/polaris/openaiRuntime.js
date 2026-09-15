@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const providerAccounting = require('./providerAccounting');
 const trustedPresentation = require('../../public/js/polaris-trusted-presentation');
 const {
   RESPONSE_SCHEMA,
@@ -92,12 +93,12 @@ function responseText(response) {
   return pieces.join('');
 }
 
-function parseUsage(response, attemptCount, startedAt, outcomeClass, knownRejected = false) {
+function parseUsage(response, attemptCount, startedAt, outcomeClass, knownRejected = false, unknownReservedCost = RESERVED_COST_NANO_USD) {
   if (!response && outcomeClass === 'failed') {
     return Object.freeze({
       inputTokens: 0,
       outputTokens: 0,
-      costNanoUsd: knownRejected ? 0 : RESERVED_COST_NANO_USD,
+      costNanoUsd: knownRejected ? 0 : unknownReservedCost,
       latencyMs: Math.max(0, Date.now() - startedAt),
       attemptCount,
       outcomeClass,
@@ -216,7 +217,7 @@ function countRequest(body) {
     reasoning: body.reasoning, text: body.text, truncation: body.truncation });
 }
 
-// Not wired by the production factory: count charge admission is unresolved.
+// The production factory wires this only with a complete reviewed tariff record.
 // Tests inject an SDK client whose fetch is in-memory; no credential is needed.
 function createCountTransport(client) {
   return (body, { signal }) => client.responses.inputTokens.count(body, { signal, maxRetries: 0 });
@@ -321,7 +322,10 @@ function createOpenAIRuntime(options = {}) {
 
   function preflight(envelope) {
     const body = assembleRequest(envelope);
-    if (options.countingBlocked === true && ['grounded_conversation', 'caller_guidance'].includes(envelope.purpose)) throw contractError('POLARIS_ACCOUNTING_UNAVAILABLE', 'Conversation is temporarily unavailable. Your saved records remain available.', 503);
+    if (['grounded_conversation', 'caller_guidance'].includes(envelope.purpose) &&
+        (options.countingBlocked === true || typeof options.countTransport !== 'function' || !options.countAccounting)) {
+      throw contractError('POLARIS_ACCOUNTING_UNAVAILABLE', 'Conversation is temporarily unavailable. Your saved records remain available.', 503);
+    }
     return body.input;
   }
 
@@ -334,16 +338,34 @@ function createOpenAIRuntime(options = {}) {
     const boundary = createProviderSignal(respondOptions.signal);
     let attemptCount = 0;
     let response = null;
+    let countUsage = null;
     try {
       if (options.countTransport) {
-        // Internal injected transport only until count pricing is part of admission.
         if (typeof respondOptions.revalidate !== 'function') throw contractError('POLARIS_ACCESS_CHANGED', 'Refresh the current record before asking again.', 409);
         await respondOptions.revalidate();
         if (boundary.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
-        const count = await options.countTransport(countRequest(body), { signal: boundary.signal });
+        const countBody = countRequest(body);
+        const countStartedAt = Date.now();
+        let count;
+        try {
+          count = await options.countTransport(countBody, { signal: boundary.signal });
+        } catch (error) {
+          countUsage = providerAccounting.countReceipt({ body: countBody, response: null,
+            accounting: options.countAccounting, startedAt: countStartedAt,
+            outcomeClass: boundary.timedOut() || (error && error.name === 'AbortError') ? 'unknown' : 'failed' });
+          throw error;
+        }
         if (boundary.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
-        if (!count || count.object !== 'response.input_tokens' || !Number.isSafeInteger(count.input_tokens) || count.input_tokens < 0) throw providerResponseError();
-        if (count.input_tokens > 16000) throw contractError('POLARIS_INPUT_TOO_LARGE', 'The selected Polaris context exceeds the safe request limit.', 413);
+        if (!count || count.object !== 'response.input_tokens' || !Number.isSafeInteger(count.input_tokens) || count.input_tokens < 0 || count.input_tokens > 16000) {
+          countUsage = providerAccounting.countReceipt({ body: countBody, response: count,
+            accounting: options.countAccounting, startedAt: countStartedAt, outcomeClass: 'failed' });
+          if (count && Number.isSafeInteger(count.input_tokens) && count.input_tokens > 16000) {
+            throw contractError('POLARIS_INPUT_TOO_LARGE', 'The selected Polaris context exceeds the safe request limit.', 413);
+          }
+          throw providerResponseError();
+        }
+        countUsage = providerAccounting.countReceipt({ body: countBody, response: count,
+          accounting: options.countAccounting, startedAt: countStartedAt, outcomeClass: 'completed' });
         await respondOptions.revalidate();
         if (JSON.stringify(assembleRequest(inputEnvelope)) !== JSON.stringify(body)) throw contractError('POLARIS_CONTEXT_CHANGED', 'The selected record changed. Refresh before asking again.', 409);
       }
@@ -352,22 +374,25 @@ function createOpenAIRuntime(options = {}) {
       response = await getClient().responses.create(body, { signal: boundary.signal });
       if (boundary.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
       if (refusalPresent(response)) {
+        const generationUsage = parseUsage(response, attemptCount, startedAt, 'refused');
         throw withInternalUsage(
           contractError('POLARIS_PROVIDER_REFUSED', 'Polaris could not answer this request safely.', 422),
-          parseUsage(response, attemptCount, startedAt, 'refused')
+          countUsage ? providerAccounting.combineUsage(countUsage, generationUsage) : generationUsage
         );
       }
       if (!response || response.status !== 'completed' || response.incomplete_details) {
+        const generationUsage = parseUsage(response, attemptCount, startedAt, 'incomplete');
         throw withInternalUsage(
           contractError('POLARIS_PROVIDER_INCOMPLETE', 'Polaris did not complete a safe structured response.', 502),
-          parseUsage(response, attemptCount, startedAt, 'incomplete')
+          countUsage ? providerAccounting.combineUsage(countUsage, generationUsage) : generationUsage
         );
       }
       let parsed;
       try { parsed = JSON.parse(responseText(response)); } catch (_error) { throw providerResponseError(); }
       if (grounded) {
+        const generationUsage = parseUsage(response, attemptCount, startedAt, 'completed');
         return Object.freeze({ response: grounded.projectResponse(parsed, inputEnvelope),
-          usage: parseUsage(response, attemptCount, startedAt, 'completed') });
+          usage: countUsage ? providerAccounting.combineUsage(countUsage, generationUsage) : generationUsage });
       }
       if (equipment) {
         let identifiers;
@@ -423,8 +448,16 @@ function createOpenAIRuntime(options = {}) {
       return Object.freeze({ response: safeResponse, usage });
     } catch (error) {
       if (error && error.code && String(error.code).startsWith('POLARIS_')) {
+        if (!response && countUsage && !error.polarisUsage) {
+          const generationUsage = Object.freeze({ inputTokens: 0, outputTokens: 0, costNanoUsd: 0,
+            latencyMs: Math.max(0, Date.now() - startedAt), attemptCount: 0,
+            outcomeClass: 'failed', providerRequestId: null });
+          throw withInternalUsage(error, providerAccounting.combineUsage(countUsage, generationUsage));
+        }
         if (response) {
-          const usage = error.polarisUsage || parseUsage(response, attemptCount, startedAt, 'failed');
+          const generationUsage = error.polarisUsage || parseUsage(response, attemptCount, startedAt, 'failed');
+          const usage = countUsage && !generationUsage.accountingVersion
+            ? providerAccounting.combineUsage(countUsage, generationUsage) : generationUsage;
           logger(Object.freeze({
             requestId: inputEnvelope.requestId,
             tenantId: opaqueTenantIdentifier(inputEnvelope.authority),
@@ -445,7 +478,14 @@ function createOpenAIRuntime(options = {}) {
       const mapped = boundary.timedOut()
         ? contractError('POLARIS_PROVIDER_TIMEOUT', 'Polaris conversation did not complete before the safe deadline.', 504)
         : preserveRetryAfter(providerFailure(error), error);
-      const usage = parseUsage(response, Math.max(1, attemptCount), startedAt, 'failed', attemptCount === 1 && [400, 401, 403, 429].includes(Number(error && error.status)));
+      const generationUsage = attemptCount === 0 && countUsage
+        ? Object.freeze({ inputTokens: 0, outputTokens: 0, costNanoUsd: 0,
+          latencyMs: Math.max(0, Date.now() - startedAt), attemptCount: 0,
+          outcomeClass: 'failed', providerRequestId: null })
+        : parseUsage(response, Math.max(1, attemptCount), startedAt, 'failed',
+          attemptCount === 1 && [400, 401, 403, 429].includes(Number(error && error.status)),
+          countUsage ? providerAccounting.MAX_GENERATION_COST_NANO_USD : RESERVED_COST_NANO_USD);
+      const usage = countUsage ? providerAccounting.combineUsage(countUsage, generationUsage) : generationUsage;
       logger(Object.freeze({
         requestId: inputEnvelope.requestId,
         tenantId: opaqueTenantIdentifier(inputEnvelope.authority),
@@ -471,29 +511,38 @@ function createOpenAIRuntime(options = {}) {
 function createProductionOpenAIRuntime(environment = process.env, options = {}) {
   const enabled = environment.POLARIS_OPENAI_ENABLED === 'true';
   const configured = enabled && Boolean(environment.OPENAI_API_KEY);
+  const countAccounting = providerAccounting.parseCountAccounting(environment);
+  let productionClient = null;
   const clientFactory = configured ? function () {
+    if (productionClient) return productionClient;
     if (typeof options.clientFactory === 'function') {
-      return options.clientFactory({
+      productionClient = options.clientFactory({
         apiKey: environment.OPENAI_API_KEY,
         maxRetries: 0,
         timeout: PROVIDER_TIMEOUT_MS,
         logLevel: 'off',
       });
+      return productionClient;
     }
     const OpenAI = require('openai');
-    return new OpenAI({
+    productionClient = new OpenAI({
       apiKey: environment.OPENAI_API_KEY,
       maxRetries: 0,
       timeout: PROVIDER_TIMEOUT_MS,
       logLevel: 'off',
     });
+    return productionClient;
   } : null;
+  const countTransport = configured && countAccounting
+    ? (body, requestOptions) => createCountTransport(clientFactory())(body, requestOptions) : null;
   return createOpenAIRuntime({
     configured,
     enabled,
     groundedEnabled: environment.POLARIS_GROUNDED_V2_ENABLED === 'true',
     clientFactory,
-    countingBlocked: true,
+    countAccounting,
+    countTransport,
+    countingBlocked: !countAccounting,
     logger: options.logger,
   });
 }

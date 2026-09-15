@@ -13,9 +13,10 @@ function createConnectedCallRouter({getPool,verifyRaw}={}){
    const verifier=verifyRaw||((raw,signature)=>{const parsed=webhook.parseSignature(signature);return parsed&&webhook.validateTimestamp(parsed.timestamp)&&webhook.validateSignature(raw,signature);});
    // No provider adapter is provisioned by mounting this authenticated boundary.
    const repository=createConnectedCallRepository(getPool);
-   const handle=createConnectedCallAdapter({...repository,verifyRaw:verifier,generate:async input=>{
-    const generate=req.app.locals.connectedCallGenerate;if(typeof generate!=='function')throw Object.assign(new Error('Call guidance is not connected. The owner can review these details.'),{statusCode:503});return generate(input);
-   }});
+   const resolveGenerate=()=>{const generate=req.app.locals.connectedCallGenerate;if(typeof generate!=='function')throw Object.assign(new Error('Call guidance is not connected. The owner can review these details.'),{statusCode:503});return generate;};
+   const handle=createConnectedCallAdapter({...repository,verifyRaw:verifier,
+    authorize:async input=>{const generate=resolveGenerate();if(typeof generate.authorize!=='function')throw Object.assign(new Error('Call guidance authority is unavailable.'),{statusCode:503});return generate.authorize(input);},
+    generate:async input=>resolveGenerate()(input)});
    return res.json(await Promise.race([handle(req.body,req.get('X-Retell-Signature'),{signal:controller.signal}),timeout]));
   }catch(e){return res.status([400,403,409,413,429,503].includes(e.statusCode)?e.statusCode:503).json({status:'unavailable',message:'Call guidance is unavailable. Ask the owner to review the missing job details.'});}finally{clearTimeout(timer);controller.abort();req.removeListener('aborted',abort);res.removeListener('close',abort);}
  });return router;

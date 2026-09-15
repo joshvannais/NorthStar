@@ -32,7 +32,7 @@ function createHandler({ boundary, getToken, repository, loadContext, getPool, s
           if (row.reason === 'session_limit') fail('POLARIS_DEMO_SESSION_LIMIT', 'This demo session has used its conversation allowance. Your saved records and scenarios remain available.', 429);
           fail('POLARIS_RATE_LIMIT', 'Demo conversation is temporarily busy or at its usage limit. Please try later.', 429);
         }
-        const reconcile = usage => getPool().query('SELECT public.demo_polaris_provider_reconcile($1,$2,$3)', [row.id, token.tokenHash, usage]);
+        const reconcile = usage => getPool().query('SELECT public.demo_polaris_provider_reconcile($1,$2,$3)', [row.id, token.tokenHash, require('./providerAccounting').reconciliationUsage(usage)]);
         try {
           const result = await runtime.respond(envelope, { signal, revalidate: async () => {
             if (!require('./connectedPolicy').generationEnabled || c.digest(await current()) !== basis) fail('POLARIS_CONTEXT_CHANGED', 'The demo record changed. Refresh before asking again.', 409);

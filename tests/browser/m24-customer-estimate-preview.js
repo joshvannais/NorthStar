@@ -43,6 +43,9 @@ const boundaryEstimate = {
 
 const requests = [];
 const versionRequests = [];
+const deliveryRequests = [];
+let issuedReceipt = null;
+let deliveryLinks = [];
 const failures = { pdf:0, brand:0 };
 const dependencyRequests = { pdf:0, brand:0 };
 const app = express();
@@ -70,8 +73,15 @@ app.get('/api/demo/command-center/estimates/:estimateId/customer-estimate-previe
   requests.push(req.path);
   res.json({ success:true, data:req.params.estimateId === boundaryId ? boundaryEstimate : estimate });
 });
-app.get('/api/demo/command-center/estimates/:estimateId/customer-estimate-versions',(req,res)=>res.json({success:true,data:{current:null,history:[],total:0,truncated:false}}));
-app.post('/api/demo/command-center/estimates/:estimateId/customer-estimate-versions',(req,res)=>{versionRequests.push({intent:req.get('X-NorthStar-Demo-Intent'),revision:req.get('X-NorthStar-Demo-Revision'),body:req.body});res.status(201).json({success:true,data:{replayed:false,receipt:{id:'20000000-0000-4000-8000-000000000001',revision:1,previousId:null,actorName:'Demo reviewer',reason:req.body.reason,approvalPin:{id:'30000000-0000-4000-8000-000000000001',digest:'a'.repeat(64)},document:{...estimate,state:'issued',notice:'Fictional demo estimate for product evaluation. No customer was contacted.'},createdAt:'2026-09-15T13:00:00.000Z'}}});});
+app.get('/api/demo/command-center/estimates/:estimateId/customer-estimate-versions',(req,res)=>res.json({success:true,data:{current:issuedReceipt,history:issuedReceipt?[issuedReceipt]:[],total:issuedReceipt?1:0,truncated:false}}));
+app.post('/api/demo/command-center/estimates/:estimateId/customer-estimate-versions',(req,res)=>{versionRequests.push({intent:req.get('X-NorthStar-Demo-Intent'),revision:req.get('X-NorthStar-Demo-Revision'),body:req.body});issuedReceipt={id:'20000000-0000-4000-8000-000000000001',revision:1,previousId:null,actorName:'Demo reviewer',reason:req.body.reason,approvalPin:{id:'30000000-0000-4000-8000-000000000001',digest:'a'.repeat(64)},document:{...estimate,state:'issued',notice:'Fictional demo estimate for product evaluation. No customer was contacted.',capabilities:{downloadPdf:true,downloadImage:true,accept:true,askQuestion:true}},createdAt:'2026-09-15T13:00:00.000Z'};res.status(201).json({success:true,data:{replayed:false,receipt:issuedReceipt}});});
+app.get('/api/demo/command-center/estimates/:estimateId/customer-estimate-links',(req,res)=>res.json({success:true,data:{links:deliveryLinks,total:deliveryLinks.length,truncated:false}}));
+app.post('/api/demo/command-center/estimates/:estimateId/customer-estimate-links',(req,res)=>{deliveryRequests.push({intent:req.get('X-NorthStar-Demo-Intent'),body:req.body});const link={id:'40000000-0000-4000-8000-000000000001',versionId:issuedReceipt.id,createdAt:'2026-09-15T13:02:00.000Z',expiresAt:'2026-09-16T13:02:00.000Z',status:'active',accepted:null,questions:[]};deliveryLinks=[link];res.status(201).json({success:true,data:{link,urlPath:'/estimate/test-customer-token',replayed:false}});});
+app.post('/api/demo/command-center/estimates/:estimateId/customer-estimate-links/:linkId/revoke',(req,res)=>{deliveryLinks=deliveryLinks.map(link=>({...link,status:'revoked'}));res.json({success:true,data:{links:deliveryLinks,total:deliveryLinks.length,truncated:false}});});
+app.get('/api/public/customer-estimates/test-customer-token',(req,res)=>{const link=deliveryLinks[0];if(!link||link.status==='revoked')return res.status(410).json({success:false,error:{message:'This estimate link is no longer available.'}});res.json({success:true,data:{mode:'demo',linkId:link.id,versionId:link.versionId,document:issuedReceipt.document,expiresAt:link.expiresAt,accepted:link.accepted}});});
+app.post('/api/public/customer-estimates/test-customer-token/accept',(req,res)=>{deliveryLinks[0]={...deliveryLinks[0],status:'accepted',accepted:{customerName:req.body.customerName,createdAt:'2026-09-15T13:04:00.000Z'}};res.status(201).json({success:true,data:{kind:'accepted',createdAt:'2026-09-15T13:04:00.000Z',replayed:false}});});
+app.post('/api/public/customer-estimates/test-customer-token/questions',(req,res)=>{deliveryLinks[0].questions.push({id:'50000000-0000-4000-8000-000000000001',customerName:req.body.customerName,replyTo:req.body.replyTo,message:req.body.message,createdAt:'2026-09-15T13:05:00.000Z'});res.status(201).json({success:true,data:{kind:'question',createdAt:'2026-09-15T13:05:00.000Z',replayed:false}});});
+app.get('/estimate/test-customer-token',(req,res)=>res.sendFile(path.resolve(__dirname,'../../public/customer-estimate.html')));
 app.get(['/', '/boundary', '/not-ready'], (req, res) => {
   const id = req.path === '/boundary' ? boundaryId : ordinaryId;
   const commercial = req.path === '/not-ready' ? `{approvalState:'not_approved',sources:{pricingCurrent:false}}` : `{approvalState:'commercial_approved',customerSummary:{},binding:{id:'30000000-0000-4000-8000-000000000001',digest:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'},current:{current:true}}`;
@@ -107,7 +117,7 @@ let browser;
       assert.equal(await entry.isEnabled(),true);
       assert.equal(await page.getByText('Ready',{exact:true}).count(),1);
       await page.screenshot({ path:path.join(output, test.name + '-entry.png'), fullPage:false });
-      const launch = page.getByRole('button', { name:'Preview Customer Estimate' });
+      const launch = entry;
       await entry.click();
       await page.getByRole('dialog', { name:'Customer Estimate Preview' }).waitFor();
       const dialog = page.getByRole('dialog', { name:'Customer Estimate Preview' });
@@ -163,11 +173,10 @@ let browser;
       const page = await context.newPage();
       await page.goto(origin + '/not-ready');
       const before = requests.length;
-      const continueButton = page.getByRole('button', { name:'Continue Estimate' });
       const entry=page.getByRole('button',{name:'Estimate, needs review'});
       assert.equal(await entry.isVisible(),true);
       assert.equal(await entry.isEnabled(),true);
-      assert.equal(await continueButton.isVisible(), true);
+      assert.equal(await page.getByRole('button', { name:'Finish Estimate' }).count(), 0);
       await entry.click();
       assert.equal(await page.locator('#cdEstimateDetails').evaluate(node => node.open), true);
       assert.equal(await page.locator('#cdPreparedAdoption').evaluate(node => node.open), true);
@@ -176,7 +185,7 @@ let browser;
       await context.close();
     }
     {
-      const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage();await page.goto(origin+'/');const issue=page.getByRole('button',{name:'Issue Estimate'});await issue.waitFor();await issue.click();await page.getByLabel('Reason for issuing').fill('Owner approved customer-facing estimate');await page.getByLabel(/I reviewed the customer-facing scope/).check();await page.getByRole('button',{name:'Confirm Issue'}).click();let dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'View Issued Estimate'}).count(),1);assert.deepEqual(versionRequests,[{intent:'customer-estimate-issue',revision:'7',body:{reason:'Owner approved customer-facing estimate',confirmed:true,confirmationVersion:'customer-estimate-issue-v1'}}]);const issuedPdfEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download PDF'}).click();const issuedPdf=await issuedPdfEvent,issuedPdfPath=path.join(output,'issued.pdf');await issuedPdf.saveAs(issuedPdfPath);assert.ok(fs.readFileSync(issuedPdfPath).subarray(0,5).toString().startsWith('%PDF-'));const issuedImageEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download image'}).click();const issuedImage=await issuedImageEvent,issuedImagePath=path.join(output,'issued-download.png');await issuedImage.saveAs(issuedImagePath);assert.equal(pngSize(issuedImagePath).width,1600);await page.screenshot({path:path.join(output,'issued-mobile.png'),fullPage:true});await page.keyboard.press('Escape');const previewsBeforeIssuedEntry=requests.length;await page.getByRole('button',{name:'Estimate, issued'}).click();dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(requests.length,previewsBeforeIssuedEntry);ledger.cases.push({name:'explicit-issue-and-view',immutableVersion:true,issuedTopActionOpensExactVersion:true,issuedTopActionPreviewRequests:0,issuedPdfAndImage:true,universalImageWidth:1600,noDeliveryClaim:true});await context.close();
+      const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage();await page.goto(origin+'/');const issue=page.getByRole('button',{name:'Issue Estimate'});await issue.waitFor();await issue.click();await page.getByLabel(/I reviewed the customer-facing scope/).check();await page.getByRole('button',{name:'Confirm Issue'}).click();let dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'Estimate, issued'}).count(),1);assert.deepEqual(versionRequests,[{intent:'customer-estimate-issue',revision:'7',body:{reason:'Owner confirmed the customer-facing estimate',confirmed:true,confirmationVersion:'customer-estimate-issue-v1'}}]);const issuedPdfEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download PDF'}).click();const issuedPdf=await issuedPdfEvent,issuedPdfPath=path.join(output,'issued.pdf');await issuedPdf.saveAs(issuedPdfPath);assert.ok(fs.readFileSync(issuedPdfPath).subarray(0,5).toString().startsWith('%PDF-'));const issuedImageEvent=page.waitForEvent('download');await dialog.getByRole('button',{name:'Download image'}).click();const issuedImage=await issuedImageEvent,issuedImagePath=path.join(output,'issued-download.png');await issuedImage.saveAs(issuedImagePath);assert.equal(pngSize(issuedImagePath).width,1600);await page.screenshot({path:path.join(output,'issued-mobile.png'),fullPage:true});await page.keyboard.press('Escape');const previewsBeforeIssuedEntry=requests.length;await page.getByRole('button',{name:'Estimate, issued'}).click();dialog=page.getByRole('dialog',{name:'Customer Estimate Preview'});await dialog.waitFor();assert.equal(await dialog.getByText('Issued',{exact:true}).count(),1);assert.equal(requests.length,previewsBeforeIssuedEntry);await page.keyboard.press('Escape');await page.getByRole('button',{name:'Share Customer Estimate'}).click();await page.getByLabel('Customer estimate link').waitFor();assert.deepEqual(deliveryRequests,[{intent:'customer-estimate-delivery',body:{versionId:issuedReceipt.id,expiresInDays:1,confirmed:true,confirmationVersion:'customer-estimate-delivery-v1'}}]);const customer=await context.newPage();await customer.goto(origin+'/estimate/test-customer-token');await customer.getByRole('heading',{name:'Windsor Tree Company'}).waitFor();assert.equal(await customer.getByRole('button',{name:'Accept Estimate'}).count(),1);assert.equal(await customer.getByRole('button',{name:'Ask a Question'}).count(),1);await customer.getByRole('button',{name:'Accept Estimate'}).click();await customer.locator('#acceptForm').getByLabel('Your full name').fill('Jordan Blake');await customer.getByLabel(/I reviewed this estimate and authorize/).check();await customer.getByRole('button',{name:'Confirm Acceptance'}).click();await customer.getByText(/Acceptance recorded/).waitFor();await customer.getByRole('button',{name:'Ask a Question'}).click();const questionForm=customer.locator('#questionForm');await questionForm.getByLabel('Your name').fill('Jordan Blake');await questionForm.getByLabel('Email or phone').fill('jordan@example.com');await questionForm.getByLabel('Your question').fill('Can we confirm the work date?');await questionForm.getByRole('button',{name:'Send Question'}).click();await customer.getByText(/question was sent/i).waitFor();assert.equal(await customer.locator('.customer-estimate-document button').count(),0);await customer.screenshot({path:path.join(output,'interactive-customer-mobile.png'),fullPage:true});ledger.cases.push({name:'explicit-issue-share-and-view',immutableVersion:true,issuedTopActionOpensExactVersion:true,issuedTopActionPreviewRequests:0,issuedPdfAndImage:true,universalImageWidth:1600,interactiveLink:true,ownerQuestionHandoff:true,staticDocumentHasNoActions:true});await context.close();
     }
     for (const recovery of [
       {kind:'pdf',button:'Download PDF',message:'The PDF could not be prepared. Try again.',extension:'.pdf'},
@@ -185,7 +194,7 @@ let browser;
       const context = await browser.newContext({ viewport:{width:900,height:780}, acceptDownloads:true });
       const page = await context.newPage();
       await page.goto(origin + '/');
-      await page.getByRole('button', { name:'Preview Customer Estimate' }).click();
+      await page.getByRole('button', { name:'Estimate, issued' }).click();
       const dialog = page.getByRole('dialog', { name:'Customer Estimate Preview' });
       await dialog.waitFor();
       await dialog.locator('img.customer-estimate-mark').evaluate(node => node.complete && node.naturalWidth > 0);
@@ -204,7 +213,7 @@ let browser;
       ledger.cases.push({name:'transient-' + recovery.kind + '-retry',recovered:true,requests:2});
       await context.close();
     }
-    assert.deepEqual(requests, [ordinaryId, ordinaryId, boundaryId, ordinaryId, ordinaryId].map(id => '/api/demo/command-center/estimates/' + id + '/customer-estimate-preview'));
+    assert.deepEqual(requests, [ordinaryId, ordinaryId, boundaryId].map(id => '/api/demo/command-center/estimates/' + id + '/customer-estimate-preview'));
     ledger.demoRouteRequests = requests;
     ledger.pass = true;
     fs.writeFileSync(path.join(output, 'RESULT.json'), JSON.stringify(ledger, null, 2));

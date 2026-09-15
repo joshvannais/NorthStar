@@ -4,6 +4,10 @@ Objective: Make Polaris own the complete estimating experience.
 
 This additive authority reconciliation preserves the founder's original nine phases. The initial package was an architecture-only slice of Phase 1. Subsequent bounded runtime adoptions are recorded below; none completes Phase 1 or any later phase. There is no independently approved numbered implementation-part count. Existing authorities and historical evidence remain unchanged.
 
+## Part 8 Slice 3 — Customer estimate delivery
+
+Implemented on its release branch. Owners can reach the estimate from the first customer-card action, issue an immutable customer version, and create an expiring interactive link. Customers can accept or ask a question; PDF and image exports remain clean, button-free documents. Detailed evidence and editing surfaces are collapsed by default. See [the Slice 3 authority](../MISSION_24_PART8_SLICE3_CUSTOMER_ESTIMATE_DELIVERY.md).
+
 ## Original phases and acceptance direction
 
 | Phase | Original name | Required direction; future implementation unless stated otherwise |

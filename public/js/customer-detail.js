@@ -288,7 +288,7 @@ window.CustomerDetail = (function() {
     var range = document.createElement('div'); range.id = 'cdPolRange'; range.className = 'drawer-original-range'; priceBox.appendChild(range);
     var confidenceNode = $('cdPolConfidence'), actionNode = $('cdPolAction');
     $('cdPolarisInsight').querySelector('.drawer-polaris-grid').replaceChildren(priceBox);
-    var analysis = panel.querySelector('.drawer-polaris-analysis'); analysis.open = true;
+    var analysis = panel.querySelector('.drawer-polaris-analysis'); analysis.open = false;
     analysis.querySelector('summary').textContent = 'Scope Details';
     var scopeSection = $('cdDescription').parentElement; scopeSection.querySelector('h4').remove();
     var travelSection = $('cdWorkScheduling').parentElement; travelSection.querySelector('h4').remove();
@@ -325,10 +325,11 @@ window.CustomerDetail = (function() {
     var workTitle=document.createElement('summary');workTitle.textContent='Schedule & Work';workArea.append(workTitle,$('cdExecutionSection'));
     var activityArea=document.createElement('details');activityArea.id='cdCustomerActivityArea';activityArea.className='drawer-section drawer-primary-disclosure';
     var activityTitle=document.createElement('summary');activityTitle.textContent='Activity';activityArea.append(activityTitle,$('cdConversationHistorySection'),$('cdTranscriptDisclosure'),contactDetails);
-    panel.append(attention,nextAction);
+    analysis.appendChild(attention);panel.appendChild(nextAction);
     priceDetails.appendChild($('cdCapellaReview'));
     content.prepend(actionSection,estimateHub,polarisSection,priceDetails,workArea,activityArea);
     $('cdContextSummary').hidden = true;
+    [analysis,priceDetails,workArea,activityArea].forEach(function(disclosure){disclosure.addEventListener('toggle',function(){if(!disclosure.open)return;[analysis,priceDetails,workArea,activityArea].forEach(function(other){if(other!==disclosure)other.open=false;});});});
 
     // Event bindings
     $('cdBtnContact').addEventListener('click', function() {

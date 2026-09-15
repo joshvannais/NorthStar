@@ -306,7 +306,7 @@ function demoIntent(path) {
       const history = await read('/customer-estimate-versions');
       assert.equal(history.total, 1);
       assert.equal(history.current.id, issue.receipt.id);
-      trace.evidence.customerDocument = { reference:customerPreview.reference, total:customerPreview.total, privateFieldsExcluded:true, immutableRevision:issue.receipt.revision };
+      trace.evidence.customerDocument = { reference:customerPreview.reference, total:customerPreview.total, privateFieldsExcluded:true, immutableRevision:issue.receipt.revision, versionId:issue.receipt.id };
       trace.final = { pins:review.pins, selectedRevision:review.selectedRevision, financialCosts:review.financialCosts, customerSummary:summary };
       result.cases.push(context.name + ' traced inputs through costs, price, policy, approval, risk, preview, and immutable issue');
       return trace;
@@ -320,6 +320,19 @@ function demoIntent(path) {
     assert.equal(demo.riskArithmetic.base.remaining, paid.riskArithmetic.base.remaining);
     assert.equal(demo.customerDocument.total, paid.customerDocument.total);
     result.cases.push('paid and isolated demo produce the same arithmetic and customer-safe output boundaries');
+
+    for (const context of contexts) {
+      const evidence=result.traces[context.name].evidence.customerDocument,key=crypto.randomUUID(),linkHeaders={...context.headers,'Idempotency-Key':key};
+      if(context.name==='demo')linkHeaders['X-NorthStar-Demo-Intent']='customer-estimate-delivery';
+      let response=await context.requester.post(context.route+'/customer-estimate-links').set(linkHeaders).send({versionId:evidence.versionId,expiresInDays:context.name==='demo'?1:14,confirmed:true,confirmationVersion:'customer-estimate-delivery-v1'});
+      assert.equal(response.status,201,JSON.stringify(response.body));const originalPath=response.body.data.urlPath;await new Promise(resolve=>setTimeout(resolve,40));response=await context.requester.post(context.route+'/customer-estimate-links').set(linkHeaders).send({versionId:evidence.versionId,expiresInDays:context.name==='demo'?1:14,confirmed:true,confirmationVersion:'customer-estimate-delivery-v1'});assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.data.replayed,true);assert.equal(response.body.data.urlPath,originalPath);const token=decodeURIComponent(originalPath.split('/').pop());
+      response=await request(fixture.app).get('/api/public/customer-estimates/'+token).set('Host','localhost');assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.data.document.reference,evidence.reference);
+      const publicHeaders={Host:'localhost',Origin:'http://localhost','Idempotency-Key':crypto.randomUUID()};response=await request(fixture.app).post('/api/public/customer-estimates/'+token+'/accept').set(publicHeaders).send({customerName:'Demo Customer',confirmed:true,confirmationVersion:'customer-estimate-accept-v1'});assert.equal(response.status,201,JSON.stringify(response.body));
+      publicHeaders['Idempotency-Key']=crypto.randomUUID();response=await request(fixture.app).post('/api/public/customer-estimates/'+token+'/questions').set(publicHeaders).send({customerName:'Demo Customer',replyTo:'customer@example.test',message:'Please confirm the proposed start date.',confirmed:true,confirmationVersion:'customer-estimate-question-v1'});assert.equal(response.status,201,JSON.stringify(response.body));
+      response=await context.requester.get(context.route+'/customer-estimate-links').set(context.headers);assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.data.links[0].status,'accepted');assert.equal(response.body.data.links[0].questionCount,1);
+      const revokeHeaders={...context.headers,'Idempotency-Key':crypto.randomUUID()};if(context.name==='demo')revokeHeaders['X-NorthStar-Demo-Intent']='customer-estimate-delivery';response=await context.requester.post(context.route+'/customer-estimate-links/'+response.body.data.links[0].id+'/revoke').set(revokeHeaders).send({});assert.ok([200,201].includes(response.status),JSON.stringify(response.body));assert.equal((await request(fixture.app).get('/api/public/customer-estimates/'+token).set('Host','localhost')).status,410);
+      result.cases.push(context.name+' customer link, acceptance, question handoff, owner status and revocation work end to end');
+    }
 
     const demoLedger = await fixture.ownerPool.query(
       "SELECT operation FROM demo_command_center_mutations WHERE operation='customer_estimate_issue' ORDER BY created_at DESC LIMIT 1"

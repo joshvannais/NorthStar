@@ -59,7 +59,8 @@ BEGIN
         ON assignment.organization_id=execution.organization_id
        AND assignment.id=execution.assignment_id
      WHERE execution.organization_id=organization_id_value
-       AND execution.id=execution_id_value;
+       AND execution.id=execution_id_value
+       AND assignment.target_state='assigned';
   END IF;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Job control authority was not found'

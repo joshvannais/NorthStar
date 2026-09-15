@@ -304,6 +304,46 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
       .set('Host', 'northstar.test').set('Cookie', tokenCookie(validToken)).expect(200);
     expect(validRead.body.data.graphs).toHaveLength(3);
 
+    const releasedTreeToken = issueToken(new Date());
+    const releasedTreeState = createInitialDemoState(releasedTreeToken.tenantId, releasedTreeToken.issuedAt, {
+      seed: require('../../src/commandCenter/demoRepository').workspaceSeedForToken(releasedTreeToken.tokenHash),
+    });
+    const releasedTreeGraph = require('../../src/commandCenter/workspace').buildSimulatedGraph({
+      tenantId: releasedTreeState.workspace.tenant.id,
+      workspace: releasedTreeState.workspace,
+      key: 'released-tree-service-label-mismatch',
+      createdAt: new Date(releasedTreeToken.issuedAt.getTime() + 1000),
+      scenarioSelection: {
+        business: 'growing_residential', service: 'tree', intent: 'tree_removal', urgency: 'this_week',
+        context: 'new_customer', scheduling: 'flexible', outcome: 'estimate_ready',
+      },
+    });
+    releasedTreeGraph.polaris.snapshot.service.label = 'Tree removal';
+    releasedTreeGraph.polaris.syntheticCalculation.input.businessProfile.services[0].name = 'Tree removal';
+    releasedTreeGraph.polaris.snapshotDigest = require('../../src/services/businessProfileAdapter').sha256(
+      releasedTreeGraph.polaris.snapshot
+    );
+    resignGraph(releasedTreeGraph);
+    releasedTreeState.graphs.unshift(releasedTreeGraph);
+    await insertPersistedDemoState(pool, releasedTreeToken, releasedTreeState, {
+      revision: 7, simulationCount: 1, mutationCount: 1, lastSimulatedAt: releasedTreeToken.issuedAt,
+    });
+    await pool.query(
+      `INSERT INTO demo_command_center_mutations
+         (session_id, idempotency_hash, operation, request_digest, response_revision, response_digest)
+       VALUES ($1,$2,'simulate_lead',$3,7,$4)`,
+      [releasedTreeToken.sessionId, '4'.repeat(64), '5'.repeat(64), '6'.repeat(64)]
+    );
+    const repairedTreeRead = await request(app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(releasedTreeToken)).expect(200);
+    expect(repairedTreeRead.body.data.integrity.revision).toBe(8);
+    expect(repairedTreeRead.body.data.session.simulationCount).toBe(1);
+    expect(repairedTreeRead.body.data.graphs[0].polaris.snapshot.service.label).toBe('Tree service');
+    expect((await pool.query(
+      'SELECT count(*)::int AS count FROM demo_command_center_mutations WHERE session_id = $1',
+      [releasedTreeToken.sessionId]
+    )).rows[0].count).toBe(1);
+
     const corruptGraphToken = issueToken(new Date());
     const corruptGraphState = createInitialDemoState(corruptGraphToken.tenantId, corruptGraphToken.issuedAt, {
       seed: require('../../src/commandCenter/demoRepository').workspaceSeedForToken(corruptGraphToken.tokenHash),

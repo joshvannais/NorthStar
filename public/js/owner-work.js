@@ -76,13 +76,12 @@
     }
     function addEvidenceChoices(target){target.append(node('p','Choose Supporting Evidence For A Resolution'));latest(model.field).forEach(function(r){checkbox(target,'support-'+r.id,r.document.note||r.document.observation||'Checklist',false);});}
     bodyFields();if(selectAction)selectAction.addEventListener('change',bodyFields);
-    field(fields,'reason','Reason For This Update','textarea','');
     var confirmation=checkbox(form,'confirmed','I Reviewed These Details And Want To Save This Work Update.',false);
     var error=node('p');error.className='owner-work-error';error.setAttribute('role','alert');form.append(error);
     var actions=node('div');actions.className='owner-work-actions';var saveButton=node('button','Save Reviewed Update');saveButton.type='submit';saveButton.className='operations-button operations-button-primary';var cancel=button('Cancel',close);actions.append(saveButton,cancel);form.append(actions);
     form.addEventListener('input',function(e){if(e.target!==confirmation)confirmation.checked=false;});
     form.addEventListener('submit',function(e){e.preventDefault();if(!confirmation.checked){error.textContent='Review And Confirm The Update Before Saving.';confirmation.focus();return;}
-      try{var values=new FormData(form),get=function(k){return String(values.get(k)||'').trim();};var body=Object.assign(pins(['start','pause','resume'].includes(family)),{reason:get('reason')});var domain=['start','pause','resume'].includes(family)?'transition':family==='propose_completion'||family==='withdraw_completion'?'completion':family;
+      try{var values=new FormData(form),get=function(k){return String(values.get(k)||'').trim();};var savedReasons={initialize:'Open the assigned work record.',start:'Start the assigned job.',pause:'Stop the assigned job.',resume:'Resume the assigned job.',progress:'Record the reviewed field update.',evidence:'Record the reviewed job evidence.',propose_completion:'Submit the job for completion review.',withdraw_completion:'Withdraw the completion proposal.'};var body=Object.assign(pins(['start','pause','resume'].includes(family)),{reason:savedReasons[family]||'Record the reviewed work update.'});var domain=['start','pause','resume'].includes(family)?'transition':family==='propose_completion'||family==='withdraw_completion'?'completion':family;
         if(domain==='transition')body.action=family;
         if(domain==='progress'){
           body.action=kind;body.performerProfileId=get('performer');if(record)Object.assign(body,{recordId:record.id,expectedRecordRevision:record.revision,expectedRecordDigest:record.digest});

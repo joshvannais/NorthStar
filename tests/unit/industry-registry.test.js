@@ -17,7 +17,7 @@ test('six coherent ordinary tree families are deterministic, canonical and do no
  const g=graph('family-'+i,selection),id=g.polaris.snapshot.service.scope.jobType;
  expect(graph('family-'+i,selection)).toEqual(g);found.set(id,g);
  expect(g.polaris.snapshot).toEqual(calculateCanonicalPolaris(g.polaris.syntheticCalculation.input));
- expect(g.polaris.snapshot.knownDirectCosts).toBeNull();expect(g.polaris.snapshot.actualCrewAssignment).toBeNull();expect(g.polaris.snapshot.travel.distanceMiles).toBeNull();
+ expect(g.polaris.snapshot.knownDirectCosts).not.toBeNull();expect(g.polaris.snapshot.netProfit).not.toBeNull();expect(g.polaris.snapshot.actualCrewAssignment).toBeNull();expect(g.polaris.snapshot.travel.distanceMiles).not.toBeNull();
  expect(g.work.assignedTo).toBeNull();expect(g.polaris.snapshot.service.scope.assessmentQuestions.length).toBeGreaterThan(2);
  expect(g.communication.transcript.some(t=>t.text===intelligence.packs.tree.operations[id].statement)).toBe(true);
  expect(g.polaris.facts.find(f=>f.variable==='jobType').normalizedValue).toBe(id);

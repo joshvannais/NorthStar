@@ -316,8 +316,16 @@
 .demo-status-booked { color: #065f46 !important; background: #ecfdf5; }
 
 .demo-bottom-grid { grid-template-columns: 1fr 1fr; margin-bottom: 20px; }
-.demo-coach-panel p:last-child, .demo-status-panel p { margin: 12px 0 0; line-height: 1.65; }
-.demo-status-panel { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.demo-coach-panel>h2, .demo-status-panel h2 { margin: 0 0 20px; }
+.demo-coach-panel>p:not(.demo-panel-kicker), .demo-status-panel #commandCenterWorkspaceNote { margin: 0; line-height: 1.6; }
+.demo-coach-evidence { margin-top:16px!important;padding-top:14px;border-top:1px solid var(--theme-border);color:var(--theme-muted);font-size:13px; }
+.demo-coach-action { display:inline-flex;margin-top:18px;color:var(--brand-700);font-weight:750;text-decoration:none; }
+.demo-coach-action:hover { text-decoration:underline;text-underline-offset:4px; }
+.demo-status-panel { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.demo-workspace-pulse { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0 0; }
+.demo-workspace-pulse div { padding:12px 14px;border:1px solid var(--theme-border);border-radius:12px;background:var(--theme-surface-soft); }
+.demo-workspace-pulse dt { color:var(--theme-muted);font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase; }
+.demo-workspace-pulse dd { margin:5px 0 0;color:var(--theme-text);font-size:1.1rem;font-weight:800;font-variant-numeric:tabular-nums; }
 .demo-live-status { flex: 0 0 auto; gap: 8px; padding: 10px 12px; color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }
 .demo-live-status i { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,0.13); }
 
@@ -383,6 +391,7 @@
   .demo-polaris-metrics { grid-template-columns: 1fr; }
   .demo-chart-summary { flex-direction: column; gap: 12px; }
   .demo-status-panel { align-items: flex-start; flex-direction: column; }
+  .demo-workspace-pulse { grid-template-columns:1fr 1fr; }
   .demo-dashboard-footer { align-items: flex-start; flex-direction: column; padding-bottom: 82px; }
 }
 

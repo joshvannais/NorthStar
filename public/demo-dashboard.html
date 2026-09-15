@@ -14,12 +14,12 @@
   <script src="/js/auth-session.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
-  <link rel="stylesheet" href="/css/demo-dashboard.css">
+  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m24-tree-intelligence-20260915">
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
   <link rel="stylesheet" href="/css/scheduling-approval.css">
   <link rel="icon" href="/assets/logo.png">
-  <link rel="stylesheet" href="/css/site-professionalism.css">
+  <link rel="stylesheet" href="/css/site-professionalism.css?v=m24-tree-intelligence-20260915">
   <link rel="stylesheet" href="/css/pre-m23-p3.css">
   <link rel="stylesheet" href="/css/execution-links.css">
   <script src="/js/execution-links.js"></script>
@@ -156,12 +156,20 @@
               <p class="demo-panel-kicker">NorthStar Coach</p>
               <h2>Next best operational move</h2>
               <p id="commandCenterCoach">Waiting for current role-authorized records.</p>
+              <p class="demo-coach-evidence" id="commandCenterCoachEvidence"></p>
+              <a class="demo-coach-action" id="commandCenterCoachAction" href="/dashboard/leads" hidden>Open record</a>
             </article>
             <article class="demo-panel demo-status-panel">
               <div>
                 <p class="demo-panel-kicker">Workspace context</p>
                 <h2 id="commandCenterWorkspaceStatus">Loading current state</h2>
                 <p id="commandCenterWorkspaceNote">No provider or readiness claim is inferred from this view.</p>
+                <dl class="demo-workspace-pulse" id="commandCenterWorkspacePulse">
+                  <div><dt>Records</dt><dd id="commandCenterPulseRecords">—</dd></div>
+                  <div><dt>Attention</dt><dd id="commandCenterPulseAttention">—</dd></div>
+                  <div><dt>Scheduled</dt><dd id="commandCenterPulseScheduled">—</dd></div>
+                  <div><dt>Estimate value</dt><dd id="commandCenterPulseValue">—</dd></div>
+                </dl>
               </div>
               <span class="demo-live-status" id="commandCenterStatePill"><i aria-hidden="true"></i>Loading</span>
             </article>
@@ -196,12 +204,12 @@
   <script src="/js/commercial-terms.js"></script>
   <script src="/js/prepared-estimate.js"></script>
   <script src="/js/customer-estimate-preview.js"></script>
-  <script src="/js/customer-detail.js"></script>
+  <script src="/js/customer-detail.js?v=m24-tree-intelligence-20260915"></script>
   <script src="/js/polaris-card.js"></script>
   <script src="/js/scheduling-time-contract.js"></script>
   <script src="/js/display-projection.js"></script>
   <script src="/js/scheduling-approval-ui.js"></script>
-  <script src="/js/command-center-page.js"></script>
+  <script src="/js/command-center-page.js?v=m24-tree-intelligence-20260915"></script>
   <script src="/js/nav-component.js?v=demo-nav-10-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

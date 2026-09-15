@@ -645,6 +645,7 @@ function buildSimulatedGraph(input) {
     scenario.job.type = selectedJobType;
     const registeredScope=industryIntelligence.scopeFor(selection.service,selectedJobType);
     if(registeredScope)scenario.job.scope=registeredScope;
+    if(selection.service==='tree')Object.assign(scenario.job.scope,require('./demoTreeBusinessProfiles').scenarioFactors(seed,selectedJobType));
     scenario.job.scope.jobType = selectedJobType;
     if (fictionalCustomer) {
       scenario.customer.phone = fictionalCustomer.phone;

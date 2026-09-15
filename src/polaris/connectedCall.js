@@ -10,8 +10,8 @@ function denied(message = 'Call guidance is unavailable for this call.', status 
 // verifyRaw is the provider's raw-body signature verifier, never an account ID
 // supplied by the call. loadCurrent resolves current integration ownership and
 // exact agent/session identity and returns only caller-authorized published facts.
-function createConnectedCallAdapter({ verifyRaw, loadCurrent, generate, record, readRecorded = async () => null, clock = Date.now }) {
-  if ([verifyRaw, loadCurrent, generate, record].some(fn => typeof fn !== 'function')) throw new TypeError('Call guidance requires authenticated authority adapters.');
+function createConnectedCallAdapter({ verifyRaw, loadCurrent, authorize, generate, record, readRecorded = async () => null, clock = Date.now }) {
+  if ([verifyRaw, loadCurrent, authorize, generate, record].some(fn => typeof fn !== 'function')) throw new TypeError('Call guidance requires authenticated authority adapters.');
   return async function handle(rawBody, signature, { signal } = {}) {
     const check = () => { if(signal?.aborted) denied('Call guidance timed out. Ask the owner to review the details.',503); };
     check();
@@ -31,6 +31,7 @@ function createConnectedCallAdapter({ verifyRaw, loadCurrent, generate, record, 
         before.audience !== 'caller' || before.expiresAt <= clock() || before.state !== 'active') denied();
     const basis = digest(before);
     const key = digest({ identity, question: body.args.question, basis });
+    await authorize({ identity, context: before, basis, signal });check();
     const cached = await readRecorded({identity,key,basis});check();
     const raw = cached ? {questions:cached.questions,explanations:cached.explanations,proposalIds:[],requestedCard:'none'} : await generate({ question: body.args.question, context: before, signal });
     check();
@@ -41,6 +42,7 @@ function createConnectedCallAdapter({ verifyRaw, loadCurrent, generate, record, 
     if (!after || after.expiresAt <= clock() || digest(after) !== basis) {
       denied('The call details changed. Check the current details before continuing.', 409);
     }
+    await authorize({ identity, context: after, basis, signal });check();
     const response = {
       status: 'provisional', questions: answer.questions, explanations: answer.explanations,
       sourceReferences: before.evidence.filter(e => [...answer.questions, ...answer.explanations].some(item => item.evidenceIds.includes(e.id))),
@@ -50,7 +52,7 @@ function createConnectedCallAdapter({ verifyRaw, loadCurrent, generate, record, 
     // record must recheck the same basis under the existing voice-session lock.
     // An immutable receipt is not permission to return revoked knowledge later.
     check();await record({ identity, key, basis, requestDigest: digest(body.args), response });
-    check();
+    check();await authorize({ identity, context: after, basis, signal });check();
     return response;
   };
 }

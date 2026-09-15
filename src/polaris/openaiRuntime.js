@@ -340,7 +340,7 @@ function createOpenAIRuntime(options = {}) {
     let response = null;
     let countUsage = null;
     try {
-      if (options.countTransport) {
+      if (grounded && options.countTransport) {
         if (typeof respondOptions.revalidate !== 'function') throw contractError('POLARIS_ACCESS_CHANGED', 'Refresh the current record before asking again.', 409);
         await respondOptions.revalidate();
         if (boundary.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });

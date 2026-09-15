@@ -11,10 +11,45 @@ ALTER TABLE public.canonical_call_provider_requests
   ADD COLUMN count_tariff_reviewed_on text CHECK(count_tariff_reviewed_on IS NULL OR count_tariff_reviewed_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
   ADD COLUMN generation_provider_request_id text CHECK(generation_provider_request_id IS NULL OR (length(generation_provider_request_id) BETWEEN 1 AND 128 AND generation_provider_request_id !~ '[[:cntrl:]]'));
 
+CREATE TABLE public.canonical_call_provider_canary_attestations (
+  voice_session_id uuid PRIMARY KEY REFERENCES public.canonical_voice_sessions(id) ON DELETE RESTRICT,
+  organization_id uuid NOT NULL,
+  integration_ownership_id uuid NOT NULL,
+  canary_binding_digest text NOT NULL CHECK(canary_binding_digest ~ '^[a-f0-9]{64}$'),
+  agent_id text NOT NULL CHECK(length(agent_id) BETWEEN 1 AND 200 AND agent_id !~ '[[:cntrl:][:space:]]'),
+  agent_version integer NOT NULL CHECK(agent_version>=0),
+  llm_id text NOT NULL CHECK(length(llm_id) BETWEEN 1 AND 200 AND llm_id !~ '[[:cntrl:][:space:]]'),
+  llm_version integer NOT NULL CHECK(llm_version>=0),
+  base_prompt_digest text NOT NULL CHECK(base_prompt_digest ~ '^[a-f0-9]{64}$'),
+  consent_version text NOT NULL CHECK(length(consent_version) BETWEEN 1 AND 200 AND consent_version !~ '[[:cntrl:][:space:]]'),
+  provider_evidence_digest text NOT NULL CHECK(provider_evidence_digest ~ '^[a-f0-9]{64}$'),
+  synthetic_only boolean NOT NULL CHECK(synthetic_only IS TRUE),
+  exclusive boolean NOT NULL CHECK(exclusive IS TRUE),
+  status text NOT NULL CHECK(status IN('active','revoked')),
+  observed_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL CHECK(expires_at>observed_at AND expires_at<=observed_at+interval '60 seconds'),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  CONSTRAINT canonical_call_provider_canary_attestation_session_fk FOREIGN KEY(organization_id,voice_session_id) REFERENCES public.canonical_voice_sessions(organization_id,id) ON DELETE RESTRICT,
+  CONSTRAINT canonical_call_provider_canary_attestation_owner_fk FOREIGN KEY(organization_id,integration_ownership_id) REFERENCES public.canonical_integration_ownership(organization_id,id) ON DELETE RESTRICT
+);
+
+-- Runtime may only read a migration-owner attestation through this exact authority function.
+CREATE FUNCTION public.canonical_call_provider_canary_authority(session_value uuid,binding_digest_value text)
+RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE s public.canonical_voice_sessions%ROWTYPE;a public.canonical_call_provider_canary_attestations%ROWTYPE;agent text;moment timestamptz;
+BEGIN
+ IF binding_digest_value IS NULL OR binding_digest_value !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'Call canary authority invalid' USING ERRCODE='22023';END IF;
+ SELECT * INTO s FROM public.canonical_voice_sessions WHERE id=session_value;moment:=clock_timestamp();
+ SELECT * INTO a FROM public.canonical_call_provider_canary_attestations WHERE voice_session_id=session_value AND canary_binding_digest=binding_digest_value;
+ SELECT external_integration_id INTO agent FROM public.canonical_integration_ownership WHERE id=s.integration_ownership_id AND organization_id=s.organization_id AND provider='retell' AND status='active';
+ IF s.id IS NULL OR a.voice_session_id IS NULL OR s.status<>'active' OR s.provider<>'retell' OR s.canonical_operation_id IS NOT NULL OR a.organization_id<>s.organization_id OR a.integration_ownership_id<>s.integration_ownership_id OR a.status<>'active' OR a.synthetic_only IS NOT TRUE OR a.exclusive IS NOT TRUE OR a.agent_id IS DISTINCT FROM agent OR a.observed_at<s.started_at OR a.expires_at IS DISTINCT FROM s.started_at+interval '60 seconds' OR a.expires_at<=moment THEN RAISE EXCEPTION 'Call canary authority unavailable' USING ERRCODE='42501';END IF;
+ RETURN jsonb_build_object('bindingDigest',a.canary_binding_digest,'organizationId',a.organization_id,'agentId',a.agent_id,'agentVersion',a.agent_version,'llmId',a.llm_id,'llmVersion',a.llm_version,'basePromptDigest',a.base_prompt_digest,'consentVersion',a.consent_version,'syntheticOnly',a.synthetic_only,'exclusive',a.exclusive,'expiresAt',a.expires_at,'remainingMs',greatest(0,floor(extract(epoch FROM(a.expires_at-moment))*1000)::integer));
+END $$;
+
 CREATE FUNCTION public.canonical_call_provider_canary_reserve(
   session_value uuid, request_value text, basis_value text, binding_digest_value text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE org uuid;s public.canonical_voice_sessions%ROWTYPE;existing public.canonical_call_provider_requests%ROWTYPE;moment timestamptz;month_value date;monthly public.polaris_provider_monthly_usage%ROWTYPE;project_spend numeric;project_cap numeric;identifier uuid;
+DECLARE org uuid;s public.canonical_voice_sessions%ROWTYPE;attestation jsonb;existing public.canonical_call_provider_requests%ROWTYPE;moment timestamptz;month_value date;monthly public.polaris_provider_monthly_usage%ROWTYPE;project_spend numeric;project_cap numeric;identifier uuid;
 BEGIN
  IF request_value IS NULL OR request_value !~ '^[a-f0-9]{64}$' OR basis_value IS NULL OR basis_value !~ '^[a-f0-9]{64}$' OR binding_digest_value IS NULL OR binding_digest_value !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'Call canary admission invalid' USING ERRCODE='22023';END IF;
  SELECT organization_id INTO org FROM public.canonical_voice_sessions WHERE id=session_value;IF org IS NULL THEN RAISE EXCEPTION 'Call unavailable' USING ERRCODE='42501';END IF;
@@ -22,6 +57,7 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text,19000037));
  PERFORM public.canonical_call_provider_retire();
  SELECT * INTO s FROM public.canonical_voice_sessions WHERE id=session_value AND organization_id=org FOR UPDATE;moment:=clock_timestamp();
+ SELECT public.canonical_call_provider_canary_authority(session_value,binding_digest_value) INTO attestation;
  IF s.status<>'active' OR s.provider<>'retell' OR s.canonical_operation_id IS NOT NULL OR s.started_at+interval '60 seconds'<=moment OR NOT EXISTS(SELECT 1 FROM public.canonical_integration_ownership i WHERE i.id=s.integration_ownership_id AND i.organization_id=org AND i.provider='retell' AND i.status='active') OR NOT EXISTS(SELECT 1 FROM public.canonical_business_profiles p WHERE p.id=s.business_profile_id AND p.organization_id=org AND p.is_active AND p.normalized_profile_hash=s.business_profile_hash) OR NOT EXISTS(SELECT 1 FROM public.subscriptions WHERE organization_id=org AND status='active' AND plan_type IN('Growth','Complete')) THEN RAISE EXCEPTION 'Call authority unavailable' USING ERRCODE='42501';END IF;
  SELECT * INTO existing FROM public.canonical_call_provider_requests WHERE voice_session_id=session_value AND request_hash=request_value;
  IF FOUND THEN IF existing.basis<>basis_value OR existing.canary_binding_digest IS DISTINCT FROM binding_digest_value THEN RAISE EXCEPTION 'Call canary request changed' USING ERRCODE='40001';END IF;RETURN jsonb_build_object('id',existing.id,'admitted',false,'state',existing.state,'organizationId',org);END IF;
@@ -34,7 +70,7 @@ BEGIN
  SELECT greatest(100000000000::numeric,COALESCE(sum(m.collected_subscription_revenue_cents::numeric*2000000),0)*1.10) INTO project_cap FROM public.polaris_provider_monthly_usage m JOIN public.subscriptions subscription ON subscription.organization_id=m.organization_id WHERE m.month_start=month_value AND subscription.status='active' AND subscription.plan_type IN('Growth','Complete');
  IF project_spend+20000000>project_cap THEN RETURN jsonb_build_object('admitted',false,'state','limited');END IF;
  IF s.started_at+interval '60 seconds'<=clock_timestamp() THEN RAISE EXCEPTION 'Call expired' USING ERRCODE='42501';END IF;
- INSERT INTO public.canonical_call_provider_requests(organization_id,voice_session_id,request_hash,basis,month_start,lease_until,canary_binding_digest) VALUES(org,session_value,request_value,basis_value,month_value,clock_timestamp()+interval '25 seconds',binding_digest_value) RETURNING id INTO identifier;
+ INSERT INTO public.canonical_call_provider_requests(organization_id,voice_session_id,request_hash,basis,month_start,lease_until,canary_binding_digest) VALUES(org,session_value,request_value,basis_value,month_value,least(clock_timestamp()+interval '25 seconds',(attestation->>'expiresAt')::timestamptz),binding_digest_value) RETURNING id INTO identifier;
  UPDATE public.polaris_provider_monthly_usage SET reserved_cost_nano_usd=reserved_cost_nano_usd+20000000,updated_at=clock_timestamp() WHERE organization_id=org AND month_start=month_value;
  RETURN jsonb_build_object('id',identifier,'admitted',true,'state','reserved','organizationId',org);
 END $$;
@@ -72,4 +108,5 @@ BEGIN
  RETURN jsonb_build_object('state',state_value,'alreadySettled',false);
 END $$;
 
-REVOKE ALL ON FUNCTION public.canonical_call_provider_canary_reserve(uuid,text,text,text),public.canonical_call_provider_canary_reconcile(uuid,jsonb,text) FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_call_provider_canary_attestations FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_call_provider_canary_authority(uuid,text),public.canonical_call_provider_canary_reserve(uuid,text,text,text),public.canonical_call_provider_canary_reconcile(uuid,jsonb,text) FROM PUBLIC;

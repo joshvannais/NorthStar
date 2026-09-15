@@ -105,6 +105,13 @@ describe('exact request accounting without live provider access',()=>{
   const complete=createProductionOpenAIRuntime({...base,POLARIS_INPUT_COUNT_ACCOUNTING_VERSION:accounting.COUNT_ENDPOINT_VERSION,POLARIS_INPUT_COUNT_MAX_COST_NANO_USD:'0',POLARIS_INPUT_COUNT_TARIFF_EVIDENCE_DIGEST:'c'.repeat(64),POLARIS_INPUT_COUNT_TARIFF_REVIEWED_ON:'2026-09-14'},{clientFactory:factory});
   await expect(complete.respond(envelope(),{revalidate:async()=>{}})).resolves.toHaveProperty('usage.accountingVersion',accounting.ACCOUNTING_VERSION);expect(factory).toHaveBeenCalledTimes(1);
  });
+ test('counted conversation configuration leaves the established equipment contract uncounted',async()=>{
+  const countTransport=jest.fn(async()=>({object:'response.input_tokens',input_tokens:100}));
+  const send=jest.fn(async()=>({id:'equipment-fixture',status:'completed',output_text:JSON.stringify({manufacturer:'Acme',model:'X1',modelYear:null,series:null,engine:null,configuration:null}),usage:{input_tokens:10,output_tokens:10,total_tokens:20,input_tokens_details:{cached_tokens:0,cache_write_tokens:0}}}));
+  const runtime=createOpenAIRuntime({enabled:true,configured:true,countAccounting,countTransport,client:{responses:{create:send}}});
+  await expect(runtime.respond({purpose:'equipment_identifiers',requestId:'equipment-fixture',authority:{organizationId:'fixture-org',role:'owner'},message:'Acme X1'})).resolves.toMatchObject({identifiers:{manufacturer:'Acme',model:'X1'}});
+  expect(countTransport).not.toHaveBeenCalled();expect(send).toHaveBeenCalledTimes(1);
+ });
  test('count tariff configuration is all-or-nothing and bounded by the fixed reservation',()=>{
   const base={POLARIS_INPUT_COUNT_ACCOUNTING_VERSION:accounting.COUNT_ENDPOINT_VERSION,POLARIS_INPUT_COUNT_MAX_COST_NANO_USD:'0',POLARIS_INPUT_COUNT_TARIFF_EVIDENCE_DIGEST:'d'.repeat(64),POLARIS_INPUT_COUNT_TARIFF_REVIEWED_ON:'2026-09-14'};
   expect(accounting.parseCountAccounting(base)).toMatchObject({maxCostNanoUsd:0});

@@ -2029,6 +2029,56 @@ html body .customer-drawer #cdPreparedAdoption { padding:0 4px 8px; }
 /* Prepared-estimate confirmations form a separate, comfortably spaced group. */
 html body .customer-drawer #cdPreparedAdoption .prepared-ack { min-height:44px;box-sizing:border-box;padding-block:8px;align-items:flex-start; }
 html body .customer-drawer #cdPreparedAdoption fieldset>.prepared-ack { margin-block:24px 16px; }
+
+/* Mission 24 Part 8: the customer's document is intentionally quiet and
+   contractor-led. It does not inherit private Polaris or Capella styling. */
+.customer-estimate-launch { margin:0 0 20px;padding:20px;border:1px solid rgba(181,140,50,.55);border-radius:16px;background:linear-gradient(135deg,rgba(212,175,55,.12),rgba(255,255,255,.9));color:var(--neutral-900); }
+html[data-theme="dark"] .customer-estimate-launch { background:linear-gradient(135deg,rgba(181,140,50,.2),rgba(24,25,35,.96));color:#f7f3e8; }
+.customer-estimate-launch h4 { margin:4px 0 8px;font-size:1.15rem; }
+.customer-estimate-launch p { margin:0 0 14px;line-height:1.55; }
+.customer-estimate-launch .customer-estimate-kicker { margin:0;color:#8a681d;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase; }
+.customer-estimate-launch-status { min-height:1.35em;margin:10px 0 0!important;font-size:.85rem; }
+body.customer-estimate-open { overflow:hidden; }
+.customer-estimate-overlay { position:fixed;inset:0;z-index:10050;display:grid;place-items:center;padding:24px;background:rgba(5,7,13,.78);backdrop-filter:blur(10px); }
+.customer-estimate-dialog { width:min(900px,100%);max-height:calc(100vh - 48px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border:1px solid rgba(212,175,55,.58);border-radius:22px;background:var(--theme-surface,#fff);box-shadow:0 30px 90px rgba(0,0,0,.35); }
+.customer-estimate-dialog-bar,.customer-estimate-dialog-actions { display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--theme-surface,#fff); }
+.customer-estimate-dialog-bar { justify-content:space-between;border-bottom:1px solid var(--neutral-200); }
+.customer-estimate-dialog-bar h2 { margin:0;font-size:1.1rem;color:var(--theme-text,#111827); }
+.customer-estimate-close { width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--neutral-300);border-radius:50%;background:transparent;color:var(--theme-text,#111827);font:300 1.8rem/1 inherit;cursor:pointer; }
+.customer-estimate-close:hover { border-color:#b58c32;background:rgba(212,175,55,.1); }
+.customer-estimate-dialog-body { overflow:auto;padding:28px;background:#e9e8e3; }
+.customer-estimate-dialog-actions { flex-wrap:wrap;border-top:1px solid var(--neutral-200); }
+.customer-estimate-dialog-actions p { flex:1 1 260px;margin:0;color:var(--theme-text-secondary,#5f6470);font-size:.82rem;text-align:right; }
+.customer-estimate-document { box-sizing:border-box;width:min(720px,100%);margin:auto;padding:48px 52px 34px;border:2px solid #b58c32;border-radius:18px;background:#fbfaf7;color:#111827;box-shadow:0 12px 44px rgba(32,27,17,.12);font-family:Inter,"Segoe UI",Arial,sans-serif; }
+.customer-estimate-document * { box-sizing:border-box;color:inherit;font-family:inherit;text-transform:none!important; }
+.customer-estimate-header { display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:24px;border-bottom:1px solid #d9c497; }
+.customer-estimate-brand { min-width:0; }
+.customer-estimate-brand h2 { margin:4px 0 0;font-size:1.7rem;line-height:1.15;overflow-wrap:anywhere; }
+.customer-estimate-kicker,.customer-estimate-label { color:#8a681d!important;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase!important; }
+.customer-estimate-muted,.customer-estimate-contact { color:#69707d!important; }
+.customer-estimate-brand p,.customer-estimate-contact { margin:5px 0 0; }
+.customer-estimate-meta { display:grid;gap:6px;justify-items:end;font-size:.82rem;white-space:nowrap; }
+.customer-estimate-meta span { padding:4px 9px;border-radius:999px;background:#f0e5c8;color:#6d5118; }
+.customer-estimate-contact { padding:14px 0 0;font-size:.8rem;line-height:1.55;overflow-wrap:anywhere; }
+.customer-estimate-intro { display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:30px 0; }
+.customer-estimate-intro strong { display:block;margin-top:7px;font-size:1.05rem; }
+.customer-estimate-intro p { margin:5px 0 0;line-height:1.5;color:#4b5563; }
+.customer-estimate-document h3 { margin:0 0 14px;font-family:inherit!important;font-size:.72rem;font-weight:800;letter-spacing:.12em;line-height:1.2;text-transform:uppercase!important;color:#8a681d; }
+.customer-estimate-scope { padding:0 0 30px; }
+.customer-estimate-scope p { margin:0;line-height:1.65;white-space:pre-line;overflow-wrap:anywhere; }
+.customer-estimate-costs,.customer-estimate-payments { padding:24px 0;border-top:1px solid #e0d8c6; }
+.customer-estimate-row { display:flex;justify-content:space-between;gap:24px;padding:9px 0;line-height:1.4; }
+.customer-estimate-row span { min-width:0;overflow-wrap:anywhere; }
+.customer-estimate-row strong { text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums; }
+.customer-estimate-subtotal { margin-top:10px;padding-top:18px;border-top:1px solid #e0d8c6; }
+.customer-estimate-total { margin-top:10px;padding:18px 0 4px;border-top:2px solid #b58c32;font-size:1.2rem; }
+.customer-estimate-adjustments { padding:4px 0 22px;color:#4b5563; }
+.customer-estimate-adjustments summary { min-height:44px;align-content:center;cursor:pointer;font-weight:650; }
+.customer-estimate-notice { margin:24px 0 0;padding:14px 16px;border-radius:10px;background:#f4f0e7;color:#5b5140;font-size:.8rem;line-height:1.5; }
+.customer-estimate-signature { display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:30px;color:#776b55;font-size:.8rem;font-weight:600; }
+.customer-estimate-mark { width:21px;height:21px;object-fit:cover;object-position:50% 43%;border-radius:4px; }
+.customer-estimate-dialog :is(button,summary):focus-visible { outline:3px solid #7c3aed;outline-offset:3px; }
+@media(max-width:640px){.customer-estimate-overlay{padding:0;place-items:stretch}.customer-estimate-dialog{width:100%;max-height:100vh;border-radius:0;border-inline:0}.customer-estimate-dialog-body{padding:14px}.customer-estimate-document{padding:28px 22px 24px;border-radius:14px}.customer-estimate-header,.customer-estimate-intro{grid-template-columns:1fr;display:grid}.customer-estimate-meta{justify-items:start}.customer-estimate-dialog-actions>*{width:100%}.customer-estimate-dialog-actions p{text-align:left}.customer-estimate-row{gap:14px}.customer-estimate-row span{min-width:0;overflow-wrap:anywhere}}
 html body .customer-drawer #cdPreparedAdoption .prepared-ack input { margin-top:2px; }
 html body .customer-drawer #cdPreparedCostAllocations :is(input,select) { width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;font:inherit;color:var(--theme-text);background:var(--theme-surface);border:1px solid var(--polaris-card-border);border-radius:8px; }
 html body .customer-drawer #cdPreparedCostAllocations label { display:block;margin:16px 0 8px; }

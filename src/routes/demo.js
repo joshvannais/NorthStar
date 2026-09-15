@@ -628,6 +628,28 @@ router.get('/command-center/estimates/:estimateId/review', async function (req, 
   }
 });
 
+router.get('/command-center/estimates/:estimateId/customer-estimate-preview', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  try {
+    const record = await commandCenterRepository.read(commandCenterToken(req, res));
+    const workspace = demoWorkspace(record);
+    const item = demoCanonicalItems(workspace).find(value => value.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({success:false,error:{code:'CUSTOMER_ESTIMATE_UNAVAILABLE',message:'That demo estimate is unavailable.'}});
+    const review = await assembleDemoCapellaReview(record, item, req);
+    const data = require('../estimating/customerEstimateProjection').createCustomerEstimatePreview({
+      review, item, profile:workspace.configuration.businessProfile, simulated:true,
+    });
+    return res.json({success:true,data});
+  } catch (error) {
+    const status = [404,409,410].includes(error && error.status) ? error.status : 503;
+    const message = status === 410 ? 'This demo session expired. Refresh to start again.' :
+      status === 404 ? 'That demo estimate is unavailable.' :
+      error && error.code === 'CUSTOMER_ESTIMATE_NOT_READY' ? error.message :
+      'The demo customer estimate is unavailable. Refresh the saved estimate and try again.';
+    return res.status(status).json({success:false,error:{code:error && error.code || 'CUSTOMER_ESTIMATE_UNAVAILABLE',message}});
+  }
+});
+
 router.get('/command-center/polaris/:kind/:id', async function (req, res) {
   res.set('Cache-Control', 'no-store');
   const idKey = DETAIL_IDENTIFIERS[req.params.kind];

@@ -1827,6 +1827,33 @@ function createCanonicalRouter(options) {
     catch(e){const status=[400,401,403,404,409,413,429,503].includes(e.status||e.statusCode)?(e.status||e.statusCode):503;return res.status(status).json({success:false,error:{message:e.code&&e.code.startsWith('CAPELLA_')?e.message:status===400?'Check the scenario amounts, source and date range.':status===403?'Scenario analysis is available to current owners and administrators.':'Scenario analysis could not be loaded. Refresh and try again.'}});}
   });
 
+  router.get('/estimates/:estimateId/customer-estimate-preview', dependencies.auth, requireCanonicalContext, async function (req, res) {
+    res.set('Cache-Control', 'no-store');
+    res.vary('Cookie');
+    if (!UUID.test(req.params.estimateId)) return res.status(404).json({success:false,error:{code:'CUSTOMER_ESTIMATE_UNAVAILABLE',message:'That estimate is unavailable.'}});
+    try {
+      const data = await withEquipmentCanonicalRead(req, dependencies, async function (client, operator) {
+        if (!operator.canMutate || !['owner', 'admin'].includes(operator.actor && operator.actor.accessRole)) {
+          throw Object.assign(new Error('Customer estimate previews are available to current owners and administrators.'), {status:403});
+        }
+        const review = await assembleCapellaReview(client, operator, req);
+        const item = await getCanonicalGraph(client, requestContext(req), req.params.estimateId);
+        if (!review || !item) throw Object.assign(new Error('That estimate is unavailable.'), {status:404});
+        const profile = await require('../services/organizationAuthority').getActiveBusinessProfile(client, requestContext(req).organizationId);
+        return require('../estimating/customerEstimateProjection').createCustomerEstimatePreview({review, item, profile, simulated:false});
+      });
+      return res.json({success:true,data});
+    } catch (error) {
+      const status = [401,403,404,409,503].includes(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
+      const message = status === 401 ? 'Sign in again to preview this customer estimate.' :
+        status === 403 ? 'Customer estimate previews are available to current owners and administrators.' :
+        status === 404 ? 'That estimate is unavailable.' :
+        error && error.code === 'CUSTOMER_ESTIMATE_NOT_READY' ? error.message :
+        'The customer estimate preview is unavailable. Refresh the saved estimate and try again.';
+      return res.status(status).json({success:false,error:{code:error && error.code || 'CUSTOMER_ESTIMATE_UNAVAILABLE',message}});
+    }
+  });
+
   router.get('/estimates/:estimateId/review', dependencies.auth, requireCanonicalContext, async function (req, res) {
     res.set('Cache-Control', 'no-store');
     const failure = (status, message) => res.status(status).json({ success: false, error: { code: 'ESTIMATE_REVIEW_UNAVAILABLE', message } });

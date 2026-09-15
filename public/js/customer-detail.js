@@ -1921,6 +1921,7 @@ window.CustomerDetail = (function() {
         }
         _estimateReview = review; renderEstimateDecision(review); renderCapellaReview(review);positionPricingReviewActions();
         if(window.NorthStarPreparedEstimate)_preparedEstimateState=window.NorthStarPreparedEstimate.mount(review,preparedHost,_preparedEstimateState,{money:decisionMoney,refresh:function(){refreshEstimateReview('review-refresh');},isCurrent:function(){return current()&&_estimateReview===review;}});
+        if(window.NorthStarCustomerEstimate){var customerEstimateLaunch=window.NorthStarCustomerEstimate.mount(review,preparedHost);if(customerEstimateLaunch)preparedHost.prepend(customerEstimateLaunch);}
         if(_groundedReview){
           var handoff=_groundedReview;_groundedReview=null;
           function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object'){var out={};Object.keys(value).sort().forEach(function(k){out[k]=stable(value[k]);});return out;}return value;}

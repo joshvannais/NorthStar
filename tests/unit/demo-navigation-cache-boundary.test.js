@@ -7,6 +7,7 @@ const { app } = require('../../src/server');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const RELEASE = 'demo-nav-10-20260915';
+const RUNTIME_RELEASE = 'demo-runtime-11-20260915';
 const DEMO_PAGES = [
   'public/demo-dashboard.html',
   'public/dashboard/polaris.html',
@@ -19,6 +20,13 @@ const DEMO_PAGES = [
   'public/dashboard/settings.html',
   'public/dashboard/integrations.html',
 ];
+const RUNTIME_PAGES = [
+  ...DEMO_PAGES,
+  'public/dashboard/command-center.html',
+  'public/dashboard/completion-review.html',
+  'public/dashboard/ai-settings.html',
+  'public/dashboard/my-number.html',
+];
 
 test('every account-free page requests one released navigation contract and renderer', () => {
   for (const relativePath of DEMO_PAGES) {
@@ -28,9 +36,17 @@ test('every account-free page requests one released navigation contract and rend
   }
 });
 
+test('every page that mounts the demo runtime requests the current release', () => {
+  for (const relativePath of RUNTIME_PAGES) {
+    const html = fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+    expect(html).toContain(`/js/demo-runtime.js?v=${RUNTIME_RELEASE}`);
+  }
+});
+
 test.each([
   '/js/command-center-contract.js',
   '/js/nav-component.js',
+  '/js/demo-runtime.js',
 ])('%s cannot be retained across releases', async assetPath => {
   const response = await request(app).get(`${assetPath}?v=${RELEASE}`).expect(200);
   expect(response.headers['cache-control']).toBe('no-store, no-cache, must-revalidate');

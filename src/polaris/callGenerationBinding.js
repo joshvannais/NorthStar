@@ -32,16 +32,18 @@ function createProductionCallGenerate(environment=process.env,{getPool,runtime}=
   const envelope={purpose:'caller_guidance',schemaVersion:VERSION,requestId:key,authority:{organizationId:current.organizationId,role:'caller'},untrustedInput:{message:question,selected:{kind:'work',id:current.voiceSessionId}},groundedContext:{basisDigest:basis,evidence:current.evidence,proposals:[],allowedCards:[],trustedFacts:[]}};
   runtime.preflight(envelope);
   admission=await authorize({identity,context,basis:contextBasis,signal});
-  const reservation=await query('SELECT public.canonical_call_provider_canary_reserve($1,$2,$3,$4) value',[current.voiceSessionId,key,basis,binding.bindingDigest]);
-  if(!reservation.admitted)unavailable();
   const controller=new AbortController(),abort=()=>controller.abort();controllers.add(controller);signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)controller.abort();const timer=setTimeout(abort,Math.max(1,Math.min(25000,admission.remainingMs)));timer.unref?.();let settled=false;
+  let reservation;
   async function settle(usage){const known=usage&&typeof usage.providerRequestId==='string'&&usage.providerRequestId&&usage.accountingVersion&&usage.count&&usage.generation;const value=known?{accountingVersion:usage.accountingVersion,costNanoUsd:String(usage.costNanoUsd),inputTokens:usage.inputTokens,outputTokens:usage.outputTokens,outcome:usage.outcomeClass,count:usage.count,generation:usage.generation}:{};const r=await query('SELECT public.canonical_call_provider_canary_reconcile($1,$2::jsonb,$3) value',[reservation.id,value,binding.bindingDigest]);settled=true;return r;}
   try{
+   if(controller.signal.aborted)unavailable();
+   reservation=await query('SELECT public.canonical_call_provider_canary_reserve($1,$2,$3,$4) value',[current.voiceSessionId,key,basis,binding.bindingDigest]);
+   if(controller.signal.aborted||!reservation.admitted)unavailable();
    await authorize({identity,context,basis:contextBasis,signal:controller.signal});
    const result=await runtime.respond(envelope,{signal:controller.signal,revalidate:async()=>{await authorize({identity,context,basis:contextBasis,signal:controller.signal});}});const outcome=await settle(result.usage);
    await authorize({identity,context,basis:contextBasis,signal:controller.signal});if(outcome.state!=='completed')unavailable();
    return {questions:result.response.questions,explanations:result.response.explanations,proposalIds:[],requestedCard:'none'};
-  }catch(e){if(!settled)await settle(e.polarisUsage).catch(()=>{});throw e;}finally{clearTimeout(timer);controller.abort();signal?.removeEventListener('abort',abort);controllers.delete(controller);}
+  }catch(e){if(reservation?.admitted&&!settled)await settle(e.polarisUsage).catch(()=>{});throw e;}finally{clearTimeout(timer);controller.abort();signal?.removeEventListener('abort',abort);controllers.delete(controller);}
  };
  generate.authorize=authorize;
  generate.stop=()=>{stopped=true;for(const c of controllers)c.abort();};return generate;

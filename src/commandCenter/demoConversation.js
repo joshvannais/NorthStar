@@ -1,6 +1,7 @@
 'use strict';
 // Authored, nonfinancial demo dialogue. Only supplied scenario facts may be spoken.
 // This is not a provider call, retrieval engine, price calculator or saved-history rewrite.
+const {packs}=require('./industryIntelligence');
 const services = require('../routes/simulation/scenario-catalog');
 const known = value => value !== undefined && value !== null && value !== '';
 const words = value => String(value).replace(/_/g, ' ');
@@ -9,7 +10,7 @@ function answer(key,value,scope,service) {
  if(!known(value)) return "I'm not sure about that yet.";
  const jobs={install:'A new installation',replace:'A replacement',repair:'A repair',inspect:'An inspection',maintain:'I need someone to maintain the system',upgrade:'An upgrade'};
  switch(key){
- case 'jobType':return (jobs[value]||'I need someone to assess the work')+'.';
+ case 'jobType':if(packs[service]&&packs[service].operations[value])return packs[service].operations[value].statement;return (jobs[value]||'I need someone to assess the work')+'.';
  case 'material':return service==='roofing'&&value==='architectural'?'Architectural shingles.':sentence(value);
  case 'linearFeet':case 'height':return 'About '+value+' feet.';
  case 'squares':return 'About '+value+' roofing squares.';
@@ -35,7 +36,7 @@ function demoConversation({serviceKey,scope={},customer={},businessProfile=null,
  const service=services[serviceKey];if(!service)throw new Error('Unsupported demo conversation service');
  const turns=[];const say=(speaker,text)=>turns.push({speaker,text});const exchange=(question,response)=>{say('ai',question);say('customer',response);};
  say('ai','Thank you for calling. I’m the virtual receptionist. What can I help you with?');
- const subject={fence:'a fence',roofing:'my roof',hvac:'my heating or cooling system',plumbing:'a plumbing issue',electrical:'some electrical work',concrete:'a concrete project'}[serviceKey];
+ const subject={fence:'a fence',roofing:'my roof',hvac:'my heating or cooling system',plumbing:'a plumbing issue',electrical:'some electrical work',concrete:'a concrete project'}[serviceKey]||service.conversationSubject||service.displayName;
  say('customer','I would like help with '+subject+'.');
  const listed=businessProfile&&Array.isArray(businessProfile.services)&&businessProfile.services.find(item=>item.key===serviceKey);
  say('ai',listed?'Our services include '+String(listed.label).replace(/^[A-Z](?=[a-z])/, c=>c.toLowerCase())+'. Let me take a few details for the team.':'Let me take a few details so the team can confirm how they can help.');

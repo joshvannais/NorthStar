@@ -1,4 +1,5 @@
 'use strict';
+const industryIntelligence=require('./industryIntelligence');
 
 const { v5: uuidv5 } = require('uuid');
 const contract = require('../../public/js/command-center-contract');
@@ -135,7 +136,7 @@ function demoConfiguration(selectionValue, seededWorkspace) {
   const businessProfile = demoBusinessProfile(selectionValue, seeded);
   return stableValue({
     immutableAcrossSimulation: Boolean(seeded),
-    scenarioSpace: publicScenarioSpace(),
+    scenarioSpace: publicScenarioSpace(seeded&&seeded.services.map(service=>service.key)),
     businessProfile,
     workforce: seeded ? seeded.team : {
       mode: 'fictional_read_only',
@@ -527,6 +528,7 @@ function withSeededDemoConversation(graph) {
   const scope = graph.polaris.snapshot.service.scope || {};
   const turns = demoConversation({ serviceKey:graph.polaris.snapshot.service.key, scope, customer:graph.customer, businessProfile:graph.businessProfile });
   const result={...graph,communication:{...graph.communication,transcript:turns}};
+  if(industryIntelligence.packs[graph.lead.serviceType])return addRecordedCostExample(graph.polaris.syntheticCalculation.input.organizationId,result);
   delete result.projectionDigest;result.projectionDigest=sha256(result);return stableValue(result);
 }
 
@@ -554,6 +556,7 @@ function initialGraphs(seededWorkspace, createdAt) {
       assignedTo: job.assignedTo,
       timeZone: job.timeZone,
       summary: job.summary,
+      missingInformation:industryIntelligence.questionsFor(job.serviceKey,job.scope.jobType),
       scope: {
         ...job.scope,
         serviceRadiusMiles: seededWorkspace.territory.radiusMiles,
@@ -610,8 +613,15 @@ function buildSimulatedGraph(input) {
     error.status = 422;
     throw error;
   }
+  if(!industryIntelligence.validSelection(selection)){
+    const error=new Error('Choose matching service details. An emergency needs flexible timing and more information before work can proceed.');error.code='DEMO_SCENARIO_INVALID';error.status=422;throw error;
+  }
   const seededWorkspace = input && input.workspace && input.workspace.contract === FIXTURE_CONTRACT
     ? input.workspace : null;
+  if(seededWorkspace&&!seededWorkspace.services.some(service=>service.key===selection.service)){
+    const error=new Error('This demo business does not include that service. Keep its saved work, or deliberately reset to start a new demo.');
+    error.code='DEMO_SCENARIO_INVALID';error.status=422;throw error;
+  }
   const seed = sha256({ tenantId: input.tenantId, key: input.key, scenario: selection });
   const nameIndex = Number.parseInt(seed.slice(0, 8), 16) % DEMO_CUSTOMER_NAMES.length;
   const fictionalCustomer = seededWorkspace
@@ -627,12 +637,14 @@ function buildSimulatedGraph(input) {
     ? fictionalCustomer.address.distanceMiles : distanceTenths / 10;
   const prepared = pipeline.withDeterministicSeed(seed, () => {
     const scenario = pipeline.generateScenario(selection.service, customerName);
-    const selectedJobType = contract.demoJobType(selection.service, selection.intent, scenario.job.type);
+    const selectedJobType = industryIntelligence.operationForSelection(selection.service,selection,scenario.job.type)||contract.demoJobType(selection.service, selection.intent, scenario.job.type);
     if (!selectedJobType) {
       const error = new Error('Choose a supported service and caller intent.');
       error.code = 'DEMO_SCENARIO_INVALID'; error.status = 422; throw error;
     }
     scenario.job.type = selectedJobType;
+    const registeredScope=industryIntelligence.scopeFor(selection.service,selectedJobType);
+    if(registeredScope)scenario.job.scope=registeredScope;
     scenario.job.scope.jobType = selectedJobType;
     if (fictionalCustomer) {
       scenario.customer.phone = fictionalCustomer.phone;
@@ -706,7 +718,7 @@ function buildSimulatedGraph(input) {
   const scheduledStart = ['booked'].includes(selection.outcome)
     ? shift(createdAt, visitOffset * 60 * 60 * 1000)
     : null;
-  const missingInformation = [profile.context.material.missing];
+  const missingInformation = [profile.context.material.missing,...industryIntelligence.questionsFor(selection.service,prepared.scenario.job.type)];
   if (selection.outcome === 'needs_information') {
     missingInformation.push('One material scope or approval input must be confirmed before scheduling.');
   }
@@ -736,7 +748,7 @@ function buildSimulatedGraph(input) {
     leadStatus: profile.outcome.material.leadStatus,
     workStatus: profile.outcome.material.workStatus,
     scheduledStart,
-    assignedTo: assignedMember ? assignedMember.name : profile.business.material.assignedTo,
+    assignedTo: industryIntelligence.packs[selection.service] ? null : assignedMember ? assignedMember.name : profile.business.material.assignedTo,
     timeZone: seededWorkspace ? seededWorkspace.territory.timeZone : null,
     summary: profile.intent.label + ' for ' + service.label.toLowerCase() +
       ' with ' + profile.urgency.label.toLowerCase() + ' urgency; outcome: ' +

@@ -48,14 +48,7 @@ const TEAM_FIRST = Object.freeze(['Avery', 'Cameron', 'Casey', 'Drew', 'Jordan',
 const SYNTHETIC_LAST = Object.freeze(['Demo', 'Example', 'Fixture', 'Sample']);
 const STREET_NAMES = Object.freeze(['Demo Way', 'Example Lane', 'Fixture Court', 'Sample Loop']);
 
-const SERVICE_DEFINITIONS = Object.freeze([
-  Object.freeze({ key: 'fence', label: 'Fence installation', estimate: 6800, jobType: 'replacement', scope: Object.freeze({ jobType: 'replace', linearFeet: 146, material: 'cedar', height: 6, gates: 2 }) }),
-  Object.freeze({ key: 'roofing', label: 'Roof replacement', estimate: 14800, jobType: 'replacement', scope: Object.freeze({ jobType: 'replace', squares: 28, material: 'architectural', pitch: '6/12', stories: 2 }) }),
-  Object.freeze({ key: 'hvac', label: 'HVAC service', estimate: 9600, jobType: 'replacement', scope: Object.freeze({ jobType: 'replace', systemType: 'heat pump', tonnage: 3, seer: 16, sqft: 2100 }) }),
-  Object.freeze({ key: 'plumbing', label: 'Plumbing service', estimate: 2850, jobType: 'repair', scope: Object.freeze({ jobType: 'repair', fixture: 'water heater', leakSeverity: 'contained', waterShutoff: true }) }),
-  Object.freeze({ key: 'electrical', label: 'Electrical service', estimate: 4250, jobType: 'upgrade', scope: Object.freeze({ jobType: 'upgrade', symptoms: 'panel capacity review', breakerBehavior: 'stable', safetyConcern: false }) }),
-  Object.freeze({ key: 'concrete', label: 'Concrete installation', estimate: 11200, jobType: 'installation', scope: Object.freeze({ jobType: 'install', squareFeet: 720, finish: 'broom', existingRemoval: true, access: 'driveway access' }) }),
-]);
+const {definitions:SERVICE_DEFINITIONS,packs:INDUSTRY_PACKS}=require('./industryRegistry');
 
 function hashBytes(value) {
   return crypto.createHash('sha256').update(String(value), 'utf8').digest();
@@ -200,6 +193,9 @@ function readiness() {
 }
 
 function createDemoWorkspaceFixture(input) {
+  const registryVersion=input&&input.registryVersion===null?null:'industry-registry-v1';
+  if(input&&input.registryVersion!==undefined&&input.registryVersion!==null&&input.registryVersion!==registryVersion)throw new Error('Unsupported fictional industry registry');
+  const serviceDefinitions=registryVersion?SERVICE_DEFINITIONS:require('./industryRegistry').legacy;
   const value = typeof input === 'string' ? { seed: input } : input || {};
   const seedDigest = value.seedDigest === undefined
     ? normalizeDemoSeed(value.seed)
@@ -267,7 +263,7 @@ function createDemoWorkspaceFixture(input) {
       formatted: '100 Example Service Way, ' + region.city + ', ' + region.state + ' ' + region.postalCode,
     },
   };
-  const services = SERVICE_DEFINITIONS.map(function (service) {
+  const services = serviceDefinitions.map(function (service) {
     return {
       id: fixtureId(seedDigest, 'service:' + service.key),
       key: service.key,
@@ -299,7 +295,7 @@ function createDemoWorkspaceFixture(input) {
     { lead: 'qualified', work: 'estimate_ready', offsetHours: 50 },
   ];
   const jobs = statuses.map(function (status, index) {
-    const definition = SERVICE_DEFINITIONS[(serviceStart + index) % SERVICE_DEFINITIONS.length];
+    const definition = serviceDefinitions[(serviceStart + index) % serviceDefinitions.length];
     const customer = customers[index];
     const assigned = members[2 + (index % 2)];
     return {
@@ -312,12 +308,12 @@ function createDemoWorkspaceFixture(input) {
       summary: definition.label + ' for a fictional customer in ' + customer.address.serviceZone + '.',
       estimatedValue: definition.estimate,
       confidence: 84 + index * 3,
-      leadStatus: status.lead,
-      workStatus: status.work,
-      scheduledStart: new Date(anchor.getTime() + status.offsetHours * 60 * 60 * 1000).toISOString(),
+      leadStatus: INDUSTRY_PACKS[definition.key] ? 'needs_information' : status.lead,
+      workStatus: INDUSTRY_PACKS[definition.key] ? 'triage' : status.work,
+      scheduledStart: INDUSTRY_PACKS[definition.key] ? null : new Date(anchor.getTime() + status.offsetHours * 60 * 60 * 1000).toISOString(),
       timeZone: region.timeZone,
-      assignedMemberId: assigned.id,
-      assignedTo: assigned.name,
+      assignedMemberId: INDUSTRY_PACKS[definition.key] ? null : assigned.id,
+      assignedTo: INDUSTRY_PACKS[definition.key] ? null : assigned.name,
     };
   });
   const businessProfile = stableValue({
@@ -345,6 +341,7 @@ function createDemoWorkspaceFixture(input) {
     readiness: readiness(),
   });
   const fixture = stableValue({
+    ...(registryVersion?{registryVersion}:{}),
     ...baseWorkspace,
     businessProfile,
     customers,
@@ -392,9 +389,10 @@ function validateDemoWorkspaceFixture(fixture) {
     }
   }
   for (const job of fixture.jobs) {
+    const pendingAssessment=Boolean(INDUSTRY_PACKS[job.serviceKey])&&job.workStatus==='triage'&&job.leadStatus==='needs_information'&&job.assignedMemberId===null&&job.assignedTo===null&&job.scheduledStart===null;
     if (!serviceKeys.has(job.serviceKey) || !customerIds.has(job.customerId) ||
-        !memberIds.has(job.assignedMemberId) || job.timeZone !== fixture.territory.timeZone ||
-        !Number.isFinite(Date.parse(job.scheduledStart))) {
+        (!pendingAssessment&&!memberIds.has(job.assignedMemberId)) || job.timeZone !== fixture.territory.timeZone ||
+        (!pendingAssessment&&!Number.isFinite(Date.parse(job.scheduledStart)))) {
       throw new Error('A fictional demo job disagrees with the shared workspace authority.');
     }
   }
@@ -498,7 +496,7 @@ function validateDemoGraphAgainstWorkspace(graph, workspace) {
   }
   if (!sameStableValue(graph.businessProfile, workspace.businessProfile) ||
       graph.work.timeZone !== workspace.territory.timeZone ||
-      !workspace.team.members.some(member => member.name === graph.work.assignedTo)) {
+      !(INDUSTRY_PACKS[graph.lead.serviceType]&&graph.work.assignedTo===null)&&!workspace.team.members.some(member => member.name === graph.work.assignedTo)) {
     throw new Error('A persisted fictional demo graph profile or assignment disagrees with its workspace.');
   }
   const scope = graph.polaris.snapshot.service.scope;

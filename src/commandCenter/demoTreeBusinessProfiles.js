@@ -213,4 +213,26 @@ function perJobEquipmentCost(asset, plannedHours) {
   return Number((paymentShare + asset.hourlyOperatingCost * plannedHours + asset.transportCostPerJob).toFixed(2));
 }
 
-module.exports = { OPERATIONS, PROFILES, SOURCE_NOTES, create, equipmentFor, perJobEquipmentCost };
+function scenarioFactors(seed, operation) {
+  const digest = crypto.createHash('sha256').update('northstar-tree-scope\0' + String(seed), 'utf8').digest();
+  const pick = (offset, values) => values[digest[offset] % values.length];
+  const factors = {
+    treeCount: 1 + digest[0] % (operation === 'hauling' ? 4 : operation === 'visit' ? 2 : 3),
+    sizeClass: pick(1, ['small', 'medium', 'large', 'very large']),
+    accessClass: pick(2, ['open yard access', 'moderate backyard access', 'restricted access']),
+    conditionClass: pick(3, ['routine condition', 'declining or damaged', 'high-risk condition']),
+    disposalChoice: pick(4, ['leave usable wood', 'chip branches onsite', 'haul all debris']),
+    nearStructure: digest[5] % 3 !== 0,
+  };
+  if (['removal', 'pruning', 'storm'].includes(operation)) factors.approximateHeightFeet = pick(6, [25, 35, 45, 60, 75, 90]);
+  if (operation === 'stump') factors.stumpDiameterInches = pick(7, [14, 20, 28, 36, 48, 60]);
+  if (operation === 'hauling') factors.debrisLoads = pick(8, [1, 2, 3, 4]);
+  if (operation === 'visit') {
+    factors.sizeClass = 'not yet assessed';
+    factors.conditionClass = 'requires onsite assessment';
+    factors.disposalChoice = 'not selected';
+  }
+  return stableValue(factors);
+}
+
+module.exports = { OPERATIONS, PROFILES, SOURCE_NOTES, create, equipmentFor, perJobEquipmentCost, scenarioFactors };

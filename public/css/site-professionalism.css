@@ -2082,7 +2082,7 @@ html body .customer-drawer #cdEstimateDetails>summary { min-height:56px;display:
 html body .customer-drawer #cdEstimateDetails[open]>summary { border-bottom:1px solid var(--neutral-200);margin-bottom:16px; }
 html body .customer-drawer #cdCustomerActivityArea>.drawer-section,
 html body .customer-drawer #cdCustomerWorkArea>.drawer-section { margin-bottom:16px; }
-html body #cdCustomerDrawer .drawer-primary-actions { position:sticky;top:0;z-index:4;margin:0 0 14px;padding:14px 0;background:linear-gradient(var(--theme-surface),var(--theme-surface));border-bottom:1px solid var(--neutral-200); }
+html body #cdCustomerDrawer .drawer-primary-actions { position:static;margin:0 0 14px;padding:14px 0;background:var(--theme-surface);border-bottom:1px solid var(--neutral-200); }
 html body #cdCustomerDrawer .drawer-primary-actions>h3 { display:none; }
 html body #cdCustomerDrawer .drawer-primary-action-list { display:grid;grid-template-columns:minmax(0,1.35fr) repeat(3,minmax(0,1fr));gap:8px; }
 html body #cdCustomerDrawer .drawer-primary-action-list>.btn { width:100%;min-width:0;margin:0;padding-inline:10px; }

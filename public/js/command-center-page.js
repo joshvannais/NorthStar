@@ -643,15 +643,36 @@
   }
 
   function renderCoachAndStatus(graphs) {
-    var first = graphs[0];
+    var ranked = graphs.slice().sort(function(left,right){return priorityScore(right)-priorityScore(left);});
+    var first = ranked[0];
     var action = first && actionEntries(first)[0];
+    var customer = first && presentationString(first.customer && first.customer.name, 'this customer');
+    var service = first && presentationString(first.lead && first.lead.serviceLabel, titleCase(first.lead && first.lead.serviceType));
+    var missing = first ? missingInputs(first) : [];
+    var risk = first && snapshot(first).risk || {};
     byId('commandCenterCoach').textContent = action
-      ? presentationString(action.label, 'Recommendation unavailable') + ' The recommendation is tied to the latest recorded evidence and should be reviewed before action.'
-      : 'No prioritized recommendation is available until a customer, lead, or work record you can access supplies enough evidence.';
-    byId('commandCenterWorkspaceStatus').textContent = 'Workspace context';
+      ? presentationString(action.label, 'Review the current record') + ' for ' + customer + ' · ' + service + '.'
+      : 'No prioritized recommendation is available until a current customer, lead, or work record supplies enough evidence.';
+    byId('commandCenterCoachEvidence').textContent = first
+      ? (risk.emergency === true ? 'Why now: the latest record contains an urgent safety signal.'
+        : missing.length ? 'Why now: ' + missing.length + ' recorded ' + (missing.length===1?'item needs':'items need') + ' review before the next decision.'
+          : 'Why now: this is the highest-priority actionable record in the current workspace.')
+      : 'New evidence will update this recommendation automatically.';
+    var coachAction=byId('commandCenterCoachAction');
+    coachAction.hidden=!first;
+    if(first){coachAction.href=detailHref(first,'customer');coachAction.textContent='Open '+customer;}
+    var scheduled = graphs.filter(function(graph){return Boolean(graph.work&&graph.work.scheduledStart);}).length;
+    var attention = graphs.filter(function(graph){return priorityScore(graph)>=60;}).length;
+    var values=graphs.map(function(graph){return finiteNumber(graph.estimate&&graph.estimate.customerPrice);}).filter(function(value){return value!==null;});
+    var total=values.reduce(function(sum,value){return sum+value;},0);
+    byId('commandCenterWorkspaceStatus').textContent = 'Current workspace pulse';
     byId('commandCenterWorkspaceNote').textContent = mode === 'demo'
-      ? 'The demo session is isolated from production, provider, account, and billing data.'
-      : 'This view shows only the workspace information available to your current account; connected-provider readiness is not inferred.';
+      ? 'Live totals from this isolated demo session. Simulating or changing work updates these figures.'
+      : 'Live totals from the role-authorized records available to this account.';
+    byId('commandCenterPulseRecords').textContent=String(graphs.length);
+    byId('commandCenterPulseAttention').textContent=String(attention);
+    byId('commandCenterPulseScheduled').textContent=String(scheduled);
+    byId('commandCenterPulseValue').textContent=values.length?formatMoney(total):'Unavailable';
     byId('commandCenterStatePill').replaceChildren();
     byId('commandCenterStatePill').hidden = true;
   }

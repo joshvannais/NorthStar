@@ -19,6 +19,12 @@ function answer(key,value,scope,service) {
  case 'seer':return 'I am considering SEER '+value+'.';
  case 'existingAge':return 'About '+value+' years old.';
  case 'stories':return value+' '+(Number(value)===1?'story.':'stories.');
+ case 'treeCount':return value+' '+(Number(value)===1?'tree or debris group.':'trees or debris groups.');
+ case 'sizeClass':case 'accessClass':case 'conditionClass':case 'disposalChoice':return sentence(value);
+ case 'approximateHeightFeet':return 'I estimate about '+value+' feet tall.';
+ case 'stumpDiameterInches':return 'I estimate about '+value+' inches across.';
+ case 'debrisLoads':return 'It looks like about '+value+' '+(Number(value)===1?'load.':'loads.');
+ case 'nearStructure':return value?'Yes, it is close to a structure, fence, or utility.':'No, it appears clear of structures and utilities.';
  case 'existingLayers':return value+' existing '+(Number(value)===1?'layer.':'layers.');
  case 'gates':return Array.isArray(value)?(value.length?value.map(g=>known(g.type)?words(g.type)+' gate':'gate').join(' and ')+'.':'No gates.'):"I'm not sure how many gates yet.";
  case 'removalRequired':return value?'Yes, there is an old fence that needs to come down.':'No existing fence needs removal.';

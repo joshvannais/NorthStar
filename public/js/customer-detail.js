@@ -335,10 +335,10 @@ window.CustomerDetail = (function() {
     var workArea=document.createElement('details');workArea.id='cdCustomerWorkArea';workArea.className='drawer-section drawer-primary-disclosure';
     var workTitle=document.createElement('summary');workTitle.textContent='Schedule & Work';workArea.append(workTitle,$('cdExecutionSection'));
     var activityArea=document.createElement('details');activityArea.id='cdCustomerActivityArea';activityArea.className='drawer-section drawer-primary-disclosure';
-    var activityTitle=document.createElement('summary');activityTitle.textContent='Activity';activityArea.append(activityTitle,$('cdConversationHistorySection'),$('cdTranscriptDisclosure'),contactDetails);
+    var activityTitle=document.createElement('summary');activityTitle.textContent='Activity & Customer History';activityArea.append(activityTitle,$('cdConversationHistorySection'),contactDetails);
     analysis.appendChild(attention);panel.appendChild(nextAction);
     priceDetails.appendChild($('cdCapellaReview'));
-    content.prepend(actionSection,estimateHub,polarisSection,profitCard,priceDetails,workArea,activityArea);
+    content.prepend(actionSection,estimateHub,$('cdTranscriptDisclosure'),polarisSection,profitCard,priceDetails,workArea,activityArea);
     $('cdContextSummary').hidden = true;
     [analysis,priceDetails,workArea,activityArea].forEach(function(disclosure){disclosure.addEventListener('toggle',function(){if(!disclosure.open)return;[analysis,priceDetails,workArea,activityArea].forEach(function(other){if(other!==disclosure)other.open=false;});});});
 

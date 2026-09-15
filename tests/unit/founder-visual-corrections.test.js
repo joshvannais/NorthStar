@@ -80,10 +80,11 @@ describe('founder desktop and mobile visual corrections', () => {
 
   test('demo transcripts use natural service language and retire the robotic prompts', () => {
     const workspace = read('src/commandCenter/workspace.js');
+    const conversation = read('src/commandCenter/demoConversation.js');
     const scenarios = read('src/commandCenter/scenarioSpace.js');
     expect(workspace).not.toContain('What outcome would be most useful from this call?');
     expect(workspace).not.toContain('How quickly does the team need to respond?');
-    expect(workspace).toContain('Is there a particular day or deadline you are working toward?');
+    expect(conversation).toContain('What timing works best for you?');
     expect(scenarios).toContain('This is my first time calling your company.');
   });
 

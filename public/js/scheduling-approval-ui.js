@@ -167,10 +167,12 @@
       select.replaceChildren();
       if (resolution.status !== 'ambiguous') {
         select.hidden = true;
+        select.closest('.m22-dialog-field').hidden = true;
         select.removeAttribute('required');
         return resolution.candidates[0];
       }
       select.hidden = false;
+      select.closest('.m22-dialog-field').hidden = false;
       select.required = true;
       select.append(el('option', '', 'Choose ' + label + ' occurrence'));
       select.options[0].value = '';
@@ -191,6 +193,7 @@
       active.endDate.value = derived.date;
       active.endTime.value = derived.time;
       active.endOccurrence.hidden = true;
+      active.endOccurrence.closest('.m22-dialog-field').hidden = true;
       active.endOccurrence.removeAttribute('required');
       selectedEnd = contract.validateRfc3339InZone(derived.rfc3339, active.timeZone);
     } else {
@@ -215,8 +218,6 @@
 
   function previewPayload() {
     var schedule = resolveSchedule();
-    var reason = active.reason.value.trim();
-    if (!reason) throw new Error('Provide a human approval reason.');
     return {
       expectedRevision: active.current.revision,
       expectedDigest: active.current.digest,
@@ -226,7 +227,7 @@
       scheduledStart: schedule.start,
       scheduledEnd: schedule.end,
       appointmentStatus: active.current.appointmentStatus,
-      reason: reason,
+      reason: active.auditReason,
     };
   }
 
@@ -251,7 +252,6 @@
     appendTerm(terms, 'Schedule', preview.proposal.scheduledStart === null && preview.proposal.scheduledEnd === null ? 'Not yet scheduled' : formatInstant(preview.proposal.scheduledStart, active.timeZone) + ' to ' + formatInstant(preview.proposal.scheduledEnd, active.timeZone));
     appendTerm(terms, 'Time zone', zoneLabel(active.timeZone));
     appendTerm(terms, 'Preview expires', formatInstant(preview.expiresAt, active.timeZone));
-    appendTerm(terms, 'Reason', displayProjection().text(active.reason.value.trim(), 'Approval reason unavailable'));
     summary.appendChild(terms);
     active.review.appendChild(summary);
 
@@ -399,13 +399,12 @@
       return;
     }
     if (!active.idempotencyKey) active.idempotencyKey = 'm22-part5-human-' + global.crypto.randomUUID();
-    var reason = active.reason.value.trim();
     var payload = {
       previewId: active.preview.id,
       previewDigest: active.preview.previewDigest,
       acknowledgedWarningDigests: (active.preview.warningDigests || []).slice(),
       acknowledgedReviewReasonDigests: (active.preview.reviewReasonDigests || []).slice(),
-      reason: reason,
+      reason: active.auditReason,
     };
     active.approve.disabled = true;
     var requestOwner=active,headers={Accept:'application/json','Content-Type':'application/json','Idempotency-Key':active.idempotencyKey};
@@ -508,7 +507,8 @@
     grid.append(field('Start date', startDate), field('Start time', startTime), field('End date', endDate), field('End time', endTime));
     var startOccurrence = document.createElement('select'); startOccurrence.setAttribute('aria-label', 'Start daylight-saving occurrence'); startOccurrence.hidden = true;
     var endOccurrence = document.createElement('select'); endOccurrence.setAttribute('aria-label', 'End daylight-saving occurrence'); endOccurrence.hidden = true;
-    grid.append(field('Start occurrence when repeated', startOccurrence), field('End occurrence when repeated', endOccurrence));
+    var startOccurrenceField=field('Start occurrence when repeated', startOccurrence),endOccurrenceField=field('End occurrence when repeated', endOccurrence);startOccurrenceField.hidden=true;endOccurrenceField.hidden=true;
+    grid.append(startOccurrenceField,endOccurrenceField);
     form.appendChild(grid);
     active.startDate = startDate; active.startTime = startTime; active.endDate = endDate; active.endTime = endTime;
     active.startOccurrence = startOccurrence; active.endOccurrence = endOccurrence;
@@ -671,9 +671,9 @@
     }
 
     var layer = el('div', 'm22-dialog-layer');
-    var dialog = el('section', 'm22-dialog'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-labelledby', 'm22DialogTitle');
+    var dialog = el('section', 'm22-dialog'); dialog.tabIndex=-1;dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-labelledby', 'm22DialogTitle');
     var header = el('header', 'm22-dialog-header');
-    var title = el('h2', '', ACTION_LABELS[action] + ' appointment'); title.id = 'm22DialogTitle';
+    var title = el('h2', '', ACTION_LABELS[action] + ' Appointment'); title.id = 'm22DialogTitle';
     var closeButton = el('button', 'm22-dialog-close', '×'); closeButton.type = 'button'; closeButton.setAttribute('aria-label', 'Cancel scheduling action'); closeButton.addEventListener('click', close);
     header.append(title, closeButton);
     var body = el('div', 'm22-dialog-body');
@@ -718,17 +718,16 @@
         Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0,
       elapsedMilliseconds: Number.isFinite(options.elapsedMilliseconds) && options.elapsedMilliseconds > 0
         ? options.elapsedMilliseconds : null,
+      auditReason: typeof options.reason === 'string' && options.reason.trim()
+        ? options.reason.trim().slice(0, 1000)
+        : 'Owner reviewed the proposed ' + ACTION_LABELS[action].toLowerCase() + ' action for ' + appointmentTitle + '.',
       applied: null,
     };
     targetField(form, directory);
     scheduleFields(form, current, options.proposal || {}, timeZone);
-    var reasonWrapper = el('div', 'm22-dialog-field');
-    var reasonLabel = el('label', '', 'Human approval reason');
-    var reason = document.createElement('textarea'); reason.maxLength = 1000; reason.required = true;
-    reason.value = typeof options.reason === 'string' ? options.reason : '';
-    reasonLabel.appendChild(reason); reasonWrapper.appendChild(reasonLabel); form.appendChild(reasonWrapper); active.reason = reason;
     document.addEventListener('keydown', trap);
-    reason.focus();
+    dialog.scrollTop = 0; body.scrollTop = 0; dialog.focus({ preventScroll: true });
+    global.requestAnimationFrame(function () { if (active && active.dialog === dialog) { dialog.scrollTop = 0; body.scrollTop = 0; } });
     return true;
   }
 

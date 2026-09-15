@@ -8,7 +8,7 @@ const VERSION='demo-equipment-readiness-basis-v1';
 function createEquipmentBasis(seed,createdAt){
  const basis=equipment.create(seed,createdAt),original=basis.assets[0];
  const extra=['Downtime Example','Fault And Maintenance Example','Unknown History Example','Held For First Demo Job','Held For Second Demo Job'].map(name=>({...original,id:require('uuid').v5(String(seed)+':'+name,'311d4d87-1275-441f-b054-87c03dcc8bcc'),name:'Practice Auger — '+name}));
- return stableValue({...basis,readinessVersion:VERSION,assets:[original,...extra]});
+ return stableValue({...basis,readinessVersion:VERSION,assets:[original,...extra,...basis.assets.slice(1)]});
 }
 function create(seed,createdAt,graphs=[],team=null){
  const basis=createEquipmentBasis(seed,createdAt),at=new Date(createdAt).toISOString();

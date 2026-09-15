@@ -906,8 +906,8 @@ async function exerciseCurrentSchedulingAuthority(page, viewport) {
   await dialog.waitFor({ state: 'visible' });
   assert.ok(await dialog.getByRole('heading', { level: 2 }).textContent(),
     viewport.label + ' Scheduling Authority opens a labelled accessible dialog');
-  assert.strictEqual(await dialog.getByLabel('Human approval reason').count(), 1,
-    viewport.label + ' Scheduling Authority exposes the required human approval reason');
+  assert.strictEqual(await dialog.getByText('Human approval reason', { exact: true }).count(), 0,
+    viewport.label + ' Scheduling Authority keeps audit provenance out of the owner workflow');
   assert.strictEqual(await dialog.getByRole('button', { name: 'Create non-capability preview' }).isVisible(), true,
     viewport.label + ' Scheduling Authority exposes an explicit non-capability preview step');
   assert.strictEqual(await dialog.getByRole('button', { name: 'Approve current preview' }).isVisible(), false,

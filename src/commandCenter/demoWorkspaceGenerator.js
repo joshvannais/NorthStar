@@ -49,6 +49,7 @@ const SYNTHETIC_LAST = Object.freeze(['Demo', 'Example', 'Fixture', 'Sample']);
 const STREET_NAMES = Object.freeze(['Demo Way', 'Example Lane', 'Fixture Court', 'Sample Loop']);
 
 const {definitions:SERVICE_DEFINITIONS,packs:INDUSTRY_PACKS}=require('./industryRegistry');
+const {create:createTreeBusinessProfile}=require('./demoTreeBusinessProfiles');
 
 function hashBytes(value) {
   return crypto.createHash('sha256').update(String(value), 'utf8').digest();
@@ -177,17 +178,17 @@ function customerForSeed(workspace, seed, ordinal) {
 
 function readiness() {
   return {
-    state: 'needs_review',
-    label: 'Review needed',
-    guidance: 'Help Polaris understand your business. Polaris works best with a complete, accurate, and up-to-date Business Profile.',
+    state: 'reviewed',
+    label: 'Complete',
+    guidance: 'This simulated company includes the operating and estimating profile used throughout its workspace.',
     separation: 'Profile Readiness is separate from integration status and uses clear categories for recognized details.',
     items: [
       { label: 'Dispatch origin', state: 'reviewed' },
       { label: 'Service area', state: 'reviewed' },
       { label: 'Operating hours', state: 'reviewed' },
-      { label: 'Customer guidance', state: 'needs_review' },
-      { label: 'Financial configuration', state: 'needs_review' },
-      { label: 'Voice assistant configuration', state: 'needs_review' },
+      { label: 'Customer guidance', state: 'reviewed' },
+      { label: 'Financial configuration', state: 'reviewed' },
+      { label: 'Voice assistant configuration', state: 'reviewed' },
     ],
   };
 }
@@ -213,6 +214,7 @@ function createDemoWorkspaceFixture(input) {
   const anchor = value.anchorTime === undefined ? deterministicAnchor(seedDigest) : new Date(value.anchorTime);
   if (!Number.isFinite(anchor.getTime())) throw new Error('Demo fixture anchor time is invalid.');
   const tenantId = fixtureId(seedDigest, 'tenant');
+  const treeBusinessProfile = createTreeBusinessProfile(seedDigest);
   const ownerIndex = random.integer(0, TEAM_FIRST.length - 1);
   const members = [
     { role: 'owner', accessRole: 'owner', operationalRole: 'Owner' },
@@ -223,6 +225,11 @@ function createDemoWorkspaceFixture(input) {
     const first = TEAM_FIRST[(ownerIndex + index) % TEAM_FIRST.length];
     const last = SYNTHETIC_LAST[(random.integer(0, SYNTHETIC_LAST.length - 1) + index) % SYNTHETIC_LAST.length];
     const name = first + ' ' + last;
+    const treeSkills = index === 2
+      ? treeBusinessProfile.workforce.skills
+      : index === 3
+        ? treeBusinessProfile.workforce.skills.filter(skill => !/qualified tree climbing/.test(skill))
+        : [];
     return {
       id: fixtureId(seedDigest, 'member:' + definition.role),
       name,
@@ -230,6 +237,7 @@ function createDemoWorkspaceFixture(input) {
       phone: reservedPhone(region, 2 + index),
       accessRole: definition.accessRole,
       operationalRole: definition.operationalRole,
+      skills: treeSkills,
       fictional: true,
     };
   });
@@ -337,6 +345,29 @@ function createDemoWorkspaceFixture(input) {
     voiceAssistant: {
       name: 'NorthStar Office Manager',
       greeting: 'Thank you for calling ' + company.name + '. How can I help today?',
+    },
+    industryProfiles: {
+      tree: treeBusinessProfile,
+    },
+    workforce: {
+      jobControlPolicy: 'direct_assignee_or_crew_lead',
+      ownerMayDelegateJobControl: true,
+      members: members.map(member => ({
+        id: member.id,
+        operationalRole: member.operationalRole,
+        skills: member.skills,
+      })),
+      crews: baseWorkspace.team.crews.map(crew => ({
+        id: crew.id,
+        leadMemberId: crew.leadMemberId,
+      })),
+    },
+    financialPlanning: {
+      currency: 'USD',
+      monthlyRevenueTarget: treeBusinessProfile.monthly.revenueTarget,
+      monthlyFixedOverhead: treeBusinessProfile.monthly.fixedOverhead,
+      estimatedMonthlyJobs: treeBusinessProfile.monthly.targetJobs,
+      machineryPaymentAllocation: treeBusinessProfile.financingPolicy,
     },
     readiness: readiness(),
   });

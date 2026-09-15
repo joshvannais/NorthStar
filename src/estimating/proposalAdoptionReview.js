@@ -21,9 +21,9 @@ function build(context,raw,{equipmentSources=context.sources,history=[]}={}){
  const body=contract.normalize(raw,{preview:true}),{review,item,sources,now}=context;
  if(item.calculationVersion!==require('./materialAdoptionContract').BASE_VERSION)contract.fail('This earlier estimate cannot adopt new cost plans. Keep its original record and prepare a supported estimate.');
  const base=proposal.build(context,body.draft);
- const available=(sources.knowledge||[]).filter(k=>k.content?.estimateProposalRecipe?.serviceKey===item.snapshot.service.key);
+ const available=proposal.applicableRecipes(sources,item,body.draft.overrides);
  if(available.length!==1||!base.recipe||base.readiness==='blocked')contract.fail('Resolve the recipe or resource questions before adopting this estimate.');
- const recipe=recipeEngine.normalize(available[0].content.estimateProposalRecipe),facts={...sources.facts};
+ const recipe=recipeEngine.normalize(available[0].recipe),facts={...sources.facts};
  for(const o of body.draft.overrides)facts[o.fieldId]={value:o.value,unit:o.unit,source:o.reason};
  const evaluation=recipeEngine.evaluate(recipe,facts,new Date(now));
  if(evaluation.state!=='calculated'||base.questions.some(q=>!q.id.endsWith('_saved')&&!['resource_readiness','cost_coverage'].includes(q.id)))contract.fail('Finish the required job and source details before adopting this estimate.');

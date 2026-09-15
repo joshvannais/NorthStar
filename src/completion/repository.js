@@ -13,6 +13,9 @@ class CompletionRepositoryError extends Error {
 
 function mapped(cause) {
   if (cause instanceof CompletionRepositoryError) return cause;
+  if (cause && cause.code === 'JOB_CONTROL_FORBIDDEN') {
+    return new CompletionRepositoryError(403,'JOB_CONTROL_FORBIDDEN',cause.message,cause);
+  }
   const constraint = String(cause && cause.constraint || '');
   if (cause && cause.code === 'P0002' || constraint === 'canonical_completion_not_found') {
     return new CompletionRepositoryError(404, 'NOT_FOUND', 'Completion authority was not found.', cause);
@@ -124,6 +127,12 @@ async function mutateCompletion(pool, input) {
     annotation: input.annotation,
   };
   return transaction(pool, true, `${input.organizationId}:${input.executionId}`, async client => {
+    if (input.actorAccessRole === 'member' &&
+        ['propose_completion','withdraw_completion'].includes(input.action)) {
+      await require('../operations/jobControlAuthority').requireJobControl(
+        client,input,{executionId:input.executionId}
+      );
+    }
     const query = await client.query(
       `SELECT public.canonical_completion_mutate(
          $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::text,

@@ -14,6 +14,7 @@ const WORK_ACTIONS = Object.freeze([
   'record_observation', 'record_note', 'record_progress', 'record_blocker',
   'record_exception', 'record_change', 'propose_completion', 'withdraw_completion',
 ]);
+const JOB_CONTROL_ACTIONS = new Set(['initialize','start','pause','resume','propose_completion','withdraw_completion']);
 const MATERIAL_MOVEMENT_KINDS = Object.freeze(['consumed', 'returned', 'transferred', 'waste', 'adjustment']);
 const EQUIPMENT_KINDS = Object.freeze([
   'check_out', 'use', 'check_in', 'reading', 'condition', 'fault', 'downtime_start',
@@ -109,7 +110,7 @@ function routeProjection(row) {
   };
 }
 
-function rowProjection(row, timeZone, mutationAllowed = false) {
+function rowProjection(row, timeZone, mutationAllowed = false, workforcePolicy = null) {
   const approval = currentApproval(row);
   const executionId = row.execution_id || null;
   const instructions = boundedText(row.instructions);
@@ -121,10 +122,19 @@ function rowProjection(row, timeZone, mutationAllowed = false) {
   const teammateTotal = Number(row.teammate_total || 0);
   const direct = row.workforce_profile_id === row.actor_profile_id;
   const assignmentKind = direct ? 'worker' : 'crew';
-  const projectedActions = exactList(row.execution_actions, WORK_ACTIONS, 'action');
+  let projectedActions = exactList(row.execution_actions, WORK_ACTIONS, 'action');
   const projectedMaterialKinds = exactList(row.execution_material_kinds, MATERIAL_MOVEMENT_KINDS, 'material kind');
   const projectedEquipmentKinds = exactList(row.execution_equipment_kinds, EQUIPMENT_KINDS, 'equipment kind');
-  const canInitialize = !executionId && row.dispatch_state === 'dispatched' &&
+  const selfCrew = teammates.find(member => member.self);
+  const policyActive = !workforcePolicy || !workforcePolicy.jobControlPolicy ||
+    workforcePolicy.jobControlPolicy === 'direct_assignee_or_crew_lead';
+  const delegated = policyActive && Array.isArray(workforcePolicy && workforcePolicy.jobControlDelegatedProfileIds) &&
+    workforcePolicy.jobControlDelegatedProfileIds.includes(row.actor_profile_id);
+  const jobControlAllowed = direct || Boolean(selfCrew && selfCrew.role === 'lead') || delegated;
+  const jobControlBasis = direct ? 'direct_assignee' :
+    selfCrew && selfCrew.role === 'lead' ? 'crew_lead' : delegated ? 'owner_delegation' : 'crew_member';
+  if (!jobControlAllowed) projectedActions = projectedActions.filter(action => !JOB_CONTROL_ACTIONS.has(action));
+  const canInitialize = jobControlAllowed && !executionId && row.dispatch_state === 'dispatched' &&
     !['cancelled', 'completed'].includes(plainText(row.appointment_status).trim().toLowerCase());
   const actions = mutationAllowed === true ? (executionId ? projectedActions : canInitialize ? ['initialize'] : []) : [];
   const mutable = actions.length > 0;
@@ -183,6 +193,7 @@ function rowProjection(row, timeZone, mutationAllowed = false) {
       version: WORK_CAPABILITY_VERSION,
       mutable,
       actions,
+      jobControl: { allowed: jobControlAllowed, basis: jobControlBasis },
       materialMovementKinds: mutable && actions.includes('record_material') ? projectedMaterialKinds : [],
       equipmentKinds: mutable && actions.includes('record_equipment') ? projectedEquipmentKinds : [],
     },
@@ -210,6 +221,7 @@ async function currentAuthority(client, input) {
             active_profile.version_number AS business_profile_version,
             rtrim(active_profile.normalized_profile_hash) AS business_profile_hash,
             active_profile.raw_profile #>> '{company,timeZone}' AS time_zone,
+            active_profile.raw_profile #> '{workforce}' AS workforce_policy,
             COALESCE(current_crews.scope,'[]'::jsonb) AS crew_scope,
             transaction_timestamp() AS evaluated_at
        FROM public.organization_memberships membership
@@ -416,7 +428,8 @@ async function loadToday(pool, input) {
     const mutationAllowed = input.onboardingComplete === true && input.subscriptionMutable === true &&
       input.actorAccessRole !== 'viewer';
     const records = selected.rows.map(row => rowProjection(
-      { ...row, actor_profile_id: authority.profile_id }, authority.time_zone, mutationAllowed
+      { ...row, actor_profile_id: authority.profile_id }, authority.time_zone, mutationAllowed,
+      authority.workforce_policy
     ));
     const data = stableValue({
       version: 'm22-part6-today-v1',

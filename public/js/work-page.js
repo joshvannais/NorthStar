@@ -78,6 +78,11 @@
       }).format(date);
     } catch (_error) { return 'Time unavailable'; }
   }
+  function localInputInstant(value) {
+    var date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
   function safeArray(value) { return Array.isArray(value) ? value : []; }
   function setState(name, title, copy, retryVisible) {
     var fallback = STATE_COPY[name] || STATE_COPY.retry;
@@ -372,7 +377,7 @@
   }
   function mutationPath(action) {
     var paths = api.paths({ appointmentId: selector.appointmentId, executionId: model.execution && model.execution.id });
-    if (['start_timer', 'stop_timer', 'record_manual'].includes(action)) return paths.laborActions;
+    if (['start_timer', 'stop_timer', 'record_manual', 'correct'].includes(action)) return paths.laborActions;
     if (action === 'record_material') return paths.materialActions;
     if (action === 'record_equipment') return paths.equipmentActions;
     if (['create_checklist', 'respond_item', 'record_observation', 'record_note'].includes(action)) return paths.evidenceActions;
@@ -384,14 +389,17 @@
   }
 
   function lifecycleDescriptor(action, button) {
-    var names = { start: 'Start work', pause: 'Pause work', resume: 'Resume work' };
+    confirmAction(lifecycleRequest(action), button);
+  }
+  function lifecycleRequest(action) {
+    var names = { start: 'Start Job', pause: 'Stop Job', resume: 'Start Job' };
     var reasons = {
-      start: 'Start the current assigned work.',
-      pause: 'Pause the current assigned work.',
-      resume: 'Resume the current assigned work.',
+      start: 'Start the current assigned job and record its server time.',
+      pause: 'Stop the current assigned job and record its server time.',
+      resume: 'Restart the current assigned job and record its server time.',
     };
     var pins = executionPins();
-    confirmAction({
+    return {
       action: action, label: names[action],
       copy: 'NorthStar will check the latest job details and your assignment before saving this work-status change.',
       path: mutationPath(action),
@@ -403,7 +411,7 @@
         expectedAssignmentDigest: pins.expectedAssignmentDigest,
         reason: reasons[action],
       },
-    }, button);
+    };
   }
 
   function renderOverview() {
@@ -435,14 +443,14 @@
       byId('workStateBadge').dataset.state = 'empty';
       content.appendChild(emptyNote('This assigned job has not been opened for recording work yet.'));
       if (allows('initialize')) {
-        content.appendChild(actionButton('Open work record', 'workLifecyclePrimary', function(event) {
+        content.appendChild(actionButton('Start Job', 'workLifecyclePrimary', function(event) {
           var recordPins = model.record.authority;
-          confirmAction({ action: 'initialize', label: 'Open work record',
-            copy: 'NorthStar will open a work record for your current assignment.',
+          confirmAction({ action: 'initialize', label: 'Start Job', continueWithStart: true,
+            copy: 'NorthStar will prepare the current work record, start the job, and record the server time.',
             path: mutationPath('initialize'), body: {
               expectedAssignmentRevision: recordPins.revision,
               expectedAssignmentDigest: recordPins.digest,
-              reason: 'Open the current assigned work detail.',
+              reason: 'Prepare the current assigned job for its recorded start.',
             } }, event.currentTarget);
         }, 'btn btn-primary'));
       } else {
@@ -454,11 +462,11 @@
     byId('workStateBadge').textContent = label(state);
     byId('workStateBadge').dataset.state = state;
     var grid = node('div', 'work-summary-grid');
-    append(grid, summary('Current state', label(state)), summary('Last action', ({ initialize: 'Job opened', start: 'Work started', pause: 'Work paused', resume: 'Work resumed' })[model.execution.lastAction] || label(model.execution.lastAction)));
+    append(grid, summary('Current state', label(state)), summary('Last action', ({ initialize: 'Job prepared', start: 'Job started', pause: 'Job stopped', resume: 'Job restarted' })[model.execution.lastAction] || label(model.execution.lastAction)));
     content.appendChild(grid);
     var actions = node('div', 'work-actions');
     var nextAction = ['start', 'pause', 'resume'].find(allows);
-    var next = nextAction ? [nextAction, { start: 'Start work', pause: 'Pause work', resume: 'Resume work' }[nextAction]] : null;
+    var next = nextAction ? [nextAction, { start: 'Start Job', pause: 'Stop Job', resume: 'Start Job' }[nextAction]] : null;
     if (next) {
       var button = actionButton(next[1], 'workLifecyclePrimary', function(event) {
         lifecycleDescriptor(next[0], event.currentTarget);
@@ -498,7 +506,10 @@
       return label(item.category) + ': ' + Math.round(Number(item.observedSeconds || 0) / 60) + ' minutes';
     }).join(' · ')));
     content.appendChild(node('p', '', 'Recorded work time. This does not calculate pay or overtime.'));
-    if (!['start_timer', 'stop_timer', 'record_manual'].some(allows)) return;
+    var canCorrect = Boolean(model.record.workCapabilities.mutable && intervals.some(function(interval) {
+      return interval.observedEnd && interval.performedByProfileId === model.today.identity.profileId;
+    }));
+    if (!['start_timer', 'stop_timer', 'record_manual'].some(allows) && !canCorrect) return;
     var categories = safeArray(data.categoryContract && data.categoryContract.categories).map(function(value) { return { value: value, label: label(value) }; });
     var open = intervals.find(function(interval) { return !interval.observedEnd && interval.reviewState !== 'rejected'; });
     var actions = node('div', 'work-actions');
@@ -519,6 +530,7 @@
     }, 'btn btn-primary'));
     if (allows('stop_timer') && !open) content.appendChild(unavailableNote('The running timer could not be loaded. Reload before trying to stop it.'));
     if (allows('record_manual')) actions.appendChild(actionButton('Add manual time', '', function() { toggleForm('workLaborManual'); }));
+    if (canCorrect) actions.appendChild(actionButton('Edit Recorded Time', '', function() { toggleForm('workLaborCorrection'); }));
     content.appendChild(actions);
     if (allows('start_timer')) content.appendChild(makeForm('workLaborStart', [
       { name: 'category', label: 'Time category', type: 'select', options: categories },
@@ -546,6 +558,43 @@
         observedEnd: new Date(values.get('observedEnd')).toISOString(),
       });
     }, 'record_manual'));
+    if (canCorrect) {
+      var correctable = intervals.filter(function(interval) {
+        return interval.observedEnd && interval.performedByProfileId === model.today.identity.profileId;
+      });
+      var correctionForm = makeForm('workLaborCorrection', [
+        { name: 'intervalId', label: 'Recorded time', type: 'select', options: correctable.map(function(interval) {
+          return { value: interval.id, label: formatInstant(interval.observedStart) + ' — ' + formatInstant(interval.observedEnd) };
+        }) },
+        { name: 'category', label: 'Time category', type: 'select', options: categories },
+        { name: 'observedStart', label: 'Started', type: 'datetime-local' },
+        { name: 'observedEnd', label: 'Ended', type: 'datetime-local' },
+      ], 'Save Time Correction', function(values) {
+        var interval = correctable.find(function(candidate) { return candidate.id === values.get('intervalId'); });
+        if (!interval) throw new Error('WORK_LABOR_INTERVAL_STALE');
+        var body = commonBody('correct', 'Correct a recorded job time while preserving its original audit history.');
+        return Object.assign(body, {
+          category: values.get('category'), categoryContractVersion: data.categoryContract.version,
+          categoryContractDigest: data.categoryContract.digest, businessProfileId: model.today.businessProfile.id,
+          businessProfileVersion: model.today.businessProfile.version, businessProfileHash: model.today.businessProfile.hash,
+          timeZone: model.today.businessProfile.timeZone,
+          observedStart: new Date(values.get('observedStart')).toISOString(),
+          observedEnd: new Date(values.get('observedEnd')).toISOString(), intervalId: interval.id,
+          expectedIntervalRevision: interval.revision, expectedIntervalDigest: interval.digest,
+        });
+      }, 'correct');
+      var intervalSelect = correctionForm.elements.namedItem('intervalId');
+      function loadCorrection() {
+        var interval = correctable.find(function(candidate) { return candidate.id === intervalSelect.value; });
+        if (!interval) return;
+        correctionForm.elements.namedItem('category').value = interval.category;
+        correctionForm.elements.namedItem('observedStart').value = localInputInstant(interval.observedStart);
+        correctionForm.elements.namedItem('observedEnd').value = localInputInstant(interval.observedEnd);
+      }
+      intervalSelect.addEventListener('change', loadCorrection);
+      loadCorrection();
+      content.appendChild(correctionForm);
+    }
   }
 
   function renderMaterials() {
@@ -964,13 +1013,13 @@
         return;
       }
       content.appendChild(node('p', '', completionSelectionCopy()));
-      content.appendChild(actionButton('Propose completion', '', function() { toggleForm('workCompletionForm'); }, 'btn btn-primary'));
+      content.appendChild(actionButton('Finish Job', '', function() { toggleForm('workCompletionForm'); }, 'btn btn-primary'));
       var tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
       var localDefault = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       content.appendChild(makeForm('workCompletionForm', [
         { name: 'expiresAt', label: 'Proposal expires', type: 'datetime-local', value: localDefault,
           help: 'An owner or administrator must explicitly review before this time.' },
-      ], 'Propose completion', function(values) {
+      ], 'Finish Job', function(values) {
         return Object.assign(executionPins(), { action: 'propose_completion',
           reason: 'Propose explicit completion for authorized review.', expiresAt: new Date(values.get('expiresAt')).toISOString(),
           gateRequirements: api.completionRequirements(model.reads.evidence),
@@ -997,6 +1046,18 @@
       var first = target.querySelector('input,select,textarea');
       if (first) first.focus();
     }
+  }
+  function honorJobIntent() {
+    var intent = String(root.location.hash || '').slice(1);
+    var labels = { 'start-job': 'Start Job', 'stop-job': 'Stop Job', 'finish-job': 'Finish Job' };
+    if (!labels[intent]) return;
+    if (root.history && typeof root.history.replaceState === 'function') {
+      root.history.replaceState(null, '', root.location.pathname + root.location.search);
+    }
+    var target = Array.prototype.find.call(document.querySelectorAll('#workSections button'), function(button) {
+      return button.textContent.trim() === labels[intent] && !button.disabled;
+    });
+    if (target) target.click();
   }
 
   function renderReady(announcement) {
@@ -1046,7 +1107,7 @@
       if (!selected.execution) {
         model.execution = null; model.reads = {};
         pruneDrafts(false);
-        renderReady(options.announcement); return true;
+        renderReady(options.announcement); honorJobIntent(); return true;
       }
       selector.executionId = selected.execution.id;
       var paths = api.paths(selector);
@@ -1075,6 +1136,7 @@
         } else model.partial.push(name);
       });
       renderReady(options.announcement);
+      honorJobIntent();
       if (options.focusId) {
         var target = byId(options.focusId);
         if (target) target.focus({ preventScroll: true });
@@ -1127,8 +1189,27 @@
       clearIdempotency(descriptor.action);
       clearDraft(descriptor.action);
       model.retryMutation = null;
-      var refreshed = await load({ preserveApplied: true, announcement: descriptor.label + ' was recorded and refreshed.',
-        focusId: focusId });
+      var refreshed = await load({ preserveApplied: true, announcement: descriptor.continueWithStart
+        ? 'The job record was prepared. NorthStar is recording the start time.'
+        : descriptor.label + ' was recorded and refreshed.', focusId: focusId });
+      if (refreshed && descriptor.continueWithStart && allows('start')) {
+        var followUp = lifecycleRequest('start');
+        var followKey = idempotencyFor('start');
+        var followHeaders = { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': followKey };
+        if (csrf) followHeaders['X-CSRF-Token'] = csrf;
+        try {
+          await responseJson(followUp.path, { method: 'POST', headers: followHeaders,
+            body: JSON.stringify(followUp.body) }, controller.signal);
+          clearIdempotency('start');
+          refreshed = await load({ preserveApplied: true,
+            announcement: 'Start Job was recorded with the current server time.', focusId: focusId });
+        } catch (startError) {
+          model.retryMutation = { descriptor: followUp, trigger: trigger };
+          setState('retry', 'Job prepared; start not confirmed',
+            'The work record exists, but NorthStar could not confirm the start time. Use Retry same request; it will not record the start twice.');
+          return;
+        }
+      }
       if (!refreshed) setState('applied-but-refresh-failed');
     } catch (error) {
       var definitive = Number.isInteger(error.status);

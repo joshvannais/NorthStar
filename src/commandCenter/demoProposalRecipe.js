@@ -1,6 +1,42 @@
 'use strict';
 const {buildCanonicalKnowledgeDocument}=require('../knowledge/contract');
 const {VERSION}=require('../estimating/proposalRecipe');
+
+const CONFIG=Object.freeze({
+ fence:{label:'Fence Installation',material:'Cedar fence materials and hardware',materialCost:'2600.00',laborTask:'Layout, posts, rails, boards and gates',workerHours:'24',hourlyCost:'42.00',equipmentTask:'Post-hole preparation',equipmentCost:'176.00',mobilization:'120.00',price:'6800.00',overhead:'450.00'},
+ roofing:{label:'Roof Replacement',material:'Architectural roofing system and disposal supplies',materialCost:'6500.00',laborTask:'Tear-off, deck review and roof-system installation',workerHours:'80',hourlyCost:'42.00',equipmentTask:'Roof access and material handling',equipmentCost:'400.00',mobilization:'180.00',price:'14800.00',overhead:'950.00'},
+ hvac:{label:'HVAC Service',material:'Matched HVAC equipment, fittings and commissioning supplies',materialCost:'4800.00',laborTask:'Removal, installation and commissioning',workerHours:'24',hourlyCost:'50.00',equipmentTask:'Recovery, evacuation and commissioning',equipmentCost:'250.00',mobilization:'120.00',price:'9600.00',overhead:'650.00'},
+ plumbing:{label:'Plumbing Service',material:'Plumbing fixture, connections and installation supplies',materialCost:'900.00',laborTask:'Isolation, removal, installation and testing',workerHours:'10',hourlyCost:'48.00',equipmentTask:'Plumbing diagnostic and installation tools',equipmentCost:'100.00',mobilization:'75.00',price:'2850.00',overhead:'225.00'},
+ electrical:{label:'Electrical Service',material:'Electrical equipment, conductors and installation supplies',materialCost:'1100.00',laborTask:'Electrical preparation, installation and verification',workerHours:'16',hourlyCost:'50.00',equipmentTask:'Electrical testing and commissioning',equipmentCost:'80.00',mobilization:'75.00',price:'4250.00',overhead:'300.00'},
+ concrete:{label:'Concrete Installation',material:'Concrete, reinforcement, forms and finishing supplies',materialCost:'3900.00',laborTask:'Preparation, placement, finishing and cleanup',workerHours:'48',hourlyCost:'45.00',equipmentTask:'Concrete preparation and finishing',equipmentCost:'300.00',mobilization:'125.00',price:'11200.00',overhead:'800.00'}
+});
+
+function make(id,createdAt,asset,serviceKey,options={}){
+ const config=options.config||CONFIG[serviceKey];if(!config)throw new Error('A supported simulated service is required.');
+ const effectiveOn=new Date(createdAt).toISOString().slice(0,10),reviewBy=new Date(Date.parse(createdAt)+30*86400000).toISOString().slice(0,10),reference='Simulated '+config.label+' Profile v1';
+ const evidence={kind:'company_reference',reference,note:'Recorded fictional company productivity and internal cost profile.',effectiveOn,endsOn:reviewBy,geography:'simulated-workspace'};
+ const source={kind:'owner_estimate',referenceId:null,digest:null,note:'Recorded fictional company pricing profile.',effectiveOn,endsOn:reviewBy};
+ const suffix=options.operation?serviceKey+'-'+options.operation:serviceKey,equipmentLine=id(suffix+'-proposal-equipment');
+ const cost=asset.simulatedCostProfile,plannedEquipmentHours=options.plannedEquipmentHours||8;
+ const perJobOperating=cost?(Number(cost.hourlyOperatingCost)*plannedEquipmentHours+Number(cost.transportCostPerJob)).toFixed(2):null;
+ let equipmentCostLine;
+ if(cost?.ownership==='rented')equipmentCostLine={lineId:equipmentLine,access:'rented',method:'rental',notApplicableReason:null,plannedHours:'1',rental:{unit:'job',quantity:'1',minimumQuantity:'1',charge:{amount:Number(cost.transportCostPerJob).toFixed(2),scope:'equipment_only',split:null}},allocation:null,operating:{mode:'all_in',allIn:{status:'known',rate:{amount:(Number(cost.hourlyOperatingCost)*plannedEquipmentHours).toFixed(2),scope:'equipment_only',split:null}},fuelEnergy:null,consumables:null,maintenance:null},fees:[],source:{kind:'my_estimate',issuer:'Simulated Company',reference,note:'Recorded fictional per-job rental and operating allowance.',effectiveOn,endsOn:reviewBy,geography:'simulated-workspace'}};
+ else if(cost?.financed)equipmentCostLine={lineId:equipmentLine,access:'financed',method:'financing_cash',notApplicableReason:null,plannedHours:'1',rental:null,allocation:{period:'month',usableHours:String(cost.qualifyingJobsPerMonth),pool:{amount:Number(cost.monthlyPayment).toFixed(2),scope:'equipment_only',split:null},includedCategories:['debt_service'],additionalCosts:[]},operating:{mode:'all_in',allIn:{status:'known',rate:{amount:perJobOperating,scope:'equipment_only',split:null}},fuelEnergy:null,consumables:null,maintenance:null},fees:[],source:{kind:'my_estimate',issuer:'Simulated Company',reference,note:'The recorded monthly payment is divided across expected qualifying jobs; this job also receives its own operating and transport cost.',effectiveOn,endsOn:reviewBy,geography:'simulated-workspace'}};
+ else equipmentCostLine={lineId:equipmentLine,access:'owned',method:'economic_recovery',notApplicableReason:null,plannedHours:'1',rental:null,allocation:{period:'year',usableHours:'1',pool:{amount:cost?'0.00':config.equipmentCost,scope:'equipment_only',split:null},includedCategories:['capital_recovery'],additionalCosts:[]},operating:{mode:'all_in',allIn:{status:'known',rate:{amount:cost?perJobOperating:'0.00',scope:'equipment_only',split:null}},fuelEnergy:null,consumables:null,maintenance:null},fees:[],source:{kind:'my_estimate',issuer:'Simulated Company',reference,note:cost?'Recorded company operating allowance for this job; no debt payment applies to this owned tool.':'Recorded fictional job equipment allocation.',effectiveOn,endsOn:reviewBy,geography:'simulated-workspace'}};
+ const recipe={version:VERSION,id:options.recipeId||'simulated_'+serviceKey+'_v1',serviceKey,currency:'USD',geography:'simulated-workspace',effectiveOn,reviewBy,applicability:options.applicability||[],fields:options.fields||[],steps:[],
+  equipmentCostLines:[equipmentCostLine],
+  components:[
+    {kind:'materials',version:'estimate-material-plan-v2',inputs:{lines:[{lineId:id(suffix+'-proposal-material'),material:config.material,quantity:'1',unit:'ea',wastePercent:'0',unitPrice:String(config.materialCost),sourceType:'entered_price',sourceNote:reference+': recorded fictional company material allowance.',priceDate:effectiveOn}]},bindings:[]},
+    {kind:'labor',version:'estimate-labor-plan-v1',inputs:{serviceKey,lines:[{lineId:id(suffix+'-proposal-labor'),task:config.laborTask,basis:'worker_hours',workerHours:String(config.workerHours),people:null,elapsedHours:null,quantity:null,unit:null,hoursPerUnit:null,rateMode:'all_in',hourlyCost:String(config.hourlyCost),burdenPercent:null,quantitySource:evidence,rateSource:evidence}],assessment:null},bindings:[]},
+    {kind:'equipment',version:'estimate-equipment-plan-v1',inputs:{serviceKey,lines:[{lineId:equipmentLine,task:config.equipmentTask,assetId:asset.id,identity:asset.privateConfiguration,accessBasis:cost?.ownership==='rented'?'rented':cost?.financed?'financed':'owned',requirements:[{requirementId:id(suffix+'-proposal-requirement'),label:'Company service configuration',kind:'numeric',operator:'equals',value:'1',unit:'profile',origin:'owner_entry',scopeKey:null,specificationIndex:0}],knowledgePins:[],ownerReview:'Recorded fictional company equipment for this service profile.'}],assessment:null},bindings:[]},
+    {kind:'travel',version:'estimate-travel-plan-v1',inputs:{serviceKey,trips:[],logistics:[{lineId:id(suffix+'-proposal-mobilization'),label:'Service mobilization',category:'mobilization',applicable:true,reason:null,basis:'whole_job',tripId:null,quantity:'1',unit:'job',rate:String(config.mobilization),source:{kind:'my_estimate',issuer:'Simulated Company',reference,note:'Recorded fictional company mobilization allowance.',effectiveOn,endsOn:reviewBy,geography:'simulated-workspace'}}],access:[],hauls:[],loadBindings:[],stagePlan:null,assessment:null},bindings:[]},
+    {kind:'pricing',version:'estimate-pricing-plan-v1',inputs:{serviceKey,lines:[{lineId:'simulated-'+suffix+'-price',label:config.label+' price',kind:'package',quantity:null,unit:null,rate:null,amount:String(config.price),scope:'Recorded fictional company price for this simulated service profile',includes:[],period:null,source}],payments:{mode:'none',balanceId:null,stages:[]},overhead:{method:'fixed',amount:String(config.overhead),percent:null,period:null,source,coverage:{status:'disjoint',explanation:'The recorded overhead allocation is separate from direct job costs.',included:[]}}},bindings:[]}
+  ]};
+  const document=buildCanonicalKnowledgeDocument({applicability:{},canonicalKey:'organization.services',content:{estimateProposalRecipe:recipe},entryType:'generated_knowledge',label:'Simulated '+config.label+' Planning Profile',origin:'human',reviewRequirement:'high_risk',sensitivity:'restricted'});
+  const knowledge={entry_id:id(suffix+'-proposal-entry'),canonical_key:'organization.services',entry_type:'generated_knowledge',version_id:id(suffix+'-proposal-version'),version_number:1,sensitivity:'restricted',review_requirement:'high_risk',canonical_document:document.canonicalDocument,canonical_digest:document.canonicalDigest,publication_id:id(suffix+'-proposal-publication'),publication_number:1,publication_digest:document.canonicalDigest};
+ return{knowledge,basis:{serviceKey,publicationId:knowledge.publication_id,digest:knowledge.canonical_digest}};
+}
+
 function create(id,createdAt,asset){
  const effectiveOn=new Date(createdAt).toISOString().slice(0,10),reviewBy=new Date(Date.parse(createdAt)+30*86400000).toISOString().slice(0,10);
  const evidence={kind:'company_reference',reference:'Simulated Fence Recipe v1',note:'Declared fictional planning inputs, not observed productivity or market rates.',effectiveOn,endsOn:reviewBy,geography:'simulated-workspace'};
@@ -21,4 +57,23 @@ function create(id,createdAt,asset){
  const knowledge={entry_id:id('proposal-entry'),canonical_key:'organization.services',entry_type:'generated_knowledge',version_id:id('proposal-version'),version_number:1,sensitivity:'restricted',review_requirement:'high_risk',canonical_document:document.canonicalDocument,canonical_digest:document.canonicalDigest,publication_id:id('proposal-publication'),publication_number:1,publication_digest:document.canonicalDigest};
  return{knowledge,basis:{version:'simulated-fence-proposal-basis-v1',geography:'simulated-workspace',publicationId:knowledge.publication_id,digest:knowledge.canonical_digest,simulated:true}};
 }
-module.exports={create};
+function treeRecipes(id,createdAt,assets,profile){
+ const tree=require('./demoTreeBusinessProfiles'),operations=Object.entries(tree.OPERATIONS);
+ return operations.map(([operation,definition])=>{
+  const machine=tree.equipmentFor(profile,operation),asset=assets['tree:'+machine.key];
+  const rates=profile.workforce.labor,crew=profile.workforce.people;
+  const loaded=[rates.crewLeadLoadedHourlyCost,rates.groundWorkerLoadedHourlyCost];
+  if(profile.workforce.hasQualifiedClimber&&['removal','pruning'].includes(operation))loaded.push(rates.climberLoadedHourlyCost);
+  const hourlyCost=(loaded.reduce((sum,value)=>sum+value,0)/loaded.length).toFixed(2);
+  const plannedEquipmentHours=Math.max(1,Math.ceil(definition.workerHours/crew));
+  const config={label:definition.label,material:definition.material,materialCost:Number(definition.materialCost).toFixed(2),laborTask:definition.laborTask,workerHours:String(definition.workerHours),hourlyCost,equipmentTask:definition.equipmentTask,equipmentCost:'0.00',mobilization:Number(definition.mobilization).toFixed(2),price:Number(definition.basePrice).toFixed(2),overhead:Number(definition.overhead).toFixed(2)};
+  return make(id,createdAt,asset,'tree',{operation,config,plannedEquipmentHours,recipeId:'simulated_tree_'+operation+'_v1',applicability:[{fieldId:'jobType',value:operation,question:'Which tree service is the customer requesting?'}],fields:[{id:'jobType',label:'Tree service operation',type:'category',unit:'category',allowedValues:operations.map(([key])=>key),question:'Which tree service is the customer requesting?',why:'The requested operation selects the company workflow, equipment and cost profile.'}]});
+ });
+}
+function createAll(id,createdAt,assets,treeProfile){
+ const keys=Object.keys(CONFIG),standard=keys.map(key=>key==='fence'?module.exports.create(id,createdAt,assets[key]):make(id,createdAt,assets[key],key)),trees=treeRecipes(id,createdAt,assets,treeProfile),rows=[...standard,...trees];
+ const services=Object.fromEntries(keys.map((key,index)=>[key,{publicationId:standard[index].knowledge.publication_id,digest:standard[index].knowledge.canonical_digest}]));
+ services.tree={publicationIds:trees.map(row=>row.knowledge.publication_id),digests:trees.map(row=>row.knowledge.canonical_digest)};
+ return{knowledgeRows:rows.map(row=>row.knowledge),basis:{version:'simulated-service-proposal-basis-v2',geography:'simulated-workspace',services,simulated:true}};
+}
+module.exports={create,createAll,CONFIG};

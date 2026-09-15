@@ -125,6 +125,7 @@ function getDefaultProfile() {
     services: [],
     financial: { desiredGrossMargin: 40, desiredNetMargin: 20, markup: 1.3, taxRate: 7, emergencyMarkup: 1.5, travelCharge: 0.58, minimumJobPrice: 150, maximumDiscount: 15 },
     scheduling: { maxJobsPerDay: 4, travelBuffer: 15, appointmentBuffer: 10, workDayLength: 8, preferredDispatchStrategy: 'efficiency', maxDailyTravel: 120 },
+    workforce: { policies: [], jobControlPolicy: 'direct_assignee_or_crew_lead', jobControlDelegatedProfileIds: [] },
     polaris: { responseStyle: 'executive', detailLevel: 'standard', showCalculations: true, showConfidence: true, showExecutiveReasoning: true, recommendationStyle: 'prioritized', conciseMode: false, executiveMode: true },
     retell: { voicePersonality: 'professional', conversationStyle: 'consultative', maxConversationLength: 15, escalationRules: {}, transferRules: {}, appointmentRules: {}, questionStrategy: 'discovery', confirmationStyle: 'explicit', emergencyWorkflow: false },
     notifications: { email: true, sms: false, push: true, dailyExecutiveBriefing: true, revenueAlerts: true, crewAlerts: false, criticalAlerts: true },

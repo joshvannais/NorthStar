@@ -17,6 +17,9 @@ function fail(status, code, message, cause) {
 
 function mapDatabaseError(error) {
   if (error instanceof FieldExecutionRepositoryError) return error;
+  if (error && error.code === 'JOB_CONTROL_FORBIDDEN') {
+    return new FieldExecutionRepositoryError(403,'JOB_CONTROL_FORBIDDEN',error.message,error);
+  }
   const constraint = String(error && error.constraint || '');
   if (constraint === 'canonical_field_execution_not_found' || error && error.code === 'P0002') {
     return new FieldExecutionRepositoryError(404, 'NOT_FOUND', 'Field execution not found.', error);
@@ -215,6 +218,9 @@ async function materialSerializable(pool, operation) {
 
 async function initializeFieldExecution(pool, input) {
   return serializable(pool, async client => {
+    if (input.actorAccessRole === 'member') {
+      await require('./jobControlAuthority').requireJobControl(client,input,{appointmentId:input.appointmentId});
+    }
     const result = await client.query(
       `SELECT public.canonical_field_execution_initialize(
          $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::bigint,
@@ -231,6 +237,9 @@ async function initializeFieldExecution(pool, input) {
 
 async function transitionFieldExecution(pool, input) {
   return serializable(pool, async client => {
+    if (input.actorAccessRole === 'member') {
+      await require('./jobControlAuthority').requireJobControl(client,input,{executionId:input.executionId});
+    }
     const result = await client.query(
       `SELECT public.canonical_field_execution_transition(
          $1::uuid,$2::uuid,$3::text,$4::uuid,$5::text,$6::uuid,$7::bigint,

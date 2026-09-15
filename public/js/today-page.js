@@ -134,6 +134,13 @@
     var end = formatInstant(record.schedule.end, timeZone, { hour: 'numeric', minute: '2-digit' });
     return start + '–' + end;
   }
+  function jobAction(labelText, enabled, href, state) {
+    var control = element(enabled ? 'a' : 'button', 'btn today-job-action', labelText);
+    control.setAttribute('data-job-action', state);
+    if (enabled) control.href = href + '#' + state + '-job';
+    else { control.type = 'button'; control.disabled = true; }
+    return control;
+  }
   function renderRecord(record, timeZone) {
     var item = element('li', 'today-work-card');
     item.setAttribute('data-appointment-id', record.appointmentId);
@@ -187,9 +194,23 @@
     } else {
       append(body, heading, grid, instructions.node, route.node);
     }
-    var workLink = element('a', 'btn btn-primary today-open-work', 'Open work');
-    workLink.href = '/dashboard/work?appointmentId=' + encodeURIComponent(record.appointmentId) +
+    var workHref = '/dashboard/work?appointmentId=' + encodeURIComponent(record.appointmentId) +
       (record.execution ? '&executionId=' + encodeURIComponent(record.execution.id) : '');
+    var permitted = record.workCapabilities && Array.isArray(record.workCapabilities.actions)
+      ? record.workCapabilities.actions : [];
+    var controls = element('div', 'today-job-controls');
+    append(controls,
+      jobAction('Start Job', ['initialize','start','resume'].some(function(action) { return permitted.includes(action); }), workHref, 'start'),
+      jobAction('Stop Job', permitted.includes('pause'), workHref, 'stop'),
+      jobAction('Finish Job', permitted.includes('propose_completion'), workHref, 'finish')
+    );
+    if (record.workCapabilities && record.workCapabilities.jobControl &&
+        record.workCapabilities.jobControl.allowed === false) {
+      controls.appendChild(element('p', 'today-job-control-note', 'Crew lead controls this job.'));
+    }
+    body.appendChild(controls);
+    var workLink = element('a', 'btn btn-secondary today-open-work', 'View Job Details');
+    workLink.href = workHref;
     workLink.setAttribute('aria-label', 'Open work for ' + presentationText(record.title, 'this appointment'));
     body.appendChild(workLink);
     append(item, accent, body);
@@ -212,7 +233,7 @@
     if (data.records.length === 0) {
       setState('empty', 'No work assigned for today', 'No appointments are assigned to you or your current crew today.', false);
     } else {
-      setState('ready', '', 'Showing current read-only schedule, dispatch, route, and job essentials.');
+      setState('ready', '', 'Showing current schedule, job controls, dispatch, route, and job essentials.');
     }
   }
   async function load() {

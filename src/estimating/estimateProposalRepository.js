@@ -13,8 +13,8 @@ function context(raw,input,now,item=null){
 }
 async function loadContext(client,input,review,item){
  let raw=await equipment.readSources(client,input);
- const recipes=equipment.presentSources(raw,input).knowledge.map(k=>k.content?.estimateProposalRecipe).filter(r=>r?.serviceKey===item.snapshot.service.key);
- if(recipes.length===1){const recipe=require('./proposalRecipe').normalize(recipes[0]),plan=recipe.components.find(c=>c.kind==='equipment');if(plan){require('./equipmentPlanContract').validate(plan.inputs);const selected=await equipment.readSources(client,input,plan.inputs);raw={...raw,references:selected.references,assets:Array.from(new Map([...raw.assets,...selected.assets].map(a=>[a.id,a])).values()),digest:sha256({initial:raw.digest,selected:selected.digest})};}}
+ const initial=equipment.presentSources(raw,input),recipes=proposal.applicableRecipes({...initial,proposalScope:initial.scope||{}},item);
+ if(recipes.length===1){const plan=recipes[0].recipe.components.find(c=>c.kind==='equipment');if(plan){require('./equipmentPlanContract').validate(plan.inputs);const selected=await equipment.readSources(client,input,plan.inputs);raw={...raw,references:selected.references,assets:Array.from(new Map([...raw.assets,...selected.assets].map(a=>[a.id,a])).values()),digest:sha256({initial:raw.digest,selected:selected.digest})};}}
  const resources=await require('./proposalResources').paid(client,{...input,appointmentId:item.ids.appointment||null},item.snapshot.service.key),now=new Date((await client.query('SELECT clock_timestamp() now')).rows[0].now);
  return {review,item,sources:{...context(raw,input,now,item),resources},now};
 }
@@ -25,7 +25,7 @@ function demoContext(record,review,item,now=new Date(),workspace=null){
  // This marker exists only in new-session generated source data. Old sessions
  // are never repaired or silently given recipe facts by this read adapter.
  const seed=record.state.equipmentBasis?.proposalRecipeBasis;
- if(seed?.version==='simulated-fence-proposal-basis-v1'&&item.snapshot.service.key==='fence'){
+ if((seed?.version==='simulated-fence-proposal-basis-v1'&&item.snapshot.service.key==='fence')||(seed?.version==='simulated-service-proposal-basis-v2'&&seed.services?.[item.snapshot.service.key])){
   sources.geography=seed.geography;
   const feet=item.snapshot.service.scope?.linearFeet;
   if(typeof feet==='number'&&Number.isFinite(feet)&&feet>=0&&!sources.unconfirmedFields.includes('linearFeet'))sources.facts.linearFeet={value:String(feet),unit:'ft',source:'Recorded simulated fence length'};

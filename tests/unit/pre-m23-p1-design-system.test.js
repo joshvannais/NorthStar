@@ -105,7 +105,7 @@ describe('Pre-Mission-23 P1 design system and employee foundation', () => {
 
     expect(today.match(/todayCount/g).length).toBe(2);
     expect(today).toContain("byId('todayCount').textContent = data.records.length + (data.records.length === 1 ? ' Appointment' : ' Appointments');");
-    expect(command).toContain("definition.textContent = 'Review current scheduling records in ' + overview.timeZone + '.';");
+    expect(command).toContain("'Review current appointments in your business time zone.'");
     expect(command).not.toContain("definition.textContent = 'Showing ' + page.shown + ' of ' + page.total + ' appointments");
     expect(publicSources).not.toMatch(/Recorded time unavailable/i);
   });

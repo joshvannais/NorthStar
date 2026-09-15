@@ -2,7 +2,7 @@
 const fs=require('fs'),path=require('path');
 for(const host of ['operations','completion-review'])test(host+' loads route contract before demo runtime and uses only canonical header destinations',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../../public/dashboard/'+host+'.html'),'utf8');
- const contract=html.indexOf('/js/command-center-contract.js?v=demo-nav-10-20260915'),demo=html.indexOf('/js/demo-runtime.js?v=demo-runtime-11-20260915');
+ const contract=html.indexOf('/js/command-center-contract.js?v=demo-nav-10-20260915'),demo=html.indexOf('/js/demo-runtime.js?v=demo-runtime-12-20260915');
  expect(contract).toBeGreaterThan(-1);expect(contract).toBeLessThan(demo);
  if(host==='operations'){
   expect(html).toContain('class="dashboard-layout"');
@@ -34,4 +34,11 @@ test('failed session establishment rejects owner reads without issuing them; pai
  const fetch=jest.fn(()=>Promise.resolve(new Response('{}',{status:410}))),r=runtime(fetch);
  await expect(r.fetch('/api/v1/field-executions/owner-work')).rejects.toThrow('workspace is unavailable');expect(fetch).toHaveBeenCalledTimes(1);
  expect(runtime(fetch,'/dashboard/operations').active).toBe(false);expect(fetch).toHaveBeenCalledTimes(1);
+});
+test('a workspace revision closes a superseded uncertain action while an unchanged workspace keeps exact retry',()=>{
+ const r=runtime(jest.fn()),pending={sessionId:'demo-session',endpoint:'/api/demo/command-center/simulations/leads',intent:'simulate-lead',attempt:{headers:{'Idempotency-Key':'same-action'},body:JSON.stringify({expectedRevision:4,scenario:{service:'tree'}})}},workspace={session:{id:'demo-session'},integrity:{revision:4}};
+ expect(r.pendingActionDisposition(pending,workspace)).toBe('retry');
+ expect(r.pendingActionDisposition(pending,{...workspace,integrity:{revision:5}})).toBe('advanced');
+ expect(r.pendingActionDisposition({...pending,attempt:{...pending.attempt,body:'not-json'}},workspace)).toBe('discard');
+ expect(r.pendingActionDisposition({...pending,sessionId:'another-session'},workspace)).toBe('discard');
 });

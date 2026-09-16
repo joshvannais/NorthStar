@@ -4,6 +4,29 @@ Objective: let each business improve its own operating assumptions from authoriz
 
 Mission 25 consumes exact references from accepted NorthStar authorities and authorized provider-neutral imports. It does not replace the source records. Mission 20 continues to own business profile and operating policy; Mission 21 owns reviewed shared knowledge; Mission 22 owns scheduling, dispatch, assignment, availability and route recommendations; Mission 23 owns actual field execution; Mission 24 owns estimates and customer-facing price; Mission 26 owns forward-looking business predictions; Mission 27 owns invoices, payments and collections; Mission 28 owns automation.
 
+## Current implementation structure — 14 parts
+
+Mission 25 currently has fourteen top-level parts. A part may use bounded slices when its implementation or release evidence must be serialized. This structure keeps the work measurable without preventing founder-authorized additions, corrections or newly discovered requirements. Any change to the top-level count must be recorded here with its reason and affected completion gates.
+
+| Part | Scope | Status |
+| --- | --- | --- |
+| 1 | Learning authority, privacy boundaries and live source inventory | Released |
+| 2 | Native planned-versus-actual labor-duration observations | Released |
+| 3 | Provider-neutral external labor import authority for backfill and continuing updates | Released |
+| 4 | Reviewed external worker and job reconciliation | Released |
+| 5 | Imported labor-duration outcomes with complete matched lineage | Released |
+| 6 | Multi-job imported labor calibration with robust sample statistics | In progress |
+| 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Planned |
+| 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Planned |
+| 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Planned |
+| 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Planned |
+| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Planned |
+| 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
+| 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Planned |
+| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | Planned |
+
+Part 12 may consume authorized external invoice, payment and collection evidence. Native NorthStar invoice/payment/collection records remain unavailable until Mission 27 creates that authority; Mission 25 records the compatibility boundary and must not invent those records early. Part 14 cannot pass with placeholder connectors, sample-only cards, an API-only owner workflow, fabricated outcomes or unresolved tenant/deletion boundaries.
+
 ## First bounded package — root authority and live-state inventory
 
 The first package is the [learning architecture](../architecture/MISSION_25_LEARNING_ARCHITECTURE.md) and [source inventory](../architecture/MISSION_25_LEARNING_SOURCE_INVENTORY.md). It establishes the contract that later runtime packages must satisfy. It adds no learning table, model, connector, provider call, route, UI, production configuration or data consumption.
@@ -38,7 +61,7 @@ Migration `086_canonical_imported_labor_outcomes.sql` and guarded external-labor
 
 The output is a deterministic advisory variance. Source corrections, tombstones, target changes, match changes and consent changes make prior advice stale; revocation hides derived results. The package does not alter an estimate, rate, schedule, payroll record, workforce profile or policy. No rendered owner interface is included; the future interface must separately pass wording, focus, keyboard, mobile, theme and founder visual review.
 
-No fixed implementation-part count is declared by this package. Later packages must state the exact source class, consent, correction/deletion behavior, derived output and release evidence they add. Completion requires usable roadmap-designated historical-backfill and continuous-update integrations; placeholder connectors and sample cards are insufficient.
+Mission 25 currently has fourteen top-level parts under the structure above. Later parts must state the exact source class, consent, correction/deletion behavior, derived output and release evidence they add. Completion requires usable roadmap-designated historical-backfill and continuous-update integrations; placeholder connectors and sample cards are insufficient.
 
 ## Required direction
 
@@ -62,3 +85,9 @@ The learning inputs include verified labor/time, travel/routes/fuel, vehicle and
 ## Evidence boundaries
 
 Architecture acceptance is not runtime completion. Each source adoption needs mounted tenant and role isolation, consent/currentness, provenance, correction/tombstone, replay/deduplication, limit, recovery and deletion/retention tests. Production-provider readiness, private production data, cross-tenant aggregation, physical-device coverage and founder visual approval remain separate gates.
+
+## Sixth bounded package — multi-job imported labor calibration
+
+Migration `087_canonical_imported_labor_calibration.sql` and guarded calibration routes summarize five to 100 current reviewed imported labor-duration outcomes for one exact service key. Separate calibration consent pins current imported-outcome consent. Each immutable proposal pins its complete sample and reports a deterministic median recorded-to-planned worker-hour ratio with lower and upper quartiles. A fixed five-percent band produces only an advisory to keep, increase or decrease planned hours.
+
+Source corrections, reviewed-match changes, adopted-plan changes, observation refreshes and consent changes make the saved proposal stale and mask its recommendation. Nothing automatically changes an estimate, labor plan, rate, schedule, payroll record, worker profile or business policy. No rendered owner interface is included; later adoption UI must separately pass wording, focus, keyboard, mobile, theme and founder visual review.

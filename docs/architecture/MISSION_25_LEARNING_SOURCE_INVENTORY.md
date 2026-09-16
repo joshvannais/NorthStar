@@ -40,8 +40,12 @@ The current projection is available only while that source's consent is active. 
 
 ## Released external-labor reconciliation contract
 
-Migration `085_canonical_external_labor_reconciliation.sql` records explicit owner or administrator links from current external worker and job references to current same-tenant workforce profiles and estimates. The current imported-record manifest and target basis are digested independently. Corrections, tombstones, profile changes and membership status changes therefore make a prior link stale instead of silently changing its meaning. Consent revocation hides the projection and blocks writes. These links are advisory lineage only; no imported record is yet eligible for an outcome observation.
+Migration `085_canonical_external_labor_reconciliation.sql` provides reviewed worker and job reference reconciliation by recording explicit owner or administrator links from current external worker and job references to current same-tenant workforce profiles and estimates. The current imported-record manifest and target basis are digested independently. Corrections, tombstones, profile changes and membership status changes therefore make a prior link stale instead of silently changing its meaning. Consent revocation hides the projection and blocks writes. These links are advisory lineage only; no imported record is yet eligible for an outcome observation.
 
 ## Released imported labor-duration outcome contract
 
 Migration `086_canonical_imported_labor_outcomes.sql` makes current matched external labor records eligible for one narrow planned-versus-recorded worker-hour comparison. The business must grant a separate purpose consent while source consent is current. The job match must point to the estimate and every current worker reference must have a current match. The immutable observation pins all source records and reviewed links. It reports a deterministic variance advisory and never adopts a changed rate, plan, price, schedule or policy.
+
+## Released multi-job imported labor calibration contract
+
+Migration `087_canonical_imported_labor_calibration.sql` adds separately consented, tenant-private multi-job imported labor calibration proposals. Five to 100 current reviewed outcomes for one normalized service key form a pinned sample. The deterministic median and quartiles describe recorded-to-planned worker-hour ratios, while a fixed five-percent band produces an advisory only. Corrections or consent changes stale the proposal and mask its recommendation. No operational authority is mutated.

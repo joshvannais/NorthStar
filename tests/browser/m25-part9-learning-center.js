@@ -80,20 +80,16 @@ let fixture;
     await paidContext.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name, value]) => ({
       name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf',
     })));
-    let raceMode = false, loadRaceMode = false, staleCenterPending = false, newTravelPostStartedResolve;
-    const newTravelPostStarted = new Promise(resolve => { newTravelPostStartedResolve = resolve; });
+    let raceMode = false, loadRaceMode = false, staleCenterPending = false, staleCenterStartedResolve;
+    const staleCenterStarted = new Promise(resolve => { staleCenterStartedResolve = resolve; });
     await paidContext.route('**/*', async route => {
       const request = route.request();
       const url = new URL(request.url());
       if (url.origin !== origin) return route.abort();
       ledger.requests.push({ method: request.method(), path: url.pathname });
-      if (loadRaceMode && request.method() === 'POST' && url.pathname === '/api/v1/learning/external-travel-sources/new.travel/consent') {
-        newTravelPostStartedResolve();
-        await new Promise(resolve => setTimeout(resolve, 100));
-        return route.continue();
-      }
       if (loadRaceMode && staleCenterPending && request.method() === 'GET' && url.pathname === '/api/v1/learning/center') {
         staleCenterPending = false;
+        staleCenterStartedResolve();
         await new Promise(resolve => setTimeout(resolve, 500));
         return route.fulfill(jsonCenter());
       }
@@ -145,12 +141,12 @@ let fixture;
     ledger.cases.push('A delayed labor response cannot overwrite the fast selected travel source or its evidence after a source switch.');
 
     loadRaceMode = true; staleCenterPending = true;
+    await paidPage.locator('#learningRefresh').click();
+    await staleCenterStarted;
     await paidPage.locator('#learningSourceKind').selectOption('travel');
     await paidPage.locator('#learningSourceKey').fill('new.travel');
     const newConsentResponse = paidPage.waitForResponse(response => response.url().endsWith('/external-travel-sources/new.travel/consent') && response.request().method() === 'POST');
     await paidPage.locator('#learningSourceAdd').click();
-    await newTravelPostStarted;
-    await paidPage.locator('#learningRefresh').click();
     assert.equal((await newConsentResponse).status(), 201);
     await paidPage.waitForFunction(() => document.querySelector('#learningDetailTitle').textContent === 'New Travel · Travel' && document.querySelector('#learningStatus').textContent === 'Learning Center is current.');
     await paidPage.waitForTimeout(650);

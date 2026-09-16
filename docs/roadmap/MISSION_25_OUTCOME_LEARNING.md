@@ -16,8 +16,8 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 4 | Reviewed external worker and job reconciliation | Released |
 | 5 | Imported labor-duration outcomes with complete matched lineage | Released |
 | 6 | Multi-job imported labor calibration with robust sample statistics | Released |
-| 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | In progress |
-| 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Planned |
+| 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Released |
+| 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | In progress |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Planned |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Planned |
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Planned |
@@ -97,3 +97,9 @@ Source corrections, reviewed-match changes, adopted-plan changes, observation re
 The Learning Center is a separate owner and administrator destination that inventories tenant-private learning sources and opens the already governed consent, evidence, reference-match and calibration authorities in one review flow. The paid page reads PostgreSQL through a bounded security-definer projection. Members and viewers have no Learning Center permission. The isolated demo page uses explicit read-only fictional records and cannot contribute to paid learning.
 
 Controls use current revision and digest pins, explicit confirmation versions, idempotency keys and fixed action-specific audit reasons. The interface does not ask an owner to invent a human-approval explanation. It reports stale and unmatched references, keeps calibration proposals advisory, and applies no estimate, rate, schedule, payroll, workforce or policy change. Part 8 still owns usable CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration; Part 14 owns complete paid/demo parity and mission-wide visual acceptance.
+
+## Eighth bounded package — usable import operations
+
+Migration `089_canonical_external_labor_import_operations.sql` and the Learning Center source-operation workflow add exact-schema CSV historical backfill, provider-neutral adapter lifecycle state, historical and continuous checkpoints, source retention policy and bounded retention or deletion cleanup. CSV pages still pass through the guarded Part 3 batch authority. Adapter state stores no credential and does not claim a provider-specific connection.
+
+Every lifecycle and policy change is an immutable revision pinned by expected revision and digest. Cleanup processes at most 100 current records, appends detail-free tombstone revisions and returns a resumable checkpoint. A deletion request immediately appends a source-consent revocation so new imports and derived reads stop before the cleanup finishes. Corrections and tombstones continue to stale downstream reviewed matches, observations and calibration proposals. These operations do not apply a learned value or change an estimate, rate, labor plan, schedule, payroll record, workforce profile or business policy.

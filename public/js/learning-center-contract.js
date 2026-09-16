@@ -39,6 +39,12 @@
     !Array.isArray(value.history)||!integer(value.total)||value.total<value.history.length)throw new Error('Learning calibration detail is invalid.');
   return value;
  }
+ function operations(value){
+  if(!object(value)||!KEY.test(value.sourceKey)||!Array.isArray(value.checkpoints)||!integer(value.activeRecordTotal)||
+    !integer(value.retentionEligibleTotal)||typeof value.deletionComplete!=='boolean'||!text(value.boundary,1000))throw new Error('Learning source operations response is invalid.');
+  ['adapter','retention','deletion'].forEach(function(key){var item=value[key];if(item!==null&&(!object(item)||!integer(item.revision)||item.revision<1||!text(item.action,32)||!digest(item.digest)))throw new Error('Learning source operation is invalid.');});
+  return value;
+ }
  function label(value){return String(value||'').replace(/[._-]+/g,' ').replace(/\b[a-z]/g,function(letter){return letter.toUpperCase();});}
- return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,calibration:calibration,label:label});
+ return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,calibration:calibration,operations:operations,label:label});
 });

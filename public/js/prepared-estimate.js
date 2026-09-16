@@ -113,6 +113,12 @@
     function controls() { calculate.disabled = state.busy || state.stale || state.unmatched || !state.fields || !state.fields.length; refresh.disabled = state.busy; check.disabled = !state.data || state.stale || state.dirty || state.data.readiness === 'blocked'; check.checked = !!state.acknowledged && !check.disabled; if(adoption)adoption.update(); }
     function invalidate(message) { state.sequence++; state.busy = false; state.data = null; state.dirty = true; state.acknowledged = false; clearTimeout(state.timer);var expiry=state.expiresAt;if(expiry&&Date.parse(expiry)<=Date.now())state.stale=true;else if(expiry)state.timer=setTimeout(function(){if(current()&&state.expiresAt===expiry)options.refresh();},Math.max(0,Date.parse(expiry)-Date.now()));status.textContent = message; renderGroups(); controls(); }
     function amount(value) { return options.money(value, review.currency); }
+    function equipmentName(identity) {
+      if (!identity) return 'Equipment details need review';
+      if (identity.displayName) return identity.displayName;
+      var exact = [identity.manufacturer, identity.model].filter(Boolean).join(' ').trim();
+      return exact || identity.equipmentType || 'Equipment details need review';
+    }
     function row(parent, label, value) { var r = node('div', null, parent, 'prepared-row'); node('span', label, r); node('strong', value == null ? 'Not recorded' : String(value), r); }
     function renderGroups() {
       if(overview){
@@ -141,7 +147,7 @@
           if (!candidates.length) node('p', 'No current crew information is available.', details);
           candidates.forEach(function (v) { node('p', v.label + ' — ' + (v.status === 'blocked' ? 'Recorded requirements or schedule conflict' : v.status === 'eligible_for_review' ? 'Review for the recorded job time; not assigned' : 'Requirements or availability need review'), details); });
         } else if (g[0] === 'equipment') {
-          (c.inputs.lines || []).forEach(function (l, i) { row(target, l.task, l.identity && (l.identity.displayName || l.identity.model || l.identity.equipmentType) || 'Equipment details need review'); var result = (c.result.lines || [])[i]; node('p', result && result.status === 'matches_reviewed_requirements' ? (review.simulated?'Prefilled from this simulated business inventory and matched to the recorded job requirements.':'Recorded specifications match the reviewed requirements. Check current condition and availability before dispatch.') : 'Confirm requirements and current equipment information.', target, 'prepared-muted'); var cost = (c.costs || []).find(function (v) { return v.lineId === l.lineId; }); row(target, 'Equipment cost', cost ? amount(cost.total) : 'Unavailable'); });
+          (c.inputs.lines || []).forEach(function (l, i) { row(target, l.task, equipmentName(l.identity)); var result = (c.result.lines || [])[i]; node('p', result && result.status === 'matches_reviewed_requirements' ? (review.simulated?'Prefilled from this simulated business inventory and matched to the recorded job requirements.':'Recorded specifications match the reviewed requirements. Check current condition and availability before dispatch.') : 'Confirm requirements and current equipment information.', target, 'prepared-muted'); var cost = (c.costs || []).find(function (v) { return v.lineId === l.lineId; }); row(target, 'Equipment cost', cost ? amount(cost.total) : 'Unavailable'); });
         } else if (g[0] === 'travel') {
           (c.inputs.logistics||[]).filter(function(item){return /^Vehicle plan/.test(item.label);}).forEach(function(item){row(target,item.label.replace(/^Vehicle plan · /,''),'Selected from Business Profile fleet');});
           row(target, 'Travel and logistics cost', amount(c.result.total)); node('p', 'Vehicle cost is counted here and is not charged again in equipment.', target, 'prepared-muted');

@@ -1219,6 +1219,19 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_labor_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_labor_outcome_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_equipment_learning_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_equipment_learning_consents, public.canonical_native_equipment_utilization_observations FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_equipment_learning_consent_projection(public.canonical_equipment_learning_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_equipment_utilization_basis(uuid,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_equipment_utilization_projection(public.canonical_native_equipment_utilization_observations) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_equipment_learning_consent_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_equipment_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_equipment_utilization_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_equipment_utilization_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_material_movements') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE ALL PRIVILEGES ON TABLE public.canonical_material_movements, public.canonical_material_events, public.canonical_material_revisions, public.canonical_material_audit_events, public.canonical_material_idempotency FROM %I',
@@ -1412,6 +1425,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_labor_idempotency',
              'canonical_learning_purpose_consents',
              'canonical_labor_outcome_observations',
+             'canonical_equipment_learning_consents',
+             'canonical_native_equipment_utilization_observations',
              'canonical_material_movements',
              'canonical_material_events',
              'canonical_material_revisions',
@@ -1580,6 +1595,21 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_labor_learning_basis(uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_labor_outcome_projection(public.canonical_labor_outcome_observations)','EXECUTE')
        )) AS learning_helpers_withheld,
+       (to_regclass('public.canonical_equipment_learning_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_equipment_learning_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_native_equipment_utilization_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS native_equipment_learning_tables_withheld,
+       (to_regclass('public.canonical_equipment_learning_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_equipment_learning_consent_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_equipment_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_native_equipment_utilization_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_native_equipment_utilization_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS native_equipment_learning_entry_execute,
+       (to_regclass('public.canonical_equipment_learning_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_equipment_learning_consent_projection(public.canonical_equipment_learning_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_equipment_utilization_basis(uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_equipment_utilization_projection(public.canonical_native_equipment_utilization_observations)','EXECUTE')
+       )) AS native_equipment_learning_helpers_withheld,
        (to_regclass('public.canonical_material_movements') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_material_movements','SELECT')
          AND NOT has_table_privilege($1,'public.canonical_material_movements','INSERT')
@@ -1690,6 +1720,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.learning_tables_withheld ||
       !runtimePrivileges.learning_entry_execute ||
       !runtimePrivileges.learning_helpers_withheld ||
+      !runtimePrivileges.native_equipment_learning_tables_withheld ||
+      !runtimePrivileges.native_equipment_learning_entry_execute ||
+      !runtimePrivileges.native_equipment_learning_helpers_withheld ||
       !runtimePrivileges.material_tables_withheld ||
       !runtimePrivileges.material_entry_execute ||
       !runtimePrivileges.material_helpers_withheld ||
@@ -1726,7 +1759,7 @@ async function runMigrations(options = {}) {
     // Bound the reviewed Mission 24 and Mission 25 migrations' complete transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
-    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql'].includes(migrations[migrations.length - 1]?.file)) {
+    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql'].includes(migrations[migrations.length - 1]?.file)) {
       const settings = await client.query(
         "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
       );

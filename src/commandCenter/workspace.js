@@ -844,7 +844,41 @@ function buildDemoWorkspace(input) {
   const activeScenarioGraph = input.state.graphs.find(graph =>
     graph && graph.scenario && graph.scenario.selection && normalizeSelection(graph.scenario.selection));
   const activeSelection = activeScenarioGraph ? activeScenarioGraph.scenario.selection : null;
-  const configuration = demoConfiguration(activeSelection, seededWorkspace);
+  const baseConfiguration = demoConfiguration(activeSelection, seededWorkspace);
+  const toolRoles = new Set(['cutting_tool', 'manual_tools', 'rigging_tools']);
+  const equipmentAssets = (input.state.equipmentBasis && input.state.equipmentBasis.assets || []).map(function (asset) {
+    const identity = asset.privateConfiguration || {};
+    const category = asset.simulatedCostProfile && toolRoles.has(asset.simulatedCostProfile.role)
+      ? 'tool' : 'equipment';
+    return {
+      ...asset,
+      manufacturer: identity.manufacturer || '',
+      model: identity.model || '',
+      category,
+      categoryLabel: category === 'tool' ? 'Industry Tools And Gear' : 'Equipment And Machinery',
+    };
+  });
+  const vehicleAssets = (baseConfiguration.businessProfile.industryProfiles?.tree?.vehicles || []).map(function (name, index) {
+    const privateConfiguration = {
+      manufacturer: 'Simulated Company Fleet', model: name, modelYear: '2026',
+      configuration: 'Tree-service transportation and towing', attachments: 'Recorded company configuration',
+    };
+    return {
+      id: 'demo-tree-vehicle-' + String(index + 1), name, manufacturer: privateConfiguration.manufacturer,
+      model: privateConfiguration.model, category: 'vehicle', categoryLabel: 'Vehicles', catalogueState: 'active',
+      version: 1, assetDigest: sha256(privateConfiguration), privateConfiguration, reviewState: 'reviewed',
+      availability: 'available', simulated: true,
+      research: {
+        state: 'reviewed', simulated: true, confidence: 'simulated profile',
+        reviewedAt: input.state.createdAt, freshUntil: input.expiresAt,
+        sources: [{ title: 'Simulated Business Fleet Profile', publisher: baseConfiguration.businessProfile.company }],
+      },
+    };
+  });
+  const configuration = stableValue({
+    ...baseConfiguration,
+    assetCatalogue: { assets: vehicleAssets.concat(equipmentAssets), canManage: false, truncated: false, simulated: true },
+  });
   const tenant = seededWorkspace ? seededWorkspace.tenant : {
     id: input.tenantId,
     name: configuration.businessProfile.company,

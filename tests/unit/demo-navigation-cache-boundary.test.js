@@ -7,7 +7,7 @@ const { app } = require('../../src/server');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const RELEASE = 'demo-nav-10-20260915';
-const RUNTIME_RELEASE = 'demo-runtime-13-20260915';
+const RUNTIME_RELEASE = 'demo-runtime-14-20260915';
 const DEMO_PAGES = [
   'public/demo-dashboard.html',
   'public/dashboard/polaris.html',

@@ -20,12 +20,19 @@ Owners and administrators may separately grant `imported_travel_variance_v1` con
 
 Source corrections, tombstones, consent changes, match changes, vehicle basis changes, and adopted-plan changes make prior observations stale and suppress their advice. Exact delayed idempotency replay remains available after revocation. No observation updates an estimate, route, schedule, reimbursement, payroll record, vehicle, equipment ledger, or business policy.
 
-## Deliberately unavailable after Slice C
+## Slice D calibration boundary
+
+Migration `093_canonical_imported_travel_calibration.sql` and guarded calibration routes require separate current calibration consent before an owner or administrator can summarize reviewed imported travel outcomes. One proposal covers one exact service key and pins five to 100 current observation chains, the active source and outcome consent, every observation and source digest, the calculation version, actor, session and request identity.
+
+Route duration, distance, fuel or energy quantity and fuel cost are calibrated independently. A dimension needs five compatible observations with one exact unit or currency. It reports deterministic median and lower and upper quartile actual-to-planned ratios. The median is exposed only as an advisory multiplier. Mixed fuel classes or currencies suppress that dimension while valid dimensions remain reviewable.
+
+Source corrections, tombstones, reviewed-match changes, adopted travel-plan changes, observation refreshes and consent changes stale the proposal and mask its multiplier and advisory. Exact delayed idempotency replay still resolves the immutable saved request with stale advice masked. The runtime role receives only guarded entry-function access and no direct table or projection-helper access.
+
+## Deliberately unavailable after Slice D
 
 - No provider-specific OAuth connection or credential storage.
-- No multi-job travel calibration yet.
 - No conversion of an estimate, MPG model or straight-line geometry into an actual.
 - No update to estimates, routes, schedules, reimbursement, payroll, assets, prices or policies.
 - No Learning Center travel source UI yet.
 
-Part 9 remains in progress until multi-job calibration, source operations, owner UI and independent release acceptance are complete.
+Part 9 remains in progress until source operations, owner UI and independent release acceptance are complete.

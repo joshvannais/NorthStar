@@ -28,11 +28,17 @@ Route duration, distance, fuel or energy quantity and fuel cost are calibrated i
 
 Source corrections, tombstones, reviewed-match changes, adopted travel-plan changes, observation refreshes and consent changes stale the proposal and mask its multiplier and advisory. Exact delayed idempotency replay still resolves the immutable saved request with stale advice masked. The runtime role receives only guarded entry-function access and no direct table or projection-helper access.
 
-## Deliberately unavailable after Slice D
+## Slice E source-operations boundary
+
+Migration `094_canonical_external_travel_import_operations.sql` and the guarded `/operations`, `/adapter`, `/retention`, `/deletion` and `/cleanup` routes add provider-neutral lifecycle and cleanup controls for one external travel source. Adapter revisions expose connect, pause, resume and disconnect state plus cadence while storing no provider credential. Historical and continuous import checkpoints remain separate.
+
+Retention policy identifies current source records older than the configured 30- to 3,650-day interval. Deletion requests revoke source consent immediately and block further imports. Retention and deletion cleanup append minimized travel tombstones in batches of one to 100 and preserve immutable, resumable cursor lineage. Changing retention or deletion authority starts a new checkpoint chain. Cancelling deletion does not reactivate source consent. Owners and administrators retain the only guarded mutation path; the runtime role has no direct operation-table or projection-helper access.
+
+## Deliberately unavailable after Slice E
 
 - No provider-specific OAuth connection or credential storage.
 - No conversion of an estimate, MPG model or straight-line geometry into an actual.
 - No update to estimates, routes, schedules, reimbursement, payroll, assets, prices or policies.
 - No Learning Center travel source UI yet.
 
-Part 9 remains in progress until source operations, owner UI and independent release acceptance are complete.
+Part 9 remains in progress until the paid and isolated-demo owner UI and independent release acceptance are complete.

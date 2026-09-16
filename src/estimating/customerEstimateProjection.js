@@ -110,12 +110,20 @@ function draftScope(item) {
   const source = scope && typeof scope === 'object' && !Array.isArray(scope) ? scope : {};
   const hidden = new Set(['address','assessmentQuestions','businessContext','callerIntent','conversationOutcome','customerContext','description','disposalPreference','email','phone','pricingModel','requestedWork','serviceRadiusMiles','siteConcern','timeZone','workDescription']);
   const order = ['jobType','workType','treeCount','sizeClass','approximateHeightFeet','conditionClass','nearStructure','accessClass','terrain','material','finish','linearFeet','squareFeet','sqft','area','equipmentName','equipmentReference','crewProfile','plannedCrewSize','crewCount','laborHours','estimatedDurationHours','customerDistanceMiles','serviceZone','schedulingConstraint','urgency'];
-  const labels = {jobType:'Work Type',workType:'Work Type',treeCount:'Tree Count',sizeClass:'Size',approximateHeightFeet:'Approximate Height',conditionClass:'Condition',nearStructure:'Near Structure',accessClass:'Access',linearFeet:'Length',squareFeet:'Area',sqft:'Area',equipmentName:'Equipment',equipmentReference:'Equipment',crewProfile:'Crew',plannedCrewSize:'Planned Crew Size',crewCount:'Crew Count',laborHours:'Labor Time',estimatedDurationHours:'Estimated Duration',customerDistanceMiles:'Customer Distance',serviceZone:'Service Area',schedulingConstraint:'Scheduling'};
+  const labels = {jobType:'Work Type',workType:'Work Type',treeCount:'Tree Count',sizeClass:'Size',approximateHeightFeet:'Approximate Height',conditionClass:'Condition',nearStructure:'Near A Structure',accessClass:'Access',linearFeet:'Length',squareFeet:'Area',sqft:'Area',equipmentName:'Equipment',equipmentReference:'Equipment',crewProfile:'Crew',plannedCrewSize:'Planned Crew Size',crewCount:'Crew Count',laborHours:'Labor Time',estimatedDurationHours:'Estimated Duration',customerDistanceMiles:'Customer Distance',serviceZone:'Service Area',schedulingConstraint:'Scheduling'};
   const units = {approximateHeightFeet:'ft',linearFeet:'ft',squareFeet:'sq ft',sqft:'sq ft',area:'sq ft',laborHours:'hours',estimatedDurationHours:'hours',customerDistanceMiles:'miles'};
-  const keys = Object.keys(source).filter(key => !hidden.has(key) && ['string','number','boolean'].includes(typeof source[key]));
+  let keys = Object.keys(source).filter(key => !hidden.has(key) && ['string','number','boolean'].includes(typeof source[key]));
   keys.sort((left,right) => { const a=order.indexOf(left),b=order.indexOf(right);return(a<0?999:a)-(b<0?999:b)||left.localeCompare(right); });
+  const seenValues=new Set();
+  keys=keys.filter(key => {
+    if(key==='equipmentReference'&&source.equipmentName)return false;
+    if(typeof source[key]!=='string')return true;
+    const value=source[key].trim().toLowerCase();
+    if(!value||seenValues.has(value))return false;
+    seenValues.add(value);return true;
+  });
   const details = keys.slice(0, 10).map(key => {
-    const raw = typeof source[key] === 'string' ? source[key].trim() : String(source[key]);
+    const raw = typeof source[key] === 'boolean' ? (source[key] ? 'Yes' : 'No') : typeof source[key] === 'string' ? source[key].trim() : String(source[key]);
     const value = raw.replace(/[_-]+/g,' ').replace(/^./, character => character.toUpperCase()) + (units[key] ? ' ' + units[key] : '');
     return (labels[key] || humanize(key)) + ': ' + value;
   });

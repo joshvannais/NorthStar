@@ -99,11 +99,15 @@ describe('Mission 24 Part 8 customer estimate preview', () => {
       {label:'Tree removal and cleanup',category:'labor',customerCharge:1400},
       {label:'Permit coordination',category:'fees',customerCharge:168.66},
     ]};
-    pending.item.opportunity.scope={jobType:'removal',treeCount:1,assessmentQuestions:'Internal prompt must stay private',accessClass:'moderate backyard access'};
+    pending.item.opportunity.scope={jobType:'removal',workType:'removal',treeCount:1,assessmentQuestions:'Internal prompt must stay private',accessClass:'moderate backyard access',nearStructure:true,equipmentName:'compact tracked lift',equipmentReference:'compact lift'};
     const draft=createCustomerEstimateDraft(pending);
     expect(createCustomerEstimateDisplay(pending)).toEqual(draft);
     expect(draft).toMatchObject({state:'draft',subtotal:'1568.66',tax:'0.00',total:'1568.66',capabilities:{downloadPdf:true,downloadImage:true,accept:false,askQuestion:false}});
     expect(draft.work.scope).toContain('Access: Moderate backyard access');
+    expect(draft.work.scope).toContain('Near A Structure: Yes');
+    expect(draft.work.scope.match(/Work Type:/g)).toHaveLength(1);
+    expect(draft.work.scope.match(/Equipment:/g)).toHaveLength(1);
+    expect(draft.work.scope).not.toContain('Compact lift');
     expect(documentRenderer.presentationRows(draft)).toContainEqual({label:'Tax',amount:'Needs Review',kind:'tax'});
     expect(JSON.stringify(draft)).not.toContain('Assessment Questions');
     expect(JSON.stringify(draft)).not.toContain('Internal prompt');

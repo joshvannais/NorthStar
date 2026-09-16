@@ -33,6 +33,8 @@ const nativeEquipmentContract = require('../learning/nativeEquipmentUtilizationC
 const nativeEquipmentRepository = require('../learning/nativeEquipmentUtilizationRepository');
 const assetImportContract = require('../learning/externalAssetImportContract');
 const assetImportRepository = require('../learning/externalAssetImportRepository');
+const assetMatchContract = require('../learning/externalAssetReconciliationContract');
+const assetMatchRepository = require('../learning/externalAssetReconciliationRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -55,6 +57,7 @@ function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
   const unavailable = code.startsWith('M25_NATIVE_EQUIPMENT_') ? 'Native equipment utilization learning is temporarily unavailable.' :
+    code.startsWith('M25_ASSET_MATCH_') ? 'Vehicle and equipment reconciliation is temporarily unavailable.' :
     code.startsWith('M25_ASSET_IMPORT_') ? 'External vehicle and equipment evidence is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_TRAVEL_CALIBRATION_') ? 'Imported travel calibration is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_CALIBRATION_') ? 'Imported labor calibration is temporarily unavailable.' :
@@ -165,6 +168,26 @@ function createLearningRouter(options = {}) {
         const sourceKey = assetImportContract.normalizeSourceKey(req.params.sourceKey);
         const data = await assetImportRepository.readSource(poolProvider(), { ...actor(req), sourceKey });
         return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-asset-sources/:sourceKey/matches', headers, tenantAuth, assetOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = assetImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await assetMatchRepository.readMatches(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-asset-sources/:sourceKey/matches', headers, mutationAuth, assetOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = assetMatchContract.normalizeMatch(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await assetMatchRepository.mutateMatch(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
 

@@ -58,7 +58,7 @@ BEGIN
   SELECT external_record_id,revision,external_version,rtrim(source_digest) source_digest
    FROM current_records WHERE state='active' AND
     CASE WHEN kind_value='worker' THEN worker_reference=reference_value ELSE job_reference=reference_value END
-   ORDER BY external_record_id
+   ORDER BY external_record_id LIMIT 1001
  ) SELECT count(*),COALESCE(jsonb_agg(jsonb_build_object('externalRecordId',external_record_id,'revision',revision,
     'externalVersion',external_version,'sourceDigest',source_digest) ORDER BY external_record_id),'[]'::jsonb)
    INTO total,manifest FROM selected;
@@ -106,6 +106,7 @@ CREATE FUNCTION public.canonical_external_labor_reference_matches_read(org UUID,
  session_value UUID,source_value TEXT)
 RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE consent_row public.canonical_external_labor_import_consents%ROWTYPE; reference_rows JSONB; worker_targets JSONB; job_targets JSONB;
+ reference_total BIGINT; worker_target_total BIGINT; job_target_total BIGINT;
 BEGIN
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'External labor reconciliation is restricted' USING ERRCODE='42501'; END IF;
  PERFORM public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,NULL,FALSE);
@@ -114,9 +115,22 @@ BEGIN
   AND source_key=source_value ORDER BY revision DESC LIMIT 1;
  IF consent_row.id IS NULL OR consent_row.action<>'grant' THEN
   RETURN jsonb_build_object('sourceKey',source_value,'activeConsent',FALSE,'references','[]'::jsonb,
-   'workerTargets','[]'::jsonb,'jobTargets','[]'::jsonb,
+   'referenceTotal',0,'referencesTruncated',FALSE,'workerTargets','[]'::jsonb,'workerTargetTotal',0,
+   'workerTargetsTruncated',FALSE,'jobTargets','[]'::jsonb,'jobTargetTotal',0,'jobTargetsTruncated',FALSE,
    'consumptionBoundary','Reference matches are unavailable while source consent is inactive.');
  END IF;
+ WITH current_records AS (
+  SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_labor_import_records
+   WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC
+ ), refs AS (
+  SELECT DISTINCT 'worker'::text kind,worker_reference reference FROM current_records WHERE state='active'
+  UNION SELECT DISTINCT 'job'::text,job_reference FROM current_records WHERE state='active'
+ ), latest AS (
+  SELECT DISTINCT ON (reference_kind,external_reference) * FROM public.canonical_external_labor_import_reference_matches
+   WHERE organization_id=org AND source_key=source_value ORDER BY reference_kind,external_reference,revision DESC
+ ), all_refs AS (
+  SELECT kind,reference FROM refs UNION SELECT reference_kind,external_reference FROM latest
+ ) SELECT count(*) INTO reference_total FROM all_refs;
  WITH current_records AS (
   SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_labor_import_records
    WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC
@@ -129,26 +143,35 @@ BEGIN
  ), visible_refs AS (
   SELECT kind,reference FROM refs
   UNION SELECT reference_kind,external_reference FROM latest
+ ), selected_refs AS (
+  SELECT * FROM visible_refs ORDER BY kind,reference LIMIT 100
  )
  SELECT COALESCE(jsonb_agg(jsonb_build_object('referenceKind',r.kind,'externalReference',r.reference,
    'sourceRecordCount',(sb.source_basis->>'recordCount')::bigint,'sourceDigest',sb.source_basis->>'digest',
    'match',CASE WHEN m.id IS NULL THEN NULL ELSE public.canonical_external_labor_reference_match_projection(m,sb.source_basis,tb.target_basis) END)
    ORDER BY r.kind,r.reference),'[]'::jsonb) INTO reference_rows
- FROM visible_refs r
+ FROM selected_refs r
  CROSS JOIN LATERAL (SELECT public.canonical_external_labor_reference_source_basis(org,source_value,r.kind,r.reference) source_basis) sb
  LEFT JOIN latest m ON m.reference_kind=r.kind AND m.external_reference=r.reference
  LEFT JOIN LATERAL (SELECT public.canonical_external_labor_reference_target_basis(org,r.kind,m.target_id) target_basis) tb ON m.target_id IS NOT NULL;
+ SELECT count(*) INTO worker_target_total FROM public.workforce_profiles p JOIN public.organization_memberships m
+  ON m.organization_id=p.organization_id AND m.id=p.membership_id
+  WHERE p.organization_id=org AND m.status='active';
  SELECT COALESCE(jsonb_agg(jsonb_build_object('targetId',p.id,'operationalRole',p.operational_role,
    'digest',b.target_basis->>'digest') ORDER BY p.operational_role,p.id),'[]'::jsonb) INTO worker_targets
- FROM (SELECT * FROM public.workforce_profiles WHERE organization_id=org ORDER BY operational_role,id LIMIT 100) p
- JOIN public.organization_memberships m ON m.organization_id=p.organization_id AND m.id=p.membership_id AND m.status='active'
+ FROM (SELECT p.* FROM public.workforce_profiles p JOIN public.organization_memberships m
+   ON m.organization_id=p.organization_id AND m.id=p.membership_id
+   WHERE p.organization_id=org AND m.status='active' ORDER BY p.operational_role,p.id LIMIT 100) p
  CROSS JOIN LATERAL (SELECT public.canonical_external_labor_reference_target_basis(org,'worker',p.id) target_basis) b;
+ SELECT count(*) INTO job_target_total FROM public.canonical_estimates WHERE organization_id=org;
  SELECT COALESCE(jsonb_agg(jsonb_build_object('targetId',e.id,'opportunityId',e.opportunity_id,
    'digest',b.target_basis->>'digest') ORDER BY e.created_at DESC,e.id DESC),'[]'::jsonb) INTO job_targets
  FROM (SELECT * FROM public.canonical_estimates WHERE organization_id=org ORDER BY created_at DESC,id DESC LIMIT 100) e
  CROSS JOIN LATERAL (SELECT public.canonical_external_labor_reference_target_basis(org,'job',e.id) target_basis) b;
  RETURN jsonb_build_object('sourceKey',source_value,'activeConsent',TRUE,'references',reference_rows,
-  'workerTargets',worker_targets,'jobTargets',job_targets,
+  'referenceTotal',reference_total,'referencesTruncated',reference_total>100,
+  'workerTargets',worker_targets,'workerTargetTotal',worker_target_total,'workerTargetsTruncated',worker_target_total>100,
+  'jobTargets',job_targets,'jobTargetTotal',job_target_total,'jobTargetsTruncated',job_target_total>100,
   'consumptionBoundary','Only current reviewed matches may support a later tenant-private observation. No operational record is changed.');
 END $$;
 

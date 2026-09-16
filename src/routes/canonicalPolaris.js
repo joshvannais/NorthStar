@@ -1840,7 +1840,7 @@ function createCanonicalRouter(options) {
         const item = await getCanonicalGraph(client, requestContext(req), req.params.estimateId);
         if (!review || !item) throw Object.assign(new Error('That estimate is unavailable.'), {status:404});
         const profile = await require('../services/organizationAuthority').getActiveBusinessProfile(client, requestContext(req).organizationId);
-        return require('../estimating/customerEstimateProjection').createCustomerEstimatePreview({review, item, profile, simulated:false});
+        return require('../estimating/customerEstimateProjection').createCustomerEstimateDisplay({review, item, profile, simulated:false});
       });
       return res.json({success:true,data});
     } catch (error) {

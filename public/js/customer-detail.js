@@ -650,12 +650,21 @@ window.CustomerDetail = (function() {
     var values = data.intelligence || {}, service = values.service || {}, scope = service.scope;
     function measured(value, unit) { return typeof value === 'number' && Number.isFinite(value) ? value + ' ' + unit : 'Not recorded'; }
     function cost(value) { return value == null ? 'Not recorded' : fmtCurrency(value); }
+    function polished(value,key) {
+      var result=describe(value,'Not recorded',key);
+      if(/@|^https?:/i.test(result))return result;
+      return result.replace(/^([a-z])/,function(letter){return letter.toUpperCase();});
+    }
     var labels = { customerDistanceMiles:'Customer distance', equipmentReference:'Equipment', jobType:'Work type', laborHours:'Labor time', serviceRadiusMiles:'Service radius', serviceZone:'Service area', linearFeet:'Length', estimatedDurationHours:'Estimated duration', seer:'SEER', sqft:'Area', squareFeet:'Area' };
     var units = { customerDistanceMiles:'miles', serviceRadiusMiles:'miles', linearFeet:'ft', laborHours:'hours', estimatedDurationHours:'hours', sqft:'square feet', squareFeet:'square feet' };
     if (service.key === 'hvac') { labels.tonnage = 'Cooling capacity'; units.tonnage = 'tons'; }
-    var scopeFacts = scope && typeof scope === 'object' && !Array.isArray(scope) ? Object.keys(scope).filter(function(key) { return !['timeZone','description','workDescription'].includes(key) && (!presentationFormat().isInternalKey(key) || key === 'equipmentReference'); }).map(function(key) {
+    var hiddenScopeKeys=['timeZone','description','workDescription','address','assessmentQuestions','businessContext','callerIntent','conversationOutcome','customerContext','disposalPreference','email','phone','pricingModel','requestedWork','serviceRadiusMiles','siteConcern'];
+    var scopeOrder=['jobType','workType','treeCount','sizeClass','approximateHeightFeet','conditionClass','nearStructure','accessClass','terrain','material','finish','linearFeet','squareFeet','sqft','area','equipmentName','equipmentReference','crewProfile','plannedCrewSize','crewCount','laborHours','estimatedDurationHours','customerDistanceMiles','serviceZone','schedulingConstraint','urgency'];
+    var scopeKeys=scope&&typeof scope==='object'&&!Array.isArray(scope)?Object.keys(scope).filter(function(key){return hiddenScopeKeys.indexOf(key)<0&&(!presentationFormat().isInternalKey(key)||key==='equipmentReference')&&['string','number','boolean'].includes(typeof scope[key]);}):[];
+    scopeKeys.sort(function(left,right){var a=scopeOrder.indexOf(left),b=scopeOrder.indexOf(right);return(a<0?999:a)-(b<0?999:b)||left.localeCompare(right);});
+    var scopeFacts = scopeKeys.length ? scopeKeys.slice(0,12).map(function(key) {
       var label = labels[key] || presentationFormat().label(key);
-      return label + ': ' + (units[key] ? measured(scope[key],units[key]) : describe(scope[key],'Not recorded',key));
+      return label + ': ' + (units[key] ? measured(scope[key],units[key]) : polished(scope[key],key));
     }) : [displayDescription(scope)];
     var travel = values.travel || {};
     return {

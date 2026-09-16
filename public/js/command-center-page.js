@@ -564,7 +564,7 @@
     var mobileCards = byId('commandCenterLeadCards');
     rows.replaceChildren();
     mobileCards.replaceChildren();
-    byId('commandCenterLeadCount').textContent = graphs.length + (graphs.length === 1 ? ' active lead' : ' active leads');
+    byId('commandCenterLeadCount').textContent = graphs.length + (graphs.length === 1 ? ' Active Lead' : ' Active Leads');
     if (!graphs.length) {
       var row = document.createElement('tr');
       var cell = element('td', 'command-center-table-empty', 'No lead records are available to you yet.');
@@ -574,7 +574,7 @@
       mobileCards.appendChild(element('p', 'command-center-mobile-empty', 'No lead records are available to you yet.'));
       return;
     }
-    var visible = graphs.slice(0, 8);
+    var visible = graphs;
     var groups = [];
     var groupByCustomer = new Map();
     visible.forEach(function(graph) {

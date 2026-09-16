@@ -19,6 +19,7 @@
   var returnToToolbarRequested = false;
   var requestedScrollRestoration = 'auto';
   var scrollRestorationTimer = null;
+  var reloadToTopRequested = false;
 
   function ownToolbarScrollRestoration(restoreMode) {
     if (!global.history || !('scrollRestoration' in global.history)) return;
@@ -40,7 +41,11 @@
     var storedToolbarReturn = JSON.parse(global.sessionStorage.getItem(RETURN_TO_TOOLBAR_KEY) || 'null');
     returnToToolbarRequested = Boolean(storedToolbarReturn);
     var navigationEntry=global.performance&&global.performance.getEntriesByType('navigation')[0];
-    if(navigationEntry&&navigationEntry.type==='reload'&&!returnToToolbarRequested)global.sessionStorage.setItem('northstarDemoDraftRefresh','true');
+    if(navigationEntry&&navigationEntry.type==='reload'&&!returnToToolbarRequested){
+      reloadToTopRequested=true;
+      global.sessionStorage.setItem('northstarDemoDraftRefresh','true');
+      ownToolbarScrollRestoration('auto');
+    }
     if (returnToToolbarRequested) {
       ownToolbarScrollRestoration(storedToolbarReturn.scrollRestoration);
     }
@@ -784,6 +789,13 @@
 
   function initializeDocument() {
     document.body.classList.add('northstar-demo-mode');
+    if(reloadToTopRequested){
+      var positionAtTop=function(){global.scrollTo({top:0,left:0,behavior:'auto'});};
+      positionAtTop();
+      global.requestAnimationFrame(function(){positionAtTop();global.requestAnimationFrame(positionAtTop);});
+      [60,180,420].forEach(function(delay){global.setTimeout(positionAtTop,delay);});
+      global.setTimeout(function(){reloadToTopRequested=false;restoreToolbarScrollMode();},500);
+    }
     rewriteLinks(document);
     var observer = new MutationObserver(function (records) {
       records.forEach(function (record) {

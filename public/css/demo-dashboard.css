@@ -303,9 +303,9 @@
 .demo-schedule-list span { margin-top: 3px; font-size: 12px; }
 
 .demo-leads-panel { margin-bottom: 20px; }
-.demo-table-wrap { width: 100%; max-width: 100%; overflow: visible; }
+.demo-table-wrap { width: 100%; max-width: 100%; max-height: 326px; overflow: auto; scrollbar-gutter: stable; }
 .demo-table-wrap table { width: 100%; min-width: 0; border-collapse: collapse; table-layout: auto; }
-.demo-table-wrap th { padding: 10px 12px; color: var(--theme-muted); border-bottom: 1px solid var(--theme-border); font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: 0.06em; }
+.demo-table-wrap th { position: sticky; top: 0; z-index: 1; padding: 10px 12px; color: var(--theme-muted); border-bottom: 1px solid var(--theme-border); background: var(--theme-surface); font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: 0.06em; }
 .demo-table-wrap td { padding: 15px 12px; color: var(--theme-text); border-bottom: 1px solid var(--theme-border); font-size: 13px; }
 .demo-table-wrap tbody tr:last-child td { border-bottom: 0; }
 .demo-table-wrap td strong, .demo-table-wrap td span { display: block; }
@@ -319,8 +319,7 @@
 .demo-coach-panel>h2, .demo-status-panel h2 { margin: 0 0 20px; }
 .demo-coach-panel>p:not(.demo-panel-kicker), .demo-status-panel #commandCenterWorkspaceNote { margin: 0; line-height: 1.6; }
 .demo-coach-evidence { margin-top:16px!important;padding-top:14px;border-top:1px solid var(--theme-border);color:var(--theme-muted);font-size:13px; }
-.demo-coach-action { display:inline-flex;margin-top:18px;color:var(--brand-700);font-weight:750;text-decoration:none; }
-.demo-coach-action:hover { text-decoration:underline;text-underline-offset:4px; }
+.demo-coach-action { display:inline-flex;margin-top:18px;text-decoration:none; }
 .demo-status-panel { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
 .demo-workspace-pulse { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0 0; }
 .demo-workspace-pulse div { padding:12px 14px;border:1px solid var(--theme-border);border-radius:12px;background:var(--theme-surface-soft); }
@@ -660,7 +659,7 @@ button.command-center-record-link {
   .demo-daily-brief .demo-updated { width: 100%; min-width: 0; max-width: 100%; }
   .demo-daily-brief .demo-updated { flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }
   .demo-leads-panel .demo-table-wrap { display: none; }
-  .command-center-mobile-leads { display: grid; min-width: 0; max-width: 100%; gap: 12px; }
+  .command-center-mobile-leads { display: grid; min-width: 0; max-width: 100%; max-height: 434px; gap: 12px; overflow-y:auto; scrollbar-gutter:stable; }
 }
 
 @media (max-width: 420px) {

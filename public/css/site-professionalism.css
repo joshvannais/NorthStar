@@ -2072,8 +2072,8 @@ html[data-theme="dark"] .customer-estimate-launch { background:linear-gradient(1
 .drawer-estimate-hub { margin:0 0 18px; }
 .drawer-estimate-hub[hidden] { display:none; }
 .drawer-estimate-hub .customer-estimate-launch { margin:0; }
-.drawer-estimate-hub .customer-estimate-launch[data-state="needs-review"] { background:linear-gradient(135deg,rgba(212,175,55,.09),rgba(255,255,255,.96)); }
-html[data-theme="dark"] .drawer-estimate-hub .customer-estimate-launch[data-state="needs-review"] { background:linear-gradient(135deg,rgba(181,140,50,.18),rgba(24,25,35,.98)); }
+.drawer-estimate-hub .customer-estimate-launch[data-state="draft"] { background:linear-gradient(135deg,rgba(212,175,55,.09),rgba(255,255,255,.96)); }
+html[data-theme="dark"] .drawer-estimate-hub .customer-estimate-launch[data-state="draft"] { background:linear-gradient(135deg,rgba(181,140,50,.18),rgba(24,25,35,.98)); }
 html body .customer-drawer .drawer-primary-disclosure { margin:14px 0;padding:0 16px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--theme-surface); }
 html body #cdCustomerDrawer .drawer-primary-disclosure>summary { min-height:56px;display:flex;align-items:center;cursor:pointer;padding:0;margin:0;font-family:var(--font-body);font-size:16px;font-weight:650;line-height:1.45;color:var(--neutral-900); }
 html body #cdCustomerDrawer .drawer-primary-disclosure[open]>summary { border-bottom:1px solid var(--neutral-200);margin-bottom:16px; }

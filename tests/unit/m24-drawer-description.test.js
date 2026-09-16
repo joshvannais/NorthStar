@@ -16,7 +16,7 @@ test('zero is preserved, absent measurements are not invented, and legacy height
 });
 test('source prose is retained verbatim while structured facts do not duplicate it',()=>{
  const prose='Replace the damaged gate. Keep the garden clear and confirm the owner’s requested access.';
- const input=data('fence',{description:prose,material:'cedar'},'Fence installation');expect(context.jobDescription(input)).toBe(prose);expect(context.workPresentation(input).description).toEqual(['material: cedar']);
+ const input=data('fence',{description:prose,material:'cedar'},'Fence installation');expect(context.jobDescription(input)).toBe(prose);expect(context.workPresentation(input).description).toEqual(['material: Cedar']);
 });
 test('concrete summary uses only the recorded finish and area',()=>{
  const input=data('concrete',{finish:'broom',squareFeet:720},'Concrete installation');expect(context.jobDescription(input)).toBe('Concrete installation with a broom finish. Recorded area: 720 square feet.');

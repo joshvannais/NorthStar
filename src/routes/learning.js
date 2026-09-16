@@ -9,6 +9,8 @@ const contract = require('../learning/laborOutcomeContract');
 const repository = require('../learning/laborOutcomeRepository');
 const importContract = require('../learning/externalLaborImportContract');
 const importRepository = require('../learning/externalLaborImportRepository');
+const reconciliationContract = require('../learning/externalLaborReconciliationContract');
+const reconciliationRepository = require('../learning/externalLaborReconciliationRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -30,8 +32,9 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_IMPORT_')
-    ? 'External labor imports are temporarily unavailable.' : 'Labor outcome learning is temporarily unavailable.';
+  const unavailable = code.startsWith('M25_MATCH_') ? 'External labor reconciliation is temporarily unavailable.' :
+    code.startsWith('M25_IMPORT_') ? 'External labor imports are temporarily unavailable.' :
+      'Labor outcome learning is temporarily unavailable.';
   return res.status(status).json({ success: false, requestId: requestId(req), error: {
     code,
     message: status === 503 ? unavailable : error.message,
@@ -136,6 +139,29 @@ function createLearningRouter(options = {}) {
         const sourceKey = importContract.normalizeSourceKey(req.params.sourceKey);
         const data = await importRepository.readSource(poolProvider(), { ...actor(req), sourceKey });
         return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-labor-sources/:sourceKey/matches', headers, tenantAuth, importOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = importContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await reconciliationRepository.readMatches(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-labor-sources/:sourceKey/matches', headers, mutationAuth, importOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = reconciliationContract.normalizeMatch(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await reconciliationRepository.mutateMatch(poolProvider(), {
+          ...actor(req), sourceKey, body, csrfToken: req.get('X-CSRF-Token'),
+          idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
 

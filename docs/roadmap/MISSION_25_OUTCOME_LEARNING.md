@@ -26,6 +26,12 @@ This package deliberately stages normalized external labor evidence. It does not
 
 This is the adapter-facing runtime foundation, not a completed vendor connector or owner import experience. CSV ingestion, provider authorization, provider-specific adapters, reviewed job/worker matching, retention and deletion orchestration, and the remaining integration categories are still required before Mission 25 completion.
 
+## Fourth bounded package — reviewed external labor reconciliation
+
+Migration `085_canonical_external_labor_reconciliation.sql` and the guarded `matches` routes add reviewed worker and job reference reconciliation for a consented external labor source. An owner or administrator explicitly links one opaque external worker reference to a current active workforce profile, or one opaque external job reference to a same-tenant canonical estimate. Every link pins the current consent, complete current imported-record manifest and current target basis. A source correction or tombstone makes a saved link stale, as does a worker profile, membership or consent revision change. Revocation hides matching projections and blocks writes. Re-granting consent does not revive an earlier match. Unlinking creates an immutable revision.
+
+The package does not infer a match, mutate either source authority, or silently replace a stale link. No imported record supports an outcome observation yet; the later observation package must require a current reviewed match and pin that match in its own lineage. No rendered owner interface is included; this API-only package documents the later wording, focus, mobile and theme review gate.
+
 No fixed implementation-part count is declared by this package. Later packages must state the exact source class, consent, correction/deletion behavior, derived output and release evidence they add. Completion requires usable roadmap-designated historical-backfill and continuous-update integrations; placeholder connectors and sample cards are insufficient.
 
 ## Required direction

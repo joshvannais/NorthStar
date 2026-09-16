@@ -21,6 +21,7 @@ test('normalizes explicit consent and observation contracts', () => {
   }), {
     estimateId, expectedConsentRevision: 1, expectedConsentDigest: digest,
     reason: 'Compare the accepted records.',
+    confirmed: true, confirmationVersion: 'm25-labor-duration-observation-v1',
   });
 });
 

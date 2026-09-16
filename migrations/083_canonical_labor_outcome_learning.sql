@@ -230,13 +230,15 @@ CREATE TABLE public.canonical_labor_outcome_observations (
  membership_id UUID NOT NULL,
  auth_session_id UUID NOT NULL,
  reason TEXT NOT NULL CHECK(public.canonical_learning_text_valid(reason,2000)),
+ confirmed BOOLEAN NOT NULL CHECK(confirmed),
+ confirmation_version TEXT NOT NULL CHECK(confirmation_version='m25-labor-duration-observation-v1'),
  calculation_version TEXT NOT NULL CHECK(calculation_version='m25-labor-duration-variance-v1'),
  request_key_hash CHAR(64) NOT NULL CHECK(request_key_hash~'^[0-9a-f]{64}$'),
  request_digest CHAR(64) NOT NULL CHECK(request_digest~'^[0-9a-f]{64}$'),
  canonical_digest CHAR(64) NOT NULL CHECK(canonical_digest~'^[0-9a-f]{64}$'),
  created_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
  UNIQUE(organization_id,estimate_id,revision),
- UNIQUE(organization_id,estimate_id,source_digest),
+ UNIQUE(organization_id,estimate_id,source_digest,consent_id),
  UNIQUE(organization_id,actor_user_id,request_key_hash),
  UNIQUE(organization_id,id),
  FOREIGN KEY(organization_id,estimate_id) REFERENCES public.canonical_estimates(organization_id,id) ON DELETE RESTRICT,
@@ -266,11 +268,13 @@ SET search_path=pg_catalog,public,pg_temp AS $$
   'varianceWorkerHours',value.variance_worker_hours::text,'variancePercent',value.variance_percent::text,
   'advisoryCode',value.advisory_code,'advisoryMessage',value.advisory_message,
   'scopeNote',value.scope_note,'adoptionBoundary',value.adoption_boundary,
+  'confirmed',value.confirmed,'confirmationVersion',value.confirmation_version,
   'calculationVersion',value.calculation_version,'reason',value.reason,'digest',rtrim(value.canonical_digest),'createdAt',value.created_at)
 $$;
 
 CREATE FUNCTION public.canonical_labor_outcome_observe(org UUID,actor UUID,role_value TEXT,session_value UUID,
- csrf TEXT,key_value TEXT,estimate UUID,expected_consent_revision BIGINT,expected_consent_digest TEXT,reason_value TEXT)
+ csrf TEXT,key_value TEXT,estimate UUID,expected_consent_revision BIGINT,expected_consent_digest TEXT,reason_value TEXT,
+ confirmed_value BOOLEAN,confirmation_version_value TEXT)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB; consent_row public.canonical_learning_purpose_consents%ROWTYPE;
@@ -280,7 +284,9 @@ DECLARE authority JSONB; consent_row public.canonical_learning_purpose_consents%
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXCEPTION 'Serializable required' USING ERRCODE='25001'; END IF;
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Learning review is restricted' USING ERRCODE='42501'; END IF;
- IF key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR public.canonical_learning_text_valid(reason_value,2000) IS NOT TRUE THEN
+ IF key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$'
+  OR public.canonical_learning_text_valid(reason_value,2000) IS NOT TRUE OR confirmed_value IS DISTINCT FROM TRUE
+  OR confirmation_version_value IS DISTINCT FROM 'm25-labor-duration-observation-v1' THEN
   RAISE EXCEPTION 'Learning observation input invalid' USING ERRCODE='22023'; END IF;
  PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Current subscription authority unavailable' USING ERRCODE='42501'; END IF;
@@ -295,7 +301,8 @@ BEGIN
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'actorUserId',actor,
   'estimateId',estimate,'consentRevision',expected_consent_revision,'consentDigest',expected_consent_digest,
-  'reason',reason_value,'sourceDigest',basis->>'sourceDigest'));
+  'reason',reason_value,'confirmed',confirmed_value,'confirmationVersion',confirmation_version_value,
+  'sourceDigest',basis->>'sourceDigest'));
  SELECT * INTO old FROM public.canonical_labor_outcome_observations
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN
@@ -304,7 +311,7 @@ BEGIN
   RETURN jsonb_build_object('observation',public.canonical_labor_outcome_projection(old),'replayed',TRUE);
  END IF;
  SELECT * INTO old FROM public.canonical_labor_outcome_observations WHERE organization_id=org
-  AND estimate_id=estimate AND source_digest=(basis->>'sourceDigest')::char(64);
+  AND estimate_id=estimate AND source_digest=(basis->>'sourceDigest')::char(64) AND consent_id=consent_row.id;
  IF FOUND THEN RAISE EXCEPTION 'The current labor outcome was already observed'
   USING ERRCODE='22023',CONSTRAINT='learning_labor_outcome_already_current'; END IF;
  SELECT * INTO current_row FROM public.canonical_labor_outcome_observations
@@ -315,16 +322,19 @@ BEGIN
   'consentDigest',rtrim(consent_row.canonical_digest),'sourceDigest',basis->>'sourceDigest',
   'plannedWorkerHours',basis->>'plannedWorkerHours','recordedWorkerHours',basis->>'recordedWorkerHoursExcludingBreaks',
   'varianceWorkerHours',basis->>'varianceWorkerHours','variancePercent',basis->>'variancePercent',
-  'advisoryCode',basis->>'advisoryCode','actorUserId',actor,'requestDigest',request_hash));
+  'advisoryCode',basis->>'advisoryCode','actorUserId',actor,'confirmed',confirmed_value,
+  'confirmationVersion',confirmation_version_value,'requestDigest',request_hash));
  INSERT INTO public.canonical_labor_outcome_observations(organization_id,estimate_id,revision,previous_id,
   consent_id,consent_revision,consent_digest,source_manifest,source_digest,planned_worker_hours,recorded_worker_hours,
   variance_worker_hours,variance_percent,advisory_code,advisory_message,scope_note,adoption_boundary,
-  actor_user_id,membership_id,auth_session_id,reason,calculation_version,request_key_hash,request_digest,canonical_digest)
+  actor_user_id,membership_id,auth_session_id,reason,confirmed,confirmation_version,
+  calculation_version,request_key_hash,request_digest,canonical_digest)
  VALUES(org,estimate,next_revision,current_row.id,consent_row.id,consent_row.revision,rtrim(consent_row.canonical_digest),
   basis->'sourceManifest',basis->>'sourceDigest',(basis->>'plannedWorkerHours')::numeric,
   (basis->>'recordedWorkerHoursExcludingBreaks')::numeric,(basis->>'varianceWorkerHours')::numeric,
   (basis->>'variancePercent')::numeric,basis->>'advisoryCode',basis->>'advisoryMessage',basis->>'scopeNote',
   basis->>'adoptionBoundary',actor,(authority->>'membershipId')::uuid,session_value,reason_value,
+  confirmed_value,confirmation_version_value,
   'm25-labor-duration-variance-v1',key_hash,request_hash,digest_value) RETURNING * INTO inserted;
  RETURN jsonb_build_object('observation',public.canonical_labor_outcome_projection(inserted),'replayed',FALSE);
 END $$;
@@ -349,13 +359,18 @@ BEGIN
   fresh:=rtrim(current_row.source_digest)=basis->>'sourceDigest' AND current_row.consent_id=consent_row.id;
  EXCEPTION WHEN SQLSTATE 'P0002' THEN basis:=NULL;fresh:=FALSE; END;
  SELECT count(*) INTO total FROM public.canonical_labor_outcome_observations WHERE organization_id=org AND estimate_id=estimate;
- SELECT COALESCE(jsonb_agg(public.canonical_labor_outcome_projection(item)||jsonb_build_object('fresh',
-   rtrim(item.source_digest)=COALESCE(basis->>'sourceDigest','') AND item.consent_id=consent_row.id) ORDER BY revision DESC),'[]'::jsonb)
+ SELECT COALESCE(jsonb_agg(public.canonical_labor_outcome_projection(item)||jsonb_build_object(
+   'fresh',rtrim(item.source_digest)=COALESCE(basis->>'sourceDigest','') AND item.consent_id=consent_row.id,
+   'advisoryAvailable',rtrim(item.source_digest)=COALESCE(basis->>'sourceDigest','') AND item.consent_id=consent_row.id,
+   'advisoryCode',CASE WHEN rtrim(item.source_digest)=COALESCE(basis->>'sourceDigest','') AND item.consent_id=consent_row.id THEN item.advisory_code ELSE NULL END,
+   'advisoryMessage',CASE WHEN rtrim(item.source_digest)=COALESCE(basis->>'sourceDigest','') AND item.consent_id=consent_row.id THEN item.advisory_message ELSE NULL END)
+   ORDER BY revision DESC),'[]'::jsonb)
   INTO history FROM (SELECT * FROM public.canonical_labor_outcome_observations WHERE organization_id=org
    AND estimate_id=estimate ORDER BY revision DESC LIMIT 20) item;
  RETURN jsonb_build_object('activeConsent',TRUE,'consent',public.canonical_learning_consent_projection(consent_row),
   'current',public.canonical_labor_outcome_projection(current_row)||jsonb_build_object('fresh',fresh,
-    'advisoryAvailable',fresh,'advisoryMessage',CASE WHEN fresh THEN current_row.advisory_message ELSE NULL END),
+    'advisoryAvailable',fresh,'advisoryCode',CASE WHEN fresh THEN current_row.advisory_code ELSE NULL END,
+    'advisoryMessage',CASE WHEN fresh THEN current_row.advisory_message ELSE NULL END),
   'history',history,'total',total,'truncated',total>20,'refreshRequired',NOT fresh);
 END $$;
 
@@ -368,5 +383,5 @@ REVOKE ALL ON FUNCTION public.canonical_labor_learning_basis(uuid,uuid) FROM PUB
 REVOKE ALL ON FUNCTION public.canonical_labor_outcome_projection(public.canonical_labor_outcome_observations) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_learning_consent_read(uuid,uuid,text,uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.canonical_labor_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_labor_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_labor_outcome_read(uuid,uuid,text,uuid,uuid) FROM PUBLIC;

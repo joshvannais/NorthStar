@@ -15,7 +15,7 @@ describe('Mission 25 Part 2 labor outcome learning contract', () => {
       'canonical_learning_consents_immutable', 'canonical_labor_outcomes_immutable',
       'FOREIGN KEY(organization_id,estimate_id)', 'FOREIGN KEY(organization_id,consent_id)',
       'FOREIGN KEY(organization_id,actor_user_id,auth_session_id)',
-      'UNIQUE(organization_id,estimate_id,source_digest)',
+      'UNIQUE(organization_id,estimate_id,source_digest,consent_id)',
     ]) expect(migration).toContain(fragment);
   });
 
@@ -36,6 +36,8 @@ describe('Mission 25 Part 2 labor outcome learning contract', () => {
       'calculation_version', "'m25-labor-duration-variance-v1'",
       'No rate, estimate, schedule or policy was changed.',
       'source_digest', 'consent_digest', 'canonical_digest',
+      "confirmation_version TEXT NOT NULL CHECK(confirmation_version='m25-labor-duration-observation-v1')",
+      "confirmed BOOLEAN NOT NULL CHECK(confirmed)",
     ]) expect(migration).toContain(fragment);
     expect(migration).not.toMatch(/UPDATE public\.(?:canonical_estimates|canonical_labor_plans|canonical_schedule_assignments|canonical_business_profiles)/);
   });
@@ -46,6 +48,7 @@ describe('Mission 25 Part 2 labor outcome learning contract', () => {
       'canonical_learning_consent_read', 'canonical_learning_consent_mutate',
       'canonical_labor_outcome_observe', 'canonical_labor_outcome_read',
     ]) expect(database).toContain(`GRANT EXECUTE ON FUNCTION public.${entry}`);
+    expect(database).toContain('uuid,bigint,text,text,boolean,text)');
     expect(database).toContain('learning_tables_withheld');
     expect(database).toContain('learning_helpers_withheld');
     expect(migration).toContain('REVOKE ALL ON TABLE public.canonical_learning_purpose_consents,public.canonical_labor_outcome_observations FROM PUBLIC');

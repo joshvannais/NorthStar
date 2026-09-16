@@ -12,7 +12,7 @@ The existing `/polaris/learning` compatibility route returns current Polaris sna
 
 ## Second bounded package — labor duration observations
 
-The first runtime source adoption compares the worker hours in one explicitly adopted Mission 24 labor plan with accepted, non-break Mission 23 labor intervals for the same completed paid-tenant job. An owner or administrator must grant current `labor_duration_variance_v1` purpose consent and explicitly record each observation. The result is a deterministic variance advisory with exact estimate, revision, plan, execution, completion, labor-record, consent and algorithm lineage.
+The first runtime source adoption compares the worker hours in one explicitly adopted Mission 24 labor plan with accepted, non-break Mission 23 labor intervals for the same completed paid-tenant job. An owner or administrator must grant current `labor_duration_variance_v1` purpose consent and explicitly confirm each observation. The confirmation and contract version are enforced and retained at the database boundary. The result is a deterministic variance advisory with exact estimate, revision, plan, execution, completion, labor-record, consent and algorithm lineage.
 
 Source corrections make the current advisory stale until it is deliberately refreshed. Consent revocation immediately blocks new observations and hides derived values from the runtime projection. The immutable audit rows remain governed records; the runtime role can use only guarded entry functions. The package does not train a model, pool tenants, read demo activity, infer employee performance, change a rate, revise an estimate, alter a schedule or update a business policy.
 

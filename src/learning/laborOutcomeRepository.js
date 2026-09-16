@@ -83,9 +83,10 @@ function mutateConsent(pool, input, body) {
 function observe(pool, input) {
   return transaction(pool, 'SERIALIZABLE', async client => {
     const result = await client.query(
-      'SELECT public.canonical_labor_outcome_observe($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) AS value',
+      'SELECT public.canonical_labor_outcome_observe($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) AS value',
       [...actorValues(input), input.csrfToken, input.idempotencyKey, input.estimateId,
-        input.expectedConsentRevision, input.expectedConsentDigest, input.reason]
+        input.expectedConsentRevision, input.expectedConsentDigest, input.reason,
+        input.confirmed, input.confirmationVersion]
     );
     return result.rows[0].value;
   });

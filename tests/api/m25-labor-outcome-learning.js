@@ -84,12 +84,22 @@ assert.ok(!fs.existsSync(output));
  const consentPin=consent.body.data.consent;
  const observeBody={expectedConsentRevision:consentPin.revision,expectedConsentDigest:consentPin.digest,
   reason:'Compare this completed job with its adopted labor plan.',confirmed:true,confirmationVersion:'m25-labor-duration-observation-v1'};
+ const bypassClient=await f.runtimePool.connect();let bypassError;
+ try{await bypassClient.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+  await bypassClient.query('SELECT public.canonical_labor_outcome_observe($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+   [f.org,owner.actorUserId,owner.actorAccessRole,owner.authSessionId,owner.csrfToken,crypto.randomUUID(),estimate,
+    consentPin.revision,consentPin.digest,'Attempt an unconfirmed direct observation.',false,'m25-labor-duration-observation-v1']);
+ }catch(error){bypassError=error;}finally{await bypassClient.query('ROLLBACK').catch(()=>{});bypassClient.release();}
+ assert.equal(bypassError&&bypassError.code,'22023');
+ assert.equal((await f.ownerPool.query('SELECT count(*)::int count FROM canonical_labor_outcome_observations')).rows[0].count,0);
  const observationKey=crypto.randomUUID();
  const observation=await write('/estimates/'+estimate+'/labor-duration-outcomes',observeBody,observationKey);
  assert.equal(observation.status,201,JSON.stringify(observation.body));assert.equal(observation.body.data.observation.plannedWorkerHours,'16.0000');
  assert.equal(observation.body.data.observation.recordedWorkerHoursExcludingBreaks,'8.0000');
  assert.equal(observation.body.data.observation.variancePercent,'-50.00');
  assert.equal(observation.body.data.observation.advisoryCode,'actual_below_plan');
+ assert.equal(observation.body.data.observation.confirmed,true);
+ assert.equal(observation.body.data.observation.confirmationVersion,'m25-labor-duration-observation-v1');
  assert.equal(observation.body.data.observation.sourceManifest.laborIntervals.length,1);
  assert.equal(observation.body.data.observation.sourceManifest.laborIntervals[0].includedInWorkerHours,true);
  assert.match(observation.body.data.observation.adoptionBoundary,/No rate, estimate, schedule or policy was changed/);
@@ -112,7 +122,9 @@ assert.ok(!fs.existsSync(output));
  assert.equal(result.status,200,JSON.stringify(result.body));
  learned=await request(f.app).get(learning+'/estimates/'+estimate+'/labor-duration-outcomes').set(owner.session.headers);
  assert.equal(learned.status,200);assert.equal(learned.body.data.current.fresh,false);assert.equal(learned.body.data.current.advisoryAvailable,false);
- assert.equal(learned.body.data.current.advisoryMessage,null);assert.equal(learned.body.data.refreshRequired,true);
+ assert.equal(learned.body.data.current.advisoryCode,null);assert.equal(learned.body.data.current.advisoryMessage,null);
+ assert.equal(learned.body.data.history[0].advisoryCode,null);assert.equal(learned.body.data.history[0].advisoryMessage,null);
+ assert.equal(learned.body.data.refreshRequired,true);
  const refreshed=await write('/estimates/'+estimate+'/labor-duration-outcomes',observeBody);
  assert.equal(refreshed.status,201,JSON.stringify(refreshed.body));assert.equal(refreshed.body.data.observation.revision,2);
  assert.equal(refreshed.body.data.observation.recordedWorkerHoursExcludingBreaks,'9.0000');
@@ -127,7 +139,19 @@ assert.ok(!fs.existsSync(output));
  assert.equal((await request(f.app).get(learning+'/estimates/'+estimate+'/labor-duration-outcomes').set(f.actors.otherOwner.session.headers)).status,200);
  const other=(await request(f.app).get(learning+'/estimates/'+estimate+'/labor-duration-outcomes').set(f.actors.otherOwner.session.headers)).body.data;
  assert.equal(other.activeConsent,false);assert.equal(other.current,null);
- ledger.cases.push('Consent revocation immediately hides derived results and another tenant receives no record existence signal.');
+ const revokedConsent=revoked.body.data.consent;
+ const regrantBody={action:'grant',expectedRevision:revokedConsent.revision,expectedDigest:revokedConsent.digest,
+  reason:'Re-enable the same explicit labor comparison purpose.',confirmed:true,confirmationVersion:'m25-labor-duration-consent-v1'};
+ const regranted=await write('/labor-duration-consent',regrantBody);assert.equal(regranted.status,201,JSON.stringify(regranted.body));
+ const regrantPin=regranted.body.data.consent;
+ const reobserved=await write('/estimates/'+estimate+'/labor-duration-outcomes',{...observeBody,
+  expectedConsentRevision:regrantPin.revision,expectedConsentDigest:regrantPin.digest});
+ assert.equal(reobserved.status,201,JSON.stringify(reobserved.body));assert.equal(reobserved.body.data.observation.revision,3);
+ const finalRevoke=await write('/labor-duration-consent',{...revoke,expectedRevision:regrantPin.revision,expectedDigest:regrantPin.digest});
+ assert.equal(finalRevoke.status,201,JSON.stringify(finalRevoke.body));
+ learned=await request(f.app).get(learning+'/estimates/'+estimate+'/labor-duration-outcomes').set(owner.session.headers);
+ assert.equal(learned.body.data.activeConsent,false);assert.equal(learned.body.data.current,null);
+ ledger.cases.push('Consent revocation hides derived results, re-granting can re-observe the same sources, and another tenant receives no record existence signal.');
 
  const privileges=(await f.ownerPool.query("SELECT has_table_privilege($1,'canonical_learning_purpose_consents','SELECT,INSERT,UPDATE,DELETE') consent_table,has_table_privilege($1,'canonical_labor_outcome_observations','SELECT,INSERT,UPDATE,DELETE') outcome_table,has_function_privilege($1,'canonical_labor_learning_basis(uuid,uuid)','EXECUTE') helper,has_function_privilege($1,'canonical_labor_outcome_read(uuid,uuid,text,uuid,uuid)','EXECUTE') entry",[f.roles.runtime])).rows[0];
  assert.deepEqual(privileges,{consent_table:false,outcome_table:false,helper:false,entry:true});

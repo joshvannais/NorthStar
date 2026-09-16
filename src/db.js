@@ -1216,7 +1216,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_labor_outcome_projection(public.canonical_labor_outcome_observations) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_learning_consent_read(uuid,uuid,text,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I', runtime_role);
-        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_labor_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_labor_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_labor_outcome_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regclass('public.canonical_material_movements') IS NOT NULL THEN
@@ -1565,7 +1565,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        (to_regclass('public.canonical_learning_purpose_consents') IS NULL OR (
          has_function_privilege($1,'public.canonical_learning_consent_read(uuid,uuid,text,uuid)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
-         AND has_function_privilege($1,'public.canonical_labor_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_labor_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_labor_outcome_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
        )) AS learning_entry_execute,
        (to_regclass('public.canonical_learning_purpose_consents') IS NULL OR (

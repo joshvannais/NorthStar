@@ -56,6 +56,8 @@ function normalizeObservation(estimateId, body) {
     expectedConsentRevision: body.expectedConsentRevision,
     expectedConsentDigest: body.expectedConsentDigest,
     reason: body.reason,
+    confirmed: true,
+    confirmationVersion: 'm25-labor-duration-observation-v1',
   };
 }
 

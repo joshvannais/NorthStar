@@ -14,12 +14,18 @@ Migration `091_canonical_external_travel_reconciliation.sql` and `/api/v1/learni
 
 Every immutable link or unlink pins current consent, source manifest, target digest, actor, session, request identity and explicit confirmation. A source correction or tombstone, reviewed vehicle identity or equipment-ledger change, target loss or consent revision makes an earlier link stale. Revocation hides references and targets and blocks new writes; exact delayed retries still return the original immutable receipt. Re-granting requires a fresh review.
 
-## Deliberately unavailable after Slice B
+## Slice C outcome boundary
+
+Owners and administrators may separately grant `imported_travel_variance_v1` consent, then record an observation for one reconciled external job and its exact adopted travel plan. Current job and vehicle matches are mandatory. The result compares route duration, driving distance, fuel or energy quantity, and fuel cost independently. A dimension is marked unavailable when its evidence is missing, incompatible, straight-line only, or uses a different currency.
+
+Source corrections, tombstones, consent changes, match changes, vehicle basis changes, and adopted-plan changes make prior observations stale and suppress their advice. Exact delayed idempotency replay remains available after revocation. No observation updates an estimate, route, schedule, reimbursement, payroll record, vehicle, equipment ledger, or business policy.
+
+## Deliberately unavailable after Slice C
 
 - No provider-specific OAuth connection or credential storage.
-- No estimate-versus-actual calculation or calibration yet.
+- No multi-job travel calibration yet.
 - No conversion of an estimate, MPG model or straight-line geometry into an actual.
 - No update to estimates, routes, schedules, reimbursement, payroll, assets, prices or policies.
 - No Learning Center travel source UI yet.
 
-Part 9 remains in progress until observations, multi-job calibration, source operations, owner UI and independent release acceptance are complete.
+Part 9 remains in progress until multi-job calibration, source operations, owner UI and independent release acceptance are complete.

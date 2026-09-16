@@ -19,6 +19,7 @@ const policy = require('../helpers/m24-policy-input');
 const commercialInput = require('../helpers/m24-commercial-input');
 const commercialContract = require('../../src/estimating/commercialContract');
 const travelComposition = require('../../src/estimating/travelCostComposition');
+const { MAX_STATE_BYTES } = require('../../src/commandCenter/demoRepository');
 
 const output = process.argv.find(value => value.startsWith('--output='))?.slice(9);
 assert.ok(output && !fs.existsSync(output));
@@ -321,6 +322,14 @@ function demoIntent(path) {
     assert.equal(demo.customerDocument.total, paid.customerDocument.total);
     result.cases.push('paid and isolated demo produce the same arithmetic and customer-safe output boundaries');
 
+    const demoStateBytes=Number((await fixture.ownerPool.query(
+      'SELECT octet_length(state::text) bytes FROM demo_command_center_sessions ORDER BY updated_at DESC LIMIT 1'
+    )).rows[0].bytes);
+    assert.ok(demoStateBytes>524288,'the mission trace must prove the former 512 KiB ceiling');
+    assert.ok(demoStateBytes<=MAX_STATE_BYTES,'the mission trace must remain inside the bounded demo state limit');
+    result.traces.demo.evidence.sessionStateBytes=demoStateBytes;
+    result.cases.push('the complete demo estimate remains saved beyond the former 512 KiB ceiling and inside the 2 MiB bound');
+
     for (const context of contexts) {
       const evidence=result.traces[context.name].evidence.customerDocument,key=crypto.randomUUID(),linkHeaders={...context.headers,'Idempotency-Key':key};
       if(context.name==='demo')linkHeaders['X-NorthStar-Demo-Intent']='customer-estimate-delivery';
@@ -330,8 +339,39 @@ function demoIntent(path) {
       const publicHeaders={Host:'localhost',Origin:'http://localhost','Idempotency-Key':crypto.randomUUID()};response=await request(fixture.app).post('/api/public/customer-estimates/'+token+'/accept').set(publicHeaders).send({customerName:'Demo Customer',confirmed:true,confirmationVersion:'customer-estimate-accept-v1'});assert.equal(response.status,201,JSON.stringify(response.body));
       publicHeaders['Idempotency-Key']=crypto.randomUUID();response=await request(fixture.app).post('/api/public/customer-estimates/'+token+'/questions').set(publicHeaders).send({customerName:'Demo Customer',replyTo:'customer@example.test',message:'Please confirm the proposed start date.',confirmed:true,confirmationVersion:'customer-estimate-question-v1'});assert.equal(response.status,201,JSON.stringify(response.body));
       response=await context.requester.get(context.route+'/customer-estimate-links').set(context.headers);assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.data.links[0].status,'accepted');assert.equal(response.body.data.links[0].questionCount,1);
-      const revokeHeaders={...context.headers,'Idempotency-Key':crypto.randomUUID()};if(context.name==='demo')revokeHeaders['X-NorthStar-Demo-Intent']='customer-estimate-delivery';response=await context.requester.post(context.route+'/customer-estimate-links/'+response.body.data.links[0].id+'/revoke').set(revokeHeaders).send({});assert.ok([200,201].includes(response.status),JSON.stringify(response.body));assert.equal((await request(fixture.app).get('/api/public/customer-estimates/'+token).set('Host','localhost')).status,410);
+      const completedLinkId=response.body.data.links[0].id;
+      const revokeHeaders={...context.headers,'Idempotency-Key':crypto.randomUUID()};if(context.name==='demo')revokeHeaders['X-NorthStar-Demo-Intent']='customer-estimate-delivery';response=await context.requester.post(context.route+'/customer-estimate-links/'+completedLinkId+'/revoke').set(revokeHeaders).send({});assert.ok([200,201].includes(response.status),JSON.stringify(response.body));assert.equal((await request(fixture.app).get('/api/public/customer-estimates/'+token).set('Host','localhost')).status,410);
       result.cases.push(context.name+' customer link, acceptance, question handoff, owner status and revocation work end to end');
+
+      // Insert an already-expired fixture instead of mutating delivery evidence;
+      // the immutable-row trigger correctly rejects UPDATE/DELETE even for the
+      // migration owner. The copied authority fields stay bound to this exact
+      // estimate/version, while database time evaluates the past expiry.
+      const expiryToken=crypto.randomBytes(32).toString('base64url');
+      const expiryTokenHash=crypto.createHash('sha256').update(expiryToken).digest('hex');
+      const expiryLinkId=crypto.randomUUID();
+      const fixtureHashes=[expiryTokenHash,crypto.createHash('sha256').update('expiry-key:'+expiryLinkId).digest('hex'),crypto.createHash('sha256').update('expiry-request:'+expiryLinkId).digest('hex'),crypto.createHash('sha256').update('expiry-row:'+expiryLinkId).digest('hex')];
+      if(context.name==='demo')await fixture.ownerPool.query(
+        `INSERT INTO public.demo_customer_estimate_delivery_links
+          (id,tenant_id,source_token_hash,estimate_id,version_id,token_hash,document,expires_at,created_at,request_key_hash,request_digest,digest)
+         SELECT $1,tenant_id,source_token_hash,estimate_id,version_id,$2,document,clock_timestamp()-INTERVAL '1 second',clock_timestamp()-INTERVAL '1 hour',$3,$4,$5
+           FROM public.demo_customer_estimate_delivery_links WHERE id=$6`,
+        [expiryLinkId,...fixtureHashes,completedLinkId]
+      );else await fixture.ownerPool.query(
+        `INSERT INTO public.canonical_customer_estimate_delivery_links
+          (id,organization_id,estimate_id,version_id,token_hash,actor_user_id,membership_id,auth_session_id,expires_at,created_at,request_key_hash,request_digest,digest)
+         SELECT $1,organization_id,estimate_id,version_id,$2,actor_user_id,membership_id,auth_session_id,clock_timestamp()-INTERVAL '1 second',clock_timestamp()-INTERVAL '1 hour',$3,$4,$5
+           FROM public.canonical_customer_estimate_delivery_links WHERE id=$6`,
+        [expiryLinkId,...fixtureHashes,completedLinkId]
+      );
+      assert.equal((await request(fixture.app).get('/api/public/customer-estimates/'+expiryToken).set('Host','localhost')).status,410);
+      const expiredAcceptHeaders={Host:'localhost',Origin:'http://localhost','Idempotency-Key':crypto.randomUUID()};
+      response=await request(fixture.app).post('/api/public/customer-estimates/'+expiryToken+'/accept').set(expiredAcceptHeaders).send({customerName:'Demo Customer',confirmed:true,confirmationVersion:'customer-estimate-accept-v1'});
+      assert.equal(response.status,410,JSON.stringify(response.body));
+      response=await context.requester.get(context.route+'/customer-estimate-links').set(context.headers);
+      assert.equal(response.status,200,JSON.stringify(response.body));
+      assert.equal(response.body.data.links.find(link=>link.id===expiryLinkId)?.status,'expired');
+      result.cases.push(context.name+' expiration closes public reads and writes while owner status remains explicit');
     }
 
     const demoLedger = await fixture.ownerPool.query(
@@ -343,6 +383,30 @@ function demoIntent(path) {
     assert.equal(demoLedger.rows[0]?.operation, 'customer_estimate_issue');
     assert.equal(operationColumn.rows[0]?.character_maximum_length, 32);
     result.cases.push('demo issuance is durably recorded without truncating its bounded operation name');
+
+    const boundedSession = (await fixture.ownerPool.query(
+      'SELECT id,state,revision FROM demo_command_center_sessions ORDER BY updated_at DESC LIMIT 1'
+    )).rows[0];
+    const boundaryClient = await fixture.ownerPool.connect();
+    try {
+      await boundaryClient.query('BEGIN');
+      await assert.rejects(
+        boundaryClient.query(
+          "UPDATE demo_command_center_sessions SET state=jsonb_build_object('payload',repeat('x',$1)) WHERE id=$2",
+          [MAX_STATE_BYTES + 1, boundedSession.id]
+        ),
+        error => error?.code === '23514'
+      );
+      await boundaryClient.query('ROLLBACK');
+    } finally {
+      boundaryClient.release();
+    }
+    const preservedSession = (await fixture.ownerPool.query(
+      'SELECT state,revision FROM demo_command_center_sessions WHERE id=$1',
+      [boundedSession.id]
+    )).rows[0];
+    assert.deepEqual(preservedSession, { state:boundedSession.state, revision:boundedSession.revision });
+    result.cases.push('the database rejects state beyond 2 MiB and preserves the last valid demo snapshot');
 
     const memberRoute = contexts[0].route + '/customer-estimate-preview';
     const forbidden = await request(fixture.app).get(memberRoute).set(fixture.actors.member.session.headers);

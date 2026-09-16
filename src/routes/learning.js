@@ -25,6 +25,8 @@ const travelMatchContract = require('../learning/externalTravelReconciliationCon
 const travelMatchRepository = require('../learning/externalTravelReconciliationRepository');
 const importedTravelOutcomeContract = require('../learning/importedTravelOutcomeContract');
 const importedTravelOutcomeRepository = require('../learning/importedTravelOutcomeRepository');
+const importedTravelCalibrationContract = require('../learning/importedTravelCalibrationContract');
+const importedTravelCalibrationRepository = require('../learning/importedTravelCalibrationRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -46,7 +48,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_IMPORTED_CALIBRATION_') ? 'Imported labor calibration is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_IMPORTED_TRAVEL_CALIBRATION_') ? 'Imported travel calibration is temporarily unavailable.' :
+    code.startsWith('M25_IMPORTED_CALIBRATION_') ? 'Imported labor calibration is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_TRAVEL_OUTCOME_') ? 'Imported travel outcome learning is temporarily unavailable.' :
     code.startsWith('M25_TRAVEL_MATCH_') ? 'External travel reconciliation is temporarily unavailable.' :
     code.startsWith('M25_TRAVEL_IMPORT_') ? 'External travel evidence is temporarily unavailable.' :
@@ -178,6 +181,48 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = importedTravelOutcomeContract.normalizeObservation(req.params.sourceKey, req.params.estimateId, req.body);
         const data = await importedTravelOutcomeRepository.observe(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-travel-sources/:sourceKey/imported-travel-calibration-consent', headers, tenantAuth,
+    travelOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = travelImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await importedTravelCalibrationRepository.readConsent(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-travel-sources/:sourceKey/imported-travel-calibration-consent', headers, mutationAuth,
+    travelOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = importedTravelCalibrationContract.normalizeConsent(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await importedTravelCalibrationRepository.mutateConsent(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-travel-sources/:sourceKey/imported-travel-calibrations/:serviceKey', headers, tenantAuth,
+    travelOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = travelImportContract.normalizeSourceKey(req.params.sourceKey);
+        const serviceKey = importedTravelCalibrationContract.normalizeServiceKey(req.params.serviceKey);
+        const data = await importedTravelCalibrationRepository.read(poolProvider(), { ...actor(req), sourceKey, serviceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-travel-sources/:sourceKey/imported-travel-calibrations/:serviceKey', headers, mutationAuth,
+    travelOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = importedTravelCalibrationContract.normalizeProposal(req.params.sourceKey, req.params.serviceKey, req.body);
+        const data = await importedTravelCalibrationRepository.propose(poolProvider(), { ...actor(req), ...normalized,
           csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });

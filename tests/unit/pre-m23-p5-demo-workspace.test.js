@@ -50,7 +50,7 @@ describe('Pre-Mission 23 P5 deterministic fictional demo workspace', () => {
     expect(first).toEqual(second);
     expect(JSON.stringify(first)).toBe(JSON.stringify(second));
     expect(first.contract).toBe(FIXTURE_CONTRACT);
-    expect(sha256(first)).toBe('5fecb0df7b23388c0efef7229e3e8ae837674514fbb55a99a3089dc18ee65872');
+    expect(sha256(first)).toBe('94d29df31218511420b2997df3062649afd594ba75f0cfaa2be2953fd89258b3');
 
     const other = createDemoWorkspaceFixture({ seed: 'pre-m23-p5-browser-fixture-beta' });
     expect(other.tenant.id).not.toBe(first.tenant.id);

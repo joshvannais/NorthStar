@@ -781,7 +781,10 @@ window.CustomerDetail = (function() {
       });
       var amount = matches.reduce(function(total, item) { return total + (Number(item.customerCharge) || 0); }, 0);
       var detail = matches.length
-        ? matches.map(function(item) { return escapeText(item.label || item.code || category.label); }).join(', ')
+        ? matches.map(function(item) {
+          var label = escapeText(item.label || item.code || category.label);
+          return label + (item.customerCharge == null ? '' : ': ' + escapeText(fmtCurrency(item.customerCharge)));
+        }).join('; ')
         : 'Awaiting a recorded input.';
       return '<section class="drawer-pricing-category" id="cdPricingCategory-' + category.key + '" data-pricing-category="' + category.key + '">' +
         '<div class="drawer-pricing-category-header"><span>' + category.label + '</span><span>' + (matches.length ? escapeText(fmtCurrency(amount)) : '\u2014') + '</span></div>' +

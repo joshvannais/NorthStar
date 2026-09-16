@@ -215,6 +215,7 @@ function createDemoWorkspaceFixture(input) {
   if (!Number.isFinite(anchor.getTime())) throw new Error('Demo fixture anchor time is invalid.');
   const tenantId = fixtureId(seedDigest, 'tenant');
   const treeBusinessProfile = createTreeBusinessProfile(seedDigest);
+  const concreteBusinessProfile = require('./demoConcreteBusinessProfile').create(seedDigest);
   const ownerIndex = random.integer(0, TEAM_FIRST.length - 1);
   const members = [
     { role: 'owner', accessRole: 'owner', operationalRole: 'Owner' },
@@ -348,6 +349,7 @@ function createDemoWorkspaceFixture(input) {
     },
     industryProfiles: {
       tree: treeBusinessProfile,
+      concrete: concreteBusinessProfile,
     },
     workforce: {
       jobControlPolicy: 'direct_assignee_or_crew_lead',

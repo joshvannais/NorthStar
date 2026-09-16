@@ -159,6 +159,56 @@ function repairKnownTreeServiceIdentity(value) {
   return candidate;
 }
 
+// A released generic demo fallback represented every non-tree service with the
+// same USD 600 material placeholder. Concrete records are repairable because
+// the saved scope still contains the measured area and the fictional workspace
+// profile needed by the current deterministic calculation.
+function repairKnownConcreteCostExample(value) {
+  if (!value || value.schemaVersion !== 2 || !value.workspace || !value.workspace.tenant || !Array.isArray(value.graphs)) return null;
+  let repaired=false;
+  const graphs=value.graphs.map(graph=>{
+    const calculation=graph&&graph.polaris&&graph.polaris.syntheticCalculation;
+    const snapshot=graph&&graph.polaris&&graph.polaris.snapshot;
+    const profile=calculation&&calculation.input&&calculation.input.businessProfile;
+    const lines=snapshot&&Array.isArray(snapshot.pricingLineItems)?snapshot.pricingLineItems:[];
+    const matches=graph&&graph.source&&graph.source.type==='account_free_demo'&&graph.lead&&graph.lead.serviceType==='concrete'&&
+      calculation&&calculation.contract==='NorthStarFictionalCostExample/v1'&&profile&&profile.version==='fictional-cost-example-v1'&&
+      snapshot&&snapshot.materialsCharge===600&&Number(snapshot.service&&snapshot.service.scope&&snapshot.service.scope.squareFeet)>0&&
+      lines.some(line=>line&&line.code==='profile-fictional-materials'&&line.customerCharge===600);
+    if(!matches)return graph;
+    repaired=true;
+    return addRecordedCostExample(value.workspace.tenant.id,graph);
+  });
+  if(!repaired)return null;
+  const candidate=stableValue({...value,graphs});
+  state(candidate);
+  return candidate;
+}
+
+function repairKnownConcreteBusinessProfile(value) {
+  const profiles=value&&value.workspace&&value.workspace.businessProfile&&value.workspace.businessProfile.industryProfiles;
+  if(!value||value.schemaVersion!==2||!profiles||profiles.concrete||!profiles.tree||
+      !/^[0-9a-f]{64}$/.test(String(value.seed||''))||!Number.isFinite(Date.parse(value.createdAt))||!Array.isArray(value.graphs))return null;
+  const expected=createDemoWorkspaceFixture({seedDigest:value.seed,anchorTime:new Date(value.createdAt),registryVersion:value.workspace.registryVersion||null});
+  const priorExpected=JSON.parse(JSON.stringify(expected));
+  delete priorExpected.businessProfile.industryProfiles.concrete;
+  if(sha256(priorExpected)!==sha256(value.workspace))return null;
+  const graphs=value.graphs.map(graph=>{
+    const updated={...graph,businessProfile:expected.businessProfile};
+    delete updated.projectionDigest;
+    updated.projectionDigest=sha256(updated);
+    return stableValue(updated);
+  });
+  return stableValue({...value,workspace:expected,graphs});
+}
+
+function repairKnownDemoCalculationDefects(value) {
+  const profileRepair=repairKnownConcreteBusinessProfile(value);
+  const treeRepair=repairKnownTreeServiceIdentity(profileRepair||value);
+  const concreteRepair=repairKnownConcreteCostExample(treeRepair||profileRepair||value);
+  return concreteRepair||treeRepair||profileRepair;
+}
+
 function workspaceSeedForToken(tokenHash) {
   return sha256({ contract: 'northstar_demo_workspace_admission_seed_v1', tokenHash: digest(tokenHash) });
 }
@@ -400,7 +450,7 @@ class DemoCommandCenterRepository {
       [token.tokenHash, now]
     );
     const initialRow = initial.rows[0] || null;
-    const repairable = initialRow && repairKnownTreeServiceIdentity(initialRow.state);
+    const repairable = initialRow && repairKnownDemoCalculationDefects(initialRow.state);
     if (!initialRow || (!legacyState(initialRow.state) && !repairable)) {
       return recordFromRow(initialRow, token, Boolean(initialRow));
     }
@@ -436,7 +486,7 @@ class DemoCommandCenterRepository {
 
   async normalizePersistedRow(client, row, token, now) {
     assertRowAuthority(row, token);
-    const repairedState = repairKnownTreeServiceIdentity(row.state);
+    const repairedState = repairKnownDemoCalculationDefects(row.state);
     if (!legacyState(row.state) && !repairedState) {
       state(row.state);
       return { row, migrated: false };
@@ -1017,6 +1067,9 @@ module.exports = {
   issueToken,
   normalizeToken,
   nextWorkspaceSeed,
+  repairKnownConcreteBusinessProfile,
+  repairKnownConcreteCostExample,
+  repairKnownDemoCalculationDefects,
   repairKnownTreeServiceIdentity,
   workspaceSeedForToken,
 };

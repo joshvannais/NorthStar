@@ -40,7 +40,8 @@ async function grantAndVerify(client, runtimeRole) {
     'public.canonical_imported_labor_calibration_consent_read(uuid,uuid,text,uuid,text)',
     'public.canonical_imported_labor_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)',
     'public.canonical_imported_labor_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,bigint,text,text,boolean,text)',
-    'public.canonical_imported_labor_calibration_read(uuid,uuid,text,uuid,text,text)'
+    'public.canonical_imported_labor_calibration_read(uuid,uuid,text,uuid,text,text)',
+    'public.canonical_learning_center_read(uuid,uuid,text,uuid)'
   ];
   for (const signature of helpers) await client.query(`REVOKE ALL ON FUNCTION ${signature} FROM ${identifier}`);
   for (const signature of entries) await client.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${identifier}`);
@@ -102,12 +103,14 @@ async function grantAndVerify(client, runtimeRole) {
     has_function_privilege($1,'public.canonical_imported_labor_calibration_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
       AND has_function_privilege($1,'public.canonical_imported_labor_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
       AND has_function_privilege($1,'public.canonical_imported_labor_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,bigint,text,text,boolean,text)','EXECUTE')
-      AND has_function_privilege($1,'public.canonical_imported_labor_calibration_read(uuid,uuid,text,uuid,text,text)','EXECUTE') calibration_entries_allowed`,
+      AND has_function_privilege($1,'public.canonical_imported_labor_calibration_read(uuid,uuid,text,uuid,text,text)','EXECUTE') calibration_entries_allowed,
+    has_function_privilege($1,'public.canonical_learning_center_read(uuid,uuid,text,uuid)','EXECUTE') learning_center_entry_allowed`,
     [runtimeRole])).rows[0];
   if (!privileges.tables_withheld || !privileges.matches_withheld || !privileges.imported_outcomes_withheld ||
       !privileges.helpers_withheld || !privileges.imported_outcome_helpers_withheld || !privileges.entries_allowed ||
       !privileges.imported_outcome_entries_allowed || !privileges.calibration_withheld ||
-      !privileges.calibration_helpers_withheld || !privileges.calibration_entries_allowed) {
+      !privileges.calibration_helpers_withheld || !privileges.calibration_entries_allowed ||
+      !privileges.learning_center_entry_allowed) {
     throw new Error(`External labor import runtime privilege verification failed: ${JSON.stringify(privileges)}`);
   }
 }

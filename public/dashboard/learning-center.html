@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Learning Center - NorthStar</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <script src="/js/command-center-contract.js?v=m25-learning-center-20260916"></script>
+  <script src="/js/demo-runtime.js?v=m25-learning-center-20260916"></script>
+  <link rel="stylesheet" href="/css/demo-runtime.css">
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/learning-center.css?v=m25-learning-center-20260916">
+  <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
+</head>
+<body class="learning-center-page">
+  <a class="learning-skip" href="#learningMain">Skip to Learning Center</a>
+  <div class="dashboard-layout">
+    <main id="learningMain" class="main-content learning-main" tabindex="-1">
+      <header class="learning-hero">
+        <div>
+          <p class="learning-eyebrow">Tenant-private operating history</p>
+          <h1>Learning Center</h1>
+          <p class="learning-lede">See which company records NorthStar may compare, what needs review, and which planning suggestions are current.</p>
+        </div>
+        <button id="learningRefresh" class="btn btn-secondary" type="button">Refresh</button>
+      </header>
+      <div id="learningStatus" class="learning-status" role="status" aria-live="polite" aria-atomic="true">Loading your learning controls.</div>
+      <section id="learningSummary" class="learning-summary" aria-label="Learning overview" hidden>
+        <article><span>External sources</span><strong id="learningSourceCount">0</strong><small>Company sources recorded</small></article>
+        <article><span>Source records</span><strong id="learningRecordCount">0</strong><small>For the selected source</small></article>
+        <article><span>Source review</span><strong id="learningReviewCount">0</strong><small>Selected source references</small></article>
+        <article><span>Calibration state</span><strong id="learningCalibrationCount">0</strong><small>For the selected service</small></article>
+      </section>
+      <section class="learning-panel" aria-labelledby="nativeLearningTitle">
+        <div class="learning-panel-heading">
+          <div><p class="learning-kicker">NorthStar records</p><h2 id="nativeLearningTitle">Completed job comparisons</h2></div>
+          <span id="nativeLearningState" class="learning-pill">Checking</span>
+        </div>
+        <p>Allow reviewed NorthStar labor records to be compared with the adopted labor plan for the same completed job.</p>
+        <div class="learning-actions"><button id="nativeLearningAction" class="btn btn-secondary" type="button" disabled>Checking consent</button></div>
+      </section>
+      <section class="learning-panel" aria-labelledby="sourcesTitle">
+        <div class="learning-panel-heading">
+          <div><p class="learning-kicker">Connected history</p><h2 id="sourcesTitle">External labor sources</h2></div>
+        </div>
+        <p id="sourcesDescription">Loading configured sources.</p>
+        <div id="learningSources" class="learning-source-grid" aria-live="polite"></div>
+      </section>
+      <section id="learningDetail" class="learning-detail" aria-labelledby="learningDetailTitle" hidden>
+        <header class="learning-detail-header"><div><p class="learning-kicker">Selected source</p><h2 id="learningDetailTitle">Source details</h2></div><span id="learningDetailState" class="learning-pill">Checking</span></header>
+        <div id="learningConsentCards" class="learning-consent-grid"></div>
+        <section class="learning-subpanel" aria-labelledby="evidenceTitle"><div class="learning-panel-heading"><div><h3 id="evidenceTitle">Source evidence</h3><p id="evidenceSummary">No source selected.</p></div></div><div id="evidenceMetrics" class="learning-metrics"></div></section>
+        <section class="learning-subpanel" aria-labelledby="matchesTitle"><div class="learning-panel-heading"><div><h3 id="matchesTitle">Reference review</h3><p id="matchesSummary">No references loaded.</p></div></div><div id="learningMatches"></div></section>
+        <section class="learning-subpanel" aria-labelledby="calibrationTitle"><div class="learning-panel-heading"><div><h3 id="calibrationTitle">Labor planning calibration</h3><p>Review a service-level summary. Saving a proposal does not apply it.</p></div></div><div id="learningCalibration"></div></section>
+      </section>
+      <aside class="learning-boundary" aria-label="Learning boundary"><h2>Owner decision remains required</h2><p id="learningBoundary">Learning remains advisory. NorthStar does not automatically change estimates, rates, schedules, payroll, worker profiles or business policy.</p></aside>
+    </main>
+  </div>
+  <script src="/js/auth-session.js"></script>
+  <script src="/js/nav-component.js?v=m25-learning-center-20260916"></script>
+  <script src="/js/learning-center-contract.js?v=m25-learning-center-20260916"></script>
+  <script src="/js/learning-center-page.js?v=m25-learning-center-20260916"></script>
+  <script>NavComponent.init('learning-center');</script>
+</body>
+</html>

@@ -15,6 +15,7 @@ const importedOutcomeContract = require('../learning/importedLaborOutcomeContrac
 const importedOutcomeRepository = require('../learning/importedLaborOutcomeRepository');
 const calibrationContract = require('../learning/importedLaborCalibrationContract');
 const calibrationRepository = require('../learning/importedLaborCalibrationRepository');
+const learningCenterRepository = require('../learning/learningCenterRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -62,6 +63,13 @@ function createLearningRouter(options = {}) {
   const importOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('External labor imports are restricted to current owners and administrators.'),
       { code: 'M25_IMPORT_FORBIDDEN', status: 403 }));
+
+  router.get('/center', headers, tenantAuth, ownerOnly, throttle, permission('learning', 'read'), async (req, res) => {
+    try {
+      const data = await learningCenterRepository.read(poolProvider(), actor(req));
+      return res.json({ success: true, data, requestId: requestId(req) });
+    } catch (error) { return replyError(req, res, error); }
+  });
 
   router.get('/labor-duration-consent', headers, tenantAuth, ownerOnly, throttle, permission('operations', 'read'), async (req, res) => {
     try {

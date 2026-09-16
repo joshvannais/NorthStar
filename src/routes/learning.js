@@ -27,6 +27,8 @@ const importedTravelOutcomeContract = require('../learning/importedTravelOutcome
 const importedTravelOutcomeRepository = require('../learning/importedTravelOutcomeRepository');
 const importedTravelCalibrationContract = require('../learning/importedTravelCalibrationContract');
 const importedTravelCalibrationRepository = require('../learning/importedTravelCalibrationRepository');
+const travelOperationsContract = require('../learning/externalTravelOperationsContract');
+const travelOperationsRepository = require('../learning/externalTravelOperationsRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -123,6 +125,36 @@ function createLearningRouter(options = {}) {
         return res.json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
+
+  router.get('/external-travel-sources/:sourceKey/operations', headers, tenantAuth, travelOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const sourceKey = travelImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await travelOperationsRepository.read(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  const travelOperationMutation = (path, normalizer, method) => router.post(path, headers, mutationAuth,
+    travelOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = normalizer(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await method(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  travelOperationMutation('/external-travel-sources/:sourceKey/adapter', travelOperationsContract.normalizeAdapter,
+    travelOperationsRepository.mutateAdapter);
+  travelOperationMutation('/external-travel-sources/:sourceKey/retention', travelOperationsContract.normalizeRetention,
+    travelOperationsRepository.mutateRetention);
+  travelOperationMutation('/external-travel-sources/:sourceKey/deletion', travelOperationsContract.normalizeDeletion,
+    travelOperationsRepository.mutateDeletion);
+  travelOperationMutation('/external-travel-sources/:sourceKey/cleanup', travelOperationsContract.normalizeCleanup,
+    travelOperationsRepository.executeCleanup);
 
   router.get('/external-travel-sources/:sourceKey/matches', headers, tenantAuth, travelOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

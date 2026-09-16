@@ -11,6 +11,8 @@ const importContract = require('../learning/externalLaborImportContract');
 const importRepository = require('../learning/externalLaborImportRepository');
 const reconciliationContract = require('../learning/externalLaborReconciliationContract');
 const reconciliationRepository = require('../learning/externalLaborReconciliationRepository');
+const importedOutcomeContract = require('../learning/importedLaborOutcomeContract');
+const importedOutcomeRepository = require('../learning/importedLaborOutcomeRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -32,7 +34,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_MATCH_') ? 'External labor reconciliation is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_IMPORTED_OUTCOME_') ? 'Imported labor outcome learning is temporarily unavailable.' :
+    code.startsWith('M25_MATCH_') ? 'External labor reconciliation is temporarily unavailable.' :
     code.startsWith('M25_IMPORT_') ? 'External labor imports are temporarily unavailable.' :
       'Labor outcome learning is temporarily unavailable.';
   return res.status(status).json({ success: false, requestId: requestId(req), error: {
@@ -159,6 +162,50 @@ function createLearningRouter(options = {}) {
         const data = await reconciliationRepository.mutateMatch(poolProvider(), {
           ...actor(req), sourceKey, body, csrfToken: req.get('X-CSRF-Token'),
           idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-labor-sources/:sourceKey/imported-labor-duration-consent', headers, tenantAuth,
+    importOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = importContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await importedOutcomeRepository.readConsent(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-labor-sources/:sourceKey/imported-labor-duration-consent', headers, mutationAuth,
+    importOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = importedOutcomeContract.normalizeConsent(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await importedOutcomeRepository.mutateConsent(poolProvider(), {
+          ...actor(req), sourceKey, body, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-labor-sources/:sourceKey/estimates/:estimateId/imported-labor-duration-outcomes',
+    headers, tenantAuth, importOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = importContract.normalizeSourceKey(req.params.sourceKey);
+        const estimateId = importedOutcomeContract.normalizeEstimateId(req.params.estimateId);
+        const data = await importedOutcomeRepository.readOutcome(poolProvider(), { ...actor(req), sourceKey, estimateId });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-labor-sources/:sourceKey/estimates/:estimateId/imported-labor-duration-outcomes',
+    headers, mutationAuth, importOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = importedOutcomeContract.normalizeObservation(req.params.sourceKey, req.params.estimateId, req.body);
+        const data = await importedOutcomeRepository.observe(poolProvider(), {
+          ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
         });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });

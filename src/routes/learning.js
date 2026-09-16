@@ -21,6 +21,8 @@ const calibrationRepository = require('../learning/importedLaborCalibrationRepos
 const learningCenterRepository = require('../learning/learningCenterRepository');
 const travelImportContract = require('../learning/externalTravelImportContract');
 const travelImportRepository = require('../learning/externalTravelImportRepository');
+const travelMatchContract = require('../learning/externalTravelReconciliationContract');
+const travelMatchRepository = require('../learning/externalTravelReconciliationRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -43,6 +45,7 @@ function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
   const unavailable = code.startsWith('M25_IMPORTED_CALIBRATION_') ? 'Imported labor calibration is temporarily unavailable.' :
+    code.startsWith('M25_TRAVEL_MATCH_') ? 'External travel reconciliation is temporarily unavailable.' :
     code.startsWith('M25_TRAVEL_IMPORT_') ? 'External travel evidence is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_OUTCOME_') ? 'Imported labor outcome learning is temporarily unavailable.' :
     code.startsWith('M25_MATCH_') ? 'External labor reconciliation is temporarily unavailable.' :
@@ -112,6 +115,27 @@ function createLearningRouter(options = {}) {
         const sourceKey = travelImportContract.normalizeSourceKey(req.params.sourceKey);
         const data = await travelImportRepository.readSource(poolProvider(), { ...actor(req), sourceKey });
         return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-travel-sources/:sourceKey/matches', headers, tenantAuth, travelOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = travelImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await travelMatchRepository.readMatches(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-travel-sources/:sourceKey/matches', headers, mutationAuth, travelOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = travelMatchContract.normalizeMatch(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await travelMatchRepository.mutateMatch(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
 

@@ -8,13 +8,18 @@ Each active record requires an opaque job reference, opaque vehicle reference, c
 
 The runtime role has no direct table or projection-helper access. It can call only four guarded entry functions. Consent revocation blocks writes and hides current records. Request keys, source versions, cursor chains, immutable history and the migration checksum make recovery and replay inspectable.
 
-## Deliberately unavailable in Slice A
+## Slice B reconciliation boundary
+
+Migration `091_canonical_external_travel_reconciliation.sql` and `/api/v1/learning/external-travel-sources/:sourceKey/matches` let a current owner or administrator review and link the opaque job and vehicle references. A job link may select only a same-tenant canonical estimate. A vehicle link may select only a current active vehicle whose exact asset version has been reviewed. No name or identifier similarity creates a link.
+
+Every immutable link or unlink pins current consent, source manifest, target digest, actor, session, request identity and explicit confirmation. A source correction or tombstone, reviewed vehicle identity or equipment-ledger change, target loss or consent revision makes an earlier link stale. Revocation hides references and targets and blocks new writes; exact delayed retries still return the original immutable receipt. Re-granting requires a fresh review.
+
+## Deliberately unavailable after Slice B
 
 - No provider-specific OAuth connection or credential storage.
-- No inference that an imported job or vehicle reference matches a NorthStar record.
 - No estimate-versus-actual calculation or calibration yet.
 - No conversion of an estimate, MPG model or straight-line geometry into an actual.
 - No update to estimates, routes, schedules, reimbursement, payroll, assets, prices or policies.
 - No Learning Center travel source UI yet.
 
-Part 9 remains in progress until reviewed reconciliation, observations, multi-job calibration, source operations, owner UI and independent release acceptance are complete.
+Part 9 remains in progress until observations, multi-job calibration, source operations, owner UI and independent release acceptance are complete.

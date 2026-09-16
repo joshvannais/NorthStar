@@ -18,7 +18,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 6 | Multi-job imported labor calibration with robust sample statistics | Released |
 | 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Released |
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
-| 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | In progress — Slice A candidate |
+| 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | In progress — Slice A released; Slice B candidate |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Planned |
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Planned |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
@@ -110,4 +110,6 @@ Part 9 is serialized because the accepted source inventory does not contain a na
 
 The import is tenant-private, consented, bounded to 100 records, cursor checked, idempotent, correction aware and tombstone aware. Revocation hides current evidence and blocks further imports. It stages evidence only: opaque job and vehicle references are not yet reconciled, and no record changes an estimate, route, schedule, reimbursement, payroll, asset, price or business policy.
 
-The remaining Part 9 slices must add reviewed same-tenant job and vehicle reconciliation; exact adopted travel-plan versus actual observations across route duration, distance, fuel quantity and fuel cost; robust multi-job calibration; retention/deletion operations; and the owner Learning Center experience. Part 9 cannot be marked released until those slices and independent acceptance are complete.
+Slice B adds explicit owner-reviewed reconciliation from each opaque job reference to a same-tenant canonical estimate and from each opaque vehicle reference to a current active reviewed vehicle asset version. A link pins the current source consent, complete current source-record manifest and exact target basis. Route corrections, tombstones, vehicle identity or operating-ledger changes, target removal and consent changes make saved links stale. Re-granting consent does not revive links approved under an earlier consent revision. Unlinks append another immutable revision. The service never guesses by name and never changes a job, vehicle, estimate, route, schedule or policy.
+
+The remaining Part 9 slices must add exact adopted travel-plan versus actual observations across route duration, distance, fuel quantity and fuel cost; robust multi-job calibration; retention/deletion operations; and the owner Learning Center experience. Part 9 cannot be marked released until those slices and independent acceptance are complete.

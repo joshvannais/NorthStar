@@ -498,6 +498,9 @@
       }
       if (method === 'GET' && url.pathname === '/api/account/preferences') return jsonResponse({ success: true, preferences: preferences(value) });
       if (method === 'GET' && url.pathname === '/api/workforce') return jsonResponse(workforce(value));
+      if (method === 'GET' && url.pathname === '/api/equipment/catalogue') {
+        return jsonResponse({ success: true, data: value.configuration.assetCatalogue });
+      }
       if (method === 'GET' && url.pathname === '/api/v1/integrations/catalogue') {
         return jsonResponse({ success: true, data: value.configuration.integrations });
       }

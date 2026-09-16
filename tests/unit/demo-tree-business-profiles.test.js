@@ -39,6 +39,22 @@ test('a refreshed demo keeps one internally consistent tree company profile acro
   }
 });
 
+test('the demo Business Profile exposes vehicles and equipment separately from industry tool inventory', () => {
+  const state = workspace.createInitialDemoState(TENANT, NOW, { seed: 'tree-inventory-profile' });
+  const projected = workspace.buildDemoWorkspace({
+    tenantId: TENANT, sessionId: '33333333-3333-4333-8333-333333333333', state,
+    revision: 1, simulationCount: 0, persisted: true, expiresAt: new Date('2026-09-16T12:00:00Z'),
+  });
+  const assets = projected.configuration.assetCatalogue.assets;
+  expect(projected.configuration.assetCatalogue.canManage).toBe(false);
+  expect(assets.some(asset => asset.category === 'vehicle')).toBe(true);
+  expect(assets.some(asset => asset.category === 'equipment')).toBe(true);
+  expect(assets.find(asset => asset.name === 'Husqvarna 550 XP Mark II chainsaw')).toEqual(expect.objectContaining({
+    category: 'tool', manufacturer: 'Husqvarna', model: '550 XP Mark II', reviewState: 'reviewed',
+  }));
+  expect(assets.find(asset => asset.name === 'Ropes, rigging, climbing gear and PPE')).toEqual(expect.objectContaining({ category: 'tool' }));
+});
+
 test('financed tree machinery allocates only a qualifying-job share plus this job operating cost', () => {
   let state;
   for (let index = 0; index < 100; index += 1) {

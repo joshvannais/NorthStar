@@ -114,7 +114,16 @@
     function amount(value) { return options.money(value, review.currency); }
     function row(parent, label, value) { var r = node('div', null, parent, 'prepared-row'); node('span', label, r); node('strong', value == null ? 'Not recorded' : String(value), r); }
     function renderGroups() {
-      if(overview){overview.replaceChildren();var draftPrice=state.data&&state.data.components.find(function(c){return c.kind==='pricing';}),priceValue=draftPrice&&draftPrice.result&&(draftPrice.result.result||draftPrice.result);row(overview,'Draft price before tax',priceValue?amount(priceValue.proposedBeforeTax):'Needs review');node('p','Review the costs and remaining questions before saving.',overview,'prepared-muted');}
+      if(overview){
+        overview.replaceChildren();
+        var draftPrice=state.data&&state.data.components.find(function(c){return c.kind==='pricing';}),priceValue=draftPrice&&draftPrice.result&&(draftPrice.result.result||draftPrice.result),originalRow=(review.rows||[])[0],originalPrice=originalRow&&originalRow.amount,preparedPrice=priceValue&&priceValue.proposedBeforeTax;
+        row(overview,'Original Polaris estimate',originalPrice==null?'Needs review':amount(originalPrice));
+        row(overview,'Prepared draft before tax',preparedPrice==null?'Needs review':amount(preparedPrice));
+        if(originalPrice!=null&&preparedPrice!=null&&Number.isFinite(Number(originalPrice))&&Number.isFinite(Number(preparedPrice))){
+          var delta=Math.round((Number(preparedPrice)-Number(originalPrice))*100)/100;
+          node('p',Math.abs(delta)<.005?'No price change. The prepared draft currently matches the original Polaris estimate.':'Prepared draft change: '+(delta>0?'+':'-')+amount(Math.abs(delta).toFixed(2))+'. Review the adjusted details and plans below.',overview,'prepared-muted');
+        }else node('p','Review the costs and remaining questions before saving.',overview,'prepared-muted');
+      }
       groups.forEach(function (g) {
         var target = groupHosts[g[0]]; target.replaceChildren(); var c = state.data && state.data.components.find(function (c) { return c.kind === g[0]; });
         if(state.denied){node('p','Current information is unavailable.',target,'prepared-muted');return;}

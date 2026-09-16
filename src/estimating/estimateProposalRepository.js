@@ -11,6 +11,63 @@ function context(raw,input,now,item=null){
  const facts={};for(const [key,fact] of Object.entries(proposalScope))if(fact&&typeof fact==='object'&&!Array.isArray(fact)&&typeof fact.value==='string'&&typeof fact.unit==='string')facts[key]={value:fact.value,unit:fact.unit,source:'Recorded job detail'};
  return{...sources,facts,proposalScope,unconfirmedFields,authorityDigest:sha256({sources:sources.authorityDigest,unconfirmedFields}),geography:typeof proposalScope.proposalGeography==='string'?proposalScope.proposalGeography:null,now:new Date(now).toISOString()};
 }
+
+function money(value){
+ if(typeof value!=='number'||!Number.isFinite(value)||value<0)return null;
+ return value.toFixed(2);
+}
+function cents(value){
+ if(typeof value==='number'&&Number.isFinite(value))return Math.round(value*100);
+ if(typeof value==='string'&&/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(value))return Number(value.replace('.',''));
+ return null;
+}
+function decimal(value){return String(Math.floor(value/100))+'.'+String(value%100).padStart(2,'0');}
+
+// The simulated company recipe is the company's reusable operating profile.
+// Tree jobs also carry recorded scope multipliers (size, access, condition,
+// disposal, count and proximity). Bind the reusable profile to this immutable
+// job snapshot before showing a prepared draft, so a generic operation price
+// cannot replace the job-specific Polaris calculation.
+function alignDemoTreeRecipe(sources,item){
+ const snapshot=item?.snapshot,scope=snapshot?.service?.scope||{};
+ if(snapshot?.service?.key!=='tree'||!scope.jobType||money(snapshot.customerFacingPrice)===null)return sources;
+ const target={
+  materials:money(snapshot.knownDirectMaterialCost),labor:money(snapshot.knownInternalLaborCost),
+  equipment:money(snapshot.knownEquipmentCost),travel:money(snapshot.travel?.knownInternalCost),
+  overhead:money(snapshot.overhead),price:money(snapshot.customerFacingPrice)
+ };
+ if(Object.values(target).some(value=>value===null))return sources;
+ const knowledge=(sources.knowledge||[]).map(entry=>{
+  const raw=entry.content?.estimateProposalRecipe;
+  if(raw?.serviceKey!=='tree'||!raw.applicability?.some(rule=>rule.fieldId==='jobType'&&rule.value===scope.jobType))return entry;
+  const recipe=JSON.parse(JSON.stringify(raw));
+  const component=kind=>recipe.components.find(value=>value.kind===kind);
+  const materials=component('materials'),labor=component('labor'),travel=component('travel'),pricing=component('pricing');
+  if(materials?.inputs?.lines?.[0]){
+   materials.inputs.lines[0].quantity='1';materials.inputs.lines[0].wastePercent='0';materials.inputs.lines[0].unitPrice=target.materials;
+   materials.inputs.lines[0].sourceNote='Recorded fictional company material cost for this job-specific tree scope.';
+  }
+  if(labor?.inputs?.lines?.[0]){
+   const line=labor.inputs.lines[0],workerHours=Number(scope.laborHours)*Number(scope.plannedCrewSize),laborCost=Number(target.labor);
+   if(Number.isFinite(workerHours)&&workerHours>0){line.workerHours=String(Math.round(workerHours*1000000)/1000000);line.hourlyCost=(laborCost/workerHours).toFixed(2);}
+   line.quantitySource.note='Recorded fictional job scope and crew size.';line.rateSource.note='Recorded fictional company loaded labor cost for this tree job.';
+  }
+  const equipmentLine=recipe.equipmentCostLines?.[0];
+  if(equipmentLine?.operating?.mode==='all_in'&&equipmentLine.operating.allIn?.status==='known'&&equipmentLine.plannedHours==='1'){
+   const calculation=require('./equipmentCostCalculation').calculateLine(equipmentLine,0),current=cents(calculation.total),goal=cents(target.equipment),prior=cents(equipmentLine.operating.allIn.rate.amount);
+   if(current!==null&&goal!==null&&prior!==null&&prior+goal-current>=0)equipmentLine.operating.allIn.rate.amount=decimal(prior+goal-current);
+  }
+  if(travel?.inputs?.logistics?.[0]){travel.inputs.logistics[0].rate=target.travel;travel.inputs.logistics[0].source.note='Recorded fictional travel and mobilization cost for this job-specific tree scope.';}
+  if(pricing?.inputs?.lines?.[0]){
+   pricing.inputs.lines[0].amount=target.price;
+   pricing.inputs.lines[0].scope='Current job-specific Polaris price from the recorded tree scope and simulated business profile';
+   pricing.inputs.lines[0].source.note='Recorded fictional job-specific price; changes require a visible prepared-estimate review.';
+  }
+  if(pricing?.inputs?.overhead){pricing.inputs.overhead.amount=target.overhead;pricing.inputs.overhead.source.note='Recorded fictional overhead allocation for this job-specific tree scope.';}
+  return{...entry,content:{...entry.content,estimateProposalRecipe:recipe}};
+ });
+ return{...sources,knowledge,authorityDigest:sha256({sourceAuthority:sources.authorityDigest,snapshotDigest:item.snapshotDigest,alignment:'simulated-tree-job-recipe-v1'})};
+}
 async function loadContext(client,input,review,item){
  let raw=await equipment.readSources(client,input);
  const initial=equipment.presentSources(raw,input),recipes=proposal.applicableRecipes({...initial,proposalScope:initial.scope||{}},item);
@@ -31,7 +88,8 @@ function demoContext(record,review,item,now=new Date(),workspace=null){
   if(typeof feet==='number'&&Number.isFinite(feet)&&feet>=0&&!sources.unconfirmedFields.includes('linearFeet'))sources.facts.linearFeet={value:String(feet),unit:'ft',source:'Recorded simulated fence length'};
   sources.authorityDigest=sha256({equipment:sources.authorityDigest,recipeBasis:seed,scope:item.snapshot.service.scope});
  }
- return {review,item,sources,now,expiresAt:record.expiresAt,simulated:true};
+ const aligned=alignDemoTreeRecipe(sources,item);
+ return {review,item,sources:aligned,now,expiresAt:record.expiresAt,simulated:true};
 }
 function demo(record,review,item,body,now=new Date(),workspace=null){return proposal.build(demoContext(record,review,item,now,workspace),body);}
 function failure(error){
@@ -39,4 +97,4 @@ function failure(error){
  const messages={400:'Review the prepared estimate entries and company recipe.',401:'Sign in again to prepare this estimate.',403:'Your current account cannot prepare this estimate.',404:'This estimate is unavailable. Refresh and choose an available record.',409:'The estimate or its sources changed. Refresh before calculating again.',410:'This estimate review expired. Refresh to continue.',413:'Shorten the prepared estimate entries and try again.',429:'Prepared estimates are temporarily unavailable. Try again later.',503:'Prepared estimates are temporarily unavailable. Refresh and try again.'};
  return{status,message:['ESTIMATE_PROPOSAL_INVALID','PROPOSAL_RECIPE_INVALID'].includes(error?.code)?error.message:messages[status]};
 }
-module.exports={context,loadContext,demoContext,preview,demo,failure};
+module.exports={context,alignDemoTreeRecipe,loadContext,demoContext,preview,demo,failure};

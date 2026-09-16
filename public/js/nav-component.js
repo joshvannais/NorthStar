@@ -15,6 +15,10 @@
   var AUXILIARY_PAGES = { 'report-a-bug': true };
   var bodyOverflowBeforeMenu = '';
 
+  function demoRuntimeActive() {
+    return Boolean(window.NorthStarDemoRuntime && window.NorthStarDemoRuntime.active === true);
+  }
+
   var NAV_ITEMS = [
     { id: 'command-center',   href: '/dashboard',                  label: 'Command Center',   svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' },
     { id: 'today',            href: '/dashboard/today',            label: 'Today',            svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-5"/></svg>' },
@@ -364,6 +368,13 @@
         }));
         return items;
       }).catch(function() {
+        // The account-free demo has no paid session to recover at /login. Its
+        // runtime owns the inline unavailable state and retry path, so keep the
+        // visitor on the demo route if workspace loading fails.
+        if (demoRuntimeActive()) {
+          root.setAttribute('data-northstar-navigation', 'unavailable');
+          return null;
+        }
         root.setAttribute('data-northstar-navigation', 'denied');
         window.location.replace('/login');
         return null;

@@ -197,8 +197,8 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     }
   });
 
-  test('persisted legacy state migrates once while corrupt schema-v2 graph authority fails closed', async () => {
-    const { issueToken } = require('../../src/commandCenter/demoRepository');
+  test('persisted legacy state migrates once while corrupt schema-v2 state is abandoned at public entry', async () => {
+    const { issueToken, DemoCommandCenterRepository } = require('../../src/commandCenter/demoRepository');
     const { createInitialDemoState } = require('../../src/commandCenter/workspace');
     const baseWorkspace = loadGitBlobModule(P5_BASE, 'src/commandCenter/workspace.js');
     await pool.query('TRUNCATE demo_command_center_sessions CASCADE');
@@ -352,9 +352,15 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     corruptGraphState.graphs[0].customer.email = 'real.person@gmail.com';
     resignGraph(corruptGraphState.graphs[0]);
     await insertPersistedDemoState(pool, corruptGraphToken, corruptGraphState);
+    const directRepository = new DemoCommandCenterRepository(() => pool);
+    await expect(directRepository.read(corruptGraphToken)).rejects.toMatchObject({
+      status: 503,
+      code: 'DEMO_STATE_INVALID',
+    });
     const corruptGraphRead = await request(app).get('/api/demo/command-center')
-      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptGraphToken)).expect(503);
-    expect(corruptGraphRead.body.error.code).toBe('demo_state_invalid');
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptGraphToken)).expect(200);
+    expect(corruptGraphRead.body.data.tenant.id).not.toBe(corruptGraphToken.tenantId);
+    expect(cookieFrom(corruptGraphRead)).not.toBe(tokenCookie(corruptGraphToken));
 
     const corruptReferenceToken = issueToken(new Date());
     const corruptReferenceState = createInitialDemoState(corruptReferenceToken.tenantId, corruptReferenceToken.issuedAt, {
@@ -364,8 +370,8 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     resignGraph(corruptReferenceState.graphs[0]);
     await insertPersistedDemoState(pool, corruptReferenceToken, corruptReferenceState);
     const corruptReferenceRead = await request(app).get('/api/demo/command-center')
-      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptReferenceToken)).expect(503);
-    expect(corruptReferenceRead.body.error.code).toBe('demo_state_invalid');
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptReferenceToken)).expect(200);
+    expect(corruptReferenceRead.body.data.tenant.id).not.toBe(corruptReferenceToken.tenantId);
 
     const corruptWorkspaceToken = issueToken(new Date());
     const corruptWorkspaceState = createInitialDemoState(corruptWorkspaceToken.tenantId, corruptWorkspaceToken.issuedAt, {
@@ -374,8 +380,8 @@ realPostgres('Demo/Paid Command Center Parity Prelude mounted PostgreSQL authori
     corruptWorkspaceState.workspace.company.email = 'not-reserved@example.net';
     await insertPersistedDemoState(pool, corruptWorkspaceToken, corruptWorkspaceState);
     const corruptWorkspaceRead = await request(app).get('/api/demo/command-center')
-      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptWorkspaceToken)).expect(503);
-    expect(corruptWorkspaceRead.body.error.code).toBe('demo_state_invalid');
+      .set('Host', 'northstar.test').set('Cookie', tokenCookie(corruptWorkspaceToken)).expect(200);
+    expect(corruptWorkspaceRead.body.data.tenant.id).not.toBe(corruptWorkspaceToken.tenantId);
     expect(global.fetch).not.toHaveBeenCalled();
 
     await settleAuditLogger();

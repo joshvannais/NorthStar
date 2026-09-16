@@ -17,8 +17,8 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 5 | Imported labor-duration outcomes with complete matched lineage | Released |
 | 6 | Multi-job imported labor calibration with robust sample statistics | Released |
 | 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Released |
-| 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | In progress |
-| 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Planned |
+| 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
+| 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | In progress — Slice A candidate |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Planned |
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Planned |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
@@ -103,3 +103,11 @@ Controls use current revision and digest pins, explicit confirmation versions, i
 Migration `089_canonical_external_labor_import_operations.sql` and the Learning Center source-operation workflow add exact-schema CSV historical backfill, provider-neutral adapter lifecycle state, historical and continuous checkpoints, source retention policy and bounded retention or deletion cleanup. CSV pages still pass through the guarded Part 3 batch authority. Adapter state stores no credential and does not claim a provider-specific connection.
 
 Every lifecycle and policy change is an immutable revision pinned by expected revision and digest. Cleanup processes at most 100 current records, appends detail-free tombstone revisions and returns a resumable checkpoint. A deletion request immediately appends a source-consent revocation so new imports and derived reads stop before the cleanup finishes. Corrections and tombstones continue to stale downstream reviewed matches, observations and calibration proposals. These operations do not apply a learned value or change an estimate, rate, labor plan, schedule, payroll record, workforce profile or business policy.
+
+## Ninth bounded package — travel, mileage and fuel outcomes
+
+Part 9 is serialized because the accepted source inventory does not contain a native GPS or fuel-purchase authority. Slice A adds a provider-neutral normalized travel evidence envelope for historical backfill and continuous updates. Every record pins one opaque job and vehicle reference, a completed route interval with an explicit IANA time zone, exact distance and fuel units when present, an evidence class, source version and update time. Fuel cost uses one of NorthStar's supported currencies (`USD`, `CAD` or `EUR`) or remains unavailable. A record must contain measured distance or fuel; modeled MPG, straight-line geometry, future route intervals and estimate-plan values cannot enter as actuals.
+
+The import is tenant-private, consented, bounded to 100 records, cursor checked, idempotent, correction aware and tombstone aware. Revocation hides current evidence and blocks further imports. It stages evidence only: opaque job and vehicle references are not yet reconciled, and no record changes an estimate, route, schedule, reimbursement, payroll, asset, price or business policy.
+
+The remaining Part 9 slices must add reviewed same-tenant job and vehicle reconciliation; exact adopted travel-plan versus actual observations across route duration, distance, fuel quantity and fuel cost; robust multi-job calibration; retention/deletion operations; and the owner Learning Center experience. Part 9 cannot be marked released until those slices and independent acceptance are complete.

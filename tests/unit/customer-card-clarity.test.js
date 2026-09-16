@@ -71,4 +71,25 @@ describe('customer card clarity corrections', () => {
     expect(demoRoute).toContain('createCustomerEstimateDisplay');
     expect(paidRoute).toContain('createCustomerEstimateDisplay');
   });
+
+  test('Polaris estimate builder stays current and exposes the complete resource plan', () => {
+    const prepared=source('public/js/prepared-estimate.js');
+    expect(prepared).toContain("'Polaris Estimate Builder'");
+    expect(prepared).toContain("'View Draft Estimate'");
+    expect(prepared).toContain("'Equipment And Tools'");
+    expect(prepared).toContain("'Vehicles, Travel And Logistics'");
+    expect(prepared).toContain("options.refresh();");
+    expect(prepared).not.toContain('This draft review expired. Refresh before calculating again.');
+    expect(prepared).not.toContain("'Review Prepared Estimate'");
+  });
+
+  test('Business Profile separates industry tool inventory from vehicles and machinery', () => {
+    const profile=source('public/dashboard/business-profile.html');
+    const equipment=source('public/js/equipment.js');
+    expect(profile).toContain('data-section="inventory"');
+    expect(profile).toContain('Industry Tool Inventory');
+    expect(profile).toContain('Husqvarna 550 XP Mark II chainsaw');
+    expect(equipment).toContain("asset.category==='tool'");
+    expect(equipment).toContain("asset.category!=='tool'");
+  });
 });

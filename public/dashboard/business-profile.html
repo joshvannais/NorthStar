@@ -196,7 +196,7 @@
           <div class="bp-nav-group"><span class="bp-nav-group-title">Business</span><button class="bp-nav-btn active" data-section="company" onclick="switchSection('company')">🏢 Company</button><button class="bp-nav-btn" data-section="headquarters" onclick="switchSection('headquarters')">📍 Headquarters</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Services &amp; Pricing</span><button class="bp-nav-btn" data-section="services" onclick="switchSection('services')">📋 Services</button><button class="bp-nav-btn" data-section="financial" onclick="switchSection('financial')">💰 Financial</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Schedule &amp; Area</span><button class="bp-nav-btn" data-section="serviceArea" onclick="switchSection('serviceArea')">🗺️ Service Area</button><button class="bp-nav-btn" data-section="hours" onclick="switchSection('hours')">🕐 Hours</button><button class="bp-nav-btn" data-section="routing" onclick="switchSection('routing')">🧭 Routing</button><button class="bp-nav-btn" data-section="scheduling" onclick="switchSection('scheduling')">📅 Scheduling</button></div>
-          <div class="bp-nav-group"><span class="bp-nav-group-title">Team &amp; Assets</span><button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button><button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Assets &amp; Fleet</button><button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button></div>
+          <div class="bp-nav-group"><span class="bp-nav-group-title">Team &amp; Assets</span><button class="bp-nav-btn" data-section="crew" onclick="switchSection('crew')">👥 Crews</button><button class="bp-nav-btn" data-section="vehicles" onclick="switchSection('vehicles')">🚛 Vehicles &amp; Equipment</button><button class="bp-nav-btn" data-section="inventory" onclick="switchSection('inventory')">🧰 Inventory</button><button class="bp-nav-btn" data-section="policies" onclick="switchSection('policies')">📜 Policies</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">AI &amp; Voice</span><button class="bp-nav-btn" data-section="polaris" onclick="switchSection('polaris')">🤖 Polaris</button><button class="bp-nav-btn" data-section="retell" onclick="switchSection('retell')">☎️ Voice &amp; Knowledge</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Knowledge</span><button class="bp-nav-btn" data-section="knowledge" onclick="switchSection('knowledge')">📚 Knowledge Management</button></div>
           <div class="bp-nav-group"><span class="bp-nav-group-title">Connections</span><button class="bp-nav-btn" data-section="notifications" onclick="switchSection('notifications')">🔔 Notifications</button><button class="bp-nav-btn" data-section="integrations" onclick="switchSection('integrations')">🔗 Integrations</button></div>
@@ -371,6 +371,21 @@
               <div class="bp-field"><label>Equipment Transport Capacity</label><input id="veh-equipmentTransportCapacity" data-operational-control data-operational-section="vehicles" data-operational-field="equipmentTransportCapacity" type="number" min="0"></div>
             </div>
           </details>
+        </div>
+
+        <!-- Section: Industry tools and job inventory -->
+        <div class="bp-section" id="section-inventory">
+          <div class="bp-card equipment-surface">
+            <div class="bp-repeat-header">
+              <div>
+                <h3>Industry Tool Inventory</h3>
+                <div class="bp-section-desc">Record the powered tools and practical gear your company needs to perform its services. Use an exact make and model where capability or operating cost matters; group ordinary ropes, rigging, climbing gear, PPE, and hand tools into sensible kits.</div>
+              </div>
+              <button id="addInventoryButton" class="equipment-button equipment-button-primary" type="button" hidden>Add inventory item</button>
+            </div>
+            <div class="bp-authority-note">NorthStar researches a specific product once when you add it, keeps the cited capability separate from your private ownership details, and lets Polaris reuse the reviewed item in future job plans. Example: Husqvarna 550 XP Mark II chainsaw.</div>
+            <div id="inventoryCatalogueContainer" class="bp-repeat-list" aria-live="polite"></div>
+          </div>
         </div>
 
         <!-- Section: Services -->

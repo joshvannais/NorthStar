@@ -22,6 +22,9 @@ test('seeded tree companies cover distinct crew and equipment operating models',
     expect(profile.equipment.some(asset => asset.role === 'material_handler')).toBe(true);
     expect(profile.equipment.some(asset => asset.role === 'stump_grinder')).toBe(true);
     expect(profile.equipment.some(asset => asset.role === 'canopy_access')).toBe(true);
+    expect(profile.inventory.some(asset => asset.key === 'husqvarna_550xp')).toBe(true);
+    expect(profile.inventory.some(asset => asset.role === 'manual_tools')).toBe(true);
+    expect(profile.inventory.some(asset => asset.role === 'rigging_tools')).toBe(true);
   }
 });
 
@@ -70,7 +73,7 @@ test('Avant appears only in the seeded profiles that own that optional configura
   expect(withoutAvant.equipmentBasis.assets.some(asset => asset.name === 'Avant articulated compact loader')).toBe(false);
 });
 
-test('each tree operation selects one matching company recipe with its own work and equipment plan', () => {
+test('each tree operation selects one matching company recipe with its own work, tools and vehicle plan', () => {
   const state = workspace.createInitialDemoState(TENANT, NOW, { seed: 'tree-operation-recipes' });
   const knowledge = state.equipmentBasis.knowledgeRows.map(row => {
     const document = JSON.parse(row.canonical_document);
@@ -82,7 +85,11 @@ test('each tree operation selects one matching company recipe with its own work 
     expect(matches).toHaveLength(1);
     expect(matches[0].recipe.id).toBe('simulated_tree_' + operation + '_v1');
     expect(proposalRecipe.normalize(matches[0].recipe).components.find(component => component.kind === 'labor').inputs.lines[0].task).toBe(definition.laborTask);
-    expect(matches[0].recipe.components.find(component => component.kind === 'equipment').inputs.lines[0].task).toBe(definition.equipmentTask);
+    const equipment = matches[0].recipe.components.find(component => component.kind === 'equipment');
+    expect(equipment.inputs.lines[0].task).toBe(definition.equipmentTask);
+    if (operation !== 'visit') expect(equipment.inputs.lines.length).toBeGreaterThan(1);
+    const travel = matches[0].recipe.components.find(component => component.kind === 'travel');
+    expect(travel.inputs.logistics.some(line => line.label.startsWith('Vehicle plan · '))).toBe(true);
   }
 });
 
@@ -139,7 +146,9 @@ test('prepared tree drafts use the same job-specific scope price and costs as th
       expect(component('pricing').result.result.overhead.gross).toBe(item.snapshot.overhead.toFixed(2));
       expect(component('materials').result.total).toBe(item.snapshot.knownDirectMaterialCost.toFixed(2));
       expect(component('labor').result.total).toBe(item.snapshot.knownInternalLaborCost.toFixed(2));
-      expect(component('equipment').costs[0].total).toBe(item.snapshot.knownEquipmentCost.toFixed(2));
+      const preparedEquipmentTotal = component('equipment').costs.reduce((sum, line) => sum + Number(line.total), 0);
+      expect(preparedEquipmentTotal).toBeCloseTo(item.snapshot.knownEquipmentCost, 2);
+      expect(component('travel').inputs.logistics.some(line => line.label.startsWith('Vehicle plan · '))).toBe(true);
       expect(component('travel').result.total).toBe(item.snapshot.travel.knownInternalCost.toFixed(2));
       const operation = item.snapshot.service.scope.jobType;
       if (item.snapshot.customerFacingPrice !== treeProfiles.OPERATIONS[operation].basePrice) verifiedNonBasePrice = true;

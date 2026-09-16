@@ -139,8 +139,13 @@ function createCustomerEstimateDraft(input) {
     unavailable('The recorded estimate is unavailable.', 404, 'CUSTOMER_ESTIMATE_UNAVAILABLE');
   }
   const simulated = input.simulated === true || review.simulated === true;
-  const price = fixed(item.estimate.customerPrice != null ? item.estimate.customerPrice : item.snapshot && item.snapshot.customerFacingPrice);
+  const snapshot=item.snapshot&&typeof item.snapshot==='object'?item.snapshot:{};
+  const price = fixed(item.estimate.customerPrice != null ? item.estimate.customerPrice : snapshot.customerFacingPrice);
   if (!price) unavailable('The recorded customer price is unavailable.');
+  const recordedTax=snapshot.taxDisposition&&snapshot.taxDisposition.status==='calculated'?fixed(snapshot.tax):null;
+  const recordedTotal=recordedTax!==null?fixed(snapshot.totalIncludingTax):null;
+  const taxReady=recordedTax!==null&&recordedTotal!==null;
+  const taxes=taxReady?[{label:'Estimated Tax',treatment:Number(snapshot.taxRatePercent)===0?'zero_rate':'taxable',amount:recordedTax}]:[];
   const rawLines = Array.isArray(item.estimate.lineItems) ? item.estimate.lineItems : [];
   const categoryLabels={labor:'Labor And Installation',materials:'Materials',material:'Materials',equipment:'Equipment',travel:'Travel And Mobilization',service:'Service And Scope',fees:'Permits And Fees',fee:'Permits And Fees'};
   let charges = rawLines.map((line,index) => ({
@@ -163,10 +168,10 @@ function createCustomerEstimateDraft(input) {
     currency:text(item.estimate.currency,8,'USD'),
     charges,
     adjustments:[],
-    taxes:[],
+    taxes,
     subtotal:price,
-    tax:'0.00',
-    total:price,
+    tax:taxReady?recordedTax:'0.00',
+    total:taxReady?recordedTotal:price,
     payments:[],
     preparedAt:text(review.recordedAt || item.snapshotCreatedAt,40),
   });

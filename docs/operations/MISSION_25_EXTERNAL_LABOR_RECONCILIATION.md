@@ -2,7 +2,7 @@
 
 The guarded `matches` routes let a current owner or administrator review an opaque worker or job reference from one consented external labor source and link it to one current NorthStar workforce profile or estimate. The write pins the complete current imported-record manifest, the current target basis, the actor, session, request identity, confirmation contract and reason.
 
-A source correction or tombstone changes the current source digest. A workforce profile or membership change changes the worker target digest. Those changes mark the saved link stale; they never silently retarget it. Revoking source consent hides the matching projection and blocks matching writes. Unlinking creates another immutable revision.
+A source correction or tombstone changes the current source digest. A workforce profile or membership change changes the worker target digest. Those changes mark the saved link stale; they never silently retarget it. Revoking source consent hides the matching projection and blocks matching writes. Re-granting creates a new consent revision and does not revive links reviewed under the earlier consent. Unlinking creates another immutable revision.
 
 The match does not create or alter a worker, job, labor interval, estimate, payroll record, schedule or policy. It is reviewed provenance for a later outcome package. Runtime access is limited to guarded read and mutation functions; the matching table and source/target helper functions remain unavailable to the runtime role.
 

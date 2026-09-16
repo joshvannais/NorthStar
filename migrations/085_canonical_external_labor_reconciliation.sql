@@ -5,6 +5,9 @@ CREATE TABLE public.canonical_external_labor_import_reference_matches (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
  source_key TEXT NOT NULL CHECK(source_key~'^[a-z0-9][a-z0-9._-]{1,63}$'),
+ consent_id UUID NOT NULL,
+ consent_revision BIGINT NOT NULL CHECK(consent_revision BETWEEN 1 AND 10000),
+ consent_digest CHAR(64) NOT NULL CHECK(consent_digest~'^[0-9a-f]{64}$'),
  reference_kind TEXT NOT NULL CHECK(reference_kind IN ('worker','job')),
  external_reference TEXT NOT NULL CHECK(char_length(external_reference) BETWEEN 1 AND 128 AND external_reference~'^[!-~]+$'),
  revision BIGINT NOT NULL CHECK(revision BETWEEN 1 AND 10000),
@@ -30,6 +33,8 @@ CREATE TABLE public.canonical_external_labor_import_reference_matches (
  FOREIGN KEY(organization_id,source_key,reference_kind,external_reference,previous_id)
   REFERENCES public.canonical_external_labor_import_reference_matches
    (organization_id,source_key,reference_kind,external_reference,id) ON DELETE RESTRICT,
+ FOREIGN KEY(organization_id,source_key,consent_id)
+  REFERENCES public.canonical_external_labor_import_consents(organization_id,source_key,id) ON DELETE RESTRICT,
  FOREIGN KEY(organization_id,membership_id)
   REFERENCES public.organization_memberships(organization_id,id) ON DELETE RESTRICT,
  FOREIGN KEY(organization_id,actor_user_id,auth_session_id)
@@ -89,14 +94,17 @@ BEGIN
 END $$;
 
 CREATE FUNCTION public.canonical_external_labor_reference_match_projection(
- value public.canonical_external_labor_import_reference_matches,current_source JSONB,current_target JSONB)
+ value public.canonical_external_labor_import_reference_matches,current_source JSONB,current_target JSONB,current_consent JSONB)
 RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT jsonb_build_object('id',value.id,'sourceKey',value.source_key,'referenceKind',value.reference_kind,
   'externalReference',value.external_reference,'revision',value.revision,'previousId',value.previous_id,
+  'consentId',value.consent_id,'consentRevision',value.consent_revision,'consentDigest',rtrim(value.consent_digest),
   'action',value.action,'targetId',value.target_id,'sourceManifest',value.source_manifest,
   'sourceDigest',value.source_digest,'targetDigest',value.target_digest,'reason',value.reason,
   'confirmed',value.confirmed,'confirmationVersion',value.confirmation_version,'digest',rtrim(value.canonical_digest),
   'status',CASE WHEN value.action='unlink' THEN 'unmatched'
+    WHEN current_consent->>'id' IS DISTINCT FROM value.consent_id::text
+      OR current_consent->>'digest' IS DISTINCT FROM rtrim(value.consent_digest) THEN 'stale'
     WHEN current_source IS NULL OR current_target IS NULL THEN 'stale'
     WHEN current_source->>'digest'=value.source_digest AND current_target->>'digest'=value.target_digest THEN 'matched'
     ELSE 'stale' END,'createdAt',value.created_at)
@@ -148,7 +156,8 @@ BEGIN
  )
  SELECT COALESCE(jsonb_agg(jsonb_build_object('referenceKind',r.kind,'externalReference',r.reference,
    'sourceRecordCount',(sb.source_basis->>'recordCount')::bigint,'sourceDigest',sb.source_basis->>'digest',
-   'match',CASE WHEN m.id IS NULL THEN NULL ELSE public.canonical_external_labor_reference_match_projection(m,sb.source_basis,tb.target_basis) END)
+   'match',CASE WHEN m.id IS NULL THEN NULL ELSE public.canonical_external_labor_reference_match_projection(m,sb.source_basis,tb.target_basis,
+    public.canonical_external_labor_import_consent_projection(consent_row)) END)
    ORDER BY r.kind,r.reference),'[]'::jsonb) INTO reference_rows
  FROM selected_refs r
  CROSS JOIN LATERAL (SELECT public.canonical_external_labor_reference_source_basis(org,source_value,r.kind,r.reference) source_basis) sb
@@ -223,7 +232,8 @@ BEGIN
   IF rtrim(replay_row.request_digest)<>request_hash THEN RAISE EXCEPTION 'External labor match key conflict' USING ERRCODE='23505'; END IF;
   source_basis:=public.canonical_external_labor_reference_source_basis(org,source_value,replay_row.reference_kind,replay_row.external_reference);
   target_basis:=public.canonical_external_labor_reference_target_basis(org,replay_row.reference_kind,replay_row.target_id);
-  RETURN jsonb_build_object('match',public.canonical_external_labor_reference_match_projection(replay_row,source_basis,target_basis),'replayed',TRUE);
+  RETURN jsonb_build_object('match',public.canonical_external_labor_reference_match_projection(replay_row,source_basis,target_basis,
+   public.canonical_external_labor_import_consent_projection(consent_row)),'replayed',TRUE);
  END IF;
  SELECT * INTO current_row FROM public.canonical_external_labor_import_reference_matches WHERE organization_id=org
   AND source_key=source_value AND reference_kind=body->>'referenceKind' AND external_reference=body->>'externalReference'
@@ -248,24 +258,26 @@ BEGIN
  next_revision:=COALESCE(current_row.revision,0)+1;
  digest_value:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,
   'referenceKind',body->>'referenceKind','externalReference',body->>'externalReference','revision',next_revision,
-  'previousId',current_row.id,'action',body->>'action','targetId',body->>'targetId',
+  'previousId',current_row.id,'action',body->>'action','targetId',body->>'targetId','consentId',consent_row.id,
+  'consentRevision',consent_row.revision,'consentDigest',rtrim(consent_row.canonical_digest),
   'sourceDigest',COALESCE(source_basis->>'digest','unavailable'),'targetDigest',COALESCE(target_basis->>'digest','unavailable'),
   'actorUserId',actor,'membershipId',(authority->>'membershipId')::uuid,'authSessionId',session_value,
   'reason',body->>'reason','confirmationVersion','m25-external-labor-reference-match-v1','requestDigest',request_hash));
- INSERT INTO public.canonical_external_labor_import_reference_matches(organization_id,source_key,reference_kind,
+ INSERT INTO public.canonical_external_labor_import_reference_matches(organization_id,source_key,consent_id,consent_revision,consent_digest,reference_kind,
   external_reference,revision,previous_id,action,target_id,source_manifest,source_digest,target_digest,actor_user_id,
   membership_id,auth_session_id,reason,confirmed,confirmation_version,request_key_hash,request_digest,canonical_digest)
- VALUES(org,source_value,body->>'referenceKind',body->>'externalReference',next_revision,current_row.id,body->>'action',
+ VALUES(org,source_value,consent_row.id,consent_row.revision,rtrim(consent_row.canonical_digest),body->>'referenceKind',body->>'externalReference',next_revision,current_row.id,body->>'action',
   CASE WHEN body->>'action'='link' THEN (body->>'targetId')::uuid ELSE NULL END,COALESCE(source_basis->'manifest','[]'::jsonb),
   COALESCE(source_basis->>'digest','unavailable'),COALESCE(target_basis->>'digest','unavailable'),actor,
   (authority->>'membershipId')::uuid,session_value,body->>'reason',TRUE,'m25-external-labor-reference-match-v1',
   key_hash,request_hash,digest_value) RETURNING * INTO inserted;
- RETURN jsonb_build_object('match',public.canonical_external_labor_reference_match_projection(inserted,source_basis,target_basis),'replayed',FALSE);
+ RETURN jsonb_build_object('match',public.canonical_external_labor_reference_match_projection(inserted,source_basis,target_basis,
+  public.canonical_external_labor_import_consent_projection(consent_row)),'replayed',FALSE);
 END $$;
 
 REVOKE ALL ON TABLE public.canonical_external_labor_import_reference_matches FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_labor_reference_source_basis(UUID,TEXT,TEXT,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_labor_reference_target_basis(UUID,TEXT,UUID) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.canonical_external_labor_reference_match_projection(public.canonical_external_labor_import_reference_matches,JSONB,JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_external_labor_reference_match_projection(public.canonical_external_labor_import_reference_matches,JSONB,JSONB,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_labor_reference_matches_read(UUID,UUID,TEXT,UUID,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_labor_reference_match_mutate(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;

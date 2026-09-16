@@ -140,11 +140,18 @@ const record = (version = 1, end = '2026-09-15T17:00:00.000Z') => ({ externalRec
     response = await post('/consent', { action: 'revoke', expectedRevision: consent.revision, expectedDigest: consent.digest,
       reason: 'Stop using this source for reconciliation.', confirmed: true,
       confirmationVersion: 'm25-external-labor-import-consent-v1' });
-    assert.equal(response.status, 201); const hidden = await request(fixture.app).get(root + '/matches').set(owner.session.headers);
+    assert.equal(response.status, 201); const revoked = response.body.data.consent;
+    const hidden = await request(fixture.app).get(root + '/matches').set(owner.session.headers);
     assert.equal(hidden.body.data.activeConsent, false); assert.deepEqual(hidden.body.data.references, []);
     assert.deepEqual(hidden.body.data.workerTargets, []); assert.deepEqual(hidden.body.data.jobTargets, []);
     assert.equal((await post('/matches', workerBody)).status, 409);
     ledger.cases.push('Consent revocation hides references and candidate targets and blocks further reconciliation writes.');
+    response = await post('/consent', { action: 'grant', expectedRevision: revoked.revision, expectedDigest: revoked.digest,
+      reason: 'Re-enable the source under a new consent revision.', confirmed: true,
+      confirmationVersion: 'm25-external-labor-import-consent-v1' });
+    assert.equal(response.status, 201); const regranted = await request(fixture.app).get(root + '/matches').set(owner.session.headers);
+    assert.equal(regranted.body.data.references.find(value => value.referenceKind === 'job').match.status, 'stale');
+    ledger.cases.push('Re-granting consent does not resurrect a match approved under an earlier consent revision.');
     ledger.pass = true;
   } catch (error) { ledger.error = error.stack; ledger.cause = error.cause && { message: error.cause.message, code: error.cause.code,
     constraint: error.cause.constraint, detail: error.cause.detail }; process.exitCode = 1;

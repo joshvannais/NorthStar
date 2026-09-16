@@ -14,7 +14,7 @@ async function grantAndVerify(client, runtimeRole) {
     'public.canonical_external_labor_import_record_projection(public.canonical_external_labor_import_records)',
     'public.canonical_external_labor_reference_source_basis(uuid,text,text,text)',
     'public.canonical_external_labor_reference_target_basis(uuid,text,uuid)',
-    'public.canonical_external_labor_reference_match_projection(public.canonical_external_labor_import_reference_matches,jsonb,jsonb)'
+    'public.canonical_external_labor_reference_match_projection(public.canonical_external_labor_import_reference_matches,jsonb,jsonb,jsonb)'
   ];
   const entries = [
     'public.canonical_external_labor_import_consent_read(uuid,uuid,text,uuid,text)',
@@ -48,7 +48,7 @@ async function grantAndVerify(client, runtimeRole) {
       AND NOT has_function_privilege($1,'public.canonical_external_labor_import_record_projection(public.canonical_external_labor_import_records)','EXECUTE')
       AND NOT has_function_privilege($1,'public.canonical_external_labor_reference_source_basis(uuid,text,text,text)','EXECUTE')
       AND NOT has_function_privilege($1,'public.canonical_external_labor_reference_target_basis(uuid,text,uuid)','EXECUTE')
-      AND NOT has_function_privilege($1,'public.canonical_external_labor_reference_match_projection(public.canonical_external_labor_import_reference_matches,jsonb,jsonb)','EXECUTE') helpers_withheld,
+      AND NOT has_function_privilege($1,'public.canonical_external_labor_reference_match_projection(public.canonical_external_labor_import_reference_matches,jsonb,jsonb,jsonb)','EXECUTE') helpers_withheld,
     has_function_privilege($1,'public.canonical_external_labor_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
       AND has_function_privilege($1,'public.canonical_external_labor_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
       AND has_function_privilege($1,'public.canonical_external_labor_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')

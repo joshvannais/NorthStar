@@ -10,6 +10,7 @@ describe('Mission 25 Part 4 reviewed external labor reconciliation', () => {
     for (const fragment of ['CREATE TABLE public.canonical_external_labor_import_reference_matches',
       'canonical_external_labor_import_reference_matches_immutable', 'source_manifest JSONB NOT NULL',
       'source_digest TEXT NOT NULL', 'target_digest TEXT NOT NULL',
+      'consent_id UUID NOT NULL', 'consent_revision BIGINT NOT NULL', 'consent_digest CHAR(64) NOT NULL',
       'FOREIGN KEY(organization_id,actor_user_id,auth_session_id)', 'request_key_hash', 'request_digest']) expect(migration).toContain(fragment);
   });
   test('requires exact current source and target bases plus explicit confirmation', () => {

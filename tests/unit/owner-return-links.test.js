@@ -2,7 +2,7 @@
 const fs=require('fs'),path=require('path');
 for(const host of ['operations','completion-review'])test(host+' loads route contract before demo runtime and uses only canonical header destinations',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../../public/dashboard/'+host+'.html'),'utf8');
- const contract=html.indexOf('/js/command-center-contract.js?v=demo-nav-10-20260915'),demo=html.indexOf('/js/demo-runtime.js?v=demo-runtime-12-20260915');
+ const contract=html.indexOf('/js/command-center-contract.js?v=demo-nav-10-20260915'),demo=html.indexOf('/js/demo-runtime.js?v=demo-runtime-13-20260915');
  expect(contract).toBeGreaterThan(-1);expect(contract).toBeLessThan(demo);
  if(host==='operations'){
   expect(html).toContain('class="dashboard-layout"');

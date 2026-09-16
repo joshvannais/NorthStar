@@ -8,6 +8,10 @@ This additive authority reconciliation preserves the founder's original nine pha
 
 Implemented on its release branch. Owners can reach the estimate from the first customer-card action, issue an immutable customer version, and create an expiring interactive link. Customers can accept or ask a question; PDF and image exports remain clean, button-free documents. Detailed evidence and editing surfaces are collapsed by default. See [the Slice 3 authority](../MISSION_24_PART8_SLICE3_CUSTOMER_ESTIMATE_DELIVERY.md).
 
+## Part 9 — Validation release candidate
+
+The [Part 9 validation and acceptance record](../MISSION_24_PART9_VALIDATION_AND_ACCEPTANCE.md) traces one estimate through recorded inputs, all cost components, pricing, policy, commercial approval, private Polaris/Capella analysis, customer-safe preview, immutable issue, delivery, acceptance, questions, revocation and expiration in paid and isolated-demo paths. Validation also found and corrected the finite demo session's obsolete 512 KiB ceiling while preserving a 2 MiB application and database bound. This remains a release candidate until a different reviewer approves the frozen commit and the approved head is merged, automatically deployed and observed healthy. Those gates determine Mission 24 completion and the transition to Mission 25.
+
 ## Original phases and acceptance direction
 
 | Phase | Original name | Required direction; future implementation unless stated otherwise |

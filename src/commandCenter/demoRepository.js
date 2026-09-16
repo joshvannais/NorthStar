@@ -53,6 +53,7 @@ const treeBusinessProfiles = require('./demoTreeBusinessProfiles');
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
 const MAX_MUTATIONS = 24;
+const MAX_STATE_BYTES = 2097152;
 const EXPIRED_CLEANUP_LIMIT = 100;
 const ADMISSION_HISTORY_MS = 2 * 60 * 60 * 1000;
 const ADMISSION_LOCK_KEY = '718842570021';
@@ -926,13 +927,12 @@ class DemoCommandCenterRepository {
       // response must never leave an unreadable demo session committed.
       nextState = state(nextState);
       const responseDigest = sha256({ state: nextState, revision: nextRevision });
-      if(operations||aggregate){
-        // Match the existing database JSONB byte limit, including PostgreSQL's
-        // representation. Preserve all saved history when another snapshot
-        // would exceed the finite demo; never truncate or replace old records.
-        const size=(await client.query('SELECT octet_length($1::jsonb::text) bytes',[nextState])).rows[0].bytes;
-        if(size>524288)fail(429,'DEMO_WORK_CAPACITY','This demo has reached its saved-work limit. Existing work remains available. Reset starts a new demo and clears its saved changes.');
-      }
+      // Match the database JSONB byte limit for every mutation. Estimate,
+      // scheduling and profile-backed demo writes all share this state; checking
+      // only work/proposal operations allowed a database constraint failure to
+      // surface as an unhelpful 503 once richer estimate history crossed 512 KiB.
+      const stateBytes=Number((await client.query('SELECT octet_length($1::jsonb::text) bytes',[nextState])).rows[0].bytes);
+      if(stateBytes>MAX_STATE_BYTES)fail(429,'DEMO_WORK_CAPACITY','This demo has reached its saved-work limit. Existing work remains available. Reset starts a new demo and clears its saved changes.');
       if(scheduling&&date(lockedRow.expires_at)<=date(this.clock()))fail(410,'DEMO_SESSION_EXPIRED','This demo session expired. Refresh to start again.');
       const updated = await client.query(
         `UPDATE demo_command_center_sessions
@@ -1061,6 +1061,7 @@ module.exports = {
   MAX_ACTIVE_SESSIONS,
   MAX_GLOBAL_CREATIONS_PER_MINUTE,
   MAX_MUTATIONS,
+  MAX_STATE_BYTES,
   MAX_SOURCE_CREATIONS_PER_MINUTE,
   SIMULATION_COOLDOWN_MS,
   TOKEN_LIFETIME_MS,

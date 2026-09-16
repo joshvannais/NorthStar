@@ -320,6 +320,16 @@ const sourceKey = 'fleet.primary';
       confirmationVersion: 'm25-imported-travel-calibration-consent-v1',
     });
     assert.equal(response.status, 201, JSON.stringify(response.body));
+    const revokedReplay = await post('/imported-travel-calibrations/tree', proposalBody, proposalKey);
+    assert.equal(revokedReplay.status, 200, JSON.stringify(revokedReplay.body));
+    assert.equal(revokedReplay.body.data.replayed, true);
+    assert.equal(revokedReplay.body.data.proposal.fresh, false);
+    assert.equal(revokedReplay.body.data.proposal.advisoryAvailable, false);
+    assert.equal(revokedReplay.body.data.proposal.metrics.routeDuration.proposedMultiplier, null);
+    const revokedConflict = await post('/imported-travel-calibrations/tree',
+      { ...proposalBody, reason: 'Changed after consent revocation.' }, proposalKey);
+    assert.equal(revokedConflict.status, 409, JSON.stringify(revokedConflict.body));
+    assert.equal(revokedConflict.body.error.code, 'M25_IMPORTED_TRAVEL_CALIBRATION_KEY_CONFLICT');
     read = await request(f.app).get(root + '/imported-travel-calibrations/tree').set(owner.session.headers);
     assert.equal(read.body.data.activeConsent, false);
     assert.equal(read.body.data.current, null);

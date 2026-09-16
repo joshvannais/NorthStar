@@ -402,6 +402,11 @@ BEGIN
  PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Current subscription authority unavailable' USING ERRCODE='42501'; END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE);
+ key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
+ request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'actorUserId',actor,
+   'sourceKey',source_value,'serviceKey',service_value,'consentRevision',expected_consent_revision,
+   'consentDigest',expected_consent_digest,'reason',reason_value,'confirmed',confirmed_value,
+   'confirmationVersion',confirmation_version_value));
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':imported-travel-calibration:'||source_value||':'||service_value,0));
  SELECT * INTO consent_row FROM public.canonical_external_travel_calibration_consents WHERE organization_id=org
   AND source_key=source_value AND purpose='imported_travel_calibration_v1' ORDER BY revision DESC LIMIT 1 FOR SHARE;
@@ -409,6 +414,20 @@ BEGIN
   AND source_key=source_value AND purpose='imported_travel_variance_v1' ORDER BY revision DESC LIMIT 1 FOR SHARE;
  SELECT * INTO source_consent FROM public.canonical_external_travel_import_consents WHERE organization_id=org
   AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR SHARE;
+ SELECT * INTO replay_row FROM public.canonical_external_travel_calibration_proposals WHERE organization_id=org
+   AND actor_user_id=actor AND request_key_hash=key_hash;
+ IF FOUND THEN
+   IF rtrim(replay_row.request_digest)<>request_hash THEN RAISE EXCEPTION 'Imported calibration key conflict' USING ERRCODE='23505'; END IF;
+   BEGIN basis:=public.canonical_imported_travel_calibration_basis(org,source_value,service_value);
+    replay_fresh:=rtrim(replay_row.sample_digest)=basis->>'sampleDigest' AND replay_row.consent_id=consent_row.id
+     AND consent_row.action='grant';
+   EXCEPTION WHEN SQLSTATE 'P0002' THEN basis:=NULL;replay_fresh:=FALSE; END;
+   RETURN jsonb_build_object('proposal',public.canonical_imported_travel_calibration_projection(replay_row)||jsonb_build_object(
+     'fresh',replay_fresh,'advisoryAvailable',replay_fresh,
+     'metrics',CASE WHEN replay_fresh THEN replay_row.metrics
+      ELSE public.canonical_imported_travel_calibration_masked_metrics(replay_row.metrics) END),
+    'replayed',TRUE);
+ END IF;
  IF source_consent.id IS NULL OR source_consent.action<>'grant' OR consent_row.id IS NULL OR consent_row.action<>'grant'
   OR outcome_consent.id IS NULL OR outcome_consent.action<>'grant'
   OR outcome_consent.source_consent_id<>source_consent.id
@@ -418,24 +437,6 @@ BEGIN
   OR consent_row.revision<>expected_consent_revision
   OR rtrim(consent_row.canonical_digest) IS DISTINCT FROM expected_consent_digest THEN
   RAISE EXCEPTION 'Active imported travel calibration consent changed' USING ERRCODE='40001',CONSTRAINT='imported_travel_calibration_consent_stale'; END IF;
- key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
- request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'actorUserId',actor,
-   'sourceKey',source_value,'serviceKey',service_value,'consentRevision',expected_consent_revision,
-   'consentDigest',expected_consent_digest,'reason',reason_value,'confirmed',confirmed_value,
-   'confirmationVersion',confirmation_version_value));
- SELECT * INTO replay_row FROM public.canonical_external_travel_calibration_proposals WHERE organization_id=org
-   AND actor_user_id=actor AND request_key_hash=key_hash;
- IF FOUND THEN
-   IF rtrim(replay_row.request_digest)<>request_hash THEN RAISE EXCEPTION 'Imported calibration key conflict' USING ERRCODE='23505'; END IF;
-   BEGIN basis:=public.canonical_imported_travel_calibration_basis(org,source_value,service_value);
-    replay_fresh:=rtrim(replay_row.sample_digest)=basis->>'sampleDigest' AND replay_row.consent_id=consent_row.id;
-   EXCEPTION WHEN SQLSTATE 'P0002' THEN basis:=NULL;replay_fresh:=FALSE; END;
-   RETURN jsonb_build_object('proposal',public.canonical_imported_travel_calibration_projection(replay_row)||jsonb_build_object(
-     'fresh',replay_fresh,'advisoryAvailable',replay_fresh,
-     'metrics',CASE WHEN replay_fresh THEN replay_row.metrics
-      ELSE public.canonical_imported_travel_calibration_masked_metrics(replay_row.metrics) END),
-    'replayed',TRUE);
- END IF;
  basis:=public.canonical_imported_travel_calibration_basis(org,source_value,service_value);
  SELECT * INTO replay_row FROM public.canonical_external_travel_calibration_proposals WHERE organization_id=org
   AND source_key=source_value AND service_key=service_value AND sample_digest=(basis->>'sampleDigest')::char(64)

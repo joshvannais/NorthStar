@@ -15,8 +15,8 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 3 | Provider-neutral external labor import authority for backfill and continuing updates | Released |
 | 4 | Reviewed external worker and job reconciliation | Released |
 | 5 | Imported labor-duration outcomes with complete matched lineage | Released |
-| 6 | Multi-job imported labor calibration with robust sample statistics | In progress |
-| 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Planned |
+| 6 | Multi-job imported labor calibration with robust sample statistics | Released |
+| 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | In progress |
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Planned |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Planned |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Planned |
@@ -91,3 +91,9 @@ Architecture acceptance is not runtime completion. Each source adoption needs mo
 Migration `087_canonical_imported_labor_calibration.sql` and guarded calibration routes summarize five to 100 current reviewed imported labor-duration outcomes for one exact service key. The latest reviewed observation for each estimate and external-job-reference pair is a distinct candidate. Freshness is evaluated before the deterministic 100-outcome cap, with a fail-closed 10,000-chain review bound. Separate calibration consent pins current imported-outcome consent. Each immutable proposal pins its complete sample and reports a deterministic median recorded-to-planned worker-hour ratio with lower and upper quartiles. A fixed five-percent band produces only an advisory to keep, increase or decrease planned hours. Exact-key retries resolve the saved immutable request before requiring a new sample and mask stale advice.
 
 Source corrections, reviewed-match changes, adopted-plan changes, observation refreshes and consent changes make the saved proposal stale and mask its recommendation. Nothing automatically changes an estimate, labor plan, rate, schedule, payroll record, worker profile or business policy. No rendered owner interface is included; later adoption UI must separately pass wording, focus, keyboard, mobile, theme and founder visual review.
+
+## Seventh bounded package — Owner Learning Center
+
+The Learning Center is a separate owner and administrator destination that inventories tenant-private learning sources and opens the already governed consent, evidence, reference-match and calibration authorities in one review flow. The paid page reads PostgreSQL through a bounded security-definer projection. Members and viewers have no Learning Center permission. The isolated demo page uses explicit read-only fictional records and cannot contribute to paid learning.
+
+Controls use current revision and digest pins, explicit confirmation versions, idempotency keys and fixed action-specific audit reasons. The interface does not ask an owner to invent a human-approval explanation. It reports stale and unmatched references, keeps calibration proposals advisory, and applies no estimate, rate, schedule, payroll, workforce or policy change. Part 8 still owns usable CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration; Part 14 owns complete paid/demo parity and mission-wide visual acceptance.

@@ -63,10 +63,7 @@ function cookieValue(req, name) {
   return '';
 }
 
-function commandCenterToken(req, res) {
-  let token = commandCenterRepository.token(cookieValue(req, DEMO_COOKIE));
-  if (token) return token;
-  token = commandCenterRepository.issue();
+function setCommandCenterCookie(res, token) {
   res.cookie(DEMO_COOKIE, token.token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -74,7 +71,35 @@ function commandCenterToken(req, res) {
     path: '/',
     maxAge: Math.max(1, token.expiresAt.getTime() - Date.now()),
   });
+}
+
+function commandCenterToken(req, res) {
+  let token = commandCenterRepository.token(cookieValue(req, DEMO_COOKIE));
+  if (token) return token;
+  token = commandCenterRepository.issue();
+  setCommandCenterCookie(res, token);
   return token;
+}
+
+const RENEWABLE_DEMO_ENTRY_ERRORS = new Set([
+  'DEMO_SESSION_EXPIRED',
+  'DEMO_STATE_CHANGED',
+  'DEMO_STATE_INVALID',
+]);
+
+async function readCommandCenterEntry(req, res) {
+  const token = commandCenterToken(req, res);
+  try {
+    return await commandCenterRepository.read(token);
+  } catch (error) {
+    // A public demo is account-free. A stale browser cookie or a no-longer-
+    // readable fictional session must start a new isolated workspace instead
+    // of falling through to paid authentication.
+    if (!error || !RENEWABLE_DEMO_ENTRY_ERRORS.has(error.code)) throw error;
+    const replacement = commandCenterRepository.issue();
+    setCommandCenterCookie(res, replacement);
+    return commandCenterRepository.read(replacement);
+  }
 }
 
 function demoWorkspace(record) {
@@ -281,8 +306,7 @@ router.get('/command-center', async function (req, res) {
   res.set('Cache-Control', 'no-store');
   res.vary('Cookie');
   try {
-    const token = commandCenterToken(req, res);
-    const record = await commandCenterRepository.read(token);
+    const record = await readCommandCenterEntry(req, res);
     return res.json({ success: true, data: demoWorkspace(record) });
   } catch (error) {
     return commandCenterFailure(req, res, error);

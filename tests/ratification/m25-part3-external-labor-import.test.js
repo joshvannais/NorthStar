@@ -36,6 +36,8 @@ describe('Mission 25 Part 3 external labor import authority', () => {
       "consent_version TEXT NOT NULL CHECK(consent_version='m25-external-labor-import-consent-v1')",
       "confirmation_version TEXT NOT NULL CHECK(confirmation_version='m25-external-labor-import-batch-v1')",
       'confirmed BOOLEAN NOT NULL CHECK(confirmed)', "body->'confirmed' IS DISTINCT FROM 'true'::jsonb",
+      "jsonb_typeof(body->'expectedConsentDigest') IS DISTINCT FROM 'string'",
+      "rtrim(consent_row.canonical_digest) IS DISTINCT FROM body->>'expectedConsentDigest'",
       "consent_row.action<>'grant'", 'expectedConsentRevision', 'expectedConsentDigest',
     ]) expect(migration).toContain(fragment);
   });

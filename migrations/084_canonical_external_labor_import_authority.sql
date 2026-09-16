@@ -253,6 +253,7 @@ BEGIN
   OR body->>'mode' NOT IN ('historical_backfill','continuous_update')
   OR jsonb_typeof(body->'expectedConsentRevision') IS DISTINCT FROM 'number'
   OR (body->>'expectedConsentRevision')!~'^([1-9][0-9]{0,3}|10000)$'
+  OR jsonb_typeof(body->'expectedConsentDigest') IS DISTINCT FROM 'string'
   OR body->>'expectedConsentDigest'!~'^[0-9a-f]{64}$'
   OR jsonb_typeof(body->'complete') IS DISTINCT FROM 'boolean' OR jsonb_typeof(body->'records') IS DISTINCT FROM 'array'
   OR jsonb_array_length(body->'records') NOT BETWEEN 1 AND 100 OR body->'confirmed' IS DISTINCT FROM 'true'::jsonb
@@ -277,7 +278,7 @@ BEGIN
   WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE;
  IF consent_row.id IS NULL OR consent_row.action<>'grant'
   OR consent_row.revision<>(body->>'expectedConsentRevision')::bigint
-  OR rtrim(consent_row.canonical_digest)<>body->>'expectedConsentDigest' THEN
+  OR rtrim(consent_row.canonical_digest) IS DISTINCT FROM body->>'expectedConsentDigest' THEN
   RAISE EXCEPTION 'External labor import consent changed' USING ERRCODE='40001',CONSTRAINT='learning_import_consent_stale'; END IF;
  SELECT * INTO replay_run FROM public.canonical_external_labor_import_runs
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;

@@ -77,16 +77,29 @@ const baseRecord = { externalRecordId: 'shift-1', externalVersion: 1, state: 'ac
       records: [{ ...corrected, observedEnd: '2026-09-15T19:00:00.000Z' }] }));
     assert.equal(conflict.status, 409); assert.equal(conflict.body.error.code, 'M25_IMPORT_RECORD_CONFLICT');
     const runsBefore = (await fixture.ownerPool.query('SELECT count(*)::int count FROM canonical_external_labor_import_runs')).rows[0].count;
-    const direct = await fixture.runtimePool.connect(); let directError;
-    try {
-      await direct.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      await direct.query('SELECT public.canonical_external_labor_import_batch($1,$2,$3,$4,$5,$6,$7,$8::jsonb)',
-        [fixture.org, owner.actorUserId, owner.actorAccessRole, owner.authSessionId, owner.csrfToken, crypto.randomUUID(), sourceKey,
-          JSON.stringify({ ...batch({ mode: 'continuous_update', cursorBefore: 'stream-1', cursorAfter: 'stream-2', records: [corrected] }), confirmed: false })]);
-    } catch (error) { directError = error; } finally { await direct.query('ROLLBACK').catch(() => {}); direct.release(); }
-    assert.equal(directError && directError.code, '22023');
+    const recordsBefore = (await fixture.ownerPool.query('SELECT count(*)::int count FROM canonical_external_labor_import_records')).rows[0].count;
+    const directBody = batch({ mode: 'continuous_update', cursorBefore: 'stream-1', cursorAfter: 'stream-2',
+      records: [{ ...corrected, externalVersion: 3, sourceUpdatedAt: '2026-09-15T18:10:00.000Z' }] });
+    for (const [label, body, code] of [
+      ['unconfirmed', { ...directBody, confirmed: false }, '22023'],
+      ['null digest', { ...directBody, expectedConsentDigest: null }, '22023'],
+      ['wrong digest type', { ...directBody, expectedConsentDigest: 7 }, '22023'],
+      ['malformed digest', { ...directBody, expectedConsentDigest: 'bad' }, '22023'],
+      ['incorrect digest', { ...directBody, expectedConsentDigest: 'b'.repeat(64) }, '40001'],
+      ['stale consent revision', { ...directBody, expectedConsentRevision: consent.revision + 1 }, '40001'],
+    ]) {
+      const direct = await fixture.runtimePool.connect(); let directError;
+      try {
+        await direct.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await direct.query('SELECT public.canonical_external_labor_import_batch($1,$2,$3,$4,$5,$6,$7,$8::jsonb)',
+          [fixture.org, owner.actorUserId, owner.actorAccessRole, owner.authSessionId, owner.csrfToken,
+            crypto.randomUUID(), sourceKey, JSON.stringify(body)]);
+      } catch (error) { directError = error; } finally { await direct.query('ROLLBACK').catch(() => {}); direct.release(); }
+      assert.equal(directError && directError.code, code, label);
+    }
     assert.equal((await fixture.ownerPool.query('SELECT count(*)::int count FROM canonical_external_labor_import_runs')).rows[0].count, runsBefore);
-    ledger.cases.push('Conflicting source versions and direct unconfirmed runtime calls fail closed without partial writes.');
+    assert.equal((await fixture.ownerPool.query('SELECT count(*)::int count FROM canonical_external_labor_import_records')).rows[0].count, recordsBefore);
+    ledger.cases.push('Conflicting versions, invalid consent pins and direct unconfirmed runtime calls fail closed without partial writes.');
 
     const revoke = { action: 'revoke', expectedRevision: consent.revision, expectedDigest: consent.digest,
       reason: 'Stop using this external labor source.', confirmed: true,

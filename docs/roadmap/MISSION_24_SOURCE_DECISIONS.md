@@ -25,7 +25,7 @@ Suffixes are physical JSONL line numbers. Role matters: assistant proposals prov
 | A122046, September1 19:55:34 | Founder asks Polaris chat to generate a Capella card when requested, with professional conversation and “no code showing”. |
 | A123207, September1 23:53:29 | Founder separately requests integrated company-branded official estimate/invoice generation for owners/estimators. Does not name it Capella. |
 | A123234 | Assistant suggests prefill/preview, output channels and detailed edit controls. Exact mechanisms remain design proposals subject to existing authorities. |
-| A66232, August21 22:39:33; A123275, September1 23:57:05 | Founder places full manual/in-person scenario calculator in Mission32. |
+| A66232, August21 22:39:33; A123275, September1 23:57:05 | Founder places the full manual/in-person On-the-Fly Calculator and rapid Estimate Studio in Mission32. |
 | A130674/130711/130751, September2 18:28:42 / 18:30:31 / 18:32:45 | Founder requests cross-industry critical reasoning and roadmap update with recent Capella plan. |
 | A167079, September9 15:51:19 | Founder wants Capella alongside Polaris in its own card where necessary. |
 | C1145, September9 18:30:12; C1150 | Founder asks for card tight below Polaris on reviewed layout; assistant confirms below Polaris, above handoffs. |

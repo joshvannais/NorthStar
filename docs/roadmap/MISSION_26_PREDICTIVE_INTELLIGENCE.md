@@ -2,7 +2,7 @@
 
 Objective: turn current authorized NorthStar facts and tenant-private Mission 25 learning into forward-looking operational forecasts that show their sources, coverage, confidence, uncertainty and limits. A prediction never becomes a fact, approved estimate, schedule, hiring decision, invoice, payment, policy or automated action.
 
-Mission 26 is the contractor-facing predictive operating layer. It does not replace the separate investor forecast artifact or Mission 32's manual Scenario Calculator. Mission 20 retains business-profile and operating-policy authority; Mission 22 retains scheduling and dispatch; Mission 23 retains actual execution; Mission 24 retains estimates and customer-facing price; Mission 25 retains outcome learning; Mission 27 retains native invoices, payments and collections; Mission 28 retains automation and any authority to apply an advisory action.
+Mission 26 is the contractor-facing predictive operating layer. It does not replace the separate investor forecast artifact, Mission 32's manual On-the-Fly Calculator, or Mission 33's private NorthStar platform analytics. Mission 20 retains business-profile and operating-policy authority; Mission 22 retains scheduling and dispatch; Mission 23 retains actual execution; Mission 24 retains estimates and customer-facing price; Mission 25 retains outcome learning; Mission 27 retains native invoices, payments and collections; Mission 28 retains automation and any authority to apply an advisory action.
 
 ## Frozen implementation structure — 12 parts and 51 slices
 

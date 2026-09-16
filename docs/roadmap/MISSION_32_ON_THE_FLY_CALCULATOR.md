@@ -1,4 +1,4 @@
-# Mission 32 — Scenario Calculator
+# Mission 32 — On-the-Fly Calculator
 
 ## Status
 
@@ -6,13 +6,13 @@ Future mission. This document records the authorized product concept only. Missi
 
 ## Product outcome
 
-Give a paying NorthStar customer a fast, explainable planning calculation when a prospective job is described informally—for example, by word of mouth before a formal site visit. The contractor records what they know, Polaris identifies what is missing, and NorthStar produces a non-binding planning range the contractor can remember and revisit.
+Give an authorized owner or estimator a fast, explainable calculation while a prospective job is being discussed or immediately afterward. The user records what is known through a concise manual, conversational, or mobile-friendly intake. NorthStar pre-fills recognized Business Profile, workforce, asset, inventory, travel, tax, overhead, margin, scheduling, knowledge, and learned-company facts; Polaris identifies what remains unknown and produces a non-binding planning range the contractor can remember, compare, save, and revisit.
 
-The feature name **Scenario Calculator** is provisional.
+The product name is **On-the-Fly Calculator**. It may also be presented as the rapid Estimate Studio when the workflow expands into a reviewed customer estimate, but it remains distinct from the investor calculator and from autonomous pricing.
 
 ## Core workflow
 
-1. Start a new calculation from the paid workspace.
+1. Start a new on-the-fly calculation from the paid workspace.
 2. Enter the known customer/contact context without silently creating a customer record.
 3. Describe the requested work, job scope, measurements, constraints, urgency, desired timing, location, and supporting notes.
 4. Choose or confirm the operating Business Profile, service area, crews, equipment, vehicles, materials, suppliers, labor assumptions, travel rules, taxes, overhead, margin policy, scheduling capacity, and other authorized inputs.
@@ -20,6 +20,8 @@ The feature name **Scenario Calculator** is provisional.
 6. Show a live explainable range, confidence, missing inputs, assumptions, risk flags, resource requirements, and recommended next action.
 7. Save the calculation as a durable draft in a searchable list.
 8. Later convert the draft into an authorized lead, customer, estimate, appointment, or work record through an explicit reviewed action.
+
+The calculator must remain useful with limited early information while clearly separating recorded facts, recognized company facts, calculated values, assumptions, and unknowns. It must not force an owner to re-enter information already present in an authorized, current NorthStar source.
 
 ## Required intake groups
 

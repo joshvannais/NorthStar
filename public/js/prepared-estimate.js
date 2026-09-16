@@ -117,7 +117,7 @@
       if(overview){
         overview.replaceChildren();
         var draftPrice=state.data&&state.data.components.find(function(c){return c.kind==='pricing';}),priceValue=draftPrice&&draftPrice.result&&(draftPrice.result.result||draftPrice.result),originalRow=(review.rows||[])[0],originalPrice=originalRow&&originalRow.amount,preparedPrice=priceValue&&priceValue.proposedBeforeTax;
-        row(overview,'Original Polaris estimate',originalPrice==null?'Needs review':amount(originalPrice));
+        row(overview,'Original Polaris estimate',originalPrice==null?'Needs review':amount(typeof originalPrice==='number'?originalPrice.toFixed(2):originalPrice));
         row(overview,'Prepared draft before tax',preparedPrice==null?'Needs review':amount(preparedPrice));
         if(originalPrice!=null&&preparedPrice!=null&&Number.isFinite(Number(originalPrice))&&Number.isFinite(Number(preparedPrice))){
           var delta=Math.round((Number(preparedPrice)-Number(originalPrice))*100)/100;

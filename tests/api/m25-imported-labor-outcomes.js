@@ -139,14 +139,19 @@ const sourceKey = 'payroll.primary';
     ledger.cases.push('A source correction stales prior advice and requires renewed current matches before a new immutable observation.');
 
     const overlapStart = new Date(start.getTime() + 3600000); const overlapEnd = new Date(start.getTime() + 3 * 3600000);
-    const overlapping = { ...record(1, overlapEnd), externalRecordId: 'shift-2', observedStart: overlapStart.toISOString() };
+    const overlapping = { ...record(1, overlapEnd), externalRecordId: 'shift-2', workerReference: 'worker-8',
+      observedStart: overlapStart.toISOString() };
     response = await post('/batches', batch([overlapping], 'cursor-2', 'cursor-3'));
     assert.equal(response.status, 201, JSON.stringify(response.body)); matches = await readMatches();
-    let overlapWorker = matches.references.find(value => value.referenceKind === 'worker');
+    let overlapWorker = matches.references.find(value => value.referenceKind === 'worker' && value.externalReference === 'worker-7');
+    const overlapAlias = matches.references.find(value => value.referenceKind === 'worker' && value.externalReference === 'worker-8');
     let overlapJob = matches.references.find(value => value.referenceKind === 'job');
     response = await post('/matches', matchBody('worker', 'worker-7', overlapWorker.sourceDigest,
       matches.workerTargets.find(value => value.targetId === f.actors.member.actorUserId), workerMatch));
     assert.equal(response.status, 201, JSON.stringify(response.body)); workerMatch = response.body.data.match;
+    response = await post('/matches', matchBody('worker', 'worker-8', overlapAlias.sourceDigest,
+      matches.workerTargets.find(value => value.targetId === f.actors.member.actorUserId)));
+    assert.equal(response.status, 201, JSON.stringify(response.body));
     response = await post('/matches', matchBody('job', 'job-19', overlapJob.sourceDigest,
       matches.jobTargets.find(value => value.targetId === estimate), jobMatch));
     assert.equal(response.status, 201, JSON.stringify(response.body)); jobMatch = response.body.data.match;
@@ -157,7 +162,7 @@ const sourceKey = 'payroll.primary';
       sourceUpdatedAt: new Date(overlapEnd.getTime() + 120000).toISOString() };
     response = await post('/batches', batch([tombstone], 'cursor-3', 'cursor-4'));
     assert.equal(response.status, 201, JSON.stringify(response.body)); matches = await readMatches();
-    overlapWorker = matches.references.find(value => value.referenceKind === 'worker');
+    overlapWorker = matches.references.find(value => value.referenceKind === 'worker' && value.externalReference === 'worker-7');
     overlapJob = matches.references.find(value => value.referenceKind === 'job');
     response = await post('/matches', matchBody('worker', 'worker-7', overlapWorker.sourceDigest,
       matches.workerTargets.find(value => value.targetId === f.actors.member.actorUserId), workerMatch));

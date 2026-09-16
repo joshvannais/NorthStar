@@ -245,13 +245,6 @@ BEGIN
  INTO record_total,actual FROM job_records;
  IF record_total=0 OR record_total>1000 OR actual<=0 THEN
   RAISE EXCEPTION 'Imported labor records are unavailable' USING ERRCODE='P0002',CONSTRAINT='imported_learning_records_unavailable'; END IF;
- IF EXISTS(WITH current_records AS (
-   SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_labor_import_records
-    WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC
-  ), job_records AS (SELECT * FROM current_records WHERE state='active' AND job_reference=job_reference_value)
-  SELECT 1 FROM job_records a JOIN job_records b ON a.worker_reference=b.worker_reference AND a.id<b.id
-   AND tstzrange(a.observed_start,a.observed_end,'[)') && tstzrange(b.observed_start,b.observed_end,'[)')) THEN
-  RAISE EXCEPTION 'Imported labor intervals overlap' USING ERRCODE='P0002',CONSTRAINT='imported_learning_records_overlap'; END IF;
  WITH current_records AS (
   SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_labor_import_records
    WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC
@@ -271,6 +264,19 @@ BEGIN
  INTO worker_total,invalid_workers,worker_matches FROM evaluated;
  IF worker_total=0 OR invalid_workers>0 THEN RAISE EXCEPTION 'Current reviewed worker matches are required'
   USING ERRCODE='P0002',CONSTRAINT='imported_learning_match_stale'; END IF;
+ IF EXISTS(WITH current_records AS (
+   SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_labor_import_records
+    WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC
+  ), job_records AS (SELECT * FROM current_records WHERE state='active' AND job_reference=job_reference_value),
+  latest AS (SELECT DISTINCT ON (external_reference) external_reference,target_id
+   FROM public.canonical_external_labor_import_reference_matches WHERE organization_id=org
+    AND source_key=source_value AND reference_kind='worker' ORDER BY external_reference,revision DESC),
+  resolved AS (SELECT records.*,matches.target_id workforce_profile_id FROM job_records records
+   JOIN latest matches ON matches.external_reference=records.worker_reference)
+  SELECT 1 FROM resolved a JOIN resolved b ON a.workforce_profile_id=b.workforce_profile_id AND a.id<b.id
+   AND tstzrange(a.observed_start,a.observed_end,'[)') && tstzrange(b.observed_start,b.observed_end,'[)')) THEN
+  RAISE EXCEPTION 'Imported labor intervals overlap for one resolved worker'
+   USING ERRCODE='P0002',CONSTRAINT='imported_learning_records_overlap'; END IF;
  WITH current_records AS (
   SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_labor_import_records
    WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC

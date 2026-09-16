@@ -84,11 +84,51 @@ const sourceKey = 'payroll.primary';
       if(i===3){const tooSmall=await post('/imported-labor-calibrations/plumbing',proposalBody);assert.equal(tooSmall.status,409,JSON.stringify(tooSmall.body));assert.equal(tooSmall.body.error.code,'M25_IMPORTED_CALIBRATION_SAMPLE_REQUIRED');}}
     ledger.cases.push('Calibration fails closed until five current reviewed same-service outcomes exist.');
 
+    const extraStart=new Date(Date.UTC(2026,0,10,8));const extraRecord={externalRecordId:'shift-extra',externalVersion:1,state:'active',
+      workerReference:'worker-8',jobReference:'job-extra',category:'production',observedStart:extraStart.toISOString(),
+      observedEnd:new Date(extraStart.getTime()+22.4*3600000).toISOString(),sourceUpdatedAt:new Date(extraStart.getTime()+23*3600000).toISOString()};
+    response=await post('/batches',{schemaVersion:'m25-external-labor-time-v1',mode:'continuous_update',expectedConsentRevision:sourceConsent.revision,
+      expectedConsentDigest:sourceConsent.digest,cursorBefore:'cursor-1',cursorAfter:'cursor-2',complete:false,records:[extraRecord],
+      reason:'Add another independently completed job.',confirmed:true,confirmationVersion:'m25-external-labor-import-batch-v1'});
+    assert.equal(response.status,201,JSON.stringify(response.body));matches=await readMatches();
+    const extraWorkerRef=matches.references.find(v=>v.referenceKind==='worker'&&v.externalReference==='worker-8');
+    const extraJobRef=matches.references.find(v=>v.referenceKind==='job'&&v.externalReference==='job-extra');
+    assert.ok(extraWorkerRef&&extraJobRef);
+    response=await post('/matches',matchBody('worker','worker-8',extraWorkerRef.sourceDigest,workerTarget));assert.equal(response.status,201,JSON.stringify(response.body));
+    response=await post('/matches',matchBody('job','job-extra',extraJobRef.sourceDigest,matches.jobTargets.find(v=>v.targetId===estimates[0])));
+    assert.equal(response.status,201,JSON.stringify(response.body));
+    response=await post(`/estimates/${estimates[0]}/imported-labor-duration-outcomes`,{externalJobReference:'job-extra',
+      expectedConsentRevision:outcomeConsent.revision,expectedConsentDigest:outcomeConsent.digest,
+      reason:'Compare the second reviewed external job with the same estimate plan.',confirmed:true,
+      confirmationVersion:'m25-imported-labor-duration-observation-v1'});
+    assert.equal(response.status,201,JSON.stringify(response.body));
+    const template=(await f.ownerPool.query(`SELECT * FROM canonical_external_labor_import_outcome_observations
+      WHERE organization_id=$1 AND source_key=$2 ORDER BY estimate_id,external_job_reference LIMIT 1`,[f.org,sourceKey])).rows[0];
+    await f.ownerPool.query(`INSERT INTO canonical_external_labor_import_outcome_observations(
+      id,organization_id,source_key,estimate_id,external_job_reference,revision,previous_id,consent_id,consent_revision,
+      consent_digest,source_manifest,source_digest,planned_worker_hours,recorded_worker_hours,variance_worker_hours,
+      variance_percent,advisory_code,advisory_message,scope_note,adoption_boundary,actor_user_id,membership_id,
+      auth_session_id,reason,confirmed,confirmation_version,calculation_version,request_key_hash,request_digest,canonical_digest)
+      SELECT gen_random_uuid(),$1,$2,$3,'000-stale-'||lpad(value::text,3,'0'),1,NULL,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,
+       $12,$13,$14,$15,$16,$17,$18,$19,$20,TRUE,$21,$22,
+       encode(sha256(convert_to('stale-key-'||value::text,'UTF8')),'hex'),
+       encode(sha256(convert_to('stale-request-'||value::text,'UTF8')),'hex'),
+       encode(sha256(convert_to('stale-canonical-'||value::text,'UTF8')),'hex')
+      FROM generate_series(1,101) value`,[f.org,sourceKey,template.estimate_id,template.consent_id,template.consent_revision,
+      template.consent_digest,JSON.stringify(template.source_manifest),template.source_digest,template.planned_worker_hours,
+      template.recorded_worker_hours,template.variance_worker_hours,template.variance_percent,template.advisory_code,
+      template.advisory_message,template.scope_note,template.adoption_boundary,template.actor_user_id,template.membership_id,
+      template.auth_session_id,'Seed deterministic stale-prefix coverage.',template.confirmation_version,template.calculation_version]);
+    ledger.cases.push('Distinct external jobs mapped to one estimate remain separate, and 101 stale candidates cannot hide the fresh sample.');
+
     const proposalKey=crypto.randomUUID(); response=await post('/imported-labor-calibrations/plumbing',proposalBody,proposalKey);
     assert.equal(response.status,201,JSON.stringify(response.body)); const proposal=response.body.data.proposal;
-    assert.equal(proposal.sampleSize,5);assert.equal(proposal.medianActualToPlannedRatio,'1.2000');assert.equal(proposal.lowerQuartileRatio,'1.1000');
-    assert.equal(proposal.upperQuartileRatio,'1.2500');assert.equal(proposal.proposedPlannedHoursMultiplier,'1.2000');assert.equal(proposal.advisoryCode,'increase_planned_hours');
+    assert.equal(proposal.sampleSize,6);assert.equal(proposal.staleExcludedCount,101);assert.equal(proposal.medianActualToPlannedRatio,'1.2250');
+    assert.equal(proposal.lowerQuartileRatio,'1.1250');assert.equal(proposal.upperQuartileRatio,'1.2875');
+    assert.equal(proposal.proposedPlannedHoursMultiplier,'1.2250');assert.equal(proposal.advisoryCode,'increase_planned_hours');
     assert.equal((await post('/imported-labor-calibrations/plumbing',proposalBody,proposalKey)).status,200);
+    const changedKey=await post('/imported-labor-calibrations/plumbing',{...proposalBody,reason:'Different request details.'},proposalKey);
+    assert.equal(changedKey.status,409);assert.equal(changedKey.body.error.code,'M25_IMPORTED_CALIBRATION_KEY_CONFLICT');
     assert.equal((await post('/imported-labor-calibrations/plumbing',proposalBody)).status,409);
     let read=await request(f.app).get(root+'/imported-labor-calibrations/plumbing').set(owner.session.headers);
     assert.equal(read.status,200);assert.equal(read.body.data.current.fresh,true);assert.equal(read.body.data.current.advisoryAvailable,true);
@@ -97,14 +137,19 @@ const sourceKey = 'payroll.primary';
     ledger.cases.push('The median and quartiles are deterministic, tenant-private and advisory-only.');
 
     const corrected={...records[0],externalVersion:2,observedEnd:new Date(new Date(records[0].observedStart).getTime()+18*3600000).toISOString(),sourceUpdatedAt:new Date(Date.UTC(2026,0,2,4)).toISOString()};
+    const correctedSecond={...records[1],externalVersion:2,observedEnd:new Date(new Date(records[1].observedStart).getTime()+17*3600000).toISOString(),sourceUpdatedAt:new Date(Date.UTC(2026,0,3,4)).toISOString()};
     response=await post('/batches',{schemaVersion:'m25-external-labor-time-v1',mode:'continuous_update',expectedConsentRevision:sourceConsent.revision,
-      expectedConsentDigest:sourceConsent.digest,cursorBefore:'cursor-1',cursorAfter:'cursor-2',complete:false,records:[corrected],
-      reason:'Correct one current source interval.',confirmed:true,confirmationVersion:'m25-external-labor-import-batch-v1'});
+      expectedConsentDigest:sourceConsent.digest,cursorBefore:'cursor-2',cursorAfter:'cursor-3',complete:false,records:[corrected,correctedSecond],
+      reason:'Correct two current source intervals.',confirmed:true,confirmationVersion:'m25-external-labor-import-batch-v1'});
     assert.equal(response.status,201,JSON.stringify(response.body));
+    const delayedReplay=await post('/imported-labor-calibrations/plumbing',proposalBody,proposalKey);
+    assert.equal(delayedReplay.status,200,JSON.stringify(delayedReplay.body));assert.equal(delayedReplay.body.data.replayed,true);
+    assert.equal(delayedReplay.body.data.proposal.fresh,false);assert.equal(delayedReplay.body.data.proposal.advisoryAvailable,false);
+    assert.equal(delayedReplay.body.data.proposal.advisoryCode,null);assert.equal(delayedReplay.body.data.proposal.proposedPlannedHoursMultiplier,null);
     read=await request(f.app).get(root+'/imported-labor-calibrations/plumbing').set(owner.session.headers);
     assert.equal(read.status,200);assert.equal(read.body.data.current.fresh,false);assert.equal(read.body.data.current.advisoryAvailable,false);
     assert.equal(read.body.data.current.advisoryCode,null);assert.equal(read.body.data.current.proposedPlannedHoursMultiplier,null);
-    ledger.cases.push('A source correction stales the sample and masks the saved recommendation.');
+    ledger.cases.push('A delayed exact-key replay survives an insufficient corrected sample while masking the stale recommendation.');
 
     response=await post('/imported-labor-calibration-consent',{action:'revoke',expectedRevision:calibrationConsent.revision,
       expectedDigest:calibrationConsent.digest,reason:'Stop this calibration purpose.',confirmed:true,confirmationVersion:'m25-imported-labor-calibration-consent-v1'});

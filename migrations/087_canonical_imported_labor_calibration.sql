@@ -227,25 +227,38 @@ BEGIN
   OR outcome_consent.source_consent_id<>source_consent.id
   OR rtrim(outcome_consent.source_consent_digest)<>rtrim(source_consent.canonical_digest) THEN
   RAISE EXCEPTION 'Current imported labor outcome consent is required' USING ERRCODE='P0002',CONSTRAINT='imported_calibration_outcome_consent_unavailable'; END IF;
+ WITH current_observations AS (
+  SELECT DISTINCT ON (estimate_id,external_job_reference) observation.*
+  FROM public.canonical_external_labor_import_outcome_observations observation
+  WHERE observation.organization_id=org AND observation.source_key=source_value
+  ORDER BY estimate_id,external_job_reference,revision DESC,id DESC
+ ) SELECT count(*) INTO candidate_total FROM current_observations observation
+ JOIN public.canonical_estimates estimate ON estimate.organization_id=org AND estimate.id=observation.estimate_id
+ JOIN public.canonical_opportunities opportunity ON opportunity.organization_id=org AND opportunity.id=estimate.opportunity_id
+ WHERE lower(btrim(opportunity.service_type))=service_value;
+ IF candidate_total>10000 THEN RAISE EXCEPTION 'Imported calibration candidate set is too broad for bounded review'
+  USING ERRCODE='P0002',CONSTRAINT='imported_calibration_sample_scope_too_broad'; END IF;
  FOR item IN WITH current_observations AS (
-   SELECT DISTINCT ON (estimate_id) observation.* FROM public.canonical_external_labor_import_outcome_observations observation
-    WHERE observation.organization_id=org AND observation.source_key=source_value
-    ORDER BY estimate_id,revision DESC
+   SELECT DISTINCT ON (estimate_id,external_job_reference) observation.*
+   FROM public.canonical_external_labor_import_outcome_observations observation
+   WHERE observation.organization_id=org AND observation.source_key=source_value
+   ORDER BY estimate_id,external_job_reference,revision DESC,id DESC
   ) SELECT observation.* FROM current_observations observation
    JOIN public.canonical_estimates estimate ON estimate.organization_id=org AND estimate.id=observation.estimate_id
    JOIN public.canonical_opportunities opportunity ON opportunity.organization_id=org AND opportunity.id=estimate.opportunity_id
-   WHERE lower(btrim(opportunity.service_type))=service_value ORDER BY observation.estimate_id LIMIT 100
+   WHERE lower(btrim(opportunity.service_type))=service_value
+   ORDER BY observation.estimate_id,observation.external_job_reference,observation.revision DESC,observation.id DESC
  LOOP
-  candidate_total:=candidate_total+1;
   BEGIN live_basis:=public.canonical_imported_labor_learning_basis(org,source_value,item.estimate_id,item.external_job_reference);
   EXCEPTION WHEN SQLSTATE 'P0002' THEN CONTINUE; END;
   IF rtrim(item.source_digest)<>live_basis->>'sourceDigest' OR item.consent_id<>outcome_consent.id THEN CONTINUE; END IF;
   ratio_value:=round(item.recorded_worker_hours/item.planned_worker_hours,6);
-  observations:=observations||jsonb_build_array(jsonb_build_object('observationId',item.id,'estimateId',item.estimate_id,
-   'externalJobReference',item.external_job_reference,'revision',item.revision,'digest',rtrim(item.canonical_digest),
-   'sourceDigest',rtrim(item.source_digest),'plannedWorkerHours',item.planned_worker_hours::text,
-   'recordedWorkerHours',item.recorded_worker_hours::text,'actualToPlannedRatio',ratio_value::text));
   fresh_total:=fresh_total+1;
+  IF fresh_total<=100 THEN observations:=observations||jsonb_build_array(jsonb_build_object(
+   'observationId',item.id,'estimateId',item.estimate_id,'externalJobReference',item.external_job_reference,
+   'revision',item.revision,'digest',rtrim(item.canonical_digest),'sourceDigest',rtrim(item.source_digest),
+   'plannedWorkerHours',item.planned_worker_hours::text,'recordedWorkerHours',item.recorded_worker_hours::text,
+   'actualToPlannedRatio',ratio_value::text)); END IF;
  END LOOP;
  IF fresh_total<5 THEN RAISE EXCEPTION 'At least five current imported labor outcomes are required'
   USING ERRCODE='P0002',CONSTRAINT='imported_calibration_sample_insufficient'; END IF;
@@ -264,8 +277,8 @@ BEGIN
   'outcomeConsent',jsonb_build_object('id',outcome_consent.id,'revision',outcome_consent.revision,'digest',rtrim(outcome_consent.canonical_digest)),
   'observations',observations);
  digest_value:=public.canonical_completion_digest(manifest);
- RETURN jsonb_build_object('sampleManifest',manifest,'sampleDigest',digest_value,'sampleSize',fresh_total,
-  'staleExcludedCount',candidate_total-fresh_total,'medianActualToPlannedRatio',median_value::text,
+ RETURN jsonb_build_object('sampleManifest',manifest,'sampleDigest',digest_value,'sampleSize',jsonb_array_length(observations),
+   'staleExcludedCount',candidate_total-fresh_total,'medianActualToPlannedRatio',median_value::text,
   'lowerQuartileRatio',lower_value::text,'upperQuartileRatio',upper_value::text,
   'proposedPlannedHoursMultiplier',median_value::text,'advisoryCode',code_value,'advisoryMessage',message_value,
   'evidenceBoundary','This proposal summarizes the median of current reviewed imported outcomes for one service. It is not a market benchmark, guaranteed duration, employee-performance score or universal price fact.',
@@ -295,7 +308,7 @@ DECLARE authority JSONB; consent_row public.canonical_external_labor_calibration
  current_row public.canonical_external_labor_calibration_proposals%ROWTYPE;
  replay_row public.canonical_external_labor_calibration_proposals%ROWTYPE;
  inserted public.canonical_external_labor_calibration_proposals%ROWTYPE;
- basis JSONB; next_revision BIGINT; key_hash TEXT; request_hash TEXT; digest_value TEXT;
+ basis JSONB; next_revision BIGINT; key_hash TEXT; request_hash TEXT; digest_value TEXT; replay_fresh BOOLEAN;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXCEPTION 'Serializable required' USING ERRCODE='25001'; END IF;
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Imported calibration review is restricted' USING ERRCODE='42501'; END IF;
@@ -325,18 +338,26 @@ BEGIN
   OR consent_row.revision<>expected_consent_revision
   OR rtrim(consent_row.canonical_digest) IS DISTINCT FROM expected_consent_digest THEN
   RAISE EXCEPTION 'Active imported calibration consent changed' USING ERRCODE='40001',CONSTRAINT='imported_calibration_consent_stale'; END IF;
- basis:=public.canonical_imported_labor_calibration_basis(org,source_value,service_value);
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'actorUserId',actor,
-  'sourceKey',source_value,'serviceKey',service_value,'consentRevision',expected_consent_revision,
-  'consentDigest',expected_consent_digest,'reason',reason_value,'confirmed',confirmed_value,
-  'confirmationVersion',confirmation_version_value,'sampleDigest',basis->>'sampleDigest'));
+   'sourceKey',source_value,'serviceKey',service_value,'consentRevision',expected_consent_revision,
+   'consentDigest',expected_consent_digest,'reason',reason_value,'confirmed',confirmed_value,
+   'confirmationVersion',confirmation_version_value));
  SELECT * INTO replay_row FROM public.canonical_external_labor_calibration_proposals WHERE organization_id=org
-  AND actor_user_id=actor AND request_key_hash=key_hash;
+   AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN
-  IF rtrim(replay_row.request_digest)<>request_hash THEN RAISE EXCEPTION 'Imported calibration key conflict' USING ERRCODE='23505'; END IF;
-  RETURN jsonb_build_object('proposal',public.canonical_imported_labor_calibration_projection(replay_row),'replayed',TRUE);
+   IF rtrim(replay_row.request_digest)<>request_hash THEN RAISE EXCEPTION 'Imported calibration key conflict' USING ERRCODE='23505'; END IF;
+   BEGIN basis:=public.canonical_imported_labor_calibration_basis(org,source_value,service_value);
+    replay_fresh:=rtrim(replay_row.sample_digest)=basis->>'sampleDigest' AND replay_row.consent_id=consent_row.id;
+   EXCEPTION WHEN SQLSTATE 'P0002' THEN basis:=NULL;replay_fresh:=FALSE; END;
+   RETURN jsonb_build_object('proposal',public.canonical_imported_labor_calibration_projection(replay_row)||jsonb_build_object(
+    'fresh',replay_fresh,'advisoryAvailable',replay_fresh,
+    'advisoryCode',CASE WHEN replay_fresh THEN replay_row.advisory_code ELSE NULL END,
+    'advisoryMessage',CASE WHEN replay_fresh THEN replay_row.advisory_message ELSE NULL END,
+    'proposedPlannedHoursMultiplier',CASE WHEN replay_fresh THEN replay_row.proposed_planned_hours_multiplier::text ELSE NULL END),
+    'replayed',TRUE);
  END IF;
+ basis:=public.canonical_imported_labor_calibration_basis(org,source_value,service_value);
  SELECT * INTO replay_row FROM public.canonical_external_labor_calibration_proposals WHERE organization_id=org
   AND source_key=source_value AND service_key=service_value AND sample_digest=(basis->>'sampleDigest')::char(64)
   AND consent_id=consent_row.id;

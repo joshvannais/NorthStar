@@ -18,6 +18,14 @@ Source corrections make the current advisory stale until it is deliberately refr
 
 This is one source class and one advisory comparison. Historical imports, continuous external updates, deletion/tombstone orchestration, multi-job calibration, owner-facing adoption UI and the other source classes below remain required before Mission 25 completion.
 
+## Third bounded package — external labor import authority
+
+Migration `084_canonical_external_labor_import_authority.sql` and the guarded external-labor routes under `/api/v1/learning` establish the first provider-neutral historical-backfill and continuous-update envelope. An owner or administrator explicitly grants consent to one named source. Each bounded batch then pins that consent, its schema version, mode, before/after cursor, explicit confirmation, normalized records, request identity and source versions. A repeated record version is deduplicated only when its normalized digest is identical. A conflicting same version, stale cursor or out-of-order version fails closed. Higher versions form immutable correction chains; source tombstones remove work details from the current projection.
+
+This package deliberately stages normalized external labor evidence. It does not insert Mission 23 labor intervals, match opaque worker or job references, calculate a labor outcome, update an estimate, infer payroll, or change a schedule or policy. Revocation blocks imports and hides the source projection. Durable audit rows remain governed evidence. A future reconciliation package must require reviewed entity matches before these records can support a tenant-private observation.
+
+This is the adapter-facing runtime foundation, not a completed vendor connector or owner import experience. CSV ingestion, provider authorization, provider-specific adapters, reviewed job/worker matching, retention and deletion orchestration, and the remaining integration categories are still required before Mission 25 completion.
+
 No fixed implementation-part count is declared by this package. Later packages must state the exact source class, consent, correction/deletion behavior, derived output and release evidence they add. Completion requires usable roadmap-designated historical-backfill and continuous-update integrations; placeholder connectors and sample cards are insufficient.
 
 ## Required direction

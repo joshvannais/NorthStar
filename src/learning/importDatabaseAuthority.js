@@ -1,0 +1,49 @@
+'use strict';
+
+async function grantAndVerify(client, runtimeRole) {
+  const table = await client.query("SELECT pg_catalog.to_regclass('public.canonical_external_labor_import_runs') IS NOT NULL present");
+  if (!table.rows[0].present) return;
+  if (!/^[A-Za-z_][A-Za-z0-9_$-]*$/.test(runtimeRole)) throw new Error('Runtime role identity is invalid');
+  const identifier = '"' + runtimeRole.replace(/"/g, '""') + '"';
+  await client.query(`REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_labor_import_consents,
+    public.canonical_external_labor_import_runs, public.canonical_external_labor_import_records FROM ${identifier}`);
+  const helpers = [
+    'public.canonical_external_labor_import_consent_projection(public.canonical_external_labor_import_consents)',
+    'public.canonical_external_labor_import_run_projection(public.canonical_external_labor_import_runs)',
+    'public.canonical_external_labor_import_record_projection(public.canonical_external_labor_import_records)'
+  ];
+  const entries = [
+    'public.canonical_external_labor_import_consent_read(uuid,uuid,text,uuid,text)',
+    'public.canonical_external_labor_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)',
+    'public.canonical_external_labor_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)',
+    'public.canonical_external_labor_import_read(uuid,uuid,text,uuid,text)'
+  ];
+  for (const signature of helpers) await client.query(`REVOKE ALL ON FUNCTION ${signature} FROM ${identifier}`);
+  for (const signature of entries) await client.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${identifier}`);
+  const privileges = (await client.query(`SELECT
+    NOT has_table_privilege($1,'public.canonical_external_labor_import_consents','SELECT')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_consents','INSERT')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_consents','UPDATE')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_consents','DELETE')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_runs','SELECT')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_runs','INSERT')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_runs','UPDATE')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_runs','DELETE')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_records','SELECT')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_records','INSERT')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_records','UPDATE')
+      AND NOT has_table_privilege($1,'public.canonical_external_labor_import_records','DELETE') tables_withheld,
+    NOT has_function_privilege($1,'public.canonical_external_labor_import_consent_projection(public.canonical_external_labor_import_consents)','EXECUTE')
+      AND NOT has_function_privilege($1,'public.canonical_external_labor_import_run_projection(public.canonical_external_labor_import_runs)','EXECUTE')
+      AND NOT has_function_privilege($1,'public.canonical_external_labor_import_record_projection(public.canonical_external_labor_import_records)','EXECUTE') helpers_withheld,
+    has_function_privilege($1,'public.canonical_external_labor_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+      AND has_function_privilege($1,'public.canonical_external_labor_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+      AND has_function_privilege($1,'public.canonical_external_labor_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+      AND has_function_privilege($1,'public.canonical_external_labor_import_read(uuid,uuid,text,uuid,text)','EXECUTE') entries_allowed`,
+    [runtimeRole])).rows[0];
+  if (!privileges.tables_withheld || !privileges.helpers_withheld || !privileges.entries_allowed) {
+    throw new Error(`External labor import runtime privilege verification failed: ${JSON.stringify(privileges)}`);
+  }
+}
+
+module.exports = { grantAndVerify };

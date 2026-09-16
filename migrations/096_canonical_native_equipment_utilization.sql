@@ -286,32 +286,52 @@ DECLARE authority JSONB; consent_row public.canonical_equipment_learning_consent
  current_row public.canonical_native_equipment_utilization_observations%ROWTYPE;
  old public.canonical_native_equipment_utilization_observations%ROWTYPE;
  inserted public.canonical_native_equipment_utilization_observations%ROWTYPE; basis JSONB;
- key_hash TEXT; request_hash TEXT; next_revision BIGINT; digest_value TEXT;
+ key_hash TEXT; request_hash TEXT; next_revision BIGINT; digest_value TEXT; replay_fresh BOOLEAN;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXCEPTION 'Serializable required' USING ERRCODE='25001'; END IF;
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Equipment learning review is restricted' USING ERRCODE='42501'; END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE);
- IF key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR expected_consent_revision NOT BETWEEN 1 AND 10000
-  OR expected_consent_digest!~'^[0-9a-f]{64}$' OR public.canonical_learning_text_valid(reason_value,2000) IS NOT TRUE
-  OR confirmed_value IS DISTINCT FROM TRUE OR confirmation_version_value<>'m25-native-equipment-utilization-observation-v1' THEN
+ IF key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$'
+  OR expected_consent_revision IS NULL OR expected_consent_revision NOT BETWEEN 1 AND 10000
+  OR expected_consent_digest IS NULL OR expected_consent_digest!~'^[0-9a-f]{64}$'
+  OR public.canonical_learning_text_valid(reason_value,2000) IS NOT TRUE
+  OR confirmed_value IS DISTINCT FROM TRUE
+  OR confirmation_version_value IS DISTINCT FROM 'm25-native-equipment-utilization-observation-v1' THEN
   RAISE EXCEPTION 'Equipment utilization observation input invalid' USING ERRCODE='22023'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':native-equipment-utilization:'||estimate::text,0));
- SELECT * INTO consent_row FROM public.canonical_equipment_learning_consents WHERE organization_id=org
-  AND purpose='native_equipment_checkout_variance_v1' ORDER BY revision DESC LIMIT 1 FOR SHARE;
- IF NOT FOUND OR consent_row.action<>'grant' OR consent_row.revision<>expected_consent_revision
-  OR rtrim(consent_row.canonical_digest)<>expected_consent_digest THEN
-  RAISE EXCEPTION 'Equipment learning consent changed' USING ERRCODE='40001',CONSTRAINT='equipment_learning_consent_stale'; END IF;
- basis:=public.canonical_native_equipment_utilization_basis(org,estimate);
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'actorUserId',actor,'estimateId',estimate,
-  'consentId',consent_row.id,'consentRevision',expected_consent_revision,'consentDigest',expected_consent_digest,
-  'sourceDigest',basis->>'sourceDigest','reason',reason_value,'confirmed',confirmed_value,'confirmationVersion',confirmation_version_value));
+  'consentRevision',expected_consent_revision,'consentDigest',expected_consent_digest,
+  'reason',reason_value,'confirmed',confirmed_value,'confirmationVersion',confirmation_version_value));
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':native-equipment-utilization:'||estimate::text,0));
  SELECT * INTO old FROM public.canonical_native_equipment_utilization_observations
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN
   IF rtrim(old.request_digest)<>request_hash THEN RAISE EXCEPTION 'Equipment learning key conflict' USING ERRCODE='23505'; END IF;
-  RETURN jsonb_build_object('observation',public.canonical_native_equipment_utilization_projection(old),'replayed',TRUE);
+  SELECT * INTO consent_row FROM public.canonical_equipment_learning_consents WHERE organization_id=org
+   AND purpose='native_equipment_checkout_variance_v1' ORDER BY revision DESC LIMIT 1;
+  replay_fresh:=FALSE;
+  IF FOUND AND consent_row.action='grant' AND consent_row.id=old.consent_id THEN
+   BEGIN
+    basis:=public.canonical_native_equipment_utilization_basis(org,estimate);
+    replay_fresh:=rtrim(old.source_digest)=basis->>'sourceDigest';
+   EXCEPTION WHEN SQLSTATE 'P0002' THEN replay_fresh:=FALSE; END;
+  END IF;
+  IF consent_row.id IS NULL OR consent_row.action<>'grant' OR consent_row.id<>old.consent_id THEN
+   RETURN jsonb_build_object('observation',jsonb_build_object('id',old.id,'estimateId',old.estimate_id,
+    'revision',old.revision,'digest',rtrim(old.canonical_digest),'createdAt',old.created_at,'fresh',FALSE,
+    'advisoryAvailable',FALSE,'advisoryCode',NULL,'advisoryMessage',NULL,'hiddenByConsent',TRUE),'replayed',TRUE);
+  END IF;
+  RETURN jsonb_build_object('observation',public.canonical_native_equipment_utilization_projection(old)||jsonb_build_object(
+   'fresh',replay_fresh,'advisoryAvailable',replay_fresh,
+   'advisoryCode',CASE WHEN replay_fresh THEN old.advisory_code ELSE NULL END,
+   'advisoryMessage',CASE WHEN replay_fresh THEN old.advisory_message ELSE NULL END),'replayed',TRUE);
  END IF;
+ SELECT * INTO consent_row FROM public.canonical_equipment_learning_consents WHERE organization_id=org
+  AND purpose='native_equipment_checkout_variance_v1' ORDER BY revision DESC LIMIT 1 FOR SHARE;
+ IF NOT FOUND OR consent_row.action<>'grant' OR consent_row.revision IS DISTINCT FROM expected_consent_revision
+  OR rtrim(consent_row.canonical_digest) IS DISTINCT FROM expected_consent_digest THEN
+  RAISE EXCEPTION 'Equipment learning consent changed' USING ERRCODE='40001',CONSTRAINT='equipment_learning_consent_stale'; END IF;
+ basis:=public.canonical_native_equipment_utilization_basis(org,estimate);
  SELECT * INTO current_row FROM public.canonical_native_equipment_utilization_observations
   WHERE organization_id=org AND estimate_id=estimate ORDER BY revision DESC LIMIT 1 FOR UPDATE;
  IF current_row.id IS NOT NULL AND rtrim(current_row.source_digest)=basis->>'sourceDigest' AND current_row.consent_id=consent_row.id THEN

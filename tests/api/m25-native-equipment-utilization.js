@@ -63,6 +63,16 @@ assert.ok(!fs.existsSync(output));
  const pin=consent.body.data.consent;assert.equal(pin.purpose,'native_equipment_checkout_variance_v1');
  const observe={expectedConsentRevision:pin.revision,expectedConsentDigest:pin.digest,
   reason:'Compare recorded checkout duration with the adopted equipment hours.',confirmed:true,confirmationVersion:'m25-native-equipment-utilization-observation-v1'};
+ const directObserve=async(revision,digest,key=crypto.randomUUID())=>{const client=await f.runtimePool.connect();try{
+  await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');const value=(await client.query(
+   'SELECT public.canonical_native_equipment_utilization_observe($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+   [f.org,owner.actorUserId,'owner',owner.authSessionId,owner.csrfToken,key,estimate,revision,digest,observe.reason,true,observe.confirmationVersion])).rows[0].value;
+  await client.query('COMMIT');return value;
+ }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}};
+ const invalidBefore=(await f.ownerPool.query('SELECT count(*)::int n FROM canonical_native_equipment_utilization_observations')).rows[0].n;
+ for(const pins of [[null,pin.digest],[pin.revision,null],[null,null],[0,pin.digest],[pin.revision,'bad']])
+  await assert.rejects(()=>directObserve(pins[0],pins[1]),error=>['22023','22P02'].includes(error.code));
+ assert.equal((await f.ownerPool.query('SELECT count(*)::int n FROM canonical_native_equipment_utilization_observations')).rows[0].n,invalidBefore);
  const observationKey=crypto.randomUUID();let observed=await write('/estimates/'+estimate+'/native-equipment-utilization-outcomes',observe,observationKey);
  assert.equal(observed.status,201,JSON.stringify(observed.body));const first=observed.body.data.observation;
  assert.equal(first.plannedHours,'8.0000');assert.equal(first.recordedCheckoutHours,'4.0000');assert.equal(first.variancePercent,'-50.00');assert.equal(first.advisoryCode,'actual_below_plan');
@@ -95,6 +105,11 @@ assert.ok(!fs.existsSync(output));
  finally{await f.ownerPool.query('ALTER TABLE canonical_field_executions ENABLE TRIGGER USER');}
  learned=await request(f.app).get(root+'/estimates/'+estimate+'/native-equipment-utilization-outcomes').set(owner.session.headers);
  assert.equal(learned.body.data.current.fresh,false);assert.equal(learned.body.data.current.advisoryAvailable,false);assert.equal(learned.body.data.current.advisoryCode,null);
+ let delayed=await write('/estimates/'+estimate+'/native-equipment-utilization-outcomes',observe,observationKey);
+ assert.equal(delayed.status,200,JSON.stringify(delayed.body));assert.equal(delayed.body.data.replayed,true);
+ assert.equal(delayed.body.data.observation.fresh,false);assert.equal(delayed.body.data.observation.advisoryAvailable,false);
+ assert.equal(delayed.body.data.observation.advisoryCode,null);assert.equal(delayed.body.data.observation.advisoryMessage,null);
+ assert.equal((await write('/estimates/'+estimate+'/native-equipment-utilization-outcomes',{...observe,reason:'A changed delayed request must conflict.'},observationKey)).status,409);
  observed=await write('/estimates/'+estimate+'/native-equipment-utilization-outcomes',observe);assert.equal(observed.status,201,JSON.stringify(observed.body));
  assert.equal(observed.body.data.observation.revision,2);assert.equal(observed.body.data.observation.recordedCheckoutHours,'5.0000');
  ledger.cases.push('An owner correction makes the prior advice stale until a new immutable observation pins the corrected event chain.');
@@ -103,6 +118,10 @@ assert.ok(!fs.existsSync(output));
  const revoked=await write('/native-equipment-utilization-consent',revoke);assert.equal(revoked.status,201,JSON.stringify(revoked.body));
  learned=await request(f.app).get(root+'/estimates/'+estimate+'/native-equipment-utilization-outcomes').set(owner.session.headers);
  assert.equal(learned.body.data.activeConsent,false);assert.equal(learned.body.data.current,null);assert.deepEqual(learned.body.data.history,[]);
+ delayed=await write('/estimates/'+estimate+'/native-equipment-utilization-outcomes',observe,observationKey);
+ assert.equal(delayed.status,200,JSON.stringify(delayed.body));assert.equal(delayed.body.data.replayed,true);
+ assert.equal(delayed.body.data.observation.hiddenByConsent,true);assert.equal(delayed.body.data.observation.advisoryAvailable,false);
+ assert.equal(delayed.body.data.observation.advisoryCode,null);assert.equal(delayed.body.data.observation.advisoryMessage,null);
  const other=await request(f.app).get(root+'/estimates/'+estimate+'/native-equipment-utilization-outcomes').set(f.actors.otherOwner.session.headers);
  assert.equal(other.status,200);assert.equal(other.body.data.activeConsent,false);assert.equal(other.body.data.current,null);
  ledger.cases.push('Consent revocation hides outcomes, and another tenant receives no record-existence signal.');

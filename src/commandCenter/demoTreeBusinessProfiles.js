@@ -34,6 +34,19 @@ const SOURCE_NOTES = Object.freeze([
     reviewedOn: '2026-09-15',
     use: 'Broad national wage comparison; fictional loaded rates remain company inputs.',
   }),
+  Object.freeze({
+    id: 'husqvarna-550xp-mark-ii',
+    publisher: 'Husqvarna',
+    url: 'https://www.husqvarna.com/us/chainsaws/550xp-mark-ii/',
+    reviewedOn: '2026-09-15',
+    use: 'Representative professional chainsaw identity and manufacturer-published product capability.',
+  }),
+]);
+
+const COMMON_INVENTORY = Object.freeze([
+  machine('husqvarna_550xp', 'Husqvarna 550 XP Mark II chainsaw', 'cutting_tool', { hourlyOperatingCost: 7 }),
+  machine('ground_saw_kit', 'Ground saw and hand-tool kit', 'manual_tools', { hourlyOperatingCost: 4 }),
+  machine('rigging_ppe_kit', 'Ropes, rigging, climbing gear and PPE', 'rigging_tools', { hourlyOperatingCost: 6 }),
 ]);
 
 const OPERATIONS = Object.freeze({
@@ -190,6 +203,7 @@ function create(seed) {
     workforce: { ...base.crew, labor },
     vehicles: base.vehicles,
     equipment: base.equipment,
+    inventory: COMMON_INVENTORY,
     disposal: base.disposal,
     monthly,
     financingPolicy: {
@@ -211,6 +225,28 @@ function equipmentFor(profile, operation) {
 function perJobEquipmentCost(asset, plannedHours) {
   const paymentShare = asset.financed ? asset.monthlyPayment / asset.qualifyingJobsPerMonth : 0;
   return Number((paymentShare + asset.hourlyOperatingCost * plannedHours + asset.transportCostPerJob).toFixed(2));
+}
+
+function equipmentBundleFor(profile, operation) {
+  const primary = equipmentFor(profile, operation);
+  const rows = [primary];
+  if (['removal', 'pruning', 'hauling'].includes(operation)) {
+    const materialHandler = profile.equipment.find(item => item.role === 'material_handler');
+    if (materialHandler && materialHandler.key !== primary.key) rows.push(materialHandler);
+  }
+  if (['removal', 'pruning'].includes(operation)) {
+    const canopy = profile.equipment.find(item => item.role === 'canopy_access');
+    if (canopy && canopy.key !== primary.key) rows.push(canopy);
+  }
+  const inventory = Array.isArray(profile.inventory) ? profile.inventory : COMMON_INVENTORY;
+  if (operation !== 'visit') rows.push(...inventory.filter(item => item.role !== 'rigging_tools' || ['removal', 'pruning', 'storm'].includes(operation)));
+  return stableValue(rows.filter((item, index, all) => item && all.findIndex(value => value.key === item.key) === index));
+}
+
+function vehiclePlanFor(profile, operation) {
+  const vehicles = Array.isArray(profile.vehicles) ? profile.vehicles : [];
+  if (operation === 'visit' || operation === 'storm') return stableValue(vehicles.slice(0, 1));
+  return stableValue(vehicles);
 }
 
 function scenarioFactors(seed, operation) {
@@ -235,4 +271,4 @@ function scenarioFactors(seed, operation) {
   return stableValue(factors);
 }
 
-module.exports = { OPERATIONS, PROFILES, SOURCE_NOTES, create, equipmentFor, perJobEquipmentCost, scenarioFactors };
+module.exports = { OPERATIONS, PROFILES, SOURCE_NOTES, COMMON_INVENTORY, create, equipmentFor, equipmentBundleFor, vehiclePlanFor, perJobEquipmentCost, scenarioFactors };

@@ -47,7 +47,7 @@
   function renderCatalogue() {
     var host = document.getElementById('assetCatalogueContainer'); if (!host || !catalogue) return;
     host.className = 'equipment-catalogue'; host.replaceChildren();
-    var assets = catalogue.assets || []; var search = node('input'); search.type = 'search'; search.placeholder = 'Find equipment';
+    var assets = (catalogue.assets || []).filter(function(asset){return asset.category!=='tool';}); var search = node('input'); search.type = 'search'; search.placeholder = 'Find vehicles or equipment';
     var searchLabel = node('label', '', 'Search vehicles and equipment'); searchLabel.append(search);
     var state = node('select'); [['active', 'Active'], ['archived', 'Archived'], ['all', 'All assets']].forEach(function (value) { var option = node('option', '', value[1]); option.value = value[0]; state.append(option); });
     var stateLabel = node('label', '', 'Catalogue status'); stateLabel.append(state);
@@ -83,6 +83,16 @@
     }
     search.addEventListener('input', filter); state.addEventListener('change', filter); filter();
   }
+  function renderInventoryCatalogue() {
+    var host=document.getElementById('inventoryCatalogueContainer');if(!host||!catalogue)return;
+    host.className='equipment-catalogue';host.replaceChildren();
+    var tools=(catalogue.assets||[]).filter(function(asset){return asset.category==='tool';});
+    var search=node('input');search.type='search';search.placeholder='Find chainsaws, climbing gear, rigging or tool kits';
+    var label=node('label','','Search tool inventory');label.append(search);var toolbar=node('div','equipment-toolbar');toolbar.append(label);toolbar.hidden=!tools.length;
+    var status=node('p','equipment-state');status.setAttribute('role','status');var list=node('div');host.append(toolbar,status,list);
+    function filter(){var term=search.value.toLocaleLowerCase(),matches=tools.filter(function(asset){return asset.catalogueState==='active'&&(asset.name+' '+asset.manufacturer+' '+asset.model).toLocaleLowerCase().includes(term);});status.textContent=tools.length?matches.length+' matching of '+tools.length+' active inventory items.':'No industry tools have been added yet. Add exact powered tools or a practical grouped gear kit.';list.replaceChildren();matches.forEach(function(asset){var card=node('article','equipment-item');card.dataset.assetId=asset.id;card.append(node('h4','',asset.name),node('p','',asset.reviewState==='reviewed'?'Reviewed identity':'Needs review'),pairs(asset.privateConfiguration||{}),sourceSummary(asset.research));if(catalogue.canManage)card.append(button('Review identity and research',function(){open({entryPath:'business_profile',message:asset.name,target:{assetId:asset.id,version:asset.version,digest:asset.assetDigest}});}));list.append(card);});}
+    search.addEventListener('input',filter);filter();
+  }
   async function loadCatalogue() {
     var requestSerial = ++serial; var host = document.getElementById('assetCatalogueContainer'); var add = document.getElementById('addAssetButton');
     document.documentElement.dataset.assetCatalogueState = 'loading';
@@ -93,7 +103,8 @@
       catalogue = result;
       if (global.NorthStarAssetCatalogue && global.NorthStarAssetCatalogue.loadIdentityContext) await global.NorthStarAssetCatalogue.loadIdentityContext();
       if (requestSerial !== serial) return null;
-      renderCatalogue(); if (add) { add.textContent = 'Add equipment'; add.hidden = !result.canManage; }
+      renderCatalogue();renderInventoryCatalogue(); if (add) { add.textContent = 'Add equipment'; add.hidden = !result.canManage; }
+      var inventoryAdd=document.getElementById('addInventoryButton');if(inventoryAdd)inventoryAdd.hidden=!result.canManage;
       var authority = document.getElementById('assetCatalogueAuthority');
       if (authority) authority.textContent = 'Your company’s equipment. Published specifications do not confirm its actual condition, availability, attachments or use.';
       document.documentElement.dataset.assetCatalogueState = 'ready'; return result;
@@ -101,6 +112,7 @@
       if (requestSerial !== serial) return null;
       document.documentElement.dataset.assetCatalogueState = 'error';
       if (host) host.replaceChildren(node('p', 'equipment-state', 'Vehicles and equipment could not be loaded. Saved records are not shown as empty.'), button('Retry loading', loadCatalogue));
+      var inventoryHost=document.getElementById('inventoryCatalogueContainer');if(inventoryHost)inventoryHost.replaceChildren(node('p','equipment-state','Tool inventory could not be loaded. Saved records are not shown as empty.'),button('Retry loading',loadCatalogue));
       return null;
     }
   }
@@ -108,7 +120,7 @@
     if (activeDialog) { activeDialog.focus(); return; }
     options = options || {}; var opener = options.opener || document.activeElement; var draft = null; var pending = false; var lastRequest = null; var suggestions = {};
     var dialog = node('dialog', 'equipment-dialog'); activeDialog = dialog; dialog.setAttribute('aria-labelledby', 'equipmentDialogTitle');
-    var title = node('h2', '', 'Add equipment'); title.id = 'equipmentDialogTitle';
+    var title = node('h2', '', options.inventory ? 'Add inventory item' : 'Add equipment'); title.id = 'equipmentDialogTitle';
     var status = node('p', 'equipment-state'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     var content = node('div'); var actions = node('div', 'equipment-actions');
     dialog.append(title, status, content, actions); document.body.append(dialog);
@@ -136,7 +148,7 @@
       if (!draft) {
         status.textContent = 'Start with the identifiers you know and how you use it. Nothing enters your asset catalogue until you review and confirm.';
         var form = node('form'); var message = node('textarea'); message.maxLength = 1500; message.value = options.message || ''; message.required = true;
-        var label = node('label', '', options.entryPath === 'polaris' ? 'Tell Polaris what you want to add' : 'Equipment identifiers and intended use');
+        var label = node('label', '', options.entryPath === 'polaris' ? 'Tell Polaris what you want to add' : options.inventory ? 'Tool, exact model when relevant, and intended use' : 'Equipment identifiers and intended use');
         label.append(message); form.append(label);
         var submit = node('button', 'equipment-button equipment-button-primary', 'Prepare reviewed draft'); submit.type = 'submit'; form.append(submit);
         form.addEventListener('submit', function (event) {
@@ -174,4 +186,5 @@
     dialog.showModal(); render();
   }
   global.NorthStarEquipment = Object.freeze({ open: open, loadCatalogue: loadCatalogue, isEquipmentRequest: isEquipmentRequest });
+  if(global.document)global.document.addEventListener('click',function(event){if(event.target&&event.target.id==='addInventoryButton')open({entryPath:'business_profile',inventory:true,opener:event.target});});
 })(window);

@@ -20,6 +20,11 @@ function create(seed,createdAt){
   const identity={manufacturer:machine.key==='avant_loader'?'Avant':'Simulated Company Fleet',model:machine.name,modelYear:'2026',series:treeProfile.label,engine:'Recorded company configuration',configuration:machine.role,attachments:machine.attachments.join(', ')||'Recorded tree-service configuration'};
   assets['tree:'+machine.key]=makeAsset('tree-'+machine.key,machine.name,identity,'Simulated Company Fleet',machine);
  }
+ for(const tool of treeProfile.inventory||[]){
+  const husqvarna=tool.key==='husqvarna_550xp';
+  const identity={manufacturer:husqvarna?'Husqvarna':'Simulated Company Inventory',model:husqvarna?'550 XP Mark II':tool.name,modelYear:'2026',series:treeProfile.label,engine:husqvarna?'50.1 cc professional chainsaw':'Recorded company configuration',configuration:tool.role,attachments:tool.attachments.join(', ')||'Recorded tree-service tool group'};
+  assets['tree:'+tool.key]=makeAsset('tree-'+tool.key,tool.name,identity,husqvarna?'Husqvarna':'Simulated Company Inventory',tool);
+ }
  const document=buildCanonicalKnowledgeDocument({applicability:{},canonicalKey:'organization.operational-capabilities',content:{equipmentNote:'For this simulated business, confirm the required hole diameter and site access before choosing an auger. Ground conditions and underground services still need review.'},entryType:'generated_knowledge',label:'Simulated Equipment Planning Guidance',origin:'human',reviewRequirement:'high_risk',sensitivity:'restricted'});
  const knowledge={entry_id:id('entry'),canonical_key:'organization.operational-capabilities',entry_type:'generated_knowledge',version_id:id('version'),version_number:1,sensitivity:'restricted',review_requirement:'high_risk',canonical_document:document.canonicalDocument,canonical_digest:document.canonicalDigest,publication_id:id('publication'),publication_number:1,publication_digest:document.canonicalDigest};
  const proposal=require('./demoProposalRecipe').createAll(id,reviewedAt,assets,treeProfile);

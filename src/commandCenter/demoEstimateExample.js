@@ -27,16 +27,19 @@ function treeExample(graph,baseScope) {
   const crewSize=Math.max(1,treeProfile.workforce.people);
   const plannedCrewHours=round(Math.max(1,definition.workerHours/crewSize*scale));
   const equipment=treeProfiles.equipmentFor(treeProfile,operation);
+  const equipmentBundle=treeProfiles.equipmentBundleFor(treeProfile,operation);
+  const vehiclePlan=treeProfiles.vehiclePlanFor(treeProfile,operation);
   const averageHourlyCost=round((treeProfile.workforce.labor.crewLeadLoadedHourlyCost+
     (treeProfile.workforce.hasQualifiedClimber?treeProfile.workforce.labor.climberLoadedHourlyCost:treeProfile.workforce.labor.groundWorkerLoadedHourlyCost)+
     Math.max(0,crewSize-2)*treeProfile.workforce.labor.groundWorkerLoadedHourlyCost)/crewSize);
   const internalMaterial=round(definition.materialCost*scale);
-  const internalEquipment=treeProfiles.perJobEquipmentCost(equipment,plannedCrewHours);
+  const internalEquipment=round(equipmentBundle.reduce((total,item)=>total+treeProfiles.perJobEquipmentCost(item,plannedCrewHours),0));
   const basePrice=round(definition.basePrice*scale);
   const laborCharge=round(basePrice*.58),materialCharge=round(basePrice*.08),equipmentCharge=round(basePrice*.24);
   const mobilizationCharge=round(basePrice-laborCharge-materialCharge-equipmentCharge);
   const scope={...baseScope,laborHours:plannedCrewHours,equipmentReference:equipment.key,
     plannedCrewSize:crewSize,equipmentName:equipment.name,crewProfile:treeProfile.label,
+    equipmentPlan:equipmentBundle.map(item=>item.name),vehiclePlan,inventoryPlan:equipmentBundle.filter(item=>(treeProfile.inventory||[]).some(tool=>tool.key===item.key)).map(item=>item.name),
     estimateBasis:`${baseScope.treeCount||1} ${baseScope.sizeClass||''} ${operation} job; ${baseScope.accessClass||'access pending'}; ${baseScope.conditionClass||'condition pending'}; ${baseScope.disposalChoice||'disposal pending'}.`};
   const materialKey='tree:'+operation;
   const profile={version:treeProfile.version,company:{name:graph.businessProfile.company,currency:'USD'},
@@ -46,11 +49,11 @@ function treeExample(graph,baseScope) {
     services:[{id:'tree',name:graph.lead.serviceLabel,crewSize,equipmentReference:equipment.key,canonicalPricing:{requiredScope:['requestedWork','treeCount','sizeClass','accessClass','conditionClass','disposalChoice'],rangePercent:operation==='visit'?5:12,lineItems:[
       {code:'tree-labor',label:definition.laborTask,category:'labor',type:'fixed',amount:laborCharge},
       {code:'tree-materials',label:definition.material,category:'materials',type:'fixed',amount:materialCharge},
-      {code:'tree-equipment',label:equipment.name,category:'equipment',type:'fixed',amount:equipmentCharge},
+      {code:'tree-equipment',label:'Equipment, tools and jobsite machinery',category:'equipment',type:'fixed',amount:equipmentCharge},
       {code:'tree-mobilization',label:'Mobilization and disposal planning',category:'serviceCharge',type:'fixed',amount:mobilizationCharge},
     ]}}]};
   scope.material=operation;
-  return {scope,profile,travel:{distanceMiles:Number(baseScope.customerDistanceMiles)||0,minutes:null,source:'fictional_demo_distance'},details:{operation,scale,crewSize,plannedCrewHours,equipment:equipment.name,internalMaterial,internalEquipment,averageHourlyCost,profile:treeProfile.label}};
+  return {scope,profile,travel:{distanceMiles:Number(baseScope.customerDistanceMiles)||0,minutes:null,source:'fictional_demo_distance'},details:{operation,scale,crewSize,plannedCrewHours,equipment:equipmentBundle.map(item=>item.name),vehicles:vehiclePlan,internalMaterial,internalEquipment,averageHourlyCost,profile:treeProfile.label}};
 }
 
 // New/reset and simulated demo jobs share an explicitly fictional cost example.

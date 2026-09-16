@@ -54,8 +54,13 @@ function alignDemoTreeRecipe(sources,item){
   }
   const equipmentLine=recipe.equipmentCostLines?.[0];
   if(equipmentLine?.operating?.mode==='all_in'&&equipmentLine.operating.allIn?.status==='known'&&equipmentLine.plannedHours==='1'){
-   const calculation=require('./equipmentCostCalculation').calculateLine(equipmentLine,0),current=cents(calculation.total),goal=cents(target.equipment),prior=cents(equipmentLine.operating.allIn.rate.amount);
-   if(current!==null&&goal!==null&&prior!==null&&prior+goal-current>=0)equipmentLine.operating.allIn.rate.amount=decimal(prior+goal-current);
+   const calculations=(recipe.equipmentCostLines||[]).map((line,index)=>require('./equipmentCostCalculation').calculateLine(line,index));
+   const current=calculations.reduce((sum,value)=>sum+(cents(value.total)||0),0),goal=cents(target.equipment);
+   if(goal!==null){
+    let delta=goal-current;
+    if(delta<0)for(const line of recipe.equipmentCostLines){const rate=line.operating?.mode==='all_in'&&line.operating.allIn?.status==='known'?cents(line.operating.allIn.rate.amount):null;if(rate===null)continue;const reduction=Math.min(rate,-delta);line.operating.allIn.rate.amount=decimal(rate-reduction);delta+=reduction;if(delta===0)break;}
+    else if(delta>0){const prior=cents(equipmentLine.operating.allIn.rate.amount);if(prior!==null)equipmentLine.operating.allIn.rate.amount=decimal(prior+delta);}
+   }
   }
   if(travel?.inputs?.logistics?.[0]){travel.inputs.logistics[0].rate=target.travel;travel.inputs.logistics[0].source.note='Recorded fictional travel and mobilization cost for this job-specific tree scope.';}
   if(pricing?.inputs?.lines?.[0]){

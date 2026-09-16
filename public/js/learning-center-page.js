@@ -55,7 +55,7 @@
         currentRecords: [{ externalRecordId: 'tree-crew-042', sourceUpdatedAt: now }], recordTotal: 28, recordsTruncated: false, latestSourceUpdatedAt: now },
       sourceConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent), outcomeConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent),
       calibrationConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent),
-      operations: { sourceKey: 'crewclock.demo', adapter: { revision: 2, digest: digest, action: 'resume', adapterKind: 'provider_api', cadence: 'daily', accountReference: 'demo-account' },
+      operations: { sourceKey: 'crewclock.demo', adapter: { revision: 2, digest: digest, action: 'resume', adapterKind: 'provider_api', cadence: 'daily' },
         retention: { revision: 1, digest: digest, action: 'set', retentionDays: 365 }, deletion: null,
         checkpoints: [{ mode: 'historical_backfill', sequence: 3, cursorAfter: null, complete: true }],
         activeRecordTotal: 28, retentionEligibleTotal: 2, deletionComplete: false,
@@ -142,23 +142,38 @@
     var root = el('learningOperations'); clear(root);
     if (!state.operations) { root.appendChild(node('p', 'learning-empty', 'Loading source operations.')); return; }
     var grid = node('div', 'learning-operation-grid'), backfill = checkpoint('historical_backfill');
-    var csv = operationCard('CSV history', backfill && backfill.complete ? 'Historical backfill is complete. Current source corrections can continue through the guarded adapter route.' : 'Upload one reviewed NorthStar labor CSV with no more than 100 records.');
+    var csv = operationCard('CSV history', backfill && backfill.complete ? 'Historical backfill is complete. Current source corrections can continue through the guarded adapter route.' : 'Upload one reviewed NorthStar labor CSV page with no more than 100 records.');
     var file = node('input', 'learning-file'); file.type = 'file'; file.accept = '.csv,text/csv'; file.setAttribute('aria-label', 'Reviewed labor CSV'); file.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(file);
+    var pageLabel = node('label', '', 'Backfill progress'); pageLabel.htmlFor = 'learningCsvPageState'; var pageState = node('select'); pageState.id = 'learningCsvPageState';
+    [['complete', 'This file is the final page'], ['more', 'More CSV pages follow']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; pageState.appendChild(option); });
+    pageState.disabled = demo || Boolean(backfill && backfill.complete); csv.appendChild(pageLabel); csv.appendChild(pageState);
+    var cursorLabel = node('label', '', 'Checkpoint after this page'); cursorLabel.htmlFor = 'learningCsvCursorAfter'; var cursorAfter = node('input'); cursorAfter.id = 'learningCsvCursorAfter'; cursorAfter.type = 'text'; cursorAfter.maxLength = 200; cursorAfter.autocomplete = 'off'; cursorAfter.placeholder = 'Example: payroll-page-002'; cursorAfter.disabled = true; csv.appendChild(cursorLabel); csv.appendChild(cursorAfter);
+    pageState.addEventListener('change', function () { cursorAfter.disabled = demo || pageState.value !== 'more'; if (!cursorAfter.disabled) cursorAfter.focus(); });
     var importButton = button(demo ? 'Demo preview' : (backfill && backfill.complete ? 'Backfill complete' : 'Import CSV'), function () {
       if (!file.files || !file.files[0]) { status('Choose a CSV file before importing.', 'error'); return; }
+      var complete = pageState.value === 'complete', nextCursor = complete ? null : cursorAfter.value.trim();
+      if (!complete && !/^[!-~]{1,200}$/.test(nextCursor)) { status('Enter a 1 to 200 character checkpoint with no spaces for the next page.', 'error'); cursorAfter.focus(); return; }
       importButton.disabled = true; status('Reading and validating the reviewed CSV.');
       file.files[0].text().then(function (text) { return mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + '/csv-backfill', {
-        cursorBefore: backfill ? backfill.cursorAfter : null, cursorAfter: null, complete: true, csvText: text
+        cursorBefore: backfill && !backfill.complete ? backfill.cursorAfter : null, cursorAfter: nextCursor, complete: complete, csvText: text
       }); }).then(function () { return selectSource(state.sourceKey, true); }).catch(function (error) { importButton.disabled = false; fail(error); });
-    }, true); importButton.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(node('div', 'learning-actions')).appendChild(importButton); csv.appendChild(node('small', '', 'Required columns are validated before any record is staged.')); grid.appendChild(csv);
+    }, true); importButton.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(node('div', 'learning-actions')).appendChild(importButton); csv.appendChild(node('small', '', backfill && !backfill.complete ? 'Resume after checkpoint ' + backfill.cursorAfter + '. Required columns are validated before staging.' : 'Required columns are validated before any record is staged.')); grid.appendChild(csv);
 
-    var adapter = state.operations.adapter, adapterCard = operationCard('Continuous sync', adapter ? 'Current state: ' + contract.label(adapter.action) + '. No provider credential is stored in the Learning Center.' : 'Register the source lifecycle before an authorized adapter submits continuous updates.');
+    var adapter = state.operations.adapter, adapterCard = operationCard('Continuous sync', adapter ? 'Current state: ' + contract.label(adapter.action) + '. Adapter state contains no account reference or provider credential.' : 'Register the source lifecycle before an authorized adapter submits continuous updates.');
+    var canConfigure = !adapter || adapter.action === 'disconnect';
+    var kindLabel = node('label', '', 'Adapter type'); kindLabel.htmlFor = 'learningAdapterKind'; var kindSelect = node('select'); kindSelect.id = 'learningAdapterKind';
+    [['provider_api', 'Provider API'], ['csv', 'CSV handoff']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; kindSelect.appendChild(option); }); kindSelect.value = adapter ? adapter.adapterKind : 'provider_api'; kindSelect.disabled = demo || !canConfigure; adapterCard.appendChild(kindLabel); adapterCard.appendChild(kindSelect);
+    var cadenceLabel = node('label', '', 'Update cadence'); cadenceLabel.htmlFor = 'learningAdapterCadence'; var cadenceSelect = node('select'); cadenceSelect.id = 'learningAdapterCadence';
+    [['hourly', 'Hourly'], ['daily', 'Daily'], ['manual', 'Manual']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; cadenceSelect.appendChild(option); }); cadenceSelect.value = adapter ? adapter.cadence : 'daily'; cadenceSelect.disabled = demo || !canConfigure; adapterCard.appendChild(cadenceLabel); adapterCard.appendChild(cadenceSelect);
     var adapterAction = !adapter || adapter.action === 'disconnect' ? 'connect' : (adapter.action === 'pause' ? 'resume' : 'pause');
     var adapterButton = button(demo ? 'Demo preview' : contract.label(adapterAction) + ' sync', function () {
       var pair = operationPair(adapter); adapterButton.disabled = true;
-      saveOperation('/adapter', { action: adapterAction, adapterKind: adapter ? adapter.adapterKind : 'provider_api', cadence: adapter ? adapter.cadence : 'daily', accountReference: adapter ? (adapter.accountReference || null) : null,
+      saveOperation('/adapter', { action: adapterAction, adapterKind: canConfigure ? kindSelect.value : adapter.adapterKind, cadence: canConfigure ? cadenceSelect.value : adapter.cadence,
         expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, confirmed: true }, 'Saving continuous sync state.');
-    }); adapterButton.disabled = demo || !state.consents.source.active; adapterCard.appendChild(node('div', 'learning-actions')).appendChild(adapterButton); grid.appendChild(adapterCard);
+    }); adapterButton.disabled = demo || !state.consents.source.active;
+    var adapterActions = node('div', 'learning-actions'); adapterActions.appendChild(adapterButton);
+    if (adapter && adapter.action !== 'disconnect') { var disconnectButton = button('Disconnect sync', function () { var pair = operationPair(adapter); disconnectButton.disabled = true; saveOperation('/adapter', { action: 'disconnect', adapterKind: adapter.adapterKind, cadence: adapter.cadence, expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, confirmed: true }, 'Disconnecting continuous sync.'); }); disconnectButton.disabled = demo; adapterActions.appendChild(disconnectButton); }
+    adapterCard.appendChild(adapterActions); grid.appendChild(adapterCard);
 
     var retention = state.operations.retention, retentionCard = operationCard('Retention', integer(state.operations.retentionEligibleTotal) + ' current records are eligible under the saved policy.');
     var daysLabel = node('label', '', 'Keep source records for days'); daysLabel.htmlFor = 'learningRetentionDays'; var days = node('input'); days.id = 'learningRetentionDays'; days.type = 'number'; days.min = '30'; days.max = '3650'; days.step = '1'; days.value = retention && retention.action === 'set' ? retention.retentionDays : 365; days.disabled = demo; retentionCard.appendChild(daysLabel); retentionCard.appendChild(days);

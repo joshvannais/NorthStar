@@ -15,6 +15,12 @@ describe('Mission 25 Part 8 import operation contracts', () => {
     expect(value.mode).toBe('historical_backfill');
     expect(value.records).toHaveLength(1);
     expect(value.records[0].externalVersion).toBe(1);
+    const page = csv.normalizeCsvBackfill('crewclock.primary', { cursorBefore: null, cursorAfter: 'page-001',
+      complete: false, csvText: `${header}\n${line}`, expectedConsentRevision: 1, expectedConsentDigest: digest });
+    expect(page.complete).toBe(false); expect(page.cursorAfter).toBe('page-001');
+    const finalPage = csv.normalizeCsvBackfill('crewclock.primary', { cursorBefore: page.cursorAfter, cursorAfter: null,
+      complete: true, csvText: `${header}\n${line.replace('shift-1', 'shift-2')}`, expectedConsentRevision: 1, expectedConsentDigest: digest });
+    expect(finalPage.complete).toBe(true); expect(finalPage.cursorBefore).toBe('page-001');
     expect(() => csv.normalizeCsvBackfill('crewclock.primary', { cursorBefore: null, cursorAfter: null,
       complete: true, csvText: `wrong,header\n${line}`, expectedConsentRevision: 1, expectedConsentDigest: digest })).toThrow(/exact NorthStar labor header/);
     expect(() => csv.normalizeCsvBackfill('crewclock.primary', { cursorBefore: null, cursorAfter: null,
@@ -23,7 +29,9 @@ describe('Mission 25 Part 8 import operation contracts', () => {
 
   test('adapter, retention, deletion and cleanup mutations use closed exact bodies', () => {
     expect(operations.normalizeAdapter('crewclock.primary', { action: 'connect', adapterKind: 'provider_api', cadence: 'daily',
-      accountReference: null, expectedRevision: 0, expectedDigest: 'none', confirmed: true }).action).toBe('connect');
+      expectedRevision: 0, expectedDigest: 'none', confirmed: true }).action).toBe('connect');
+    expect(() => operations.normalizeAdapter('crewclock.primary', { action: 'connect', adapterKind: 'provider_api', cadence: 'daily',
+      accountReference: 'sk_live_super_secret_1234567890', expectedRevision: 0, expectedDigest: 'none', confirmed: true })).toThrow(/invalid/);
     expect(operations.normalizeRetention('crewclock.primary', { action: 'set', retentionDays: 365,
       expectedRevision: 0, expectedDigest: 'none', confirmed: true }).retentionDays).toBe(365);
     expect(operations.normalizeDeletion('crewclock.primary', { action: 'request', expectedRevision: 0,

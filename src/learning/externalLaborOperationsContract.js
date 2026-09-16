@@ -23,11 +23,10 @@ function pair(body) {
 }
 
 function normalizeAdapter(sourceKey, body) {
-  const keys = ['action', 'adapterKind', 'cadence', 'accountReference', 'expectedRevision', 'expectedDigest', 'confirmed'];
+  const keys = ['action', 'adapterKind', 'cadence', 'expectedRevision', 'expectedDigest', 'confirmed'];
   if (!exact(body, keys) || !['connect', 'pause', 'resume', 'disconnect'].includes(body.action) || !pair(body) ||
       body.confirmed !== true || !['csv', 'provider_api'].includes(body.adapterKind) ||
-      !['manual', 'hourly', 'daily'].includes(body.cadence) ||
-      !(body.accountReference === null || (typeof body.accountReference === 'string' && /^[\x21-\x7e]{1,128}$/.test(body.accountReference)))) {
+      !['manual', 'hourly', 'daily'].includes(body.cadence)) {
     fail('Adapter lifecycle details are invalid.');
   }
   return Object.freeze({ sourceKey: importContract.normalizeSourceKey(sourceKey), ...body });

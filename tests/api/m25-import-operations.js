@@ -23,6 +23,9 @@ assert.ok(!fs.existsSync(output));
     let response = await write('/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none',
       reason: 'Use reviewed company labor history.', confirmed: true, confirmationVersion: 'm25-external-labor-import-consent-v1' });
     assert.equal(response.status, 201, JSON.stringify(response.body)); const consent = response.body.data.consent;
+    const initialCancel = await write('/deletion', { action: 'cancel', expectedRevision: 0, expectedDigest: 'none', confirmed: true });
+    assert.equal(initialCancel.status, 400, JSON.stringify(initialCancel.body));
+    assert.equal((await fixture.ownerPool.query('SELECT count(*)::integer total FROM canonical_external_labor_deletion_revisions WHERE organization_id=$1 AND source_key=$2', [fixture.org, sourceKey])).rows[0].total, 0);
 
     const csv = [
       'externalRecordId,externalVersion,state,workerReference,jobReference,category,observedStart,observedEnd,sourceUpdatedAt',
@@ -37,12 +40,20 @@ assert.ok(!fs.existsSync(output));
     response = await request(fixture.app).get(root + '/operations').set(owner.session.headers);
     assert.equal(response.status, 200); assert.equal(response.body.data.activeRecordTotal, 1);
     const adapterKey = crypto.randomUUID();
-    const adapterBody = { action: 'connect', adapterKind: 'provider_api', cadence: 'hourly', accountReference: 'tenant-account-42', expectedRevision: 0, expectedDigest: 'none', confirmed: true };
+    const credentialShaped = await write('/adapter', { action: 'connect', adapterKind: 'provider_api', cadence: 'hourly',
+      accountReference: 'sk_live_super_secret_1234567890', expectedRevision: 0, expectedDigest: 'none', confirmed: true });
+    assert.equal(credentialShaped.status, 400); assert.doesNotMatch(JSON.stringify(credentialShaped.body), /sk_live/);
+    const adapterBody = { action: 'connect', adapterKind: 'provider_api', cadence: 'hourly', expectedRevision: 0, expectedDigest: 'none', confirmed: true };
     response = await write('/adapter', adapterBody, adapterKey); assert.equal(response.status, 201, JSON.stringify(response.body));
     const adapter = response.body.data.adapter; assert.equal(adapter.action, 'connect');
     const replay = await write('/adapter', adapterBody, adapterKey); assert.equal(replay.status, 200); assert.equal(replay.headers['idempotency-replayed'], 'true');
     response = await write('/adapter', { ...adapterBody, action: 'pause', expectedRevision: adapter.revision, expectedDigest: adapter.digest });
-    assert.equal(response.status, 201); assert.equal(response.body.data.adapter.action, 'pause');
+    assert.equal(response.status, 201); assert.equal(response.body.data.adapter.action, 'pause'); const pausedAdapter = response.body.data.adapter;
+    response = await write('/adapter', { ...adapterBody, action: 'resume', expectedRevision: pausedAdapter.revision, expectedDigest: pausedAdapter.digest });
+    assert.equal(response.status, 201); assert.equal(response.body.data.adapter.action, 'resume'); const resumedAdapter = response.body.data.adapter;
+    response = await write('/adapter', { ...adapterBody, action: 'disconnect', expectedRevision: resumedAdapter.revision, expectedDigest: resumedAdapter.digest });
+    assert.equal(response.status, 201); assert.equal(response.body.data.adapter.action, 'disconnect');
+    assert.equal(Object.hasOwn(response.body.data.adapter, 'accountReference'), false);
     ledger.cases.push('Provider-neutral adapter lifecycle is transition checked, revision pinned and idempotent without storing credentials.');
 
     response = await write('/retention', { action: 'set', retentionDays: 30, expectedRevision: 0, expectedDigest: 'none', confirmed: true });
@@ -129,6 +140,84 @@ assert.ok(!fs.existsSync(output));
     response = await request(fixture.app).get(pagedRoot + '/operations').set(owner.session.headers);
     assert.equal(response.body.data.activeRecordTotal, 0); assert.equal(response.body.data.deletionComplete, true);
     ledger.cases.push('A 101-record deletion resumes from its exact checkpoint across two bounded cleanup batches and reaches zero active records.');
+
+    const policySourceKey = 'crewclock.policy-reset';
+    const policyRoot = `/api/v1/learning/external-labor-sources/${policySourceKey}`;
+    const policyWrite = (suffix, body, key = crypto.randomUUID()) => request(fixture.app).post(policyRoot + suffix)
+      .set(owner.session.headers).set('X-CSRF-Token', owner.csrfToken).set('Idempotency-Key', key).send(body);
+    response = await policyWrite('/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Use reviewed company labor history.', confirmed: true, confirmationVersion: 'm25-external-labor-import-consent-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); const policyConsent = response.body.data.consent;
+    const policyRecord = (externalRecordId, date) => ({ externalRecordId, externalVersion: 1, state: 'active',
+      workerReference: 'worker-policy', jobReference: `job-${externalRecordId}`, category: 'production',
+      observedStart: `${date}T13:00:00.000Z`, observedEnd: `${date}T14:00:00.000Z`, sourceUpdatedAt: `${date}T14:05:00.000Z` });
+    response = await policyWrite('/batches', { schemaVersion: 'm25-external-labor-time-v1', mode: 'continuous_update',
+      expectedConsentRevision: policyConsent.revision, expectedConsentDigest: policyConsent.digest, cursorBefore: null, cursorAfter: 'policy-1',
+      complete: false, records: [policyRecord('a-recent', '2026-07-15'), policyRecord('b-old', '2025-01-15'), policyRecord('c-old', '2025-01-16')],
+      reason: 'Stage policy reset evidence.', confirmed: true, confirmationVersion: 'm25-external-labor-import-batch-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await policyWrite('/retention', { action: 'set', retentionDays: 365, expectedRevision: 0, expectedDigest: 'none', confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); const firstPolicy = response.body.data.retention;
+    response = await policyWrite('/cleanup', { operation: 'retention', expectedRevision: firstPolicy.revision,
+      expectedDigest: firstPolicy.digest, cursorBefore: null, limit: 1, confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.complete, false);
+    assert.equal(response.body.data.run.cursorAfter, 'b-old');
+    response = await policyWrite('/retention', { action: 'set', retentionDays: 30, expectedRevision: firstPolicy.revision,
+      expectedDigest: firstPolicy.digest, confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); const secondPolicy = response.body.data.retention;
+    response = await request(fixture.app).get(policyRoot + '/operations').set(owner.session.headers);
+    assert.equal(response.status, 200); assert.equal(response.body.data.checkpoints.some(item => item.mode === 'retention_cleanup'), false);
+    response = await policyWrite('/cleanup', { operation: 'retention', expectedRevision: secondPolicy.revision,
+      expectedDigest: secondPolicy.digest, cursorBefore: null, limit: 1, confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.cursorAfter, 'a-recent');
+    const resetRun = (await fixture.ownerPool.query(`SELECT authority_revision,previous_run_id FROM canonical_external_labor_cleanup_runs
+      WHERE organization_id=$1 AND source_key=$2 AND operation='retention' ORDER BY sequence DESC LIMIT 1`, [fixture.org, policySourceKey])).rows[0];
+    assert.equal(Number(resetRun.authority_revision), secondPolicy.revision); assert.equal(resetRun.previous_run_id, null);
+    ledger.cases.push('Changing retention authority starts a new checkpoint chain at null, so newly eligible lower identities cannot be skipped.');
+
+    const deleteSourceKey = 'crewclock.deletion-reset';
+    const deleteRoot = `/api/v1/learning/external-labor-sources/${deleteSourceKey}`;
+    const deleteWrite = (suffix, body, key = crypto.randomUUID()) => request(fixture.app).post(deleteRoot + suffix)
+      .set(owner.session.headers).set('X-CSRF-Token', owner.csrfToken).set('Idempotency-Key', key).send(body);
+    response = await deleteWrite('/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Use reviewed company labor history.', confirmed: true, confirmationVersion: 'm25-external-labor-import-consent-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); let deleteConsent = response.body.data.consent;
+    const deletionRecord = externalRecordId => ({ externalRecordId, externalVersion: 1, state: 'active', workerReference: 'worker-delete',
+      jobReference: `job-${externalRecordId}`, category: 'production', observedStart: '2026-09-15T13:00:00.000Z',
+      observedEnd: '2026-09-15T14:00:00.000Z', sourceUpdatedAt: '2026-09-15T14:05:00.000Z' });
+    response = await deleteWrite('/batches', { schemaVersion: 'm25-external-labor-time-v1', mode: 'continuous_update',
+      expectedConsentRevision: deleteConsent.revision, expectedConsentDigest: deleteConsent.digest, cursorBefore: null, cursorAfter: 'delete-1',
+      complete: false, records: [deletionRecord('a-first'), deletionRecord('b-second'), deletionRecord('c-third')],
+      reason: 'Stage deletion reset evidence.', confirmed: true, confirmationVersion: 'm25-external-labor-import-batch-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await deleteWrite('/deletion', { action: 'request', expectedRevision: 0, expectedDigest: 'none', confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); const firstDeletion = response.body.data.deletion;
+    response = await deleteWrite('/cleanup', { operation: 'deletion', expectedRevision: firstDeletion.revision,
+      expectedDigest: firstDeletion.digest, cursorBefore: null, limit: 1, confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.cursorAfter, 'a-first');
+    response = await deleteWrite('/deletion', { action: 'cancel', expectedRevision: firstDeletion.revision, expectedDigest: firstDeletion.digest, confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); const cancelledDeletion = response.body.data.deletion;
+    response = await request(fixture.app).get(deleteRoot + '/consent').set(owner.session.headers); deleteConsent = response.body.data.current;
+    response = await deleteWrite('/consent', { action: 'grant', expectedRevision: deleteConsent.revision, expectedDigest: deleteConsent.digest,
+      reason: 'Resume reviewed company labor history.', confirmed: true, confirmationVersion: 'm25-external-labor-import-consent-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); deleteConsent = response.body.data.consent;
+    response = await deleteWrite('/batches', { schemaVersion: 'm25-external-labor-time-v1', mode: 'continuous_update',
+      expectedConsentRevision: deleteConsent.revision, expectedConsentDigest: deleteConsent.digest, cursorBefore: 'delete-1', cursorAfter: 'delete-2',
+      complete: false, records: [deletionRecord('0-new')], reason: 'Stage a later lower-sorted record.', confirmed: true,
+      confirmationVersion: 'm25-external-labor-import-batch-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await deleteWrite('/deletion', { action: 'request', expectedRevision: cancelledDeletion.revision,
+      expectedDigest: cancelledDeletion.digest, confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); const secondDeletion = response.body.data.deletion;
+    response = await request(fixture.app).get(deleteRoot + '/operations').set(owner.session.headers);
+    assert.equal(response.body.data.checkpoints.some(item => item.mode === 'deletion_cleanup'), false);
+    response = await deleteWrite('/cleanup', { operation: 'deletion', expectedRevision: secondDeletion.revision,
+      expectedDigest: secondDeletion.digest, cursorBefore: null, limit: 1, confirmed: true });
+    assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.cursorAfter, '0-new');
+    const resetDeletionRun = (await fixture.ownerPool.query(`SELECT authority_revision,previous_run_id FROM canonical_external_labor_cleanup_runs
+      WHERE organization_id=$1 AND source_key=$2 AND operation='deletion' ORDER BY sequence DESC LIMIT 1`, [fixture.org, deleteSourceKey])).rows[0];
+    assert.equal(Number(resetDeletionRun.authority_revision), secondDeletion.revision); assert.equal(resetDeletionRun.previous_run_id, null);
+    ledger.cases.push('A cancelled and re-requested deletion starts at null under its new authority and includes later lower-sorted records.');
 
     const member = await request(fixture.app).get(root + '/operations').set(fixture.actors.member.session.headers);
     assert.equal(member.status, 403);

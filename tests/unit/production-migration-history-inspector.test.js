@@ -76,8 +76,8 @@ describe('bounded read-only production migration-history inspector', () => {
     });
     expect(sources.find(source => source.filename === '089_canonical_external_labor_import_operations.sql')).toEqual({
       filename: '089_canonical_external_labor_import_operations.sql',
-      bytes: 33312,
-      checksum: '5883683beef38a55b91d092a1e0beef4ed453d49a82330bb85de0adda221bc17',
+      bytes: 33352,
+      checksum: 'ed29cc1781861bc07787399fbe9c7c93a1ed71f4bbc640fc600e69ed11364ae2',
     });
   });
 

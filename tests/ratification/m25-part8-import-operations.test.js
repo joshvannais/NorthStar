@@ -31,7 +31,7 @@ describe('Mission 25 Part 8 usable import operations', () => {
     const page = read('public/js/learning-center-page.js');
     const routes = read('src/routes/learning.js');
     for (const fragment of ['Add a company source', 'Import and source operations', 'learningOperations']) expect(html).toContain(fragment);
-    for (const fragment of ['CSV history', 'Continuous sync', 'Save retention', 'Request deletion', 'Process next 100']) expect(page).toContain(fragment);
+    for (const fragment of ['CSV history', 'More CSV pages follow', 'Checkpoint after this page', 'Continuous sync', 'Disconnect sync', 'Save retention', 'Request deletion', 'Process next 100']) expect(page).toContain(fragment);
     for (const fragment of ['/csv-backfill', '/operations', '/adapter', '/retention', '/deletion', '/cleanup']) expect(routes).toContain(fragment);
     expect(page).not.toMatch(/human approval reason/i);
   });
@@ -40,6 +40,6 @@ describe('Mission 25 Part 8 usable import operations', () => {
     const roadmap = read('docs/roadmap/MISSION_25_OUTCOME_LEARNING.md');
     const operations = read('docs/operations/MISSION_25_IMPORT_OPERATIONS.md');
     expect(roadmap).toContain('## Eighth bounded package — usable import operations');
-    for (const fragment of ['provider-neutral lifecycle', 'No provider credential', 'bounded cleanup', 'does not apply']) expect(operations).toContain(fragment);
+    for (const fragment of ['provider-neutral lifecycle', 'no field for a provider account identifier', 'bounded cleanup', 'does not apply']) expect(operations).toContain(fragment);
   });
 });

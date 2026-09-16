@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
@@ -79,18 +80,29 @@ let fixture;
     await paidContext.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name, value]) => ({
       name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf',
     })));
+    let raceMode = false;
     await paidContext.route('**/*', async route => {
       const request = route.request();
       const url = new URL(request.url());
       if (url.origin !== origin) return route.abort();
       ledger.requests.push({ method: request.method(), path: url.pathname });
+      if (raceMode && request.method() === 'GET' && url.pathname === '/api/v1/learning/external-labor-sources/slow.labor') {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return route.fulfill(jsonSource('slow.labor', 11));
+      }
+      if (raceMode && request.method() === 'GET' && url.pathname === '/api/v1/learning/external-travel-sources/fleet.browser') return route.fulfill(jsonSource('fleet.browser', 22));
       return route.continue();
     });
+    const seededLabor = await paidContext.request.post(`${origin}/api/v1/learning/external-labor-sources/slow.labor/consent`, {
+      headers: { 'X-CSRF-Token': fixture.actors.owner.csrfToken, 'Idempotency-Key': crypto.randomUUID() },
+      data: { action: 'grant', expectedRevision: 0, expectedDigest: 'none', reason: 'Seed the delayed labor source for the source-switch regression.', confirmed: true, confirmationVersion: 'm25-external-labor-import-consent-v1' },
+    });
+    assert.equal(seededLabor.status(), 201);
     const paidPage = await paidContext.newPage();
     paidPage.setDefaultTimeout(20000);
     paidPage.on('pageerror', error => ledger.pageErrors.push(error.message));
     await paidPage.goto(`${origin}/dashboard/learning-center`, { waitUntil: 'networkidle' });
-    await paidPage.locator('#learningStatus').filter({ hasText: 'No external source has been recorded' }).waitFor();
+    await paidPage.locator('#learningStatus').filter({ hasText: 'Learning Center is current' }).waitFor();
     await paidPage.locator('#learningSourceKind').selectOption('travel');
     await paidPage.locator('#learningSourceKey').fill('fleet.browser');
     const consentResponse = paidPage.waitForResponse(response => response.url().endsWith('/external-travel-sources/fleet.browser/consent') && response.request().method() === 'POST');
@@ -108,6 +120,17 @@ let fixture;
     assert.equal(await paidPage.locator('#learningMain').getAttribute('aria-busy'), 'false');
     assert.equal(await paidPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     ledger.cases.push('The paid owner route creates and reads a real tenant-private travel source through the guarded consent and detail APIs.');
+
+    raceMode = true;
+    await paidPage.reload({ waitUntil: 'domcontentloaded' });
+    await paidPage.locator('.learning-source-card').nth(1).waitFor();
+    await paidPage.getByRole('button', { name: /Fleet Browser, Travel source/i }).click();
+    await paidPage.locator('#learningStatus').filter({ hasText: 'Learning Center is current' }).waitFor();
+    await paidPage.waitForTimeout(650);
+    assert.equal(await paidPage.locator('#learningDetailTitle').innerText(), 'Fleet Browser · Travel');
+    assert.equal(await paidPage.locator('#evidenceMetrics .learning-metric strong').first().innerText(), '22');
+    assert.equal(await paidPage.locator('#learningDetail').isVisible(), true);
+    ledger.cases.push('A delayed labor response cannot overwrite the fast selected travel source or its evidence after a source switch.');
     await paidContext.close();
 
     assert.deepEqual(ledger.pageErrors, []);
@@ -124,3 +147,13 @@ let fixture;
     await fixture?.cleanup();
   }
 })();
+
+function jsonSource(sourceKey, count) {
+  return {
+    status: 200,
+    contentType: 'application/json; charset=utf-8',
+    body: JSON.stringify({ success: true, data: { sourceKey, activeConsent: true, runs: [], runTotal: count,
+      runsTruncated: false, currentRecords: [], recordTotal: count, recordsTruncated: false,
+      latestSourceUpdatedAt: '2026-09-16T12:00:00.000Z' } }),
+  };
+}

@@ -51,6 +51,8 @@ describe('Mission 25 Part 9F travel Learning Center', () => {
     expect(page).toContain("node('caption', 'learning-visually-hidden'");
     expect(page).toContain("setAttribute('aria-busy', 'true')");
     expect(page).toContain("scrollRestoration = 'manual'");
+    expect(page).toContain('generation !== state.selectionGeneration');
+    expect(page).toContain('generation === state.selectionGeneration');
     expect(css).toContain('.learning-visually-hidden');
     expect(css).toContain('@media(max-width:560px)');
     expect(css).toContain('.learning-travel-calibration-grid');

@@ -5,7 +5,7 @@
   var session = global.NorthStarAccountSession;
   var demo = global.location.pathname.indexOf('/demo/') === 0;
   if (global.history && 'scrollRestoration' in global.history) global.history.scrollRestoration = 'manual';
-  var state = { center: null, sourceKind: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, operations: null };
+  var state = { center: null, sourceKind: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, operations: null, selectionGeneration: 0, calibrationGeneration: 0 };
   var el = function (id) { return document.getElementById(id); };
 
   function node(tag, className, text) {
@@ -320,35 +320,51 @@
 
   function loadCalibration(serviceKey) {
     if (demo) { state.calibration = demoModel(state.sourceKind).calibration; state.calibration.serviceKey = serviceKey; renderCalibration(); renderSummary(); return Promise.resolve(); }
+    var selectionGeneration = state.selectionGeneration, calibrationGeneration = ++state.calibrationGeneration;
+    var base = sourceBase(state.sourceKind, state.sourceKey), travel = isTravel();
     state.calibration = null; renderCalibration();
-    return api(sourceBase(state.sourceKind, state.sourceKey) + (isTravel() ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/') + encodeURIComponent(serviceKey))
-      .then(function (value) { state.calibration = contract.calibration(value); renderCalibration(); renderSummary(); }).catch(fail);
+    return api(base + (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/') + encodeURIComponent(serviceKey))
+      .then(function (value) {
+        if (selectionGeneration !== state.selectionGeneration || calibrationGeneration !== state.calibrationGeneration) return;
+        state.calibration = contract.calibration(value); renderCalibration(); renderSummary();
+      }).catch(function (error) {
+        if (selectionGeneration === state.selectionGeneration && calibrationGeneration === state.calibrationGeneration) fail(error);
+      });
   }
   function selectSource(sourceKind, sourceKey, refresh) {
-    state.sourceKind = sourceKind; state.sourceKey = sourceKey; renderSources(); status('Loading ' + contract.label(sourceKey) + '.'); el('learningMain').setAttribute('aria-busy', 'true');
+    var generation = ++state.selectionGeneration, travel = sourceKind === 'travel'; ++state.calibrationGeneration;
+    state.sourceKind = sourceKind; state.sourceKey = sourceKey; state.detail = null; state.matches = null; state.calibration = null; state.operations = null;
+    renderSources(); el('learningDetail').hidden = true; status('Loading ' + contract.label(sourceKey) + '.'); el('learningMain').setAttribute('aria-busy', 'true');
     if (demo) {
       var model = demoModel(sourceKind); state.detail = model.source; state.consents = { source: model.sourceConsent, outcome: model.outcomeConsent, calibration: model.calibrationConsent };
-      state.matches = model.matches; state.calibration = model.calibration; state.operations = model.operations; finishDetail(); return Promise.resolve();
+      state.matches = model.matches; state.calibration = model.calibration; state.operations = model.operations; finishDetail(generation); return Promise.resolve();
     }
     var base = sourceBase(sourceKind, sourceKey);
-    var outcomeConsentPath = isTravel() ? '/imported-travel-variance-consent' : '/imported-labor-duration-consent';
-    var calibrationConsentPath = isTravel() ? '/imported-travel-calibration-consent' : '/imported-labor-calibration-consent';
+    var outcomeConsentPath = travel ? '/imported-travel-variance-consent' : '/imported-labor-duration-consent';
+    var calibrationConsentPath = travel ? '/imported-travel-calibration-consent' : '/imported-labor-calibration-consent';
     return Promise.all([api(base), api(base + '/consent'), api(base + '/matches'), api(base + outcomeConsentPath), api(base + calibrationConsentPath), api(base + '/operations')])
       .then(function (values) {
+        if (generation !== state.selectionGeneration) return null;
         state.detail = contract.source(values[0]); state.consents = { source: contract.consent(values[1]), outcome: contract.consent(values[3]), calibration: contract.consent(values[4]) };
         state.matches = contract.matches(values[2]); state.operations = contract.operations(values[5]); var source = selectedSource();
-        if (source && source.serviceKeys.length) return api(base + (isTravel() ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/') + encodeURIComponent(source.serviceKeys[0])).then(function (value) { state.calibration = contract.calibration(value); });
+        if (source && source.serviceKeys.length) return api(base + (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/') + encodeURIComponent(source.serviceKeys[0])).then(function (value) {
+          if (generation === state.selectionGeneration) state.calibration = contract.calibration(value);
+        });
         state.calibration = null;
-      }).then(finishDetail).catch(fail);
+        return null;
+      }).then(function () { if (generation === state.selectionGeneration) finishDetail(generation); }).catch(function (error) {
+        if (generation === state.selectionGeneration) fail(error);
+      });
   }
-  function finishDetail() {
+  function finishDetail(generation) {
+    if (generation !== state.selectionGeneration || !state.detail || !state.matches || !state.operations) return;
     el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey) + ' · ' + contract.label(state.sourceKind);
     setPill(el('learningDetailState'), state.detail.activeConsent, !state.detail.activeConsent); renderConsentCards(); renderOperations(); renderEvidence(); renderMatches(); renderCalibration(); renderSummary();
     status(demo ? 'Showing isolated demo records. Controls are read-only.' : 'Learning Center is current.', 'success'); el('learningMain').setAttribute('aria-busy', 'false');
   }
   function load(preferredKind, preferredKey) {
     if (typeof preferredKind !== 'string' || typeof preferredKey !== 'string') { preferredKind = null; preferredKey = null; }
-    var entryLoad = state.center === null;
+    var entryLoad = state.center === null; ++state.selectionGeneration; ++state.calibrationGeneration;
     if (entryLoad) global.scrollTo(0, 0);
     status('Loading your tenant-private learning controls.'); el('learningRefresh').disabled = true; el('learningMain').setAttribute('aria-busy', 'true');
     var promise = demo ? Promise.resolve(demoModel('labor').center) : api('/center');

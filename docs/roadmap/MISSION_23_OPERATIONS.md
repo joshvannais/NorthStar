@@ -415,7 +415,8 @@ are complete.
 | Mission 29 | Enterprise governance, advanced custom roles, SSO, MFA policy, delegations, and organizational controls. |
 | Mission 30 | Integrated operating-system composition across accepted authorities. |
 | Mission 31 | Isolated simulation that cannot mutate paid production authority. |
-| Mission 32 | Manual Scenario Calculator and conversion of its non-binding drafts through explicit reviewed actions. |
+| Mission 32 | On-the-Fly Calculator and conversion of its non-binding drafts through explicit reviewed actions. |
+| Mission 33 | Private NorthStar platform administration and company intelligence for the founder and authorized platform staff. |
 
 No Mission 23 row may become a second authority for a field that an earlier
 mission already owns. Downstream consumers receive exact immutable references or
@@ -729,6 +730,9 @@ scope is re-established.
 - Mission 31 simulations are isolated and cannot call paid mutation routes.
 - Mission 32 calculations remain non-binding drafts and convert only through an
   explicit reviewed action.
+- Mission 33 consumes trustworthy canonical platform events and financial,
+  usage, reliability and support facts; it does not become a hidden tenant-data
+  backdoor or replace a customer company's owner/admin workspace.
 
 ## Serialized delivery
 

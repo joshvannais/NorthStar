@@ -4,7 +4,7 @@
   var contract = global.NorthStarLearningCenterContract;
   var session = global.NorthStarAccountSession;
   var demo = global.location.pathname.indexOf('/demo/') === 0;
-  var state = { center: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null };
+  var state = { center: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, operations: null };
   var el = function (id) { return document.getElementById(id); };
 
   function node(tag, className, text) {
@@ -55,6 +55,11 @@
         currentRecords: [{ externalRecordId: 'tree-crew-042', sourceUpdatedAt: now }], recordTotal: 28, recordsTruncated: false, latestSourceUpdatedAt: now },
       sourceConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent), outcomeConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent),
       calibrationConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent),
+      operations: { sourceKey: 'crewclock.demo', adapter: { revision: 2, digest: digest, action: 'resume', adapterKind: 'provider_api', cadence: 'daily' },
+        retention: { revision: 1, digest: digest, action: 'set', retentionDays: 365 }, deletion: null,
+        checkpoints: [{ mode: 'historical_backfill', sequence: 3, cursorAfter: null, complete: true }],
+        activeRecordTotal: 28, retentionEligibleTotal: 2, deletionComplete: false,
+        boundary: 'Demo cleanup is read-only. Paid cleanup appends minimized tombstones and invalidates dependent advice.' },
       matches: { sourceKey: 'crewclock.demo', activeConsent: true, referenceTotal: 3,
         references: [
           { referenceKind: 'worker', externalReference: 'crew-lead-7', sourceRecordCount: 12, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '11111111-1111-4111-8111-111111111111', targetDigest: digest, action: 'link', status: 'matched' } },
@@ -95,7 +100,7 @@
     var root = el('learningSources'); clear(root);
     el('sourcesDescription').textContent = state.center.sources.length ?
       'Select a company source to inspect its consent, evidence, reference matches and service-level calibrations.' :
-      'No external labor source has been recorded yet. Import setup will be available in the next Learning Center package.';
+      'No external labor source has been recorded yet. Add the first source, then import its reviewed CSV history.';
     state.center.sources.forEach(function (source) {
       var card = node('button', 'learning-source-card'); card.type = 'button';
       card.setAttribute('aria-pressed', String(source.sourceKey === state.sourceKey));
@@ -122,6 +127,67 @@
       '/external-labor-sources/' + key + '/imported-labor-duration-consent', 'm25-imported-labor-duration-consent-v1'));
     root.appendChild(consentCard('Calibration proposals', 'Controls service-level summaries built from current reviewed comparisons.', state.consents.calibration,
       '/external-labor-sources/' + key + '/imported-labor-calibration-consent', 'm25-imported-labor-calibration-consent-v1'));
+  }
+  function operationPair(value) { return value ? { expectedRevision: value.revision, expectedDigest: value.digest } : { expectedRevision: 0, expectedDigest: 'none' }; }
+  function operationCard(title, description) { var card = node('article', 'learning-operation-card'); card.appendChild(node('h4', '', title)); card.appendChild(node('p', '', description)); return card; }
+  function checkpoint(mode) { return (state.operations.checkpoints || []).filter(function (item) { return item.mode === mode; })[0] || null; }
+  function saveOperation(path, body, message) {
+    status(message); return mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + path, body)
+      .then(function () { return selectSource(state.sourceKey, true); }).catch(function (error) {
+        fail(error);
+        renderOperations();
+      });
+  }
+  function renderOperations() {
+    var root = el('learningOperations'); clear(root);
+    if (!state.operations) { root.appendChild(node('p', 'learning-empty', 'Loading source operations.')); return; }
+    var grid = node('div', 'learning-operation-grid'), backfill = checkpoint('historical_backfill');
+    var csv = operationCard('CSV history', backfill && backfill.complete ? 'Historical backfill is complete. Current source corrections can continue through the guarded adapter route.' : 'Upload one reviewed NorthStar labor CSV page with no more than 100 records.');
+    var file = node('input', 'learning-file'); file.type = 'file'; file.accept = '.csv,text/csv'; file.setAttribute('aria-label', 'Reviewed labor CSV'); file.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(file);
+    var pageLabel = node('label', '', 'Backfill progress'); pageLabel.htmlFor = 'learningCsvPageState'; var pageState = node('select'); pageState.id = 'learningCsvPageState';
+    [['complete', 'This file is the final page'], ['more', 'More CSV pages follow']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; pageState.appendChild(option); });
+    pageState.disabled = demo || Boolean(backfill && backfill.complete); csv.appendChild(pageLabel); csv.appendChild(pageState);
+    var cursorLabel = node('label', '', 'Checkpoint after this page'); cursorLabel.htmlFor = 'learningCsvCursorAfter'; var cursorAfter = node('input'); cursorAfter.id = 'learningCsvCursorAfter'; cursorAfter.type = 'text'; cursorAfter.maxLength = 200; cursorAfter.autocomplete = 'off'; cursorAfter.placeholder = 'Example: payroll-page-002'; cursorAfter.disabled = true; csv.appendChild(cursorLabel); csv.appendChild(cursorAfter);
+    pageState.addEventListener('change', function () { cursorAfter.disabled = demo || pageState.value !== 'more'; if (!cursorAfter.disabled) cursorAfter.focus(); });
+    var importButton = button(demo ? 'Demo preview' : (backfill && backfill.complete ? 'Backfill complete' : 'Import CSV'), function () {
+      if (!file.files || !file.files[0]) { status('Choose a CSV file before importing.', 'error'); return; }
+      var complete = pageState.value === 'complete', nextCursor = complete ? null : cursorAfter.value.trim();
+      if (!complete && !/^[!-~]{1,200}$/.test(nextCursor)) { status('Enter a 1 to 200 character checkpoint with no spaces for the next page.', 'error'); cursorAfter.focus(); return; }
+      importButton.disabled = true; status('Reading and validating the reviewed CSV.');
+      file.files[0].text().then(function (text) { return mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + '/csv-backfill', {
+        cursorBefore: backfill && !backfill.complete ? backfill.cursorAfter : null, cursorAfter: nextCursor, complete: complete, csvText: text
+      }); }).then(function () { return selectSource(state.sourceKey, true); }).catch(function (error) { importButton.disabled = false; fail(error); });
+    }, true); importButton.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(node('div', 'learning-actions')).appendChild(importButton); csv.appendChild(node('small', '', backfill && !backfill.complete ? 'Resume after checkpoint ' + backfill.cursorAfter + '. Required columns are validated before staging.' : 'Required columns are validated before any record is staged.')); grid.appendChild(csv);
+
+    var adapter = state.operations.adapter, adapterCard = operationCard('Continuous sync', adapter ? 'Current state: ' + contract.label(adapter.action) + '. Adapter state contains no account reference or provider credential.' : 'Register the source lifecycle before an authorized adapter submits continuous updates.');
+    var canConfigure = !adapter || adapter.action === 'disconnect';
+    var kindLabel = node('label', '', 'Adapter type'); kindLabel.htmlFor = 'learningAdapterKind'; var kindSelect = node('select'); kindSelect.id = 'learningAdapterKind';
+    [['provider_api', 'Provider API'], ['csv', 'CSV handoff']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; kindSelect.appendChild(option); }); kindSelect.value = adapter ? adapter.adapterKind : 'provider_api'; kindSelect.disabled = demo || !canConfigure; adapterCard.appendChild(kindLabel); adapterCard.appendChild(kindSelect);
+    var cadenceLabel = node('label', '', 'Update cadence'); cadenceLabel.htmlFor = 'learningAdapterCadence'; var cadenceSelect = node('select'); cadenceSelect.id = 'learningAdapterCadence';
+    [['hourly', 'Hourly'], ['daily', 'Daily'], ['manual', 'Manual']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; cadenceSelect.appendChild(option); }); cadenceSelect.value = adapter ? adapter.cadence : 'daily'; cadenceSelect.disabled = demo || !canConfigure; adapterCard.appendChild(cadenceLabel); adapterCard.appendChild(cadenceSelect);
+    var adapterAction = !adapter || adapter.action === 'disconnect' ? 'connect' : (adapter.action === 'pause' ? 'resume' : 'pause');
+    var adapterButton = button(demo ? 'Demo preview' : contract.label(adapterAction) + ' sync', function () {
+      var pair = operationPair(adapter); adapterButton.disabled = true;
+      saveOperation('/adapter', { action: adapterAction, adapterKind: canConfigure ? kindSelect.value : adapter.adapterKind, cadence: canConfigure ? cadenceSelect.value : adapter.cadence,
+        expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, confirmed: true }, 'Saving continuous sync state.');
+    }); adapterButton.disabled = demo || !state.consents.source.active;
+    var adapterActions = node('div', 'learning-actions'); adapterActions.appendChild(adapterButton);
+    if (adapter && adapter.action !== 'disconnect') { var disconnectButton = button('Disconnect sync', function () { var pair = operationPair(adapter); disconnectButton.disabled = true; saveOperation('/adapter', { action: 'disconnect', adapterKind: adapter.adapterKind, cadence: adapter.cadence, expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, confirmed: true }, 'Disconnecting continuous sync.'); }); disconnectButton.disabled = demo; adapterActions.appendChild(disconnectButton); }
+    adapterCard.appendChild(adapterActions); grid.appendChild(adapterCard);
+
+    var retention = state.operations.retention, retentionCard = operationCard('Retention', integer(state.operations.retentionEligibleTotal) + ' current records are eligible under the saved policy.');
+    var daysLabel = node('label', '', 'Keep source records for days'); daysLabel.htmlFor = 'learningRetentionDays'; var days = node('input'); days.id = 'learningRetentionDays'; days.type = 'number'; days.min = '30'; days.max = '3650'; days.step = '1'; days.value = retention && retention.action === 'set' ? retention.retentionDays : 365; days.disabled = demo; retentionCard.appendChild(daysLabel); retentionCard.appendChild(days);
+    var saveRetention = button(demo ? 'Demo preview' : 'Save retention', function () { var pair = operationPair(retention); saveRetention.disabled = true; saveOperation('/retention', { action: 'set', retentionDays: Number(days.value), expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, confirmed: true }, 'Saving the retention policy.'); }); saveRetention.disabled = demo;
+    var retentionCheckpoint = checkpoint('retention_cleanup');
+    var runRetention = button('Process eligible records', function () { var pair = operationPair(retention); runRetention.disabled = true; saveOperation('/cleanup', { operation: 'retention', expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, cursorBefore: retentionCheckpoint && !retentionCheckpoint.complete ? retentionCheckpoint.cursorAfter : null, limit: 100, confirmed: true }, 'Processing the next retention batch.'); }); runRetention.disabled = demo || !retention || retention.action !== 'set' || state.operations.retentionEligibleTotal < 1;
+    var retentionActions = node('div', 'learning-actions'); retentionActions.appendChild(saveRetention); retentionActions.appendChild(runRetention); retentionCard.appendChild(retentionActions); grid.appendChild(retentionCard);
+
+    var deletion = state.operations.deletion, deletionRequested = deletion && deletion.action === 'request'; var deletionCard = operationCard('Delete imported source records', deletionRequested ? (state.operations.deletionComplete ? 'Deletion is complete. Audit receipts retain no work details.' : integer(state.operations.activeRecordTotal) + ' current records remain to be tombstoned.') : 'A deletion request immediately pauses source use and hides dependent learning advice.'); deletionCard.classList.add('learning-danger');
+    var deletionAction = button(demo ? 'Demo preview' : (deletionRequested ? 'Cancel request' : 'Request deletion'), function () { var pair = operationPair(deletion); deletionAction.disabled = true; saveOperation('/deletion', { action: deletionRequested ? 'cancel' : 'request', expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, confirmed: true }, deletionRequested ? 'Cancelling the source deletion request.' : 'Requesting source deletion and blocking new use.'); }); deletionAction.disabled = demo;
+    var deletionCheckpoint = checkpoint('deletion_cleanup');
+    var runDeletion = button('Process next 100', function () { var pair = operationPair(deletion); runDeletion.disabled = true; saveOperation('/cleanup', { operation: 'deletion', expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, cursorBefore: deletionCheckpoint && !deletionCheckpoint.complete ? deletionCheckpoint.cursorAfter : null, limit: 100, confirmed: true }, 'Processing the next deletion batch.'); }); runDeletion.disabled = demo || !deletionRequested || state.operations.deletionComplete;
+    var deletionActions = node('div', 'learning-actions'); deletionActions.appendChild(deletionAction); deletionActions.appendChild(runDeletion); deletionCard.appendChild(deletionActions); grid.appendChild(deletionCard);
+    root.appendChild(grid); root.appendChild(node('p', 'learning-empty', state.operations.boundary));
   }
   function metric(label, value) { var item = node('div', 'learning-metric'); item.appendChild(node('span', '', label)); item.appendChild(node('strong', '', value)); return item; }
   function renderEvidence() {
@@ -202,27 +268,27 @@
     state.sourceKey = sourceKey; renderSources(); status('Loading ' + contract.label(sourceKey) + '.');
     if (demo) {
       var model = demoModel(); state.detail = model.source; state.consents = { source: model.sourceConsent, outcome: model.outcomeConsent, calibration: model.calibrationConsent };
-      state.matches = model.matches; state.calibration = model.calibration; finishDetail(); return Promise.resolve();
+      state.matches = model.matches; state.calibration = model.calibration; state.operations = model.operations; finishDetail(); return Promise.resolve();
     }
     var key = encodeURIComponent(sourceKey), base = '/external-labor-sources/' + key;
-    return Promise.all([api(base), api(base + '/consent'), api(base + '/matches'), api(base + '/imported-labor-duration-consent'), api(base + '/imported-labor-calibration-consent')])
+    return Promise.all([api(base), api(base + '/consent'), api(base + '/matches'), api(base + '/imported-labor-duration-consent'), api(base + '/imported-labor-calibration-consent'), api(base + '/operations')])
       .then(function (values) {
         state.detail = contract.source(values[0]); state.consents = { source: contract.consent(values[1]), outcome: contract.consent(values[3]), calibration: contract.consent(values[4]) };
-        state.matches = contract.matches(values[2]); var source = state.center.sources.filter(function (item) { return item.sourceKey === sourceKey; })[0];
+        state.matches = contract.matches(values[2]); state.operations = contract.operations(values[5]); var source = state.center.sources.filter(function (item) { return item.sourceKey === sourceKey; })[0];
         if (source && source.serviceKeys.length) return api(base + '/imported-labor-calibrations/' + encodeURIComponent(source.serviceKeys[0])).then(function (value) { state.calibration = contract.calibration(value); });
         state.calibration = null;
       }).then(finishDetail).catch(fail);
   }
   function finishDetail() {
     el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey);
-    setPill(el('learningDetailState'), state.detail.activeConsent, !state.detail.activeConsent); renderConsentCards(); renderEvidence(); renderMatches(); renderCalibration(); renderSummary();
+    setPill(el('learningDetailState'), state.detail.activeConsent, !state.detail.activeConsent); renderConsentCards(); renderOperations(); renderEvidence(); renderMatches(); renderCalibration(); renderSummary();
     status(demo ? 'Showing isolated demo records. Controls are read-only.' : 'Learning Center is current.', 'success');
   }
   function load() {
     status('Loading your tenant-private learning controls.'); el('learningRefresh').disabled = true;
     var promise = demo ? Promise.resolve(demoModel().center) : api('/center');
     return promise.then(function (value) {
-      state.center = contract.center(value); state.sourceKey = null; state.detail = null; state.matches = null; state.calibration = null;
+      state.center = contract.center(value); state.sourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.operations = null;
       el('learningBoundary').textContent = state.center.learningBoundary; renderNative(); renderSources(); renderSummary();
       if (state.center.sources.length) return selectSource(state.center.sources[0].sourceKey);
       el('learningDetail').hidden = true; status('Learning Center is ready. No external source has been recorded.', 'success');
@@ -234,6 +300,15 @@
   }
 
   el('learningRefresh').addEventListener('click', load);
+  el('learningSourceForm').addEventListener('submit', function (event) {
+    event.preventDefault(); if (demo) return;
+    var input = el('learningSourceKey'), sourceKey = input.value.trim().toLowerCase();
+    if (!contract.KEY.test(sourceKey)) { status('Use 2 to 64 lowercase letters, numbers, dots, dashes or underscores.', 'error'); input.focus(); return; }
+    el('learningSourceAdd').disabled = true; status('Adding the company source.');
+    mutate('/external-labor-sources/' + encodeURIComponent(sourceKey) + '/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none', reason: 'Owner added this company source in the Learning Center.', confirmed: true, confirmationVersion: 'm25-external-labor-import-consent-v1' })
+      .then(function () { input.value = ''; return load(); }).then(function () { return selectSource(sourceKey, true); }).catch(fail).finally(function () { el('learningSourceAdd').disabled = false; });
+  });
+  if (demo) { el('learningSourceKey').disabled = true; el('learningSourceAdd').disabled = true; }
   if (demo) load(); else session.guard().then(function (account) {
     if (account && account.user) load();
   });

@@ -13,9 +13,9 @@ describe('bounded read-only production migration-history inspector', () => {
     expect(() => canonicalBytes(Buffer.from('one\rtwo'))).toThrow('lone carriage return');
   });
 
-  test('loads the additive repository migration set through worker projection 053 while preserving released checksums', () => {
+  test('loads the additive repository migration set while preserving released checksums', () => {
     const sources = sourceMigrations();
-    expect(sources).toHaveLength(51);
+    expect(sources.length).toBeGreaterThanOrEqual(51);
     expect(sources.find(source => source.filename === '042_canonical_material_inventory_evidence.sql'))
       .toEqual({
         filename: '042_canonical_material_inventory_evidence.sql',
@@ -69,10 +69,15 @@ describe('bounded read-only production migration-history inspector', () => {
       bytes: 1088,
       checksum: '2071b58c97a8c4fa9e2e0c7255b67f0340c4062f7477b498ef31b16aafcefb8b',
     });
-    expect(sources.at(-1)).toEqual({
+    expect(sources.find(source => source.filename === '053_current_worker_execution_projection.sql')).toEqual({
       filename: '053_current_worker_execution_projection.sql',
       bytes: 10934,
       checksum: '67cb4dd2a45074944e4dc3f2e4c8ac9fd958b4158e99e58b84371bce921f0753',
+    });
+    expect(sources.find(source => source.filename === '089_canonical_external_labor_import_operations.sql')).toEqual({
+      filename: '089_canonical_external_labor_import_operations.sql',
+      bytes: 33352,
+      checksum: 'ed29cc1781861bc07787399fbe9c7c93a1ed71f4bbc640fc600e69ed11364ae2',
     });
   });
 

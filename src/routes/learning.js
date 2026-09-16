@@ -9,6 +9,9 @@ const contract = require('../learning/laborOutcomeContract');
 const repository = require('../learning/laborOutcomeRepository');
 const importContract = require('../learning/externalLaborImportContract');
 const importRepository = require('../learning/externalLaborImportRepository');
+const csvContract = require('../learning/externalLaborCsvContract');
+const operationsContract = require('../learning/externalLaborOperationsContract');
+const operationsRepository = require('../learning/externalLaborOperationsRepository');
 const reconciliationContract = require('../learning/externalLaborReconciliationContract');
 const reconciliationRepository = require('../learning/externalLaborReconciliationRepository');
 const importedOutcomeContract = require('../learning/importedLaborOutcomeContract');
@@ -147,6 +150,28 @@ function createLearningRouter(options = {}) {
       } catch (error) { return replyError(req, res, error); }
     });
 
+  router.post('/external-labor-sources/:sourceKey/csv-backfill', headers, mutationAuth, importOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const consent = await importRepository.readConsent(poolProvider(), {
+          ...actor(req), sourceKey: importContract.normalizeSourceKey(req.params.sourceKey),
+        });
+        const current = consent && consent.current;
+        const normalized = csvContract.normalizeCsvBackfill(req.params.sourceKey, {
+          ...req.body,
+          expectedConsentRevision: current ? current.revision : 0,
+          expectedConsentDigest: current ? current.digest : 'none',
+        });
+        const { sourceKey, ...body } = normalized;
+        const data = await importRepository.importBatch(poolProvider(), {
+          ...actor(req), sourceKey, body, csrfToken: req.get('X-CSRF-Token'),
+          idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
   router.get('/external-labor-sources/:sourceKey', headers, tenantAuth, importOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {
       try {
@@ -155,6 +180,36 @@ function createLearningRouter(options = {}) {
         return res.json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
+
+  router.get('/external-labor-sources/:sourceKey/operations', headers, tenantAuth, importOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const sourceKey = importContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await operationsRepository.read(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  const operationMutation = (path, normalizer, method) => router.post(path, headers, mutationAuth,
+    importOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = normalizer(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await method(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  operationMutation('/external-labor-sources/:sourceKey/adapter', operationsContract.normalizeAdapter,
+    operationsRepository.mutateAdapter);
+  operationMutation('/external-labor-sources/:sourceKey/retention', operationsContract.normalizeRetention,
+    operationsRepository.mutateRetention);
+  operationMutation('/external-labor-sources/:sourceKey/deletion', operationsContract.normalizeDeletion,
+    operationsRepository.mutateDeletion);
+  operationMutation('/external-labor-sources/:sourceKey/cleanup', operationsContract.normalizeCleanup,
+    operationsRepository.executeCleanup);
 
   router.get('/external-labor-sources/:sourceKey/matches', headers, tenantAuth, importOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

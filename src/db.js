@@ -1251,6 +1251,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_metric_valid(jsonb) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_metrics_valid(jsonb) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_planned_operating_cost(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_target_coverage(jsonb,jsonb,jsonb,text) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_unavailable_metrics(text) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_learning_consent_projection(public.canonical_external_asset_outcome_consents) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_learning_basis(uuid,text,uuid,text) FROM %I', runtime_role);
@@ -1665,6 +1666,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        (to_regclass('public.canonical_external_asset_outcome_consents') IS NULL OR (
          NOT has_function_privilege($1,'public.canonical_imported_asset_learning_basis(uuid,text,uuid,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_imported_asset_planned_operating_cost(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_target_coverage(jsonb,jsonb,jsonb,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_imported_asset_outcome_projection(public.canonical_external_asset_outcome_observations)','EXECUTE')
        )) AS imported_asset_outcome_helpers_withheld,
        (to_regclass('public.canonical_material_movements') IS NULL OR (

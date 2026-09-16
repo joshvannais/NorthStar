@@ -18,12 +18,94 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 6 | Multi-job imported labor calibration with robust sample statistics | Released |
 | 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Released |
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
-| 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | In progress — Slices A and B released; Slice C candidate |
+| 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | In progress — Slices A-C released; Slice D planned |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Planned |
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Planned |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Planned |
 | 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | Planned |
+
+## Frozen slice structure for Parts 9-14
+
+Parts 1-8 were released as one bounded package each and do not have retroactive lettered slices. Parts 9-14 contain 48 slices. This count and ordering are frozen before Part 9 Slice D begins. A later change requires a documented authority or acceptance reason, the affected gates and an updated total before implementation proceeds.
+
+### Part 9 — six travel, mileage and fuel slices
+
+| Slice | Scope |
+| --- | --- |
+| A | Provider-neutral historical and continuous travel, mileage and fuel import authority. |
+| B | Explicit reviewed job and vehicle reconciliation. |
+| C | Single-job adopted-plan versus imported-actual travel observations. |
+| D | Robust multi-job travel calibration with pinned samples and advisory output. |
+| E | Adapter lifecycle, checkpoints, retention, revocation and bounded deletion operations. |
+| F | Paid and isolated-demo Learning Center travel experience, recovery, accessibility, responsive review and independent Part 9 acceptance. |
+
+### Part 10 — eight vehicle and equipment slices
+
+| Slice | Scope |
+| --- | --- |
+| A | Native vehicle and equipment utilization outcome authority from current NorthStar operational evidence. |
+| B | Provider-neutral external utilization, operating-cost, maintenance and downtime import authority. |
+| C | Explicit reviewed job, vehicle and equipment reconciliation. |
+| D | Single-job utilization and operating-cost observations against adopted Mission 24 equipment plans. |
+| E | Maintenance, downtime, condition and availability outcomes with exact asset lineage. |
+| F | Robust multi-job vehicle and equipment calibration with advisory output. |
+| G | Source lifecycle, checkpoints, retention, revocation and bounded deletion operations. |
+| H | Paid and isolated-demo Learning Center experience, recovery, accessibility, responsive review and independent Part 10 acceptance. |
+
+### Part 11 — eight materials, inventory and purchasing slices
+
+| Slice | Scope |
+| --- | --- |
+| A | Native planned-versus-used material outcome authority from current NorthStar movement evidence. |
+| B | Provider-neutral external inventory, purchasing and vendor-cost import authority. |
+| C | Explicit reviewed job, material, vendor and inventory-location reconciliation. |
+| D | Single-job quantity, consumption and waste observations. |
+| E | Unit-cost, vendor, availability and purchasing observations with explicit currency and valuation boundaries. |
+| F | Robust multi-job materials and purchasing calibration with advisory output. |
+| G | Source lifecycle, checkpoints, retention, revocation and bounded deletion operations. |
+| H | Paid and isolated-demo Learning Center experience, recovery, accessibility, responsive review and independent Part 11 acceptance. |
+
+### Part 12 — eleven external business-system slices
+
+| Slice | Scope |
+| --- | --- |
+| A | Provider-neutral CRM and field-service import authority. |
+| B | Provider-neutral project and change-order import authority. |
+| C | Provider-neutral communications evidence import with strict intent, delivery and satisfaction-label boundaries. |
+| D | Provider-neutral external invoice, payment, collection and accounting evidence import with the Mission 27 compatibility boundary. |
+| E | Explicit reviewed customer, job, estimate, execution, project, change-order and financial reconciliation. |
+| F | Lead, appointment, issued-estimate and customer-response outcome observations. |
+| G | Scope, change-order and project-delivery outcome observations. |
+| H | External revenue, collection, realized-cost and margin observations; native equivalents remain unavailable until Mission 27 releases them. |
+| I | Source-specific multi-record calibration with pinned samples, applicability limits and advisory output. |
+| J | Source lifecycle, checkpoints, retention, revocation and bounded deletion operations across the Part 12 source classes. |
+| K | Paid and isolated-demo Learning Center experience, recovery, accessibility, responsive review and independent Part 12 acceptance. |
+
+### Part 13 — eight cross-source graph and adoption slices
+
+| Slice | Scope |
+| --- | --- |
+| A | Canonical tenant-private cross-source job and outcome graph authority. |
+| B | Deterministic freshness, conflict, completeness and evidence-coverage evaluation. |
+| C | Complete per-job outcome summaries across labor, travel, equipment, materials, scope and available financial evidence. |
+| D | Cross-job proposal generation with pinned cohorts, dispersion, applicability and uncertainty. |
+| E | Versioned proposal registry and owner-readable impact preview. |
+| F | Explicit owner adoption through the authority that owns the affected business-profile or planning value. |
+| G | Correction, revocation, deletion, proposal supersession and adoption-lineage propagation. |
+| H | Paid and isolated-demo graph and adoption experience, recovery, accessibility, responsive review and independent Part 13 acceptance. |
+
+### Part 14 — seven mission acceptance slices
+
+| Slice | Scope |
+| --- | --- |
+| A | Complete paid-tenant source-to-observation-to-calibration-to-adoption journey. |
+| B | Complete resettable fictional demo journey with strict paid/demo isolation. |
+| C | Migration, restart, replay, resume, correction, revocation, retention and deletion recovery proof. |
+| D | Bounds, performance, concurrency, failure recovery and operational observability proof. |
+| E | Mission-wide accessibility, keyboard, responsive, light/dark theme and five-layout-per-page review. |
+| F | Independent exact-head authority, privacy, security and regression audit across the complete mission. |
+| G | Normal merge, deployment, production health, founder visual verdict and final Mission 25 acceptance. |
 
 Part 12 may consume authorized external invoice, payment and collection evidence. Native NorthStar invoice/payment/collection records remain unavailable until Mission 27 creates that authority; Mission 25 records the compatibility boundary and must not invent those records early. Part 14 cannot pass with placeholder connectors, sample-only cards, an API-only owner workflow, fabricated outcomes or unresolved tenant/deletion boundaries.
 

@@ -10,6 +10,8 @@ describe('Mission 25 Part 7 Owner Learning Center', () => {
     expect(migration).toContain('canonical_learning_center_read');
     expect(migration).toContain("role_value NOT IN ('owner','admin')");
     expect(migration).toContain('LIMIT 100');
+    expect(migration).toContain('JOIN selected ON selected.source_key=observation.source_key');
+    expect(migration).toContain('JOIN selected ON selected.source_key=proposal.source_key');
     expect(migration).toContain('ordinal<=50');
     expect(migration).toContain("'authority','tenant_private_postgresql'");
     expect(migration).toContain('Learning remains advisory');
@@ -32,6 +34,10 @@ describe('Mission 25 Part 7 Owner Learning Center', () => {
     for (const phrase of ['Completed job comparisons', 'External labor sources', 'Source evidence', 'Reference review', 'Labor planning calibration']) expect(html).toContain(phrase);
     expect(page).toContain("confirmationVersion: 'm25-external-labor-reference-match-v1'");
     expect(page).toContain("confirmationVersion: 'm25-imported-labor-calibration-proposal-v1'");
+    expect(page).toContain("currentAndFresh ? 'Proposal current'");
+    expect(page).toContain('currentAndFresh;');
+    expect(html).toContain('For the selected source');
+    expect(html).toContain('For the selected service');
     expect(html).toContain('Owner decision remains required');
     expect(html + page).not.toMatch(/Human approval reason|Reason For This Update|<textarea/i);
   });

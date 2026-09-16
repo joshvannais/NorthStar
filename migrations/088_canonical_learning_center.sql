@@ -30,12 +30,18 @@ BEGIN
   UNION SELECT source_key FROM public.canonical_external_labor_calibration_proposals WHERE organization_id=org
  ), selected AS (SELECT source_key FROM source_keys ORDER BY source_key LIMIT 100), service_keys AS (
   SELECT observation.source_key,lower(btrim(opportunity.service_type)) service_key
-  FROM (SELECT DISTINCT ON (organization_id,source_key,estimate_id,external_job_reference) *
-    FROM public.canonical_external_labor_import_outcome_observations WHERE organization_id=org
-    ORDER BY organization_id,source_key,estimate_id,external_job_reference,revision DESC,id DESC) observation
+  FROM (SELECT DISTINCT ON (observation.organization_id,observation.source_key,observation.estimate_id,observation.external_job_reference) observation.*
+    FROM public.canonical_external_labor_import_outcome_observations observation
+    JOIN selected ON selected.source_key=observation.source_key
+    WHERE observation.organization_id=org
+    ORDER BY observation.organization_id,observation.source_key,observation.estimate_id,observation.external_job_reference,
+      observation.revision DESC,observation.id DESC) observation
   JOIN public.canonical_estimates estimate ON estimate.organization_id=org AND estimate.id=observation.estimate_id
   JOIN public.canonical_opportunities opportunity ON opportunity.organization_id=org AND opportunity.id=estimate.opportunity_id
-  UNION SELECT source_key,service_key FROM public.canonical_external_labor_calibration_proposals WHERE organization_id=org
+  UNION SELECT proposal.source_key,proposal.service_key
+    FROM public.canonical_external_labor_calibration_proposals proposal
+    JOIN selected ON selected.source_key=proposal.source_key
+    WHERE proposal.organization_id=org
  ), service_counts AS (
   SELECT source_key,count(*) total FROM (SELECT DISTINCT source_key,service_key FROM service_keys) value GROUP BY source_key
  ), selected_services AS (

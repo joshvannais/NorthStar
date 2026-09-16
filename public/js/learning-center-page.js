@@ -180,15 +180,16 @@
       var grid = node('div', 'learning-calibration-grid'); grid.appendChild(metric('Reviewed jobs', String(integer(current.sampleSize))));
       grid.appendChild(metric('Median ratio', current.medianActualToPlannedRatio || 'Unavailable')); grid.appendChild(metric('Planning multiplier', current.proposedPlannedHoursMultiplier || 'Needs refresh')); card.appendChild(grid);
     }
-    var action = button(demo ? 'Demo preview' : (current ? 'Refresh proposal' : 'Prepare proposal'), function () {
+    var currentAndFresh = Boolean(current && current.fresh === true);
+    var action = button(demo ? 'Demo preview' : (currentAndFresh ? 'Proposal current' : (current ? 'Refresh proposal' : 'Prepare proposal')), function () {
       var consent = state.consents.calibration; if (!consent.active || !consent.current) { status('Allow calibration proposals before preparing one.', 'error'); return; }
       action.disabled = true; status('Preparing a reviewed advisory proposal.');
       mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + '/imported-labor-calibrations/' + encodeURIComponent(state.calibration.serviceKey), {
         expectedConsentRevision: consent.current.revision, expectedConsentDigest: consent.current.digest,
         reason: 'Owner requested a current service-level labor calibration from the Learning Center.', confirmed: true,
         confirmationVersion: 'm25-imported-labor-calibration-proposal-v1'
-      }).then(function () { return selectSource(state.sourceKey, true); }).catch(fail);
-    }, true); action.disabled = demo || !state.consents.calibration.active; card.appendChild(node('div', 'learning-actions')).appendChild(action); root.appendChild(card);
+      }).then(function () { return selectSource(state.sourceKey, true); }).catch(function (error) { action.disabled = false; fail(error); });
+    }, true); action.disabled = demo || !state.consents.calibration.active || currentAndFresh; card.appendChild(node('div', 'learning-actions')).appendChild(action); root.appendChild(card);
   }
 
   function loadCalibration(serviceKey) {

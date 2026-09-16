@@ -1,0 +1,9 @@
+# Mission 25 Part 10 Slice D imported asset outcomes
+
+Owners and administrators can separately authorize a tenant-private comparison between one reviewed external job and the exact adopted Mission 24 equipment and equipment-cost plans. The job reference and every vehicle or equipment reference must already have a current explicit reviewed link. NorthStar does not guess links from names, models or similar text.
+
+Utilization and operating cost are reviewed independently. Planned equipment hours are compared only with machine-hour evidence. Engine hours, distance, cycles and job counts remain unavailable because this slice does not invent conversions. Operating costs require the adopted plan currency and applicable job operating-cost classes; no exchange rate or unrelated ownership charge is inferred.
+
+Each observation retains the source consent, purpose consent, estimate and adopted plan revisions, reviewed job and asset reconciliation revisions, current asset and equipment-ledger basis, every source record used, explicit units and currency, calculation version and request identity. Corrections, tombstones, plan changes, match changes, asset or ledger changes and consent changes make prior advice stale and hide its values. Revocation hides outcomes and blocks new observations. Re-granting consent does not revive an old match or observation.
+
+The output is advisory. It does not change an estimate, price, schedule, job, vehicle, equipment record, cost allocation, reimbursement, payroll record or business policy. Maintenance-event, downtime, condition and availability outcomes remain unimplemented until Slice E. This API-only slice adds no rendered owner surface; the later Learning Center experience must pass the standing wording, keyboard, focus, responsive, theme and founder visual review gates.

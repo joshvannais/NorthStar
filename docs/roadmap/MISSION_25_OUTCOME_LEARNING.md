@@ -19,7 +19,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Released |
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Released — Slices A-F accepted |
-| 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | In progress — Slices A-B released; Slice C candidate; Slices D-H planned |
+| 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | In progress — Slices A-C released; Slice D candidate; Slices E-H planned |
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Planned |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Planned |
@@ -219,3 +219,13 @@ Each active record carries an opaque source record, optional opaque job referenc
 Exact duplicate versions are counted without another record. A same-version payload conflict or older version fails closed. Higher versions append immutable corrections; tombstones retain no operational detail. Revocation blocks writes and hides current source evidence, while an exact delayed retry still receives its original immutable receipt. Protected tables and projection/validation helpers are withheld from the runtime role; only guarded entry functions are executable.
 
 This is staging authority only. It does not reconcile opaque references, create Mission 23 events, calculate an estimate-versus-actual outcome, allocate a monthly payment to a job, or change a job, estimate, schedule, asset, cost allocation or policy. Provider credentials, provider-specific adapters, reviewed reconciliation, outcomes, calibration, retention/deletion operations and Learning Center experience remain Slices C-H.
+
+## Part 10 Slice C — reviewed external asset reconciliation
+
+Migration `098_canonical_external_asset_reconciliation.sql` records explicit owner or administrator links from current opaque job, vehicle and equipment references to a same-tenant estimate or current active reviewed asset version of the matching category. Each link pins current source consent, all current imported records carrying the reference, and the current target basis, including the asset version and equipment-ledger revision and digest when present. No fuzzy matching is permitted. Corrections, tombstones, consent, target, asset-version or ledger changes make earlier links stale; revocation hides and blocks them, and re-granting cannot revive them. The links remain lineage only and do not change operational authority.
+
+## Part 10 Slice D candidate — imported utilization and operating-cost outcomes
+
+Migration `099_canonical_imported_asset_outcomes.sql` adds separate purpose consent and immutable single-job observations against the exact adopted Mission 24 equipment plan and equipment-cost plan. Every current job, vehicle and equipment reference used by the observation must retain an exact current owner-reviewed match. The observation pins the adopted revision, both plans, source consent, reviewed reconciliation revisions, asset versions and ledger bases, and every current utilization or operating-cost record used.
+
+Machine-hour utilization and same-currency job operating costs are evaluated independently. Engine hours, distance, cycles and job counts are not converted to planned equipment hours. Financing, insurance, rental and unspecified charges are not relabeled as job operating cost, and no exchange rate is inferred. Missing or incompatible dimensions remain explicitly unavailable without suppressing a compatible dimension. Corrections, tombstones, consent, reconciliation, plan, asset-version or ledger changes stale and mask prior advice. Revocation hides and blocks derived work, and re-granting does not revive old consent or matches. The result remains advisory and cannot change an estimate, price, schedule, job, asset, allocation, reimbursement, payroll record or policy. Maintenance-event, downtime, condition and availability outcomes remain Slice E.

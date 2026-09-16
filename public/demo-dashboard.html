@@ -10,16 +10,16 @@
   <title>Contractor Command Center — NorthStar</title>
   <script src="/js/theme.js"></script>
   <script src="/js/command-center-contract.js?v=demo-nav-10-20260915"></script>
-  <script src="/js/demo-runtime.js?v=demo-runtime-12-20260915"></script>
+  <script src="/js/demo-runtime.js?v=command-center-clarity-20260915"></script>
   <script src="/js/auth-session.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
-  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m24-tree-intelligence-20260915">
+  <link rel="stylesheet" href="/css/demo-dashboard.css?v=command-center-clarity-20260915">
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
-  <link rel="stylesheet" href="/css/scheduling-approval.css">
+  <link rel="stylesheet" href="/css/scheduling-approval.css?v=command-center-clarity-20260915">
   <link rel="icon" href="/assets/logo.png">
-  <link rel="stylesheet" href="/css/site-professionalism.css?v=m24-tree-intelligence-20260915">
+  <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
   <link rel="stylesheet" href="/css/pre-m23-p3.css">
   <link rel="stylesheet" href="/css/execution-links.css">
   <script src="/js/execution-links.js"></script>
@@ -94,6 +94,23 @@
 
           <section class="demo-kpi-grid" id="commandCenterKpis" aria-label="Business snapshot"></section>
 
+          <section class="demo-panel demo-leads-panel" aria-labelledby="commandCenterLeadsTitle">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Recent Leads</p>
+                <h2 id="commandCenterLeadsTitle">Customers And Requested Work</h2>
+              </div>
+              <span class="demo-count-pill" id="commandCenterLeadCount">0 Active</span>
+            </div>
+            <div class="demo-table-wrap" tabindex="0" aria-label="Recent leads, scroll for more than five records">
+              <table>
+                <thead><tr><th>Customer</th><th>Service</th><th>Original Estimate</th><th>Status</th><th>Next Action</th></tr></thead>
+                <tbody id="commandCenterLeadRows"></tbody>
+              </table>
+            </div>
+            <div class="command-center-mobile-leads" id="commandCenterLeadCards" aria-label="Customers and requested work"></div>
+          </section>
+
           <section class="m22-authority-overview" id="commandCenterScheduling" aria-labelledby="commandCenterSchedulingTitle" aria-busy="true">
             <div class="m22-authority-heading">
               <div><p class="demo-panel-kicker">Scheduling Overview</p><h2 id="commandCenterSchedulingTitle">Owner and Dispatcher Overview</h2><p id="commandCenterSchedulingDefinition">Loading current assignment, schedule, dispatch, review, and conflict information.</p></div>
@@ -134,30 +151,13 @@
             </article>
           </section>
 
-          <section class="demo-panel demo-leads-panel" aria-labelledby="commandCenterLeadsTitle">
-            <div class="demo-panel-heading">
-              <div>
-                <p class="demo-panel-kicker">Recent leads</p>
-                <h2 id="commandCenterLeadsTitle">Customers and requested work</h2>
-              </div>
-              <span class="demo-count-pill" id="commandCenterLeadCount">0 active</span>
-            </div>
-            <div class="demo-table-wrap">
-              <table>
-                <thead><tr><th>Customer</th><th>Service</th><th>Original estimate</th><th>Status</th><th>Next action</th></tr></thead>
-                <tbody id="commandCenterLeadRows"></tbody>
-              </table>
-            </div>
-            <div class="command-center-mobile-leads" id="commandCenterLeadCards" aria-label="Customers and requested work"></div>
-          </section>
-
           <section class="demo-bottom-grid" aria-label="Guidance and workspace context">
             <article class="demo-panel demo-coach-panel">
               <p class="demo-panel-kicker">NorthStar Coach</p>
               <h2>Next best operational move</h2>
               <p id="commandCenterCoach">Waiting for current role-authorized records.</p>
               <p class="demo-coach-evidence" id="commandCenterCoachEvidence"></p>
-              <a class="demo-coach-action" id="commandCenterCoachAction" href="/dashboard/leads" hidden>Open record</a>
+              <a class="btn btn-primary demo-coach-action" id="commandCenterCoachAction" href="/dashboard/leads" hidden>Open Record</a>
             </article>
             <article class="demo-panel demo-status-panel">
               <div>
@@ -203,13 +203,13 @@
   <script src="/js/transcript-renderer.js"></script>
   <script src="/js/commercial-terms.js"></script>
   <script src="/js/prepared-estimate.js?v=m24-tree-price-alignment-r2-20260915"></script>
-  <script src="/js/customer-estimate-preview.js"></script>
-  <script src="/js/customer-detail.js?v=m24-tree-intelligence-20260915"></script>
+  <script src="/js/customer-estimate-preview.js?v=command-center-clarity-20260915"></script>
+  <script src="/js/customer-detail.js?v=command-center-clarity-20260915"></script>
   <script src="/js/polaris-card.js"></script>
   <script src="/js/scheduling-time-contract.js"></script>
   <script src="/js/display-projection.js"></script>
   <script src="/js/scheduling-approval-ui.js"></script>
-  <script src="/js/command-center-page.js?v=m24-tree-intelligence-20260915"></script>
+  <script src="/js/command-center-page.js?v=command-center-clarity-20260915"></script>
   <script src="/js/nav-component.js?v=demo-nav-10-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

@@ -31,4 +31,39 @@ describe('customer card clarity corrections', () => {
     expect(html).toContain('id="commandCenterWorkspacePulse"');
     expect(css).toMatch(/\.demo-coach-panel>h2, \.demo-status-panel h2 \{ margin: 0 0 20px;/);
   });
+
+  test('command center prioritizes five recent leads and uses the shared action style', () => {
+    const html = source('public/demo-dashboard.html');
+    const css = source('public/css/demo-dashboard.css');
+    const scheduling = source('public/css/scheduling-approval.css');
+    const page = source('public/js/command-center-page.js');
+    expect(html.indexOf('id="commandCenterKpis"')).toBeLessThan(html.indexOf('id="commandCenterLeadsTitle"'));
+    expect(html.indexOf('id="commandCenterLeadsTitle"')).toBeLessThan(html.indexOf('id="commandCenterScheduling"'));
+    expect(html).toContain('class="btn btn-primary demo-coach-action"');
+    expect(css).toMatch(/\.demo-table-wrap \{[^}]*max-height: 326px;[^}]*overflow: auto;/s);
+    expect(css).toMatch(/\.command-center-mobile-leads \{[^}]*max-height: 434px;[^}]*overflow-y:auto;/s);
+    expect(scheduling).toMatch(/\.m22-overview-list \{[^}]*max-height: 1036px;[^}]*overflow-y:auto;/s);
+    expect(page).toContain('var visible = graphs;');
+  });
+
+  test('reload returns to the top and scope details omit internal assessment prompts', () => {
+    const runtime=source('public/js/demo-runtime.js');
+    const detail=source('public/js/customer-detail.js');
+    expect(runtime).toContain('reloadToTopRequested=true');
+    expect(runtime).toContain("global.scrollTo({top:0,left:0,behavior:'auto'})");
+    expect(detail).toContain("'assessmentQuestions'");
+    expect(detail).toContain('scopeKeys.slice(0,12)');
+    expect(detail).toContain("letter.toUpperCase()");
+  });
+
+  test('estimate action opens a downloadable draft before commercial approval', () => {
+    const preview=source('public/js/customer-estimate-preview.js');
+    const demoRoute=source('src/routes/demo.js');
+    const paidRoute=source('src/routes/canonicalPolaris.js');
+    expect(preview).toContain("'View Draft Estimate'");
+    expect(preview).toContain("section.dataset.state=ready?'ready':'draft'");
+    expect(preview).not.toContain('section.hidden=!ready');
+    expect(demoRoute).toContain('createCustomerEstimateDisplay');
+    expect(paidRoute).toContain('createCustomerEstimateDisplay');
+  });
 });

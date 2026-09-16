@@ -636,7 +636,7 @@ router.get('/command-center/estimates/:estimateId/customer-estimate-preview', as
     const item = demoCanonicalItems(workspace).find(value => value.ids.estimate === req.params.estimateId);
     if (!item) return res.status(404).json({success:false,error:{code:'CUSTOMER_ESTIMATE_UNAVAILABLE',message:'That demo estimate is unavailable.'}});
     const review = await assembleDemoCapellaReview(record, item, req);
-    const data = require('../estimating/customerEstimateProjection').createCustomerEstimatePreview({
+    const data = require('../estimating/customerEstimateProjection').createCustomerEstimateDisplay({
       review, item, profile:workspace.configuration.businessProfile, simulated:true,
     });
     return res.json({success:true,data});

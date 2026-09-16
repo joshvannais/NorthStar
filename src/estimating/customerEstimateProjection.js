@@ -94,6 +94,95 @@ function safePayments(rows) {
   });
 }
 
+function fixed(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 && number <= 999999999999 ? number.toFixed(2) : null;
+}
+
+function humanize(value) {
+  return text(String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' '), 200)
+    .replace(/^./, character => character.toUpperCase());
+}
+
+function draftScope(item) {
+  const scope = item && item.opportunity && item.opportunity.scope;
+  if (typeof scope === 'string' && text(scope, 4000)) return text(scope, 4000);
+  const source = scope && typeof scope === 'object' && !Array.isArray(scope) ? scope : {};
+  const hidden = new Set(['address','assessmentQuestions','businessContext','callerIntent','conversationOutcome','customerContext','description','disposalPreference','email','phone','pricingModel','requestedWork','serviceRadiusMiles','siteConcern','timeZone','workDescription']);
+  const order = ['jobType','workType','treeCount','sizeClass','approximateHeightFeet','conditionClass','nearStructure','accessClass','terrain','material','finish','linearFeet','squareFeet','sqft','area','equipmentName','equipmentReference','crewProfile','plannedCrewSize','crewCount','laborHours','estimatedDurationHours','customerDistanceMiles','serviceZone','schedulingConstraint','urgency'];
+  const labels = {jobType:'Work Type',workType:'Work Type',treeCount:'Tree Count',sizeClass:'Size',approximateHeightFeet:'Approximate Height',conditionClass:'Condition',nearStructure:'Near Structure',accessClass:'Access',linearFeet:'Length',squareFeet:'Area',sqft:'Area',equipmentName:'Equipment',equipmentReference:'Equipment',crewProfile:'Crew',plannedCrewSize:'Planned Crew Size',crewCount:'Crew Count',laborHours:'Labor Time',estimatedDurationHours:'Estimated Duration',customerDistanceMiles:'Customer Distance',serviceZone:'Service Area',schedulingConstraint:'Scheduling'};
+  const units = {approximateHeightFeet:'ft',linearFeet:'ft',squareFeet:'sq ft',sqft:'sq ft',area:'sq ft',laborHours:'hours',estimatedDurationHours:'hours',customerDistanceMiles:'miles'};
+  const keys = Object.keys(source).filter(key => !hidden.has(key) && ['string','number','boolean'].includes(typeof source[key]));
+  keys.sort((left,right) => { const a=order.indexOf(left),b=order.indexOf(right);return(a<0?999:a)-(b<0?999:b)||left.localeCompare(right); });
+  const details = keys.slice(0, 10).map(key => {
+    const raw = typeof source[key] === 'string' ? source[key].trim() : String(source[key]);
+    const value = raw.replace(/[_-]+/g,' ').replace(/^./, character => character.toUpperCase()) + (units[key] ? ' ' + units[key] : '');
+    return (labels[key] || humanize(key)) + ': ' + value;
+  });
+  const title = text(item && item.snapshot && item.snapshot.service && item.snapshot.service.label, 200,
+    text(item && item.opportunity && item.opportunity.serviceType, 200, 'Service work'));
+  return text((humanize(title) + (details.length ? '. ' + details.join('; ') + '.' : '.')).replace(/\.\./g,'.'), 4000);
+}
+
+function createCustomerEstimateDraft(input) {
+  const review = input && input.review;
+  const item = input && input.item;
+  if (!review || !item || !item.customer || !item.opportunity || !item.estimate) {
+    unavailable('The recorded estimate is unavailable.', 404, 'CUSTOMER_ESTIMATE_UNAVAILABLE');
+  }
+  const simulated = input.simulated === true || review.simulated === true;
+  const price = fixed(item.estimate.customerPrice != null ? item.estimate.customerPrice : item.snapshot && item.snapshot.customerFacingPrice);
+  if (!price) unavailable('The recorded customer price is unavailable.');
+  const rawLines = Array.isArray(item.estimate.lineItems) ? item.estimate.lineItems : [];
+  const categoryLabels={labor:'Labor And Installation',materials:'Materials',material:'Materials',equipment:'Equipment',travel:'Travel And Mobilization',service:'Service And Scope',fees:'Permits And Fees',fee:'Permits And Fees'};
+  let charges = rawLines.map((line,index) => ({
+    label:/^(illustrative|configured)/i.test(text(line&&line.label,200))&&categoryLabels[String(line&&line.category||'').toLowerCase()]
+      ? categoryLabels[String(line.category).toLowerCase()]
+      : text(line && line.label, 200, 'Estimated Service ' + (index + 1)),
+    kind:line && line.kind === 'fee' ? 'fee' : 'charge',
+    amount:fixed(line && (line.customerCharge != null ? line.customerCharge : line.amount)),
+  })).filter(line => line.amount !== null);
+  const lineTotal = charges.reduce((sum,line) => sum + Number(line.amount), 0);
+  if (!charges.length || Math.abs(lineTotal - Number(price)) > 0.01) {
+    charges = [{label:humanize(item.opportunity.serviceType || 'Estimated service'),kind:'charge',amount:price}];
+  }
+  const contentBasis = stableValue({
+    contract:CONTRACT,
+    simulated,
+    issuer:publicIssuer(input.profile),
+    customer:{name:text(item.customer.name,200),address:text(item.customer.address,400)},
+    work:{title:humanize(item.snapshot && item.snapshot.service && item.snapshot.service.label || item.opportunity.serviceType || 'Service estimate'),scope:draftScope(item)},
+    currency:text(item.estimate.currency,8,'USD'),
+    charges,
+    adjustments:[],
+    taxes:[],
+    subtotal:price,
+    tax:'0.00',
+    total:price,
+    payments:[],
+    preparedAt:text(review.recordedAt || item.snapshotCreatedAt,40),
+  });
+  if (!contentBasis.issuer.name) unavailable('Add the business name before viewing this estimate.');
+  if (!contentBasis.customer.name) unavailable('Add the customer name before viewing this estimate.');
+  const reference='EST-'+sha256(contentBasis).slice(0,10).toUpperCase();
+  return Object.freeze(stableValue({
+    ...contentBasis,
+    reference,
+    state:'draft',
+    notice:simulated
+      ? 'Draft fictional demo estimate based on the recorded request and simulated business profile. Tax and final terms must be reviewed before issuing.'
+      : 'Draft estimate based on the recorded request and current business profile. Tax and final terms must be reviewed before issuing or sending.',
+    capabilities:{downloadPdf:true,downloadImage:true,accept:false,askQuestion:false},
+    platformSignature:'Powered by NorthStar',
+  }));
+}
+
+function createCustomerEstimateDisplay(input) {
+  const commercial=input&&input.review&&input.review.commercialTerms;
+  const ready=!!(commercial&&commercial.customerSummary&&commercial.approvalState==='commercial_approved'&&commercial.binding&&commercial.current&&commercial.current.current===true);
+  return ready ? createCustomerEstimatePreview(input) : createCustomerEstimateDraft(input);
+}
+
 function createCustomerEstimatePreview(input) {
   const review = input && input.review;
   const item = input && input.item;
@@ -146,4 +235,4 @@ function createCustomerEstimatePreview(input) {
   }));
 }
 
-module.exports = { CONTRACT, createCustomerEstimatePreview, publicIssuer, unavailable };
+module.exports = { CONTRACT, createCustomerEstimatePreview, createCustomerEstimateDraft, createCustomerEstimateDisplay, publicIssuer, unavailable };

@@ -13,6 +13,7 @@
   }
 
   function safeText(value) { return typeof value === 'string' ? value : ''; }
+  function stateLabel(estimate) { return estimate.state === 'issued' ? 'Issued' : estimate.state === 'draft' ? 'Draft' : 'Preview'; }
 
   function presentationRows(estimate) {
     var rows = [];
@@ -20,6 +21,7 @@
     (estimate.adjustments || []).forEach(function (line) { rows.push({ label:line.label+' (included)', amount:money(line.amount, estimate.currency), kind:'adjustment' }); });
     rows.push({ label:'Subtotal', amount:money(estimate.subtotal, estimate.currency), kind:'subtotal' });
     (estimate.taxes || []).forEach(function (line) { var treatment=line.treatment==='zero_rate'?'Zero rate':line.treatment==='exempt'?'Exempt':line.treatment==='taxable'?'Taxable':'Reviewed';rows.push({ label:line.label+' · '+treatment, amount:money(line.amount, estimate.currency), kind:'tax' }); });
+    if(estimate.state==='draft'&&!(estimate.taxes||[]).length)rows.push({label:'Tax',amount:'Needs Review',kind:'tax'});
     rows.push({ label:'Estimated total', amount:money(estimate.total, estimate.currency), kind:'total' });
     return rows;
   }
@@ -41,7 +43,7 @@
     if (estimate.issuer.dba) append(brand,'p','customer-estimate-muted',estimate.issuer.dba);
     var meta = append(header,'div','customer-estimate-meta');
     append(meta,'strong','',estimate.reference);
-    append(meta,'span','',estimate.state === 'preview' ? 'Preview' : 'Issued');
+    append(meta,'span','',stateLabel(estimate));
     var contact = [estimate.issuer.phone,estimate.issuer.email,estimate.issuer.website,estimate.issuer.address].filter(Boolean);
     if (contact.length) append(card,'p','customer-estimate-contact',contact.join(' · '));
     var intro = append(card,'section','customer-estimate-intro');
@@ -63,7 +65,7 @@
   function documentLines(estimate) {
     var lines=[{text:'ESTIMATE',size:10,gap:16,color:'gold'},{text:estimate.issuer.name,size:22,gap:28,bold:true}];
     [estimate.issuer.phone,estimate.issuer.email,estimate.issuer.website,estimate.issuer.address].filter(Boolean).forEach(function(v){wrap(v,78).forEach(function(row){lines.push({text:row,size:9,gap:13});});});
-    lines.push({text:estimate.reference+'  |  '+(estimate.state==='preview'?'Preview':'Issued'),size:9,gap:24});
+    lines.push({text:estimate.reference+'  |  '+stateLabel(estimate),size:9,gap:24});
     lines.push({text:'PREPARED FOR',size:9,gap:14,color:'gold'});lines.push({text:estimate.customer.name,size:13,gap:18,bold:true});if(estimate.customer.address)wrap(estimate.customer.address,78).forEach(function(v){lines.push({text:v,size:10,gap:14});});
     lines.push({text:'WORK',size:9,gap:14,color:'gold'});lines.push({text:estimate.work.title,size:13,gap:18,bold:true});
     lines.push({text:'PROJECT SCOPE',size:9,gap:14,color:'gold'});wrap(estimate.work.scope,78).forEach(function(v){lines.push({text:v,size:10,gap:14});});
@@ -77,7 +79,7 @@
     var issuer=[estimate.issuer.phone,estimate.issuer.email,estimate.issuer.website,estimate.issuer.address].filter(Boolean).join(' · '),rows=presentationRows(estimate).map(function(row){return [{text:breakLongTokens(row.label,36),bold:row.kind==='total',noWrap:false},{text:row.amount,bold:row.kind==='total',alignment:'right',noWrap:true}];});
     var issuerName=identityImages&&identityImages.issuer?{image:identityImages.issuer,width:Math.min(300,identityImages.issuerWidth),margin:[0,2,0,0]}:{text:estimate.issuer.name,style:'brand'};
     var customerName=identityImages&&identityImages.customer?{image:identityImages.customer,width:Math.min(220,identityImages.customerWidth),margin:[0,5,0,0]}:{text:estimate.customer.name,bold:true,margin:[0,5,0,0]};
-    var content=[{text:'ESTIMATE',style:'kicker'},{columns:[issuerName,{stack:[{text:estimate.reference,bold:true,alignment:'right'},{text:estimate.state==='preview'?'Preview':'Issued',color:'#8a681d',alignment:'right',margin:[0,4,0,0]}]}],margin:[0,0,0,8]}];
+    var content=[{text:'ESTIMATE',style:'kicker'},{columns:[issuerName,{stack:[{text:estimate.reference,bold:true,alignment:'right'},{text:stateLabel(estimate),color:'#8a681d',alignment:'right',margin:[0,4,0,0]}]}],margin:[0,0,0,8]}];
     if(issuer)content.push({text:issuer,style:'muted',margin:[0,0,0,22]});
     content.push({columns:[{stack:[{text:'PREPARED FOR',style:'kicker'},customerName,{text:estimate.customer.address||'',style:'muted',margin:[0,4,0,0]}]},{stack:[{text:'WORK',style:'kicker'},{text:estimate.work.title,bold:true,margin:[0,5,0,0]}]}],columnGap:24,margin:[0,0,0,22]});
     content.push({text:'PROJECT SCOPE',style:'kicker'},{text:estimate.work.scope,margin:[0,6,0,22]},{text:'ESTIMATE',style:'kicker'},{table:{widths:['*',90],body:rows},layout:{hLineWidth:function(index,node){return index===rows.length-1?1.5:index===rows.length-2||index===estimate.charges.length+estimate.adjustments.length?0.5:0;},hLineColor:function(){return'#b58c32';},vLineWidth:function(){return 0;},paddingTop:function(){return 7;},paddingBottom:function(){return 7;},paddingLeft:function(){return 0;},paddingRight:function(){return 0;}}});
@@ -119,7 +121,7 @@
       function card(x,y,w,h,fill){ctx.fillStyle=fill||'#f7f3eb';roundRect(ctx,x,y,w,h,22);ctx.fill();ctx.strokeStyle='#ded2b8';ctx.lineWidth=2;ctx.stroke();}
       var y=136;kicker('Estimate',padding,y);text(estimate.issuer.name,padding,y+61,50,'700');
       text(estimate.reference,width-padding,y+18,24,'700','#111827','right');
-      text(estimate.state==='preview'?'Preview':'Issued',width-padding,y+58,22,'600','#8a681d','right');
+      text(stateLabel(estimate),width-padding,y+58,22,'600','#8a681d','right');
       var contactY=y+116;contact.forEach(function(line){text(line,padding,contactY,23,'400','#69707d');contactY+=32;});
       y=outer+headerHeight;divider(y);y+=30;
       var gap=28,column=(contentWidth-gap)/2;card(padding,y,column,introHeight,'#f5f1e8');card(padding+column+gap,y,column,introHeight,'#f5f1e8');
@@ -141,8 +143,8 @@
 
   function open(estimate, returnFocus) {
     var overlay=append(document.body,'div','customer-estimate-overlay');overlay.setAttribute('role','presentation');var dialog=append(overlay,'section','customer-estimate-dialog');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','customerEstimateDialogTitle');dialog.tabIndex=-1;
-    var bar=append(dialog,'div','customer-estimate-dialog-bar');var title=append(bar,'h2','', 'Customer Estimate Preview');title.id='customerEstimateDialogTitle';var close=append(bar,'button','customer-estimate-close','×');close.type='button';close.setAttribute('aria-label','Close customer estimate preview');
-    var body=append(dialog,'div','customer-estimate-dialog-body');body.appendChild(estimateCard(estimate));var actions=append(dialog,'div','customer-estimate-dialog-actions');var pdf=append(actions,'button','btn btn-secondary','Download PDF');pdf.type='button';var image=append(actions,'button','btn btn-secondary','Download image');image.type='button';var defaultNote=estimate.state==='preview'?'Downloads are previews. Nothing is sent to the customer.':'Downloads match this issued estimate.',note=append(actions,'p','',defaultNote);note.setAttribute('role','status');note.setAttribute('aria-live','polite');
+    var bar=append(dialog,'div','customer-estimate-dialog-bar');var dialogTitle=estimate.state==='draft'?'Draft Customer Estimate':estimate.state==='issued'?'Issued Customer Estimate':'Customer Estimate Preview';var title=append(bar,'h2','',dialogTitle);title.id='customerEstimateDialogTitle';var close=append(bar,'button','customer-estimate-close','×');close.type='button';close.setAttribute('aria-label','Close customer estimate preview');
+    var body=append(dialog,'div','customer-estimate-dialog-body');body.appendChild(estimateCard(estimate));var actions=append(dialog,'div','customer-estimate-dialog-actions');var pdf=append(actions,'button','btn btn-secondary','Download PDF');pdf.type='button';var image=append(actions,'button','btn btn-secondary','Download Image');image.type='button';var defaultNote=estimate.state==='issued'?'Downloads match this issued estimate.':estimate.state==='draft'?'Downloads are clearly labeled drafts. Nothing was issued or sent.':'Downloads are previews. Nothing was sent to the customer.',note=append(actions,'p','',defaultNote);note.setAttribute('role','status');note.setAttribute('aria-live','polite');
     function keyboard(event){if(!overlay.isConnected)return;if(event.key==='Escape'){event.preventDefault();shut();return;}if(event.key!=='Tab')return;var controls=Array.prototype.slice.call(dialog.querySelectorAll('button:not([disabled]),summary,[href],[tabindex]:not([tabindex="-1"])'));if(!controls.length)return;var first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}
     function shut(){document.removeEventListener('keydown',keyboard);overlay.remove();document.body.classList.remove('customer-estimate-open');if(returnFocus&&returnFocus.isConnected)returnFocus.focus();}close.onclick=shut;overlay.onclick=function(event){if(event.target===overlay)shut();};document.addEventListener('keydown',keyboard);pdf.onclick=function(){pdf.disabled=true;note.textContent='Preparing the PDF…';pdfBlob(estimate).then(function(blob){save(blob,estimate.reference+'.pdf');note.textContent=defaultNote;}).catch(function(){note.textContent='The PDF could not be prepared. Try again.';}).finally(function(){pdf.disabled=false;});};image.onclick=function(){image.disabled=true;note.textContent='Preparing the image…';canvasBlob(estimate).then(function(blob){save(blob,estimate.reference+'.png');note.textContent=defaultNote;}).catch(function(){note.textContent='The image could not be prepared. Try again.';}).finally(function(){image.disabled=false;});};document.body.classList.add('customer-estimate-open');close.focus();
   }
@@ -154,13 +156,14 @@
   function mount(review, host) {
     if(!host||!review)return null;
     var commercial=review.commercialTerms||{},ready=!!(commercial.customerSummary&&commercial.approvalState==='commercial_approved'&&commercial.binding&&commercial.current&&commercial.current.current===true);
-    var section=append(host,'section','customer-estimate-launch');section.dataset.state=ready?'ready':'needs-review';section.hidden=!ready;append(section,'p','customer-estimate-kicker',ready?'Customer estimate':'Estimate');var heading=append(section,'h4','',ready?'Estimate ready to issue':'Estimate needs review'),description=append(section,'p','',ready?'Preview it from the estimate action above, then issue the exact version when it is ready.':'Finish the remaining review before a customer version can be issued.'),actions=append(section,'div','customer-estimate-launch-actions');var preview=append(actions,'button','btn btn-secondary',ready?'View Customer Estimate':'Finish Estimate');preview.type='button';var issue=ready?append(actions,'button','btn btn-primary','Issue Estimate'):null;if(issue)issue.type='button';var status=append(section,'p','customer-estimate-launch-status',ready?'Checking issued versions…':'');status.setAttribute('role','status');status.setAttribute('aria-live','polite');var deliveryHost=append(section,'div','customer-estimate-delivery'),historyHost=append(section,'div','customer-estimate-version-history');
+    var section=append(host,'section','customer-estimate-launch');section.dataset.state=ready?'ready':'draft';append(section,'p','customer-estimate-kicker',ready?'Customer Estimate':'Draft Estimate');var heading=append(section,'h4','',ready?'Estimate Ready To Issue':'Draft Estimate Available'),description=append(section,'p','',ready?'View or download the estimate, then issue the exact version when it is ready.':'View or download the draft now. Recorded job details and the business profile supplied the current price; review tax and final terms before issuing.'),actions=append(section,'div','customer-estimate-launch-actions');var preview=append(actions,'button','btn btn-secondary',ready?'View Customer Estimate':'View Draft Estimate');preview.type='button';var reviewButton=!ready?append(actions,'button','btn btn-secondary','Review Before Issuing'):null;if(reviewButton)reviewButton.type='button';var issue=ready?append(actions,'button','btn btn-primary','Issue Estimate'):null;if(issue)issue.type='button';var status=append(section,'p','customer-estimate-launch-status',ready?'Checking issued versions…':'Draft available now.');status.setAttribute('role','status');status.setAttribute('aria-live','polite');var deliveryHost=append(section,'div','customer-estimate-delivery'),historyHost=append(section,'div','customer-estimate-version-history');
     var external=document.getElementById('cdBtnEstimate'),externalStatus=document.getElementById('cdEstimateActionStatus');
-    function externalState(label){if(!external)return;external.disabled=false;external.setAttribute('aria-label','Estimate, '+label.toLowerCase());var title=external.querySelector('span');if(title)title.textContent=label==='Issued'?'View Customer Estimate':label==='Ready'?'View Customer Estimate':'Finish Estimate';if(externalStatus)externalStatus.textContent=label;}
-    if(external){preview.hidden=true;external.onclick=function(){preview.click();};externalState(ready?'Ready':'Needs review');}
+    function externalState(label){if(!external)return;external.disabled=false;external.setAttribute('aria-label','Estimate, '+label.toLowerCase());var title=external.querySelector('span');if(title)title.textContent=label==='Draft'?'View Draft Estimate':'View Customer Estimate';if(externalStatus)externalStatus.textContent=label;}
+    if(external){preview.hidden=true;external.onclick=function(){preview.click();};externalState(ready?'Ready':'Draft');}
     function goToReview(){var target=document.getElementById('cdEstimateDetails');if(target){target.open=true;var next=document.getElementById(commercial.sources&&commercial.sources.pricingCurrent?'cdCommercialTerms':'cdPreparedAdoption')||target.querySelector('summary,button');if(next&&next.tagName==='DETAILS')next.open=true;var focus=next&&next.querySelector?next.querySelector('summary,button,input,select'):next;if(focus){focus.focus();focus.scrollIntoView({block:'nearest'});}}status.textContent='Review the highlighted estimate step below.';}
     function showEstimate(button,estimate,note){open(estimate,button);status.textContent=note||'Customer estimate ready.';}
-    preview.onclick=function(){if(!ready){goToReview();return;}preview.disabled=true;status.textContent='Preparing the customer estimate…';window.NorthStarAccountSession.fetch(route(review),{cache:'no-store'}).then(responseData).then(function(estimate){showEstimate(external||preview,estimate,'Preview ready. Nothing was sent.');}).catch(function(error){status.textContent=error&&error.message||'The customer estimate is unavailable. Refresh the saved estimate and try again.';}).finally(function(){preview.disabled=false;});};
+    if(reviewButton)reviewButton.onclick=goToReview;
+    preview.onclick=function(){preview.disabled=true;status.textContent=ready?'Preparing the customer estimate…':'Preparing the draft estimate…';window.NorthStarAccountSession.fetch(route(review),{cache:'no-store'}).then(responseData).then(function(estimate){showEstimate(external||preview,estimate,estimate.state==='draft'?'Draft ready to view or download. Nothing was issued or sent.':'Preview ready. Nothing was sent.');}).catch(function(error){status.textContent=error&&error.message||'The customer estimate is unavailable. Refresh the saved estimate and try again.';}).finally(function(){preview.disabled=false;});};
     function renderDelivery(data,current,newPath){
       deliveryHost.replaceChildren();var links=data&&data.links||[],active=links.find(function(link){return link.status==='active'||link.status==='accepted';});
       var bar=append(deliveryHost,'div','customer-estimate-delivery-bar');append(bar,'strong','',active?(active.status==='accepted'?'Customer accepted':'Customer link active'):'Customer delivery');

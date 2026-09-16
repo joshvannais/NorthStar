@@ -1,6 +1,6 @@
 'use strict';
 
-const { createCustomerEstimatePreview } = require('../../src/estimating/customerEstimateProjection');
+const { createCustomerEstimatePreview, createCustomerEstimateDraft, createCustomerEstimateDisplay } = require('../../src/estimating/customerEstimateProjection');
 const documentRenderer = require('../../public/js/customer-estimate-preview');
 const fs=require('node:fs'),path=require('node:path');
 
@@ -90,6 +90,24 @@ describe('Mission 24 Part 8 customer estimate preview', () => {
     const scope=input();scope.review.commercialTerms.customerSummary.scopeSummary=' ';expect(()=>createCustomerEstimatePreview(scope)).toThrow(/work scope/);
     const issuer=input();issuer.profile.rawProfile.company.name=' ';expect(()=>createCustomerEstimatePreview(issuer)).toThrow(/business name/);
     const customer=input();customer.item.customer.name=' ';expect(()=>createCustomerEstimatePreview(customer)).toThrow(/customer name/);
+  });
+
+  test('always provides a downloadable draft while keeping issuance approval separate', () => {
+    const pending=input();
+    pending.review.commercialTerms={approvalState:'not_approved',customerSummary:null,binding:null,current:null};
+    pending.item.estimate={currency:'USD',customerPrice:1568.66,lineItems:[
+      {label:'Tree removal and cleanup',category:'labor',customerCharge:1400},
+      {label:'Permit coordination',category:'fees',customerCharge:168.66},
+    ]};
+    pending.item.opportunity.scope={jobType:'removal',treeCount:1,assessmentQuestions:'Internal prompt must stay private',accessClass:'moderate backyard access'};
+    const draft=createCustomerEstimateDraft(pending);
+    expect(createCustomerEstimateDisplay(pending)).toEqual(draft);
+    expect(draft).toMatchObject({state:'draft',subtotal:'1568.66',tax:'0.00',total:'1568.66',capabilities:{downloadPdf:true,downloadImage:true,accept:false,askQuestion:false}});
+    expect(draft.work.scope).toContain('Access: Moderate backyard access');
+    expect(documentRenderer.presentationRows(draft)).toContainEqual({label:'Tax',amount:'Needs Review',kind:'tax'});
+    expect(JSON.stringify(draft)).not.toContain('Assessment Questions');
+    expect(JSON.stringify(draft)).not.toContain('Internal prompt');
+    expect(()=>createCustomerEstimatePreview(pending)).toThrow(/Approve the current scope/);
   });
 
   test('formats USD with a dollar sign and builds one complete Unicode PDF definition', () => {

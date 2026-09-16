@@ -110,3 +110,40 @@ test('every tree operation calculates a complete profile-backed draft without ma
     expect(output.questions.map(question => question.id)).toEqual(['resource_readiness', 'cost_coverage']);
   }
 });
+
+test('prepared tree drafts use the same job-specific scope price and costs as the original Polaris estimate', () => {
+  const estimateRepository = require('../../src/estimating/estimateProposalRepository');
+  const buildEstimateReview = require('../../src/services/estimateReview').buildEstimateReview;
+  const intents = ['tree_removal', 'tree_pruning', 'tree_stump', 'tree_storm', 'tree_hauling', 'tree_visit'];
+  let verifiedNonBasePrice = false;
+  for (let index = 0; index < 12; index += 1) {
+    const state = workspace.createInitialDemoState(TENANT, NOW, { seed: 'tree-prepared-alignment-' + index });
+    for (const intent of intents) {
+      const storm = intent === 'tree_storm';
+      const graph = workspace.buildSimulatedGraph({
+        tenantId: TENANT, workspace: state.workspace, key: 'tree-prepared-alignment-' + index + '-' + intent, createdAt: NOW,
+        scenarioSelection: { business: 'owner_operator', service: 'tree', intent, urgency: storm ? 'safety_emergency' : 'planning', context: 'new_customer', scheduling: 'flexible', outcome: storm ? 'needs_information' : 'estimate_ready' },
+      });
+      const item = workspace.demoCanonicalItems({ tenant: state.workspace.tenant, graphs: [graph], configuration: { businessProfile: state.workspace.businessProfile } })[0];
+      const review = {
+        ...buildEstimateReview(item, { simulated: true }), selectedRevision: null, isCurrent: true,
+        decisions: { writeBasis: { revision: 0, digest: 'none' } },
+        pricingPlans: { sources: { serviceKey: 'tree', asOfDate: '2026-09-15', references: [], digest: 'tree-prepared-alignment', basis: { directCosts: null, overheadIncluded: [] } } },
+      };
+      const output = estimateRepository.demo(
+        { state, expiresAt: '2026-09-16T12:00:00Z' }, review, item,
+        { version: estimateProposal.VERSION, selectedRevision: null, expectedBasisDigest: null, overrides: [], candidateIds: [] }, NOW, state,
+      );
+      const component = kind => output.components.find(value => value.kind === kind);
+      expect(component('pricing').result.result.proposedBeforeTax).toBe(item.snapshot.customerFacingPrice.toFixed(2));
+      expect(component('pricing').result.result.overhead.gross).toBe(item.snapshot.overhead.toFixed(2));
+      expect(component('materials').result.total).toBe(item.snapshot.knownDirectMaterialCost.toFixed(2));
+      expect(component('labor').result.total).toBe(item.snapshot.knownInternalLaborCost.toFixed(2));
+      expect(component('equipment').costs[0].total).toBe(item.snapshot.knownEquipmentCost.toFixed(2));
+      expect(component('travel').result.total).toBe(item.snapshot.travel.knownInternalCost.toFixed(2));
+      const operation = item.snapshot.service.scope.jobType;
+      if (item.snapshot.customerFacingPrice !== treeProfiles.OPERATIONS[operation].basePrice) verifiedNonBasePrice = true;
+    }
+  }
+  expect(verifiedNonBasePrice).toBe(true);
+});

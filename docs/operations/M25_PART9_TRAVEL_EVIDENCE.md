@@ -50,4 +50,4 @@ Disposable PostgreSQL checks cover the combined inventory, tenant isolation, own
 - No provider-specific browser workflow for entering raw route records; authorized adapters use the bounded normalized import contract.
 - No physical Safari or physical-device evidence in the local acceptance lane.
 
-All six Part 9 slices are implemented in the current candidate. Part 9 remains unreleased until the independent exact-head acceptance audit passes.
+All six Part 9 slices are released. Independent exact-head acceptance passed at `ab11fe727d92d284db8b3ed0463b210346fdee72` with no actionable correctness, security, privacy or regression finding. The acceptance report SHA-256 is `46b5dc1871c13c863cf67abaabdc20ddfd29b49208eb4a27c5c8c541cb7fdd11`.

@@ -144,12 +144,13 @@ async function createDatabaseFixture(options = {}) {
         return { assignment, actor, appointment, opportunity };
       }
       const repository = require('../../src/operations/repository');
-      let execution = (await repository.initializeFieldExecution(runtimePool, {
+      const executionPool = options.useMigrationRoleForUpstreamSeed ? ownerPool : runtimePool;
+      let execution = (await repository.initializeFieldExecution(executionPool, {
         ...actor, appointmentId: appointment, expectedAssignmentRevision: Number(assignment.revision),
         expectedAssignmentDigest: assignment.digest, idempotencyKey: crypto.randomUUID(),
         reason: 'Initialize synthetic overview work', requestCorrelationId: `p9b-init-${sequence}`,
       })).body.data;
-      execution = (await repository.transitionFieldExecution(runtimePool, {
+      execution = (await repository.transitionFieldExecution(executionPool, {
         ...actor, executionId: execution.id, expectedRevision: execution.revision, expectedDigest: execution.digest,
         expectedAssignmentRevision: Number(assignment.revision), expectedAssignmentDigest: assignment.digest,
         action: 'start', idempotencyKey: crypto.randomUUID(), reason: 'Start synthetic overview work',

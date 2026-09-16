@@ -10,6 +10,14 @@ The first package is the [learning architecture](../architecture/MISSION_25_LEAR
 
 The existing `/polaris/learning` compatibility route returns current Polaris snapshot projections. Its name does not make it a Mission 25 learning engine, training corpus or outcome graph.
 
+## Second bounded package — labor duration observations
+
+The first runtime source adoption compares the worker hours in one explicitly adopted Mission 24 labor plan with accepted, non-break Mission 23 labor intervals for the same completed paid-tenant job. An owner or administrator must grant current `labor_duration_variance_v1` purpose consent and explicitly record each observation. The result is a deterministic variance advisory with exact estimate, revision, plan, execution, completion, labor-record, consent and algorithm lineage.
+
+Source corrections make the current advisory stale until it is deliberately refreshed. Consent revocation immediately blocks new observations and hides derived values from the runtime projection. The immutable audit rows remain governed records; the runtime role can use only guarded entry functions. The package does not train a model, pool tenants, read demo activity, infer employee performance, change a rate, revise an estimate, alter a schedule or update a business policy.
+
+This is one source class and one advisory comparison. Historical imports, continuous external updates, deletion/tombstone orchestration, multi-job calibration, owner-facing adoption UI and the other source classes below remain required before Mission 25 completion.
+
 No fixed implementation-part count is declared by this package. Later packages must state the exact source class, consent, correction/deletion behavior, derived output and release evidence they add. Completion requires usable roadmap-designated historical-backfill and continuous-update integrations; placeholder connectors and sample cards are insufficient.
 
 ## Required direction

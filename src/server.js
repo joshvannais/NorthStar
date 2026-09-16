@@ -19,6 +19,7 @@ const voiceRoutes = require('./routes/voice');
 const voiceWebhook = require('./voice/webhook');
 const { createRetellWebhookBoundaryRouter } = require('./routes/retellWebhookBoundary');
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
+const { createLearningRouter } = require('./routes/learning');
 const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
 const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
@@ -281,6 +282,7 @@ const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1/command-center', createCommandCenterRouter());
 app.use('/api/v1/today', createTodayRouter());
 app.use('/api/v1/operational-overview', createOperationalOverviewRouter());
+app.use('/api/v1/learning', createLearningRouter());
 app.use('/api/v1', simulationsRoutes);
 app.use('/api/public', createCustomerEstimateDeliveryRouter());
 app.use('/api/v1/canonical', createCanonicalRouter({

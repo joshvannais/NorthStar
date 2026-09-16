@@ -1,6 +1,10 @@
 # Mission 25 tenant-private learning architecture
 
-Status: root contract proposal against released Mission 24 completion `e5ea91ee8a574cd140ff73bd571e30ac824dcf5b`. This document authorizes no runtime or provider mutation.
+Status: root contract accepted in Mission 25 Part 1. Part 2 releases the bounded labor-duration observation described below; provider imports and broader calibration remain unimplemented.
+
+## First runtime source
+
+The initial source is a paid-tenant, completed-job comparison between an adopted Mission 24 labor plan and accepted Mission 23 labor intervals. It requires explicit owner/admin purpose consent, pins the complete source manifest, computes a deterministic advisory, and keeps application outside this package. Corrected source records invalidate the current advice; revoked consent prevents further use and suppresses derived values from guarded reads. Demo records and cross-tenant data are rejected.
 
 ## Canonical identities
 

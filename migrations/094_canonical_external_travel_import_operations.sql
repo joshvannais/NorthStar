@@ -51,7 +51,7 @@ CREATE TABLE public.canonical_external_travel_cleanup_runs (
  source_key TEXT NOT NULL CHECK(source_key~'^[a-z0-9][a-z0-9._-]{1,63}$'), operation TEXT NOT NULL CHECK(operation IN ('retention','deletion')),
  sequence BIGINT NOT NULL CHECK(sequence BETWEEN 1 AND 1000000000), previous_run_id UUID, authority_revision BIGINT NOT NULL CHECK(authority_revision BETWEEN 1 AND 10000),
  authority_digest CHAR(64) NOT NULL CHECK(authority_digest~'^[0-9a-f]{64}$'), cursor_before TEXT, cursor_after TEXT,
- complete BOOLEAN NOT NULL, tombstoned_count INTEGER NOT NULL CHECK(tombstoned_count BETWEEN 1 AND 100),
+ complete BOOLEAN NOT NULL, tombstoned_count INTEGER NOT NULL CHECK(tombstoned_count BETWEEN 0 AND 100),
  actor_user_id UUID NOT NULL, membership_id UUID NOT NULL, auth_session_id UUID NOT NULL,
  request_key_hash CHAR(64) NOT NULL CHECK(request_key_hash~'^[0-9a-f]{64}$'), request_digest CHAR(64) NOT NULL CHECK(request_digest~'^[0-9a-f]{64}$'),
  canonical_digest CHAR(64) NOT NULL CHECK(canonical_digest~'^[0-9a-f]{64}$'), created_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
@@ -80,6 +80,13 @@ RETURNS JSONB LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path=pg_catalog,pu
   'digest',rtrim(value->>'canonical_digest'),'createdAt',value->>'created_at'))
 $$;
 
+CREATE FUNCTION public.canonical_external_travel_cleanup_projection(value public.canonical_external_travel_cleanup_runs)
+RETURNS JSONB LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path=pg_catalog,public,pg_temp AS $$
+ SELECT jsonb_build_object('id',value.id,'operation',value.operation,'sequence',value.sequence,
+  'cursorAfter',value.cursor_after,'complete',value.complete,'tombstonedCount',value.tombstoned_count,
+  'digest',rtrim(value.canonical_digest))
+$$;
+
 CREATE FUNCTION public.canonical_external_travel_operation_mutate(org UUID,actor UUID,role_value TEXT,session_value UUID,
  csrf TEXT,key_value TEXT,source_value TEXT,kind TEXT,body JSONB)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
@@ -91,7 +98,11 @@ BEGIN
  PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE; IF NOT FOUND THEN RAISE EXCEPTION 'Subscription unavailable' USING ERRCODE='42501'; END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE);
  IF source_value IS NULL OR source_value!~'^[a-z0-9][a-z0-9._-]{1,63}$' OR key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$'
-  OR kind NOT IN ('adapter','retention','deletion') OR body->'confirmed' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION 'Source operation invalid' USING ERRCODE='22023'; END IF;
+  OR kind NOT IN ('adapter','retention','deletion') OR jsonb_typeof(body) IS DISTINCT FROM 'object'
+  OR jsonb_typeof(body->'expectedRevision') IS DISTINCT FROM 'number' OR (body->>'expectedRevision')!~'^(0|[1-9][0-9]{0,3}|10000)$'
+  OR jsonb_typeof(body->'expectedDigest') IS DISTINCT FROM 'string' OR body->>'expectedDigest'!~'^(none|[0-9a-f]{64})$'
+  OR (((body->>'expectedRevision')::bigint=0)<>(body->>'expectedDigest'='none'))
+  OR body->'confirmed' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION 'Source operation invalid' USING ERRCODE='22023'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-travel-operation:'||source_value||':'||kind,0));
  IF NOT EXISTS(SELECT 1 FROM public.canonical_external_travel_import_consents WHERE organization_id=org AND source_key=source_value) THEN RAISE EXCEPTION 'Source operation requires a recorded source' USING ERRCODE='22023'; END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex'); request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,'kind',kind,'body',body));
@@ -108,18 +119,25 @@ BEGIN
  digest_value:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,'kind',kind,'revision',revision_value,'previousId',previous,'actorUserId',actor,'body',body,'requestDigest',request_hash));
  IF kind='adapter' THEN
   IF public.canonical_field_evidence_object_keys_exact(body,ARRAY['action','adapterKind','cadence','expectedRevision','expectedDigest','confirmed']) IS NOT TRUE
-   OR body->>'action' NOT IN ('connect','pause','resume','disconnect') OR body->>'adapterKind' NOT IN ('csv','provider_api') OR body->>'cadence' NOT IN ('manual','hourly','daily')
+   OR jsonb_typeof(body->'action') IS DISTINCT FROM 'string' OR NOT (body->>'action'=ANY(ARRAY['connect','pause','resume','disconnect']))
+   OR jsonb_typeof(body->'adapterKind') IS DISTINCT FROM 'string' OR NOT (body->>'adapterKind'=ANY(ARRAY['csv','provider_api']))
+   OR jsonb_typeof(body->'cadence') IS DISTINCT FROM 'string' OR NOT (body->>'cadence'=ANY(ARRAY['manual','hourly','daily']))
    THEN RAISE EXCEPTION 'Adapter operation invalid' USING ERRCODE='22023'; END IF;
   IF (body->>'action'='connect' AND current_value->>'action' IS NOT NULL AND current_value->>'action'<>'disconnect') OR (body->>'action'='pause' AND current_value->>'action' NOT IN ('connect','resume')) OR (body->>'action'='resume' AND current_value->>'action'<>'pause') OR (body->>'action'='disconnect' AND current_value->>'action' NOT IN ('connect','pause','resume')) THEN RAISE EXCEPTION 'Adapter transition invalid' USING ERRCODE='22023'; END IF;
   IF body->>'action'<>'connect' AND (body->>'adapterKind' IS DISTINCT FROM current_value->>'adapter_kind' OR body->>'cadence' IS DISTINCT FROM current_value->>'cadence') THEN RAISE EXCEPTION 'Adapter identity changed during lifecycle transition' USING ERRCODE='22023'; END IF;
   INSERT INTO public.canonical_external_travel_adapter_revisions(organization_id,source_key,revision,previous_id,action,adapter_kind,cadence,actor_user_id,membership_id,auth_session_id,request_key_hash,request_digest,canonical_digest)
   VALUES(org,source_value,revision_value,previous,body->>'action',body->>'adapterKind',body->>'cadence',actor,(authority->>'membershipId')::uuid,session_value,key_hash,request_hash,digest_value) RETURNING to_jsonb(canonical_external_travel_adapter_revisions.*) INTO inserted;
  ELSIF kind='retention' THEN
-  IF public.canonical_field_evidence_object_keys_exact(body,ARRAY['action','retentionDays','expectedRevision','expectedDigest','confirmed']) IS NOT TRUE OR body->>'action' NOT IN ('set','disable') OR (body->>'action'='set' AND ((body->>'retentionDays')!~'^[0-9]+$' OR (body->>'retentionDays')::integer NOT BETWEEN 30 AND 3650)) OR (body->>'action'='disable' AND body->'retentionDays'<>'null'::jsonb) THEN RAISE EXCEPTION 'Retention operation invalid' USING ERRCODE='22023'; END IF;
+  IF public.canonical_field_evidence_object_keys_exact(body,ARRAY['action','retentionDays','expectedRevision','expectedDigest','confirmed']) IS NOT TRUE
+   OR jsonb_typeof(body->'action') IS DISTINCT FROM 'string' OR NOT (body->>'action'=ANY(ARRAY['set','disable']))
+   OR (body->>'action'='set' AND (jsonb_typeof(body->'retentionDays') IS DISTINCT FROM 'number' OR (body->>'retentionDays')!~'^[0-9]+$' OR (body->>'retentionDays')::integer NOT BETWEEN 30 AND 3650))
+   OR (body->>'action'='disable' AND body->'retentionDays' IS DISTINCT FROM 'null'::jsonb) THEN RAISE EXCEPTION 'Retention operation invalid' USING ERRCODE='22023'; END IF;
   INSERT INTO public.canonical_external_travel_retention_revisions(organization_id,source_key,revision,previous_id,action,retention_days,actor_user_id,membership_id,auth_session_id,request_key_hash,request_digest,canonical_digest)
   VALUES(org,source_value,revision_value,previous,body->>'action',CASE WHEN body->>'action'='set' THEN (body->>'retentionDays')::integer END,actor,(authority->>'membershipId')::uuid,session_value,key_hash,request_hash,digest_value) RETURNING to_jsonb(canonical_external_travel_retention_revisions.*) INTO inserted;
  ELSE
-  IF public.canonical_field_evidence_object_keys_exact(body,ARRAY['action','expectedRevision','expectedDigest','confirmed']) IS NOT TRUE OR body->>'action' NOT IN ('request','cancel') OR (body->>'action'='request' AND current_value->>'action'='request') OR (body->>'action'='cancel' AND current_value->>'action' IS DISTINCT FROM 'request') THEN RAISE EXCEPTION 'Deletion operation invalid' USING ERRCODE='22023'; END IF;
+  IF public.canonical_field_evidence_object_keys_exact(body,ARRAY['action','expectedRevision','expectedDigest','confirmed']) IS NOT TRUE
+   OR jsonb_typeof(body->'action') IS DISTINCT FROM 'string' OR NOT (body->>'action'=ANY(ARRAY['request','cancel']))
+   OR (body->>'action'='request' AND current_value->>'action'='request') OR (body->>'action'='cancel' AND current_value->>'action' IS DISTINCT FROM 'request') THEN RAISE EXCEPTION 'Deletion operation invalid' USING ERRCODE='22023'; END IF;
   INSERT INTO public.canonical_external_travel_deletion_revisions(organization_id,source_key,revision,previous_id,action,actor_user_id,membership_id,auth_session_id,request_key_hash,request_digest,canonical_digest)
   VALUES(org,source_value,revision_value,previous,body->>'action',actor,(authority->>'membershipId')::uuid,session_value,key_hash,request_hash,digest_value) RETURNING to_jsonb(canonical_external_travel_deletion_revisions.*) INTO inserted;
   IF body->>'action'='request' THEN
@@ -173,11 +191,20 @@ BEGIN
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Cleanup restricted' USING ERRCODE='42501'; END IF;
  PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE; IF NOT FOUND THEN RAISE EXCEPTION 'Subscription unavailable' USING ERRCODE='42501'; END IF;
  authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE); operation_value:=body->>'operation';
- IF source_value IS NULL OR source_value!~'^[a-z0-9][a-z0-9._-]{1,63}$' OR key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR operation_value NOT IN ('retention','deletion') OR public.canonical_field_evidence_object_keys_exact(body,ARRAY['operation','expectedRevision','expectedDigest','cursorBefore','limit','confirmed']) IS NOT TRUE OR body->'confirmed' IS DISTINCT FROM 'true'::jsonb OR (body->>'expectedRevision')!~'^([1-9][0-9]{0,3}|10000)$' OR body->>'expectedDigest'!~'^[0-9a-f]{64}$' OR (body->'cursorBefore'<>'null'::jsonb AND (jsonb_typeof(body->'cursorBefore') IS DISTINCT FROM 'string' OR char_length(body->>'cursorBefore') NOT BETWEEN 1 AND 128 OR body->>'cursorBefore'!~'^[!-~]+$')) OR (body->>'limit')!~'^[0-9]+$' OR (body->>'limit')::integer NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'Cleanup invalid' USING ERRCODE='22023'; END IF;
+ IF source_value IS NULL OR source_value!~'^[a-z0-9][a-z0-9._-]{1,63}$' OR key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$'
+  OR jsonb_typeof(body) IS DISTINCT FROM 'object' OR jsonb_typeof(body->'operation') IS DISTINCT FROM 'string'
+  OR NOT (operation_value=ANY(ARRAY['retention','deletion']))
+  OR public.canonical_field_evidence_object_keys_exact(body,ARRAY['operation','expectedRevision','expectedDigest','cursorBefore','limit','confirmed']) IS NOT TRUE
+  OR body->'confirmed' IS DISTINCT FROM 'true'::jsonb
+  OR jsonb_typeof(body->'expectedRevision') IS DISTINCT FROM 'number' OR (body->>'expectedRevision')!~'^([1-9][0-9]{0,3}|10000)$'
+  OR jsonb_typeof(body->'expectedDigest') IS DISTINCT FROM 'string' OR body->>'expectedDigest'!~'^[0-9a-f]{64}$'
+  OR NOT (body->'cursorBefore'='null'::jsonb OR (jsonb_typeof(body->'cursorBefore')='string' AND char_length(body->>'cursorBefore') BETWEEN 1 AND 128 AND body->>'cursorBefore'~'^[!-~]+$'))
+  OR jsonb_typeof(body->'limit') IS DISTINCT FROM 'number' OR (body->>'limit')!~'^[0-9]+$' OR (body->>'limit')::integer NOT BETWEEN 1 AND 100
+  THEN RAISE EXCEPTION 'Cleanup invalid' USING ERRCODE='22023'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-travel-cleanup:'||source_value||':'||operation_value,0));
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex'); request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,'body',body));
  SELECT * INTO replay_run FROM public.canonical_external_travel_cleanup_runs WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
- IF FOUND THEN IF rtrim(replay_run.request_digest)<>request_hash THEN RAISE EXCEPTION 'Cleanup key conflict' USING ERRCODE='23505'; END IF; RETURN jsonb_build_object('run',to_jsonb(replay_run),'replayed',TRUE); END IF;
+ IF FOUND THEN IF rtrim(replay_run.request_digest)<>request_hash THEN RAISE EXCEPTION 'Cleanup key conflict' USING ERRCODE='23505'; END IF; RETURN jsonb_build_object('run',public.canonical_external_travel_cleanup_projection(replay_run),'replayed',TRUE); END IF;
  IF operation_value='retention' THEN SELECT to_jsonb(item) INTO authority_value FROM (SELECT * FROM public.canonical_external_travel_retention_revisions WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE) item; ELSE SELECT to_jsonb(item) INTO authority_value FROM (SELECT * FROM public.canonical_external_travel_deletion_revisions WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE) item; END IF;
  IF COALESCE((authority_value->>'revision')::bigint,0)<>(body->>'expectedRevision')::bigint OR COALESCE(rtrim(authority_value->>'canonical_digest'),'none') IS DISTINCT FROM body->>'expectedDigest' OR (operation_value='retention' AND authority_value->>'action'<>'set') OR (operation_value='deletion' AND authority_value->>'action'<>'request') THEN RAISE EXCEPTION 'Cleanup authority changed' USING ERRCODE='40001'; END IF;
  SELECT * INTO previous_run FROM public.canonical_external_travel_cleanup_runs WHERE organization_id=org AND source_key=source_value AND operation=operation_value
@@ -186,7 +213,6 @@ BEGIN
  IF (previous_run.id IS NULL OR previous_run.complete) AND body->'cursorBefore'<>'null'::jsonb THEN RAISE EXCEPTION 'Cleanup cursor changed' USING ERRCODE='40001'; END IF;
  CREATE TEMP TABLE selected_cleanup_records ON COMMIT DROP AS WITH current_records AS (SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_travel_import_records WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC) SELECT * FROM current_records WHERE state='active' AND (body->'cursorBefore'='null'::jsonb OR external_record_id>body->>'cursorBefore') AND (operation_value='deletion' OR source_updated_at<transaction_timestamp()-make_interval(days=>(authority_value->>'retention_days')::integer)) ORDER BY external_record_id LIMIT (body->>'limit')::integer+1;
  SELECT count(*) INTO selected_count FROM selected_cleanup_records; has_more:=selected_count>(body->>'limit')::integer;
- IF selected_count=0 THEN RETURN jsonb_build_object('run',NULL,'replayed',FALSE,'complete',TRUE,'tombstonedCount',0); END IF;
  DELETE FROM selected_cleanup_records WHERE external_record_id=(SELECT max(external_record_id) FROM selected_cleanup_records) AND has_more; SELECT count(*),max(external_record_id) INTO selected_count,next_cursor FROM selected_cleanup_records; IF NOT has_more THEN next_cursor:=NULL; END IF;
  SELECT COALESCE(max(sequence),0)+1 INTO sequence_value FROM public.canonical_external_travel_cleanup_runs WHERE organization_id=org AND source_key=source_value AND operation=operation_value;
  digest_value:=public.canonical_completion_digest(jsonb_build_object('id',run_id,'organizationId',org,'sourceKey',source_value,'operation',operation_value,'sequence',sequence_value,'previousRunId',previous_run.id,'authorityRevision',(authority_value->>'revision')::bigint,'authorityDigest',rtrim(authority_value->>'canonical_digest'),'cursorBefore',body->>'cursorBefore','cursorAfter',next_cursor,'complete',NOT has_more,'tombstonedCount',selected_count,'actorUserId',actor,'requestDigest',request_hash));
@@ -204,7 +230,8 @@ BEGIN
    record_row.external_version+1,'tombstone',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
    transaction_timestamp(),record_digest,record_row.import_run_id,run_id);
  END LOOP;
- RETURN jsonb_build_object('run',jsonb_build_object('id',run_id,'operation',operation_value,'sequence',sequence_value,'cursorAfter',next_cursor,'complete',NOT has_more,'tombstonedCount',selected_count,'digest',digest_value),'replayed',FALSE);
+ SELECT * INTO replay_run FROM public.canonical_external_travel_cleanup_runs WHERE id=run_id;
+ RETURN jsonb_build_object('run',public.canonical_external_travel_cleanup_projection(replay_run),'replayed',FALSE);
 END $$;
 
 CREATE FUNCTION public.canonical_external_travel_import_deletion_guard() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
@@ -214,6 +241,7 @@ CREATE TRIGGER canonical_external_travel_import_deletion_guard BEFORE INSERT ON 
 
 REVOKE ALL ON TABLE public.canonical_external_travel_adapter_revisions,public.canonical_external_travel_retention_revisions,public.canonical_external_travel_deletion_revisions,public.canonical_external_travel_cleanup_runs FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_travel_operation_projection(TEXT,JSONB) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_external_travel_cleanup_projection(public.canonical_external_travel_cleanup_runs) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_travel_operation_mutate(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_travel_adapter_mutate(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_travel_retention_mutate(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;

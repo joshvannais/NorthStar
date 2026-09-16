@@ -38,10 +38,25 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
         .post(root + suffix).set(actor.session.headers).set('X-CSRF-Token', actor.csrfToken)
         .set('Idempotency-Key', requestKey).send(body) };
     };
+    const directRuntimeReject = async (functionName, sourceKey, body) => {
+      const client = await fixture.runtimePool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await assert.rejects(client.query(`SELECT public.${functionName}($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+          [fixture.org, owner.actorUserId, owner.actorAccessRole, owner.authSessionId, owner.csrfToken,
+            crypto.randomUUID(), sourceKey, JSON.stringify(body)]), error => error.code === '22023');
+      } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+    };
 
     const primary = source('fleet.operations');
     let response = await primary.write('/consent', consentBody);
     assert.equal(response.status, 201, JSON.stringify(response.body)); const consent = response.body.data.consent;
+    await directRuntimeReject('canonical_external_travel_adapter_mutate', 'fleet.operations', {
+      action: 'connect', adapterKind: 'provider_api', cadence: 'hourly', expectedRevision: null,
+      expectedDigest: 'none', confirmed: true,
+    });
+    assert.equal((await fixture.ownerPool.query(`SELECT count(*)::integer total FROM canonical_external_travel_adapter_revisions
+      WHERE organization_id=$1 AND source_key=$2`, [fixture.org, 'fleet.operations'])).rows[0].total, 0);
     const initialCancel = await primary.write('/deletion', { action: 'cancel', expectedRevision: 0,
       expectedDigest: 'none', confirmed: true });
     assert.equal(initialCancel.status, 400, JSON.stringify(initialCancel.body));
@@ -75,14 +90,36 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
     assert.equal(response.status, 201, JSON.stringify(response.body)); const retention = response.body.data.retention;
     response = await request(fixture.app).get(primary.root + '/operations').set(owner.session.headers);
     assert.equal(response.body.data.retentionEligibleTotal, 1);
-    response = await primary.write('/cleanup', { operation: 'retention', expectedRevision: retention.revision,
-      expectedDigest: retention.digest, cursorBefore: null, limit: 100, confirmed: true });
+    await directRuntimeReject('canonical_external_travel_cleanup_execute', 'fleet.operations', {
+      operation: 'retention', expectedRevision: null, expectedDigest: retention.digest,
+      cursorBefore: null, limit: 100, confirmed: true,
+    });
+    assert.equal((await fixture.ownerPool.query(`SELECT count(*)::integer total FROM canonical_external_travel_cleanup_runs
+      WHERE organization_id=$1 AND source_key=$2`, [fixture.org, 'fleet.operations'])).rows[0].total, 0);
+    const retentionCleanup = { operation: 'retention', expectedRevision: retention.revision,
+      expectedDigest: retention.digest, cursorBefore: null, limit: 100, confirmed: true };
+    const retentionKey = crypto.randomUUID();
+    response = await primary.write('/cleanup', retentionCleanup, retentionKey);
     assert.equal(response.status, 201, JSON.stringify(response.body));
     assert.equal(response.body.data.run.tombstonedCount, 1); assert.equal(response.body.data.run.complete, true);
+    const firstCleanup = response.body.data.run;
+    response = await primary.write('/cleanup', retentionCleanup, retentionKey);
+    assert.equal(response.status, 200); assert.equal(response.headers['idempotency-replayed'], 'true');
+    assert.deepEqual(response.body.data.run, firstCleanup); assert.equal(Object.hasOwn(response.body.data.run, 'organization_id'), false);
+    response = await primary.write('/cleanup', { ...retentionCleanup, limit: 99 }, retentionKey);
+    assert.equal(response.status, 409);
+    const zeroCleanupKey = crypto.randomUUID();
+    response = await primary.write('/cleanup', retentionCleanup, zeroCleanupKey);
+    assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.tombstonedCount, 0);
+    const zeroCleanup = response.body.data.run;
+    response = await primary.write('/cleanup', retentionCleanup, zeroCleanupKey);
+    assert.equal(response.status, 200); assert.deepEqual(response.body.data.run, zeroCleanup);
+    response = await primary.write('/cleanup', { ...retentionCleanup, limit: 99 }, zeroCleanupKey);
+    assert.equal(response.status, 409);
     response = await request(fixture.app).get(primary.root).set(owner.session.headers);
     assert.equal(response.body.data.currentRecords[0].state, 'tombstone');
     assert.equal(response.body.data.currentRecords[0].jobReference, null);
-    ledger.cases.push('Retention appends a minimized travel tombstone through one bounded immutable cleanup run.');
+    ledger.cases.push('Retention cleanup is bounded, direct-runtime pin checks fail closed and nonzero or zero-result retries are exact.');
 
     const deletionSource = source('fleet.deletion');
     response = await deletionSource.write('/consent', consentBody);
@@ -159,9 +196,10 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
     const privileges = (await fixture.ownerPool.query(`SELECT
       has_table_privilege($1,'canonical_external_travel_cleanup_runs','SELECT') cleanup_table,
       has_function_privilege($1,'canonical_external_travel_operation_projection(text,jsonb)','EXECUTE') helper,
+      has_function_privilege($1,'canonical_external_travel_cleanup_projection(canonical_external_travel_cleanup_runs)','EXECUTE') cleanup_helper,
       has_function_privilege($1,'canonical_external_travel_cleanup_execute(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE') entry`,
     [fixture.roles.runtime])).rows[0];
-    assert.deepEqual(privileges, { cleanup_table: false, helper: false, entry: true });
+    assert.deepEqual(privileges, { cleanup_table: false, helper: false, cleanup_helper: false, entry: true });
     await assert.rejects(fixture.ownerPool.query('DELETE FROM canonical_external_travel_cleanup_runs'));
     const bytes = fs.readFileSync(path.join(__dirname, '../../migrations/094_canonical_external_travel_import_operations.sql'));
     const checksum = crypto.createHash('sha256').update(bytes).digest('hex');

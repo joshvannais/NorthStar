@@ -80,17 +80,29 @@ let fixture;
     await paidContext.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name, value]) => ({
       name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf',
     })));
-    let raceMode = false;
+    let raceMode = false, loadRaceMode = false, staleCenterPending = false, newTravelPostStartedResolve;
+    const newTravelPostStarted = new Promise(resolve => { newTravelPostStartedResolve = resolve; });
     await paidContext.route('**/*', async route => {
       const request = route.request();
       const url = new URL(request.url());
       if (url.origin !== origin) return route.abort();
       ledger.requests.push({ method: request.method(), path: url.pathname });
+      if (loadRaceMode && request.method() === 'POST' && url.pathname === '/api/v1/learning/external-travel-sources/new.travel/consent') {
+        newTravelPostStartedResolve();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return route.continue();
+      }
+      if (loadRaceMode && staleCenterPending && request.method() === 'GET' && url.pathname === '/api/v1/learning/center') {
+        staleCenterPending = false;
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return route.fulfill(jsonCenter());
+      }
       if (raceMode && request.method() === 'GET' && url.pathname === '/api/v1/learning/external-labor-sources/slow.labor') {
         await new Promise(resolve => setTimeout(resolve, 500));
         return route.fulfill(jsonSource('slow.labor', 11));
       }
       if (raceMode && request.method() === 'GET' && url.pathname === '/api/v1/learning/external-travel-sources/fleet.browser') return route.fulfill(jsonSource('fleet.browser', 22));
+      if (loadRaceMode && request.method() === 'GET' && url.pathname === '/api/v1/learning/external-travel-sources/new.travel') return route.fulfill(jsonSource('new.travel', 33));
       return route.continue();
     });
     const seededLabor = await paidContext.request.post(`${origin}/api/v1/learning/external-labor-sources/slow.labor/consent`, {
@@ -131,11 +143,26 @@ let fixture;
     assert.equal(await paidPage.locator('#evidenceMetrics .learning-metric strong').first().innerText(), '22');
     assert.equal(await paidPage.locator('#learningDetail').isVisible(), true);
     ledger.cases.push('A delayed labor response cannot overwrite the fast selected travel source or its evidence after a source switch.');
+
+    loadRaceMode = true; staleCenterPending = true;
+    await paidPage.locator('#learningSourceKind').selectOption('travel');
+    await paidPage.locator('#learningSourceKey').fill('new.travel');
+    const newConsentResponse = paidPage.waitForResponse(response => response.url().endsWith('/external-travel-sources/new.travel/consent') && response.request().method() === 'POST');
+    await paidPage.locator('#learningSourceAdd').click();
+    await newTravelPostStarted;
+    await paidPage.locator('#learningRefresh').click();
+    assert.equal((await newConsentResponse).status(), 201);
+    await paidPage.waitForFunction(() => document.querySelector('#learningDetailTitle').textContent === 'New Travel · Travel' && document.querySelector('#learningStatus').textContent === 'Learning Center is current.');
+    await paidPage.waitForTimeout(650);
+    assert.equal(await paidPage.locator('#learningDetailTitle').innerText(), 'New Travel · Travel');
+    assert.equal(await paidPage.locator('#evidenceMetrics .learning-metric strong').first().innerText(), '33');
+    assert.equal(await paidPage.locator('#learningMain').getAttribute('aria-busy'), 'false');
+    ledger.cases.push('An older whole-inventory refresh cannot overwrite the newer post-save load, selected travel source or ready state.');
     await paidContext.close();
 
     assert.deepEqual(ledger.pageErrors, []);
-    assert.deepEqual(ledger.requests.filter(item => item.method === 'POST').map(item => item.path), ['/api/v1/learning/external-travel-sources/fleet.browser/consent']);
-    ledger.cases.push('The demo emitted no mutation, and the paid run emitted only its expected owner consent mutation.');
+    assert.deepEqual(ledger.requests.filter(item => item.method === 'POST').map(item => item.path), ['/api/v1/learning/external-travel-sources/fleet.browser/consent', '/api/v1/learning/external-travel-sources/new.travel/consent']);
+    ledger.cases.push('The demo emitted no mutation, and the paid run emitted only its two expected owner consent mutations.');
     ledger.pass = true;
   } catch (error) {
     ledger.error = error.stack;
@@ -155,5 +182,18 @@ function jsonSource(sourceKey, count) {
     body: JSON.stringify({ success: true, data: { sourceKey, activeConsent: true, runs: [], runTotal: count,
       runsTruncated: false, currentRecords: [], recordTotal: count, recordsTruncated: false,
       latestSourceUpdatedAt: '2026-09-16T12:00:00.000Z' } }),
+  };
+}
+
+function jsonCenter() {
+  const digest = 'a'.repeat(64);
+  return {
+    status: 200,
+    contentType: 'application/json; charset=utf-8',
+    body: JSON.stringify({ success: true, data: { version: 'm25-learning-center-v2', authority: 'tenant_private_postgresql',
+      evaluatedAt: '2026-09-16T12:00:00.000Z', nativeLabor: { active: true, current: { revision: 1, digest, action: 'grant' }, history: [], total: 1 },
+      sources: [{ sourceKind: 'labor', sourceKey: 'slow.labor', serviceKeys: [], serviceTotal: 0, servicesTruncated: false }],
+      sourceTotal: 1, sourcesTruncated: false,
+      learningBoundary: 'Synthetic stale center response for request-order regression only.' } }),
   };
 }

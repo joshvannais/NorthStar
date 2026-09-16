@@ -5,7 +5,7 @@
   var session = global.NorthStarAccountSession;
   var demo = global.location.pathname.indexOf('/demo/') === 0;
   if (global.history && 'scrollRestoration' in global.history) global.history.scrollRestoration = 'manual';
-  var state = { center: null, sourceKind: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, operations: null, selectionGeneration: 0, calibrationGeneration: 0 };
+  var state = { center: null, sourceKind: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, operations: null, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0 };
   var el = function (id) { return document.getElementById(id); };
 
   function node(tag, className, text) {
@@ -364,11 +364,12 @@
   }
   function load(preferredKind, preferredKey) {
     if (typeof preferredKind !== 'string' || typeof preferredKey !== 'string') { preferredKind = null; preferredKey = null; }
-    var entryLoad = state.center === null; ++state.selectionGeneration; ++state.calibrationGeneration;
+    var generation = ++state.loadGeneration, entryLoad = state.center === null; ++state.selectionGeneration; ++state.calibrationGeneration;
     if (entryLoad) global.scrollTo(0, 0);
     status('Loading your tenant-private learning controls.'); el('learningRefresh').disabled = true; el('learningMain').setAttribute('aria-busy', 'true');
     var promise = demo ? Promise.resolve(demoModel('labor').center) : api('/center');
     return promise.then(function (value) {
+      if (generation !== state.loadGeneration) return;
       state.center = contract.center(value); state.sourceKind = null; state.sourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.operations = null;
       el('learningBoundary').textContent = state.center.learningBoundary; renderNative(); renderSources(); renderSummary();
       if (state.center.sources.length) {
@@ -376,8 +377,12 @@
         return selectSource(preferred.sourceKind, preferred.sourceKey);
       }
       el('learningDetail').hidden = true; status('Learning Center is ready. No external source has been recorded.', 'success');
-    }).catch(fail).finally(function () {
+    }).catch(function (error) {
+      if (generation === state.loadGeneration) fail(error);
+    }).finally(function () {
+      if (generation !== state.loadGeneration) return;
       el('learningRefresh').disabled = false;
+      el('learningMain').setAttribute('aria-busy', 'false');
       if (entryLoad) { global.scrollTo(0, 0); global.requestAnimationFrame(function () { global.scrollTo(0, 0); }); }
     });
   }

@@ -655,13 +655,14 @@ window.CustomerDetail = (function() {
       if(/@|^https?:/i.test(result))return result;
       return result.replace(/^([a-z])/,function(letter){return letter.toUpperCase();});
     }
-    var labels = { customerDistanceMiles:'Customer distance', equipmentReference:'Equipment', jobType:'Work type', laborHours:'Labor time', serviceRadiusMiles:'Service radius', serviceZone:'Service area', linearFeet:'Length', estimatedDurationHours:'Estimated duration', seer:'SEER', sqft:'Area', squareFeet:'Area' };
-    var units = { customerDistanceMiles:'miles', serviceRadiusMiles:'miles', linearFeet:'ft', laborHours:'hours', estimatedDurationHours:'hours', sqft:'square feet', squareFeet:'square feet' };
+    var labels = { customerDistanceMiles:'Customer distance', equipmentReference:'Equipment', equipmentName:'Equipment', jobType:'Work type', workType:'Work type', treeCount:'Tree count', sizeClass:'Size', approximateHeightFeet:'Approximate height', conditionClass:'Condition', nearStructure:'Near a structure', accessClass:'Access', crewProfile:'Crew', plannedCrewSize:'Planned crew size', crewCount:'Crew count', laborHours:'Labor time', serviceRadiusMiles:'Service radius', serviceZone:'Service area', schedulingConstraint:'Scheduling', linearFeet:'Length', estimatedDurationHours:'Estimated duration', seer:'SEER', sqft:'Area', squareFeet:'Area' };
+    var units = { customerDistanceMiles:'miles', serviceRadiusMiles:'miles', approximateHeightFeet:'ft', linearFeet:'ft', laborHours:'hours', estimatedDurationHours:'hours', sqft:'square feet', squareFeet:'square feet' };
     if (service.key === 'hvac') { labels.tonnage = 'Cooling capacity'; units.tonnage = 'tons'; }
     var hiddenScopeKeys=['timeZone','description','workDescription','address','assessmentQuestions','businessContext','callerIntent','conversationOutcome','customerContext','disposalPreference','email','phone','pricingModel','requestedWork','serviceRadiusMiles','siteConcern'];
     var scopeOrder=['jobType','workType','treeCount','sizeClass','approximateHeightFeet','conditionClass','nearStructure','accessClass','terrain','material','finish','linearFeet','squareFeet','sqft','area','equipmentName','equipmentReference','crewProfile','plannedCrewSize','crewCount','laborHours','estimatedDurationHours','customerDistanceMiles','serviceZone','schedulingConstraint','urgency'];
     var scopeKeys=scope&&typeof scope==='object'&&!Array.isArray(scope)?Object.keys(scope).filter(function(key){return hiddenScopeKeys.indexOf(key)<0&&(!presentationFormat().isInternalKey(key)||key==='equipmentReference')&&['string','number','boolean'].includes(typeof scope[key]);}):[];
     scopeKeys.sort(function(left,right){var a=scopeOrder.indexOf(left),b=scopeOrder.indexOf(right);return(a<0?999:a)-(b<0?999:b)||left.localeCompare(right);});
+    var seenScopeValues={};scopeKeys=scopeKeys.filter(function(key){if(key==='equipmentReference'&&scope.equipmentName)return false;if(typeof scope[key]!=='string')return true;var value=scope[key].trim().toLowerCase();if(!value||seenScopeValues[value])return false;seenScopeValues[value]=true;return true;});
     var scopeFacts = scopeKeys.length ? scopeKeys.slice(0,12).map(function(key) {
       var label = labels[key] || presentationFormat().label(key);
       return label + ': ' + (units[key] ? measured(scope[key],units[key]) : polished(scope[key],key));

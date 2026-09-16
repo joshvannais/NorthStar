@@ -54,6 +54,11 @@ describe('customer card clarity corrections', () => {
     expect(detail).toContain("'assessmentQuestions'");
     expect(detail).toContain('scopeKeys.slice(0,12)');
     expect(detail).toContain("letter.toUpperCase()");
+    expect(detail).toContain("approximateHeightFeet:'Approximate height'");
+    expect(detail).toContain("nearStructure:'Near a structure'");
+    expect(detail).toContain("approximateHeightFeet:'ft'");
+    expect(detail).toContain("key==='equipmentReference'&&scope.equipmentName");
+    expect(detail).toContain('seenScopeValues[value]');
   });
 
   test('estimate action opens a downloadable draft before commercial approval', () => {

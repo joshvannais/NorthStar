@@ -4,7 +4,8 @@
   var contract = global.NorthStarLearningCenterContract;
   var session = global.NorthStarAccountSession;
   var demo = global.location.pathname.indexOf('/demo/') === 0;
-  var state = { center: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, operations: null };
+  if (global.history && 'scrollRestoration' in global.history) global.history.scrollRestoration = 'manual';
+  var state = { center: null, sourceKind: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, operations: null, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0 };
   var el = function (id) { return document.getElementById(id); };
 
   function node(tag, className, text) {
@@ -42,33 +43,60 @@
     var value = node('button', 'btn ' + (primary ? 'btn-primary' : 'btn-secondary'), label);
     value.type = 'button'; value.addEventListener('click', handler); return value;
   }
+  function selectedSource() {
+    return state.center && state.center.sources.filter(function (item) {
+      return item.sourceKind === state.sourceKind && item.sourceKey === state.sourceKey;
+    })[0];
+  }
+  function sourceBase(kind, key) {
+    return '/external-' + kind + '-sources/' + encodeURIComponent(key);
+  }
+  function isTravel() { return state.sourceKind === 'travel'; }
 
-  function demoModel() {
+  function demoModel(kind) {
     var digest = 'a'.repeat(64), now = new Date().toISOString();
     var consent = { active: true, current: { revision: 1, digest: digest, action: 'grant' }, history: [], total: 1, truncated: false };
+    var travel = kind === 'travel';
     return {
-      center: { version: 'm25-learning-center-v1', authority: 'isolated_demo_postgresql', evaluatedAt: now,
-        nativeLabor: consent, sourceTotal: 1, sourcesTruncated: false,
-        sources: [{ sourceKey: 'crewclock.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false }],
+      center: { version: 'm25-learning-center-v2', authority: 'isolated_demo_postgresql', evaluatedAt: now,
+        nativeLabor: consent, sourceTotal: 2, sourcesTruncated: false,
+        sources: [
+          { sourceKind: 'labor', sourceKey: 'crewclock.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
+          { sourceKind: 'travel', sourceKey: 'fleet.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false }
+        ],
         learningBoundary: 'Demo records are isolated and illustrative. Learning remains advisory and changes no operating record.' },
-      source: { sourceKey: 'crewclock.demo', activeConsent: true, runs: [{ sequence: 4 }], runTotal: 4, runsTruncated: false,
-        currentRecords: [{ externalRecordId: 'tree-crew-042', sourceUpdatedAt: now }], recordTotal: 28, recordsTruncated: false, latestSourceUpdatedAt: now },
-      sourceConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent), outcomeConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent),
-      calibrationConsent: Object.assign({ sourceKey: 'crewclock.demo' }, consent),
-      operations: { sourceKey: 'crewclock.demo', adapter: { revision: 2, digest: digest, action: 'resume', adapterKind: 'provider_api', cadence: 'daily' },
+      source: { sourceKey: travel ? 'fleet.demo' : 'crewclock.demo', activeConsent: true, runs: [{ sequence: 4 }], runTotal: 4, runsTruncated: false,
+        currentRecords: [{ externalRecordId: travel ? 'route-042' : 'tree-crew-042', sourceUpdatedAt: now }], recordTotal: travel ? 34 : 28, recordsTruncated: false, latestSourceUpdatedAt: now },
+      sourceConsent: Object.assign({ sourceKey: travel ? 'fleet.demo' : 'crewclock.demo' }, consent), outcomeConsent: Object.assign({ sourceKey: travel ? 'fleet.demo' : 'crewclock.demo' }, consent),
+      calibrationConsent: Object.assign({ sourceKey: travel ? 'fleet.demo' : 'crewclock.demo' }, consent),
+      operations: { sourceKey: travel ? 'fleet.demo' : 'crewclock.demo', adapter: { revision: 2, digest: digest, action: 'resume', adapterKind: 'provider_api', cadence: 'daily' },
         retention: { revision: 1, digest: digest, action: 'set', retentionDays: 365 }, deletion: null,
-        checkpoints: [{ mode: 'historical_backfill', sequence: 3, cursorAfter: null, complete: true }],
-        activeRecordTotal: 28, retentionEligibleTotal: 2, deletionComplete: false,
+        checkpoints: [{ mode: 'historical_backfill', sequence: 3, cursorAfter: null, complete: true }, { mode: 'continuous_update', sequence: 4, cursorAfter: 'demo-004', complete: false }],
+        activeRecordTotal: travel ? 34 : 28, retentionEligibleTotal: 2, deletionComplete: false,
         boundary: 'Demo cleanup is read-only. Paid cleanup appends minimized tombstones and invalidates dependent advice.' },
-      matches: { sourceKey: 'crewclock.demo', activeConsent: true, referenceTotal: 3,
+      matches: travel ? { sourceKey: 'fleet.demo', activeConsent: true, referenceTotal: 2,
         references: [
+          { referenceKind: 'job', externalReference: 'tree-job-042', sourceRecordCount: 6, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '22222222-2222-4222-8222-222222222222', targetDigest: digest, action: 'link', status: 'matched' } },
+          { referenceKind: 'vehicle', externalReference: 'chip-truck-2', sourceRecordCount: 6, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '44444444-4444-4444-8444-444444444444', targetDigest: digest, action: 'link', status: 'matched' } }
+        ],
+        vehicleTargets: [{ targetId: '44444444-4444-4444-8444-444444444444', name: 'Chip truck 2', manufacturer: 'Ford', model: 'F-550', digest: digest }],
+        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', digest: digest }] } :
+      { sourceKey: 'crewclock.demo', activeConsent: true, referenceTotal: 3, references: [
           { referenceKind: 'worker', externalReference: 'crew-lead-7', sourceRecordCount: 12, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '11111111-1111-4111-8111-111111111111', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'job', externalReference: 'tree-job-042', sourceRecordCount: 9, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '22222222-2222-4222-8222-222222222222', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'worker', externalReference: 'climber-12', sourceRecordCount: 7, sourceDigest: digest, match: null }
         ],
         workerTargets: [{ targetId: '11111111-1111-4111-8111-111111111111', operationalRole: 'Crew lead', digest: digest }],
         jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', digest: digest }] },
-      calibration: { sourceKey: 'crewclock.demo', serviceKey: 'tree-service', activeConsent: true, history: [], total: 1, truncated: false,
+      calibration: travel ? { sourceKey: 'fleet.demo', serviceKey: 'tree-service', activeConsent: true, history: [], total: 1, truncated: false,
+        refreshRequired: false, current: { fresh: true, advisoryAvailable: true, sampleSize: 8, staleExcludedCount: 1,
+          metrics: {
+            routeDuration: { status: 'compared', label: 'Route duration', unit: 'vehicle_minute', medianActualToPlannedRatio: '1.0800', lowerQuartileRatio: '0.9600', upperQuartileRatio: '1.1700', proposedMultiplier: '1.0800', advisoryMessage: 'Reviewed routes averaged about 8% longer than planned.', unavailableReason: null },
+            distance: { status: 'compared', label: 'Driving distance', unit: 'mi', medianActualToPlannedRatio: '1.0300', lowerQuartileRatio: '0.9800', upperQuartileRatio: '1.0900', proposedMultiplier: '1.0300', advisoryMessage: 'Reviewed driving distance averaged about 3% above plan.', unavailableReason: null },
+            fuelQuantity: { status: 'unavailable', label: 'Fuel or energy quantity', unit: null, medianActualToPlannedRatio: null, proposedMultiplier: null, advisoryMessage: null, unavailableReason: 'At least five current outcomes with this comparable dimension are required.' },
+            fuelCost: { status: 'compared', label: 'Fuel cost', unit: 'USD', medianActualToPlannedRatio: '1.0600', lowerQuartileRatio: '0.9700', upperQuartileRatio: '1.1400', proposedMultiplier: '1.0600', advisoryMessage: 'Reviewed fuel cost averaged about 6% above plan.', unavailableReason: null }
+          } } } :
+      { sourceKey: 'crewclock.demo', serviceKey: 'tree-service', activeConsent: true, history: [], total: 1, truncated: false,
         refreshRequired: false, current: { fresh: true, advisoryAvailable: true, sampleSize: 8, staleExcludedCount: 1,
           medianActualToPlannedRatio: '1.0800', lowerQuartileRatio: '0.9600', upperQuartileRatio: '1.1700',
           proposedPlannedHoursMultiplier: '1.0800', advisoryMessage: 'Recent reviewed tree-service jobs averaged about 8% more labor time than their adopted plans.' } }
@@ -99,14 +127,17 @@
   function renderSources() {
     var root = el('learningSources'); clear(root);
     el('sourcesDescription').textContent = state.center.sources.length ?
-      'Select a company source to inspect its consent, evidence, reference matches and service-level calibrations.' :
-      'No external labor source has been recorded yet. Add the first source, then import its reviewed CSV history.';
+      'Select a labor or travel source to inspect its consent, evidence, reference matches and service-level calibrations.' :
+      'No external source has been recorded yet. Add the first labor or travel source to begin a reviewed connection.';
     state.center.sources.forEach(function (source) {
       var card = node('button', 'learning-source-card'); card.type = 'button';
-      card.setAttribute('aria-pressed', String(source.sourceKey === state.sourceKey));
+      card.setAttribute('aria-pressed', String(source.sourceKind === state.sourceKind && source.sourceKey === state.sourceKey));
+      card.setAttribute('aria-label', contract.label(source.sourceKey) + ', ' + contract.label(source.sourceKind) + ' source');
+      var kind = node('span', 'learning-source-kind', source.sourceKind === 'travel' ? 'Travel · mileage · fuel' : 'Labor · time');
+      card.appendChild(kind);
       card.appendChild(node('strong', '', contract.label(source.sourceKey)));
       card.appendChild(node('span', '', source.serviceTotal + ' service ' + (source.serviceTotal === 1 ? 'group' : 'groups') + ' recorded'));
-      card.addEventListener('click', function () { selectSource(source.sourceKey); }); root.appendChild(card);
+      card.addEventListener('click', function () { selectSource(source.sourceKind, source.sourceKey); }); root.appendChild(card);
     });
   }
   function consentCard(title, description, consent, endpoint, version) {
@@ -116,24 +147,25 @@
       action.disabled = true; status('Saving ' + title.toLowerCase() + ' consent.');
       mutate(endpoint, consentBody(consent, consent.active ? 'revoke' : 'grant', version,
         'Owner ' + (consent.active ? 'paused' : 'enabled') + ' ' + title.toLowerCase() + ' from the Learning Center.'))
-        .then(function () { return selectSource(state.sourceKey, true); }).catch(fail);
+        .then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(fail);
     }, false); action.disabled = demo; card.appendChild(node('div', 'learning-actions')).appendChild(action); return card;
   }
   function renderConsentCards() {
-    var root = el('learningConsentCards'); clear(root); var key = encodeURIComponent(state.sourceKey);
+    var root = el('learningConsentCards'); clear(root);
+    var base = sourceBase(state.sourceKind, state.sourceKey);
     root.appendChild(consentCard('Source import', 'Controls whether records from this named source may be staged.', state.consents.source,
-      '/external-labor-sources/' + key + '/consent', 'm25-external-labor-import-consent-v1'));
-    root.appendChild(consentCard('Outcome comparisons', 'Controls comparisons between matched imported jobs and adopted labor plans.', state.consents.outcome,
-      '/external-labor-sources/' + key + '/imported-labor-duration-consent', 'm25-imported-labor-duration-consent-v1'));
+      base + '/consent', isTravel() ? 'm25-external-travel-import-consent-v1' : 'm25-external-labor-import-consent-v1'));
+    root.appendChild(consentCard('Outcome comparisons', isTravel() ? 'Controls comparisons between matched route evidence and adopted travel plans.' : 'Controls comparisons between matched imported jobs and adopted labor plans.', state.consents.outcome,
+      base + (isTravel() ? '/imported-travel-variance-consent' : '/imported-labor-duration-consent'), isTravel() ? 'm25-imported-travel-variance-consent-v1' : 'm25-imported-labor-duration-consent-v1'));
     root.appendChild(consentCard('Calibration proposals', 'Controls service-level summaries built from current reviewed comparisons.', state.consents.calibration,
-      '/external-labor-sources/' + key + '/imported-labor-calibration-consent', 'm25-imported-labor-calibration-consent-v1'));
+      base + (isTravel() ? '/imported-travel-calibration-consent' : '/imported-labor-calibration-consent'), isTravel() ? 'm25-imported-travel-calibration-consent-v1' : 'm25-imported-labor-calibration-consent-v1'));
   }
   function operationPair(value) { return value ? { expectedRevision: value.revision, expectedDigest: value.digest } : { expectedRevision: 0, expectedDigest: 'none' }; }
   function operationCard(title, description) { var card = node('article', 'learning-operation-card'); card.appendChild(node('h4', '', title)); card.appendChild(node('p', '', description)); return card; }
   function checkpoint(mode) { return (state.operations.checkpoints || []).filter(function (item) { return item.mode === mode; })[0] || null; }
   function saveOperation(path, body, message) {
-    status(message); return mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + path, body)
-      .then(function () { return selectSource(state.sourceKey, true); }).catch(function (error) {
+    status(message); return mutate(sourceBase(state.sourceKind, state.sourceKey) + path, body)
+      .then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(function (error) {
         fail(error);
         renderOperations();
       });
@@ -142,22 +174,33 @@
     var root = el('learningOperations'); clear(root);
     if (!state.operations) { root.appendChild(node('p', 'learning-empty', 'Loading source operations.')); return; }
     var grid = node('div', 'learning-operation-grid'), backfill = checkpoint('historical_backfill');
-    var csv = operationCard('CSV history', backfill && backfill.complete ? 'Historical backfill is complete. Current source corrections can continue through the guarded adapter route.' : 'Upload one reviewed NorthStar labor CSV page with no more than 100 records.');
-    var file = node('input', 'learning-file'); file.type = 'file'; file.accept = '.csv,text/csv'; file.setAttribute('aria-label', 'Reviewed labor CSV'); file.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(file);
-    var pageLabel = node('label', '', 'Backfill progress'); pageLabel.htmlFor = 'learningCsvPageState'; var pageState = node('select'); pageState.id = 'learningCsvPageState';
-    [['complete', 'This file is the final page'], ['more', 'More CSV pages follow']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; pageState.appendChild(option); });
-    pageState.disabled = demo || Boolean(backfill && backfill.complete); csv.appendChild(pageLabel); csv.appendChild(pageState);
-    var cursorLabel = node('label', '', 'Checkpoint after this page'); cursorLabel.htmlFor = 'learningCsvCursorAfter'; var cursorAfter = node('input'); cursorAfter.id = 'learningCsvCursorAfter'; cursorAfter.type = 'text'; cursorAfter.maxLength = 200; cursorAfter.autocomplete = 'off'; cursorAfter.placeholder = 'Example: payroll-page-002'; cursorAfter.disabled = true; csv.appendChild(cursorLabel); csv.appendChild(cursorAfter);
-    pageState.addEventListener('change', function () { cursorAfter.disabled = demo || pageState.value !== 'more'; if (!cursorAfter.disabled) cursorAfter.focus(); });
-    var importButton = button(demo ? 'Demo preview' : (backfill && backfill.complete ? 'Backfill complete' : 'Import CSV'), function () {
-      if (!file.files || !file.files[0]) { status('Choose a CSV file before importing.', 'error'); return; }
-      var complete = pageState.value === 'complete', nextCursor = complete ? null : cursorAfter.value.trim();
-      if (!complete && !/^[!-~]{1,200}$/.test(nextCursor)) { status('Enter a 1 to 200 character checkpoint with no spaces for the next page.', 'error'); cursorAfter.focus(); return; }
-      importButton.disabled = true; status('Reading and validating the reviewed CSV.');
-      file.files[0].text().then(function (text) { return mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + '/csv-backfill', {
-        cursorBefore: backfill && !backfill.complete ? backfill.cursorAfter : null, cursorAfter: nextCursor, complete: complete, csvText: text
-      }); }).then(function () { return selectSource(state.sourceKey, true); }).catch(function (error) { importButton.disabled = false; fail(error); });
-    }, true); importButton.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(node('div', 'learning-actions')).appendChild(importButton); csv.appendChild(node('small', '', backfill && !backfill.complete ? 'Resume after checkpoint ' + backfill.cursorAfter + '. Required columns are validated before staging.' : 'Required columns are validated before any record is staged.')); grid.appendChild(csv);
+    if (!isTravel()) {
+      var csv = operationCard('CSV history', backfill && backfill.complete ? 'Historical backfill is complete. Current source corrections can continue through the guarded adapter route.' : 'Upload one reviewed NorthStar labor CSV page with no more than 100 records.');
+      var file = node('input', 'learning-file'); file.type = 'file'; file.accept = '.csv,text/csv'; file.setAttribute('aria-label', 'Reviewed labor CSV'); file.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(file);
+      var pageLabel = node('label', '', 'Backfill progress'); pageLabel.htmlFor = 'learningCsvPageState'; var pageState = node('select'); pageState.id = 'learningCsvPageState';
+      [['complete', 'This file is the final page'], ['more', 'More CSV pages follow']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; pageState.appendChild(option); });
+      pageState.disabled = demo || Boolean(backfill && backfill.complete); csv.appendChild(pageLabel); csv.appendChild(pageState);
+      var cursorLabel = node('label', '', 'Checkpoint after this page'); cursorLabel.htmlFor = 'learningCsvCursorAfter'; var cursorAfter = node('input'); cursorAfter.id = 'learningCsvCursorAfter'; cursorAfter.type = 'text'; cursorAfter.maxLength = 200; cursorAfter.autocomplete = 'off'; cursorAfter.placeholder = 'Example: payroll-page-002'; cursorAfter.disabled = true; csv.appendChild(cursorLabel); csv.appendChild(cursorAfter);
+      pageState.addEventListener('change', function () { cursorAfter.disabled = demo || pageState.value !== 'more'; if (!cursorAfter.disabled) cursorAfter.focus(); });
+      var importButton = button(demo ? 'Demo preview' : (backfill && backfill.complete ? 'Backfill complete' : 'Import CSV'), function () {
+        if (!file.files || !file.files[0]) { status('Choose a CSV file before importing.', 'error'); return; }
+        var complete = pageState.value === 'complete', nextCursor = complete ? null : cursorAfter.value.trim();
+        if (!complete && !/^[!-~]{1,200}$/.test(nextCursor)) { status('Enter a 1 to 200 character checkpoint with no spaces for the next page.', 'error'); cursorAfter.focus(); return; }
+        importButton.disabled = true; status('Reading and validating the reviewed CSV.');
+        file.files[0].text().then(function (text) { return mutate(sourceBase('labor', state.sourceKey) + '/csv-backfill', {
+          cursorBefore: backfill && !backfill.complete ? backfill.cursorAfter : null, cursorAfter: nextCursor, complete: complete, csvText: text
+        }); }).then(function () { return selectSource('labor', state.sourceKey, true); }).catch(function (error) { importButton.disabled = false; fail(error); });
+      }, true); importButton.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(node('div', 'learning-actions')).appendChild(importButton); csv.appendChild(node('small', '', backfill && !backfill.complete ? 'Resume after checkpoint ' + backfill.cursorAfter + '. Required columns are validated before staging.' : 'Required columns are validated before any record is staged.')); grid.appendChild(csv);
+    } else {
+      var continuous = checkpoint('continuous_update');
+      var checkpointCard = operationCard('Import checkpoints', 'Authorized adapters submit normalized route, mileage and fuel records in pages of no more than 100. NorthStar stores the checkpoint, not a provider credential.');
+      var checkpointMetrics = node('div', 'learning-compact-metrics');
+      checkpointMetrics.appendChild(metric('Historical history', backfill ? (backfill.complete ? 'Complete' : 'In progress') : 'Not started'));
+      checkpointMetrics.appendChild(metric('Continuous updates', continuous ? ('Run ' + integer(continuous.sequence)) : 'Not started'));
+      checkpointCard.appendChild(checkpointMetrics);
+      checkpointCard.appendChild(node('small', '', 'Distance and fuel retain their source units and evidence basis. Missing dimensions remain unavailable.'));
+      grid.appendChild(checkpointCard);
+    }
 
     var adapter = state.operations.adapter, adapterCard = operationCard('Continuous sync', adapter ? 'Current state: ' + contract.label(adapter.action) + '. Adapter state contains no account reference or provider credential.' : 'Register the source lifecycle before an authorized adapter submits continuous updates.');
     var canConfigure = !adapter || adapter.action === 'disconnect';
@@ -191,7 +234,7 @@
   }
   function metric(label, value) { var item = node('div', 'learning-metric'); item.appendChild(node('span', '', label)); item.appendChild(node('strong', '', value)); return item; }
   function renderEvidence() {
-    el('evidenceSummary').textContent = state.detail.activeConsent ? 'Current staged evidence for this source. Records remain separate from operating data.' : 'Source consent is inactive.';
+    el('evidenceSummary').textContent = state.detail.activeConsent ? (isTravel() ? 'Current staged route, mileage and fuel evidence. Records remain separate from operating data.' : 'Current staged labor evidence. Records remain separate from operating data.') : 'Source consent is inactive.';
     var root = el('evidenceMetrics'); clear(root);
     root.appendChild(metric('Import runs', integer(state.detail.runTotal).toLocaleString()));
     root.appendChild(metric('Current records', integer(state.detail.recordTotal).toLocaleString()));
@@ -200,14 +243,16 @@
   }
   function targetLabel(kind, target) {
     if (kind === 'worker') return contract.label(target.operationalRole || 'Worker') + ' · ' + String(target.targetId).slice(0, 8);
+    if (kind === 'vehicle') return (target.name || [target.manufacturer, target.model].filter(Boolean).join(' ') || 'Vehicle') + ' · ' + String(target.targetId).slice(0, 8);
     return 'Estimate ' + String(target.targetId).slice(0, 8);
   }
   function renderMatches() {
     var root = el('learningMatches'); clear(root); var references = state.matches.references || [];
-    el('matchesSummary').textContent = references.length ? 'Link imported identities to the current company record they describe. Stale links must be reviewed again.' : 'No imported worker or job references are available.';
+    el('matchesSummary').textContent = references.length ? 'Link imported identities to the current company record they describe. Stale links must be reviewed again.' : (isTravel() ? 'No imported vehicle or job references are available.' : 'No imported worker or job references are available.');
     if (!references.length) { root.appendChild(node('p', 'learning-empty', 'No references to review.')); return; }
     var wrap = node('div', 'learning-table-wrap'), table = node('table', 'learning-table'), head = node('thead'), row = node('tr');
-    ['Type', 'External reference', 'Evidence', 'Status', 'Company record'].forEach(function (label) { row.appendChild(node('th', '', label)); }); head.appendChild(row); table.appendChild(head);
+    table.appendChild(node('caption', 'learning-visually-hidden', 'Imported reference review for ' + contract.label(state.sourceKey)));
+    ['Type', 'External reference', 'Evidence', 'Status', 'Company record'].forEach(function (label) { var th = node('th', '', label); th.scope = 'col'; row.appendChild(th); }); head.appendChild(row); table.appendChild(head);
     var body = node('tbody');
     references.forEach(function (reference) {
       var tr = node('tr'); tr.appendChild(node('td', '', contract.label(reference.referenceKind))); tr.appendChild(node('td', '', reference.externalReference));
@@ -215,7 +260,7 @@
       var match = reference.match, matchState = match ? match.status : 'unmatched'; var pill = node('span', 'learning-pill', contract.label(matchState)); pill.dataset.state = matchState === 'matched' ? 'current' : (matchState === 'stale' ? 'stale' : 'review'); tr.appendChild(node('td')).appendChild(pill);
       var cell = node('td'), select = node('select'); select.setAttribute('aria-label', 'Company record for ' + reference.externalReference);
       select.appendChild(new Option('Not linked', ''));
-      var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : state.matches.jobTargets;
+      var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : (reference.referenceKind === 'vehicle' ? state.matches.vehicleTargets : state.matches.jobTargets);
       targets.forEach(function (target) { var option = new Option(targetLabel(reference.referenceKind, target), target.targetId); option.dataset.digest = target.digest; select.appendChild(option); });
       select.value = match && match.action === 'link' ? match.targetId : ''; select.disabled = demo;
       select.addEventListener('change', function () { saveMatch(reference, select); }); cell.appendChild(select); tr.appendChild(cell); body.appendChild(tr);
@@ -224,15 +269,17 @@
   function saveMatch(reference, select) {
     var match = reference.match, link = Boolean(select.value), selected = select.options[select.selectedIndex]; select.disabled = true;
     status('Saving the reviewed reference match.');
-    mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + '/matches', {
+    mutate(sourceBase(state.sourceKind, state.sourceKey) + '/matches', {
       referenceKind: reference.referenceKind, externalReference: reference.externalReference, action: link ? 'link' : 'unlink', targetId: link ? select.value : null,
       expectedRevision: match ? match.revision : 0, expectedDigest: match ? match.digest : 'none', expectedSourceDigest: reference.sourceDigest || 'unavailable',
       expectedTargetDigest: link ? selected.dataset.digest : 'unavailable', reason: 'Owner reviewed this imported reference in the Learning Center.', confirmed: true,
-      confirmationVersion: 'm25-external-labor-reference-match-v1'
-    }).then(function () { return selectSource(state.sourceKey, true); }).catch(fail);
+      confirmationVersion: isTravel() ? 'm25-external-travel-reference-match-v1' : 'm25-external-labor-reference-match-v1'
+    }).then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(fail);
   }
   function renderCalibration() {
-    var root = el('learningCalibration'); clear(root); var source = state.center.sources.filter(function (item) { return item.sourceKey === state.sourceKey; })[0];
+    var root = el('learningCalibration'); clear(root); var source = selectedSource();
+    el('calibrationTitle').textContent = isTravel() ? 'Travel planning calibration' : 'Labor planning calibration';
+    el('calibrationDescription').textContent = isTravel() ? 'Review route duration, driving distance, fuel quantity and fuel cost independently. Saving a proposal does not apply it.' : 'Review a service-level labor summary. Saving a proposal does not apply it.';
     if (!source || !source.serviceKeys.length) { root.appendChild(node('p', 'learning-empty', 'No service group has enough reviewed imported outcome history yet.')); return; }
     var controls = node('div', 'learning-inline'), label = node('label', '', 'Service group'), select = node('select'); label.htmlFor = 'learningService'; select.id = 'learningService';
     source.serviceKeys.forEach(function (key) { select.appendChild(new Option(contract.label(key), key)); });
@@ -241,7 +288,20 @@
     var card = node('article', 'learning-calibration-card'), current = state.calibration.current;
     card.appendChild(node('h4', '', contract.label(state.calibration.serviceKey)));
     if (!current) card.appendChild(node('p', '', state.calibration.activeConsent ? 'No proposal has been prepared. At least five current reviewed outcomes are required.' : 'Calibration consent is inactive.'));
-    else {
+    else if (isTravel()) {
+      card.appendChild(node('p', '', current.fresh ? 'Current reviewed travel proposal. Each dimension remains separate.' : 'The saved travel proposal is stale and must be refreshed before use.'));
+      var travelGrid = node('div', 'learning-travel-calibration-grid');
+      ['routeDuration', 'distance', 'fuelQuantity', 'fuelCost'].forEach(function (key) {
+        var value = current.metrics && current.metrics[key] ? current.metrics[key] : { status: 'unavailable' };
+        var item = node('section', 'learning-dimension-card');
+        var title = node('div', 'learning-dimension-heading'); title.appendChild(node('h5', '', value.label || contract.label(key)));
+        var dimensionPill = node('span', 'learning-pill', value.status === 'compared' ? 'Compared' : 'Unavailable'); dimensionPill.dataset.state = value.status === 'compared' ? 'current' : 'inactive'; title.appendChild(dimensionPill); item.appendChild(title);
+        item.appendChild(node('strong', 'learning-dimension-value', value.proposedMultiplier ? value.proposedMultiplier + '×' : 'No multiplier'));
+        item.appendChild(node('small', '', value.status === 'compared' ? ('Median actual-to-plan ratio · ' + value.medianActualToPlannedRatio + (value.unit ? ' · ' + contract.label(value.unit) : '')) : (value.unavailableReason || 'Comparable current evidence is unavailable.')));
+        if (value.advisoryMessage) item.appendChild(node('p', '', value.advisoryMessage)); travelGrid.appendChild(item);
+      });
+      card.appendChild(travelGrid);
+    } else {
       card.appendChild(node('p', '', current.fresh ? (current.advisoryMessage || 'Current reviewed proposal.') : 'The saved proposal is stale and must be refreshed before use.'));
       var grid = node('div', 'learning-calibration-grid'); grid.appendChild(metric('Reviewed jobs', String(integer(current.sampleSize))));
       grid.appendChild(metric('Median ratio', current.medianActualToPlannedRatio || 'Unavailable')); grid.appendChild(metric('Planning multiplier', current.proposedPlannedHoursMultiplier || 'Needs refresh')); card.appendChild(grid);
@@ -250,65 +310,97 @@
     var action = button(demo ? 'Demo preview' : (currentAndFresh ? 'Proposal current' : (current ? 'Refresh proposal' : 'Prepare proposal')), function () {
       var consent = state.consents.calibration; if (!consent.active || !consent.current) { status('Allow calibration proposals before preparing one.', 'error'); return; }
       action.disabled = true; status('Preparing a reviewed advisory proposal.');
-      mutate('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + '/imported-labor-calibrations/' + encodeURIComponent(state.calibration.serviceKey), {
+      mutate(sourceBase(state.sourceKind, state.sourceKey) + (isTravel() ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/') + encodeURIComponent(state.calibration.serviceKey), {
         expectedConsentRevision: consent.current.revision, expectedConsentDigest: consent.current.digest,
-        reason: 'Owner requested a current service-level labor calibration from the Learning Center.', confirmed: true,
-        confirmationVersion: 'm25-imported-labor-calibration-proposal-v1'
-      }).then(function () { return selectSource(state.sourceKey, true); }).catch(function (error) { action.disabled = false; fail(error); });
+        reason: isTravel() ? 'Owner requested a current service-level travel calibration from the Learning Center.' : 'Owner requested a current service-level labor calibration from the Learning Center.', confirmed: true,
+        confirmationVersion: isTravel() ? 'm25-imported-travel-calibration-proposal-v1' : 'm25-imported-labor-calibration-proposal-v1'
+      }).then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(function (error) { action.disabled = false; fail(error); });
     }, true); action.disabled = demo || !state.consents.calibration.active || currentAndFresh; card.appendChild(node('div', 'learning-actions')).appendChild(action); root.appendChild(card);
   }
 
   function loadCalibration(serviceKey) {
-    if (demo) { state.calibration = demoModel().calibration; state.calibration.serviceKey = serviceKey; renderCalibration(); renderSummary(); return Promise.resolve(); }
+    if (demo) { state.calibration = demoModel(state.sourceKind).calibration; state.calibration.serviceKey = serviceKey; renderCalibration(); renderSummary(); return Promise.resolve(); }
+    var selectionGeneration = state.selectionGeneration, calibrationGeneration = ++state.calibrationGeneration;
+    var base = sourceBase(state.sourceKind, state.sourceKey), travel = isTravel();
     state.calibration = null; renderCalibration();
-    return api('/external-labor-sources/' + encodeURIComponent(state.sourceKey) + '/imported-labor-calibrations/' + encodeURIComponent(serviceKey))
-      .then(function (value) { state.calibration = contract.calibration(value); renderCalibration(); renderSummary(); }).catch(fail);
+    return api(base + (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/') + encodeURIComponent(serviceKey))
+      .then(function (value) {
+        if (selectionGeneration !== state.selectionGeneration || calibrationGeneration !== state.calibrationGeneration) return;
+        state.calibration = contract.calibration(value); renderCalibration(); renderSummary();
+      }).catch(function (error) {
+        if (selectionGeneration === state.selectionGeneration && calibrationGeneration === state.calibrationGeneration) fail(error);
+      });
   }
-  function selectSource(sourceKey, refresh) {
-    state.sourceKey = sourceKey; renderSources(); status('Loading ' + contract.label(sourceKey) + '.');
+  function selectSource(sourceKind, sourceKey, refresh) {
+    var generation = ++state.selectionGeneration, travel = sourceKind === 'travel'; ++state.calibrationGeneration;
+    state.sourceKind = sourceKind; state.sourceKey = sourceKey; state.detail = null; state.matches = null; state.calibration = null; state.operations = null;
+    renderSources(); el('learningDetail').hidden = true; status('Loading ' + contract.label(sourceKey) + '.'); el('learningMain').setAttribute('aria-busy', 'true');
     if (demo) {
-      var model = demoModel(); state.detail = model.source; state.consents = { source: model.sourceConsent, outcome: model.outcomeConsent, calibration: model.calibrationConsent };
-      state.matches = model.matches; state.calibration = model.calibration; state.operations = model.operations; finishDetail(); return Promise.resolve();
+      var model = demoModel(sourceKind); state.detail = model.source; state.consents = { source: model.sourceConsent, outcome: model.outcomeConsent, calibration: model.calibrationConsent };
+      state.matches = model.matches; state.calibration = model.calibration; state.operations = model.operations; finishDetail(generation); return Promise.resolve();
     }
-    var key = encodeURIComponent(sourceKey), base = '/external-labor-sources/' + key;
-    return Promise.all([api(base), api(base + '/consent'), api(base + '/matches'), api(base + '/imported-labor-duration-consent'), api(base + '/imported-labor-calibration-consent'), api(base + '/operations')])
+    var base = sourceBase(sourceKind, sourceKey);
+    var outcomeConsentPath = travel ? '/imported-travel-variance-consent' : '/imported-labor-duration-consent';
+    var calibrationConsentPath = travel ? '/imported-travel-calibration-consent' : '/imported-labor-calibration-consent';
+    return Promise.all([api(base), api(base + '/consent'), api(base + '/matches'), api(base + outcomeConsentPath), api(base + calibrationConsentPath), api(base + '/operations')])
       .then(function (values) {
+        if (generation !== state.selectionGeneration) return null;
         state.detail = contract.source(values[0]); state.consents = { source: contract.consent(values[1]), outcome: contract.consent(values[3]), calibration: contract.consent(values[4]) };
-        state.matches = contract.matches(values[2]); state.operations = contract.operations(values[5]); var source = state.center.sources.filter(function (item) { return item.sourceKey === sourceKey; })[0];
-        if (source && source.serviceKeys.length) return api(base + '/imported-labor-calibrations/' + encodeURIComponent(source.serviceKeys[0])).then(function (value) { state.calibration = contract.calibration(value); });
+        state.matches = contract.matches(values[2]); state.operations = contract.operations(values[5]); var source = selectedSource();
+        if (source && source.serviceKeys.length) return api(base + (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/') + encodeURIComponent(source.serviceKeys[0])).then(function (value) {
+          if (generation === state.selectionGeneration) state.calibration = contract.calibration(value);
+        });
         state.calibration = null;
-      }).then(finishDetail).catch(fail);
+        return null;
+      }).then(function () { if (generation === state.selectionGeneration) finishDetail(generation); }).catch(function (error) {
+        if (generation === state.selectionGeneration) fail(error);
+      });
   }
-  function finishDetail() {
-    el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey);
+  function finishDetail(generation) {
+    if (generation !== state.selectionGeneration || !state.detail || !state.matches || !state.operations) return;
+    el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey) + ' · ' + contract.label(state.sourceKind);
     setPill(el('learningDetailState'), state.detail.activeConsent, !state.detail.activeConsent); renderConsentCards(); renderOperations(); renderEvidence(); renderMatches(); renderCalibration(); renderSummary();
-    status(demo ? 'Showing isolated demo records. Controls are read-only.' : 'Learning Center is current.', 'success');
+    status(demo ? 'Showing isolated demo records. Controls are read-only.' : 'Learning Center is current.', 'success'); el('learningMain').setAttribute('aria-busy', 'false');
   }
-  function load() {
-    status('Loading your tenant-private learning controls.'); el('learningRefresh').disabled = true;
-    var promise = demo ? Promise.resolve(demoModel().center) : api('/center');
+  function load(preferredKind, preferredKey) {
+    if (typeof preferredKind !== 'string' || typeof preferredKey !== 'string') { preferredKind = null; preferredKey = null; }
+    var generation = ++state.loadGeneration, entryLoad = state.center === null; ++state.selectionGeneration; ++state.calibrationGeneration;
+    if (entryLoad) global.scrollTo(0, 0);
+    status('Loading your tenant-private learning controls.'); el('learningRefresh').disabled = true; el('learningMain').setAttribute('aria-busy', 'true');
+    var promise = demo ? Promise.resolve(demoModel('labor').center) : api('/center');
     return promise.then(function (value) {
-      state.center = contract.center(value); state.sourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.operations = null;
+      if (generation !== state.loadGeneration) return;
+      state.center = contract.center(value); state.sourceKind = null; state.sourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.operations = null;
       el('learningBoundary').textContent = state.center.learningBoundary; renderNative(); renderSources(); renderSummary();
-      if (state.center.sources.length) return selectSource(state.center.sources[0].sourceKey);
+      if (state.center.sources.length) {
+        var preferred = state.center.sources.filter(function (source) { return source.sourceKind === preferredKind && source.sourceKey === preferredKey; })[0] || state.center.sources[0];
+        return selectSource(preferred.sourceKind, preferred.sourceKey);
+      }
       el('learningDetail').hidden = true; status('Learning Center is ready. No external source has been recorded.', 'success');
-    }).catch(fail).finally(function () { el('learningRefresh').disabled = false; });
+    }).catch(function (error) {
+      if (generation === state.loadGeneration) fail(error);
+    }).finally(function () {
+      if (generation !== state.loadGeneration) return;
+      el('learningRefresh').disabled = false;
+      el('learningMain').setAttribute('aria-busy', 'false');
+      if (entryLoad) { global.scrollTo(0, 0); global.requestAnimationFrame(function () { global.scrollTo(0, 0); }); }
+    });
   }
   function fail(error) {
     status((error && error.message ? error.message : 'Learning Center could not be loaded.') + (error && error.requestId ? ' Request ' + error.requestId + '.' : ''), 'error');
-    el('learningRefresh').disabled = false;
+    el('learningRefresh').disabled = false; el('learningMain').setAttribute('aria-busy', 'false');
   }
 
   el('learningRefresh').addEventListener('click', load);
   el('learningSourceForm').addEventListener('submit', function (event) {
     event.preventDefault(); if (demo) return;
-    var input = el('learningSourceKey'), sourceKey = input.value.trim().toLowerCase();
+    var input = el('learningSourceKey'), sourceKind = el('learningSourceKind').value, sourceKey = input.value.trim().toLowerCase();
     if (!contract.KEY.test(sourceKey)) { status('Use 2 to 64 lowercase letters, numbers, dots, dashes or underscores.', 'error'); input.focus(); return; }
     el('learningSourceAdd').disabled = true; status('Adding the company source.');
-    mutate('/external-labor-sources/' + encodeURIComponent(sourceKey) + '/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none', reason: 'Owner added this company source in the Learning Center.', confirmed: true, confirmationVersion: 'm25-external-labor-import-consent-v1' })
-      .then(function () { input.value = ''; return load(); }).then(function () { return selectSource(sourceKey, true); }).catch(fail).finally(function () { el('learningSourceAdd').disabled = false; });
+    mutate(sourceBase(sourceKind, sourceKey) + '/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none', reason: 'Owner added this company source in the Learning Center.', confirmed: true, confirmationVersion: sourceKind === 'travel' ? 'm25-external-travel-import-consent-v1' : 'm25-external-labor-import-consent-v1' })
+      .then(function () { input.value = ''; return load(sourceKind, sourceKey); }).catch(fail).finally(function () { el('learningSourceAdd').disabled = false; });
   });
-  if (demo) { el('learningSourceKey').disabled = true; el('learningSourceAdd').disabled = true; }
+  if (demo) { el('learningSourceKind').disabled = true; el('learningSourceKey').disabled = true; el('learningSourceAdd').disabled = true; }
   if (demo) load(); else session.guard().then(function (account) {
     if (account && account.user) load();
   });

@@ -18,7 +18,7 @@ assert.ok(!fs.existsSync(output));
     const route = '/api/v1/learning/center';
     let response = await request(f.app).get(route).set(f.actors.owner.session.headers);
     assert.equal(response.status, 200, JSON.stringify(response.body));
-    assert.equal(response.body.data.version, 'm25-learning-center-v1');
+    assert.equal(response.body.data.version, 'm25-learning-center-v2');
     assert.equal(response.body.data.authority, 'tenant_private_postgresql');
     assert.deepEqual(response.body.data.sources, []);
     assert.match(response.body.data.learningBoundary, /does not automatically change estimates/);
@@ -40,16 +40,31 @@ assert.ok(!fs.existsSync(output));
     response = await request(f.app).get(route).set(f.actors.owner.session.headers);
     assert.equal(response.status, 200, JSON.stringify(response.body));
     assert.equal(response.body.data.sourceTotal, 1);
-    assert.deepEqual(response.body.data.sources, [{ sourceKey: source, serviceKeys: [], serviceTotal: 0, servicesTruncated: false }]);
+    assert.deepEqual(response.body.data.sources, [{ sourceKind: 'labor', sourceKey: source, serviceKeys: [], serviceTotal: 0, servicesTruncated: false }]);
     ledger.cases.push('A consented source appears through the read model without inventing service history.');
+
+    response = await request(f.app).post(`/api/v1/learning/external-travel-sources/${source}/consent`)
+      .set(f.actors.owner.session.headers).set('X-CSRF-Token', f.actors.owner.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send({ action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+        reason: 'Enable the owner-reviewed travel source.', confirmed: true,
+        confirmationVersion: 'm25-external-travel-import-consent-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await request(f.app).get(route).set(f.actors.owner.session.headers);
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.data.sourceTotal, 2);
+    assert.deepEqual(response.body.data.sources, [
+      { sourceKind: 'labor', sourceKey: source, serviceKeys: [], serviceTotal: 0, servicesTruncated: false },
+      { sourceKind: 'travel', sourceKey: source, serviceKeys: [], serviceTotal: 0, servicesTruncated: false },
+    ]);
+    ledger.cases.push('Labor and travel sources with the same tenant label remain distinct and bounded.');
 
     const privileges = (await f.ownerPool.query(`SELECT
       has_function_privilege($1,'canonical_learning_center_read(uuid,uuid,text,uuid)','EXECUTE') entry,
       has_table_privilege($1,'canonical_external_labor_import_consents','SELECT') source_table`, [f.roles.runtime])).rows[0];
     assert.deepEqual(privileges, { entry: true, source_table: false });
-    const bytes = fs.readFileSync(path.join(__dirname, '../../migrations/088_canonical_learning_center.sql'));
+    const bytes = fs.readFileSync(path.join(__dirname, '../../migrations/095_canonical_learning_center_travel.sql'));
     const checksum = crypto.createHash('sha256').update(bytes).digest('hex');
-    const applied = (await f.ownerPool.query("SELECT trim(checksum) checksum FROM _migrations WHERE filename='088_canonical_learning_center.sql'")).rows;
+    const applied = (await f.ownerPool.query("SELECT trim(checksum) checksum FROM _migrations WHERE filename='095_canonical_learning_center_travel.sql'")).rows;
     assert.deepEqual(applied, [{ checksum }]);
     ledger.cases.push('Runtime access stays entry-only and the applied migration checksum matches exact bytes.');
     ledger.pass = true;

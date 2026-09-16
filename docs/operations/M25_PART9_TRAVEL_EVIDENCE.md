@@ -34,11 +34,20 @@ Migration `094_canonical_external_travel_import_operations.sql` and the guarded 
 
 Retention policy identifies current source records older than the configured 30- to 3,650-day interval. Deletion requests revoke source consent immediately and block further imports. Retention and deletion cleanup append minimized travel tombstones in batches of one to 100 and preserve immutable, resumable cursor lineage. A zero-record completion also persists an exact idempotency receipt. Changing retention or deletion authority starts a new checkpoint chain. Cancelling deletion does not reactivate source consent. Owners and administrators retain the only guarded mutation path; the runtime role has no direct operation-table or projection-helper access.
 
-## Deliberately unavailable after Slice E
+## Slice F owner-experience boundary
+
+Migration `095_canonical_learning_center_travel.sql`, `/dashboard/learning-center` and `/demo/learning-center` add travel to the existing Learning Center without creating another travel authority. The combined inventory distinguishes labor and travel sources with `sourceKind`, retains identical source labels as separate identities, caps the inventory at 100 sources and caps service groups at 50 per source. Paid owners use the guarded source, consent, matching, operation and calibration APIs already defined by Slices A-E. The isolated demo uses fictional read-only records and performs no learning mutation.
+
+The travel view keeps route duration, distance, fuel or energy quantity and fuel cost separate. It shows canonical unavailable reasons instead of inventing a multiplier. Job and vehicle references remain owner-reviewed. Provider-neutral lifecycle, import checkpoints, retention and deletion controls remain credential-free. Initial page entry disables browser scroll restoration, returns to the top, exposes a polite status region and `aria-busy`, and uses captioned tables, scoped headers, keyboard-visible controls and narrow responsive grids.
+
+Disposable PostgreSQL checks cover the combined inventory, tenant isolation, owner-only access, runtime entry-only privileges, migration checksum and the five existing travel authority suites. Browser checks cover the authenticated paid route and isolated demo in installed Chrome 152 at 390 by 844 and Playwright WebKit 26.5 at 1440 by 900. Both runs had no page errors or horizontal overflow; the demo emitted no mutation and the paid run emitted only the expected source-consent mutations. Synthetic browser transport checks delayed the first labor detail response by 500 milliseconds while travel was selected, then delayed an older whole-inventory refresh while a newer post-save load completed. The stale completions could not overwrite the selected travel identity, evidence or ready state. These checks prove client request-order handling, not provider latency. Playwright WebKit is not physical Safari or physical-device evidence.
+
+## Deliberately unavailable after Slice F
 
 - No provider-specific OAuth connection or credential storage.
 - No conversion of an estimate, MPG model or straight-line geometry into an actual.
 - No update to estimates, routes, schedules, reimbursement, payroll, assets, prices or policies.
-- No Learning Center travel source UI yet.
+- No provider-specific browser workflow for entering raw route records; authorized adapters use the bounded normalized import contract.
+- No physical Safari or physical-device evidence in the local acceptance lane.
 
-Part 9 remains in progress until the paid and isolated-demo owner UI and independent release acceptance are complete.
+All six Part 9 slices are released. Independent exact-head acceptance passed at `ab11fe727d92d284db8b3ed0463b210346fdee72` with no actionable correctness, security, privacy or regression finding. The acceptance report SHA-256 is `46b5dc1871c13c863cf67abaabdc20ddfd29b49208eb4a27c5c8c541cb7fdd11`.

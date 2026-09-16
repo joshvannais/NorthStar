@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Learning Center - NorthStar</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-  <script src="/js/command-center-contract.js?v=m25-import-operations-20260916"></script>
-  <script src="/js/demo-runtime.js?v=m25-import-operations-20260916"></script>
+  <script src="/js/command-center-contract.js?v=m25-travel-learning-20260916"></script>
+  <script src="/js/demo-runtime.js?v=m25-travel-learning-20260916"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/learning-center.css?v=m25-import-operations-20260916">
+  <link rel="stylesheet" href="/css/learning-center.css?v=m25-travel-learning-20260916">
   <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
 </head>
 <body class="learning-center-page">
@@ -42,12 +42,16 @@
       </section>
       <section class="learning-panel" aria-labelledby="sourcesTitle">
         <div class="learning-panel-heading">
-          <div><p class="learning-kicker">Connected history</p><h2 id="sourcesTitle">External labor sources</h2></div>
+          <div><p class="learning-kicker">Connected history</p><h2 id="sourcesTitle">External labor and travel sources</h2></div>
         </div>
         <p id="sourcesDescription">Loading configured sources.</p>
         <form id="learningSourceForm" class="learning-source-form">
           <label for="learningSourceKey">Add a company source</label>
-          <div class="learning-inline"><input id="learningSourceKey" name="sourceKey" type="text" inputmode="text" autocomplete="off" maxlength="64" placeholder="Example: crewclock.primary" pattern="[a-z0-9][a-z0-9._-]{1,63}"><button id="learningSourceAdd" class="btn btn-secondary" type="submit">Add source</button></div>
+          <div class="learning-inline">
+            <select id="learningSourceKind" name="sourceKind" aria-label="Source category"><option value="labor">Labor and time</option><option value="travel">Travel, mileage and fuel</option></select>
+            <input id="learningSourceKey" name="sourceKey" type="text" inputmode="text" autocomplete="off" maxlength="64" placeholder="Example: fleet.primary" pattern="[a-z0-9][a-z0-9._-]{1,63}">
+            <button id="learningSourceAdd" class="btn btn-secondary" type="submit">Add source</button>
+          </div>
           <small>Use a stable company label. NorthStar stores no provider password or access token here.</small>
         </form>
         <div id="learningSources" class="learning-source-grid" aria-live="polite"></div>
@@ -58,15 +62,15 @@
         <section class="learning-subpanel" aria-labelledby="operationsTitle"><div class="learning-panel-heading"><div><h3 id="operationsTitle">Import and source operations</h3><p>Bring in a reviewed CSV, manage continuous sync state, and control retention or deletion.</p></div></div><div id="learningOperations"></div></section>
         <section class="learning-subpanel" aria-labelledby="evidenceTitle"><div class="learning-panel-heading"><div><h3 id="evidenceTitle">Source evidence</h3><p id="evidenceSummary">No source selected.</p></div></div><div id="evidenceMetrics" class="learning-metrics"></div></section>
         <section class="learning-subpanel" aria-labelledby="matchesTitle"><div class="learning-panel-heading"><div><h3 id="matchesTitle">Reference review</h3><p id="matchesSummary">No references loaded.</p></div></div><div id="learningMatches"></div></section>
-        <section class="learning-subpanel" aria-labelledby="calibrationTitle"><div class="learning-panel-heading"><div><h3 id="calibrationTitle">Labor planning calibration</h3><p>Review a service-level summary. Saving a proposal does not apply it.</p></div></div><div id="learningCalibration"></div></section>
+        <section class="learning-subpanel" aria-labelledby="calibrationTitle"><div class="learning-panel-heading"><div><h3 id="calibrationTitle">Planning calibration</h3><p id="calibrationDescription">Review a service-level summary. Saving a proposal does not apply it.</p></div></div><div id="learningCalibration"></div></section>
       </section>
       <aside class="learning-boundary" aria-label="Learning boundary"><h2>Owner decision remains required</h2><p id="learningBoundary">Learning remains advisory. NorthStar does not automatically change estimates, rates, schedules, payroll, worker profiles or business policy.</p></aside>
     </main>
   </div>
   <script src="/js/auth-session.js"></script>
-  <script src="/js/nav-component.js?v=m25-import-operations-20260916"></script>
-  <script src="/js/learning-center-contract.js?v=m25-import-operations-20260916"></script>
-  <script src="/js/learning-center-page.js?v=m25-import-operations-20260916"></script>
+  <script src="/js/nav-component.js?v=m25-travel-learning-20260916"></script>
+  <script src="/js/learning-center-contract.js?v=m25-travel-learning-20260916"></script>
+  <script src="/js/learning-center-page.js?v=m25-travel-learning-20260916"></script>
   <script>NavComponent.init('learning-center');</script>
 </body>
 </html>

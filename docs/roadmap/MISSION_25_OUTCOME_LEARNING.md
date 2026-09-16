@@ -32,6 +32,12 @@ Migration `085_canonical_external_labor_reconciliation.sql` and the guarded `mat
 
 The package does not infer a match, mutate either source authority, or silently replace a stale link. No imported record supports an outcome observation yet; the later observation package must require a current reviewed match and pin that match in its own lineage. No rendered owner interface is included; this API-only package documents the later wording, focus, mobile and theme review gate.
 
+## Fifth bounded package — imported labor-duration outcomes
+
+Migration `086_canonical_imported_labor_outcomes.sql` and guarded external-labor outcome routes allow a current reviewed external job to be compared with its adopted Mission 24 labor plan. A separate purpose consent is required in addition to source consent. Every opaque worker reference and the job reference must have a current owner-reviewed same-tenant match. The observation pins the estimate, adopted revision and labor plan, source consent, job match, worker matches, all current imported intervals and calculation version. Overlapping intervals fail closed.
+
+The output is a deterministic advisory variance. Source corrections, tombstones, target changes, match changes and consent changes make prior advice stale; revocation hides derived results. The package does not alter an estimate, rate, schedule, payroll record, workforce profile or policy. No rendered owner interface is included; the future interface must separately pass wording, focus, keyboard, mobile, theme and founder visual review.
+
 No fixed implementation-part count is declared by this package. Later packages must state the exact source class, consent, correction/deletion behavior, derived output and release evidence they add. Completion requires usable roadmap-designated historical-backfill and continuous-update integrations; placeholder connectors and sample cards are insufficient.
 
 ## Required direction

@@ -1262,9 +1262,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_import_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
         IF pg_catalog.to_regclass('public.canonical_external_material_cleanup_runs') IS NOT NULL THEN
-          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_adapter_revisions, public.canonical_external_material_retention_revisions, public.canonical_external_material_deletion_revisions, public.canonical_external_material_hold_revisions, public.canonical_external_material_cleanup_runs FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_adapter_revisions, public.canonical_external_material_retention_revisions, public.canonical_external_material_deletion_revisions, public.canonical_external_material_hold_revisions, public.canonical_external_material_lifecycle_gates, public.canonical_external_material_cleanup_runs FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_operation_projection(text,jsonb) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_cleanup_projection(public.canonical_external_material_cleanup_runs) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_lifecycle_lock(uuid,text) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_import_deletion_guard() FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_consent_deletion_guard() FROM %I', runtime_role);

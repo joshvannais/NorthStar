@@ -12,16 +12,22 @@ function mapped(error) {
 }
 
 async function transaction(pool, isolation, work) {
-  const client = await pool.connect();
-  try {
-    await client.query(`BEGIN ISOLATION LEVEL ${isolation}`);
-    await client.query("SET LOCAL statement_timeout='5000ms'");
-    await client.query("SET LOCAL lock_timeout='2000ms'");
-    await client.query("SET LOCAL idle_in_transaction_session_timeout='5000ms'");
-    await client.query('SET LOCAL search_path=pg_catalog,public');
-    const value = await work(client); await client.query('COMMIT'); return value;
-  } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw mapped(error); }
-  finally { client.release(); }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const client = await pool.connect();
+    try {
+      await client.query(`BEGIN ISOLATION LEVEL ${isolation}`);
+      await client.query("SET LOCAL statement_timeout='5000ms'");
+      await client.query("SET LOCAL lock_timeout='2000ms'");
+      await client.query("SET LOCAL idle_in_transaction_session_timeout='5000ms'");
+      await client.query('SET LOCAL search_path=pg_catalog,public');
+      const value = await work(client); await client.query('COMMIT'); return value;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (['40001', '23505'].includes(error && error.code) && attempt < 2) continue;
+      throw mapped(error);
+    } finally { client.release(); }
+  }
+  throw mapped(Object.assign(new Error('Material source lifecycle changed.'), { code: '40001' }));
 }
 
 function actor(input) { return [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId]; }

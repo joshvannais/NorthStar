@@ -60,6 +60,17 @@ CREATE TABLE public.canonical_external_material_hold_revisions (
  CHECK((revision=1 AND previous_id IS NULL) OR (revision>1 AND previous_id IS NOT NULL))
 );
 
+-- This row is coordination state, not evidence authority. Every lifecycle write updates it
+-- after taking the same advisory lock so a waiter with an older SERIALIZABLE snapshot
+-- fails and retries instead of acting on authority committed while it waited.
+CREATE TABLE public.canonical_external_material_lifecycle_gates (
+ organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+ source_key TEXT NOT NULL CHECK(source_key~'^[a-z0-9][a-z0-9._-]{1,63}$'),
+ epoch BIGINT NOT NULL CHECK(epoch BETWEEN 1 AND 9223372036854775807),
+ touched_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+ PRIMARY KEY(organization_id,source_key)
+);
+
 CREATE TABLE public.canonical_external_material_cleanup_runs (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
  source_key TEXT NOT NULL CHECK(source_key~'^[a-z0-9][a-z0-9._-]{1,63}$'), operation TEXT NOT NULL CHECK(operation IN ('retention','deletion')),
@@ -103,6 +114,17 @@ RETURNS JSONB LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path=pg_catalog,pu
   'digest',rtrim(value.canonical_digest))
 $$;
 
+CREATE FUNCTION public.canonical_external_material_lifecycle_lock(org UUID,source_value TEXT)
+RETURNS VOID LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-material-lifecycle:'||source_value,0));
+ INSERT INTO public.canonical_external_material_lifecycle_gates(organization_id,source_key,epoch)
+ VALUES(org,source_value,1)
+ ON CONFLICT(organization_id,source_key) DO UPDATE
+ SET epoch=canonical_external_material_lifecycle_gates.epoch+1,touched_at=transaction_timestamp();
+END
+$$;
+
 CREATE FUNCTION public.canonical_external_material_operation_mutate(org UUID,actor UUID,role_value TEXT,session_value UUID,
  csrf TEXT,key_value TEXT,source_value TEXT,kind TEXT,body JSONB)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
@@ -119,7 +141,7 @@ BEGIN
   OR jsonb_typeof(body->'expectedDigest') IS DISTINCT FROM 'string' OR body->>'expectedDigest'!~'^(none|[0-9a-f]{64})$'
   OR (((body->>'expectedRevision')::bigint=0)<>(body->>'expectedDigest'='none'))
   OR body->'confirmed' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION 'Source operation invalid' USING ERRCODE='22023'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-material-operation:'||source_value||':'||kind,0));
+ PERFORM public.canonical_external_material_lifecycle_lock(org,source_value);
  IF NOT EXISTS(SELECT 1 FROM public.canonical_external_material_import_consents WHERE organization_id=org AND source_key=source_value) THEN RAISE EXCEPTION 'Source operation requires a recorded source' USING ERRCODE='22023'; END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex'); request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,'kind',kind,'body',body));
  IF kind='adapter' THEN SELECT to_jsonb(item) INTO replay_value FROM (SELECT * FROM public.canonical_external_material_adapter_revisions WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash) item;
@@ -194,7 +216,7 @@ BEGIN
  THEN RAISE EXCEPTION 'Source hold invalid' USING ERRCODE='22023'; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.canonical_external_material_import_consents WHERE organization_id=org AND source_key=source_value)
  THEN RAISE EXCEPTION 'Source hold requires a recorded source' USING ERRCODE='22023'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-material-hold:'||source_value,0));
+ PERFORM public.canonical_external_material_lifecycle_lock(org,source_value);
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,'body',body));
  SELECT * INTO replay_row FROM public.canonical_external_material_hold_revisions WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
@@ -250,7 +272,7 @@ END $$;
 CREATE FUNCTION public.canonical_external_material_cleanup_execute(org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,key_value TEXT,source_value TEXT,body JSONB)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB; authority_value JSONB; previous_run public.canonical_external_material_cleanup_runs%ROWTYPE; replay_run public.canonical_external_material_cleanup_runs%ROWTYPE;
- key_hash TEXT; request_hash TEXT; run_id UUID:=gen_random_uuid(); digest_value TEXT; sequence_value BIGINT; selected_count INTEGER; has_more BOOLEAN; next_cursor TEXT; record_row public.canonical_external_material_import_records%ROWTYPE; record_digest TEXT; operation_value TEXT;
+ current_hold public.canonical_external_material_hold_revisions%ROWTYPE; key_hash TEXT; request_hash TEXT; run_id UUID:=gen_random_uuid(); digest_value TEXT; sequence_value BIGINT; selected_count INTEGER; has_more BOOLEAN; next_cursor TEXT; record_row public.canonical_external_material_import_records%ROWTYPE; record_digest TEXT; operation_value TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXCEPTION 'Serializable required' USING ERRCODE='25001'; END IF;
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EXCEPTION 'Cleanup restricted' USING ERRCODE='42501'; END IF;
@@ -266,19 +288,20 @@ BEGIN
   OR NOT (body->'cursorBefore'='null'::jsonb OR (jsonb_typeof(body->'cursorBefore')='string' AND char_length(body->>'cursorBefore') BETWEEN 1 AND 128 AND body->>'cursorBefore'~'^[!-~]+$'))
   OR jsonb_typeof(body->'limit') IS DISTINCT FROM 'number' OR (body->>'limit')!~'^[0-9]+$' OR (body->>'limit')::integer NOT BETWEEN 1 AND 100
   THEN RAISE EXCEPTION 'Cleanup invalid' USING ERRCODE='22023'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-material-cleanup:'||source_value||':'||operation_value,0));
+ PERFORM public.canonical_external_material_lifecycle_lock(org,source_value);
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex'); request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,'body',body));
  SELECT * INTO replay_run FROM public.canonical_external_material_cleanup_runs WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN IF rtrim(replay_run.request_digest)<>request_hash THEN RAISE EXCEPTION 'Cleanup key conflict' USING ERRCODE='23505'; END IF; RETURN jsonb_build_object('run',public.canonical_external_material_cleanup_projection(replay_run),'replayed',TRUE); END IF;
  IF operation_value='retention' THEN SELECT to_jsonb(item) INTO authority_value FROM (SELECT * FROM public.canonical_external_material_retention_revisions WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE) item; ELSE SELECT to_jsonb(item) INTO authority_value FROM (SELECT * FROM public.canonical_external_material_deletion_revisions WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE) item; END IF;
  IF COALESCE((authority_value->>'revision')::bigint,0)<>(body->>'expectedRevision')::bigint OR COALESCE(rtrim(authority_value->>'canonical_digest'),'none') IS DISTINCT FROM body->>'expectedDigest' OR (operation_value='retention' AND authority_value->>'action'<>'set') OR (operation_value='deletion' AND authority_value->>'action'<>'request') THEN RAISE EXCEPTION 'Cleanup authority changed' USING ERRCODE='40001'; END IF;
- IF EXISTS(SELECT 1 FROM public.canonical_external_material_hold_revisions WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1)
-  AND (SELECT action FROM public.canonical_external_material_hold_revisions WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1)='place'
- THEN RAISE EXCEPTION 'Source cleanup is blocked by an active hold' USING ERRCODE='40001',CONSTRAINT='external_material_cleanup_active_hold'; END IF;
  SELECT * INTO previous_run FROM public.canonical_external_material_cleanup_runs WHERE organization_id=org AND source_key=source_value AND operation=operation_value
   AND authority_revision=(authority_value->>'revision')::bigint AND rtrim(authority_digest)=rtrim(authority_value->>'canonical_digest') ORDER BY sequence DESC LIMIT 1 FOR UPDATE;
  IF previous_run.id IS NOT NULL AND NOT previous_run.complete AND previous_run.cursor_after IS DISTINCT FROM body->>'cursorBefore' THEN RAISE EXCEPTION 'Cleanup cursor changed' USING ERRCODE='40001'; END IF;
  IF (previous_run.id IS NULL OR previous_run.complete) AND body->'cursorBefore'<>'null'::jsonb THEN RAISE EXCEPTION 'Cleanup cursor changed' USING ERRCODE='40001'; END IF;
+ SELECT * INTO current_hold FROM public.canonical_external_material_hold_revisions
+  WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE;
+ IF current_hold.action='place'
+ THEN RAISE EXCEPTION 'Source cleanup is blocked by an active hold' USING ERRCODE='40001',CONSTRAINT='external_material_cleanup_active_hold'; END IF;
  CREATE TEMP TABLE selected_cleanup_records ON COMMIT DROP AS WITH current_records AS (SELECT DISTINCT ON (external_record_id) * FROM public.canonical_external_material_import_records WHERE organization_id=org AND source_key=source_value ORDER BY external_record_id,revision DESC) SELECT * FROM current_records WHERE state='active' AND (body->'cursorBefore'='null'::jsonb OR external_record_id>body->>'cursorBefore') AND (operation_value='deletion' OR source_updated_at<transaction_timestamp()-make_interval(days=>(authority_value->>'retention_days')::integer)) ORDER BY external_record_id LIMIT (body->>'limit')::integer+1;
  SELECT count(*) INTO selected_count FROM selected_cleanup_records; has_more:=selected_count>(body->>'limit')::integer;
  DELETE FROM selected_cleanup_records WHERE external_record_id=(SELECT max(external_record_id) FROM selected_cleanup_records) AND has_more; SELECT count(*),max(external_record_id) INTO selected_count,next_cursor FROM selected_cleanup_records; IF NOT has_more THEN next_cursor:=NULL; END IF;
@@ -324,9 +347,10 @@ END $$;
 CREATE TRIGGER canonical_external_material_consent_deletion_guard BEFORE INSERT ON public.canonical_external_material_import_consents
  FOR EACH ROW EXECUTE FUNCTION public.canonical_external_material_consent_deletion_guard();
 
-REVOKE ALL ON TABLE public.canonical_external_material_adapter_revisions,public.canonical_external_material_retention_revisions,public.canonical_external_material_deletion_revisions,public.canonical_external_material_hold_revisions,public.canonical_external_material_cleanup_runs FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_external_material_adapter_revisions,public.canonical_external_material_retention_revisions,public.canonical_external_material_deletion_revisions,public.canonical_external_material_hold_revisions,public.canonical_external_material_lifecycle_gates,public.canonical_external_material_cleanup_runs FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_material_operation_projection(TEXT,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_material_cleanup_projection(public.canonical_external_material_cleanup_runs) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_external_material_lifecycle_lock(UUID,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_material_operation_mutate(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_material_adapter_mutate(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_material_retention_mutate(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;

@@ -29,7 +29,7 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
   confirmationVersion: 'm25-external-material-import-batch-v1' });
 
 (async () => {
-  let fixture; const ledger = { cases: [] };
+  let fixture; const manualClients = new Set(); const ledger = { cases: [] };
   try {
     fixture = await createDatabaseFixture({ operationalSchedule: true });
     const owner = fixture.actors.owner;
@@ -48,6 +48,18 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
             crypto.randomUUID(), sourceKey, JSON.stringify(body)]), error => error.code === '22023');
       } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
     };
+    const beginRuntimeMutation = async (functionName, sourceKey, body, requestKey = crypto.randomUUID()) => {
+      const client = await fixture.runtimePool.connect();
+      manualClients.add(client);
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await client.query("SET LOCAL statement_timeout='5000ms'");
+      await client.query("SET LOCAL lock_timeout='4000ms'");
+      const result = await client.query(`SELECT public.${functionName}($1,$2,$3,$4,$5,$6,$7,$8::jsonb) value`,
+        [fixture.org, owner.actorUserId, owner.actorAccessRole, owner.authSessionId, owner.csrfToken,
+          requestKey, sourceKey, JSON.stringify(body)]);
+      return { client, value: result.rows[0].value };
+    };
+    const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
     const primary = source('materials.operations');
     let response = await primary.write('/consent', consentBody);
@@ -149,6 +161,107 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
       expectedDigest: heldDeletion.digest, cursorBefore: null, limit: 100, confirmed: true });
     assert.equal(response.status, 201); assert.equal(response.body.data.run.tombstonedCount, 1);
     ledger.cases.push('A tenant-private legal or audit hold blocks cleanup without blocking consent revocation; explicit matching release permits bounded cleanup and cannot restore prior detail.');
+
+    const holdFirst = source('materials.hold-first-race');
+    response = await holdFirst.write('/consent', consentBody); const holdFirstConsent = response.body.data.consent;
+    response = await holdFirst.write('/batches', batch(holdFirstConsent, [record('hold-first-record')], null, 'hold-first', 'continuous_update'));
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await holdFirst.write('/deletion', { action: 'request', expectedRevision: 0, expectedDigest: 'none', confirmed: true });
+    const holdFirstDeletion = response.body.data.deletion;
+    const holdFirstTxn = await beginRuntimeMutation('canonical_external_material_hold_mutate', 'materials.hold-first-race', holdBody);
+    const committedHold = holdFirstTxn.value.hold;
+    let holdFirstCleanupSettled = false;
+    const holdFirstCleanup = holdFirst.write('/cleanup', { operation: 'deletion', expectedRevision: holdFirstDeletion.revision,
+      expectedDigest: holdFirstDeletion.digest, cursorBefore: null, limit: 100, confirmed: true })
+      .then(result => { holdFirstCleanupSettled = true; return result; });
+    await wait(100); assert.equal(holdFirstCleanupSettled, false);
+    await holdFirstTxn.client.query('COMMIT'); holdFirstTxn.client.release(); manualClients.delete(holdFirstTxn.client);
+    response = await holdFirstCleanup;
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    assert.equal(response.body.error.code, 'M25_MATERIAL_IMPORT_OPERATIONS_HOLD_ACTIVE');
+    response = await request(fixture.app).get(holdFirst.root + '/operations').set(owner.session.headers);
+    assert.equal(response.body.data.activeRecordTotal, 1); assert.equal(response.body.data.hold.action, 'place');
+
+    const releaseTxn = await beginRuntimeMutation('canonical_external_material_hold_mutate', 'materials.hold-first-race', {
+      action: 'release', holdKind: 'legal', expectedRevision: committedHold.revision,
+      expectedDigest: committedHold.digest, confirmed: true,
+    });
+    let releaseCleanupSettled = false;
+    const releasedCleanup = holdFirst.write('/cleanup', { operation: 'deletion', expectedRevision: holdFirstDeletion.revision,
+      expectedDigest: holdFirstDeletion.digest, cursorBefore: null, limit: 100, confirmed: true })
+      .then(result => { releaseCleanupSettled = true; return result; });
+    await wait(100); assert.equal(releaseCleanupSettled, false);
+    await releaseTxn.client.query('COMMIT'); releaseTxn.client.release(); manualClients.delete(releaseTxn.client);
+    response = await releasedCleanup;
+    assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.tombstonedCount, 1);
+
+    const cleanupFirst = source('materials.cleanup-first-race');
+    response = await cleanupFirst.write('/consent', consentBody); const cleanupFirstConsent = response.body.data.consent;
+    response = await cleanupFirst.write('/batches', batch(cleanupFirstConsent, [record('cleanup-first-record')], null, 'cleanup-first', 'continuous_update'));
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await cleanupFirst.write('/deletion', { action: 'request', expectedRevision: 0, expectedDigest: 'none', confirmed: true });
+    const cleanupFirstDeletion = response.body.data.deletion;
+    const cleanupTxn = await beginRuntimeMutation('canonical_external_material_cleanup_execute', 'materials.cleanup-first-race', {
+      operation: 'deletion', expectedRevision: cleanupFirstDeletion.revision, expectedDigest: cleanupFirstDeletion.digest,
+      cursorBefore: null, limit: 100, confirmed: true,
+    });
+    assert.equal(cleanupTxn.value.run.tombstonedCount, 1);
+    let cleanupFirstHoldSettled = false;
+    const cleanupFirstHold = cleanupFirst.write('/hold', holdBody).then(result => { cleanupFirstHoldSettled = true; return result; });
+    await wait(100); assert.equal(cleanupFirstHoldSettled, false);
+    assert.equal((await fixture.ownerPool.query(`SELECT count(*)::integer total FROM canonical_external_material_hold_revisions
+      WHERE organization_id=$1 AND source_key=$2`, [fixture.org, 'materials.cleanup-first-race'])).rows[0].total, 0);
+    await cleanupTxn.client.query('COMMIT'); cleanupTxn.client.release(); manualClients.delete(cleanupTxn.client);
+    response = await cleanupFirstHold;
+    assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.hold.action, 'place');
+    response = await request(fixture.app).get(cleanupFirst.root + '/operations').set(owner.session.headers);
+    assert.equal(response.body.data.activeRecordTotal, 0); assert.equal(response.body.data.hold.action, 'place');
+    ledger.cases.push('One tenant-and-source lifecycle lock orders hold placement, release and destructive cleanup in both directions; stale waiters retry from fresh authority and never bypass an active hold.');
+
+    const retentionRace = source('materials.retention-race');
+    response = await retentionRace.write('/consent', consentBody); const retentionRaceConsent = response.body.data.consent;
+    response = await retentionRace.write('/batches', batch(retentionRaceConsent, [record('retention-race-record')], null, 'retention-race', 'continuous_update'));
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await retentionRace.write('/retention', { action: 'set', retentionDays: 30,
+      expectedRevision: 0, expectedDigest: 'none', confirmed: true });
+    const firstRetentionRace = response.body.data.retention;
+    const retentionTxn = await beginRuntimeMutation('canonical_external_material_retention_mutate', 'materials.retention-race', {
+      action: 'set', retentionDays: 60, expectedRevision: firstRetentionRace.revision,
+      expectedDigest: firstRetentionRace.digest, confirmed: true,
+    });
+    let staleRetentionCleanupSettled = false;
+    const staleRetentionCleanup = retentionRace.write('/cleanup', { operation: 'retention',
+      expectedRevision: firstRetentionRace.revision, expectedDigest: firstRetentionRace.digest,
+      cursorBefore: null, limit: 100, confirmed: true }).then(result => { staleRetentionCleanupSettled = true; return result; });
+    await wait(100); assert.equal(staleRetentionCleanupSettled, false);
+    await retentionTxn.client.query('COMMIT'); retentionTxn.client.release(); manualClients.delete(retentionTxn.client);
+    response = await staleRetentionCleanup;
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    response = await request(fixture.app).get(retentionRace.root + '/operations').set(owner.session.headers);
+    assert.equal(response.body.data.retention.revision, 2); assert.equal(response.body.data.activeRecordTotal, 1);
+    ledger.cases.push('Retention changes share lifecycle ordering, invalidate stale pinned cleanup and preserve its cursor and current evidence.');
+
+    const deletionRace = source('materials.deletion-race');
+    response = await deletionRace.write('/consent', consentBody); const deletionRaceConsent = response.body.data.consent;
+    response = await deletionRace.write('/batches', batch(deletionRaceConsent, [record('deletion-race-record')], null, 'deletion-race', 'continuous_update'));
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await deletionRace.write('/deletion', { action: 'request', expectedRevision: 0,
+      expectedDigest: 'none', confirmed: true });
+    const firstDeletionRace = response.body.data.deletion;
+    const deletionCancelTxn = await beginRuntimeMutation('canonical_external_material_deletion_mutate', 'materials.deletion-race', {
+      action: 'cancel', expectedRevision: firstDeletionRace.revision, expectedDigest: firstDeletionRace.digest, confirmed: true,
+    });
+    let staleDeletionCleanupSettled = false;
+    const staleDeletionCleanup = deletionRace.write('/cleanup', { operation: 'deletion',
+      expectedRevision: firstDeletionRace.revision, expectedDigest: firstDeletionRace.digest,
+      cursorBefore: null, limit: 100, confirmed: true }).then(result => { staleDeletionCleanupSettled = true; return result; });
+    await wait(100); assert.equal(staleDeletionCleanupSettled, false);
+    await deletionCancelTxn.client.query('COMMIT'); deletionCancelTxn.client.release(); manualClients.delete(deletionCancelTxn.client);
+    response = await staleDeletionCleanup;
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    response = await request(fixture.app).get(deletionRace.root + '/operations').set(owner.session.headers);
+    assert.equal(response.body.data.deletion.action, 'cancel'); assert.equal(response.body.data.activeRecordTotal, 1);
+    ledger.cases.push('Deletion cancellation shares lifecycle ordering and prevents stale deletion cleanup from removing current evidence.');
 
     const deletionSource = source('materials.deletion');
     response = await deletionSource.write('/consent', consentBody);
@@ -272,12 +385,15 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
     const privileges = (await fixture.ownerPool.query(`SELECT
       has_table_privilege($1,'canonical_external_material_cleanup_runs','SELECT') cleanup_table,
       has_table_privilege($1,'canonical_external_material_hold_revisions','SELECT') hold_table,
+      has_table_privilege($1,'canonical_external_material_lifecycle_gates','SELECT') lifecycle_table,
       has_function_privilege($1,'canonical_external_material_operation_projection(text,jsonb)','EXECUTE') helper,
       has_function_privilege($1,'canonical_external_material_cleanup_projection(canonical_external_material_cleanup_runs)','EXECUTE') cleanup_helper,
+      has_function_privilege($1,'canonical_external_material_lifecycle_lock(uuid,text)','EXECUTE') lifecycle_helper,
       has_function_privilege($1,'canonical_external_material_cleanup_execute(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE') cleanup_entry,
       has_function_privilege($1,'canonical_external_material_hold_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE') hold_entry`,
     [fixture.roles.runtime])).rows[0];
-    assert.deepEqual(privileges, { cleanup_table: false, hold_table: false, helper: false, cleanup_helper: false,
+    assert.deepEqual(privileges, { cleanup_table: false, hold_table: false, lifecycle_table: false, helper: false, cleanup_helper: false,
+      lifecycle_helper: false,
       cleanup_entry: true, hold_entry: true });
     await assert.rejects(fixture.ownerPool.query('DELETE FROM canonical_external_material_cleanup_runs'));
     await assert.rejects(fixture.ownerPool.query('DELETE FROM canonical_external_material_hold_revisions'));
@@ -291,6 +407,7 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
     ledger.cause = error.cause && { message: error.cause.message, code: error.cause.code, constraint: error.cause.constraint };
     process.exitCode = 1;
   } finally {
+    for (const client of manualClients) { await client.query('ROLLBACK').catch(() => {}); client.release(); }
     if (fixture) await fixture.cleanup();
     fs.writeFileSync(output, JSON.stringify(ledger, null, 2));
     console.log(JSON.stringify(ledger));

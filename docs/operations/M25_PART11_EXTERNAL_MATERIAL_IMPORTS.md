@@ -6,6 +6,8 @@ Migration `106_canonical_external_material_import_authority.sql` and the guarded
 
 Every record carries an opaque source record identity and version, one exact material reference, applicable opaque job, vendor and location references, event and source-update times, an IANA time zone, exact quantity and unit, applicable amount, currency and valuation, evidence class and provider evidence digest. Historical and continuing pages are bounded to 100 records and pin the current permission revision and digest plus the exact prior cursor.
 
+Each distinct time zone in a page is validated once through a set-based lookup against PostgreSQL's IANA time-zone catalogue before any record is inserted. An invalid zone rejects the entire page. The public 100-record bound and fixed five-second database statement timeout remain unchanged.
+
 Inventory balances require a location and permit an explicit zero balance. Inventory movements require a location, positive quantity and one declared movement class. Purchases and vendor costs require positive quantity, a vendor reference and an explicit cost object. Purchases accept only unit or line-total valuation. No unit, currency, quantity, amount, time or opaque reference is converted or inferred.
 
 ## Consent, correction and source boundary

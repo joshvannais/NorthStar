@@ -147,6 +147,15 @@ BEGIN IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXC
  IF FOUND THEN IF rtrim(replay.request_digest)<>request_hash THEN RAISE EXCEPTION 'Material, inventory, purchasing and vendor cost batch key conflict' USING ERRCODE='23505'; END IF; RETURN jsonb_build_object('run',public.canonical_external_material_run_projection(replay),'replayed',TRUE); END IF;
  SELECT * INTO consent_row FROM public.canonical_external_material_import_consents WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE;
  IF consent_row.id IS NULL OR consent_row.action IS DISTINCT FROM 'grant' OR consent_row.revision IS DISTINCT FROM (body->>'expectedConsentRevision')::bigint OR rtrim(consent_row.canonical_digest) IS DISTINCT FROM body->>'expectedConsentDigest' THEN RAISE EXCEPTION 'Material, inventory, purchasing and vendor cost consent changed' USING ERRCODE='40001'; END IF;
+ IF EXISTS(
+  SELECT 1 FROM (
+   SELECT DISTINCT item_value->>'timeZone' AS name
+   FROM jsonb_array_elements(body->'records') AS record(item_value)
+   WHERE item_value->>'state'='active'
+  ) requested_zone
+  LEFT JOIN pg_catalog.pg_timezone_names known_zone ON known_zone.name=requested_zone.name
+  WHERE requested_zone.name IS NULL OR known_zone.name IS NULL
+ ) THEN RAISE EXCEPTION 'External material, inventory, purchasing and vendor cost time zone invalid' USING ERRCODE='22023'; END IF;
  SELECT * INTO previous_run FROM public.canonical_external_material_import_runs WHERE organization_id=org AND source_key=source_value AND mode=body->>'mode' ORDER BY sequence DESC LIMIT 1 FOR UPDATE;
  IF previous_run.id IS NULL AND body->'cursorBefore'<>'null'::jsonb OR previous_run.id IS NOT NULL AND previous_run.cursor_after IS DISTINCT FROM body->>'cursorBefore' THEN RAISE EXCEPTION 'Material, inventory, purchasing and vendor cost cursor changed' USING ERRCODE='40001'; END IF;
  IF previous_run.mode='historical_backfill' AND previous_run.complete THEN RAISE EXCEPTION 'Material, inventory, purchasing and vendor cost backfill complete' USING ERRCODE='22023'; END IF;
@@ -168,7 +177,7 @@ BEGIN IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXC
     OR NOT(item->'vendorReference'='null'::jsonb OR (jsonb_typeof(item->'vendorReference')='string' AND length(item->>'vendorReference') BETWEEN 1 AND 128 AND item->>'vendorReference'~'^[!-~]+$'))
     OR NOT(item->'locationReference'='null'::jsonb OR (jsonb_typeof(item->'locationReference')='string' AND length(item->>'locationReference') BETWEEN 1 AND 128 AND item->>'locationReference'~'^[!-~]+$'))
     OR item->>'occurredAt'!~'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' OR NOT pg_input_is_valid(item->>'occurredAt','timestamp with time zone')
-    OR item->>'timeZone'!~'^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+.-]+)+)$' OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_timezone_names zone WHERE zone.name=item->>'timeZone')
+    OR jsonb_typeof(item->'timeZone') IS DISTINCT FROM 'string' OR item->>'timeZone'!~'^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+.-]+)+)$'
     OR jsonb_typeof(item->'evidenceClass') IS DISTINCT FROM 'string' OR item->>'evidenceClass' NOT IN ('measured','documented','provider_recorded','owner_confirmed')
     OR jsonb_typeof(item->'providerEvidenceDigest') IS DISTINCT FROM 'string' OR item->>'providerEvidenceDigest'!~'^[0-9a-f]{64}$' THEN RAISE EXCEPTION 'External material, inventory, purchasing and vendor cost record invalid' USING ERRCODE='22023'; END IF;
    occurred:=(item->>'occurredAt')::timestamptz;IF occurred>updated THEN RAISE EXCEPTION 'Material event time invalid' USING ERRCODE='22023'; END IF;

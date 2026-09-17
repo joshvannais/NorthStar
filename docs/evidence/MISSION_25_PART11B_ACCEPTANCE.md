@@ -16,7 +16,8 @@ This candidate starts from independently accepted Slice A head `82ceac0be5ca4169
 
 - Fresh disposable PostgreSQL 17.10 applied the complete migration chain `001` through `106` under separated migration and runtime roles for the Slice B and Slice A mounted runs.
 - The mounted Slice B API passed six end-to-end controls across all four record classes, owner-only permission, explicit units and currency, missing-pin and missing-currency rejection, concurrent deterministic replay, correction, conflict, tombstone, revocation, non-revival, tenant isolation, immutability, least privilege, checksum registration and operational-table non-mutation.
-- Four focused contract and ratification suites passed 15 checks covering bounded pages, type-specific validation, unsupported values, source-period masking, entry-only runtime grants, accepted native material compatibility and absence of a rendered surface.
+- A dedicated fresh PostgreSQL performance control measured a cold 100-record page at 95.90 ms, 1/50/100-record pages at 32.39/43.56/66.18 ms and repeated 100-record pages at 54.49/61.32 ms with eight distinct IANA zones. Every valid page remained far below the enforced two-second test ceiling and unchanged five-second statement timeout. A 100-record page containing one invalid zone rolled back without storing a run or record.
+- Four focused contract and ratification suites passed 16 checks covering bounded pages, type-specific validation, unsupported values, set-based time-zone validation, source-period masking, entry-only runtime grants, accepted native material compatibility and absence of a rendered surface.
 - The accepted Slice A mounted native material regression passed all six cases against the `001`–`106` chain, including exact bindings, stale masking, revocation and non-revival.
 
 ## Boundaries

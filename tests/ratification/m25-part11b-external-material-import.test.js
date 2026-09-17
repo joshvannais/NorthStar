@@ -14,6 +14,11 @@ describe('Mission 25 Part 11 Slice B external material imports', () => {
       'canonical_external_material_import_records','request_key_hash','previous_id',"state IN ('active','tombstone')",
       'run.consent_id=consent_row.id','canonical_field_execution_actor_authority']) expect(migration).toContain(value);
   });
+  test('validates each distinct page time zone through one set-based catalogue join', () => {
+    expect(migration).toContain("SELECT DISTINCT item_value->>'timeZone' AS name");
+    expect(migration).toContain('LEFT JOIN pg_catalog.pg_timezone_names known_zone');
+    expect(migration).not.toContain('NOT EXISTS(SELECT 1 FROM pg_catalog.pg_timezone_names');
+  });
   test('withholds storage and helpers while granting only bounded entry functions', () => {
     const db = read('src/db.js');
     for (const value of ['REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_import_consents',

@@ -1232,6 +1232,20 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_equipment_utilization_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_equipment_utilization_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_material_learning_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_material_learning_consents, public.canonical_native_material_outcome_observations FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_learning_consent_projection(public.canonical_material_learning_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_material_bindings_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_material_outcome_basis(uuid,uuid,uuid,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_material_outcome_projection(public.canonical_native_material_outcome_observations) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_material_learning_consent_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_material_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_material_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_material_outcome_read(uuid,uuid,text,uuid,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_external_asset_import_consents') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_import_consents, public.canonical_external_asset_import_runs, public.canonical_external_asset_import_records FROM %I',
@@ -1518,6 +1532,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_labor_outcome_observations',
              'canonical_equipment_learning_consents',
              'canonical_native_equipment_utilization_observations',
+             'canonical_material_learning_consents',
+             'canonical_native_material_outcome_observations',
              'canonical_material_movements',
              'canonical_material_events',
              'canonical_material_revisions',
@@ -1701,6 +1717,22 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_native_equipment_utilization_basis(uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_native_equipment_utilization_projection(public.canonical_native_equipment_utilization_observations)','EXECUTE')
        )) AS native_equipment_learning_helpers_withheld,
+       (to_regclass('public.canonical_material_learning_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_material_learning_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_native_material_outcome_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS native_material_learning_tables_withheld,
+       (to_regclass('public.canonical_material_learning_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_material_learning_consent_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_material_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_native_material_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_native_material_outcome_read(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE')
+       )) AS native_material_learning_entry_execute,
+       (to_regclass('public.canonical_material_learning_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_material_learning_consent_projection(public.canonical_material_learning_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_material_bindings_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_material_outcome_basis(uuid,uuid,uuid,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_material_outcome_projection(public.canonical_native_material_outcome_observations)','EXECUTE')
+       )) AS native_material_learning_helpers_withheld,
        (to_regclass('public.canonical_external_asset_outcome_consents') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_external_asset_outcome_consents','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_external_asset_outcome_observations','SELECT,INSERT,UPDATE,DELETE')
@@ -1863,6 +1895,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.native_equipment_learning_tables_withheld ||
       !runtimePrivileges.native_equipment_learning_entry_execute ||
       !runtimePrivileges.native_equipment_learning_helpers_withheld ||
+      !runtimePrivileges.native_material_learning_tables_withheld ||
+      !runtimePrivileges.native_material_learning_entry_execute ||
+      !runtimePrivileges.native_material_learning_helpers_withheld ||
       !runtimePrivileges.imported_asset_outcome_tables_withheld ||
       !runtimePrivileges.imported_asset_outcome_entry_execute ||
       !runtimePrivileges.imported_asset_outcome_helpers_withheld ||

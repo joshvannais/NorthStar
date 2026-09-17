@@ -31,6 +31,8 @@ const travelOperationsContract = require('../learning/externalTravelOperationsCo
 const travelOperationsRepository = require('../learning/externalTravelOperationsRepository');
 const nativeEquipmentContract = require('../learning/nativeEquipmentUtilizationContract');
 const nativeEquipmentRepository = require('../learning/nativeEquipmentUtilizationRepository');
+const nativeMaterialContract = require('../learning/nativeMaterialOutcomeContract');
+const nativeMaterialRepository = require('../learning/nativeMaterialOutcomeRepository');
 const assetImportContract = require('../learning/externalAssetImportContract');
 const assetImportRepository = require('../learning/externalAssetImportRepository');
 const assetOperationsContract = require('../learning/externalAssetOperationsContract');
@@ -65,6 +67,7 @@ function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
   const unavailable = code.startsWith('M25_IMPORTED_ASSET_CALIBRATION_') ? 'Vehicle and equipment calibration is temporarily unavailable.' :
+    code.startsWith('M25_NATIVE_MATERIAL_') ? 'Material outcome learning is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_ASSET_OUTCOME_') ? 'Imported vehicle and equipment outcome learning is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_ASSET_HEALTH_') ? 'Imported asset health learning is temporarily unavailable.' :
     code.startsWith('M25_NATIVE_EQUIPMENT_') ? 'Native equipment utilization learning is temporarily unavailable.' :
@@ -138,6 +141,42 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = nativeEquipmentContract.normalizeObservation(req.params.estimateId, req.body);
         const data = await nativeEquipmentRepository.observe(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/native-material-outcome-consent', headers, tenantAuth, ownerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const data = await nativeMaterialRepository.readConsent(poolProvider(), actor(req));
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/native-material-outcome-consent', headers, mutationAuth, ownerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const body = nativeMaterialContract.normalizeConsent(req.body);
+        const data = await nativeMaterialRepository.mutateConsent(poolProvider(), { ...actor(req), body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.get('/estimates/:estimateId/executions/:executionId/native-material-outcomes', headers, tenantAuth, ownerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const ids = nativeMaterialContract.normalizeIds(req.params.estimateId, req.params.executionId);
+        const data = await nativeMaterialRepository.readOutcome(poolProvider(), { ...actor(req), ...ids });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/estimates/:estimateId/executions/:executionId/native-material-outcomes', headers, mutationAuth, ownerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = nativeMaterialContract.normalizeObservation(req.params.estimateId, req.params.executionId, req.body);
+        const data = await nativeMaterialRepository.observe(poolProvider(), { ...actor(req), ...normalized,
           csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });

@@ -34,10 +34,18 @@ describe('Mission 25 Part 12D external financial evidence contract', () => {
     expect(record.amountClaim.status).toBe('unavailable');
   });
   test.each([
+    ['null record type', { ...base('invoice'), recordType: null }],
+    ['null record state', { ...base('invoice'), recordState: null }],
+    ['null amount claim', { ...base('invoice'), amountClaim: null }],
+    ['null evidence class', { ...base('invoice'), evidenceClass: null }],
+    ['null evidence digest', { ...base('invoice'), providerEvidenceDigest: null }],
     ['negative amount', { ...base('invoice'), amountClaim: amount('-1', 'invoice_total') }],
     ['too precise', { ...base('invoice'), amountClaim: amount('1.1234567', 'invoice_total') }],
     ['unsupported currency form', { ...base('invoice'), amountClaim: { ...amount('1', 'invoice_total'), currency: 'usd' } }],
     ['extra amount detail', { ...base('invoice'), amountClaim: { ...amount('1', 'invoice_total'), memo: 'Call Alice' } }],
+    ['scalar amount claim', { ...base('invoice'), amountClaim: '100' }],
+    ['array amount claim', { ...base('invoice'), amountClaim: [] }],
+    ['missing amount key', { ...base('invoice'), amountClaim: { status: 'recorded', amount: '1', currency: 'USD' } }],
     ['wrong basis', { ...base('payment'), amountClaim: amount('1', 'invoice_total') }],
   ])('rejects %s', (_label, record) => expect(() => contract.normalizeRecord(record)).toThrow(/invalid|requires/));
   test.each([

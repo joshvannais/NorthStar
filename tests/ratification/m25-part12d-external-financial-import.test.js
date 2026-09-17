@@ -26,6 +26,8 @@ describe('Mission 25 Part 12 Slice D external financial evidence imports', () =>
     expect(migration).toContain("external_record_id~'^ref_[0-9a-f]{64}$'");
     expect(migration).toContain("accounting_reference~'^ref_[0-9a-f]{64}$'");
     expect(migration).toContain("amount_claim-ARRAY['status','amount','currency','basis']='{}'::jsonb");
+    for (const required of ['record_type IS NOT NULL','record_state IS NOT NULL','amount_claim IS NOT NULL',
+      'evidence_class IS NOT NULL','provider_evidence_digest IS NOT NULL']) expect(migration).toContain(required);
     expect(migration).toContain('FOREIGN KEY(time_zone) REFERENCES public.canonical_external_financial_time_zones(name)');
   });
   test('withholds tables and helpers while granting guarded entries only', () => {

@@ -104,16 +104,49 @@ const base = (recordType, label) => ({
       assert.equal((await write('/batches', invalid)).status, 400);
       await assert.rejects(directBatch(invalid), error => error.code === '22023');
     }
-    const directTable = (type, label, override) => fixture.ownerPool.query(`INSERT INTO public.canonical_external_financial_import_records
+    const directTableSql = `INSERT INTO public.canonical_external_financial_import_records
       SELECT (jsonb_populate_record(NULL::public.canonical_external_financial_import_records,to_jsonb(record) || $1::jsonb)).*
       FROM public.canonical_external_financial_import_records record
-      WHERE record.organization_id=$2 AND record.source_key=$3 AND record.record_type=$4 LIMIT 1`, [JSON.stringify({
+      WHERE record.organization_id=$2 AND record.source_key=$3 AND record.record_type=$4 LIMIT 1`;
+    const directTable = (type, label, override, client = fixture.ownerPool) => client.query(directTableSql, [JSON.stringify({
         id: crypto.randomUUID(), external_record_id: ref(`direct-${label}`), revision: 999, previous_id: null, external_version: 999, ...override,
       }), fixture.org, sourceKey, type]);
+    const directNullAndShapeAdversaries = [
+      ['null-record-type', { record_type: null }],
+      ['null-record-state', { record_state: null }],
+      ['null-amount', { amount_claim: null }],
+      ['null-evidence-class', { evidence_class: null }],
+      ['null-evidence-digest', { provider_evidence_digest: null }],
+      ['scalar-amount', { amount_claim: '100' }],
+      ['array-amount', { amount_claim: [] }],
+      ['empty-amount', { amount_claim: {} }],
+      ['missing-amount-key', { amount_claim: { status: 'recorded', amount: '1', currency: 'USD' } }],
+      ['extra-amount-key', { amount_claim: { ...amount('1','invoice_total'), memo: 'private' } }],
+      ['wrong-amount-type', { amount_claim: { status: 'recorded', amount: 1, currency: 'USD', basis: 'invoice_total' } }],
+      ['invalid-record-type', { record_type: 'receipt' }],
+      ['invalid-record-state', { record_state: 'complete' }],
+      ['invalid-evidence-class', { evidence_class: 'provider_guessed' }],
+      ['invalid-evidence-digest', { provider_evidence_digest: 'not-a-digest' }],
+    ];
+    for (const [label, override] of directNullAndShapeAdversaries) {
+      await assert.rejects(directTable('invoice', label, override), error => error.code === '23514', label);
+    }
     await assert.rejects(directTable('invoice','extra-claim', { amount_claim: { ...amount('1','invoice_total'), accountNumber: '1234' } }), error => error.code === '23514');
     await assert.rejects(directTable('invoice','raw-ref', { invoice_reference: 'alice@example.com' }), error => error.code === '23514');
     await assert.rejects(directTable('invoice','unknown-zone', { time_zone: 'America/Not_A_Real_Zone' }), error => error.code === '23503');
-    ledger.cases.push('Node, guarded entries, and direct-table constraints reject unknown zones, cross-type references, negative or ambiguous amounts, extra content, and raw identifiers.');
+    const ownerControl = await fixture.ownerPool.connect();
+    try {
+      await ownerControl.query('BEGIN');
+      assert.equal((await directTable('invoice','valid-active-control', {}, ownerControl)).rowCount, 1);
+      assert.equal((await directTable('invoice','valid-tombstone-control', {
+        state: 'tombstone', record_type: null, customer_reference: null, job_reference: null,
+        estimate_reference: null, execution_reference: null, project_reference: null, change_order_reference: null,
+        invoice_reference: null, payment_reference: null, collection_reference: null, accounting_reference: null,
+        record_state: null, amount_claim: null, occurred_at: null, time_zone: null, evidence_class: null,
+        provider_evidence_digest: null,
+      }, ownerControl)).rowCount, 1);
+    } finally { await ownerControl.query('ROLLBACK').catch(() => {}); ownerControl.release(); }
+    ledger.cases.push('Node, guarded entries, and direct-table constraints reject SQL nulls, malformed amount shapes, invalid classes, unknown zones, cross-type references, negative or ambiguous amounts, extra content, and raw identifiers while valid active and tombstone controls remain accepted.');
 
     const duplicateCursor = cursor('duplicate'); const correctionCursor = cursor('correction'); const tombstoneCursor = cursor('tombstone');
     response = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorAfter: duplicateCursor }));

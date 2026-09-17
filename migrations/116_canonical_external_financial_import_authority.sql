@@ -76,10 +76,11 @@ CREATE TABLE public.canonical_external_financial_import_records (
   AND collection_reference IS NULL AND accounting_reference IS NULL AND record_state IS NULL
   AND amount_claim IS NULL AND occurred_at IS NULL AND time_zone IS NULL
   AND evidence_class IS NULL AND provider_evidence_digest IS NULL)
- OR (state='active' AND record_type IN ('invoice','payment','collection','accounting_entry')
+ OR (state='active' AND record_type IS NOT NULL AND record_type IN ('invoice','payment','collection','accounting_entry')
+  AND record_state IS NOT NULL AND amount_claim IS NOT NULL
   AND occurred_at IS NOT NULL AND source_updated_at>=occurred_at AND time_zone IS NOT NULL
-  AND evidence_class IN ('provider_recorded','documented','owner_confirmed')
-  AND provider_evidence_digest~'^[0-9a-f]{64}$')),
+  AND evidence_class IS NOT NULL AND evidence_class IN ('provider_recorded','documented','owner_confirmed')
+  AND provider_evidence_digest IS NOT NULL AND provider_evidence_digest~'^[0-9a-f]{64}$')),
  CHECK((customer_reference IS NULL OR customer_reference~'^ref_[0-9a-f]{64}$')
   AND (job_reference IS NULL OR job_reference~'^ref_[0-9a-f]{64}$')
   AND (estimate_reference IS NULL OR estimate_reference~'^ref_[0-9a-f]{64}$')
@@ -101,7 +102,7 @@ CREATE TABLE public.canonical_external_financial_import_records (
    AND record_state IN ('open','in_progress','promised','settled','closed','failed','written_off','unknown')) OR
   (record_type='accounting_entry' AND accounting_reference IS NOT NULL AND collection_reference IS NULL
    AND record_state IN ('draft','posted','reversed','voided','unknown'))),
- CHECK(state='tombstone' OR (jsonb_typeof(amount_claim)='object'
+ CHECK(state='tombstone' OR (amount_claim IS NOT NULL AND jsonb_typeof(amount_claim)='object'
   AND amount_claim?&ARRAY['status','amount','currency','basis']
   AND amount_claim-ARRAY['status','amount','currency','basis']='{}'::jsonb
   AND jsonb_typeof(amount_claim->'status')='string' AND (

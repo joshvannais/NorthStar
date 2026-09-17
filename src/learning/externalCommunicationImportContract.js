@@ -2,7 +2,11 @@
 
 const DIGEST = /^[0-9a-f]{64}$/;
 const SOURCE_KEY = /^[a-z0-9][a-z0-9._-]{1,63}$/;
-const OPAQUE_KEY = /^[\x21-\x7e]{1,128}$/;
+// A Part 12C source adapter must replace every provider identity with a source-scoped,
+// non-reversible token before the value reaches NorthStar. Raw provider IDs and business
+// text are never accepted as lineage.
+const OPAQUE_REFERENCE = /^ref_[0-9a-f]{64}$/;
+const OPAQUE_CURSOR = /^cur_[0-9a-f]{64}$/;
 const TIME_ZONE = /^(?:UTC|[A-Za-z_]+(?:\/[A-Za-z0-9_+.-]+)+)$/;
 const CONSENT_VERSION = 'm25-external-communication-import-consent-v1';
 const BATCH_VERSION = 'm25-external-communication-import-batch-v1';
@@ -40,9 +44,9 @@ function iso(value) {
   try { return value === new Date(value).toISOString(); } catch (_error) { return false; }
 }
 function cursor(value) {
-  return value === null || (typeof value === 'string' && value.length >= 1 && value.length <= 512 && /^[\x21-\x7e]+$/.test(value));
+  return value === null || (typeof value === 'string' && OPAQUE_CURSOR.test(value));
 }
-function optionalReference(value) { return value === null || (typeof value === 'string' && OPAQUE_KEY.test(value)); }
+function optionalReference(value) { return value === null || (typeof value === 'string' && OPAQUE_REFERENCE.test(value)); }
 function sourceKey(value) {
   const normalized = String(value || '').toLowerCase();
   if (normalized !== value || !SOURCE_KEY.test(normalized)) fail('External communication source identity is invalid.');
@@ -58,7 +62,7 @@ function normalizeClaim(value, values, bases, label) {
   return Object.freeze({ ...value });
 }
 function normalizeRecord(value) {
-  if (!exact(value, RECORD_KEYS) || typeof value.externalRecordId !== 'string' || !OPAQUE_KEY.test(value.externalRecordId) ||
+  if (!exact(value, RECORD_KEYS) || typeof value.externalRecordId !== 'string' || !OPAQUE_REFERENCE.test(value.externalRecordId) ||
       !Number.isInteger(value.externalVersion) || value.externalVersion < 1 || value.externalVersion > 1000000000 ||
       !['active','tombstone'].includes(value.state) || !iso(value.sourceUpdatedAt)) fail('External communication record is invalid.');
   if (Date.parse(value.sourceUpdatedAt) > Date.now() + 300000) fail('External communication source time is invalid.');
@@ -72,7 +76,7 @@ function normalizeRecord(value) {
       !optionalReference(value.customerReference) || !optionalReference(value.leadReference) ||
       !optionalReference(value.jobReference) || !optionalReference(value.appointmentReference) ||
       !optionalReference(value.estimateReference) || !optionalReference(value.projectReference) ||
-      typeof value.communicationReference !== 'string' || !OPAQUE_KEY.test(value.communicationReference) ||
+      typeof value.communicationReference !== 'string' || !OPAQUE_REFERENCE.test(value.communicationReference) ||
       !iso(value.occurredAt) || !TIME_ZONE.test(String(value.timeZone || '')) ||
       Date.parse(value.occurredAt) > Date.parse(value.sourceUpdatedAt) ||
       !['provider_recorded','documented','owner_confirmed'].includes(value.evidenceClass) ||
@@ -124,6 +128,6 @@ function normalizeBatch(key, body) {
   return Object.freeze({ sourceKey: normalized, ...body, records });
 }
 
-module.exports = { CONSENT_VERSION, BATCH_VERSION, SCHEMA_VERSION, CHANNELS, DIRECTIONS, INTENTS,
+module.exports = { CONSENT_VERSION, BATCH_VERSION, SCHEMA_VERSION, OPAQUE_REFERENCE, OPAQUE_CURSOR, CHANNELS, DIRECTIONS, INTENTS,
   INTENT_BASES, DELIVERY_STATES, SATISFACTION_VALUES, SATISFACTION_BASES,
   normalizeSourceKey: sourceKey, normalizeConsent, normalizeBatch, normalizeRecord };

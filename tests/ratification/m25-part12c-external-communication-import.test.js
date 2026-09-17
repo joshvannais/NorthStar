@@ -20,6 +20,15 @@ describe('Mission 25 Part 12 Slice C communication imports', () => {
     }
     expect(migration).not.toContain('automated_sentiment');
   });
+  test('uses one content-free token representation in Node and PostgreSQL', () => {
+    const contract = read('src/learning/externalCommunicationImportContract.js');
+    expect(contract).toContain("const OPAQUE_REFERENCE = /^ref_[0-9a-f]{64}$/");
+    expect(contract).toContain("const OPAQUE_CURSOR = /^cur_[0-9a-f]{64}$/");
+    expect(migration).toContain("external_record_id~'^ref_[0-9a-f]{64}$'");
+    expect(migration).toContain("communication_reference~'^ref_[0-9a-f]{64}$'");
+    expect(migration).toContain("cursor_after~'^cur_[0-9a-f]{64}$'");
+    expect(migration).not.toContain("length(p.value#>>'{}') BETWEEN 1 AND 128");
+  });
   test('preserves consent, immutable source history, and current-period masking', () => {
     for (const value of ['canonical_external_communication_import_consents','canonical_external_communication_import_runs',
       'canonical_external_communication_import_records','request_key_hash','previous_id',"state IN ('active','tombstone')",

@@ -15,7 +15,9 @@ Owners and administrators grant separate permission for one opaque source key. R
 - Confirmation: `m25-external-communication-import-batch-v1`
 - Source permission: `m25-external-communication-import-consent-v1`
 
-Every active record retains one opaque communication reference, increasing source version, exact event and update times, IANA time zone, evidence class and evidence digest. Opaque customer, lead, job, appointment, estimate and project references are optional. No text matching creates a NorthStar relationship; every active record stays `unmatched` until Part 12E reviewed reconciliation.
+Every external record identity and customer, lead, job, appointment, estimate, project or communication reference uses one exact non-content representation: `ref_` followed by 64 lowercase hexadecimal characters. A source adapter must create that value as a non-reversible, source-scoped token before calling NorthStar, such as an HMAC-SHA-256 value made with a source-specific secret that NorthStar does not receive or store. Import cursors use the parallel `cur_` plus 64 lowercase hexadecimal representation. Raw provider identifiers, names, contact details and message-like text are rejected rather than transformed or stored.
+
+Every active record also retains its increasing source version, exact event and update times, IANA time zone, evidence class and evidence digest. Customer, lead, job, appointment, estimate and project tokens are optional. No text matching creates a NorthStar relationship; every active record stays `unmatched` until Part 12E reviewed reconciliation.
 
 ## Intent, delivery and satisfaction boundaries
 
@@ -23,7 +25,7 @@ A communication record carries its channel and direction. Its intent is either e
 
 A delivery record carries only a recorded delivery state such as sent, delivered, failed, bounced, read or unknown. Delivery does not establish intent, customer satisfaction, estimate acceptance, job completion or payment.
 
-A satisfaction record is accepted only when the source identifies explicit customer feedback or a human review of explicit customer feedback. Automated sentiment is not an accepted satisfaction basis. Satisfaction may remain explicitly unavailable or unknown. The import stores no message body, subject, transcript, email address, phone number, customer name or other communication content.
+A satisfaction record is accepted only when the source identifies explicit customer feedback or a human review of explicit customer feedback. Automated sentiment is not an accepted satisfaction basis. Satisfaction may remain explicitly unavailable or unknown. The import stores no message body, subject, transcript, email address, phone number, customer name or other communication content. Node and PostgreSQL enforce the same exact token grammar before any immutable history is written.
 
 ## Corrections, removals and recovery
 

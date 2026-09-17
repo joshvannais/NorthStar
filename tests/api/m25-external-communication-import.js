@@ -12,12 +12,14 @@ const output = (process.argv.find(value => value.startsWith('--output=')) || '--
 assert.ok(!fs.existsSync(output));
 const sourceKey = 'communications.primary';
 const evidenceDigest = crypto.createHash('sha256').update('opaque-communication-provider-evidence').digest('hex');
+const ref = value => `ref_${crypto.createHash('sha256').update(`${sourceKey}:${value}`).digest('hex')}`;
+const cursor = value => `cur_${crypto.createHash('sha256').update(`${sourceKey}:cursor:${value}`).digest('hex')}`;
 const claim = (value, basis) => ({ status: 'recorded', value, basis });
 const base = (recordType, externalRecordId) => ({
-  externalRecordId, externalVersion: 1, state: 'active', recordType,
-  customerReference: 'customer-ext-1', leadReference: 'lead-ext-1', jobReference: 'job-ext-1',
-  appointmentReference: 'appointment-ext-1', estimateReference: 'estimate-ext-1', projectReference: 'project-ext-1',
-  communicationReference: 'communication-ext-1',
+  externalRecordId: ref(externalRecordId), externalVersion: 1, state: 'active', recordType,
+  customerReference: ref('customer-ext-1'), leadReference: ref('lead-ext-1'), jobReference: ref('job-ext-1'),
+  appointmentReference: ref('appointment-ext-1'), estimateReference: ref('estimate-ext-1'), projectReference: ref('project-ext-1'),
+  communicationReference: ref('communication-ext-1'),
   channel: recordType === 'communication' ? 'phone' : null,
   direction: recordType === 'communication' ? 'inbound' : null,
   intentClaim: recordType === 'communication' ? claim('request_estimate', 'customer_explicit') : null,
@@ -53,7 +55,7 @@ const base = (recordType, externalRecordId) => ({
       .set('X-CSRF-Token', fixture.actors.admin.csrfToken).set('Idempotency-Key', crypto.randomUUID()).send(grant);
     assert.equal(adminGrant.status, 201, JSON.stringify(adminGrant.body));
     const maximumRecords = Array.from({ length: 100 }, (_, index) => ({ ...base('communication', `communication-max-${index}`),
-      communicationReference: `communication-max-${index}`, timeZone: index % 2 ? 'America/Chicago' : 'America/New_York' }));
+      communicationReference: ref(`communication-max-${index}`), timeZone: index % 2 ? 'America/Chicago' : 'America/New_York' }));
     const maximumStarted = Date.now();
     const maximumPage = await request(fixture.app).post(adminRoot + '/batches').set(fixture.actors.admin.session.headers)
       .set('X-CSRF-Token', fixture.actors.admin.csrfToken).set('Idempotency-Key', crypto.randomUUID()).send({
@@ -97,39 +99,66 @@ const base = (recordType, externalRecordId) => ({
       await client.query('SELECT public.canonical_external_communication_import_batch($1,$2,$3,$4,$5,$6,$7,$8::jsonb)',
         [fixture.org, owner.actorUserId, owner.actorAccessRole, owner.authSessionId, owner.csrfToken, crypto.randomUUID(), sourceKey, JSON.stringify(body)]);
     } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); } };
-    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: 'bad', expectedConsentRevision: null, expectedConsentDigest: null })), error => error.code === '22023');
+    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor('bad'), expectedConsentRevision: null, expectedConsentDigest: null })), error => error.code === '22023');
     const invalidZone = base('communication','invalid-zone'); invalidZone.timeZone = 'EST';
-    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: 'bad', records: [invalidZone] })), error => error.code === '22023');
+    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor('bad'), records: [invalidZone] })), error => error.code === '22023');
     const invalidValue = base('communication','invalid-value'); invalidValue.intentClaim = claim('request_estimate', 'automated_sentiment');
-    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: 'bad', records: [invalidValue] })), error => error.code === '22023');
+    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor('bad'), records: [invalidValue] })), error => error.code === '22023');
     const crossPurpose = base('communication','cross-purpose'); crossPurpose.satisfactionClaim = claim('satisfied', 'explicit_customer_feedback');
-    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: 'bad', records: [crossPurpose] })), error => error.code === '22023');
+    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor('bad'), records: [crossPurpose] })), error => error.code === '22023');
     const inferredSatisfaction = base('satisfaction','inferred-satisfaction'); inferredSatisfaction.satisfactionClaim = claim('satisfied', 'provider_classified');
-    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: 'bad', records: [inferredSatisfaction] })), error => error.code === '22023');
+    await assert.rejects(directBatch(batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor('bad'), records: [inferredSatisfaction] })), error => error.code === '22023');
+    const privacyAdversaries = {
+      externalRecordId: 'alice@example.com', customerReference: '8605550101', leadReference: '+1 (202) 555-0123',
+      jobReference: 'Alice_Smith', appointmentReference: 'Subject:Emergency', estimateReference: 'Transcript:Need_help',
+      projectReference: 'Body:Please_call_me_now', communicationReference: 'Message:Call_me',
+    };
+    for (const [field, prohibited] of Object.entries(privacyAdversaries)) {
+      const record = base('communication', `privacy-${field}`); record[field] = prohibited;
+      const privacyBatch = batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor(`privacy-${field}`), records: [record] });
+      const apiRejected = await write('/batches', privacyBatch);
+      assert.equal(apiRejected.status, 400, `${field} accepted by API: ${JSON.stringify(apiRejected.body)}`);
+      await assert.rejects(directBatch(privacyBatch), error => error.code === '22023');
+    }
+    const databaseFields = { externalRecordId: 'external_record_id', customerReference: 'customer_reference',
+      leadReference: 'lead_reference', jobReference: 'job_reference', appointmentReference: 'appointment_reference',
+      estimateReference: 'estimate_reference', projectReference: 'project_reference', communicationReference: 'communication_reference' };
+    for (const [field, prohibited] of Object.entries(privacyAdversaries)) {
+      const override = { id: crypto.randomUUID(), external_record_id: ref(`direct-table-${field}`), revision: 999,
+        previous_id: null, external_version: 999, [databaseFields[field]]: prohibited };
+      await assert.rejects(fixture.ownerPool.query(`INSERT INTO public.canonical_external_communication_import_records
+        SELECT (jsonb_populate_record(NULL::public.canonical_external_communication_import_records,
+          to_jsonb(record) || $1::jsonb)).*
+        FROM public.canonical_external_communication_import_records record
+        WHERE record.organization_id=$2 AND record.record_type='communication' LIMIT 1`, [JSON.stringify(override), fixture.org]),
+      error => error.code === '23514');
+    }
+    ledger.cases.push('Node, guarded PostgreSQL entries and direct table constraints reject content-bearing values in every communication identity/reference field, including email, compact and formatted phone, customer-name, subject, transcript, body and message-like text.');
     const duplicatePage = base('communication','duplicate-page');
-    assert.equal((await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorAfter: 'stream-invalid', records: [duplicatePage, duplicatePage] }))).status, 400);
+    assert.equal((await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor('stream-invalid'), records: [duplicatePage, duplicatePage] }))).status, 400);
     ledger.cases.push('Database and API boundaries reject missing consent pins, invalid time zones, unsupported intent bases, cross-purpose facts, inferred satisfaction labels, and ambiguous duplicate page identities.');
 
-    response = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorAfter: 'duplicate-1', records }));
+    const duplicateCursor = cursor('duplicate-1'); const streamOne = cursor('stream-1'); const streamTwo = cursor('stream-2');
+    response = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorAfter: duplicateCursor, records }));
     assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.duplicateCount, 3);
-    const staleCursor = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: 'wrong', cursorAfter: 'wrong-2', records: [base('communication','stale-cursor')] }));
+    const staleCursor = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: cursor('wrong'), cursorAfter: cursor('wrong-2'), records: [base('communication','stale-cursor')] }));
     assert.equal(staleCursor.status, 409); assert.equal(staleCursor.body.error.code, 'M25_COMMUNICATION_IMPORT_CHANGED');
     const corrected = { ...base('communication','communication-1'), externalVersion: 2,
       intentClaim: { status: 'unavailable', value: null, basis: null },
       sourceUpdatedAt: '2026-09-15T18:00:00.000Z' };
-    response = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: 'duplicate-1', cursorAfter: 'stream-1', records: [corrected] }));
+    response = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: duplicateCursor, cursorAfter: streamOne, records: [corrected] }));
     assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.correctedCount, 1);
     source = await request(fixture.app).get(root).set(owner.session.headers);
-    assert.equal(source.body.data.currentRecords.find(value => value.externalRecordId === 'communication-1').intentClaim.status, 'unavailable');
-    const conflict = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: 'stream-1', cursorAfter: 'stream-2', records: [{ ...corrected, direction: 'outbound' }] }));
+    assert.equal(source.body.data.currentRecords.find(value => value.externalRecordId === ref('communication-1')).intentClaim.status, 'unavailable');
+    const conflict = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: streamOne, cursorAfter: streamTwo, records: [{ ...corrected, direction: 'outbound' }] }));
     assert.equal(conflict.status, 409); assert.equal(conflict.body.error.code, 'M25_COMMUNICATION_IMPORT_RECORD_CONFLICT');
     const tombstone = Object.fromEntries(Object.keys(corrected).map(name => [name,
       ['externalRecordId','externalVersion','state','sourceUpdatedAt'].includes(name) ? corrected[name] : null]));
     Object.assign(tombstone, { externalVersion: 3, state: 'tombstone', sourceUpdatedAt: '2026-09-15T19:00:00.000Z' });
-    response = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: 'stream-1', cursorAfter: 'stream-2', records: [tombstone] }));
+    response = await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorBefore: streamOne, cursorAfter: streamTwo, records: [tombstone] }));
     assert.equal(response.status, 201, JSON.stringify(response.body)); assert.equal(response.body.data.run.tombstonedCount, 1);
     source = await request(fixture.app).get(root).set(owner.session.headers);
-    const removed = source.body.data.currentRecords.find(value => value.externalRecordId === 'communication-1');
+    const removed = source.body.data.currentRecords.find(value => value.externalRecordId === ref('communication-1'));
     assert.equal(removed.state, 'tombstone'); assert.equal(removed.communicationReference, null); assert.equal(removed.intentClaim, null); assert.equal(removed.reconciliationStatus, 'unavailable');
     ledger.cases.push('Distinct-request duplicates deduplicate deterministically; stale cursors and same-version conflicts fail closed; corrections preserve explicit unknowns and tombstones retain no business details.');
 

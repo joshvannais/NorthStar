@@ -1,11 +1,13 @@
 'use strict';
+const crypto = require('node:crypto');
 const contract = require('../../src/learning/externalCommunicationImportContract');
 
 const digest = 'a'.repeat(64);
+const ref = value => `ref_${crypto.createHash('sha256').update(`communications.primary:${value}`).digest('hex')}`;
 const claim = (value, basis) => ({ status: 'recorded', value, basis });
-const base = type => ({ externalRecordId: `${type}-1`, externalVersion: 1, state: 'active', recordType: type,
-  customerReference: null, leadReference: null, jobReference: 'job-1', appointmentReference: null,
-  estimateReference: null, projectReference: null, communicationReference: 'communication-1',
+const base = type => ({ externalRecordId: ref(`${type}-1`), externalVersion: 1, state: 'active', recordType: type,
+  customerReference: null, leadReference: null, jobReference: ref('job-1'), appointmentReference: null,
+  estimateReference: null, projectReference: null, communicationReference: ref('communication-1'),
   channel: type === 'communication' ? 'phone' : null, direction: type === 'communication' ? 'inbound' : null,
   intentClaim: type === 'communication' ? claim('request_estimate','customer_explicit') : null,
   deliveryState: type === 'delivery' ? 'delivered' : null,
@@ -35,6 +37,14 @@ describe('Mission 25 Part 12C communication import contract', () => {
     expect(() => contract.normalizeRecord({ ...tombstone, channel: 'phone' })).toThrow(/cannot retain business details/);
     expect(() => contract.normalizeRecord({ ...value, messageBody: 'private text' })).toThrow(/invalid/);
   });
+  test.each([
+    ['externalRecordId','alice@example.com'], ['customerReference','8605550101'],
+    ['leadReference','+1 (202) 555-0123'], ['jobReference','Alice_Smith'],
+    ['appointmentReference','Subject:Emergency'], ['estimateReference','Transcript:Need_help'],
+    ['projectReference','Body:Please_call_me_now'], ['communicationReference','Message:Call_me'],
+  ])('rejects content-bearing %s values', (field, prohibited) => {
+    expect(() => contract.normalizeRecord({ ...base('communication'), [field]: prohibited })).toThrow(/invalid/);
+  });
   test('bounds pages and rejects duplicate source identities', () => {
     const batch = { schemaVersion: contract.SCHEMA_VERSION, mode: 'historical_backfill', expectedConsentRevision: 1,
       expectedConsentDigest: digest, cursorBefore: null, cursorAfter: null, complete: true,
@@ -42,5 +52,7 @@ describe('Mission 25 Part 12C communication import contract', () => {
       confirmationVersion: contract.BATCH_VERSION };
     expect(contract.normalizeBatch('communications.primary', batch).records).toHaveLength(1);
     expect(() => contract.normalizeBatch('communications.primary', { ...batch, records: [base('communication'), base('communication')] })).toThrow(/more than once/);
+    expect(() => contract.normalizeBatch('communications.primary', { ...batch, mode: 'continuous_update', complete: false,
+      cursorAfter: 'customer@example.com' })).toThrow(/batch is invalid/);
   });
 });

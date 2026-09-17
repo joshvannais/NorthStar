@@ -2,6 +2,9 @@
 -- This stages normalized evidence only. It does not call providers, reconcile opaque references,
 -- calculate an outcome, or change customers, leads, jobs, appointments, estimates, invoices,
 -- payments, dispatch, schedules, costs, provider state or company policy.
+-- Every external ID/reference is the exact shared ref_<64 lowercase hex> representation of a
+-- source-scoped, non-reversible adapter token. Import cursors use cur_<64 lowercase hex>.
+-- Raw provider identifiers, contact details, names and message-like content fail closed.
 
 CREATE TABLE public.canonical_external_communication_import_consents (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id),
@@ -21,7 +24,9 @@ CREATE TABLE public.canonical_external_communication_import_runs (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id), source_key TEXT NOT NULL,
  mode TEXT NOT NULL CHECK(mode IN ('historical_backfill','continuous_update')), sequence BIGINT NOT NULL CHECK(sequence BETWEEN 1 AND 1000000000), previous_run_id UUID,
  consent_id UUID NOT NULL, consent_revision BIGINT NOT NULL, consent_digest TEXT NOT NULL CHECK(consent_digest~'^[0-9a-f]{64}$'),
- schema_version TEXT NOT NULL CHECK(schema_version='m25-external-communication-evidence-v1'), cursor_before TEXT, cursor_after TEXT, complete BOOLEAN NOT NULL,
+ schema_version TEXT NOT NULL CHECK(schema_version='m25-external-communication-evidence-v1'),
+ cursor_before TEXT CHECK(cursor_before IS NULL OR cursor_before~'^cur_[0-9a-f]{64}$'),
+ cursor_after TEXT CHECK(cursor_after IS NULL OR cursor_after~'^cur_[0-9a-f]{64}$'), complete BOOLEAN NOT NULL,
  record_count INTEGER NOT NULL CHECK(record_count BETWEEN 1 AND 100), inserted_count INTEGER NOT NULL, corrected_count INTEGER NOT NULL,
  duplicate_count INTEGER NOT NULL, tombstoned_count INTEGER NOT NULL, actor_user_id UUID NOT NULL, membership_id UUID NOT NULL,
  auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id), reason TEXT NOT NULL CHECK(length(reason) BETWEEN 1 AND 2000), confirmed BOOLEAN NOT NULL CHECK(confirmed),
@@ -39,7 +44,7 @@ CREATE INDEX canonical_external_communication_run_period_idx ON public.canonical
 
 CREATE TABLE public.canonical_external_communication_import_records (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id), source_key TEXT NOT NULL,
- external_record_id TEXT NOT NULL CHECK(length(external_record_id) BETWEEN 1 AND 128), revision BIGINT NOT NULL CHECK(revision BETWEEN 1 AND 1000000000),
+ external_record_id TEXT NOT NULL CHECK(external_record_id~'^ref_[0-9a-f]{64}$'), revision BIGINT NOT NULL CHECK(revision BETWEEN 1 AND 1000000000),
  previous_id UUID, consent_id UUID NOT NULL, external_version BIGINT NOT NULL CHECK(external_version BETWEEN 1 AND 1000000000), state TEXT NOT NULL CHECK(state IN ('active','tombstone')),
  record_type TEXT, customer_reference TEXT, lead_reference TEXT, job_reference TEXT, appointment_reference TEXT,
  estimate_reference TEXT, project_reference TEXT, communication_reference TEXT, channel TEXT, direction TEXT,
@@ -60,6 +65,13 @@ CREATE TABLE public.canonical_external_communication_import_records (
   AND communication_reference IS NOT NULL AND occurred_at IS NOT NULL AND source_updated_at>=occurred_at AND time_zone IS NOT NULL
   AND evidence_class IN ('provider_recorded','documented','owner_confirmed')
   AND provider_evidence_digest~'^[0-9a-f]{64}$')),
+ CHECK((customer_reference IS NULL OR customer_reference~'^ref_[0-9a-f]{64}$')
+  AND (lead_reference IS NULL OR lead_reference~'^ref_[0-9a-f]{64}$')
+  AND (job_reference IS NULL OR job_reference~'^ref_[0-9a-f]{64}$')
+  AND (appointment_reference IS NULL OR appointment_reference~'^ref_[0-9a-f]{64}$')
+  AND (estimate_reference IS NULL OR estimate_reference~'^ref_[0-9a-f]{64}$')
+  AND (project_reference IS NULL OR project_reference~'^ref_[0-9a-f]{64}$')
+  AND (communication_reference IS NULL OR communication_reference~'^ref_[0-9a-f]{64}$')),
  CHECK(state='tombstone' OR
   (record_type='communication' AND channel IN ('phone','sms','email','chat','portal','other','unknown')
    AND direction IN ('inbound','outbound','internal','unknown') AND intent_claim IS NOT NULL
@@ -150,8 +162,8 @@ BEGIN IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXC
   OR jsonb_typeof(body->'complete') IS DISTINCT FROM 'boolean' OR jsonb_typeof(body->'records') IS DISTINCT FROM 'array' OR jsonb_array_length(body->'records') NOT BETWEEN 1 AND 100 OR body->'confirmed' IS DISTINCT FROM 'true'::jsonb
   OR jsonb_typeof(body->'confirmationVersion') IS DISTINCT FROM 'string' OR body->>'confirmationVersion' IS DISTINCT FROM 'm25-external-communication-import-batch-v1'
   OR jsonb_typeof(body->'reason') IS DISTINCT FROM 'string' OR public.canonical_learning_text_valid(body->>'reason',2000) IS NOT TRUE
-  OR (body->'cursorBefore'<>'null'::jsonb AND (jsonb_typeof(body->'cursorBefore')<>'string' OR length(body->>'cursorBefore') NOT BETWEEN 1 AND 512 OR body->>'cursorBefore'!~'^[!-~]+$'))
-  OR (body->'cursorAfter'<>'null'::jsonb AND (jsonb_typeof(body->'cursorAfter')<>'string' OR length(body->>'cursorAfter') NOT BETWEEN 1 AND 512 OR body->>'cursorAfter'!~'^[!-~]+$'))
+  OR (body->'cursorBefore'<>'null'::jsonb AND (jsonb_typeof(body->'cursorBefore')<>'string' OR body->>'cursorBefore'!~'^cur_[0-9a-f]{64}$'))
+  OR (body->'cursorAfter'<>'null'::jsonb AND (jsonb_typeof(body->'cursorAfter')<>'string' OR body->>'cursorAfter'!~'^cur_[0-9a-f]{64}$'))
   OR (body->>'mode'='continuous_update' AND ((body->>'complete')::boolean OR body->'cursorAfter'='null'::jsonb))
   OR (body->>'mode'='historical_backfill' AND (((body->>'complete')::boolean AND body->'cursorAfter'<>'null'::jsonb) OR (NOT (body->>'complete')::boolean AND body->'cursorAfter'='null'::jsonb))) THEN RAISE EXCEPTION 'External communication batch invalid' USING ERRCODE='22023'; END IF;
  IF (SELECT count(*) FROM (SELECT x->>'externalRecordId' FROM jsonb_array_elements(body->'records')x GROUP BY x->>'externalRecordId')u)<>jsonb_array_length(body->'records') THEN RAISE EXCEPTION 'Duplicate communication identity' USING ERRCODE='22023'; END IF;
@@ -176,7 +188,7 @@ BEGIN IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXC
  SELECT COALESCE(max(sequence),0)+1 INTO next_sequence FROM public.canonical_external_communication_import_runs WHERE organization_id=org AND source_key=source_value AND mode=body->>'mode';record_count:=jsonb_array_length(body->'records');
  FOR item IN SELECT value FROM jsonb_array_elements(body->'records') LOOP
   IF public.canonical_field_evidence_object_keys_exact(item,ARRAY['externalRecordId','externalVersion','state','recordType','customerReference','leadReference','jobReference','appointmentReference','estimateReference','projectReference','communicationReference','channel','direction','intentClaim','deliveryState','satisfactionClaim','occurredAt','timeZone','evidenceClass','providerEvidenceDigest','sourceUpdatedAt']) IS NOT TRUE
-   OR jsonb_typeof(item->'externalRecordId') IS DISTINCT FROM 'string' OR length(item->>'externalRecordId') NOT BETWEEN 1 AND 128 OR item->>'externalRecordId'!~'^[!-~]+$'
+   OR jsonb_typeof(item->'externalRecordId') IS DISTINCT FROM 'string' OR item->>'externalRecordId'!~'^ref_[0-9a-f]{64}$'
    OR jsonb_typeof(item->'externalVersion') IS DISTINCT FROM 'number' OR (item->>'externalVersion')!~'^([1-9][0-9]{0,8}|1000000000)$'
    OR jsonb_typeof(item->'state') IS DISTINCT FROM 'string' OR item->>'state' IS NULL OR item->>'state' NOT IN ('active','tombstone')
    OR jsonb_typeof(item->'sourceUpdatedAt') IS DISTINCT FROM 'string' OR item->>'sourceUpdatedAt'!~'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' OR NOT pg_input_is_valid(item->>'sourceUpdatedAt','timestamp with time zone') THEN RAISE EXCEPTION 'External communication record invalid' USING ERRCODE='22023'; END IF;
@@ -186,7 +198,7 @@ BEGIN IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXC
    IF EXISTS(SELECT 1 FROM jsonb_each(item) p WHERE p.key NOT IN ('externalRecordId','externalVersion','state','sourceUpdatedAt') AND p.value<>'null'::jsonb) THEN RAISE EXCEPTION 'Communication tombstone retained details' USING ERRCODE='22023'; END IF; occurred:=NULL;
   ELSE
    IF jsonb_typeof(item->'recordType') IS DISTINCT FROM 'string' OR item->>'recordType' NOT IN ('communication','delivery','satisfaction')
-    OR EXISTS(SELECT 1 FROM jsonb_each(item) p WHERE p.key IN ('customerReference','leadReference','jobReference','appointmentReference','estimateReference','projectReference','communicationReference') AND NOT(p.value='null'::jsonb OR (jsonb_typeof(p.value)='string' AND length(p.value#>>'{}') BETWEEN 1 AND 128 AND (p.value#>>'{}')~'^[!-~]+$')))
+    OR EXISTS(SELECT 1 FROM jsonb_each(item) p WHERE p.key IN ('customerReference','leadReference','jobReference','appointmentReference','estimateReference','projectReference','communicationReference') AND NOT(p.value='null'::jsonb OR (jsonb_typeof(p.value)='string' AND (p.value#>>'{}')~'^ref_[0-9a-f]{64}$')))
     OR item->'communicationReference'='null'::jsonb
     OR item->>'occurredAt'!~'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' OR NOT pg_input_is_valid(item->>'occurredAt','timestamp with time zone')
     OR jsonb_typeof(item->'timeZone') IS DISTINCT FROM 'string' OR item->>'timeZone'!~'^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+.-]+)+)$'

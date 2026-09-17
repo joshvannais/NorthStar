@@ -280,8 +280,18 @@ Source permission is current-period specific. Revocation hides all staged detail
 
 Slice B passed independent exact-head acceptance at `a06968bad9620de8199286d7011bce511ea43a39` with no P0-P3 findings.
 
-## Part 11 Slice C candidate — reviewed external material reconciliation
+## Part 11 Slice C accepted — reviewed external material reconciliation
 
 Migration `107_canonical_external_material_reconciliation.sql` adds explicit owner or administrator links from opaque current-period external job, material, vendor and inventory-location references to exact same-tenant current targets. Job links use canonical estimates. Material and location links require accepted Mission 23 movement evidence under the exact item or location key. Vendor links require the exact supplier label from a currently adopted Mission 24 material-plan line whose reviewed evidence type is `supplier_quote`; this remains company-recorded evidence and is not supplier verification.
 
 Every immutable link pins the current source permission, complete current source-record manifest and complete current target manifest. The service never guesses by name, converts a unit or currency, creates a target, or changes an operational record. Source corrections and tombstones, accepted movement or location changes, estimate or adopted-plan changes, match changes and permission changes make earlier lineage stale or unavailable. Revocation hides and blocks reconciliation. A later permission period revives neither prior imported evidence nor prior matches. Quantity and waste observations, cost, vendor and availability outcomes, calibration, lifecycle cleanup and the rendered Learning Center remain mandatory Slices D-H.
+
+Slice C passed independent exact-head acceptance at `5befa1351f0b64e46e028dcdb5f6ce1f0c41f005` with no P0-P3 findings.
+
+## Part 11 Slice D candidate — imported material quantity, consumption and waste outcomes
+
+Migration `108_canonical_imported_material_quantity_outcomes.sql` adds separate current-source-period purpose consent and an immutable advisory observation for one exact imported job and one exact adopted Mission 24 material plan. Every job and material reference requires a current owner-reviewed Part 11C link. The owner supplies one exact opaque material reference for every plan line; the plan lines, bindings and current recorded material references must have equal coverage, and one reconciled target item cannot stand for multiple plan lines.
+
+Recorded consumption and recorded waste are evaluated independently from current imported inventory-movement evidence. Missing evidence remains unavailable rather than becoming zero. A unit conflict makes only that dimension unavailable. Total recorded use and plan variance require both compatible dimensions, and the overall advisory is withheld unless every planned line is comparable. Purchases, vendor costs, balances, returns, transfers and adjustments do not establish job use in this slice.
+
+Every observation pins the estimate, adopted revision and plan, current source permission, exact job and material matches, sorted bindings and complete current job-record manifest. Corrections, tombstones, link or target changes, plan changes and consent changes stale and mask prior advice. Revocation hides derived history, and later grants revive neither earlier evidence nor observations. The output is advisory and changes no estimate, price, job, plan, material movement, inventory balance, purchase, vendor record, cost or policy. Cost, vendor, purchasing and availability observations, calibration, lifecycle cleanup and the rendered Learning Center remain mandatory Slices E-H.

@@ -15,8 +15,8 @@ const layouts = [
   { name: 'tablet-landscape-light', width: 1024, height: 768, theme: 'light' },
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
 ];
-const forbidden = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\[object Object\]|\bM25_[A-Z0-9_]+|request\s+id\b/i;
-const ledger = { engine, layouts: [], cases: [], pageErrors: [], externalRequests: [], pass: false };
+const forbidden = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\[object Object\]|\bM25_[A-Z0-9_]+|request\s+id\b|\b(?:provider|credentials?|token|schema|digest|revision|projection|authority|idempotency|internal state)\b/i;
+const ledger = { engine, layouts: [], paidLayouts: [], cases: [], pageErrors: [], externalRequests: [], pass: false };
 let browser, server, fixture;
 (async () => {
   try {
@@ -50,18 +50,25 @@ let browser, server, fixture;
     ledger.cases.push('Five isolated demo layouts show material permissions, evidence, unavailable measures, lifecycle controls and planning suggestions without overflow or internal identifiers.');
     ledger.cases.push('Every required layout converts a structured server failure into one plain recovery message without exposing backend codes or request identifiers.');
 
-    const paid = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
-    await paid.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name,value]) => ({ name,value,url:origin,sameSite:'Lax',httpOnly:name!=='northstar_csrf' })));
-    const page = await paid.newPage(); page.setDefaultTimeout(20000); page.on('pageerror', error => ledger.pageErrors.push(`paid: ${error.message}`));
-    await page.goto(`${origin}/dashboard/learning-center`, { waitUntil: 'networkidle' }); await page.locator('#learningStatus').filter({ hasText: /Learning Center is (ready|current)/ }).waitFor();
-    await page.locator('#learningSourceKind').selectOption('material'); await page.locator('#learningSourceKey').fill('materials.browser');
-    const grant = page.waitForResponse(response => response.url().endsWith('/external-material-sources/materials.browser/consent') && response.request().method()==='POST'); await page.locator('#learningSourceAdd').click(); assert.equal((await grant).status(), 201);
-    await page.locator('#learningDetailTitle').filter({ hasText: 'Materials Browser · Material' }).waitFor(); assert.equal(await page.locator('#learningConsentCards .learning-consent-card').count(), 4);
-    const place = page.waitForResponse(response => response.url().endsWith('/external-material-sources/materials.browser/hold') && response.request().method()==='POST'); await page.getByRole('button',{name:'Place hold'}).click(); assert.equal((await place).status(),201);
-    await page.getByText(/Cleanup is paused by the active legal hold/i).waitFor(); assert.equal(await page.getByRole('button',{name:'Process eligible records'}).isDisabled(),true);
-    assert.doesNotMatch(await page.locator('body').innerText(), forbidden); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    ledger.cases.push('Paid owner flow creates a tenant-private material source, exposes four separate permissions, and blocks cleanup while a legal hold is active.');
-    await paid.close(); assert.deepEqual(ledger.pageErrors, []); assert.deepEqual(ledger.externalRequests, []); ledger.pass = true;
+    for (const [index, layout] of layouts.entries()) {
+      const paid = await browser.newContext({ viewport: { width: layout.width, height: layout.height }, reducedMotion: 'reduce' });
+      await paid.addInitScript(theme => localStorage.setItem('northstar-theme', theme), layout.theme);
+      await paid.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name,value]) => ({ name,value,url:origin,sameSite:'Lax',httpOnly:name!=='northstar_csrf' })));
+      await paid.route('**/*', route => { const url = new URL(route.request().url()); if (url.origin !== origin) { ledger.externalRequests.push(url.href); return route.abort(); } return route.continue(); });
+      const page = await paid.newPage(); page.setDefaultTimeout(20000); page.on('pageerror', error => ledger.pageErrors.push(`paid-${layout.name}: ${error.message}`));
+      await page.goto(`${origin}/dashboard/learning-center`, { waitUntil: 'networkidle' }); await page.locator('#learningStatus').filter({ hasText: /Learning Center is (ready|current)/ }).waitFor(); assert.equal(await page.evaluate(() => scrollY), 0);
+      await page.locator('.learning-skip').focus(); assert.equal(await page.locator('.learning-skip').evaluate(element => element === document.activeElement), true); await page.keyboard.press('Enter'); assert.match(page.url(), /#learningMain$/);
+      const sourceKey = `materials.browser-${index + 1}`; await page.locator('#learningSourceKind').selectOption('material'); await page.locator('#learningSourceKey').fill(sourceKey);
+      const grant = page.waitForResponse(response => response.url().endsWith(`/external-material-sources/${sourceKey}/consent`) && response.request().method()==='POST'); await page.locator('#learningSourceAdd').click(); assert.equal((await grant).status(), 201);
+      await page.locator('#learningDetailTitle').filter({ hasText: new RegExp(`Materials Browser ${index + 1}.*Material`, 'i') }).waitFor(); assert.equal(await page.locator('#learningConsentCards .learning-consent-card').count(), 4);
+      const place = page.waitForResponse(response => response.url().endsWith(`/external-material-sources/${sourceKey}/hold`) && response.request().method()==='POST'); await page.getByRole('button',{name:'Place hold'}).click(); assert.equal((await place).status(),201);
+      await page.getByText(/Cleanup is paused by the active legal hold/i).waitFor(); assert.equal(await page.getByRole('button',{name:'Process eligible records'}).isDisabled(),true);
+      const body = await page.locator('body').innerText(); assert.doesNotMatch(body, forbidden); const geometry = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth })); assert.ok(geometry.scrollWidth <= geometry.width, JSON.stringify(geometry));
+      const capture = path.join(captureRoot, `paid-${engine}-${layout.name}.png`); await page.screenshot({ path: capture, fullPage: true }); ledger.paidLayouts.push({ ...layout, capture, scrollWidth: geometry.scrollWidth });
+      await paid.close();
+    }
+    ledger.cases.push('Five paid owner layouts each create a tenant-private material source, expose four separate permissions, and block cleanup while a legal hold is active.');
+    assert.deepEqual(ledger.pageErrors, []); assert.deepEqual(ledger.externalRequests, []); ledger.pass = true;
   } catch (error) { ledger.error = error.stack; process.exitCode = 1; }
   finally { fs.writeFileSync(output, JSON.stringify(ledger,null,2)); await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); await fixture?.cleanup(); }
 })();

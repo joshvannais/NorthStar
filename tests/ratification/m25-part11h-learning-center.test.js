@@ -23,7 +23,7 @@ describe('Mission 25 Part 11 Slice H material Learning Center', () => {
       "'/imported-material-cost-consent'", "'/imported-material-calibration-consent'",
       "'/imported-material-calibrations/'", "'m25-external-material-reference-match-v1'",
       "'m25-imported-material-calibration-proposal-v1'"]) expect(page).toContain(fragment);
-    expect(page).not.toMatch(/access[_-]?token|client[_-]?secret|provider[_-]?password/i);
+    expect(page).not.toMatch(/access[ _-]?token|client[ _-]?secret|provider[ _-]?password|credential implementation/i);
   });
 
   test('shows every independent material planning measure and unavailable state', () => {
@@ -53,6 +53,7 @@ describe('Mission 25 Part 11 Slice H material Learning Center', () => {
     expect(page).toContain("authority: 'isolated_demo_postgresql'");
     expect(page).toContain("el('learningSourceKind').disabled = true");
     expect(html).toContain('Materials used');
+    expect(html).toContain('Connections are managed outside this page.');
     expect(html).toContain('What Polaris has learned');
     expect(html).toContain('aria-live="polite"');
     expect(css).toContain('.learning-confirmation');

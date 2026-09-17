@@ -276,7 +276,7 @@
       }, true); importButton.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(node('div', 'learning-actions')).appendChild(importButton); csv.appendChild(node('small', '', backfill && !backfill.complete ? 'Continue the previous import. Required columns are checked before records are saved for review.' : 'Required columns are checked before records are saved for review.')); grid.appendChild(csv);
     } else {
       var continuous = checkpoint('continuous_update');
-       var checkpointCard = operationCard('Import progress', isMaterial() ? 'Authorized connections submit reviewed material, inventory and purchasing records in pages of no more than 100. NorthStar stores progress without a provider password.' : (isAsset() ? 'Authorized connections submit reviewed vehicle and equipment records in pages of no more than 100. NorthStar stores progress without a provider password.' : 'Authorized connections submit reviewed route, mileage and fuel records in pages of no more than 100. NorthStar stores progress without a provider password.'));
+       var checkpointCard = operationCard('Import progress', isMaterial() ? 'Authorized connections submit reviewed material, inventory and purchasing records in pages of no more than 100. Progress is saved so a later import can continue safely.' : (isAsset() ? 'Authorized connections submit reviewed vehicle and equipment records in pages of no more than 100. Progress is saved so a later import can continue safely.' : 'Authorized connections submit reviewed route, mileage and fuel records in pages of no more than 100. Progress is saved so a later import can continue safely.'));
       var checkpointMetrics = node('div', 'learning-compact-metrics');
       checkpointMetrics.appendChild(metric('Earlier records', backfill ? (backfill.complete ? 'Complete' : 'In progress') : 'Not started'));
       checkpointMetrics.appendChild(metric('Continuous updates', continuous ? ('Run ' + integer(continuous.sequence)) : 'Not started'));
@@ -286,7 +286,7 @@
     }
 
     var adapter = state.operations.adapter, adapterState = adapter && adapter.action === 'resume' ? 'Running' : (adapter && adapter.action === 'pause' ? 'Paused' : (adapter ? contract.label(adapter.action) : null));
-    var adapterCard = operationCard('Continuous updates', adapter ? 'Current state: ' + adapterState + '. Connection settings do not store an account reference or provider password.' : 'Choose how an authorized connection may submit future updates.');
+    var adapterCard = operationCard('Continuous updates', adapter ? 'Current state: ' + adapterState + '. Connections are managed outside this page.' : 'Choose how an authorized connection may submit future updates.');
     var canConfigure = !adapter || adapter.action === 'disconnect';
     var kindLabel = node('label', '', 'Connection method'); kindLabel.htmlFor = 'learningAdapterKind'; var kindSelect = node('select'); kindSelect.id = 'learningAdapterKind';
     [['provider_api', 'Connected service'], ['csv', 'CSV file']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; kindSelect.appendChild(option); }); kindSelect.value = adapter ? adapter.adapterKind : 'provider_api'; kindSelect.disabled = demo || !canConfigure; adapterCard.appendChild(kindLabel); adapterCard.appendChild(kindSelect);

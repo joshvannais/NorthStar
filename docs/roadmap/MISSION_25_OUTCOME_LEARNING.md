@@ -288,10 +288,20 @@ Every immutable link pins the current source permission, complete current source
 
 Slice C passed independent exact-head acceptance at `5befa1351f0b64e46e028dcdb5f6ce1f0c41f005` with no P0-P3 findings.
 
-## Part 11 Slice D candidate — imported material quantity, consumption and waste outcomes
+## Part 11 Slice D accepted — imported material quantity, consumption and waste outcomes
 
 Migration `108_canonical_imported_material_quantity_outcomes.sql` adds separate current-source-period purpose consent and an immutable advisory observation for one exact imported job and one exact adopted Mission 24 material plan. Every job and material reference requires a current owner-reviewed Part 11C link. The owner supplies one exact opaque material reference for every plan line; the plan lines, bindings and current recorded material references must have equal coverage, and one reconciled target item cannot stand for multiple plan lines.
 
 Recorded consumption and recorded waste are evaluated independently from current imported inventory-movement evidence. Missing evidence remains unavailable rather than becoming zero. A unit conflict makes only that dimension unavailable. Total recorded use and plan variance require both compatible dimensions, and the overall advisory is withheld unless every planned line is comparable. Purchases, vendor costs, balances, returns, transfers and adjustments do not establish job use in this slice.
 
 Every observation pins the estimate, adopted revision and plan, current source permission, exact job and material matches, sorted bindings and complete current job-record manifest. Corrections, tombstones, link or target changes, plan changes and consent changes stale and mask prior advice. Revocation hides derived history, and later grants revive neither earlier evidence nor observations. The output is advisory and changes no estimate, price, job, plan, material movement, inventory balance, purchase, vendor record, cost or policy. Cost, vendor, purchasing and availability observations, calibration, lifecycle cleanup and the rendered Learning Center remain mandatory Slices E-H.
+
+Slice D passed independent exact-head acceptance at `b0f859aa2b96a75721f207925e8e58cf85655c13` with no P0-P3 findings.
+
+## Part 11 Slice E candidate — imported material cost, purchasing, vendor and recorded-balance observations
+
+Migration `109_canonical_imported_material_cost_observations.sql` adds separate current-source-period purpose consent and immutable advisory observations for one exact imported job and one exact adopted Mission 24 material plan. Every job and material reference needs a current owner-reviewed Part 11C link. Vendor and inventory-location references are explicit per-line bindings and require their own current reviewed links when used.
+
+Unit cost, job purchasing quantity and line total, reviewed vendor lineage, and recorded inventory balance are evaluated independently. A unit cost requires one unambiguous amount in the exact planned unit and estimate currency. A purchase line total remains a line total and is never divided into a fabricated unit price. Vendor lineage reflects company-reviewed supplier evidence without independently verifying or rating the supplier. One exact recorded balance can be compared with the waste-inclusive planned quantity at its source timestamp, but it never confirms present availability. Mixed units, currencies, valuations, missing evidence, conflicting prices and multiple balance records make only the affected dimension unavailable.
+
+The observation pins the estimate, adopted revision and plan, current source permission, exact reviewed reconciliation revisions, sorted bindings and the complete relevant current imported-record manifest. Corrections, tombstones, source or purpose consent changes, plan changes, target changes and reviewed-link changes stale and mask prior output. Revocation hides derived history, and later grants revive neither earlier evidence nor observations. No unit, currency, valuation, cost allocation, vendor selection, purchase need or availability is inferred. The result is advisory and changes no estimate, price, plan, job, purchase, vendor, inventory record, reservation, schedule or policy. Calibration, lifecycle cleanup and the rendered Learning Center remain mandatory Slices F-H.

@@ -39,6 +39,8 @@ const materialMatchContract = require('../learning/externalMaterialReconciliatio
 const materialMatchRepository = require('../learning/externalMaterialReconciliationRepository');
 const importedMaterialQuantityContract = require('../learning/importedMaterialQuantityContract');
 const importedMaterialQuantityRepository = require('../learning/importedMaterialQuantityRepository');
+const importedMaterialCostContract = require('../learning/importedMaterialCostContract');
+const importedMaterialCostRepository = require('../learning/importedMaterialCostRepository');
 const assetImportContract = require('../learning/externalAssetImportContract');
 const assetImportRepository = require('../learning/externalAssetImportRepository');
 const assetOperationsContract = require('../learning/externalAssetOperationsContract');
@@ -283,6 +285,22 @@ function createLearningRouter(options = {}) {
       } catch (error) { return replyError(req, res, error); }
     });
 
+  router.get('/external-material-sources/:sourceKey/imported-material-cost-consent', headers, tenantAuth,
+    materialImportOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try { const sourceKey = materialImportContract.normalizeSourceKey(req.params.sourceKey); const data = await importedMaterialCostRepository.readConsent(poolProvider(), { ...actor(req), sourceKey }); return res.json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-material-sources/:sourceKey/imported-material-cost-consent', headers, mutationAuth,
+    materialImportOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try { const normalized = importedMaterialCostContract.normalizeConsent(req.params.sourceKey, req.body); const { sourceKey, ...body } = normalized; const data = await importedMaterialCostRepository.mutateConsent(poolProvider(), { ...actor(req), sourceKey, body, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') }); if (data.replayed) res.set('Idempotency-Replayed', 'true'); return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
+  router.get('/external-material-sources/:sourceKey/estimates/:estimateId/imported-material-cost-observations', headers,
+    tenantAuth, materialImportOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try { const sourceKey = materialImportContract.normalizeSourceKey(req.params.sourceKey); const estimateId = importedMaterialCostContract.normalizeEstimateId(req.params.estimateId); const data = await importedMaterialCostRepository.readOutcome(poolProvider(), { ...actor(req), sourceKey, estimateId }); return res.json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-material-sources/:sourceKey/estimates/:estimateId/imported-material-cost-observations', headers,
+    mutationAuth, materialImportOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try { const normalized = importedMaterialCostContract.normalizeObservation(req.params.sourceKey, req.params.estimateId, req.body); const data = await importedMaterialCostRepository.observe(poolProvider(), { ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') }); if (data.replayed) res.set('Idempotency-Replayed', 'true'); return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
   router.get('/external-asset-sources/:sourceKey/consent', headers, tenantAuth, assetOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {
       try {

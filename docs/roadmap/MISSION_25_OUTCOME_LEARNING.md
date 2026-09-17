@@ -20,7 +20,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Released — Slices A-F accepted |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Released — Slices A-H independently accepted |
-| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | In progress — Slice A candidate |
+| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | In progress — Slice A accepted; Slice B candidate |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Planned |
 | 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | Planned |
@@ -260,10 +260,20 @@ The experience uses plain business language, live loading and error status, labe
 
 Part 10 passed independent exact-head acceptance at `8f6af4c2a3654d2e1b9a1e2246d35b6933838cad` with no P0-P3 findings. Production migration and deployment, provider credentials and private production data remained outside that acceptance package.
 
-## Part 11 Slice A candidate — native planned-versus-used material outcomes
+## Part 11 Slice A accepted — native planned-versus-used material outcomes
 
 Migration `105_canonical_native_material_outcomes.sql` adds separate purpose consent and an immutable advisory comparison between one exact adopted Mission 24 multi-line material plan and one explicitly selected completed Mission 23 execution. Every planned line must have one owner-supplied exact item reference. The exact plan-line set and binding set must match, and one recorded item cannot ambiguously represent multiple planned lines.
 
 The comparison pins the estimate, current adopted estimate revision, exact material plan, selected execution, current completion record, sorted bindings and the complete current movement set for every bound item. It compares waste-inclusive planned quantity with accepted consumption plus accepted waste only when the recorded unit already matches the planned unit. Unreviewed evidence, incomplete line coverage, missing accepted use, conflicting units, changed completion, changed adoption or changed movement evidence fails closed or makes prior advice stale. Returns, transfers and adjustments remain in provenance but do not establish use. No names are matched and no units, stock, purchases, vendor facts, costs, availability or valuation are inferred.
 
 Revocation hides saved observations and blocks new ones. A later grant begins a distinct consent period and does not revive earlier observations. The runtime role receives only guarded owner/administrator entry functions; storage and basis helpers remain withheld. The output is advisory and changes no estimate, price, job, material movement, inventory balance, purchase, vendor record or business policy. External sources, reconciliation, quantity/waste expansion, unit cost, vendor and availability outcomes, calibration, lifecycle cleanup and the rendered Learning Center remain mandatory Slices B-H.
+
+Slice A passed independent exact-head acceptance at `82ceac0be5ca4169a5bbd5dcf681a498a3ad5415` with no P0-P3 findings.
+
+## Part 11 Slice B candidate — external material, inventory, purchasing and vendor-cost evidence
+
+Migration `106_canonical_external_material_import_authority.sql` adds a provider-neutral staging boundary for separately consented inventory balances, inventory movements, purchases and vendor costs. Each immutable normalized record preserves its opaque source and record identity, source version, event and source-update times, IANA time zone, opaque job/material/vendor/location references when applicable, exact quantity and unit, exact amount/currency/valuation when applicable, evidence class and provider evidence digest. Pages are bounded, cursor-pinned and deterministic under replay and concurrency.
+
+The four record classes are validated independently. Inventory balances require an explicit location and may record zero quantity. Movements require a declared movement class and positive quantity. Purchases require positive quantity, vendor identity and an explicit unit or line-total cost. Vendor costs require positive quantity, vendor identity and an explicit valuation and source basis. Unsupported units, currencies, conversions and incomplete values fail closed. Corrections require a higher source version; tombstones retain no business detail.
+
+Source permission is current-period specific. Revocation hides all staged detail and blocks new imports. A later grant starts a new permission period and does not revive records from an earlier period. Runtime receives only guarded owner/administrator entry functions and cannot read protected tables or call validation/projection helpers. This slice does not reconcile opaque references, infer stock or value, calculate outcomes, connect to a provider, or change estimates, jobs, material plans, inventory, purchases, vendors, costs or policy. Reconciliation, quantity/waste observations, cost/vendor/availability observations, calibration, lifecycle cleanup and the Learning Center remain mandatory Slices C-H.

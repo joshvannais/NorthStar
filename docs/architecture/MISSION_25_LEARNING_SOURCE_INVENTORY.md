@@ -133,8 +133,12 @@ Migration `103_canonical_learning_center_assets.sql` adds asset sources and nati
 
 The rendered experience identifies checkout duration as distinct from engine-on time, keeps unavailable dimensions explicit and never describes maintenance or downtime as proof of condition or availability. Active deletion presents a cancel-first recovery state; a new source-consent period cannot revive prior source detail or learning authority. No provider credential, live provider claim or operational mutation is added.
 
-## Part 11 Slice F candidate — multi-job material and purchasing calibration
+## Part 11 Slice F accepted — multi-job material and purchasing calibration
 
 Migration `110_canonical_imported_material_calibration.sql` requires a distinct current calibration consent pinned to current Part 11D quantity and Part 11E cost consent. Five to 100 fresh paired observations for one normalized service form a deterministic sample. One current quantity/cost pair per exact canonical-estimate and imported-job identity contributes one job; distinct reviewed imported jobs linked to the same estimate remain distinct samples. Each job first contributes one median ratio for each complete comparable dimension, so plans with more lines do not receive more weight.
 
 Total material use, waste, unit cost, purchased quantity and purchase cost are summarized independently with median and lower and upper quartiles. Exact units, plan shape and currency must match, and at least five current jobs are required per dimension. Raw statistics remain visible, while values outside the inclusive `0.25` to `4.00` range cannot produce an advisory multiplier. Vendor lineage and recorded balances remain outside calibration. Every result is advisory, immutable and consent-bound; corrections or lineage changes stale it, revocation hides it and later grants do not revive an earlier consent period.
+
+## Part 11 Slice G candidate — material source lifecycle and cleanup
+
+Material import operations retain only provider-neutral adapter kind and cadence. Immutable retention, deletion and legal/audit-hold revisions are tenant private. Cleanup is authorized by the exact current policy or deletion digest, processes at most 100 current source records, appends minimized tombstones and records a resumable immutable run. Active holds prevent cleanup. Deletion revokes source permission immediately; cancellation and a new consent period cannot revive prior source detail, reviewed links, observations or calibration.

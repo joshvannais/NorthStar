@@ -20,7 +20,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Released — Slices A-F accepted |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Released — Slices A-H independently accepted |
-| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | In progress — Slice A accepted; Slice B candidate |
+| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | In progress — Slices A-F accepted; Slice G candidate |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Planned |
 | 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | Planned |
@@ -308,10 +308,20 @@ The observation pins the estimate, adopted revision and plan, current source per
 
 Slice E passed independent exact-head acceptance at `1effdbc5768efe091d788dda544a37084f65cd7c` with no P0-P3 findings.
 
-## Part 11 Slice F candidate — robust multi-job material and purchasing calibration
+## Part 11 Slice F accepted — robust multi-job material and purchasing calibration
 
 Migration `110_canonical_imported_material_calibration.sql` adds separate current-period calibration consent and immutable advisory proposals for five to 100 fresh same-service jobs. Every job must have one current Part 11D quantity observation and one current Part 11E cost observation for the same canonical estimate, imported job and exact adopted Mission 24 material plan. A separately reviewed imported job linked to the same estimate remains a distinct equal-weight sample; only later revisions of the same exact estimate-and-imported-job pair replace its earlier observation. The sample pins all four consent periods, both observation identities, revisions, digests and source digests, the normalized service, calculation version and request identity.
 
 Each job has equal weight. Complete compatible plan lines first reduce to one per-job median for total use, waste, unit cost, purchased quantity and purchase cost. The cross-job sample then reports median and lower and upper quartile actual-to-planned ratios for each dimension independently. A dimension needs five jobs on one exact unit, plan-shape and currency basis. Missing, ambiguous or incompatible evidence does not become zero and does not suppress a different compatible dimension.
 
 Raw robust statistics are retained. Only an inclusive `0.25` to `4.00` median may produce an advisory multiplier. Vendor lineage and recorded inventory balance remain uncalibrated because the accepted sources provide neither a numeric future baseline nor proof of current availability. Corrections, tombstones, reconciliation or target changes, adopted-plan changes, observation revisions and consent changes stale and mask prior advice. Revocation hides history and later grants revive no prior proposal. No estimate, price, plan, job, purchase, vendor, inventory record, balance, reservation, schedule or policy is changed. Lifecycle cleanup and the rendered Learning Center remain mandatory Slices G-H.
+
+Slice F passed independent exact-head acceptance at `410c7c5ddaf73a6962c0f2d44e64fb6d1b5a1ff3` with no P0-P3 findings.
+
+## Part 11 Slice G candidate — material source lifecycle and bounded cleanup
+
+Migration `111_canonical_external_material_import_operations.sql` adds provider-neutral adapter lifecycle, historical and continuous checkpoints, retention policy, deletion requests, legal and audit holds, and bounded resumable cleanup for external material, inventory, purchasing and vendor-cost evidence. It stores no provider credential or provider account identity and does not claim a live connection.
+
+Every lifecycle, retention, deletion and hold change is an immutable revision pinned to the exact prior revision and digest. Cleanup processes at most 100 current records, appends detail-free tombstone revisions and returns an exact resumable checkpoint. A policy change starts a new cleanup chain. A current legal or audit hold blocks cleanup; a deletion request can still revoke source permission immediately, so imports and derived reads stop without destroying held evidence. Source permission cannot be re-granted while deletion remains active. Recovery requires explicit hold release when applicable, deletion cancellation and a new source consent period. None of those actions revives tombstoned evidence or prior reconciliation, observation or calibration authority.
+
+Cleanup remains tenant private, owner or administrator controlled, narrowly scoped, idempotent and observable. It never connects to a provider or changes an estimate, price, material plan, job, purchase, vendor, inventory balance, reservation, schedule or policy. The paid and isolated-demo Learning Center and complete Part 11 acceptance remain Slice H.

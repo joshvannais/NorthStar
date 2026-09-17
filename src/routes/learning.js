@@ -35,6 +35,8 @@ const nativeMaterialContract = require('../learning/nativeMaterialOutcomeContrac
 const nativeMaterialRepository = require('../learning/nativeMaterialOutcomeRepository');
 const materialImportContract = require('../learning/externalMaterialImportContract');
 const materialImportRepository = require('../learning/externalMaterialImportRepository');
+const materialOperationsContract = require('../learning/externalMaterialOperationsContract');
+const materialOperationsRepository = require('../learning/externalMaterialOperationsRepository');
 const materialMatchContract = require('../learning/externalMaterialReconciliationContract');
 const materialMatchRepository = require('../learning/externalMaterialReconciliationRepository');
 const importedMaterialQuantityContract = require('../learning/importedMaterialQuantityContract');
@@ -78,6 +80,7 @@ function replyError(req, res, error) {
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
   const unavailable = code.startsWith('M25_MATERIAL_MATCH_') ? 'Material reference review is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_MATERIAL_OUTCOME_') ? 'Imported material outcome learning is temporarily unavailable.' :
+    code.startsWith('M25_MATERIAL_IMPORT_OPERATIONS_') ? 'Material source operations are temporarily unavailable.' :
     code.startsWith('M25_MATERIAL_IMPORT_') ? 'External material evidence is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_ASSET_CALIBRATION_') ? 'Vehicle and equipment calibration is temporarily unavailable.' :
     code.startsWith('M25_NATIVE_MATERIAL_') ? 'Material outcome learning is temporarily unavailable.' :
@@ -237,6 +240,28 @@ function createLearningRouter(options = {}) {
         return res.json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
+
+  router.get('/external-material-sources/:sourceKey/operations', headers, tenantAuth, materialImportOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try { const sourceKey = materialImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await materialOperationsRepository.read(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  const materialOperationMutation = (path, normalize, mutate) => router.post(path, headers, mutationAuth,
+    materialImportOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try { const normalized = normalize(req.params.sourceKey, req.body); const { sourceKey, ...body } = normalized;
+        const data = await mutate(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  materialOperationMutation('/external-material-sources/:sourceKey/adapter', materialOperationsContract.normalizeAdapter, materialOperationsRepository.mutateAdapter);
+  materialOperationMutation('/external-material-sources/:sourceKey/retention', materialOperationsContract.normalizeRetention, materialOperationsRepository.mutateRetention);
+  materialOperationMutation('/external-material-sources/:sourceKey/deletion', materialOperationsContract.normalizeDeletion, materialOperationsRepository.mutateDeletion);
+  materialOperationMutation('/external-material-sources/:sourceKey/hold', materialOperationsContract.normalizeHold, materialOperationsRepository.mutateHold);
+  materialOperationMutation('/external-material-sources/:sourceKey/cleanup', materialOperationsContract.normalizeCleanup, materialOperationsRepository.executeCleanup);
 
   router.get('/external-material-sources/:sourceKey/matches', headers, tenantAuth, materialImportOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

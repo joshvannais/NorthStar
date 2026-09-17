@@ -1,0 +1,13 @@
+# Mission 25 Part 11G — Material source lifecycle and bounded cleanup
+
+Slice G adds provider-neutral source lifecycle, checkpoints, retention, deletion, legal and audit holds, and bounded cleanup for tenant-private material, inventory, purchasing and vendor-cost evidence. It stores adapter kind and cadence only. It stores no provider credential or provider account identity, calls no provider and does not claim a live connection.
+
+Owners and administrators can connect, pause, resume or disconnect a declared CSV or provider-API adapter. Every lifecycle, policy, hold and deletion change is an immutable revision pinned to the exact prior revision and digest, authenticated session, CSRF check and idempotency key. Historical and continuous import checkpoints remain the source of import progress.
+
+Retention is optional and bounded from 30 to 3,650 days. Cleanup processes one to 100 current records per request and appends detail-free tombstones. It removes job, material, vendor, location, quantity, cost, movement, time-zone and provider evidence detail from the current revision. Cleanup runs are immutable, observable and resumable from an exact cursor. A changed retention or deletion authority starts its own cleanup chain.
+
+A current legal or audit hold blocks retention and deletion cleanup. Placing and releasing a hold requires an exact current revision and digest; release must name the same hold kind. A deletion request can still revoke source permission while a hold is active, ensuring imports and derived reads stop without destroying held evidence. Cleanup can resume only after explicit hold release.
+
+A deletion request immediately revokes source permission. New imports and derived reads stop before cleanup begins. Source permission cannot be granted while deletion remains requested. Recovery requires explicit deletion cancellation and a new consent period. That period cannot revive tombstoned evidence or prior job, material, vendor or inventory-location matches, quantity/cost observations, or calibration advice.
+
+These operations never create a provider connection or change an estimate, price, material plan, job, purchase, vendor, inventory balance, reservation, schedule or company policy. The paid and isolated-demo Learning Center and Part 11 acceptance remain Slice H.

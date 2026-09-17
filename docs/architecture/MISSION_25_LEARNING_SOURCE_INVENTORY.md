@@ -142,3 +142,11 @@ Total material use, waste, unit cost, purchased quantity and purchase cost are s
 ## Part 11 Slice G candidate — material source lifecycle and cleanup
 
 Material import operations retain only provider-neutral adapter kind and cadence. Immutable retention, deletion and legal/audit-hold revisions are tenant private. Cleanup is authorized by the exact current policy or deletion digest, processes at most 100 current source records, appends minimized tombstones and records a resumable immutable run. Active holds prevent cleanup. Deletion revokes source permission immediately; cancellation and a new consent period cannot revive prior source detail, reviewed links, observations or calibration.
+
+## Part 12 Slice A candidate — staged CRM and field-service evidence
+
+The accepted input is the exact provider-neutral schema `m25-external-crm-field-service-v1`. It stages five record classes only: customer, lead, job, appointment and issued estimate. The source envelope preserves an opaque source key, exact consent period, historical or continuous cursor chain, immutable run identity, record identity and source version, event and update times, IANA time zone, evidence class and provider evidence digest.
+
+The record body retains opaque related references and a strict class-specific state. An explicit `unknown` remains unknown. Current active records are projected as `unmatched`; no name, address, contact detail or similar text creates a NorthStar relationship. Customer/job/estimate/execution/project/change-order/financial reconciliation belongs to Part 12E. Lead, appointment, issued-estimate and customer-response observations belong to Part 12F. External invoice, payment and accounting evidence belongs to Part 12D, while native NorthStar invoice and payment facts remain unavailable until Mission 27.
+
+This schema provides no fields for provider credentials, provider account identity, customer names, email addresses, phone numbers, postal addresses, descriptions, notes, financial amounts or currency. Source adapters must supply opaque references rather than repurpose them for business details. The boundary cannot create or edit a NorthStar customer, lead, job, appointment, estimate, schedule, dispatch decision, invoice, payment or provider record. Provider-specific adapters, lifecycle operations, retention and deletion remain Part 12J.

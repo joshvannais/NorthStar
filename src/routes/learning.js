@@ -35,6 +35,8 @@ const nativeMaterialContract = require('../learning/nativeMaterialOutcomeContrac
 const nativeMaterialRepository = require('../learning/nativeMaterialOutcomeRepository');
 const materialImportContract = require('../learning/externalMaterialImportContract');
 const materialImportRepository = require('../learning/externalMaterialImportRepository');
+const crmFieldServiceImportContract = require('../learning/externalCrmFieldServiceImportContract');
+const crmFieldServiceImportRepository = require('../learning/externalCrmFieldServiceImportRepository');
 const materialOperationsContract = require('../learning/externalMaterialOperationsContract');
 const materialOperationsRepository = require('../learning/externalMaterialOperationsRepository');
 const materialMatchContract = require('../learning/externalMaterialReconciliationContract');
@@ -78,7 +80,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_MATERIAL_MATCH_') ? 'Material reference review is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_CRM_FIELD_SERVICE_IMPORT_') ? 'External CRM and field-service evidence is temporarily unavailable.' :
+    code.startsWith('M25_MATERIAL_MATCH_') ? 'Material reference review is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_MATERIAL_OUTCOME_') ? 'Imported material outcome learning is temporarily unavailable.' :
     code.startsWith('M25_MATERIAL_IMPORT_OPERATIONS_') ? 'Material source operations are temporarily unavailable.' :
     code.startsWith('M25_MATERIAL_IMPORT_') ? 'External material evidence is temporarily unavailable.' :
@@ -129,6 +132,48 @@ function createLearningRouter(options = {}) {
   const materialImportOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('External material evidence is restricted to current owners and administrators.'),
       { code: 'M25_MATERIAL_IMPORT_FORBIDDEN', status: 403 }));
+  const crmFieldServiceImportOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
+    Object.assign(new Error('External CRM and field-service evidence is restricted to current owners and administrators.'),
+      { code: 'M25_CRM_FIELD_SERVICE_IMPORT_FORBIDDEN', status: 403 }));
+
+  router.get('/external-crm-field-service-sources/:sourceKey/consent', headers, tenantAuth, crmFieldServiceImportOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = crmFieldServiceImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await crmFieldServiceImportRepository.readConsent(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-crm-field-service-sources/:sourceKey/consent', headers, mutationAuth, crmFieldServiceImportOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = crmFieldServiceImportContract.normalizeConsent(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await crmFieldServiceImportRepository.mutateConsent(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-crm-field-service-sources/:sourceKey/batches', headers, mutationAuth, crmFieldServiceImportOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = crmFieldServiceImportContract.normalizeBatch(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await crmFieldServiceImportRepository.importBatch(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.get('/external-crm-field-service-sources/:sourceKey', headers, tenantAuth, crmFieldServiceImportOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = crmFieldServiceImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await crmFieldServiceImportRepository.readSource(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
 
   router.get('/native-equipment-utilization-consent', headers, tenantAuth, ownerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

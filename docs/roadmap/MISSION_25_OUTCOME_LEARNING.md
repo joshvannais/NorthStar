@@ -326,8 +326,18 @@ Every lifecycle, retention, deletion and hold change is an immutable revision pi
 
 Cleanup remains tenant private, owner or administrator controlled, narrowly scoped, idempotent and observable. It never connects to a provider or changes an estimate, price, material plan, job, purchase, vendor, inventory balance, reservation, schedule or policy. The paid and isolated-demo Learning Center and complete Part 11 acceptance remain Slice H.
 
-## Part 11 Slice H candidate — material Learning Center and Part 11 acceptance
+## Part 11 Slice H accepted — material Learning Center and Part 11 acceptance
 
 Migration `112_canonical_learning_center_materials.sql` extends the bounded tenant-private Learning Center inventory with native material permission and external material sources while preserving separate labor, travel, vehicle and equipment categories. The owner-facing paid and isolated-demo page exposes source permission, imported evidence, exact reviewed links, independent quantity, cost and planning permissions, material planning suggestions and explicit unavailable reasons.
 
 Material lifecycle controls show connection progress, retention, deletion and active legal or audit holds in plain business language. An irreversible deletion batch requires a separate consequence confirmation. Holds disable cleanup. Deletion cancellation and a new permission period do not revive deleted details, comparisons or earlier planning authority. The surface remains advisory and never changes estimates, material plans, inventory, purchases, vendors, schedules, jobs or policy.
+
+Part 11 passed independent exact-head acceptance at `97a08a9733a3f7f0fb19465f418a58a927c2158d` with no P0-P3 findings. Production migration and deployment, provider credentials, physical-device review, manual assistive-technology review and the founder's visual verdict remained outside that acceptance package.
+
+## Part 12 Slice A candidate — provider-neutral CRM and field-service import authority
+
+Migration `113_canonical_external_crm_field_service_import_authority.sql` adds a provider-neutral staging boundary for separately consented customer, lead, job, appointment and issued-estimate evidence. It supports bounded historical backfill and continuous updates through independent cursor chains. Every immutable page pins the exact schema, source, source-permission revision and digest, cursor, request identity and normalized record versions. Pages contain at most 100 records and validate each distinct IANA time zone once before storage.
+
+Every active record preserves an opaque external identity, exact source version, record class, explicit type-appropriate state, opaque related references, event and source-update times, evidence class and provider evidence digest. `unknown` is a valid recorded state and never becomes a guessed outcome. Records remain visibly `unmatched` until the separate Part 12E reviewed reconciliation authority exists. Higher source versions append corrections. Same-version content conflicts fail closed. Tombstones retain only identity, version, removal state and source-update time.
+
+Source permission is owner or administrator controlled and current-period specific. Revocation hides all staged detail and blocks new imports. A later grant starts empty cursor and record lineage and cannot revive records from an earlier period; the same provider version appears only after an explicit new-period import. Runtime receives only four guarded entry functions; protected tables and projection helpers remain withheld. This slice stores no provider credentials or provider account identity, calls no provider, performs no fuzzy matching and changes no customer, lead, job, appointment, estimate, dispatch, schedule, invoice, payment, provider record or company policy. Project/change-order, communication, finance, reconciliation, outcome, calibration, lifecycle and Learning Center work remain mandatory Slices B-K.

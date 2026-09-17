@@ -8,7 +8,7 @@ The caller binds every plan line to one distinct opaque material reference. Vend
 
 ## Independent dimensions
 
-- **Unit cost** compares the adopted line price only when current evidence contains one unambiguous `unit_cost` amount in the exact planned unit and estimate currency. A line total is never divided into a unit cost.
+- **Unit cost** compares the adopted line price only when current evidence contains exactly one compatible current `unit_cost` record in the planned unit and estimate currency. Two separate records remain ambiguous even when their amounts match. A line total is never divided into a unit cost.
 - **Purchasing** compares exact job purchase quantity in the planned unit. A recorded purchase total is shown only when every selected purchase uses `line_total` valuation and the estimate currency. Shipping, tax, discounts and unit prices are not added as line totals.
 - **Vendor** reports only current reviewed lineage between the opaque source vendor and the supplier-quote label already adopted on that plan line. It does not verify, rank or recommend the supplier.
 - **Recorded balance** compares one exact imported inventory balance at one reviewed location with the waste-inclusive planned quantity. It preserves the source timestamp and explicitly states that the record does not confirm current availability. Missing, conflicting or multiple current balances remain unavailable.

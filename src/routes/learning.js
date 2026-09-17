@@ -43,6 +43,8 @@ const communicationImportContract = require('../learning/externalCommunicationIm
 const communicationImportRepository = require('../learning/externalCommunicationImportRepository');
 const financialImportContract = require('../learning/externalFinancialImportContract');
 const financialImportRepository = require('../learning/externalFinancialImportRepository');
+const businessMatchContract = require('../learning/externalBusinessReconciliationContract');
+const businessMatchRepository = require('../learning/externalBusinessReconciliationRepository');
 const materialOperationsContract = require('../learning/externalMaterialOperationsContract');
 const materialOperationsRepository = require('../learning/externalMaterialOperationsRepository');
 const materialMatchContract = require('../learning/externalMaterialReconciliationContract');
@@ -87,6 +89,7 @@ function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
   const unavailable = code.startsWith('M25_FINANCIAL_IMPORT_') ? 'External financial evidence is temporarily unavailable.' :
+    code.startsWith('M25_BUSINESS_MATCH_') ? 'External business reference review is temporarily unavailable.' :
     code.startsWith('M25_COMMUNICATION_IMPORT_') ? 'External communication evidence is temporarily unavailable.' :
     code.startsWith('M25_PROJECT_CHANGE_ORDER_IMPORT_') ? 'External project and change-order evidence is temporarily unavailable.' :
     code.startsWith('M25_CRM_FIELD_SERVICE_IMPORT_') ? 'External CRM and field-service evidence is temporarily unavailable.' :
@@ -153,6 +156,30 @@ function createLearningRouter(options = {}) {
   const financialImportOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('External financial evidence is restricted to current owners and administrators.'),
       { code: 'M25_FINANCIAL_IMPORT_FORBIDDEN', status: 403 }));
+  const businessMatchOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
+    Object.assign(new Error('External business reference review is restricted to current owners and administrators.'),
+      { code: 'M25_BUSINESS_MATCH_FORBIDDEN', status: 403 }));
+
+  router.get('/external-business-sources/:sourceClass/:sourceKey/matches', headers, tenantAuth, businessMatchOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceClass = businessMatchContract.normalizeSourceClass(req.params.sourceClass);
+        const sourceKey = businessMatchContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await businessMatchRepository.readMatches(poolProvider(), { ...actor(req), sourceClass, sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-business-sources/:sourceClass/:sourceKey/matches', headers, mutationAuth, businessMatchOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = businessMatchContract.normalizeMatch(req.params.sourceClass, req.params.sourceKey, req.body);
+        const { sourceClass, sourceKey, ...body } = normalized;
+        const data = await businessMatchRepository.mutateMatch(poolProvider(), { ...actor(req), sourceClass, sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
 
   router.get('/external-financial-sources/:sourceKey/consent', headers, tenantAuth, financialImportOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

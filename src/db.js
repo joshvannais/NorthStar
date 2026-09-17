@@ -1276,7 +1276,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       END IF;
       IF pg_catalog.to_regclass('public.canonical_external_communication_import_consents') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
-          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_communication_import_consents, public.canonical_external_communication_import_runs, public.canonical_external_communication_import_records FROM %I',
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_communication_import_consents, public.canonical_external_communication_import_runs, public.canonical_external_communication_import_records, public.canonical_external_communication_time_zones FROM %I',
           runtime_role
         );
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_communication_immutable() FROM %I', runtime_role);
@@ -1897,6 +1897,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          NOT has_table_privilege($1,'public.canonical_external_communication_import_consents','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_external_communication_import_runs','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_external_communication_import_records','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_communication_time_zones','SELECT,INSERT,UPDATE,DELETE')
        )) AS external_communication_import_tables_withheld,
        (to_regclass('public.canonical_external_communication_import_consents') IS NULL OR (
          has_function_privilege($1,'public.canonical_external_communication_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')

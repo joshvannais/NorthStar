@@ -45,6 +45,8 @@ describe('Mission 25 Part 12 Slice C communication imports', () => {
   test('withholds storage and helpers while granting only guarded entries', () => {
     const db = read('src/db.js');
     for (const value of ['REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_communication_import_consents',
+      'public.canonical_external_communication_time_zones FROM %I',
+      "NOT has_table_privilege($1,'public.canonical_external_communication_time_zones','SELECT,INSERT,UPDATE,DELETE')",
       'REVOKE ALL ON FUNCTION public.canonical_external_communication_record_projection',
       'GRANT EXECUTE ON FUNCTION public.canonical_external_communication_import_batch',
       'external_communication_import_helpers_withheld']) expect(db).toContain(value);

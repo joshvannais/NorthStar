@@ -130,7 +130,8 @@ const base = (recordType, externalRecordId) => ({
         SELECT (jsonb_populate_record(NULL::public.canonical_external_communication_import_records,
           to_jsonb(record) || $1::jsonb)).*
         FROM public.canonical_external_communication_import_records record
-        WHERE record.organization_id=$2 AND record.record_type='communication' LIMIT 1`, [JSON.stringify(override), fixture.org]),
+        WHERE record.organization_id=$2 AND record.source_key=$3 AND record.record_type='communication' LIMIT 1`,
+      [JSON.stringify(override), fixture.org, sourceKey]),
       error => error.code === '23514');
     }
     ledger.cases.push('Node, guarded PostgreSQL entries and direct table constraints reject content-bearing values in every communication identity/reference field, including email, compact and formatted phone, customer-name, subject, transcript, body and message-like text.');
@@ -138,10 +139,10 @@ const base = (recordType, externalRecordId) => ({
       SELECT (jsonb_populate_record(NULL::public.canonical_external_communication_import_records,
         to_jsonb(record) || $1::jsonb)).*
       FROM public.canonical_external_communication_import_records record
-      WHERE record.organization_id=$2 AND record.record_type=$3 LIMIT 1`, [JSON.stringify({
+      WHERE record.organization_id=$2 AND record.source_key=$3 AND record.record_type=$4 LIMIT 1`, [JSON.stringify({
         id: crypto.randomUUID(), external_record_id: ref(`direct-semantic-${label}`), revision: 998,
         previous_id: null, external_version: 998, ...override,
-      }), fixture.org, recordType]);
+      }), fixture.org, sourceKey, recordType]);
     const semanticPrivacyAdversaries = [
       ['communication','intent-extra', { intent_claim: { ...claim('request_estimate','customer_explicit'), subject: 'Alice needs an estimate' } }],
       ['communication','intent-nested', { intent_claim: { ...claim('request_estimate','customer_explicit'), details: { transcript: 'Call 8605550199' } } }],
@@ -166,14 +167,24 @@ const base = (recordType, externalRecordId) => ({
     }
     const validDirectClient = await fixture.ownerPool.connect();
     try {
+      const selectionControl = await validDirectClient.query(`SELECT
+        (SELECT array_agg(DISTINCT time_zone ORDER BY time_zone)
+         FROM public.canonical_external_communication_import_records
+         WHERE organization_id=$1 AND source_key='communications.admin-control') AS other_source_zones,
+        (SELECT time_zone FROM public.canonical_external_communication_import_records
+         WHERE organization_id=$1 AND source_key=$2 AND external_record_id=$3
+         ORDER BY revision DESC LIMIT 1) AS selected_zone`, [fixture.org, sourceKey, ref('communication-1')]);
+      assert.deepEqual(selectionControl.rows[0].other_source_zones, ['America/Chicago','America/New_York']);
+      assert.equal(selectionControl.rows[0].selected_zone, 'America/New_York');
       await validDirectClient.query('BEGIN');
       const validDirect = await validDirectClient.query(`INSERT INTO public.canonical_external_communication_import_records
         SELECT (jsonb_populate_record(NULL::public.canonical_external_communication_import_records,
           to_jsonb(record) || $1::jsonb)).*
         FROM public.canonical_external_communication_import_records record
-        WHERE record.organization_id=$2 AND record.record_type='communication' LIMIT 1 RETURNING intent_claim,time_zone`,
+        WHERE record.organization_id=$2 AND record.source_key=$3 AND record.external_record_id=$4
+        ORDER BY record.revision DESC LIMIT 1 RETURNING intent_claim,time_zone`,
       [JSON.stringify({ id: crypto.randomUUID(), external_record_id: ref('direct-semantic-valid'), revision: 997,
-        previous_id: null, external_version: 997 }), fixture.org]);
+        previous_id: null, external_version: 997 }), fixture.org, sourceKey, ref('communication-1')]);
       assert.equal(validDirect.rows[0].intent_claim.value, 'request_estimate');
       assert.equal(validDirect.rows[0].time_zone, 'America/New_York');
     } finally { await validDirectClient.query('ROLLBACK').catch(() => {}); validDirectClient.release(); }
@@ -227,9 +238,18 @@ const base = (recordType, externalRecordId) => ({
 
     const privileges = (await fixture.ownerPool.query(`SELECT
       has_table_privilege($1,'canonical_external_communication_import_records','SELECT') table_read,
+      has_table_privilege($1,'canonical_external_communication_time_zones','SELECT') zone_read,
+      has_table_privilege($1,'canonical_external_communication_time_zones','INSERT') zone_insert,
+      has_table_privilege($1,'canonical_external_communication_time_zones','UPDATE') zone_update,
+      has_table_privilege($1,'canonical_external_communication_time_zones','DELETE') zone_delete,
       has_function_privilege($1,'canonical_external_communication_record_projection(canonical_external_communication_import_records)','EXECUTE') helper,
       has_function_privilege($1,'canonical_external_communication_import_read(uuid,uuid,text,uuid,text)','EXECUTE') entry`, [fixture.roles.runtime])).rows[0];
-    assert.deepEqual(privileges, { table_read: false, helper: false, entry: true });
+    assert.deepEqual(privileges, { table_read: false, zone_read: false, zone_insert: false,
+      zone_update: false, zone_delete: false, helper: false, entry: true });
+    await assert.rejects(fixture.runtimePool.query('SELECT name FROM canonical_external_communication_time_zones LIMIT 1'), error => error.code === '42501');
+    await assert.rejects(fixture.runtimePool.query("INSERT INTO canonical_external_communication_time_zones(name) VALUES('America/Runtime_Test')"), error => error.code === '42501');
+    await assert.rejects(fixture.runtimePool.query("UPDATE canonical_external_communication_time_zones SET name='America/Runtime_Test' WHERE name='UTC'"), error => error.code === '42501');
+    await assert.rejects(fixture.runtimePool.query("DELETE FROM canonical_external_communication_time_zones WHERE name='UTC'"), error => error.code === '42501');
     await assert.rejects(fixture.ownerPool.query('DELETE FROM canonical_external_communication_import_records'));
     const bytes = fs.readFileSync(path.join(__dirname,'../../migrations/115_canonical_external_communication_import_authority.sql'));
     const checksum = crypto.createHash('sha256').update(bytes).digest('hex');

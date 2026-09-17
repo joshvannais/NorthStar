@@ -37,6 +37,6 @@ Historical and continuous cursors advance independently within the current permi
 
 ## Access and boundaries
 
-Only current owners and administrators with operations permission may use the four guarded entry functions. Runtime has no direct table or projection-helper access. Pages use a source-scoped transaction lock, serializable writes and the existing five-second statement timeout.
+Only current owners and administrators with operations permission may use the four guarded entry functions. Runtime has no direct access to consent, run, record or time-zone catalog tables and no projection-helper access. Pages use a source-scoped transaction lock, serializable writes and the existing five-second statement timeout.
 
 This slice stages evidence only. It does not call a provider, store provider credentials, reconcile opaque references, interpret message content, calculate a customer-response outcome, or change customers, leads, jobs, appointments, executions, estimates, projects, change orders, invoices, payments, schedules, dispatch, communications or company policy. External finance, reviewed reconciliation, observations, calibration, lifecycle cleanup and the Learning Center remain Parts 12D-K. Native NorthStar invoice and payment evidence remains unavailable until Mission 27.

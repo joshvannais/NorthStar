@@ -1243,6 +1243,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_cleanup_projection(public.canonical_external_asset_cleanup_runs) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_import_deletion_guard() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_consent_deletion_guard() FROM %I', runtime_role);
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_adapter_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_retention_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_deletion_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);

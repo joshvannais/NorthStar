@@ -20,9 +20,12 @@ describe('Mission 25 Part 10 Slice G vehicle and equipment source operations', (
   test('keeps runtime access entry-only and blocks imports after deletion', () => {
     const db = read('src/db.js');
     expect(db).toContain('canonical_external_asset_import_deletion_guard');
+    expect(db).toContain('canonical_external_asset_consent_deletion_guard');
     expect(db).toContain('canonical_external_asset_cleanup_execute');
     expect(db).toContain('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_adapter_revisions');
     expect(migration).toContain('CREATE TRIGGER canonical_external_asset_import_deletion_guard');
+    expect(migration).toContain('CREATE TRIGGER canonical_external_asset_consent_deletion_guard');
+    expect(migration).toContain('external_asset_deletion_blocks_consent_grant');
     expect(migration).toContain('REVOKE ALL ON FUNCTION public.canonical_external_asset_operation_mutate');
   });
 

@@ -240,6 +240,22 @@ DECLARE action_value TEXT;
 BEGIN SELECT action INTO action_value FROM public.canonical_external_asset_deletion_revisions WHERE organization_id=NEW.organization_id AND source_key=NEW.source_key ORDER BY revision DESC LIMIT 1; IF action_value='request' THEN RAISE EXCEPTION 'Source deletion blocks imports' USING ERRCODE='40001'; END IF; RETURN NEW; END $$;
 CREATE TRIGGER canonical_external_asset_import_deletion_guard BEFORE INSERT ON public.canonical_external_asset_import_runs FOR EACH ROW EXECUTE FUNCTION public.canonical_external_asset_import_deletion_guard();
 
+CREATE FUNCTION public.canonical_external_asset_consent_deletion_guard() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE action_value TEXT;
+BEGIN
+ IF NEW.action='grant' THEN
+  SELECT action INTO action_value FROM public.canonical_external_asset_deletion_revisions
+   WHERE organization_id=NEW.organization_id AND source_key=NEW.source_key ORDER BY revision DESC LIMIT 1;
+  IF action_value='request' THEN
+   RAISE EXCEPTION 'Cancel source deletion before starting a new consent period'
+    USING ERRCODE='40001',CONSTRAINT='external_asset_deletion_blocks_consent_grant';
+  END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER canonical_external_asset_consent_deletion_guard BEFORE INSERT ON public.canonical_external_asset_import_consents
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_external_asset_consent_deletion_guard();
+
 REVOKE ALL ON TABLE public.canonical_external_asset_adapter_revisions,public.canonical_external_asset_retention_revisions,public.canonical_external_asset_deletion_revisions,public.canonical_external_asset_cleanup_runs FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_asset_operation_projection(TEXT,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_asset_cleanup_projection(public.canonical_external_asset_cleanup_runs) FROM PUBLIC;
@@ -250,3 +266,4 @@ REVOKE ALL ON FUNCTION public.canonical_external_asset_deletion_mutate(UUID,UUID
 REVOKE ALL ON FUNCTION public.canonical_external_asset_operations_read(UUID,UUID,TEXT,UUID,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_asset_cleanup_execute(UUID,UUID,TEXT,UUID,TEXT,TEXT,TEXT,JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_asset_import_deletion_guard() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_external_asset_consent_deletion_guard() FROM PUBLIC;

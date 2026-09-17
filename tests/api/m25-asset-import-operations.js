@@ -127,11 +127,41 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
     assert.equal(response.status, 201); const deletionConsent = response.body.data.consent;
     response = await deletionSource.write('/batches', batch(deletionConsent, [record('delete-asset')], null, 'stream-1', 'continuous_update'));
     assert.equal(response.status, 201, JSON.stringify(response.body));
+    const outcomeConsentBody = { action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Use reviewed utilization and operating-cost outcomes.', confirmed: true,
+      confirmationVersion: 'm25-imported-asset-utilization-cost-consent-v1' };
+    response = await deletionSource.write('/imported-utilization-cost-consent', outcomeConsentBody);
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    const healthConsentBody = { action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Summarize current maintenance and downtime for reviewed assets.', confirmed: true,
+      confirmationVersion: 'm25-imported-asset-health-consent-v1' };
+    response = await deletionSource.write('/imported-asset-health-consent', healthConsentBody);
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    const calibrationConsentBody = { action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Use a bounded current same-service sample for advisory calibration.', confirmed: true,
+      confirmationVersion: 'm25-imported-asset-calibration-consent-v1' };
+    response = await deletionSource.write('/imported-asset-calibration-consent', calibrationConsentBody);
+    assert.equal(response.status, 201, JSON.stringify(response.body));
     response = await deletionSource.write('/deletion', { action: 'request', expectedRevision: 0,
       expectedDigest: 'none', confirmed: true });
     assert.equal(response.status, 201, JSON.stringify(response.body)); const deletion = response.body.data.deletion;
     const consentAfter = await request(fixture.app).get(deletionSource.root + '/consent').set(owner.session.headers);
     assert.equal(consentAfter.body.data.current.action, 'revoke');
+    const activeDeletionRegrant = await deletionSource.write('/consent', { ...consentBody,
+      expectedRevision: consentAfter.body.data.current.revision, expectedDigest: consentAfter.body.data.current.digest,
+      reason: 'This must remain blocked while deletion is active.' });
+    assert.equal(activeDeletionRegrant.status, 409, JSON.stringify(activeDeletionRegrant.body));
+    let sourceRead = await request(fixture.app).get(deletionSource.root).set(owner.session.headers);
+    assert.equal(sourceRead.status, 200); assert.equal(sourceRead.body.data.activeConsent, false);
+    assert.deepEqual(sourceRead.body.data.currentRecords, []);
+    const estimateId = crypto.randomUUID();
+    let outcomeRead = await request(fixture.app).get(`${deletionSource.root}/estimates/${estimateId}/imported-utilization-cost-outcomes`).set(owner.session.headers);
+    assert.equal(outcomeRead.status, 200); assert.equal(outcomeRead.body.data.activeConsent, false);
+    let healthRead = await request(fixture.app).get(`${deletionSource.root}/imported-asset-health-outcomes`)
+      .query({ assetCategory: 'equipment', externalAssetReference: 'equipment-delete-asset' }).set(owner.session.headers);
+    assert.equal(healthRead.status, 200); assert.equal(healthRead.body.data.activeConsent, false);
+    let calibrationRead = await request(fixture.app).get(`${deletionSource.root}/imported-asset-calibrations/tree_service`).set(owner.session.headers);
+    assert.equal(calibrationRead.status, 200); assert.equal(calibrationRead.body.data.activeConsent, false);
     const blocked = await deletionSource.write('/batches', batch(deletionConsent, [record('later-asset')], 'stream-1', 'stream-2', 'continuous_update'));
     assert.equal(blocked.status, 409);
     response = await deletionSource.write('/cleanup', { operation: 'deletion', expectedRevision: deletion.revision,
@@ -145,12 +175,19 @@ const batch = (consent, records, cursorBefore = null, cursorAfter = null, mode =
     response = await deletionSource.write('/consent', { ...consentBody, expectedRevision: consentBeforeRegrant.revision,
       expectedDigest: consentBeforeRegrant.digest, reason: 'Start a new permission period after deletion cleanup.' });
     assert.equal(response.status, 201); assert.equal(response.body.data.consent.action, 'grant');
-    response = await request(fixture.app).get(deletionSource.root).set(owner.session.headers);
-    assert.equal(response.status, 200); assert.equal(response.body.data.currentRecords[0].state, 'tombstone');
-    assert.equal(response.body.data.currentRecords[0].assetReference, null);
+    sourceRead = await request(fixture.app).get(deletionSource.root).set(owner.session.headers);
+    assert.equal(sourceRead.status, 200); assert.equal(sourceRead.body.data.currentRecords[0].state, 'tombstone');
+    assert.equal(sourceRead.body.data.currentRecords[0].assetReference, null);
+    outcomeRead = await request(fixture.app).get(`${deletionSource.root}/estimates/${estimateId}/imported-utilization-cost-outcomes`).set(owner.session.headers);
+    assert.equal(outcomeRead.status, 200); assert.equal(outcomeRead.body.data.activeConsent, false);
+    healthRead = await request(fixture.app).get(`${deletionSource.root}/imported-asset-health-outcomes`)
+      .query({ assetCategory: 'equipment', externalAssetReference: 'equipment-delete-asset' }).set(owner.session.headers);
+    assert.equal(healthRead.status, 200); assert.equal(healthRead.body.data.activeConsent, false);
+    calibrationRead = await request(fixture.app).get(`${deletionSource.root}/imported-asset-calibrations/tree_service`).set(owner.session.headers);
+    assert.equal(calibrationRead.status, 200); assert.equal(calibrationRead.body.data.activeConsent, false);
     response = await request(fixture.app).get(deletionSource.root + '/operations').set(owner.session.headers);
     assert.equal(response.body.data.activeRecordTotal, 0);
-    ledger.cases.push('Deletion immediately revokes source use and blocks imports; later cancellation and re-grant do not revive tombstoned evidence.');
+    ledger.cases.push('Active deletion blocks source re-grant and masks raw and downstream reads; cancellation plus a new source consent does not revive tombstones or prior learning consent.');
 
     const paged = source('fleet.paged');
     response = await paged.write('/consent', consentBody); const pagedConsent = response.body.data.consent;

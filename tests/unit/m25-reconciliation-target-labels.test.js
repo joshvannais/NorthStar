@@ -1,6 +1,6 @@
 'use strict';
 
-const { applyTargetLabels } = require('../../src/learning/reconciliationTargetLabels');
+const { applyTargetLabels, safeDisplayLabel } = require('../../src/learning/reconciliationTargetLabels');
 
 describe('Mission 25 reconciliation target labels', () => {
   test('attaches only authoritative safe labels and removes ambiguous targets', () => {
@@ -25,5 +25,16 @@ describe('Mission 25 reconciliation target labels', () => {
     expect(result.vehicleTargets[0].displayLabel).toBe('Chip Truck · Ford F-550');
     expect(result.workerUnavailableTotal).toBe(1);
     expect(matches.workerTargets).toHaveLength(2);
+  });
+
+  test('fails closed on embedded presentation hazards without rejecting ordinary company labels', () => {
+    for (const value of ['Crew [Object Object] · Technician', 'Crew object_object · Technician',
+      'Crew 860-555-1212 East · Technician', 'Crew (860) 555-1212 West · Technician',
+      `Crew ${'a'.repeat(64)} · Technician`, `Crew digest:${'b'.repeat(64)} · Technician`]) {
+      expect(safeDisplayLabel(value)).toBeNull();
+    }
+    for (const value of ['Hash Tree Service · Technician', 'Route 64 Crew · Technician', 'Chip Truck · Ford F-550']) {
+      expect(safeDisplayLabel(value)).toBe(value);
+    }
   });
 });

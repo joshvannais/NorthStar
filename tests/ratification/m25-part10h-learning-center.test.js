@@ -81,10 +81,15 @@ describe('Mission 25 Part 10 Slice H vehicle and equipment Learning Center', () 
     const repositories = ['externalLaborReconciliationRepository.js', 'externalTravelReconciliationRepository.js',
       'externalAssetReconciliationRepository.js'].map(file => read('src/learning/' + file)).join('\n');
     expect(migration).toContain('canonical_learning_reconciliation_target_labels_read');
+    expect(migration).toContain('canonical_learning_target_label_compose');
+    expect(migration).toContain("right(discriminator_label,LEAST(char_length(discriminator_label),96))");
+    expect(migration).toContain("object[[:space:]_-]*object");
+    expect(migration).toContain("[0-9a-f]{32,}");
     expect(migration).toContain("JOIN public.users u ON u.organization_id=m.organization_id AND u.id=m.user_id");
     expect(migration).toContain("JOIN public.canonical_customers c ON c.organization_id=o.organization_id AND c.id=o.customer_id");
     expect(migration).toContain("a.internal_reference");
     expect(migration).not.toMatch(/email|phone|vin|serial_number/i);
     expect(repositories.match(/readTargetLabels/g)).toHaveLength(6);
+    expect(read('public/js/learning-center-contract.js')).toContain('safeLabel:safeLabel');
   });
 });

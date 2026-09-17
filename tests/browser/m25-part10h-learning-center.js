@@ -29,6 +29,9 @@ function assertSafeVisible(value) {
   assert.doesNotMatch(value, /\[object Object\]/i);
   assert.doesNotMatch(value, /request\s+(?:id\b|[0-9a-f]{8}-)/i);
   assert.doesNotMatch(value, INTERNAL_CODE_PATTERN);
+  assert.doesNotMatch(value, /object[\s_-]*object/i);
+  assert.doesNotMatch(value, /860[ .-]555[ .-]1212|\(860\) 555[ .-]1212|\+1 860[ .-]555[ .-]1212/);
+  assert.doesNotMatch(value, /[0-9a-f]{64}/i);
 }
 const presented = value => value.replace(/[._-]+/g, ' ').replace(/\b[a-z]/g, letter => letter.toUpperCase());
 const ledger = { engine, layouts: [], cases: [], pageErrors: [], externalRequests: [], pass: false };
@@ -93,11 +96,20 @@ let paidLabels;
       await paidLayoutPage.getByRole('button', { name: /Crewclock Labels, Labor source/i }).click();
       await paidLayoutPage.locator('#learningDetailTitle').filter({ hasText: /Crewclock Labels · Labor/i }).waitFor();
       let options = await paidLayoutPage.locator('.learning-table select option').evaluateAll(nodes => nodes.map(option => ({ label: option.textContent, value: option.value })));
-      const laborExpected = [...paidLabels.labels.workers, ...paidLabels.labels.jobs].map(presented);
+      const laborExpected = [...paidLabels.labels.workers, ...paidLabels.labels.longWorkers, ...paidLabels.labels.jobs].map(presented);
       for (const label of laborExpected) assert.ok(options.some(option => option.label === label), JSON.stringify(options));
       const laborMapping = new Map(options.map(option => [option.label, option.value]));
       paidLabels.workers.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.workers[index])), target));
+      paidLabels.longWorkers.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.longWorkers[index])), target));
       paidLabels.jobs.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.jobs[index])), target));
+      paidLabels.forbiddenWorkers.forEach(target => assert.ok(!options.some(option => option.value === target), target));
+      const browserSanitizer = await paidLayoutPage.evaluate(function () {
+        var contract = window.NorthStarLearningCenterContract;
+        return ['Crew [Object Object] · Technician', 'Crew 860-555-1212 East · Technician',
+          'Crew (860) 555-1212 West · Technician', 'Crew ' + 'a'.repeat(64) + ' · Technician',
+          'Crew digest:' + 'b'.repeat(64) + ' · Technician'].map(function (value) { return contract.safeLabel(value); });
+      });
+      assert.deepEqual(browserSanitizer, [null, null, null, null, null]);
       await paidLayoutPage.getByRole('button', { name: /Fleet Labels, Asset source/i }).click();
       await paidLayoutPage.locator('#learningDetailTitle').filter({ hasText: /Fleet Labels · Asset/i }).waitFor();
       options = await paidLayoutPage.locator('.learning-table select option').evaluateAll(nodes => nodes.map(option => ({ label: option.textContent, value: option.value })));

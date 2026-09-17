@@ -2,6 +2,10 @@
  'use strict';
  var KEY=/^[a-z0-9][a-z0-9._-]{1,63}$/;
  var UUID=/(?:^|[^0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:$|[^0-9a-f])/i;
+ var OBJECT_MARKER=/object[\s_-]*object/i;
+ var CONTACT_NUMBER=/(?:^|[^0-9])(?:\+1[ .-]?)?\(?[0-9]{3}\)?[ .-][0-9]{3}[ .-][0-9]{4}(?:$|[^0-9])|(?:^|[^0-9])[0-9]{10,15}(?:$|[^0-9])/;
+ var INTERNAL_HEX=/(?:^|[^0-9a-f])[0-9a-f]{32,}(?:$|[^0-9a-f])/i;
+ var PREFIXED_INTERNAL=/(?:digest|checksum|hash)[\s:=_-]+[A-Za-z0-9/+_-]{16,}|(?:request|record|database)[\s_-]*(?:id|identifier)[\s:#=_-]+[A-Za-z0-9._:-]{6,}/i;
  function object(value){return value&&typeof value==='object'&&!Array.isArray(value);}
  function integer(value){return Number.isSafeInteger(value)&&value>=0;}
  function text(value,max){return typeof value==='string'&&value.length>0&&value.length<=max;}
@@ -62,10 +66,16 @@
   ['adapter','retention','deletion'].forEach(function(key){var item=value[key];if(item!==null&&(!object(item)||!integer(item.revision)||item.revision<1||!text(item.action,32)||!digest(item.digest)))throw new Error('Learning source operation is invalid.');});
   return value.deletionComplete===null?Object.assign({},value,{deletionComplete:false}):value;
  }
- function label(value,fallback){
-  var textValue=typeof value==='string'?value.trim():'';
-  if(!textValue||UUID.test(textValue)||textValue.indexOf('[object Object]')>=0)return fallback||'Company record';
-  return textValue.slice(0,120).replace(/[._-]+/g,' ').replace(/\b[a-z]/g,function(letter){return letter.toUpperCase();});
+ function safeLabel(value){
+  var textValue=typeof value==='string'?value.trim().replace(/\s+/g,' '):'';
+  if(!textValue||textValue.length>240||/[\u0000-\u001f\u007f]/.test(textValue)||UUID.test(textValue)||OBJECT_MARKER.test(textValue)||
+    CONTACT_NUMBER.test(textValue)||INTERNAL_HEX.test(textValue)||PREFIXED_INTERNAL.test(textValue)||textValue.indexOf('@')>=0)return null;
+  return textValue;
  }
- return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,health:health,calibration:calibration,operations:operations,label:label});
+ function label(value,fallback){
+  var textValue=safeLabel(value);
+  if(!textValue)return fallback||'Company record';
+  return textValue.replace(/[._-]+/g,' ').replace(/\b[a-z]/g,function(letter){return letter.toUpperCase();});
+ }
+ return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,health:health,calibration:calibration,operations:operations,safeLabel:safeLabel,label:label});
 });

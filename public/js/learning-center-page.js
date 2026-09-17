@@ -277,7 +277,7 @@
     root.appendChild(metric('Last source update', state.detail.latestSourceUpdatedAt ? new Date(state.detail.latestSourceUpdatedAt).toLocaleString() : 'None'));
   }
   function targetLabel(kind, target) {
-    return contract.label(target.displayLabel, kind === 'worker' ? 'Worker' : (kind === 'vehicle' ? 'Vehicle' : (kind === 'equipment' ? 'Equipment' : 'Job')));
+    return contract.safeLabel(target.displayLabel) ? contract.label(target.displayLabel) : null;
   }
   function referenceLabel(reference) {
     return contract.label(reference.externalReference, 'Imported ' + contract.label(reference.referenceKind, 'record'));
@@ -297,7 +297,7 @@
       var cell = node('td'), select = node('select'); select.setAttribute('aria-label', 'Company record for ' + safeReference);
       select.appendChild(new Option('Not linked', ''));
       var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : (reference.referenceKind === 'vehicle' ? state.matches.vehicleTargets : (reference.referenceKind === 'equipment' ? state.matches.equipmentTargets : state.matches.jobTargets));
-      targets.forEach(function (target) { var option = new Option(targetLabel(reference.referenceKind, target), target.targetId); option.dataset.digest = target.digest; select.appendChild(option); });
+      targets.forEach(function (target) { var label = targetLabel(reference.referenceKind, target); if (!label) return; var option = new Option(label, target.targetId); option.dataset.digest = target.digest; select.appendChild(option); });
       select.value = match && match.action === 'link' ? match.targetId : ''; select.disabled = demo;
       select.addEventListener('change', function () { saveMatch(reference, select); }); cell.appendChild(select); tr.appendChild(cell); body.appendChild(tr);
     }); table.appendChild(body); wrap.appendChild(table); root.appendChild(wrap); renderAssetHealth();

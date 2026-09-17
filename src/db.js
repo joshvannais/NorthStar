@@ -1260,6 +1260,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         END IF;
         IF pg_catalog.to_regprocedure('public.canonical_learning_reconciliation_target_labels_read(uuid,uuid,text,uuid)') IS NOT NULL THEN
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_learning_target_label_text(text,integer) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_learning_target_label_compose(text,text,integer) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_learning_reconciliation_target_labels_read(uuid,uuid,text,uuid) TO %I', runtime_role);
         END IF;
         IF pg_catalog.to_regclass('public.canonical_external_asset_outcome_consents') IS NOT NULL THEN

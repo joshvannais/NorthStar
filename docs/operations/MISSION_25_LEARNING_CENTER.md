@@ -6,6 +6,6 @@ The paid page reads PostgreSQL through `canonical_learning_center_read` and the 
 
 The interface uses fixed, action-specific audit reasons. It does not add a freeform approval-reason field. Consent changes, reference links and calibration requests remain explicit owner actions with current revision and digest pins plus an idempotency key.
 
-The isolated demo route renders clearly labeled, read-only fictional records. Demo content does not enter paid learning authority. Part 8 owns usable CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion operations; Part 14 owns final paid/demo parity and mission-wide visual acceptance.
+The isolated demo route renders clearly labeled, read-only fictional records. Demo content does not enter paid learning authority. Part 8 owns usable CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion operations; Part 9 adds travel evidence; Part 10 adds vehicle and equipment evidence, asset-health review and source-deletion recovery. Part 14 owns final mission-wide paid/demo parity and acceptance.
 
 No Learning Center action automatically changes an estimate, labor plan, rate, schedule, payroll record, worker profile or business policy. A calibration proposal remains advisory until a later workflow in the authority that owns the affected business setting explicitly adopts it.

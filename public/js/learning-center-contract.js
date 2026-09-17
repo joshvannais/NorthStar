@@ -12,12 +12,12 @@
   return Object.assign({},value,{active:Boolean(value.current&&value.current.action==='grant')});
  }
  function center(value){
-  if(!object(value)||value.version!=='m25-learning-center-v2'||['tenant_private_postgresql','isolated_demo_postgresql'].indexOf(value.authority)<0||
+  if(!object(value)||value.version!=='m25-learning-center-v3'||['tenant_private_postgresql','isolated_demo_postgresql'].indexOf(value.authority)<0||
     !text(value.evaluatedAt,64)||!Array.isArray(value.sources)||!integer(value.sourceTotal)||value.sourceTotal<value.sources.length||
-    typeof value.sourcesTruncated!=='boolean'||!text(value.learningBoundary,1000)||!object(value.nativeLabor))throw new Error('Learning Center response is invalid.');
+    typeof value.sourcesTruncated!=='boolean'||!text(value.learningBoundary,1000)||!object(value.nativeLabor)||!object(value.nativeEquipment))throw new Error('Learning Center response is invalid.');
   var seen=Object.create(null);
   value.sources.forEach(function(source){
-   if(!object(source)||['labor','travel'].indexOf(source.sourceKind)<0||!KEY.test(source.sourceKey)||!Array.isArray(source.serviceKeys)||
+   if(!object(source)||['labor','travel','asset'].indexOf(source.sourceKind)<0||!KEY.test(source.sourceKey)||!Array.isArray(source.serviceKeys)||
      !integer(source.serviceTotal)||source.serviceTotal<source.serviceKeys.length||typeof source.servicesTruncated!=='boolean'||
      source.serviceKeys.length>50||source.serviceKeys.some(function(service){return!KEY.test(service);}))throw new Error('Learning source response is invalid.');
    var identity=source.sourceKind+':'+source.sourceKey;
@@ -35,12 +35,24 @@
  function matches(value){
   if(!object(value)||!KEY.test(value.sourceKey)||typeof value.activeConsent!=='boolean'||!Array.isArray(value.references)||
     !integer(value.referenceTotal)||value.referenceTotal<value.references.length||!Array.isArray(value.jobTargets)||
-    (!Array.isArray(value.workerTargets)&&!Array.isArray(value.vehicleTargets)))throw new Error('Learning match detail is invalid.');
+    (!Array.isArray(value.workerTargets)&&!Array.isArray(value.vehicleTargets)&&!Array.isArray(value.equipmentTargets)))throw new Error('Learning match detail is invalid.');
   return value;
  }
  function calibration(value){
   if(!object(value)||!KEY.test(value.sourceKey)||!KEY.test(value.serviceKey)||typeof value.activeConsent!=='boolean'||
     !Array.isArray(value.history)||!integer(value.total)||value.total<value.history.length)throw new Error('Learning calibration detail is invalid.');
+  return value;
+ }
+ function health(value){
+  if(!object(value)||!KEY.test(value.sourceKey)||typeof value.activeConsent!=='boolean'||!Array.isArray(value.history)||
+    !integer(value.total)||value.total<value.history.length)throw new Error('Asset health detail is invalid.');
+  if(value.current!==null){
+   if(!object(value.current)||typeof value.current.fresh!=='boolean'||typeof value.current.advisoryAvailable!=='boolean'||!object(value.current.outcomes))throw new Error('Asset health detail is invalid.');
+   ['maintenance','downtime','condition','availability'].forEach(function(key){
+    var item=value.current.outcomes[key];
+    if(!object(item)||['recorded','unavailable'].indexOf(item.status)<0)throw new Error('Asset health detail is invalid.');
+   });
+  }
   return value;
  }
  function operations(value){
@@ -50,5 +62,5 @@
   return value.deletionComplete===null?Object.assign({},value,{deletionComplete:false}):value;
  }
  function label(value){return String(value||'').replace(/[._-]+/g,' ').replace(/\b[a-z]/g,function(letter){return letter.toUpperCase();});}
- return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,calibration:calibration,operations:operations,label:label});
+ return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,health:health,calibration:calibration,operations:operations,label:label});
 });

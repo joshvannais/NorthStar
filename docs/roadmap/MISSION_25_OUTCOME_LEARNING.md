@@ -19,7 +19,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Released |
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Released — Slices A-F accepted |
-| 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | In progress — Slices A-E released; Slices F-G candidates; Slice H planned |
+| 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | In progress — Slices A-E released; Slices F-H candidates |
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Planned |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Planned |
@@ -249,3 +249,11 @@ Migration `102_canonical_external_asset_import_operations.sql` adds provider-neu
 Every lifecycle, retention and deletion change is an immutable revision pinned to the exact prior revision and digest. Cleanup processes no more than 100 current records, appends detail-free tombstone revisions and returns an exact resumable checkpoint. A retention-policy change starts a new cleanup chain. A deletion request immediately revokes source consent, so new imports and derived reads stop before cleanup finishes. Source permission cannot be re-granted while deletion remains active. Recovery requires explicit deletion cancellation and a new consent period, which cannot revive tombstoned evidence or prior reconciliation, outcome or calibration authority.
 
 Cleanup remains tenant private and owner or administrator controlled. It does not create Mission 23 events, connect to a provider, apply a learned value or change an estimate, price, plan, schedule, job, vehicle, equipment, assignment, allocation, reimbursement, payroll record or policy. The paid and isolated-demo Learning Center, recovery and responsive acceptance remain Slice H.
+
+## Part 10 Slice H candidate — paid and isolated-demo Learning Center
+
+Migration `103_canonical_learning_center_assets.sql` extends the bounded tenant-private Learning Center inventory with a distinct vehicle-and-equipment source category and native equipment comparison consent. Identical source labels remain separate across labor, travel and asset categories. The paid page composes only the accepted guarded Part 10 authorities for source consent, staged evidence, explicit job/vehicle/equipment matching, source operations, separately consented asset-health summaries and utilization/operating-cost calibration.
+
+The isolated demo adds fictional, read-only vehicle and equipment records without calling a paid mutation or entering paid learning authority. Maintenance and downtime are shown independently; condition and availability remain explicitly unavailable. A current deletion request blocks the source-grant control and explains the required cancellation and new-consent recovery without implying that deleted detail, reviewed matches, observations or calibration can revive.
+
+The experience uses plain business language, live loading and error status, labeled controls, skip navigation, keyboard focus styles, responsive cards and bounded tables. Request-generation guards prevent delayed source, health or calibration reads from replacing a newer selection. It changes no estimate, price, plan, route, schedule, job, vehicle, equipment, maintenance plan, allocation, reimbursement, payroll record or policy. Physical-device review, manual assistive-technology review and the founder's visual verdict remain separate unavailable evidence until performed.

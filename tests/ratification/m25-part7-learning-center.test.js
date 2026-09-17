@@ -31,7 +31,7 @@ describe('Mission 25 Part 7 Owner Learning Center', () => {
 
   test('renders source, consent, freshness, conflict and calibration review without freeform approval reasons', () => {
     const html = read('public/dashboard/learning-center.html'), page = read('public/js/learning-center-page.js');
-    for (const phrase of ['Completed job comparisons', 'External labor and travel sources', 'Source evidence', 'Reference review', 'Planning calibration']) expect(html).toContain(phrase);
+    for (const phrase of ['Completed job comparisons', 'External operating sources', 'Source evidence', 'Reference review', 'Planning calibration']) expect(html).toContain(phrase);
     expect(page).toContain("'m25-external-labor-reference-match-v1'");
     expect(page).toContain("'m25-imported-labor-calibration-proposal-v1'");
     expect(page).toContain("currentAndFresh ? 'Proposal current'");

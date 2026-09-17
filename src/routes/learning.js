@@ -41,6 +41,8 @@ const importedMaterialQuantityContract = require('../learning/importedMaterialQu
 const importedMaterialQuantityRepository = require('../learning/importedMaterialQuantityRepository');
 const importedMaterialCostContract = require('../learning/importedMaterialCostContract');
 const importedMaterialCostRepository = require('../learning/importedMaterialCostRepository');
+const importedMaterialCalibrationContract = require('../learning/importedMaterialCalibrationContract');
+const importedMaterialCalibrationRepository = require('../learning/importedMaterialCalibrationRepository');
 const assetImportContract = require('../learning/externalAssetImportContract');
 const assetImportRepository = require('../learning/externalAssetImportRepository');
 const assetOperationsContract = require('../learning/externalAssetOperationsContract');
@@ -300,6 +302,27 @@ function createLearningRouter(options = {}) {
   router.post('/external-material-sources/:sourceKey/estimates/:estimateId/imported-material-cost-observations', headers,
     mutationAuth, materialImportOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
       try { const normalized = importedMaterialCostContract.normalizeObservation(req.params.sourceKey, req.params.estimateId, req.body); const data = await importedMaterialCostRepository.observe(poolProvider(), { ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') }); if (data.replayed) res.set('Idempotency-Replayed', 'true'); return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-material-sources/:sourceKey/imported-material-calibration-consent', headers, tenantAuth,
+    materialImportOwnerOnly, throttle, permission('operations', 'read'),
+    async (req, res) => {
+      try { const sourceKey = materialImportContract.normalizeSourceKey(req.params.sourceKey); const data = await importedMaterialCalibrationRepository.readConsent(poolProvider(), { ...actor(req), sourceKey }); return res.json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-material-sources/:sourceKey/imported-material-calibration-consent', headers, mutationAuth,
+    materialImportOwnerOnly, throttle, permission('operations', 'update'),
+    async (req, res) => {
+      try { const normalized = importedMaterialCalibrationContract.normalizeConsent(req.params.sourceKey, req.body); const { sourceKey, ...body } = normalized; const data = await importedMaterialCalibrationRepository.mutateConsent(poolProvider(), { ...actor(req), sourceKey, body, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') }); if (data.replayed) res.set('Idempotency-Replayed', 'true'); return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
+  router.get('/external-material-sources/:sourceKey/imported-material-calibrations/:serviceKey', headers, tenantAuth,
+    materialImportOwnerOnly, throttle, permission('operations', 'read'),
+    async (req, res) => {
+      try { const sourceKey = materialImportContract.normalizeSourceKey(req.params.sourceKey); const serviceKey = importedMaterialCalibrationContract.normalizeServiceKey(req.params.serviceKey); const data = await importedMaterialCalibrationRepository.read(poolProvider(), { ...actor(req), sourceKey, serviceKey }); return res.json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-material-sources/:sourceKey/imported-material-calibrations/:serviceKey', headers, mutationAuth,
+    materialImportOwnerOnly, throttle, permission('operations', 'update'),
+    async (req, res) => {
+      try { const normalized = importedMaterialCalibrationContract.normalizeProposal(req.params.sourceKey, req.params.serviceKey, req.body); const data = await importedMaterialCalibrationRepository.propose(poolProvider(), { ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') }); if (data.replayed) res.set('Idempotency-Replayed', 'true'); return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) }); } catch (error) { return replyError(req, res, error); }
     });
   router.get('/external-asset-sources/:sourceKey/consent', headers, tenantAuth, assetOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

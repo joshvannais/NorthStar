@@ -1261,6 +1261,20 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_outcome_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,text,boolean,text) TO %I', runtime_role);
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_outcome_read(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
         END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_asset_health_consents') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_health_consents, public.canonical_external_asset_health_observations FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_unavailable(text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_maintenance_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_downtime_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_outcomes_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_consent_projection(public.canonical_external_asset_health_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_basis(uuid,text,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_projection(public.canonical_external_asset_health_observations,jsonb,public.canonical_external_asset_health_consents,public.canonical_external_asset_import_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_observe(uuid,uuid,text,uuid,text,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_read(uuid,uuid,text,uuid,text,text,text) TO %I', runtime_role);
+        END IF;
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_utilization_valid(jsonb,boolean) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_cost_valid(jsonb) FROM %I', runtime_role);
@@ -1669,6 +1683,23 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_imported_asset_target_coverage(jsonb,jsonb,jsonb,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_imported_asset_outcome_projection(public.canonical_external_asset_outcome_observations)','EXECUTE')
        )) AS imported_asset_outcome_helpers_withheld,
+       (to_regclass('public.canonical_external_asset_health_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_asset_health_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_asset_health_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS imported_asset_health_tables_withheld,
+       (to_regclass('public.canonical_external_asset_health_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_imported_asset_health_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_health_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_health_observe(uuid,uuid,text,uuid,text,text,text,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_health_read(uuid,uuid,text,uuid,text,text,text)','EXECUTE')
+       )) AS imported_asset_health_entry_execute,
+       (to_regclass('public.canonical_external_asset_health_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_imported_asset_health_basis(uuid,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_unavailable(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_maintenance_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_downtime_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_projection(public.canonical_external_asset_health_observations,jsonb,public.canonical_external_asset_health_consents,public.canonical_external_asset_import_consents)','EXECUTE')
+       )) AS imported_asset_health_helpers_withheld,
        (to_regclass('public.canonical_material_movements') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_material_movements','SELECT')
          AND NOT has_table_privilege($1,'public.canonical_material_movements','INSERT')
@@ -1785,6 +1816,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.imported_asset_outcome_tables_withheld ||
       !runtimePrivileges.imported_asset_outcome_entry_execute ||
       !runtimePrivileges.imported_asset_outcome_helpers_withheld ||
+      !runtimePrivileges.imported_asset_health_tables_withheld ||
+      !runtimePrivileges.imported_asset_health_entry_execute ||
+      !runtimePrivileges.imported_asset_health_helpers_withheld ||
       !runtimePrivileges.material_tables_withheld ||
       !runtimePrivileges.material_entry_execute ||
       !runtimePrivileges.material_helpers_withheld ||
@@ -1821,7 +1855,7 @@ async function runMigrations(options = {}) {
     // Bound the reviewed Mission 24 and Mission 25 migrations' complete transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
-    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql'].includes(migrations[migrations.length - 1]?.file)) {
+    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql','100_canonical_imported_asset_health_outcomes.sql'].includes(migrations[migrations.length - 1]?.file)) {
       const settings = await client.query(
         "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
       );

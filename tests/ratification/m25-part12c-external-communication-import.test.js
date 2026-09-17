@@ -29,6 +29,14 @@ describe('Mission 25 Part 12 Slice C communication imports', () => {
     expect(migration).toContain("cursor_after~'^cur_[0-9a-f]{64}$'");
     expect(migration).not.toContain("length(p.value#>>'{}') BETWEEN 1 AND 128");
   });
+  test('makes claim semantics and known time zones direct-table invariants', () => {
+    expect(migration).toContain("intent_claim-ARRAY['status','value','basis']='{}'::jsonb");
+    expect(migration).toContain("satisfaction_claim-ARRAY['status','value','basis']='{}'::jsonb");
+    expect(migration).toContain('jsonb_typeof(intent_claim->\'value\')=\'string\'');
+    expect(migration).toContain('jsonb_typeof(satisfaction_claim->\'basis\')=\'string\'');
+    expect(migration).toContain('canonical_external_communication_time_zones');
+    expect(migration).toContain('FOREIGN KEY(time_zone) REFERENCES public.canonical_external_communication_time_zones(name)');
+  });
   test('preserves consent, immutable source history, and current-period masking', () => {
     for (const value of ['canonical_external_communication_import_consents','canonical_external_communication_import_runs',
       'canonical_external_communication_import_records','request_key_hash','previous_id',"state IN ('active','tombstone')",

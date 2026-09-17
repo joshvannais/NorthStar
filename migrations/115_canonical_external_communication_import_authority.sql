@@ -42,6 +42,16 @@ CREATE TABLE public.canonical_external_communication_import_runs (
 );
 CREATE INDEX canonical_external_communication_run_period_idx ON public.canonical_external_communication_import_runs(organization_id,source_key,consent_id,mode,sequence DESC);
 
+-- Freeze the PostgreSQL 17 time-zone catalog available when this unreleased authority is
+-- installed. The guarded import checks the same catalog, and the foreign key below prevents
+-- migration-owner/direct-table writes from bypassing that validation.
+CREATE TABLE public.canonical_external_communication_time_zones (
+ name TEXT PRIMARY KEY CHECK(name~'^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+.-]+)+)$')
+);
+INSERT INTO public.canonical_external_communication_time_zones(name)
+SELECT DISTINCT name FROM pg_catalog.pg_timezone_names
+WHERE name~'^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+.-]+)+)$';
+
 CREATE TABLE public.canonical_external_communication_import_records (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), organization_id UUID NOT NULL REFERENCES public.organizations(id), source_key TEXT NOT NULL,
  external_record_id TEXT NOT NULL CHECK(external_record_id~'^ref_[0-9a-f]{64}$'), revision BIGINT NOT NULL CHECK(revision BETWEEN 1 AND 1000000000),
@@ -56,6 +66,7 @@ CREATE TABLE public.canonical_external_communication_import_records (
  FOREIGN KEY(organization_id,source_key,consent_id,previous_id) REFERENCES public.canonical_external_communication_import_records(organization_id,source_key,consent_id,id),
  FOREIGN KEY(organization_id,source_key,consent_id) REFERENCES public.canonical_external_communication_import_consents(organization_id,source_key,id),
  FOREIGN KEY(organization_id,source_key,consent_id,import_run_id) REFERENCES public.canonical_external_communication_import_runs(organization_id,source_key,consent_id,id) DEFERRABLE INITIALLY DEFERRED,
+ FOREIGN KEY(time_zone) REFERENCES public.canonical_external_communication_time_zones(name),
  CHECK((state='tombstone' AND record_type IS NULL AND customer_reference IS NULL AND lead_reference IS NULL
   AND job_reference IS NULL AND appointment_reference IS NULL AND estimate_reference IS NULL AND project_reference IS NULL
   AND communication_reference IS NULL AND channel IS NULL AND direction IS NULL AND intent_claim IS NULL
@@ -80,21 +91,29 @@ CREATE TABLE public.canonical_external_communication_import_records (
    AND delivery_state IN ('queued','sent','delivered','failed','bounced','read','unknown') AND satisfaction_claim IS NULL) OR
   (record_type='satisfaction' AND channel IS NULL AND direction IS NULL AND intent_claim IS NULL
    AND delivery_state IS NULL AND satisfaction_claim IS NOT NULL)),
- CHECK(intent_claim IS NULL OR
-  (intent_claim->>'status'='unavailable' AND intent_claim->'value'='null'::jsonb AND intent_claim->'basis'='null'::jsonb) OR
-  (intent_claim->>'status'='recorded'
-   AND intent_claim->>'value' IN ('request_estimate','schedule','reschedule','cancel','question','status_request','complaint','compliment','other','unknown')
-   AND intent_claim->>'basis' IN ('customer_explicit','human_reviewed','provider_classified'))),
- CHECK(satisfaction_claim IS NULL OR
-  (satisfaction_claim->>'status'='unavailable' AND satisfaction_claim->'value'='null'::jsonb AND satisfaction_claim->'basis'='null'::jsonb) OR
-  (satisfaction_claim->>'status'='recorded' AND satisfaction_claim->>'value' IN ('satisfied','neutral','dissatisfied','unknown')
-   AND satisfaction_claim->>'basis' IN ('explicit_customer_feedback','human_reviewed_explicit_feedback')))
+ CHECK(intent_claim IS NULL OR (jsonb_typeof(intent_claim)='object'
+  AND intent_claim?&ARRAY['status','value','basis'] AND intent_claim-ARRAY['status','value','basis']='{}'::jsonb
+  AND jsonb_typeof(intent_claim->'status')='string' AND (
+   (intent_claim->>'status'='unavailable' AND intent_claim->'value'='null'::jsonb AND intent_claim->'basis'='null'::jsonb) OR
+   (intent_claim->>'status'='recorded' AND jsonb_typeof(intent_claim->'value')='string'
+    AND intent_claim->>'value' IN ('request_estimate','schedule','reschedule','cancel','question','status_request','complaint','compliment','other','unknown')
+    AND jsonb_typeof(intent_claim->'basis')='string'
+    AND intent_claim->>'basis' IN ('customer_explicit','human_reviewed','provider_classified'))))),
+ CHECK(satisfaction_claim IS NULL OR (jsonb_typeof(satisfaction_claim)='object'
+  AND satisfaction_claim?&ARRAY['status','value','basis'] AND satisfaction_claim-ARRAY['status','value','basis']='{}'::jsonb
+  AND jsonb_typeof(satisfaction_claim->'status')='string' AND (
+   (satisfaction_claim->>'status'='unavailable' AND satisfaction_claim->'value'='null'::jsonb AND satisfaction_claim->'basis'='null'::jsonb) OR
+   (satisfaction_claim->>'status'='recorded' AND jsonb_typeof(satisfaction_claim->'value')='string'
+    AND satisfaction_claim->>'value' IN ('satisfied','neutral','dissatisfied','unknown')
+    AND jsonb_typeof(satisfaction_claim->'basis')='string'
+    AND satisfaction_claim->>'basis' IN ('explicit_customer_feedback','human_reviewed_explicit_feedback')))))
 );
 
 CREATE FUNCTION public.canonical_external_communication_immutable() RETURNS TRIGGER LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN RAISE EXCEPTION 'Communication evidence history is immutable' USING ERRCODE='23514'; END $$;
 CREATE TRIGGER canonical_external_communication_consent_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_external_communication_import_consents FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_external_communication_immutable();
 CREATE TRIGGER canonical_external_communication_run_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_external_communication_import_runs FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_external_communication_immutable();
 CREATE TRIGGER canonical_external_communication_record_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_external_communication_import_records FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_external_communication_immutable();
+CREATE TRIGGER canonical_external_communication_time_zone_immutable BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.canonical_external_communication_time_zones FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_external_communication_immutable();
 
 CREATE FUNCTION public.canonical_external_communication_consent_projection(v public.canonical_external_communication_import_consents) RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT jsonb_build_object('id',v.id,'sourceKey',v.source_key,'revision',v.revision,'previousId',v.previous_id,'action',v.action,'sourceScope',v.source_scope,'consentVersion',v.consent_version,'reason',v.reason,'digest',rtrim(v.canonical_digest),'createdAt',v.created_at) $$;
@@ -258,7 +277,7 @@ BEGIN IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN RAISE EX
  WITH current_records AS(SELECT DISTINCT ON(r.external_record_id) r.* FROM public.canonical_external_communication_import_records r JOIN public.canonical_external_communication_import_runs run ON run.organization_id=r.organization_id AND run.source_key=r.source_key AND run.id=r.import_run_id WHERE r.organization_id=org AND r.source_key=source_value AND run.consent_id=consent_row.id ORDER BY r.external_record_id,r.revision DESC),selected AS(SELECT * FROM current_records ORDER BY external_record_id LIMIT 100) SELECT COALESCE(jsonb_agg(public.canonical_external_communication_record_projection(x) ORDER BY external_record_id),'[]'::jsonb) INTO records FROM selected x;
  RETURN jsonb_build_object('sourceKey',source_value,'activeConsent',TRUE,'consent',public.canonical_external_communication_consent_projection(consent_row),'runs',runs,'runTotal',run_total,'runsTruncated',run_total>20,'currentRecords',records,'recordTotal',record_total,'recordsTruncated',record_total>100,'latestSourceUpdatedAt',latest_source,'consumptionBoundary','Staged communication evidence cannot change customers, leads, jobs, appointments, estimates, dispatch, schedules, invoices, payments, provider records or company policy. Every record remains unmatched until it is separately reviewed.'); END $$;
 
-REVOKE ALL ON TABLE public.canonical_external_communication_import_consents,public.canonical_external_communication_import_runs,public.canonical_external_communication_import_records FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_external_communication_import_consents,public.canonical_external_communication_import_runs,public.canonical_external_communication_import_records,public.canonical_external_communication_time_zones FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_communication_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_communication_consent_projection(public.canonical_external_communication_import_consents) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_external_communication_run_projection(public.canonical_external_communication_import_runs) FROM PUBLIC;

@@ -45,6 +45,18 @@ describe('Mission 25 Part 12C communication import contract', () => {
   ])('rejects content-bearing %s values', (field, prohibited) => {
     expect(() => contract.normalizeRecord({ ...base('communication'), [field]: prohibited })).toThrow(/invalid/);
   });
+  test.each([
+    ['extra intent key', { ...base('communication'), intentClaim: { ...claim('request_estimate','customer_explicit'), subject: 'Alice needs an estimate' } }],
+    ['nested intent content', { ...base('communication'), intentClaim: { ...claim('request_estimate','customer_explicit'), details: { transcript: 'Call 8605550199' } } }],
+    ['intent status type', { ...base('communication'), intentClaim: { status: ['recorded'], value: 'request_estimate', basis: 'customer_explicit' } }],
+    ['intent value type', { ...base('communication'), intentClaim: { status: 'recorded', value: { body: 'alice@example.com' }, basis: 'customer_explicit' } }],
+    ['extra satisfaction keys', { ...base('satisfaction'), satisfactionClaim: { ...claim('satisfied','explicit_customer_feedback'), customerName: 'Alice', message: 'Please call me' } }],
+    ['nested satisfaction content', { ...base('satisfaction'), satisfactionClaim: { ...claim('satisfied','explicit_customer_feedback'), details: { body: 'alice@example.com' } } }],
+    ['satisfaction basis type', { ...base('satisfaction'), satisfactionClaim: { status: 'recorded', value: 'satisfied', basis: { message: 'Call 8605550199' } } }],
+    ['content-bearing time zone', { ...base('communication'), timeZone: 'Body: call Alice at 8605550199' }],
+  ])('rejects %s', (_label, record) => {
+    expect(() => contract.normalizeRecord(record)).toThrow(/invalid|requires/);
+  });
   test('bounds pages and rejects duplicate source identities', () => {
     const batch = { schemaVersion: contract.SCHEMA_VERSION, mode: 'historical_backfill', expectedConsentRevision: 1,
       expectedConsentDigest: digest, cursorBefore: null, cursorAfter: null, complete: true,

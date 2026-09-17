@@ -134,6 +134,50 @@ const base = (recordType, externalRecordId) => ({
       error => error.code === '23514');
     }
     ledger.cases.push('Node, guarded PostgreSQL entries and direct table constraints reject content-bearing values in every communication identity/reference field, including email, compact and formatted phone, customer-name, subject, transcript, body and message-like text.');
+    const directTableRecord = (recordType, label, override) => fixture.ownerPool.query(`INSERT INTO public.canonical_external_communication_import_records
+      SELECT (jsonb_populate_record(NULL::public.canonical_external_communication_import_records,
+        to_jsonb(record) || $1::jsonb)).*
+      FROM public.canonical_external_communication_import_records record
+      WHERE record.organization_id=$2 AND record.record_type=$3 LIMIT 1`, [JSON.stringify({
+        id: crypto.randomUUID(), external_record_id: ref(`direct-semantic-${label}`), revision: 998,
+        previous_id: null, external_version: 998, ...override,
+      }), fixture.org, recordType]);
+    const semanticPrivacyAdversaries = [
+      ['communication','intent-extra', { intent_claim: { ...claim('request_estimate','customer_explicit'), subject: 'Alice needs an estimate' } }],
+      ['communication','intent-nested', { intent_claim: { ...claim('request_estimate','customer_explicit'), details: { transcript: 'Call 8605550199' } } }],
+      ['communication','intent-status-type', { intent_claim: { status: ['recorded'], value: 'request_estimate', basis: 'customer_explicit' } }],
+      ['communication','intent-value-type', { intent_claim: { status: 'recorded', value: { body: 'alice@example.com' }, basis: 'customer_explicit' } }],
+      ['satisfaction','satisfaction-extra', { satisfaction_claim: { ...claim('satisfied','explicit_customer_feedback'), customerName: 'Alice', message: 'Please call me' } }],
+      ['satisfaction','satisfaction-nested', { satisfaction_claim: { ...claim('satisfied','explicit_customer_feedback'), details: { body: 'alice@example.com' } } }],
+      ['satisfaction','satisfaction-basis-type', { satisfaction_claim: { status: 'recorded', value: 'satisfied', basis: { message: 'Call 8605550199' } } }],
+      ['communication','time-zone-content', { time_zone: 'Body: call Alice at 8605550199' }],
+      ['communication','time-zone-unknown', { time_zone: 'America/Not_A_Real_Zone' }],
+    ];
+    for (const [recordType, label, override] of semanticPrivacyAdversaries) {
+      const record = base(recordType, `semantic-${label}`);
+      if ('intent_claim' in override) record.intentClaim = override.intent_claim;
+      if ('satisfaction_claim' in override) record.satisfactionClaim = override.satisfaction_claim;
+      if ('time_zone' in override) record.timeZone = override.time_zone;
+      const rejectedBatch = batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor(`semantic-${label}`), records: [record] });
+      const apiRejected = await write('/batches', rejectedBatch);
+      assert.equal(apiRejected.status, 400, `${label} accepted by API: ${JSON.stringify(apiRejected.body)}`);
+      await assert.rejects(directBatch(rejectedBatch), error => error.code === '22023');
+      await assert.rejects(directTableRecord(recordType, label, override), error => ['23503','23514'].includes(error.code));
+    }
+    const validDirectClient = await fixture.ownerPool.connect();
+    try {
+      await validDirectClient.query('BEGIN');
+      const validDirect = await validDirectClient.query(`INSERT INTO public.canonical_external_communication_import_records
+        SELECT (jsonb_populate_record(NULL::public.canonical_external_communication_import_records,
+          to_jsonb(record) || $1::jsonb)).*
+        FROM public.canonical_external_communication_import_records record
+        WHERE record.organization_id=$2 AND record.record_type='communication' LIMIT 1 RETURNING intent_claim,time_zone`,
+      [JSON.stringify({ id: crypto.randomUUID(), external_record_id: ref('direct-semantic-valid'), revision: 997,
+        previous_id: null, external_version: 997 }), fixture.org]);
+      assert.equal(validDirect.rows[0].intent_claim.value, 'request_estimate');
+      assert.equal(validDirect.rows[0].time_zone, 'America/New_York');
+    } finally { await validDirectClient.query('ROLLBACK').catch(() => {}); validDirectClient.release(); }
+    ledger.cases.push('Exact claim shapes and the immutable known-time-zone catalog reject extra keys, nested private content, unexpected types, free-form text and unknown zones at every privacy layer while valid records remain accepted.');
     const duplicatePage = base('communication','duplicate-page');
     assert.equal((await write('/batches', batch({ mode: 'continuous_update', complete: false, cursorAfter: cursor('stream-invalid'), records: [duplicatePage, duplicatePage] }))).status, 400);
     ledger.cases.push('Database and API boundaries reject missing consent pins, invalid time zones, unsupported intent bases, cross-purpose facts, inferred satisfaction labels, and ambiguous duplicate page identities.');

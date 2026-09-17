@@ -10,14 +10,17 @@ Slice H was built from independently accepted Slice G head `adfc9a9e51d44b90a7d5
 - Deletion recovery blocks source permission while deletion is active. Cancellation and a separate new consent period do not revive deleted detail or prior downstream authority.
 - Response contracts fail closed for the inventory, consent, source detail, exact matches, source operations, asset health and calibration projections.
 - Reference controls expose company-facing labels only, and structured failures resolve to plain recovery text without backend codes, request identifiers, UUIDs or object serialization text.
+- Migration `104_canonical_learning_match_labels.sql` supplies tenant-private worker, job, vehicle and equipment labels from current company context. Ambiguous persistent targets fail closed instead of exposing opaque identity.
 - Earlier Slice D-F API-only ratifications remain true for their original scope; their accepted controls are rendered only by final Slice H.
 
 ## Executed evidence
 
-- Fresh disposable PostgreSQL 17 migration chain `001` through `103`.
+- Fresh disposable PostgreSQL 17 migration chain `001` through `104`.
 - Mounted Learning Center API: six owner, member-denial, tenant-isolation, category-identity, least-privilege and checksum controls.
+- Mounted paid reconciliation-label API: four recognizable-label, opaque-target, ambiguity, tenant/role and exact-migration controls.
 - Material Slice A-G PostgreSQL APIs: native utilization, import, reconciliation, job outcome, asset health, calibration and source operations.
-- Part 10 A-H contract and ratification set: 69 checks across Jest and Node's test runner.
+- Part 10 A-H contract and ratification set: 71 checks across Jest and Node's test runner.
+- Chrome and WebKit: demo and paid Learning Center captures at phone narrow, phone, tablet portrait, tablet landscape and desktop layouts; paid controls retain exact opaque target mappings while only unique company labels render.
 - Chrome 152 and Playwright WebKit 26.5: paid asset-source creation, deletion recovery, race recovery, reload recovery, no browser errors and no unexpected external requests.
 - Five layouts per browser engine: 360x800 dark, 390x844 light, 768x1024 dark, 1024x768 light and 1440x900 dark. Every checked layout stayed within its viewport.
 

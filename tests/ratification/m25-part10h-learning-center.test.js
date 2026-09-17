@@ -70,10 +70,21 @@ describe('Mission 25 Part 10 Slice H vehicle and equipment Learning Center', () 
     const contract = read('public/js/learning-center-contract.js');
     expect(page).not.toContain("String(target.targetId).slice(0, 8)");
     expect(page).not.toContain("error.requestId ? ' Request '");
-    expect(page).toContain("contract.label(target.displayLabel || target.jobLabel || target.title || target.serviceType, 'Job')");
-    expect(page).toContain("contract.label(target.name || [target.manufacturer, target.model].filter(Boolean).join(' '), 'Vehicle')");
+    expect(page).toContain("contract.label(target.displayLabel");
     expect(page).toContain("Learning Center is temporarily unavailable. Refresh and try again.");
     expect(contract).toContain("UUID.test(textValue)");
     expect(contract).toContain("return fallback||'Company record'");
+  });
+
+  test('paid match targets use tenant-private recognizable label authority', () => {
+    const migration = read('migrations/104_canonical_learning_match_labels.sql');
+    const repositories = ['externalLaborReconciliationRepository.js', 'externalTravelReconciliationRepository.js',
+      'externalAssetReconciliationRepository.js'].map(file => read('src/learning/' + file)).join('\n');
+    expect(migration).toContain('canonical_learning_reconciliation_target_labels_read');
+    expect(migration).toContain("JOIN public.users u ON u.organization_id=m.organization_id AND u.id=m.user_id");
+    expect(migration).toContain("JOIN public.canonical_customers c ON c.organization_id=o.organization_id AND c.id=o.customer_id");
+    expect(migration).toContain("a.internal_reference");
+    expect(migration).not.toMatch(/email|phone|vin|serial_number/i);
+    expect(repositories.match(/readTargetLabels/g)).toHaveLength(6);
   });
 });

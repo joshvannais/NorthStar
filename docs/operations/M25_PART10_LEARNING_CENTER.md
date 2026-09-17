@@ -12,4 +12,6 @@ The page uses plain business wording, visible loading/error/ready states, a skip
 
 Reference controls show only recognizable company labels such as Job, Vehicle and Equipment names. Missing labels use those plain category names and never expose an internal identifier. Error states are selected from a short status-based recovery set; backend codes, request identifiers, structured error bodies and UUIDs are never rendered.
 
+Paid reconciliation choices come from a tenant-private label projection. Jobs use recorded customer, service and job context; workers use their company display name and operational role; vehicles and equipment use catalogue names and recorded model context. Collisions use bounded company location, date or internal-reference context when it is safe. A persistent target is withheld when the current company data cannot distinguish it without an opaque identifier.
+
 Nothing in this experience changes an estimate, price, plan, route, schedule, job, vehicle, equipment, maintenance plan, allocation, reimbursement, payroll record or business policy. Provider credentials, provider-specific connections, physical-device evidence, manual assistive-technology evidence and the founder's visual verdict remain outside source-controlled acceptance.

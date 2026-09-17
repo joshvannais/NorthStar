@@ -11,6 +11,7 @@ process.env.AUTH_ACCESS_SECRET = 'm25-part10h-learning-center-browser-secret';
 for (const key of ['DATABASE_URL', 'MIGRATION_DATABASE_URL', 'OPENAI_API_KEY', 'RETELL_API_KEY', 'STRIPE_SECRET_KEY']) delete process.env[key];
 
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { seedLearningLabels } = require('../helpers/m25-learning-label-fixture');
 const engine = process.argv[2];
 const output = path.resolve(process.argv[3]);
 const captureRoot = path.resolve(process.argv[4]);
@@ -29,15 +30,18 @@ function assertSafeVisible(value) {
   assert.doesNotMatch(value, /request\s+(?:id\b|[0-9a-f]{8}-)/i);
   assert.doesNotMatch(value, INTERNAL_CODE_PATTERN);
 }
+const presented = value => value.replace(/[._-]+/g, ' ').replace(/\b[a-z]/g, letter => letter.toUpperCase());
 const ledger = { engine, layouts: [], cases: [], pageErrors: [], externalRequests: [], pass: false };
 let browser;
 let server;
 let fixture;
+let paidLabels;
 
 (async () => {
   try {
     fs.mkdirSync(captureRoot, { recursive: true });
     fixture = await createDatabaseFixture();
+    paidLabels = await seedLearningLabels(fixture);
     server = fixture.app.listen(0, '127.0.0.1');
     await new Promise(resolve => server.once('listening', resolve));
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -64,7 +68,7 @@ let fixture;
       for (const phrase of ['Maintenance', 'Downtime', 'Condition', 'Availability', 'Not established']) assert.match(await page.locator('#learningAssetHealth').innerText(), new RegExp(phrase, 'i'));
       for (const phrase of ['Machine-hour use', 'Job operating cost', '1.1200×', '1.0700×']) assert.match(await page.locator('#learningCalibration').innerText(), new RegExp(phrase.replace('×', '\xD7'), 'i'));
       const optionLabels = await page.locator('.learning-table select option').allInnerTexts();
-      for (const label of ['Tree Service Job', 'Chip Truck 2', 'Tracked Chipper 1']) assert.ok(optionLabels.includes(label), JSON.stringify(optionLabels));
+      for (const label of ['Tree Service Job', 'Chip Truck 2 · Ford F 550', 'Tracked Chipper 1 · Bandit 21XP']) assert.ok(optionLabels.includes(label), JSON.stringify(optionLabels));
       optionLabels.forEach(assertSafeVisible);
       assert.equal(await page.locator('.learning-table select:not([disabled])').count(), 0);
       assert.equal(await page.locator('#learningConsentCards button:not([disabled])').count(), 0);
@@ -82,6 +86,32 @@ let fixture;
       await context.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name, value]) => ({
         name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf',
       })));
+      const paidLayoutPage = await context.newPage();
+      paidLayoutPage.on('pageerror', error => ledger.pageErrors.push(`${layout.name}-paid: ${error.message}`));
+      await paidLayoutPage.goto(`${origin}/dashboard/learning-center`, { waitUntil: 'networkidle' });
+      await paidLayoutPage.locator('#learningStatus').filter({ hasText: /Learning Center is (ready|current)/ }).waitFor();
+      await paidLayoutPage.getByRole('button', { name: /Crewclock Labels, Labor source/i }).click();
+      await paidLayoutPage.locator('#learningDetailTitle').filter({ hasText: /Crewclock Labels · Labor/i }).waitFor();
+      let options = await paidLayoutPage.locator('.learning-table select option').evaluateAll(nodes => nodes.map(option => ({ label: option.textContent, value: option.value })));
+      const laborExpected = [...paidLabels.labels.workers, ...paidLabels.labels.jobs].map(presented);
+      for (const label of laborExpected) assert.ok(options.some(option => option.label === label), JSON.stringify(options));
+      const laborMapping = new Map(options.map(option => [option.label, option.value]));
+      paidLabels.workers.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.workers[index])), target));
+      paidLabels.jobs.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.jobs[index])), target));
+      await paidLayoutPage.getByRole('button', { name: /Fleet Labels, Asset source/i }).click();
+      await paidLayoutPage.locator('#learningDetailTitle').filter({ hasText: /Fleet Labels · Asset/i }).waitFor();
+      options = await paidLayoutPage.locator('.learning-table select option').evaluateAll(nodes => nodes.map(option => ({ label: option.textContent, value: option.value })));
+      const assetExpected = [...paidLabels.labels.jobs, ...paidLabels.labels.vehicles, ...paidLabels.labels.equipment].map(presented);
+      for (const label of assetExpected) assert.ok(options.some(option => option.label === label), JSON.stringify(options));
+      const assetMapping = new Map(options.map(option => [option.label, option.value]));
+      paidLabels.vehicles.forEach((target, index) => assert.equal(assetMapping.get(presented(paidLabels.labels.vehicles[index])), target));
+      paidLabels.equipment.forEach((target, index) => assert.equal(assetMapping.get(presented(paidLabels.labels.equipment[index])), target));
+      assertSafeVisible(await paidLayoutPage.locator('body').innerText());
+      const paidCapture = path.join(captureRoot, `${engine}-${layout.name}-paid.png`);
+      await paidLayoutPage.screenshot({ path: paidCapture, fullPage: true });
+      ledger.layouts[ledger.layouts.length - 1].paidCapture = paidCapture;
+      await paidLayoutPage.close();
+
       const errorPage = await context.newPage();
       errorPage.on('pageerror', error => ledger.pageErrors.push(`${layout.name}-error: ${error.message}`));
       await errorPage.route('**/api/v1/learning/center', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
@@ -95,6 +125,7 @@ let fixture;
       await context.close();
     }
     ledger.cases.push('Five responsive dark and light demo layouts render company-facing job, vehicle and equipment labels without identifiers or horizontal overflow.');
+    ledger.cases.push('Five paid layouts render unique worker, job, vehicle and equipment labels and preserve each intended opaque selection value without displaying it.');
     ledger.cases.push('Every required layout normalizes a structured API failure without rendering backend codes, request identifiers, UUIDs or object serialization text.');
 
     const paidContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });

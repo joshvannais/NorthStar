@@ -34,6 +34,10 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
       [...seeded.labels.longWorkers].sort());
     assert.equal(new Set(seeded.labels.longWorkers).size, 2);
     assert.ok(seeded.labels.longWorkers.every(value => value.length <= 240 && /-(?:North|South)$/.test(value)));
+    assert.deepEqual(labor.workerTargets.filter(value => seeded.separatorWorkers.includes(value.targetId))
+      .map(value => [value.targetId, value.displayLabel]).sort(), seeded.separatorWorkers
+      .map((targetId, index) => [targetId, seeded.labels.separatorWorkers[index]]).sort());
+    assert.equal(new Set(seeded.labels.separatorWorkers).size, 2);
     assert.ok(labor.workerUnavailableTotal >= seeded.ambiguousWorkers.length + seeded.forbiddenWorkers.length);
     assert.deepEqual(new Set(labor.jobTargets.map(value => value.targetId)), new Set(seeded.jobs));
     ledger.cases.push('Same-role workers and jobs receive unique recognizable labels; forbidden records and an indistinguishable duplicate pair fail closed, while long duplicates retain their late North or South discriminator.');
@@ -49,7 +53,7 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
     const rendered = [...labor.workerTargets, ...labor.jobTargets, ...assets.vehicleTargets, ...assets.equipmentTargets]
       .map(value => value.displayLabel).join('\n');
-    assert.doesNotMatch(rendered, UUID); assert.doesNotMatch(rendered, /@|object[\s_-]*object|860[ .-]555[ .-]1212|[0-9a-f]{64}|\brequest\b|\bdigest\b/i);
+    assert.doesNotMatch(rendered, UUID); assert.doesNotMatch(rendered, /@|object[\s:_-]*object|860(?:[ ./-]|\u2011)555(?:[ ./-]|\u2011)1212|[0-9a-f]{64}|\b(?:db|database|record|request|internal)[ ._-]*(?:id|identifier)\b|\bdigest\b/i);
     assert.equal((await request(fixture.app).get(`/api/v1/learning/external-labor-sources/${seeded.laborSource}/matches`)
       .set(fixture.actors.member.session.headers)).status, 403);
     const other = await request(fixture.app).get(`/api/v1/learning/external-labor-sources/${seeded.laborSource}/matches`)
@@ -58,14 +62,23 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
     ledger.cases.push('Labels contain no UUID, contact, request or digest text; worker access is denied and another tenant sees no target labels.');
 
     const sanitizer = (await fixture.ownerPool.query(`SELECT
-      canonical_learning_target_label_text('Crew [Object Object] · Technician',240) object_value,
-      canonical_learning_target_label_text('Crew 860-555-1212 East · Technician',240) number_value,
-      canonical_learning_target_label_text($1,240) digest_value,
+      canonical_learning_target_label_text('Prefix [object:Object] suffix',240) object_value,
+      canonical_learning_target_label_text('Crew 860/555/1212 East',240) slash_number_value,
+      canonical_learning_target_label_text($1,240) unicode_number_value,
+      canonical_learning_target_label_text('Crew DB id: 123456789',240) database_id_value,
+      canonical_learning_target_label_text('Crew 01890f47-2b7c-7cc1-98f1-426614174000',240) uuid_v7_value,
+      canonical_learning_target_label_text($2,240) digest_value,
       canonical_learning_target_label_text('Hash Tree Service',240) company_value,
-      canonical_learning_target_label_text('Chip Truck · Ford F-550',240) model_value`, [`Crew ${'a'.repeat(64)} · Technician`])).rows[0];
-    assert.deepEqual(sanitizer, { object_value: null, number_value: null, digest_value: null,
-      company_value: 'Hash Tree Service', model_value: 'Chip Truck · Ford F-550' });
-    ledger.cases.push('The PostgreSQL component gate rejects embedded serialization, contact-number and digest-shaped values without rejecting ordinary company or model labels.');
+      canonical_learning_target_label_text('Chip Truck · Ford F-550',240) model_value,
+      canonical_learning_target_label_text('Ｒｅｇｉｏｎａｌ．Ｎｏｒｔｈ',240) unicode_normalized,
+      canonical_learning_target_label_text('Regional.North',240) dot_separator,
+      canonical_learning_target_label_text('Regional-North',240) dash_separator`,
+    ['Crew 860\u2011555\u20111212 East', `Crew ${'a'.repeat(64)} · Technician`])).rows[0];
+    assert.deepEqual(sanitizer, { object_value: null, slash_number_value: null, unicode_number_value: null,
+      database_id_value: null, uuid_v7_value: null, digest_value: null, company_value: 'Hash Tree Service',
+      model_value: 'Chip Truck · Ford F-550', unicode_normalized: 'Regional.North',
+      dot_separator: 'Regional.North', dash_separator: 'Regional-North' });
+    ledger.cases.push('The PostgreSQL normalization and safety gate rejects exact serialization, contact, internal-ID, UUID-v7 and digest adversaries while preserving distinct safe separators.');
 
     const privileges = (await fixture.ownerPool.query(`SELECT
       has_function_privilege($1,'canonical_learning_reconciliation_target_labels_read(uuid,uuid,text,uuid)','EXECUTE') entry,

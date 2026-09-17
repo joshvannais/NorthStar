@@ -82,22 +82,22 @@
           { referenceKind: 'vehicle', externalReference: 'chip-truck-2', sourceRecordCount: 5, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '44444444-4444-4444-8444-444444444444', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'equipment', externalReference: 'tracked-chipper-1', sourceRecordCount: 11, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '55555555-5555-4555-8555-555555555555', targetDigest: digest, action: 'link', status: 'matched' } }
         ],
-        vehicleTargets: [{ targetId: '44444444-4444-4444-8444-444444444444', displayLabel: 'Chip truck 2 · Ford F-550', name: 'Chip truck 2', manufacturer: 'Ford', model: 'F-550', digest: digest }],
-        equipmentTargets: [{ targetId: '55555555-5555-4555-8555-555555555555', displayLabel: 'Tracked chipper 1 · Bandit 21XP', name: 'Tracked chipper 1', manufacturer: 'Bandit', model: '21XP', digest: digest }],
-        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree service job', digest: digest }] } : travel ? { sourceKey: 'fleet.demo', activeConsent: true, referenceTotal: 2,
+        vehicleTargets: [{ targetId: '44444444-4444-4444-8444-444444444444', displayLabel: 'Chip Truck 2 · Ford F-550', name: 'Chip truck 2', manufacturer: 'Ford', model: 'F-550', digest: digest }],
+        equipmentTargets: [{ targetId: '55555555-5555-4555-8555-555555555555', displayLabel: 'Tracked Chipper 1 · Bandit 21XP', name: 'Tracked chipper 1', manufacturer: 'Bandit', model: '21XP', digest: digest }],
+        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree Service Job', digest: digest }] } : travel ? { sourceKey: 'fleet.demo', activeConsent: true, referenceTotal: 2,
         references: [
           { referenceKind: 'job', externalReference: 'tree-job-042', sourceRecordCount: 6, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '22222222-2222-4222-8222-222222222222', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'vehicle', externalReference: 'chip-truck-2', sourceRecordCount: 6, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '44444444-4444-4444-8444-444444444444', targetDigest: digest, action: 'link', status: 'matched' } }
         ],
-        vehicleTargets: [{ targetId: '44444444-4444-4444-8444-444444444444', displayLabel: 'Chip truck 2 · Ford F-550', name: 'Chip truck 2', manufacturer: 'Ford', model: 'F-550', digest: digest }],
-        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree service job', digest: digest }] } :
+        vehicleTargets: [{ targetId: '44444444-4444-4444-8444-444444444444', displayLabel: 'Chip Truck 2 · Ford F-550', name: 'Chip truck 2', manufacturer: 'Ford', model: 'F-550', digest: digest }],
+        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree Service Job', digest: digest }] } :
       { sourceKey: 'crewclock.demo', activeConsent: true, referenceTotal: 3, references: [
           { referenceKind: 'worker', externalReference: 'crew-lead-7', sourceRecordCount: 12, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '11111111-1111-4111-8111-111111111111', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'job', externalReference: 'tree-job-042', sourceRecordCount: 9, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '22222222-2222-4222-8222-222222222222', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'worker', externalReference: 'climber-12', sourceRecordCount: 7, sourceDigest: digest, match: null }
         ],
-        workerTargets: [{ targetId: '11111111-1111-4111-8111-111111111111', displayLabel: 'Jordan Lee · Crew lead', operationalRole: 'Crew lead', digest: digest }],
-        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree service job', digest: digest }] },
+        workerTargets: [{ targetId: '11111111-1111-4111-8111-111111111111', displayLabel: 'Jordan Lee · Crew Lead', operationalRole: 'Crew lead', digest: digest }],
+        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree Service Job', digest: digest }] },
       health: { sourceKey: 'equipment.demo', activeConsent: true, history: [], total: 1, truncated: false,
         current: { fresh: true, advisoryAvailable: true, outcomes: {
           maintenance: { status: 'recorded', recordCount: 3, completedCount: 2, deferredCount: 1, cancelledCount: 0 },
@@ -277,7 +277,7 @@
     root.appendChild(metric('Last source update', state.detail.latestSourceUpdatedAt ? new Date(state.detail.latestSourceUpdatedAt).toLocaleString() : 'None'));
   }
   function targetLabel(kind, target) {
-    return contract.safeLabel(target.displayLabel) ? contract.label(target.displayLabel) : null;
+    return contract.safeLabel(target.displayLabel);
   }
   function referenceLabel(reference) {
     return contract.label(reference.externalReference, 'Imported ' + contract.label(reference.referenceKind, 'record'));

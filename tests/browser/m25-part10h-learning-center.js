@@ -22,18 +22,18 @@ const layouts = [
   { name: 'tablet-landscape-light', width: 1024, height: 768, theme: 'light' },
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
 ];
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const INTERNAL_CODE_PATTERN = /\b(?:M25|INTERNAL|REQUEST)_[A-Z0-9_]+\b/;
 function assertSafeVisible(value) {
   assert.doesNotMatch(value, UUID_PATTERN);
   assert.doesNotMatch(value, /\[object Object\]/i);
   assert.doesNotMatch(value, /request\s+(?:id\b|[0-9a-f]{8}-)/i);
   assert.doesNotMatch(value, INTERNAL_CODE_PATTERN);
-  assert.doesNotMatch(value, /object[\s_-]*object/i);
-  assert.doesNotMatch(value, /860[ .-]555[ .-]1212|\(860\) 555[ .-]1212|\+1 860[ .-]555[ .-]1212/);
+  assert.doesNotMatch(value, /object[\s:_-]*object/i);
+  assert.doesNotMatch(value, /860(?:[ ./-]|\u2011)555(?:[ ./-]|\u2011)1212/);
+  assert.doesNotMatch(value, /\b(?:db|database|record|request|internal)[ ._-]*(?:id|identifier)\b/i);
   assert.doesNotMatch(value, /[0-9a-f]{64}/i);
 }
-const presented = value => value.replace(/[._-]+/g, ' ').replace(/\b[a-z]/g, letter => letter.toUpperCase());
 const ledger = { engine, layouts: [], cases: [], pageErrors: [], externalRequests: [], pass: false };
 let browser;
 let server;
@@ -71,7 +71,7 @@ let paidLabels;
       for (const phrase of ['Maintenance', 'Downtime', 'Condition', 'Availability', 'Not established']) assert.match(await page.locator('#learningAssetHealth').innerText(), new RegExp(phrase, 'i'));
       for (const phrase of ['Machine-hour use', 'Job operating cost', '1.1200×', '1.0700×']) assert.match(await page.locator('#learningCalibration').innerText(), new RegExp(phrase.replace('×', '\xD7'), 'i'));
       const optionLabels = await page.locator('.learning-table select option').allInnerTexts();
-      for (const label of ['Tree Service Job', 'Chip Truck 2 · Ford F 550', 'Tracked Chipper 1 · Bandit 21XP']) assert.ok(optionLabels.includes(label), JSON.stringify(optionLabels));
+      for (const label of ['Tree Service Job', 'Chip Truck 2 · Ford F-550', 'Tracked Chipper 1 · Bandit 21XP']) assert.ok(optionLabels.includes(label), JSON.stringify(optionLabels));
       optionLabels.forEach(assertSafeVisible);
       assert.equal(await page.locator('.learning-table select:not([disabled])').count(), 0);
       assert.equal(await page.locator('#learningConsentCards button:not([disabled])').count(), 0);
@@ -96,28 +96,36 @@ let paidLabels;
       await paidLayoutPage.getByRole('button', { name: /Crewclock Labels, Labor source/i }).click();
       await paidLayoutPage.locator('#learningDetailTitle').filter({ hasText: /Crewclock Labels · Labor/i }).waitFor();
       let options = await paidLayoutPage.locator('.learning-table select option').evaluateAll(nodes => nodes.map(option => ({ label: option.textContent, value: option.value })));
-      const laborExpected = [...paidLabels.labels.workers, ...paidLabels.labels.longWorkers, ...paidLabels.labels.jobs].map(presented);
+      const laborExpected = [...paidLabels.labels.workers, ...paidLabels.labels.longWorkers,
+        ...paidLabels.labels.separatorWorkers, ...paidLabels.labels.jobs];
       for (const label of laborExpected) assert.ok(options.some(option => option.label === label), JSON.stringify(options));
       const laborMapping = new Map(options.map(option => [option.label, option.value]));
-      paidLabels.workers.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.workers[index])), target));
-      paidLabels.longWorkers.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.longWorkers[index])), target));
-      paidLabels.jobs.forEach((target, index) => assert.equal(laborMapping.get(presented(paidLabels.labels.jobs[index])), target));
+      paidLabels.workers.forEach((target, index) => assert.equal(laborMapping.get(paidLabels.labels.workers[index]), target));
+      paidLabels.longWorkers.forEach((target, index) => assert.equal(laborMapping.get(paidLabels.labels.longWorkers[index]), target));
+      paidLabels.separatorWorkers.forEach((target, index) => assert.equal(laborMapping.get(paidLabels.labels.separatorWorkers[index]), target));
+      paidLabels.jobs.forEach((target, index) => assert.equal(laborMapping.get(paidLabels.labels.jobs[index]), target));
       paidLabels.forbiddenWorkers.forEach(target => assert.ok(!options.some(option => option.value === target), target));
       const browserSanitizer = await paidLayoutPage.evaluate(function () {
         var contract = window.NorthStarLearningCenterContract;
-        return ['Crew [Object Object] · Technician', 'Crew 860-555-1212 East · Technician',
-          'Crew (860) 555-1212 West · Technician', 'Crew ' + 'a'.repeat(64) + ' · Technician',
-          'Crew digest:' + 'b'.repeat(64) + ' · Technician'].map(function (value) { return contract.safeLabel(value); });
+        return {
+          rejected: ['Prefix [object:Object] suffix', 'Crew 860/555/1212 East',
+            'Crew 860\u2011555\u20111212 East', 'Crew DB id: 123456789',
+            'Crew 01890f47-2b7c-7cc1-98f1-426614174000', 'Crew ' + 'a'.repeat(64),
+            'Crew digest:' + 'b'.repeat(64)].map(function (value) { return contract.safeLabel(value); }),
+          normalized: contract.safeLabel('Ｒｅｇｉｏｎａｌ．Ｎｏｒｔｈ'),
+          separators: [contract.safeLabel('Regional.North'), contract.safeLabel('Regional-North')],
+        };
       });
-      assert.deepEqual(browserSanitizer, [null, null, null, null, null]);
+      assert.deepEqual(browserSanitizer, { rejected: [null, null, null, null, null, null, null],
+        normalized: 'Regional.North', separators: ['Regional.North', 'Regional-North'] });
       await paidLayoutPage.getByRole('button', { name: /Fleet Labels, Asset source/i }).click();
       await paidLayoutPage.locator('#learningDetailTitle').filter({ hasText: /Fleet Labels · Asset/i }).waitFor();
       options = await paidLayoutPage.locator('.learning-table select option').evaluateAll(nodes => nodes.map(option => ({ label: option.textContent, value: option.value })));
-      const assetExpected = [...paidLabels.labels.jobs, ...paidLabels.labels.vehicles, ...paidLabels.labels.equipment].map(presented);
+      const assetExpected = [...paidLabels.labels.jobs, ...paidLabels.labels.vehicles, ...paidLabels.labels.equipment];
       for (const label of assetExpected) assert.ok(options.some(option => option.label === label), JSON.stringify(options));
       const assetMapping = new Map(options.map(option => [option.label, option.value]));
-      paidLabels.vehicles.forEach((target, index) => assert.equal(assetMapping.get(presented(paidLabels.labels.vehicles[index])), target));
-      paidLabels.equipment.forEach((target, index) => assert.equal(assetMapping.get(presented(paidLabels.labels.equipment[index])), target));
+      paidLabels.vehicles.forEach((target, index) => assert.equal(assetMapping.get(paidLabels.labels.vehicles[index]), target));
+      paidLabels.equipment.forEach((target, index) => assert.equal(assetMapping.get(paidLabels.labels.equipment[index]), target));
       assertSafeVisible(await paidLayoutPage.locator('body').innerText());
       const paidCapture = path.join(captureRoot, `${engine}-${layout.name}-paid.png`);
       await paidLayoutPage.screenshot({ path: paidCapture, fullPage: true });

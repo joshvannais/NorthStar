@@ -70,7 +70,8 @@ describe('Mission 25 Part 10 Slice H vehicle and equipment Learning Center', () 
     const contract = read('public/js/learning-center-contract.js');
     expect(page).not.toContain("String(target.targetId).slice(0, 8)");
     expect(page).not.toContain("error.requestId ? ' Request '");
-    expect(page).toContain("contract.label(target.displayLabel");
+    expect(page).toContain('return contract.safeLabel(target.displayLabel);');
+    expect(page).not.toContain('contract.label(target.displayLabel');
     expect(page).toContain("Learning Center is temporarily unavailable. Refresh and try again.");
     expect(contract).toContain("UUID.test(textValue)");
     expect(contract).toContain("return fallback||'Company record'");
@@ -83,13 +84,15 @@ describe('Mission 25 Part 10 Slice H vehicle and equipment Learning Center', () 
     expect(migration).toContain('canonical_learning_reconciliation_target_labels_read');
     expect(migration).toContain('canonical_learning_target_label_compose');
     expect(migration).toContain("right(discriminator_label,LEAST(char_length(discriminator_label),96))");
-    expect(migration).toContain("object[[:space:]_-]*object");
+    expect(migration).toContain('normalize(value,NFKC)');
+    expect(migration).toContain("object[[:space:]:_-]*object");
+    expect(migration).toContain("(db|database|record|request|internal)");
     expect(migration).toContain("[0-9a-f]{32,}");
     expect(migration).toContain("JOIN public.users u ON u.organization_id=m.organization_id AND u.id=m.user_id");
     expect(migration).toContain("JOIN public.canonical_customers c ON c.organization_id=o.organization_id AND c.id=o.customer_id");
     expect(migration).toContain("a.internal_reference");
     expect(migration).not.toMatch(/email|phone|vin|serial_number/i);
     expect(repositories.match(/readTargetLabels/g)).toHaveLength(6);
-    expect(read('public/js/learning-center-contract.js')).toContain('safeLabel:safeLabel');
+    expect(read('public/js/learning-center-contract.js')).toContain('normalizeLabel:normalizeLabel,safeLabel:safeLabel');
   });
 });

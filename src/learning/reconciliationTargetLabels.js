@@ -2,14 +2,21 @@
 
 const TARGET_KEYS = Object.freeze(['workerTargets', 'jobTargets', 'vehicleTargets', 'equipmentTargets']);
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-const CONTACT_NUMBER = /(?:^|[^0-9])(?:\+1[ .-]?)?\(?[0-9]{3}\)?[ .-][0-9]{3}[ .-][0-9]{4}(?:$|[^0-9])|(?:^|[^0-9])[0-9]{10,15}(?:$|[^0-9])/;
+const OBJECT_MARKER = /object[\s:_-]*object/i;
+const CONTACT_NUMBER = /(?:^|[^0-9])(?:\+?[0-9][() ./-]*){10,15}(?:$|[^0-9])/;
 const INTERNAL_HEX = /(?:^|[^0-9a-f])[0-9a-f]{32,}(?:$|[^0-9a-f])/i;
-const PREFIXED_INTERNAL = /(?:digest|checksum|hash)[\s:=_-]+[A-Za-z0-9/+_-]{16,}|(?:request|record|database)[\s_-]*(?:id|identifier)[\s:#=_-]+[A-Za-z0-9._:-]{6,}/i;
+const PREFIXED_INTERNAL = /(?:digest|checksum|hash)[\s:=_-]+[A-Za-z0-9/+_-]{16,}|(?:db|database|record|request|internal)[\s._-]*(?:id|identifier)[\s:#=_-]+[A-Za-z0-9._:-]{6,}/i;
+const INVISIBLE = /[\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/;
+const DASH_VARIANTS = /[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g;
+
+function normalizeDisplayLabel(value) {
+  if (typeof value !== 'string') return null;
+  return value.normalize('NFKC').replace(DASH_VARIANTS, '-').trim().replace(/\s+/gu, ' ');
+}
 
 function safeDisplayLabel(value) {
-  if (typeof value !== 'string') return null;
-  const label = value.trim().replace(/\s+/g, ' ');
-  if (!label || label.length > 240 || /[\u0000-\u001f\u007f]/.test(label) || /object[\s_-]*object/i.test(label) ||
+  const label = normalizeDisplayLabel(value);
+  if (!label || Array.from(label).length > 240 || /[\u0000-\u001f\u007f]/.test(label) || INVISIBLE.test(label) || OBJECT_MARKER.test(label) ||
     UUID.test(label) || CONTACT_NUMBER.test(label) || INTERNAL_HEX.test(label) || PREFIXED_INTERNAL.test(label) || label.includes('@')) return null;
   return label;
 }
@@ -20,8 +27,10 @@ function applyTargetLabels(matches, labels) {
   for (const key of TARGET_KEYS) {
     if (!Array.isArray(matches[key])) continue;
     const candidates = Array.isArray(labels[key]) ? labels[key] : [];
-    const safe = new Map(candidates.map(value => [value.targetId, safeDisplayLabel(value.displayLabel)])
-      .filter(value => value[1] !== null));
+    const normalized = candidates.map(value => [value.targetId, safeDisplayLabel(value.displayLabel)]);
+    const counts = new Map();
+    normalized.forEach(([, label]) => { if (label !== null) counts.set(label, (counts.get(label) || 0) + 1); });
+    const safe = new Map(normalized.filter(([, label]) => label !== null && counts.get(label) === 1));
     rejected[key] = candidates.length - safe.size;
     result[key] = matches[key].filter(value => safe.has(value.targetId)).map(value => ({ ...value, displayLabel: safe.get(value.targetId) }));
   }
@@ -41,4 +50,4 @@ async function readTargetLabels(client, input) {
   return value;
 }
 
-module.exports = { applyTargetLabels, readTargetLabels, safeDisplayLabel };
+module.exports = { applyTargetLabels, normalizeDisplayLabel, readTargetLabels, safeDisplayLabel };

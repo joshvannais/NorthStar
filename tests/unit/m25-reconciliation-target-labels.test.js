@@ -1,6 +1,6 @@
 'use strict';
 
-const { applyTargetLabels, safeDisplayLabel } = require('../../src/learning/reconciliationTargetLabels');
+const { applyTargetLabels, normalizeDisplayLabel, safeDisplayLabel } = require('../../src/learning/reconciliationTargetLabels');
 
 describe('Mission 25 reconciliation target labels', () => {
   test('attaches only authoritative safe labels and removes ambiguous targets', () => {
@@ -28,13 +28,30 @@ describe('Mission 25 reconciliation target labels', () => {
   });
 
   test('fails closed on embedded presentation hazards without rejecting ordinary company labels', () => {
-    for (const value of ['Crew [Object Object] · Technician', 'Crew object_object · Technician',
-      'Crew 860-555-1212 East · Technician', 'Crew (860) 555-1212 West · Technician',
-      `Crew ${'a'.repeat(64)} · Technician`, `Crew digest:${'b'.repeat(64)} · Technician`]) {
+    for (const value of ['Prefix [object:Object] suffix', 'Crew object_object · Technician',
+      'Crew 860/555/1212 East', 'Crew 860\u2011555\u20111212 East', 'Crew DB id: 123456789',
+      'Crew 01890f47-2b7c-7cc1-98f1-426614174000', `Crew ${'a'.repeat(64)} · Technician`,
+      `Crew digest:${'b'.repeat(64)} · Technician`]) {
       expect(safeDisplayLabel(value)).toBeNull();
     }
     for (const value of ['Hash Tree Service · Technician', 'Route 64 Crew · Technician', 'Chip Truck · Ford F-550']) {
       expect(safeDisplayLabel(value)).toBe(value);
     }
+    expect(normalizeDisplayLabel('  Ｒｅｇｉｏｎａｌ．Ｎｏｒｔｈ  ')).toBe('Regional.North');
+    expect(safeDisplayLabel('Regional.North')).toBe('Regional.North');
+    expect(safeDisplayLabel('Regional-North')).toBe('Regional-North');
+  });
+
+  test('determines uniqueness after canonical normalization on the exact displayed label', () => {
+    const matches = { workerTargets: [{ targetId: 'worker-a' }, { targetId: 'worker-b' }, { targetId: 'worker-c' }],
+      jobTargets: [], vehicleTargets: [], equipmentTargets: [] };
+    const result = applyTargetLabels(matches, { workerTargets: [
+      { targetId: 'worker-a', displayLabel: 'Ｒｅｇｉｏｎａｌ．Ｎｏｒｔｈ' },
+      { targetId: 'worker-b', displayLabel: 'Regional.North' },
+      { targetId: 'worker-c', displayLabel: 'Regional-North' },
+    ], jobTargets: [], vehicleTargets: [], equipmentTargets: [], workerUnavailableTotal: 0,
+    jobUnavailableTotal: 0, vehicleUnavailableTotal: 0, equipmentUnavailableTotal: 0 });
+    expect(result.workerTargets).toEqual([{ targetId: 'worker-c', displayLabel: 'Regional-North' }]);
+    expect(result.workerUnavailableTotal).toBe(2);
   });
 });

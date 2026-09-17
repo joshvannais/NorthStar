@@ -58,12 +58,16 @@ describe('Mission 25 Learning Center browser contract', () => {
     expect(contract.label('123e4567-e89b-42d3-a456-426614174000', 'Job')).toBe('Job');
     expect(contract.label('Truck 123e4567-e89b-42d3-a456-426614174000', 'Vehicle')).toBe('Vehicle');
     expect(contract.label({ private: true }, 'Equipment')).toBe('Equipment');
-    for (const value of ['Crew [Object Object] · Technician', 'Crew object_object · Technician',
-      'Crew 860-555-1212 East · Technician', 'Crew (860) 555-1212 West · Technician',
-      `Crew ${'a'.repeat(64)} · Technician`, `Crew hash:${'b'.repeat(64)} · Technician`]) {
+    for (const value of ['Prefix [object:Object] suffix', 'Crew object_object · Technician',
+      'Crew 860/555/1212 East', 'Crew 860\u2011555\u20111212 East', 'Crew DB id: 123456789',
+      'Crew 01890f47-2b7c-7cc1-98f1-426614174000', `Crew ${'a'.repeat(64)} · Technician`,
+      `Crew hash:${'b'.repeat(64)} · Technician`]) {
       expect(contract.safeLabel(value)).toBeNull();
       expect(contract.label(value, 'Worker')).toBe('Worker');
     }
+    expect(contract.normalizeLabel('  Ｒｅｇｉｏｎａｌ．Ｎｏｒｔｈ  ')).toBe('Regional.North');
+    expect(contract.safeLabel('Regional.North')).toBe('Regional.North');
+    expect(contract.safeLabel('Regional-North')).toBe('Regional-North');
     expect(contract.safeLabel('Hash Tree Service · Technician')).toBe('Hash Tree Service · Technician');
     expect(contract.safeLabel('Route 64 Crew · Technician')).toBe('Route 64 Crew · Technician');
     expect(contract.safeLabel('Chip Truck · Ford F-550')).toBe('Chip Truck · Ford F-550');

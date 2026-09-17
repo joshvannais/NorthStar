@@ -84,8 +84,9 @@ async function seedLearningLabels(fixture) {
     await createWorker(fixture, 'Jordan Lee', 'South-Yard')];
   const ambiguousWorkers = [await createWorker(fixture, 'Casey Morgan', 'Shared-Yard'),
     await createWorker(fixture, 'Casey Morgan', 'Shared-Yard')];
-  const forbiddenNames = ['Crew [Object Object]', 'Crew 860-555-1212 East', 'Crew (860) 555-1212 West',
-    'Crew +1 860.555.1212 Central', `Crew ${'a'.repeat(64)}`, `Crew digest:${'b'.repeat(64)}`];
+  const forbiddenNames = ['Prefix [object:Object] suffix', 'Crew 860/555/1212 East',
+    'Crew 860\u2011555\u20111212 East', 'Crew DB id: 123456789',
+    'Crew 01890f47-2b7c-7cc1-98f1-426614174000', `Crew ${'a'.repeat(64)}`, `Crew digest:${'b'.repeat(64)}`];
   const forbiddenWorkers = [];
   for (let index = 0; index < forbiddenNames.length; index += 1) {
     forbiddenWorkers.push(await createWorker(fixture, forbiddenNames[index], `Unsafe-Yard-${index + 1}`));
@@ -97,6 +98,9 @@ async function seedLearningLabels(fixture) {
   const composed = (prefix, discriminator) => prefix.length + 3 + discriminator.length <= 240 ? `${prefix} · ${discriminator}` :
     `${prefix.slice(0, 240 - 3 - discriminator.length).trimEnd()} · ${discriminator}`;
   const longWorkerLabels = longLocations.map(location => composed(`${longName} · Technician`, location));
+  const separatorLocations = ['Regional.North', 'Regional-North'];
+  const separatorWorkers = [await createWorker(fixture, 'Taylor Rowan', separatorLocations[0]),
+    await createWorker(fixture, 'Taylor Rowan', separatorLocations[1])];
   const jobs = [await createJob(fixture, 'Avery Sample', 'Tree Removal', 'Backyard oak removal', '2026-09-16T13:00:00Z'),
     await createJob(fixture, 'Morgan Demo', 'Stump Grinding', 'Front yard stump grinding', '2026-09-16T14:00:00Z')];
   const vehicles = [await createAsset(fixture, 'vehicle', 'North Truck'), await createAsset(fixture, 'vehicle', 'South Truck')];
@@ -130,10 +134,11 @@ async function seedLearningLabels(fixture) {
     reason: 'Stage recognizable paid asset label evidence.', confirmed: true, confirmationVersion: 'm25-external-asset-import-batch-v1' });
   if (response.status !== 201) throw new Error('Asset label batch failed: ' + JSON.stringify(response.body));
 
-  return { workers, ambiguousWorkers, forbiddenWorkers, forbiddenNames, longWorkers, jobs, vehicles, equipment, laborSource, assetSource,
+  return { workers, ambiguousWorkers, forbiddenWorkers, forbiddenNames, longWorkers, separatorWorkers, jobs, vehicles, equipment, laborSource, assetSource,
     labels: {
       workers: ['Alex Rivera · Technician', 'Jordan Lee · Technician · North-Yard', 'Jordan Lee · Technician · South-Yard'],
       longWorkers: longWorkerLabels,
+      separatorWorkers: separatorLocations.map(location => `Taylor Rowan · Technician · ${location}`),
       jobs: ['Avery Sample · Tree Removal · Backyard oak removal', 'Morgan Demo · Stump Grinding · Front yard stump grinding'],
       vehicles: ['Chip Truck · Ford F-550 · North Truck · 2024', 'Chip Truck · Ford F-550 · South Truck · 2024'],
       equipment: ['Tracked Chipper · Bandit 21XP · Chipper A · 2024', 'Tracked Chipper · Bandit 21XP · Chipper B · 2024'],

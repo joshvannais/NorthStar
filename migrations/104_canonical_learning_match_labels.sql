@@ -4,16 +4,18 @@
 CREATE FUNCTION public.canonical_learning_target_label_text(value TEXT, maximum INTEGER)
 RETURNS TEXT LANGUAGE sql IMMUTABLE STRICT SET search_path=pg_catalog,public,pg_temp AS $$
  WITH candidate AS (
-  SELECT regexp_replace(btrim(value),'[[:space:]]+',' ','g') normalized
+  SELECT regexp_replace(btrim(translate(normalize(value,NFKC),
+   U&'\2010\2011\2012\2013\2014\2015\2212\FE58\FE63\FF0D','----------')),
+   '[[:space:]]+',' ','g') normalized
  ) SELECT CASE
   WHEN maximum NOT BETWEEN 1 AND 240 OR normalized='' OR normalized~'[[:cntrl:]]'
-    OR normalized~*'object[[:space:]_-]*object'
+    OR normalized ~ U&'[\0080-\009F\200B-\200F\202A-\202E\2060\2066-\2069\FEFF]'
+    OR normalized~*'object[[:space:]:_-]*object'
     OR normalized~*'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
     OR normalized~*'(^|[^0-9a-f])[0-9a-f]{32,}([^0-9a-f]|$)'
-    OR normalized~'(^|[^0-9])([+]1[ .-]?)?[(]?[0-9]{3}[)]?[ .-][0-9]{3}[ .-][0-9]{4}([^0-9]|$)'
-    OR normalized~'(^|[^0-9])[0-9]{10,15}([^0-9]|$)'
+    OR normalized~'(^|[^0-9])([+]?[0-9][() ./-]*){10,15}([^0-9]|$)'
     OR normalized~*'(digest|checksum|hash)[[:space:]:=_-]+[[:alnum:]/+_-]{16,}'
-    OR normalized~*'(request|record|database)[[:space:]_-]*(id|identifier)[[:space:]:=#_-]+[[:alnum:]._:-]{6,}'
+    OR normalized~*'(db|database|record|request|internal)[[:space:]._-]*(id|identifier)[[:space:]:=#_-]+[[:alnum:]._:-]{6,}'
     OR normalized LIKE '%@%' OR char_length(normalized)>maximum THEN NULL
   ELSE normalized
  END FROM candidate
@@ -61,12 +63,12 @@ BEGIN
    public.canonical_learning_target_label_compose(display_name||' · '||role_label,NULL,240) base_label
   FROM raw WHERE display_name IS NOT NULL AND role_label IS NOT NULL
  ), counted AS (
-  SELECT *,count(*) OVER(PARTITION BY lower(base_label)) base_total FROM based WHERE base_label IS NOT NULL
+  SELECT *,count(*) OVER(PARTITION BY base_label) base_total FROM based WHERE base_label IS NOT NULL
  ), candidates AS (
   SELECT *,CASE WHEN base_total=1 THEN base_label WHEN location_label IS NOT NULL THEN
    public.canonical_learning_target_label_compose(base_source,location_label,240) END display_label FROM counted
  ), visible AS (
-  SELECT *,count(*) OVER(PARTITION BY lower(display_label)) label_total FROM candidates WHERE display_label IS NOT NULL
+  SELECT *,count(*) OVER(PARTITION BY display_label) label_total FROM candidates WHERE display_label IS NOT NULL
  ), selected AS (
   SELECT * FROM visible WHERE label_total=1 ORDER BY lower(display_label),target_id LIMIT 100
  ) SELECT COALESCE(jsonb_agg(jsonb_build_object('targetId',target_id,'displayLabel',display_label)
@@ -90,13 +92,13 @@ BEGIN
  ), rendered AS (
   SELECT *,public.canonical_learning_target_label_compose(base_source,NULL,240) base_label FROM based
  ), counted AS (
-  SELECT *,count(*) OVER(PARTITION BY lower(base_label)) base_total FROM rendered WHERE base_label IS NOT NULL
+  SELECT *,count(*) OVER(PARTITION BY base_label) base_total FROM rendered WHERE base_label IS NOT NULL
  ), candidates AS (
   SELECT *,CASE WHEN base_total=1 THEN base_label ELSE
    public.canonical_learning_target_label_compose(base_source,
     to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI "UTC"'),240) END display_label FROM counted
  ), visible AS (
-  SELECT *,count(*) OVER(PARTITION BY lower(display_label)) label_total FROM candidates
+  SELECT *,count(*) OVER(PARTITION BY display_label) label_total FROM candidates
  ), selected AS (
   SELECT * FROM visible WHERE label_total=1 ORDER BY created_at DESC,target_id DESC LIMIT 100
  ) SELECT COALESCE(jsonb_agg(jsonb_build_object('targetId',target_id,'displayLabel',display_label)
@@ -121,12 +123,12 @@ BEGIN
  ), rendered AS (
   SELECT *,public.canonical_learning_target_label_compose(base_source,NULL,240) base_label FROM based
  ), counted AS (
-  SELECT *,count(*) OVER(PARTITION BY category,lower(base_label)) base_total FROM rendered WHERE base_label IS NOT NULL
+  SELECT *,count(*) OVER(PARTITION BY category,base_label) base_total FROM rendered WHERE base_label IS NOT NULL
  ), candidates AS (
   SELECT *,CASE WHEN base_total=1 THEN base_label WHEN reference_label IS NOT NULL
    THEN public.canonical_learning_target_label_compose(base_source,concat_ws(' · ',reference_label,model_year::text),240) END display_label FROM counted
  ), visible AS (
-  SELECT *,count(*) OVER(PARTITION BY category,lower(display_label)) label_total FROM candidates WHERE display_label IS NOT NULL
+  SELECT *,count(*) OVER(PARTITION BY category,display_label) label_total FROM candidates WHERE display_label IS NOT NULL
  ), selected AS (
   SELECT * FROM visible WHERE label_total=1 ORDER BY category,lower(display_label),target_id LIMIT 200
  ) SELECT

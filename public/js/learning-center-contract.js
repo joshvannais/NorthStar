@@ -1,11 +1,13 @@
 (function(root,factory){'use strict';var value=factory();if(typeof module==='object'&&module.exports)module.exports=value;if(root)root.NorthStarLearningCenterContract=value;})(typeof window!=='undefined'?window:null,function(){
  'use strict';
  var KEY=/^[a-z0-9][a-z0-9._-]{1,63}$/;
- var UUID=/(?:^|[^0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:$|[^0-9a-f])/i;
- var OBJECT_MARKER=/object[\s_-]*object/i;
- var CONTACT_NUMBER=/(?:^|[^0-9])(?:\+1[ .-]?)?\(?[0-9]{3}\)?[ .-][0-9]{3}[ .-][0-9]{4}(?:$|[^0-9])|(?:^|[^0-9])[0-9]{10,15}(?:$|[^0-9])/;
+ var UUID=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+ var OBJECT_MARKER=/object[\s:_-]*object/i;
+ var CONTACT_NUMBER=/(?:^|[^0-9])(?:\+?[0-9][() ./-]*){10,15}(?:$|[^0-9])/;
  var INTERNAL_HEX=/(?:^|[^0-9a-f])[0-9a-f]{32,}(?:$|[^0-9a-f])/i;
- var PREFIXED_INTERNAL=/(?:digest|checksum|hash)[\s:=_-]+[A-Za-z0-9/+_-]{16,}|(?:request|record|database)[\s_-]*(?:id|identifier)[\s:#=_-]+[A-Za-z0-9._:-]{6,}/i;
+ var PREFIXED_INTERNAL=/(?:digest|checksum|hash)[\s:=_-]+[A-Za-z0-9/+_-]{16,}|(?:db|database|record|request|internal)[\s._-]*(?:id|identifier)[\s:#=_-]+[A-Za-z0-9._:-]{6,}/i;
+ var INVISIBLE=/[\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/;
+ var DASH_VARIANTS=/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g;
  function object(value){return value&&typeof value==='object'&&!Array.isArray(value);}
  function integer(value){return Number.isSafeInteger(value)&&value>=0;}
  function text(value,max){return typeof value==='string'&&value.length>0&&value.length<=max;}
@@ -66,9 +68,12 @@
   ['adapter','retention','deletion'].forEach(function(key){var item=value[key];if(item!==null&&(!object(item)||!integer(item.revision)||item.revision<1||!text(item.action,32)||!digest(item.digest)))throw new Error('Learning source operation is invalid.');});
   return value.deletionComplete===null?Object.assign({},value,{deletionComplete:false}):value;
  }
+ function normalizeLabel(value){
+  return typeof value==='string'?value.normalize('NFKC').replace(DASH_VARIANTS,'-').trim().replace(/\s+/gu,' '):null;
+ }
  function safeLabel(value){
-  var textValue=typeof value==='string'?value.trim().replace(/\s+/g,' '):'';
-  if(!textValue||textValue.length>240||/[\u0000-\u001f\u007f]/.test(textValue)||UUID.test(textValue)||OBJECT_MARKER.test(textValue)||
+  var textValue=normalizeLabel(value);
+  if(!textValue||Array.from(textValue).length>240||/[\u0000-\u001f\u007f]/.test(textValue)||INVISIBLE.test(textValue)||UUID.test(textValue)||OBJECT_MARKER.test(textValue)||
     CONTACT_NUMBER.test(textValue)||INTERNAL_HEX.test(textValue)||PREFIXED_INTERNAL.test(textValue)||textValue.indexOf('@')>=0)return null;
   return textValue;
  }
@@ -77,5 +82,5 @@
   if(!textValue)return fallback||'Company record';
   return textValue.replace(/[._-]+/g,' ').replace(/\b[a-z]/g,function(letter){return letter.toUpperCase();});
  }
- return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,health:health,calibration:calibration,operations:operations,safeLabel:safeLabel,label:label});
+ return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,health:health,calibration:calibration,operations:operations,normalizeLabel:normalizeLabel,safeLabel:safeLabel,label:label});
 });

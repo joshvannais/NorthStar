@@ -39,6 +39,8 @@ const importedAssetOutcomeContract = require('../learning/importedAssetOutcomeCo
 const importedAssetOutcomeRepository = require('../learning/importedAssetOutcomeRepository');
 const importedAssetHealthContract = require('../learning/importedAssetHealthContract');
 const importedAssetHealthRepository = require('../learning/importedAssetHealthRepository');
+const importedAssetCalibrationContract = require('../learning/importedAssetCalibrationContract');
+const importedAssetCalibrationRepository = require('../learning/importedAssetCalibrationRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -60,7 +62,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_IMPORTED_ASSET_OUTCOME_') ? 'Imported vehicle and equipment outcome learning is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_IMPORTED_ASSET_CALIBRATION_') ? 'Vehicle and equipment calibration is temporarily unavailable.' :
+    code.startsWith('M25_IMPORTED_ASSET_OUTCOME_') ? 'Imported vehicle and equipment outcome learning is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_ASSET_HEALTH_') ? 'Imported asset health learning is temporarily unavailable.' :
     code.startsWith('M25_NATIVE_EQUIPMENT_') ? 'Native equipment utilization learning is temporarily unavailable.' :
     code.startsWith('M25_ASSET_MATCH_') ? 'Vehicle and equipment reconciliation is temporarily unavailable.' :
@@ -268,6 +271,48 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = importedAssetHealthContract.normalizeObservation(req.params.sourceKey, req.body);
         const data = await importedAssetHealthRepository.observe(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-asset-sources/:sourceKey/imported-asset-calibration-consent', headers, tenantAuth,
+    assetOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = assetImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await importedAssetCalibrationRepository.readConsent(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-asset-sources/:sourceKey/imported-asset-calibration-consent', headers, mutationAuth,
+    assetOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = importedAssetCalibrationContract.normalizeConsent(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await importedAssetCalibrationRepository.mutateConsent(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-asset-sources/:sourceKey/imported-asset-calibrations/:serviceKey', headers, tenantAuth,
+    assetOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = assetImportContract.normalizeSourceKey(req.params.sourceKey);
+        const serviceKey = importedAssetCalibrationContract.normalizeServiceKey(req.params.serviceKey);
+        const data = await importedAssetCalibrationRepository.read(poolProvider(), { ...actor(req), sourceKey, serviceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/external-asset-sources/:sourceKey/imported-asset-calibrations/:serviceKey', headers, mutationAuth,
+    assetOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = importedAssetCalibrationContract.normalizeProposal(req.params.sourceKey, req.params.serviceKey, req.body);
+        const data = await importedAssetCalibrationRepository.propose(poolProvider(), { ...actor(req), ...normalized,
           csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });

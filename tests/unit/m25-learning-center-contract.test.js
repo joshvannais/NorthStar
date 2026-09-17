@@ -55,5 +55,8 @@ describe('Mission 25 Learning Center browser contract', () => {
       checkpoints: [], activeRecordTotal: 0, retentionEligibleTotal: 0, deletionComplete: null,
       boundary: 'No deletion has been requested.' }).deletionComplete).toBe(false);
     expect(contract.label('tree-service')).toBe('Tree Service');
+    expect(contract.label('123e4567-e89b-42d3-a456-426614174000', 'Job')).toBe('Job');
+    expect(contract.label('Truck 123e4567-e89b-42d3-a456-426614174000', 'Vehicle')).toBe('Vehicle');
+    expect(contract.label({ private: true }, 'Equipment')).toBe('Equipment');
   });
 });

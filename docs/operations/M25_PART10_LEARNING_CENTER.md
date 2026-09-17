@@ -10,4 +10,6 @@ The isolated demo contains fictional, read-only labor, travel and vehicle/equipm
 
 The page uses plain business wording, visible loading/error/ready states, a skip link, live status region, labeled controls, keyboard focus styles, responsive source and dimension cards, bounded tables and dark/light theme tokens. Reload starts at the top. Request-generation guards prevent older source, health and calibration responses from replacing a newer selection.
 
+Reference controls show only recognizable company labels such as Job, Vehicle and Equipment names. Missing labels use those plain category names and never expose an internal identifier. Error states are selected from a short status-based recovery set; backend codes, request identifiers, structured error bodies and UUIDs are never rendered.
+
 Nothing in this experience changes an estimate, price, plan, route, schedule, job, vehicle, equipment, maintenance plan, allocation, reimbursement, payroll record or business policy. Provider credentials, provider-specific connections, physical-device evidence, manual assistive-technology evidence and the founder's visual verdict remain outside source-controlled acceptance.

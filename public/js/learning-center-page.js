@@ -84,20 +84,20 @@
         ],
         vehicleTargets: [{ targetId: '44444444-4444-4444-8444-444444444444', name: 'Chip truck 2', manufacturer: 'Ford', model: 'F-550', digest: digest }],
         equipmentTargets: [{ targetId: '55555555-5555-4555-8555-555555555555', name: 'Tracked chipper 1', manufacturer: 'Bandit', model: '21XP', digest: digest }],
-        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', digest: digest }] } : travel ? { sourceKey: 'fleet.demo', activeConsent: true, referenceTotal: 2,
+        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree service job', digest: digest }] } : travel ? { sourceKey: 'fleet.demo', activeConsent: true, referenceTotal: 2,
         references: [
           { referenceKind: 'job', externalReference: 'tree-job-042', sourceRecordCount: 6, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '22222222-2222-4222-8222-222222222222', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'vehicle', externalReference: 'chip-truck-2', sourceRecordCount: 6, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '44444444-4444-4444-8444-444444444444', targetDigest: digest, action: 'link', status: 'matched' } }
         ],
         vehicleTargets: [{ targetId: '44444444-4444-4444-8444-444444444444', name: 'Chip truck 2', manufacturer: 'Ford', model: 'F-550', digest: digest }],
-        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', digest: digest }] } :
+        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree service job', digest: digest }] } :
       { sourceKey: 'crewclock.demo', activeConsent: true, referenceTotal: 3, references: [
           { referenceKind: 'worker', externalReference: 'crew-lead-7', sourceRecordCount: 12, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '11111111-1111-4111-8111-111111111111', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'job', externalReference: 'tree-job-042', sourceRecordCount: 9, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '22222222-2222-4222-8222-222222222222', targetDigest: digest, action: 'link', status: 'matched' } },
           { referenceKind: 'worker', externalReference: 'climber-12', sourceRecordCount: 7, sourceDigest: digest, match: null }
         ],
         workerTargets: [{ targetId: '11111111-1111-4111-8111-111111111111', operationalRole: 'Crew lead', digest: digest }],
-        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', digest: digest }] },
+        jobTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', opportunityId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Tree service job', digest: digest }] },
       health: { sourceKey: 'equipment.demo', activeConsent: true, history: [], total: 1, truncated: false,
         current: { fresh: true, advisoryAvailable: true, outcomes: {
           maintenance: { status: 'recorded', recordCount: 3, completedCount: 2, deferredCount: 1, cancelledCount: 0 },
@@ -164,10 +164,10 @@
     state.center.sources.forEach(function (source) {
       var card = node('button', 'learning-source-card'); card.type = 'button';
       card.setAttribute('aria-pressed', String(source.sourceKind === state.sourceKind && source.sourceKey === state.sourceKey));
-      card.setAttribute('aria-label', contract.label(source.sourceKey) + ', ' + contract.label(source.sourceKind) + ' source');
+      card.setAttribute('aria-label', contract.label(source.sourceKey, 'Company source') + ', ' + contract.label(source.sourceKind, 'Operating') + ' source');
       var kind = node('span', 'learning-source-kind', source.sourceKind === 'asset' ? 'Vehicles · equipment' : (source.sourceKind === 'travel' ? 'Travel · mileage · fuel' : 'Labor · time'));
       card.appendChild(kind);
-      card.appendChild(node('strong', '', contract.label(source.sourceKey)));
+      card.appendChild(node('strong', '', contract.label(source.sourceKey, 'Company source')));
       card.appendChild(node('span', '', source.serviceTotal + ' service ' + (source.serviceTotal === 1 ? 'group' : 'groups') + ' recorded'));
       card.addEventListener('click', function () { selectSource(source.sourceKind, source.sourceKey); }); root.appendChild(card);
     });
@@ -277,24 +277,27 @@
     root.appendChild(metric('Last source update', state.detail.latestSourceUpdatedAt ? new Date(state.detail.latestSourceUpdatedAt).toLocaleString() : 'None'));
   }
   function targetLabel(kind, target) {
-    if (kind === 'worker') return contract.label(target.operationalRole || 'Worker') + ' · ' + String(target.targetId).slice(0, 8);
-    if (kind === 'vehicle') return (target.name || [target.manufacturer, target.model].filter(Boolean).join(' ') || 'Vehicle') + ' · ' + String(target.targetId).slice(0, 8);
-    if (kind === 'equipment') return (target.name || [target.manufacturer, target.model].filter(Boolean).join(' ') || 'Equipment') + ' · ' + String(target.targetId).slice(0, 8);
-    return 'Estimate ' + String(target.targetId).slice(0, 8);
+    if (kind === 'worker') return contract.label(target.operationalRole, 'Worker');
+    if (kind === 'vehicle') return contract.label(target.name || [target.manufacturer, target.model].filter(Boolean).join(' '), 'Vehicle');
+    if (kind === 'equipment') return contract.label(target.name || [target.manufacturer, target.model].filter(Boolean).join(' '), 'Equipment');
+    return contract.label(target.displayLabel || target.jobLabel || target.title || target.serviceType, 'Job');
+  }
+  function referenceLabel(reference) {
+    return contract.label(reference.externalReference, 'Imported ' + contract.label(reference.referenceKind, 'record'));
   }
   function renderMatches() {
     var root = el('learningMatches'); clear(root); var references = state.matches.references || [];
     el('matchesSummary').textContent = references.length ? 'Link imported identities to the current company record they describe. Stale links must be reviewed again.' : (isAsset() ? 'No imported vehicle, equipment or job references are available.' : (isTravel() ? 'No imported vehicle or job references are available.' : 'No imported worker or job references are available.'));
     if (!references.length) { root.appendChild(node('p', 'learning-empty', 'No references to review.')); renderAssetHealth(); return; }
     var wrap = node('div', 'learning-table-wrap'), table = node('table', 'learning-table'), head = node('thead'), row = node('tr');
-    table.appendChild(node('caption', 'learning-visually-hidden', 'Imported reference review for ' + contract.label(state.sourceKey)));
+    table.appendChild(node('caption', 'learning-visually-hidden', 'Imported reference review for ' + contract.label(state.sourceKey, 'company source')));
     ['Type', 'External reference', 'Evidence', 'Status', 'Company record'].forEach(function (label) { var th = node('th', '', label); th.scope = 'col'; row.appendChild(th); }); head.appendChild(row); table.appendChild(head);
     var body = node('tbody');
     references.forEach(function (reference) {
-      var tr = node('tr'); tr.appendChild(node('td', '', contract.label(reference.referenceKind))); tr.appendChild(node('td', '', reference.externalReference));
+      var safeReference = referenceLabel(reference); var tr = node('tr'); tr.appendChild(node('td', '', contract.label(reference.referenceKind, 'Record'))); tr.appendChild(node('td', '', safeReference));
       tr.appendChild(node('td', '', integer(reference.sourceRecordCount) + ' records'));
       var match = reference.match, matchState = match ? match.status : 'unmatched'; var pill = node('span', 'learning-pill', contract.label(matchState)); pill.dataset.state = matchState === 'matched' ? 'current' : (matchState === 'stale' ? 'stale' : 'review'); tr.appendChild(node('td')).appendChild(pill);
-      var cell = node('td'), select = node('select'); select.setAttribute('aria-label', 'Company record for ' + reference.externalReference);
+      var cell = node('td'), select = node('select'); select.setAttribute('aria-label', 'Company record for ' + safeReference);
       select.appendChild(new Option('Not linked', ''));
       var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : (reference.referenceKind === 'vehicle' ? state.matches.vehicleTargets : (reference.referenceKind === 'equipment' ? state.matches.equipmentTargets : state.matches.jobTargets));
       targets.forEach(function (target) { var option = new Option(targetLabel(reference.referenceKind, target), target.targetId); option.dataset.digest = target.digest; select.appendChild(option); });
@@ -333,10 +336,10 @@
     if (!references.some(function (item) { return item.referenceKind === selected.referenceKind && item.externalReference === selected.externalReference; })) selected = references[0];
     state.healthReference = selected;
     var controls = node('div', 'learning-inline'), label = node('label', '', 'Reviewed asset'), select = node('select'); label.htmlFor = 'learningHealthAsset'; select.id = 'learningHealthAsset';
-    references.forEach(function (reference, index) { select.appendChild(new Option(contract.label(reference.referenceKind) + ' · ' + reference.externalReference, String(index))); });
+    references.forEach(function (reference, index) { select.appendChild(new Option(contract.label(reference.referenceKind, 'Asset') + ' · ' + referenceLabel(reference), String(index))); });
     select.value = String(references.indexOf(selected)); select.addEventListener('change', function () { state.healthReference = references[Number(select.value)]; state.health = null; renderAssetHealth(); loadAssetHealth(state.healthReference); }); controls.appendChild(label); controls.appendChild(select); root.appendChild(controls);
     if (!state.health) { root.appendChild(node('p', 'learning-empty', 'Loading the current maintenance and downtime summary.')); return; }
-    var card = node('article', 'learning-calibration-card'), current = state.health.current; card.appendChild(node('h4', '', contract.label(selected.externalReference)));
+    var card = node('article', 'learning-calibration-card'), current = state.health.current; card.appendChild(node('h4', '', referenceLabel(selected)));
     if (!current) card.appendChild(node('p', '', state.consents.health && state.consents.health.active ? 'No summary has been prepared for this reviewed asset.' : 'Allow asset health summaries before preparing one.'));
     else {
       card.appendChild(node('p', '', current.fresh ? 'Current source-backed summary. Every dimension remains separate.' : 'This summary is stale. Refresh current evidence before using it.'));
@@ -421,7 +424,7 @@
   function selectSource(sourceKind, sourceKey, refresh) {
     var generation = ++state.selectionGeneration, travel = sourceKind === 'travel', asset = sourceKind === 'asset'; ++state.calibrationGeneration; ++state.healthGeneration;
     state.sourceKind = sourceKind; state.sourceKey = sourceKey; state.detail = null; state.matches = null; state.calibration = null; state.health = null; state.healthReference = null; state.operations = null;
-    renderSources(); el('learningDetail').hidden = true; status('Loading ' + contract.label(sourceKey) + '.'); el('learningMain').setAttribute('aria-busy', 'true');
+    renderSources(); el('learningDetail').hidden = true; status('Loading ' + contract.label(sourceKey, 'company source') + '.'); el('learningMain').setAttribute('aria-busy', 'true');
     if (demo) {
       var model = demoModel(sourceKind); state.detail = model.source; state.consents = { source: model.sourceConsent, outcome: model.outcomeConsent, health: model.healthConsent, calibration: model.calibrationConsent };
       state.matches = model.matches; state.calibration = model.calibration; state.health = asset ? model.health : null; state.healthReference = asset ? assetHealthReferences()[0] : null; state.operations = model.operations; finishDetail(generation); return Promise.resolve();
@@ -449,7 +452,7 @@
   }
   function finishDetail(generation) {
     if (generation !== state.selectionGeneration || !state.detail || !state.matches || !state.operations) return;
-    el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey) + ' · ' + contract.label(state.sourceKind);
+    el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey, 'Company source') + ' · ' + contract.label(state.sourceKind, 'Operating');
     setPill(el('learningDetailState'), state.detail.activeConsent, !state.detail.activeConsent); renderConsentCards(); renderOperations(); renderEvidence(); renderMatches(); renderCalibration(); renderSummary();
     status(demo ? 'Showing isolated demo records. Controls are read-only.' : 'Learning Center is current.', 'success'); el('learningMain').setAttribute('aria-busy', 'false');
   }
@@ -478,7 +481,12 @@
     });
   }
   function fail(error) {
-    status((error && error.message ? error.message : 'Learning Center could not be loaded.') + (error && error.requestId ? ' Request ' + error.requestId + '.' : ''), 'error');
+    var message = 'Learning Center could not complete that request. Refresh and try again.';
+    if (error && error.status === 401) message = 'Your session ended. Sign in again to continue.';
+    else if (error && error.status === 403) message = 'You do not have permission to change this company record.';
+    else if (error && error.status === 409) message = 'This company record changed. Refresh the Learning Center and try again.';
+    else if (error && Number(error.status) >= 500) message = 'Learning Center is temporarily unavailable. Refresh and try again.';
+    status(message, 'error');
     el('learningRefresh').disabled = false; el('learningMain').setAttribute('aria-busy', 'false');
   }
 

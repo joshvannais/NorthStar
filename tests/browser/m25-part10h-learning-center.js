@@ -21,6 +21,14 @@ const layouts = [
   { name: 'tablet-landscape-light', width: 1024, height: 768, theme: 'light' },
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
 ];
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+const INTERNAL_CODE_PATTERN = /\b(?:M25|INTERNAL|REQUEST)_[A-Z0-9_]+\b/;
+function assertSafeVisible(value) {
+  assert.doesNotMatch(value, UUID_PATTERN);
+  assert.doesNotMatch(value, /\[object Object\]/i);
+  assert.doesNotMatch(value, /request\s+(?:id\b|[0-9a-f]{8}-)/i);
+  assert.doesNotMatch(value, INTERNAL_CODE_PATTERN);
+}
 const ledger = { engine, layouts: [], cases: [], pageErrors: [], externalRequests: [], pass: false };
 let browser;
 let server;
@@ -55,6 +63,9 @@ let fixture;
       assert.equal(await page.locator('#assetHealthPanel').isVisible(), true);
       for (const phrase of ['Maintenance', 'Downtime', 'Condition', 'Availability', 'Not established']) assert.match(await page.locator('#learningAssetHealth').innerText(), new RegExp(phrase, 'i'));
       for (const phrase of ['Machine-hour use', 'Job operating cost', '1.1200×', '1.0700×']) assert.match(await page.locator('#learningCalibration').innerText(), new RegExp(phrase.replace('×', '\xD7'), 'i'));
+      const optionLabels = await page.locator('.learning-table select option').allInnerTexts();
+      for (const label of ['Tree Service Job', 'Chip Truck 2', 'Tracked Chipper 1']) assert.ok(optionLabels.includes(label), JSON.stringify(optionLabels));
+      optionLabels.forEach(assertSafeVisible);
       assert.equal(await page.locator('.learning-table select:not([disabled])').count(), 0);
       assert.equal(await page.locator('#learningConsentCards button:not([disabled])').count(), 0);
       const geometry = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth, busy: document.querySelector('#learningMain').getAttribute('aria-busy'), scrollY }));
@@ -67,9 +78,24 @@ let fixture;
       await page.reload({ waitUntil: 'networkidle' });
       await page.locator('#learningStatus').filter({ hasText: 'Showing isolated demo records' }).waitFor();
       assert.equal(await page.evaluate(() => window.scrollY), 0);
+
+      await context.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name, value]) => ({
+        name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf',
+      })));
+      const errorPage = await context.newPage();
+      errorPage.on('pageerror', error => ledger.pageErrors.push(`${layout.name}-error: ${error.message}`));
+      await errorPage.route('**/api/v1/learning/center', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({
+        error: { message: 'private failure 123e4567-e89b-42d3-a456-426614174000', code: 'M25_PRIVATE_INTERNAL' },
+        code: 'M25_PRIVATE_INTERNAL', requestId: '123e4567-e89b-42d3-a456-426614174000',
+      }) }));
+      await errorPage.goto(`${origin}/dashboard/learning-center`, { waitUntil: 'networkidle' });
+      await errorPage.locator('#learningStatus').filter({ hasText: 'Learning Center is temporarily unavailable. Refresh and try again.' }).waitFor();
+      assertSafeVisible(await errorPage.locator('body').innerText());
+      await errorPage.close();
       await context.close();
     }
-    ledger.cases.push('Five responsive dark and light demo layouts render asset matching, health and calibration without horizontal overflow or demo mutations.');
+    ledger.cases.push('Five responsive dark and light demo layouts render company-facing job, vehicle and equipment labels without identifiers or horizontal overflow.');
+    ledger.cases.push('Every required layout normalizes a structured API failure without rendering backend codes, request identifiers, UUIDs or object serialization text.');
 
     const paidContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
     await paidContext.addInitScript(() => localStorage.setItem('northstar-theme', 'dark'));

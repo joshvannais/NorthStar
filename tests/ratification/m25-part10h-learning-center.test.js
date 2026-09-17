@@ -64,4 +64,16 @@ describe('Mission 25 Part 10 Slice H vehicle and equipment Learning Center', () 
     expect(css).toContain('.learning-native-grid');
     expect(html + page).not.toMatch(/Human approval reason|Reason For This Update|<textarea/i);
   });
+
+  test('renders only company-facing labels and normalized recovery messages', () => {
+    const page = read('public/js/learning-center-page.js');
+    const contract = read('public/js/learning-center-contract.js');
+    expect(page).not.toContain("String(target.targetId).slice(0, 8)");
+    expect(page).not.toContain("error.requestId ? ' Request '");
+    expect(page).toContain("contract.label(target.displayLabel || target.jobLabel || target.title || target.serviceType, 'Job')");
+    expect(page).toContain("contract.label(target.name || [target.manufacturer, target.model].filter(Boolean).join(' '), 'Vehicle')");
+    expect(page).toContain("Learning Center is temporarily unavailable. Refresh and try again.");
+    expect(contract).toContain("UUID.test(textValue)");
+    expect(contract).toContain("return fallback||'Company record'");
+  });
 });

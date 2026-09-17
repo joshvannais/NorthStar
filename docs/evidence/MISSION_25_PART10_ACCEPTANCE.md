@@ -9,6 +9,7 @@ Slice H was built from independently accepted Slice G head `adfc9a9e51d44b90a7d5
 - The isolated demo is fictional and read-only. Browser evidence verifies that it emits no mutation and makes no request outside the local test origin.
 - Deletion recovery blocks source permission while deletion is active. Cancellation and a separate new consent period do not revive deleted detail or prior downstream authority.
 - Response contracts fail closed for the inventory, consent, source detail, exact matches, source operations, asset health and calibration projections.
+- Reference controls expose company-facing labels only, and structured failures resolve to plain recovery text without backend codes, request identifiers, UUIDs or object serialization text.
 - Earlier Slice D-F API-only ratifications remain true for their original scope; their accepted controls are rendered only by final Slice H.
 
 ## Executed evidence
@@ -16,7 +17,7 @@ Slice H was built from independently accepted Slice G head `adfc9a9e51d44b90a7d5
 - Fresh disposable PostgreSQL 17 migration chain `001` through `103`.
 - Mounted Learning Center API: six owner, member-denial, tenant-isolation, category-identity, least-privilege and checksum controls.
 - Material Slice A-G PostgreSQL APIs: native utilization, import, reconciliation, job outcome, asset health, calibration and source operations.
-- Part 10 A-H contract and ratification set: 68 checks across Jest and Node's test runner.
+- Part 10 A-H contract and ratification set: 69 checks across Jest and Node's test runner.
 - Chrome 152 and Playwright WebKit 26.5: paid asset-source creation, deletion recovery, race recovery, reload recovery, no browser errors and no unexpected external requests.
 - Five layouts per browser engine: 360x800 dark, 390x844 light, 768x1024 dark, 1024x768 light and 1440x900 dark. Every checked layout stayed within its viewport.
 

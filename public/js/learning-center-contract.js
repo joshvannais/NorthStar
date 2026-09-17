@@ -1,6 +1,7 @@
 (function(root,factory){'use strict';var value=factory();if(typeof module==='object'&&module.exports)module.exports=value;if(root)root.NorthStarLearningCenterContract=value;})(typeof window!=='undefined'?window:null,function(){
  'use strict';
  var KEY=/^[a-z0-9][a-z0-9._-]{1,63}$/;
+ var UUID=/(?:^|[^0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:$|[^0-9a-f])/i;
  function object(value){return value&&typeof value==='object'&&!Array.isArray(value);}
  function integer(value){return Number.isSafeInteger(value)&&value>=0;}
  function text(value,max){return typeof value==='string'&&value.length>0&&value.length<=max;}
@@ -61,6 +62,10 @@
   ['adapter','retention','deletion'].forEach(function(key){var item=value[key];if(item!==null&&(!object(item)||!integer(item.revision)||item.revision<1||!text(item.action,32)||!digest(item.digest)))throw new Error('Learning source operation is invalid.');});
   return value.deletionComplete===null?Object.assign({},value,{deletionComplete:false}):value;
  }
- function label(value){return String(value||'').replace(/[._-]+/g,' ').replace(/\b[a-z]/g,function(letter){return letter.toUpperCase();});}
+ function label(value,fallback){
+  var textValue=typeof value==='string'?value.trim():'';
+  if(!textValue||UUID.test(textValue)||textValue.indexOf('[object Object]')>=0)return fallback||'Company record';
+  return textValue.slice(0,120).replace(/[._-]+/g,' ').replace(/\b[a-z]/g,function(letter){return letter.toUpperCase();});
+ }
  return Object.freeze({KEY:KEY,center:center,consent:consent,source:source,matches:matches,health:health,calibration:calibration,operations:operations,label:label});
 });

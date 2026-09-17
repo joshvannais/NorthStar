@@ -13,6 +13,11 @@ describe('Mission 25 Learning Center browser contract', () => {
         sourceTotal: 1, sourcesTruncated: false, learningBoundary: 'Advisory owner review remains required.' };
       expect(contract.center(value)).toBe(value);
     }
+    const material = { version: 'm25-learning-center-v4', authority: 'tenant_private_postgresql', evaluatedAt: new Date().toISOString(),
+      nativeLabor: consent, nativeEquipment: consent, nativeMaterial: consent,
+      sources: [{ sourceKind: 'material', sourceKey: 'materials.primary', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false }],
+      sourceTotal: 1, sourcesTruncated: false, learningBoundary: 'Advisory owner review remains required.' };
+    expect(contract.center(material)).toBe(material);
   });
 
   test('rejects duplicate, invalid and over-broad source projections', () => {
@@ -40,6 +45,8 @@ describe('Mission 25 Learning Center browser contract', () => {
       vehicleTargets: [], jobTargets: [] })).toBeTruthy();
     expect(contract.matches({ sourceKey: 'equipment.demo', activeConsent: true, references: [], referenceTotal: 0,
       vehicleTargets: [], equipmentTargets: [], jobTargets: [] })).toBeTruthy();
+    expect(contract.matches({ sourceKey: 'materials.demo', activeConsent: true, references: [], referenceTotal: 0,
+      materialTargets: [], vendorTargets: [], inventoryLocationTargets: [], jobTargets: [] })).toBeTruthy();
     expect(contract.consent({ current: { revision: 1, digest, action: 'grant' }, history: [], total: 1, truncated: false }).active).toBe(true);
     expect(contract.calibration({ sourceKey: 'crewclock.demo', serviceKey: 'tree-service', activeConsent: true,
       history: [], total: 0 })).toBeTruthy();

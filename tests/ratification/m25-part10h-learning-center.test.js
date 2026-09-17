@@ -44,7 +44,7 @@ describe('Mission 25 Part 10 Slice H vehicle and equipment Learning Center', () 
     const docs = read('docs/operations/M25_PART10_LEARNING_CENTER.md');
     expect(page).toContain("deletion.action === 'request'");
     expect(page).toContain("'Cancel deletion first'");
-    expect(page).toContain('Cancel the active deletion request before starting a new source consent period.');
+    expect(page).toContain('Cancel the active deletion request before allowing this source again.');
     expect(docs).toContain('do not revive deleted source detail or earlier learning authority');
   });
 
@@ -70,7 +70,7 @@ describe('Mission 25 Part 10 Slice H vehicle and equipment Learning Center', () 
     const contract = read('public/js/learning-center-contract.js');
     expect(page).not.toContain("String(target.targetId).slice(0, 8)");
     expect(page).not.toContain("error.requestId ? ' Request '");
-    expect(page).toContain('return contract.safeLabel(target.displayLabel);');
+    expect(page).toContain('return contract.safeLabel(target.displayLabel || target.label);');
     expect(page).not.toContain('contract.label(target.displayLabel');
     expect(page).toContain("Learning Center is temporarily unavailable. Refresh and try again.");
     expect(contract).toContain("UUID.test(textValue)");

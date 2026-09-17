@@ -20,7 +20,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Released — Slices A-F accepted |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Released — Slices A-H independently accepted |
-| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | In progress — Slices A-F accepted; Slice G candidate |
+| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | In progress — Slices A-G accepted; Slice H candidate |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Planned |
 | 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | Planned |
@@ -318,10 +318,16 @@ Raw robust statistics are retained. Only an inclusive `0.25` to `4.00` median ma
 
 Slice F passed independent exact-head acceptance at `410c7c5ddaf73a6962c0f2d44e64fb6d1b5a1ff3` with no P0-P3 findings.
 
-## Part 11 Slice G candidate — material source lifecycle and bounded cleanup
+## Part 11 Slice G accepted — material source lifecycle and bounded cleanup
 
 Migration `111_canonical_external_material_import_operations.sql` adds provider-neutral adapter lifecycle, historical and continuous checkpoints, retention policy, deletion requests, legal and audit holds, and bounded resumable cleanup for external material, inventory, purchasing and vendor-cost evidence. It stores no provider credential or provider account identity and does not claim a live connection.
 
 Every lifecycle, retention, deletion and hold change is an immutable revision pinned to the exact prior revision and digest. Cleanup processes at most 100 current records, appends detail-free tombstone revisions and returns an exact resumable checkpoint. A policy change starts a new cleanup chain. A current legal or audit hold blocks cleanup; a deletion request can still revoke source permission immediately, so imports and derived reads stop without destroying held evidence. Source permission cannot be re-granted while deletion remains active. Recovery requires explicit hold release when applicable, deletion cancellation and a new source consent period. None of those actions revives tombstoned evidence or prior reconciliation, observation or calibration authority.
 
 Cleanup remains tenant private, owner or administrator controlled, narrowly scoped, idempotent and observable. It never connects to a provider or changes an estimate, price, material plan, job, purchase, vendor, inventory balance, reservation, schedule or policy. The paid and isolated-demo Learning Center and complete Part 11 acceptance remain Slice H.
+
+## Part 11 Slice H candidate — material Learning Center and Part 11 acceptance
+
+Migration `112_canonical_learning_center_materials.sql` extends the bounded tenant-private Learning Center inventory with native material permission and external material sources while preserving separate labor, travel, vehicle and equipment categories. The owner-facing paid and isolated-demo page exposes source permission, imported evidence, exact reviewed links, independent quantity, cost and planning permissions, material planning suggestions and explicit unavailable reasons.
+
+Material lifecycle controls show connection progress, retention, deletion and active legal or audit holds in plain business language. An irreversible deletion batch requires a separate consequence confirmation. Holds disable cleanup. Deletion cancellation and a new permission period do not revive deleted details, comparisons or earlier planning authority. The surface remains advisory and never changes estimates, material plans, inventory, purchases, vendors, schedules, jobs or policy.

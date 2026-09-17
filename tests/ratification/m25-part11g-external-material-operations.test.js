@@ -42,7 +42,7 @@ describe('Mission 25 Part 11 Slice G material source operations', () => {
   test('documents checkpoints, no credentials, no revival and no operational mutation', () => {
     const roadmap = read('docs/roadmap/MISSION_25_OUTCOME_LEARNING.md');
     const operations = read('docs/operations/M25_PART11_EXTERNAL_MATERIAL_OPERATIONS.md');
-    expect(roadmap).toContain('## Part 11 Slice G candidate — material source lifecycle and bounded cleanup');
+    expect(roadmap).toContain('## Part 11 Slice G accepted — material source lifecycle and bounded cleanup');
     for (const fragment of ['stores no provider credential', 'one to 100', 'tenant-and-source lifecycle order', 'cannot revive tombstoned evidence',
       'never create a provider connection or change an estimate']) expect(operations).toContain(fragment);
   });

@@ -4,7 +4,7 @@
 
 This backend-only slice creates a tenant-private advisory calibration proposal from five to 100 current same-service jobs. Every sampled job must have one fresh Part 11D quantity observation and one fresh Part 11E cost observation for the same exact imported job and adopted Mission 24 material plan. Current external-material source permission, current quantity-outcome consent, current cost-outcome consent and separate calibration consent are all required.
 
-The sample pins the source, quantity and cost consent periods; both immutable observation identities, revisions and digests; their complete current source digests; the normalized service; and the deterministic calculation version and request identity. Each canonical estimate can contribute at most once.
+The sample pins the source, quantity and cost consent periods; both immutable observation identities, revisions and digests; their complete current source digests; the normalized service; and the deterministic calculation version and request identity. Each distinct current pair of canonical estimate and exact imported job contributes one equal-weight job sample. Two separately reviewed imported jobs linked to the same estimate remain two samples; only later revisions of the same exact pair replace that pair's earlier observation.
 
 ## Equal job weight and independent dimensions
 

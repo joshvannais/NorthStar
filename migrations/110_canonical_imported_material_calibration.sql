@@ -417,21 +417,26 @@ BEGIN
   OR rtrim(cost_consent.source_consent_digest)<>rtrim(source_consent.canonical_digest) THEN
   RAISE EXCEPTION 'Current material quantity and cost outcome consent is required'
    USING ERRCODE='P0002',CONSTRAINT='imported_material_calibration_quantity_consent_unavailable'; END IF;
- WITH current_quantity AS(SELECT DISTINCT ON(estimate_id) observation.* FROM public.canonical_external_material_quantity_observations observation
-   WHERE observation.organization_id=org AND observation.source_key=source_value ORDER BY estimate_id,revision DESC,id DESC),
-  current_cost AS(SELECT DISTINCT ON(estimate_id) observation.* FROM public.canonical_external_material_cost_observations observation
-   WHERE observation.organization_id=org AND observation.source_key=source_value ORDER BY estimate_id,revision DESC,id DESC),
-  candidate_ids AS(SELECT estimate_id FROM current_quantity UNION SELECT estimate_id FROM current_cost)
+ WITH current_quantity AS(SELECT DISTINCT ON(estimate_id,external_job_reference) observation.* FROM public.canonical_external_material_quantity_observations observation
+   WHERE observation.organization_id=org AND observation.source_key=source_value
+   ORDER BY estimate_id,external_job_reference,revision DESC,id DESC),
+  current_cost AS(SELECT DISTINCT ON(estimate_id,external_job_reference) observation.* FROM public.canonical_external_material_cost_observations observation
+   WHERE observation.organization_id=org AND observation.source_key=source_value
+   ORDER BY estimate_id,external_job_reference,revision DESC,id DESC),
+  candidate_ids AS(SELECT estimate_id,external_job_reference FROM current_quantity
+   UNION SELECT estimate_id,external_job_reference FROM current_cost)
  SELECT count(*) INTO candidate_total FROM candidate_ids candidate
  JOIN public.canonical_estimates estimate ON estimate.organization_id=org AND estimate.id=candidate.estimate_id
  JOIN public.canonical_opportunities opportunity ON opportunity.organization_id=org AND opportunity.id=estimate.opportunity_id
  WHERE lower(btrim(opportunity.service_type))=service_value;
  IF candidate_total>10000 THEN RAISE EXCEPTION 'Material and purchasing calibration candidate set is too broad for bounded review'
   USING ERRCODE='P0002',CONSTRAINT='imported_material_calibration_sample_scope_too_broad'; END IF;
- FOR item IN WITH current_quantity AS(SELECT DISTINCT ON(estimate_id) observation.* FROM public.canonical_external_material_quantity_observations observation
-   WHERE observation.organization_id=org AND observation.source_key=source_value ORDER BY estimate_id,revision DESC,id DESC),
-  current_cost AS(SELECT DISTINCT ON(estimate_id) observation.* FROM public.canonical_external_material_cost_observations observation
-   WHERE observation.organization_id=org AND observation.source_key=source_value ORDER BY estimate_id,revision DESC,id DESC)
+ FOR item IN WITH current_quantity AS(SELECT DISTINCT ON(estimate_id,external_job_reference) observation.* FROM public.canonical_external_material_quantity_observations observation
+   WHERE observation.organization_id=org AND observation.source_key=source_value
+   ORDER BY estimate_id,external_job_reference,revision DESC,id DESC),
+  current_cost AS(SELECT DISTINCT ON(estimate_id,external_job_reference) observation.* FROM public.canonical_external_material_cost_observations observation
+   WHERE observation.organization_id=org AND observation.source_key=source_value
+   ORDER BY estimate_id,external_job_reference,revision DESC,id DESC)
   SELECT quantity.id quantity_id,quantity.estimate_id,quantity.external_job_reference,quantity.revision quantity_revision,
    quantity.canonical_digest quantity_digest,quantity.source_digest quantity_source_digest,quantity.source_manifest quantity_manifest,
    quantity.result quantity_result,quantity.consent_id quantity_consent_id,plan.inputs quantity_plan_inputs,
@@ -446,7 +451,7 @@ BEGIN
    AND rtrim(plan.digest)=quantity.source_manifest#>>'{materialPlan,digest}'
   JOIN public.canonical_opportunities opportunity ON opportunity.organization_id=org AND opportunity.id=estimate.opportunity_id
   WHERE lower(btrim(opportunity.service_type))=service_value
-  ORDER BY quantity.estimate_id
+  ORDER BY quantity.estimate_id,quantity.external_job_reference
  LOOP
   BEGIN
    quantity_basis:=public.canonical_imported_material_outcome_basis(org,source_value,item.estimate_id,item.external_job_reference,item.quantity_manifest->'bindings');

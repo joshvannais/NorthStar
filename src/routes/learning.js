@@ -33,6 +33,8 @@ const nativeEquipmentContract = require('../learning/nativeEquipmentUtilizationC
 const nativeEquipmentRepository = require('../learning/nativeEquipmentUtilizationRepository');
 const assetImportContract = require('../learning/externalAssetImportContract');
 const assetImportRepository = require('../learning/externalAssetImportRepository');
+const assetOperationsContract = require('../learning/externalAssetOperationsContract');
+const assetOperationsRepository = require('../learning/externalAssetOperationsRepository');
 const assetMatchContract = require('../learning/externalAssetReconciliationContract');
 const assetMatchRepository = require('../learning/externalAssetReconciliationRepository');
 const importedAssetOutcomeContract = require('../learning/importedAssetOutcomeContract');
@@ -67,6 +69,7 @@ function replyError(req, res, error) {
     code.startsWith('M25_IMPORTED_ASSET_HEALTH_') ? 'Imported asset health learning is temporarily unavailable.' :
     code.startsWith('M25_NATIVE_EQUIPMENT_') ? 'Native equipment utilization learning is temporarily unavailable.' :
     code.startsWith('M25_ASSET_MATCH_') ? 'Vehicle and equipment reconciliation is temporarily unavailable.' :
+    code.startsWith('M25_ASSET_IMPORT_OPERATIONS_') ? 'Vehicle and equipment source operations are temporarily unavailable.' :
     code.startsWith('M25_ASSET_IMPORT_') ? 'External vehicle and equipment evidence is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_TRAVEL_CALIBRATION_') ? 'Imported travel calibration is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_CALIBRATION_') ? 'Imported labor calibration is temporarily unavailable.' :
@@ -179,6 +182,36 @@ function createLearningRouter(options = {}) {
         return res.json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
+
+  router.get('/external-asset-sources/:sourceKey/operations', headers, tenantAuth, assetOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const sourceKey = assetImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await assetOperationsRepository.read(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  const assetOperationMutation = (path, normalizer, method) => router.post(path, headers, mutationAuth,
+    assetOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = normalizer(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await method(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  assetOperationMutation('/external-asset-sources/:sourceKey/adapter', assetOperationsContract.normalizeAdapter,
+    assetOperationsRepository.mutateAdapter);
+  assetOperationMutation('/external-asset-sources/:sourceKey/retention', assetOperationsContract.normalizeRetention,
+    assetOperationsRepository.mutateRetention);
+  assetOperationMutation('/external-asset-sources/:sourceKey/deletion', assetOperationsContract.normalizeDeletion,
+    assetOperationsRepository.mutateDeletion);
+  assetOperationMutation('/external-asset-sources/:sourceKey/cleanup', assetOperationsContract.normalizeCleanup,
+    assetOperationsRepository.executeCleanup);
 
   router.get('/external-asset-sources/:sourceKey/matches', headers, tenantAuth, assetOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

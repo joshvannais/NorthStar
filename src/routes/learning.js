@@ -35,6 +35,8 @@ const nativeMaterialContract = require('../learning/nativeMaterialOutcomeContrac
 const nativeMaterialRepository = require('../learning/nativeMaterialOutcomeRepository');
 const materialImportContract = require('../learning/externalMaterialImportContract');
 const materialImportRepository = require('../learning/externalMaterialImportRepository');
+const materialMatchContract = require('../learning/externalMaterialReconciliationContract');
+const materialMatchRepository = require('../learning/externalMaterialReconciliationRepository');
 const assetImportContract = require('../learning/externalAssetImportContract');
 const assetImportRepository = require('../learning/externalAssetImportRepository');
 const assetOperationsContract = require('../learning/externalAssetOperationsContract');
@@ -68,7 +70,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_MATERIAL_IMPORT_') ? 'External material evidence is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_MATERIAL_MATCH_') ? 'Material reference review is temporarily unavailable.' :
+    code.startsWith('M25_MATERIAL_IMPORT_') ? 'External material evidence is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_ASSET_CALIBRATION_') ? 'Vehicle and equipment calibration is temporarily unavailable.' :
     code.startsWith('M25_NATIVE_MATERIAL_') ? 'Material outcome learning is temporarily unavailable.' :
     code.startsWith('M25_IMPORTED_ASSET_OUTCOME_') ? 'Imported vehicle and equipment outcome learning is temporarily unavailable.' :
@@ -225,6 +228,26 @@ function createLearningRouter(options = {}) {
         const sourceKey = materialImportContract.normalizeSourceKey(req.params.sourceKey);
         const data = await materialImportRepository.readSource(poolProvider(), { ...actor(req), sourceKey });
         return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-material-sources/:sourceKey/matches', headers, tenantAuth, materialImportOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const sourceKey = materialImportContract.normalizeSourceKey(req.params.sourceKey);
+        const data = await materialMatchRepository.readMatches(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-material-sources/:sourceKey/matches', headers, mutationAuth, materialImportOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = materialMatchContract.normalizeMatch(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await materialMatchRepository.mutateMatch(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }
     });
 

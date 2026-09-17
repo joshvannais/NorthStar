@@ -270,10 +270,18 @@ Revocation hides saved observations and blocks new ones. A later grant begins a 
 
 Slice A passed independent exact-head acceptance at `82ceac0be5ca4169a5bbd5dcf681a498a3ad5415` with no P0-P3 findings.
 
-## Part 11 Slice B candidate — external material, inventory, purchasing and vendor-cost evidence
+## Part 11 Slice B accepted — external material, inventory, purchasing and vendor-cost evidence
 
 Migration `106_canonical_external_material_import_authority.sql` adds a provider-neutral staging boundary for separately consented inventory balances, inventory movements, purchases and vendor costs. Each immutable normalized record preserves its opaque source and record identity, source version, event and source-update times, IANA time zone, opaque job/material/vendor/location references when applicable, exact quantity and unit, exact amount/currency/valuation when applicable, evidence class and provider evidence digest. Pages are bounded, cursor-pinned and deterministic under replay and concurrency.
 
 The four record classes are validated independently. Inventory balances require an explicit location and may record zero quantity. Movements require a declared movement class and positive quantity. Purchases require positive quantity, vendor identity and an explicit unit or line-total cost. Vendor costs require positive quantity, vendor identity and an explicit valuation and source basis. Unsupported units, currencies, conversions and incomplete values fail closed. Corrections require a higher source version; tombstones retain no business detail.
 
 Source permission is current-period specific. Revocation hides all staged detail and blocks new imports. A later grant starts a new permission period and does not revive records from an earlier period. Runtime receives only guarded owner/administrator entry functions and cannot read protected tables or call validation/projection helpers. This slice does not reconcile opaque references, infer stock or value, calculate outcomes, connect to a provider, or change estimates, jobs, material plans, inventory, purchases, vendors, costs or policy. Reconciliation, quantity/waste observations, cost/vendor/availability observations, calibration, lifecycle cleanup and the Learning Center remain mandatory Slices C-H.
+
+Slice B passed independent exact-head acceptance at `a06968bad9620de8199286d7011bce511ea43a39` with no P0-P3 findings.
+
+## Part 11 Slice C candidate — reviewed external material reconciliation
+
+Migration `107_canonical_external_material_reconciliation.sql` adds explicit owner or administrator links from opaque current-period external job, material, vendor and inventory-location references to exact same-tenant current targets. Job links use canonical estimates. Material and location links require accepted Mission 23 movement evidence under the exact item or location key. Vendor links require the exact supplier label from a currently adopted Mission 24 material-plan line whose reviewed evidence type is `supplier_quote`; this remains company-recorded evidence and is not supplier verification.
+
+Every immutable link pins the current source permission, complete current source-record manifest and complete current target manifest. The service never guesses by name, converts a unit or currency, creates a target, or changes an operational record. Source corrections and tombstones, accepted movement or location changes, estimate or adopted-plan changes, match changes and permission changes make earlier lineage stale or unavailable. Revocation hides and blocks reconciliation. A later permission period revives neither prior imported evidence nor prior matches. Quantity and waste observations, cost, vendor and availability outcomes, calibration, lifecycle cleanup and the rendered Learning Center remain mandatory Slices D-H.

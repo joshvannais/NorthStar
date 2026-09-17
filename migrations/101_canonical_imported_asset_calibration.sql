@@ -38,12 +38,13 @@ CREATE TABLE public.canonical_external_asset_calibration_consents (
 
 CREATE FUNCTION public.canonical_imported_asset_calibration_metric_valid(value JSONB)
 RETURNS BOOLEAN LANGUAGE sql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
- SELECT public.canonical_field_evidence_object_keys_exact(value,ARRAY['status','label','unit','sampleSize',
+ SELECT public.canonical_field_evidence_object_keys_exact(value,ARRAY['status','label','unit','sampleSize','advisoryAvailable',
   'medianActualToPlannedRatio','lowerQuartileRatio','upperQuartileRatio','proposedMultiplier','advisoryCode',
   'advisoryMessage','unavailableReason']) AND value->>'status' IN ('compared','unavailable')
   AND jsonb_typeof(value->'label')='string' AND public.canonical_learning_text_valid(value->>'label',100)
   AND jsonb_typeof(value->'sampleSize')='number' AND (value->>'sampleSize')~'^(0|[1-9][0-9]{0,2})$'
   AND (value->>'sampleSize')::integer BETWEEN 0 AND 100
+  AND jsonb_typeof(value->'advisoryAvailable')='boolean'
   AND CASE WHEN value->>'status'='compared' THEN
    (value->>'sampleSize')::integer BETWEEN 5 AND 100 AND jsonb_typeof(value->'unit')='string'
    AND value->>'unit'~'^[A-Za-z][A-Za-z0-9._-]{0,15}$'
@@ -53,17 +54,23 @@ RETURNS BOOLEAN LANGUAGE sql IMMUTABLE SECURITY DEFINER SET search_path=pg_catal
    AND value->>'lowerQuartileRatio'~'^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$'
    AND jsonb_typeof(value->'upperQuartileRatio')='string'
    AND value->>'upperQuartileRatio'~'^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$'
-   AND jsonb_typeof(value->'proposedMultiplier')='string'
-   AND value->>'proposedMultiplier'=value->>'medianActualToPlannedRatio'
    AND (value->>'upperQuartileRatio')::numeric >= (value->>'lowerQuartileRatio')::numeric
-   AND value->>'advisoryCode' IN ('keep_current_assumption','increase_planned_amount','decrease_planned_amount')
-   AND jsonb_typeof(value->'advisoryMessage')='string'
-   AND public.canonical_learning_text_valid(value->>'advisoryMessage',1000)
-   AND value->'unavailableReason'='null'::jsonb
-   AND value->>'advisoryCode'=CASE WHEN (value->>'medianActualToPlannedRatio')::numeric BETWEEN 0.95 AND 1.05
-    THEN 'keep_current_assumption' WHEN (value->>'medianActualToPlannedRatio')::numeric>1.05
-    THEN 'increase_planned_amount' ELSE 'decrease_planned_amount' END
-  ELSE value->'unit'='null'::jsonb AND value->'medianActualToPlannedRatio'='null'::jsonb
+   AND CASE WHEN value->'advisoryAvailable'='true'::jsonb THEN
+    (value->>'medianActualToPlannedRatio')::numeric BETWEEN 0.25 AND 4.00
+    AND jsonb_typeof(value->'proposedMultiplier')='string'
+    AND value->>'proposedMultiplier'=value->>'medianActualToPlannedRatio'
+    AND value->>'advisoryCode' IN ('keep_current_assumption','increase_planned_amount','decrease_planned_amount')
+    AND jsonb_typeof(value->'advisoryMessage')='string'
+    AND public.canonical_learning_text_valid(value->>'advisoryMessage',1000)
+    AND value->'unavailableReason'='null'::jsonb
+    AND value->>'advisoryCode'=CASE WHEN (value->>'medianActualToPlannedRatio')::numeric BETWEEN 0.95 AND 1.05
+     THEN 'keep_current_assumption' WHEN (value->>'medianActualToPlannedRatio')::numeric>1.05
+     THEN 'increase_planned_amount' ELSE 'decrease_planned_amount' END
+   ELSE ((value->>'medianActualToPlannedRatio')::numeric<0.25 OR (value->>'medianActualToPlannedRatio')::numeric>4.00)
+    AND value->'proposedMultiplier'='null'::jsonb AND value->'advisoryCode'='null'::jsonb
+    AND value->'advisoryMessage'='null'::jsonb AND jsonb_typeof(value->'unavailableReason')='string'
+    AND public.canonical_learning_text_valid(value->>'unavailableReason',1000) END
+  ELSE value->'advisoryAvailable'='false'::jsonb AND value->'unit'='null'::jsonb AND value->'medianActualToPlannedRatio'='null'::jsonb
    AND value->'lowerQuartileRatio'='null'::jsonb AND value->'upperQuartileRatio'='null'::jsonb
    AND value->'proposedMultiplier'='null'::jsonb AND value->'advisoryCode'='null'::jsonb
    AND value->'advisoryMessage'='null'::jsonb AND jsonb_typeof(value->'unavailableReason')='string'
@@ -79,8 +86,8 @@ $$;
 
 CREATE FUNCTION public.canonical_imported_asset_calibration_eligible_count(value JSONB)
 RETURNS INTEGER LANGUAGE sql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
- SELECT (CASE WHEN value#>>'{utilization,status}'='compared' THEN 1 ELSE 0 END
-  + CASE WHEN value#>>'{operatingCost,status}'='compared' THEN 1 ELSE 0 END)::integer
+ SELECT (CASE WHEN value#>'{utilization,advisoryAvailable}'='true'::jsonb THEN 1 ELSE 0 END
+  + CASE WHEN value#>'{operatingCost,advisoryAvailable}'='true'::jsonb THEN 1 ELSE 0 END)::integer
 $$;
 
 CREATE TABLE public.canonical_external_asset_calibration_proposals (
@@ -98,7 +105,7 @@ CREATE TABLE public.canonical_external_asset_calibration_proposals (
  sample_size INTEGER NOT NULL CHECK(sample_size BETWEEN 5 AND 100),
  stale_excluded_count INTEGER NOT NULL CHECK(stale_excluded_count BETWEEN 0 AND 1000000),
  metrics JSONB NOT NULL CHECK(jsonb_typeof(metrics)='object'),
- eligible_metric_count INTEGER NOT NULL CHECK(eligible_metric_count BETWEEN 1 AND 2),
+ eligible_metric_count INTEGER NOT NULL CHECK(eligible_metric_count BETWEEN 0 AND 2),
  evidence_boundary TEXT NOT NULL CHECK(public.canonical_learning_text_valid(evidence_boundary,1500)),
  adoption_boundary TEXT NOT NULL CHECK(public.canonical_learning_text_valid(adoption_boundary,1000)),
  actor_user_id UUID NOT NULL,
@@ -270,19 +277,25 @@ BEGIN
   round(percentile_cont(0.75) WITHIN GROUP(ORDER BY ratio)::numeric,4)
  INTO sample_count,unit_count,unit_value,median_value,lower_value,upper_value FROM eligible;
  IF sample_count<5 THEN RETURN jsonb_build_object('status','unavailable','label',label_value,'unit',NULL,
-  'sampleSize',sample_count,'medianActualToPlannedRatio',NULL,'lowerQuartileRatio',NULL,'upperQuartileRatio',NULL,
+  'sampleSize',sample_count,'advisoryAvailable',FALSE,'medianActualToPlannedRatio',NULL,'lowerQuartileRatio',NULL,'upperQuartileRatio',NULL,
   'proposedMultiplier',NULL,'advisoryCode',NULL,'advisoryMessage',NULL,
   'unavailableReason','At least five current outcomes with this comparable dimension are required.'); END IF;
  IF unit_count<>1 THEN RETURN jsonb_build_object('status','unavailable','label',label_value,'unit',NULL,
-  'sampleSize',sample_count,'medianActualToPlannedRatio',NULL,'lowerQuartileRatio',NULL,'upperQuartileRatio',NULL,
+  'sampleSize',sample_count,'advisoryAvailable',FALSE,'medianActualToPlannedRatio',NULL,'lowerQuartileRatio',NULL,'upperQuartileRatio',NULL,
   'proposedMultiplier',NULL,'advisoryCode',NULL,'advisoryMessage',NULL,
   'unavailableReason','Current outcomes use incompatible units or currencies for this dimension.'); END IF;
+ IF median_value<0.25 OR median_value>4.00 THEN
+  RETURN jsonb_build_object('status','compared','label',label_value,'unit',unit_value,'sampleSize',sample_count,
+   'advisoryAvailable',FALSE,'medianActualToPlannedRatio',median_value::text,'lowerQuartileRatio',lower_value::text,
+   'upperQuartileRatio',upper_value::text,'proposedMultiplier',NULL,'advisoryCode',NULL,'advisoryMessage',NULL,
+   'unavailableReason','The observed median is outside the 0.25 to 4.00 advisory multiplier range. Review the adopted baseline and source evidence before changing this assumption.');
+ END IF;
  code_value:=CASE WHEN median_value BETWEEN 0.95 AND 1.05 THEN 'keep_current_assumption'
   WHEN median_value>1.05 THEN 'increase_planned_amount' ELSE 'decrease_planned_amount' END;
  message_value:=CASE code_value WHEN 'keep_current_assumption' THEN 'The median actual-to-planned ratio is within 5% of the current assumption.'
   WHEN 'increase_planned_amount' THEN 'The median actual amount is higher than the adopted plans in this reviewed sample.'
   ELSE 'The median actual amount is lower than the adopted plans in this reviewed sample.' END;
- RETURN jsonb_build_object('status','compared','label',label_value,'unit',unit_value,'sampleSize',sample_count,
+ RETURN jsonb_build_object('status','compared','label',label_value,'unit',unit_value,'sampleSize',sample_count,'advisoryAvailable',TRUE,
   'medianActualToPlannedRatio',median_value::text,'lowerQuartileRatio',lower_value::text,
   'upperQuartileRatio',upper_value::text,'proposedMultiplier',median_value::text,'advisoryCode',code_value,
   'advisoryMessage',message_value,'unavailableReason',NULL);
@@ -339,8 +352,6 @@ BEGIN
  metrics_value:=jsonb_build_object('utilization',public.canonical_imported_asset_calibration_metric(observations,'utilization'),
   'operatingCost',public.canonical_imported_asset_calibration_metric(observations,'operatingCost'));
  eligible_count:=public.canonical_imported_asset_calibration_eligible_count(metrics_value);
- IF eligible_count=0 THEN RAISE EXCEPTION 'At least one vehicle or equipment dimension needs five comparable current outcomes'
-  USING ERRCODE='P0002',CONSTRAINT='imported_asset_calibration_dimension_sample_insufficient'; END IF;
  manifest:=jsonb_build_object('sourceKey',source_value,'serviceKey',service_value,
   'sourceConsent',jsonb_build_object('id',source_consent.id,'revision',source_consent.revision,'digest',rtrim(source_consent.canonical_digest)),
   'outcomeConsent',jsonb_build_object('id',outcome_consent.id,'revision',outcome_consent.revision,'digest',rtrim(outcome_consent.canonical_digest)),
@@ -348,14 +359,14 @@ BEGIN
  digest_value:=public.canonical_completion_digest(manifest);
  RETURN jsonb_build_object('sampleManifest',manifest,'sampleDigest',digest_value,'sampleSize',jsonb_array_length(observations),
   'staleExcludedCount',candidate_total-fresh_total,'metrics',metrics_value,'eligibleMetricCount',eligible_count,
-  'evidenceBoundary','Utilization and operating cost are calibrated independently from five to 100 current reviewed same-service outcomes with one exact unit or currency. Unavailable and incompatible dimensions are excluded, not estimated. Maintenance, downtime, condition and availability remain unavailable because no adopted comparison baseline exists.',
+  'evidenceBoundary','Utilization and operating cost are calibrated independently from five to 100 current reviewed same-service outcomes with one exact unit or currency. Raw median and quartile statistics are retained. A proposed multiplier is available only when the median is within the reciprocal 0.25 to 4.00 review-step range; an outlier keeps its statistics but withholds advice. Unavailable and incompatible dimensions are excluded, not estimated. Maintenance, downtime, condition and availability remain unavailable because no adopted comparison baseline exists.',
   'adoptionBoundary','Review the cited jobs before changing future vehicle or equipment assumptions. No estimate, price, schedule, job, vehicle, equipment, allocation, reimbursement, payroll record or policy was changed.');
 END $$;
 
 CREATE FUNCTION public.canonical_imported_asset_calibration_masked_metrics(value JSONB)
 RETURNS JSONB LANGUAGE sql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
- SELECT jsonb_build_object('utilization',(value->'utilization')||jsonb_build_object('proposedMultiplier',NULL,'advisoryCode',NULL,'advisoryMessage',NULL),
-  'operatingCost',(value->'operatingCost')||jsonb_build_object('proposedMultiplier',NULL,'advisoryCode',NULL,'advisoryMessage',NULL))
+ SELECT jsonb_build_object('utilization',(value->'utilization')||jsonb_build_object('advisoryAvailable',FALSE,'proposedMultiplier',NULL,'advisoryCode',NULL,'advisoryMessage',NULL),
+  'operatingCost',(value->'operatingCost')||jsonb_build_object('advisoryAvailable',FALSE,'proposedMultiplier',NULL,'advisoryCode',NULL,'advisoryMessage',NULL))
 $$;
 
 CREATE FUNCTION public.canonical_imported_asset_calibration_projection(value public.canonical_external_asset_calibration_proposals)
@@ -430,7 +441,7 @@ BEGIN
      AND consent_row.action='grant';
    EXCEPTION WHEN SQLSTATE 'P0002' THEN basis:=NULL;replay_fresh:=FALSE; END;
    RETURN jsonb_build_object('proposal',public.canonical_imported_asset_calibration_projection(replay_row)||jsonb_build_object(
-     'fresh',replay_fresh,'advisoryAvailable',replay_fresh,
+     'fresh',replay_fresh,'advisoryAvailable',replay_fresh AND replay_row.eligible_metric_count>0,
      'metrics',CASE WHEN replay_fresh THEN replay_row.metrics
       ELSE public.canonical_imported_asset_calibration_masked_metrics(replay_row.metrics) END),
     'replayed',TRUE);
@@ -514,7 +525,7 @@ BEGIN
   THEN public.canonical_imported_asset_calibration_hidden_projection(item)
   ELSE public.canonical_imported_asset_calibration_projection(item)||jsonb_build_object(
    'fresh',rtrim(item.sample_digest)=COALESCE(basis->>'sampleDigest',''),
-   'advisoryAvailable',rtrim(item.sample_digest)=COALESCE(basis->>'sampleDigest',''),
+   'advisoryAvailable',rtrim(item.sample_digest)=COALESCE(basis->>'sampleDigest','') AND item.eligible_metric_count>0,
    'metrics',CASE WHEN rtrim(item.sample_digest)=COALESCE(basis->>'sampleDigest','') THEN item.metrics
     ELSE public.canonical_imported_asset_calibration_masked_metrics(item.metrics) END) END
   ORDER BY created_at DESC,id DESC),'[]'::jsonb) INTO history
@@ -524,7 +535,7 @@ BEGIN
   'consent',public.canonical_imported_asset_calibration_consent_projection(consent_row),
   'current',CASE WHEN current_row.consent_id<>consent_row.id THEN public.canonical_imported_asset_calibration_hidden_projection(current_row)
    ELSE public.canonical_imported_asset_calibration_projection(current_row)||jsonb_build_object('fresh',fresh,
-    'advisoryAvailable',fresh,'metrics',CASE WHEN fresh THEN current_row.metrics
+    'advisoryAvailable',fresh AND current_row.eligible_metric_count>0,'metrics',CASE WHEN fresh THEN current_row.metrics
      ELSE public.canonical_imported_asset_calibration_masked_metrics(current_row.metrics) END) END,
   'history',history,'total',total,'truncated',total>20,'refreshRequired',NOT fresh);
 END $$;

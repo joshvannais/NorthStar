@@ -11,7 +11,7 @@ describe('Mission 25 Part 13H Learning Center projection', () => {
   test('returns a bounded tenant-private completed-job service inventory', async () => {
     for (const actorName of ['owner','admin']) {
       const response = await request(fixture.app).get('/api/v1/learning/center').set(fixture.actors[actorName].session.headers);
-      expect(response.status).toBe(200); expect(response.body.data).toMatchObject({ version:'m25-learning-center-v6', outcomeServiceKeys:[], outcomeServiceTotal:0, outcomeServicesTruncated:false });
+      expect(response.status).toBe(200); expect(response.body.data).toMatchObject({ version:'m25-learning-center-v6', outcomeServiceKeys:[], outcomeServiceTotal:0, outcomeServicesTruncated:false, outcomeServices:[] });
       expect(() => contract.center(response.body.data)).not.toThrow();
     }
     const other = await request(fixture.app).get('/api/v1/learning/center').set(fixture.actors.otherOwner.session.headers);

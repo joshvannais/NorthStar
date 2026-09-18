@@ -2,6 +2,7 @@
  'use strict';
  var KEY=/^[a-z0-9][a-z0-9._-]{1,63}$/;
  var UUID=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+ var UUID_EXACT=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
  var OBJECT_MARKER=/object[\s:_-]*object/i;
  var CONTACT_NUMBER=/(?:^|[^0-9])(?:\+?[0-9][() ./-]*){10,15}(?:$|[^0-9])/;
  var INTERNAL_HEX=/(?:^|[^0-9a-f])[0-9a-f]{32,}(?:$|[^0-9a-f])/i;
@@ -30,7 +31,11 @@
     !text(value.evaluatedAt,64)||!Array.isArray(value.sources)||!integer(value.sourceTotal)||value.sourceTotal<value.sources.length||
     typeof value.sourcesTruncated!=='boolean'||!text(value.learningBoundary,1000)||!object(value.nativeLabor)||!object(value.nativeEquipment)||
     ((value.version==='m25-learning-center-v4'||value.version==='m25-learning-center-v5'||value.version==='m25-learning-center-v6')&&!object(value.nativeMaterial))||
-    (value.version==='m25-learning-center-v6'&&(!Array.isArray(value.outcomeServiceKeys)||!integer(value.outcomeServiceTotal)||value.outcomeServiceTotal<value.outcomeServiceKeys.length||typeof value.outcomeServicesTruncated!=='boolean'||value.outcomeServiceKeys.length>50||value.outcomeServiceKeys.some(function(service){return!KEY.test(service);})||new Set(value.outcomeServiceKeys).size!==value.outcomeServiceKeys.length)))throw new Error('Learning Center response is invalid.');
+    (value.version==='m25-learning-center-v6'&&(!Array.isArray(value.outcomeServiceKeys)||!Array.isArray(value.outcomeServices)||!integer(value.outcomeServiceTotal)||value.outcomeServiceTotal<value.outcomeServiceKeys.length||typeof value.outcomeServicesTruncated!=='boolean'||value.outcomeServiceKeys.length>50||value.outcomeServices.length!==value.outcomeServiceKeys.length||value.outcomeServiceKeys.some(function(service){return!KEY.test(service);})||new Set(value.outcomeServiceKeys).size!==value.outcomeServiceKeys.length)))throw new Error('Learning Center response is invalid.');
+  if(value.version==='m25-learning-center-v6')value.outcomeServices.forEach(function(service,index){
+   if(!object(service)||service.serviceKey!==value.outcomeServiceKeys[index]||!KEY.test(service.serviceKey)||!integer(service.eligibleSummaryTotal)||!integer(service.selectableSummaryTotal)||!integer(service.ambiguousSummaryTotal)||service.eligibleSummaryTotal!==service.selectableSummaryTotal+service.ambiguousSummaryTotal||!Array.isArray(service.summaries)||service.summaries.length!==Math.min(service.selectableSummaryTotal,100)||typeof service.summariesTruncated!=='boolean'||service.summariesTruncated!==(service.selectableSummaryTotal>100))throw new Error('Completed job summary response is invalid.');
+   var summarySeen=Object.create(null),labelSeen=Object.create(null);service.summaries.forEach(function(summary){if(!object(summary)||!UUID_EXACT.test(String(summary.summaryId||''))||!safeLabel(summary.displayLabel)||summarySeen[summary.summaryId]||labelSeen[summary.displayLabel])throw new Error('Completed job summary response is invalid.');summarySeen[summary.summaryId]=true;labelSeen[summary.displayLabel]=true;});
+  });
   var seen=Object.create(null);
   value.sources.forEach(function(source){
    if(!object(source)||['labor','travel','asset','material','crm_field_service','project_change_order','communication','financial'].indexOf(source.sourceKind)<0||!KEY.test(source.sourceKey)||!Array.isArray(source.serviceKeys)||

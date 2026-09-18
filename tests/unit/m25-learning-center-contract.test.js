@@ -48,6 +48,16 @@ describe('Mission 25 Learning Center browser contract', () => {
     expect(contract.matches({ sourceKey: 'materials.demo', activeConsent: true, references: [], referenceTotal: 0,
       materialTargets: [], vendorTargets: [], inventoryLocationTargets: [], jobTargets: [] })).toBeTruthy();
     expect(contract.consent({ current: { revision: 1, digest, action: 'grant' }, history: [], total: 1, truncated: false }).active).toBe(true);
+    expect(contract.consent({ current: null, crmSourceKey: 'crm.primary', communicationSourceKey: 'messages.primary',
+      sourcePermissionsAvailable: true, consumptionBoundary: 'Customer outcome learning records advice only.' })).toEqual(expect.objectContaining({
+        active: false, current: null, history: [], total: 0, truncated: false,
+      }));
+    expect(contract.consent({ current: { revision:1, digest, action:'grant', sourcePermissionsCurrent:true }, crmSourceKey:'crm.primary',
+      communicationSourceKey:'messages.primary', sourcePermissionsAvailable:true })).toEqual(expect.objectContaining({ active:true, total:1 }));
+    expect(contract.consent({ current: { revision:1, digest, action:'grant', sourcePermissionsCurrent:false }, crmSourceKey:'crm.primary',
+      communicationSourceKey:'messages.primary', sourcePermissionsAvailable:true })).toEqual(expect.objectContaining({ active:false }));
+    expect(contract.consent({ current: null, crmSourceKey: 'Invalid source', communicationSourceKey: 'messages.primary',
+      sourcePermissionsAvailable: true })).toBeNull();
     expect(contract.calibration({ sourceKey: 'crewclock.demo', serviceKey: 'tree-service', activeConsent: true,
       history: [], total: 0 })).toBeTruthy();
     expect(contract.health({ sourceKey: 'equipment.demo', activeConsent: true, history: [], total: 1,

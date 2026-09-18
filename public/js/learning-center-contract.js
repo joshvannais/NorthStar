@@ -12,9 +12,16 @@
  function integer(value){return Number.isSafeInteger(value)&&value>=0;}
  function text(value,max){return typeof value==='string'&&value.length>0&&value.length<=max;}
  function digest(value){return typeof value==='string'&&/^[0-9a-f]{64}$/.test(value);}
+ function consentCurrent(value){return object(value)&&integer(value.revision)&&value.revision>=1&&digest(value.digest)&&['grant','revoke'].indexOf(value.action)>=0;}
  function consent(value){
+  if(object(value)&&(value.current===null||consentCurrent(value.current))&&KEY.test(value.crmSourceKey)&&KEY.test(value.communicationSourceKey)&&
+    typeof value.sourcePermissionsAvailable==='boolean'&&(value.consumptionBoundary===undefined||text(value.consumptionBoundary,1000))&&
+    value.history===undefined&&value.total===undefined&&value.truncated===undefined){
+   if(value.current!==null&&typeof value.current.sourcePermissionsCurrent!=='boolean')return null;
+   return Object.assign({},value,{active:Boolean(value.sourcePermissionsAvailable&&value.current&&value.current.action==='grant'&&value.current.sourcePermissionsCurrent),history:[],total:value.current?1:0,truncated:false});
+  }
   if(!object(value)||!Array.isArray(value.history)||!integer(value.total)||value.total<value.history.length)return null;
-  if(value.current!==null&&(!object(value.current)||!integer(value.current.revision)||value.current.revision<1||!digest(value.current.digest)||['grant','revoke'].indexOf(value.current.action)<0))return null;
+  if(value.current!==null&&!consentCurrent(value.current))return null;
   if(typeof value.active==='boolean')return value;
   return Object.assign({},value,{active:Boolean(value.current&&value.current.action==='grant')});
  }

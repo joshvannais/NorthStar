@@ -68,6 +68,56 @@ let browser, server, fixture;
       await paid.close();
     }
     ledger.cases.push('Five paid owner layouts each create a tenant-private financial source, expose three separate permissions, and block cleanup while a legal hold is active.');
+
+    const pairing = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    await pairing.addInitScript(() => localStorage.setItem('northstar-theme', 'dark'));
+    await pairing.addCookies(Object.entries(fixture.actors.owner.session.cookies).map(([name,value]) => ({ name,value,url:origin,sameSite:'Lax',httpOnly:name!=='northstar_csrf' })));
+    await pairing.route('**/*', route => { const url = new URL(route.request().url()); if (url.origin !== origin) { ledger.externalRequests.push(url.href); return route.abort(); } return route.continue(); });
+    const pairPage = await pairing.newPage(), pairRequests = [];
+    pairPage.setDefaultTimeout(20000); pairPage.on('pageerror', error => ledger.pageErrors.push(`paid-pairing: ${error.message}`));
+    pairPage.on('request', request => { if (request.url().includes('/api/v1/learning/')) pairRequests.push(`${request.method()} ${new URL(request.url()).pathname}${new URL(request.url()).search}`); });
+    await pairPage.goto(`${origin}/dashboard/learning-center`, { waitUntil: 'networkidle' });
+    await pairPage.locator('#learningStatus').filter({ hasText: /Learning Center is (ready|current)/ }).waitFor();
+    async function addPairSource(kind, key, expectedRoute) {
+      await pairPage.locator('#learningSourceKind').selectOption(kind); await pairPage.locator('#learningSourceKey').fill(key);
+      const response = pairPage.waitForResponse(value => value.url().endsWith(expectedRoute) && value.request().method() === 'POST');
+      await pairPage.locator('#learningSourceAdd').click(); assert.equal((await response).status(), 201);
+      await pairPage.locator('#learningStatus').filter({ hasText: 'Learning Center is current.' }).waitFor();
+    }
+    await addPairSource('crm_field_service', 'crm.pair', '/external-crm-field-service-sources/crm.pair/consent');
+    await pairPage.locator('#learningDetailTitle').filter({ hasText: /Crm Pair.*CRM and field service/i }).waitFor();
+    assert.equal(await pairPage.locator('.learning-consent-card').filter({ hasText: 'Customer outcome comparisons' }).getByRole('button', { name: 'Add paired source first' }).isDisabled(), true);
+    assert.doesNotMatch(await pairPage.locator('#learningStatus').innerText(), /could not complete/i);
+
+    await addPairSource('communication', 'chat.one', '/external-communication-sources/chat.one/consent');
+    await pairPage.locator('#learningDetailTitle').filter({ hasText: /Chat One.*Customer communications/i }).waitFor();
+    const outcomeCard = pairPage.locator('.learning-consent-card').filter({ hasText: 'Customer outcome comparisons' });
+    const outcomeGrant = pairPage.waitForResponse(value => new URL(value.url()).pathname.endsWith('/external-customer-outcome-sources/crm.pair/chat.one/consent') && value.request().method() === 'POST');
+    await outcomeCard.getByRole('button', { name: 'Allow' }).click(); assert.equal((await outcomeGrant).status(), 201);
+    await pairPage.locator('#learningStatus').filter({ hasText: 'Learning Center is current.' }).waitFor();
+    const calibrationCard = pairPage.locator('.learning-consent-card').filter({ hasText: 'Planning suggestions' });
+    const calibrationGrant = pairPage.waitForResponse(value => {
+      const url = new URL(value.url()); return url.pathname.endsWith('/external-business-calibration/customer/crm.pair/consent') && url.searchParams.get('secondarySourceKey') === 'chat.one' && value.request().method() === 'POST';
+    });
+    await calibrationCard.getByRole('button', { name: 'Allow' }).click(); assert.equal((await calibrationGrant).status(), 201);
+    await pairPage.locator('#learningStatus').filter({ hasText: 'Learning Center is current.' }).waitFor();
+    assert.equal(await outcomeCard.getByRole('button', { name: 'Pause' }).count(), 1); assert.equal(await calibrationCard.getByRole('button', { name: 'Pause' }).count(), 1);
+    assert.doesNotMatch(await pairPage.locator('body').innerText(), forbidden); assert.doesNotMatch(await pairPage.locator('#learningStatus').innerText(), /could not complete/i);
+
+    await addPairSource('communication', 'chat.two', '/external-communication-sources/chat.two/consent');
+    await pairPage.getByRole('button', { name: /Crm Pair, CRM and field service source/i }).click();
+    const pairSelect = pairPage.getByLabel('Customer communication source'); await pairSelect.waitFor();
+    assert.equal(await pairSelect.inputValue(), ''); assert.equal(await pairPage.getByRole('button', { name: 'Choose paired source first' }).count(), 2);
+    await pairSelect.selectOption('chat.one'); await pairPage.locator('#learningStatus').filter({ hasText: 'Learning Center is current.' }).waitFor();
+    assert.match(pairRequests.join('\n'), /GET \/api\/v1\/learning\/external-customer-outcome-sources\/crm\.pair\/chat\.one\/consent/);
+    assert.match(pairRequests.join('\n'), /GET \/api\/v1\/learning\/external-business-calibration\/customer\/crm\.pair\/consent\?secondarySourceKey=chat\.one/);
+    await pairPage.reload({ waitUntil: 'networkidle' }); await pairPage.locator('#learningStatus').filter({ hasText: /Learning Center is (ready|current)/ }).waitFor();
+    await pairPage.getByRole('button', { name: /Crm Pair, CRM and field service source/i }).click(); await pairPage.getByLabel('Customer communication source').waitFor();
+    assert.equal(await pairPage.getByLabel('Customer communication source').inputValue(), '');
+    assert.doesNotMatch(await pairPage.locator('#learningStatus').innerText(), /could not complete/i);
+    const pairGeometry = await pairPage.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth })); assert.ok(pairGeometry.scrollWidth <= pairGeometry.width, JSON.stringify(pairGeometry));
+    await pairPage.screenshot({ path: path.join(captureRoot, `paid-${engine}-customer-source-pairing.png`), fullPage: true }); await pairing.close();
+    ledger.cases.push('Paid owner pairing stays unavailable with a missing or ambiguous partner, grants the first exact customer outcome and planning permissions, and requires the owner to choose among multiple customer communication sources.');
     assert.deepEqual(ledger.pageErrors, []); assert.deepEqual(ledger.externalRequests, []); ledger.pass = true;
   } catch (error) { ledger.error = error.stack; process.exitCode = 1; }
   finally { fs.writeFileSync(output, JSON.stringify(ledger,null,2)); await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); await fixture?.cleanup(); }

@@ -28,6 +28,17 @@ describe('Mission 25 Part 12K business-system Learning Center API', () => {
       const response = await request(fixture.app).get('/api/v1/learning/center').set(fixture.actors[actorName].session.headers);
       expect(response.status).toBe(200); expect(response.body.data.version).toBe('m25-learning-center-v5'); expect(response.body.data.sourceTotal).toBe(4);
     }
+    const pairRoot = '/api/v1/learning/external-customer-outcome-sources/crm.api/conversations.api';
+    let pairConsent = await request(fixture.app).get(`${pairRoot}/consent`).set(fixture.actors.owner.session.headers);
+    expect(pairConsent.status).toBe(200); expect(pairConsent.body.data).toEqual(expect.objectContaining({ current:null, sourcePermissionsAvailable:true }));
+    expect(contract.consent(pairConsent.body.data)).toEqual(expect.objectContaining({ active:false, history:[], total:0, truncated:false }));
+    pairConsent = await request(fixture.app).post(`${pairRoot}/consent`).set(fixture.actors.owner.session.headers)
+      .set('Idempotency-Key', crypto.randomUUID()).send({ action:'grant', expectedRevision:0, expectedDigest:'none',
+        reason:'Owner enabled the exact reviewed customer source pair.', confirmed:true, confirmationVersion:'m25-external-customer-outcome-consent-v1' });
+    expect(pairConsent.status).toBe(201);
+    const calibrationConsent = await request(fixture.app).get('/api/v1/learning/external-business-calibration/customer/crm.api/consent')
+      .query({ secondarySourceKey:'conversations.api' }).set(fixture.actors.owner.session.headers);
+    expect(calibrationConsent.status).toBe(200); expect(contract.consent(calibrationConsent.body.data)).toEqual(expect.objectContaining({ active:false }));
     const other = await request(fixture.app).get('/api/v1/learning/center').set(fixture.actors.otherOwner.session.headers);
     expect(other.status).toBe(200); expect(other.body.data.sources).toEqual([]);
     for (const [endpoint, validator] of [

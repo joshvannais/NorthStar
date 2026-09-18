@@ -49,6 +49,8 @@ const customerOutcomeContract = require('../learning/externalCustomerOutcomeCont
 const customerOutcomeRepository = require('../learning/externalCustomerOutcomeRepository');
 const projectOutcomeContract = require('../learning/externalProjectOutcomeContract');
 const projectOutcomeRepository = require('../learning/externalProjectOutcomeRepository');
+const financialOutcomeContract = require('../learning/externalFinancialOutcomeContract');
+const financialOutcomeRepository = require('../learning/externalFinancialOutcomeRepository');
 const materialOperationsContract = require('../learning/externalMaterialOperationsContract');
 const materialOperationsRepository = require('../learning/externalMaterialOperationsRepository');
 const materialMatchContract = require('../learning/externalMaterialReconciliationContract');
@@ -92,7 +94,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_EXTERNAL_PROJECT_OUTCOME_') ? 'Project outcome learning is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_EXTERNAL_FINANCIAL_OUTCOME_') ? 'Financial outcome learning is temporarily unavailable.' :
+    code.startsWith('M25_EXTERNAL_PROJECT_OUTCOME_') ? 'Project outcome learning is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_CUSTOMER_OUTCOME_') ? 'Customer outcome learning is temporarily unavailable.' :
     code.startsWith('M25_FINANCIAL_IMPORT_') ? 'External financial evidence is temporarily unavailable.' :
     code.startsWith('M25_BUSINESS_MATCH_') ? 'External business reference review is temporarily unavailable.' :
@@ -171,6 +174,9 @@ function createLearningRouter(options = {}) {
   const projectOutcomeOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('Project outcome learning is restricted to current owners and administrators.'),
       { code: 'M25_EXTERNAL_PROJECT_OUTCOME_FORBIDDEN', status: 403 }));
+  const financialOutcomeOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
+    Object.assign(new Error('Financial outcome learning is restricted to current owners and administrators.'),
+      { code: 'M25_EXTERNAL_FINANCIAL_OUTCOME_FORBIDDEN', status: 403 }));
 
   router.get('/external-customer-outcome-sources/:crmSourceKey/:communicationSourceKey/consent', headers, tenantAuth, customerOutcomeOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {
@@ -245,6 +251,45 @@ function createLearningRouter(options = {}) {
         const normalized = projectOutcomeContract.normalizeObservation(req.params.sourceKey, req.body);
         const { sourceKey, ...input } = normalized;
         const data = await projectOutcomeRepository.observe(poolProvider(), { ...actor(req), sourceKey, ...input,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/external-financial-outcome-sources/:sourceKey/consent', headers, tenantAuth, financialOutcomeOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const { sourceKey } = financialOutcomeContract.normalizeSource(req.params.sourceKey);
+        const data = await financialOutcomeRepository.readConsent(poolProvider(), { ...actor(req), sourceKey });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-financial-outcome-sources/:sourceKey/consent', headers, mutationAuth, financialOutcomeOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = financialOutcomeContract.normalizeConsent(req.params.sourceKey, req.body);
+        const { sourceKey, ...body } = normalized;
+        const data = await financialOutcomeRepository.mutateConsent(poolProvider(), { ...actor(req), sourceKey, body,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.get('/external-financial-outcome-sources/:sourceKey/outcomes/:estimateId', headers, tenantAuth, financialOutcomeOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const normalized = financialOutcomeContract.normalizeRead(req.params.sourceKey, req.params.estimateId);
+        const data = await financialOutcomeRepository.readOutcome(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-financial-outcome-sources/:sourceKey/outcomes', headers, mutationAuth, financialOutcomeOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = financialOutcomeContract.normalizeObservation(req.params.sourceKey, req.body);
+        const { sourceKey, ...input } = normalized;
+        const data = await financialOutcomeRepository.observe(poolProvider(), { ...actor(req), sourceKey, ...input,
           csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });

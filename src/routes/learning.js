@@ -51,6 +51,8 @@ const projectOutcomeContract = require('../learning/externalProjectOutcomeContra
 const projectOutcomeRepository = require('../learning/externalProjectOutcomeRepository');
 const financialOutcomeContract = require('../learning/externalFinancialOutcomeContract');
 const financialOutcomeRepository = require('../learning/externalFinancialOutcomeRepository');
+const businessCalibrationContract = require('../learning/externalBusinessCalibrationContract');
+const businessCalibrationRepository = require('../learning/externalBusinessCalibrationRepository');
 const materialOperationsContract = require('../learning/externalMaterialOperationsContract');
 const materialOperationsRepository = require('../learning/externalMaterialOperationsRepository');
 const materialMatchContract = require('../learning/externalMaterialReconciliationContract');
@@ -94,7 +96,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_EXTERNAL_FINANCIAL_OUTCOME_') ? 'Financial outcome learning is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_EXTERNAL_BUSINESS_CALIBRATION_') ? 'Business calibration is temporarily unavailable.' :
+    code.startsWith('M25_EXTERNAL_FINANCIAL_OUTCOME_') ? 'Financial outcome learning is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_PROJECT_OUTCOME_') ? 'Project outcome learning is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_CUSTOMER_OUTCOME_') ? 'Customer outcome learning is temporarily unavailable.' :
     code.startsWith('M25_FINANCIAL_IMPORT_') ? 'External financial evidence is temporarily unavailable.' :
@@ -177,6 +180,46 @@ function createLearningRouter(options = {}) {
   const financialOutcomeOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('Financial outcome learning is restricted to current owners and administrators.'),
       { code: 'M25_EXTERNAL_FINANCIAL_OUTCOME_FORBIDDEN', status: 403 }));
+  const businessCalibrationOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
+    Object.assign(new Error('Business calibration is restricted to current owners and administrators.'),
+      { code: 'M25_EXTERNAL_BUSINESS_CALIBRATION_FORBIDDEN', status: 403 }));
+
+  router.get('/external-business-calibration/:kind/:sourceKey/consent', headers, tenantAuth, businessCalibrationOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const normalized = businessCalibrationContract.normalizeRead(req.params.kind, req.params.sourceKey, req.query.secondarySourceKey);
+        const data = await businessCalibrationRepository.readConsent(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-business-calibration/:kind/:sourceKey/consent', headers, mutationAuth, businessCalibrationOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = businessCalibrationContract.normalizeConsent(req.params.kind, req.params.sourceKey, req.query.secondarySourceKey, req.body);
+        const data = await businessCalibrationRepository.mutateConsent(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.get('/external-business-calibration/:kind/:sourceKey/services/:serviceKey', headers, tenantAuth, businessCalibrationOwnerOnly, throttle,
+    permission('operations', 'read'), async (req, res) => {
+      try {
+        const normalized = businessCalibrationContract.normalizeRead(req.params.kind, req.params.sourceKey, req.query.secondarySourceKey, req.params.serviceKey);
+        const data = await businessCalibrationRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  router.post('/external-business-calibration/:kind/:sourceKey/services/:serviceKey/proposals', headers, mutationAuth, businessCalibrationOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = businessCalibrationContract.normalizeProposal(req.params.kind, req.params.sourceKey, req.query.secondarySourceKey, req.params.serviceKey, req.body);
+        const data = await businessCalibrationRepository.propose(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
 
   router.get('/external-customer-outcome-sources/:crmSourceKey/:communicationSourceKey/consent', headers, tenantAuth, customerOutcomeOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

@@ -2509,6 +2509,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.job_outcome_graph_tables_withheld ||
       !runtimePrivileges.job_outcome_graph_entry_execute ||
       !runtimePrivileges.job_outcome_graph_helpers_withheld ||
+      !runtimePrivileges.job_outcome_graph_evaluation_table_withheld ||
+      !runtimePrivileges.job_outcome_graph_evaluation_entry_execute ||
+      !runtimePrivileges.job_outcome_graph_evaluation_helpers_withheld ||
       !runtimePrivileges.external_business_operations_tables_withheld ||
       !runtimePrivileges.external_business_operations_entry_execute ||
       !runtimePrivileges.external_business_operations_helpers_withheld ||
@@ -2751,11 +2754,17 @@ function resetForTests() {
   readinessFailure = null;
 }
 
+async function grantAndVerifyRuntimeAuthorityForTests(client, authority) {
+  if (process.env.NODE_ENV !== 'test') throw new Error('Runtime authority verification helper is test-only');
+  return grantAndVerifyRuntimeAuthority(client, authority);
+}
+
 module.exports = {
   PROTECTED_LEGACY_MIGRATION_CHECKSUMS,
   canonicalizeMigrationChecksumBytes,
   close,
   getPool,
+  grantAndVerifyRuntimeAuthorityForTests,
   initDatabase,
   isAvailable,
   query,

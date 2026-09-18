@@ -40,6 +40,25 @@ describe('Mission 25 Part 13B job outcome graph evaluation API',()=>{
   response=await post('/api/v1/learning/job-outcome-graph/consent',{action:'revoke',expectedRevision:consent.revision,expectedDigest:consent.digest,reason:'Stop reviewing connected job outcomes.',confirmed:true,confirmationVersion:'m25-job-outcome-graph-consent-v1'});const revoked=response.body.data.consent;read=(await request(f.app).get(`/api/v1/learning/estimates/${estimate}/job-outcome-graph/evaluation`).set(owner.session.headers)).body.data;expect(read).toMatchObject({activeConsent:false,current:null,total:0});expect((await post(`/api/v1/learning/estimates/${estimate}/job-outcome-graph/evaluation`,body,key)).status).toBe(409);
   response=await post('/api/v1/learning/job-outcome-graph/consent',{action:'grant',expectedRevision:revoked.revision,expectedDigest:revoked.digest,reason:'Start a new connected outcome review period.',confirmed:true,confirmationVersion:'m25-job-outcome-graph-consent-v1'});read=(await request(f.app).get(`/api/v1/learning/estimates/${estimate}/job-outcome-graph/evaluation`).set(owner.session.headers)).body.data;expect(read).toMatchObject({activeConsent:true,current:null,total:0});expect((await post(`/api/v1/learning/estimates/${estimate}/job-outcome-graph/evaluation`,body,key)).status).toBe(409);
   const privilege=(await f.ownerPool.query("SELECT has_table_privilege($1,'canonical_job_outcome_graph_evaluations','SELECT,INSERT,UPDATE,DELETE') table_access,has_function_privilege($1,'canonical_job_outcome_graph_evaluate_manifest(jsonb,jsonb)','EXECUTE') helper,has_function_privilege($1,'canonical_job_outcome_graph_evaluation_read(uuid,uuid,text,uuid,uuid)','EXECUTE') entry",[f.roles.runtime])).rows[0];expect(privilege).toEqual({table_access:false,helper:false,entry:true});await expect(f.runtimePool.query('SELECT * FROM canonical_job_outcome_graph_evaluations')).rejects.toMatchObject({code:'42501'});await expect(f.ownerPool.query('DELETE FROM canonical_job_outcome_graph_evaluations')).rejects.toBeTruthy();
-  const after=(await f.ownerPool.query('SELECT snapshot_digest FROM canonical_estimates WHERE organization_id=$1 AND id=$2',[f.org,estimate])).rows[0].snapshot_digest;expect(after).toBe(before);
+ const after=(await f.ownerPool.query('SELECT snapshot_digest FROM canonical_estimates WHERE organization_id=$1 AND id=$2',[f.org,estimate])).rows[0].snapshot_digest;expect(after).toBe(before);
+ },180000);
+ test('startup fails closed on leaked evaluation authority and restores the intended entry-only role',async()=>{
+  const startup=async()=>{const client=await f.ownerPool.connect();try{await client.query('BEGIN');try{const result=await f.db.grantAndVerifyRuntimeAuthorityForTests(client,{runtimeRole:f.roles.runtime});await client.query('COMMIT');return result;}catch(error){await client.query('ROLLBACK');throw error;}}finally{client.release();}};
+  const privileges=async()=>(await f.ownerPool.query("SELECT has_table_privilege($1,'canonical_job_outcome_graph_evaluations','SELECT,INSERT,UPDATE,DELETE') table_access,has_function_privilege($1,'canonical_job_outcome_graph_evaluate_manifest(jsonb,jsonb)','EXECUTE') helper,has_function_privilege($1,'canonical_job_outcome_graph_evaluation_read(uuid,uuid,text,uuid,uuid)','EXECUTE') entry",[f.roles.runtime])).rows[0];
+
+  await f.ownerPool.query('GRANT SELECT ON TABLE canonical_job_outcome_graph_evaluations TO PUBLIC');
+  try{await expect(startup()).rejects.toThrow('Runtime database role privilege verification failed');}
+  finally{await f.ownerPool.query('REVOKE ALL ON TABLE canonical_job_outcome_graph_evaluations FROM PUBLIC');}
+
+  await f.ownerPool.query('GRANT EXECUTE ON FUNCTION canonical_job_outcome_graph_evaluate_manifest(jsonb,jsonb) TO PUBLIC');
+  try{await expect(startup()).rejects.toThrow('Runtime database role privilege verification failed');}
+  finally{await f.ownerPool.query('REVOKE ALL ON FUNCTION canonical_job_outcome_graph_evaluate_manifest(jsonb,jsonb) FROM PUBLIC');}
+
+  await f.ownerPool.query('REVOKE ALL ON FUNCTION canonical_job_outcome_graph_evaluation_read(uuid,uuid,text,uuid,uuid) FROM '+`"${f.roles.runtime.replace(/"/g,'""')}"`);
+  expect((await privileges()).entry).toBe(false);
+  await expect(startup()).resolves.toBeUndefined();
+  expect(await privileges()).toEqual({table_access:false,helper:false,entry:true});
+  await expect(f.runtimePool.query('SELECT * FROM canonical_job_outcome_graph_evaluations')).rejects.toMatchObject({code:'42501'});
+  await expect(f.runtimePool.query("SELECT canonical_job_outcome_graph_evaluate_manifest('[]'::jsonb,'[]'::jsonb)")).rejects.toMatchObject({code:'42501'});
  },180000);
 });

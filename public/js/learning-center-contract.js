@@ -26,10 +26,11 @@
   return Object.assign({},value,{active:Boolean(value.current&&value.current.action==='grant')});
  }
  function center(value){
-  if(!object(value)||['m25-learning-center-v3','m25-learning-center-v4','m25-learning-center-v5'].indexOf(value.version)<0||['tenant_private_postgresql','isolated_demo_postgresql'].indexOf(value.authority)<0||
+  if(!object(value)||['m25-learning-center-v3','m25-learning-center-v4','m25-learning-center-v5','m25-learning-center-v6'].indexOf(value.version)<0||['tenant_private_postgresql','isolated_demo_postgresql'].indexOf(value.authority)<0||
     !text(value.evaluatedAt,64)||!Array.isArray(value.sources)||!integer(value.sourceTotal)||value.sourceTotal<value.sources.length||
     typeof value.sourcesTruncated!=='boolean'||!text(value.learningBoundary,1000)||!object(value.nativeLabor)||!object(value.nativeEquipment)||
-    ((value.version==='m25-learning-center-v4'||value.version==='m25-learning-center-v5')&&!object(value.nativeMaterial)))throw new Error('Learning Center response is invalid.');
+    ((value.version==='m25-learning-center-v4'||value.version==='m25-learning-center-v5'||value.version==='m25-learning-center-v6')&&!object(value.nativeMaterial))||
+    (value.version==='m25-learning-center-v6'&&(!Array.isArray(value.outcomeServiceKeys)||!integer(value.outcomeServiceTotal)||value.outcomeServiceTotal<value.outcomeServiceKeys.length||typeof value.outcomeServicesTruncated!=='boolean'||value.outcomeServiceKeys.length>50||value.outcomeServiceKeys.some(function(service){return!KEY.test(service);})||new Set(value.outcomeServiceKeys).size!==value.outcomeServiceKeys.length)))throw new Error('Learning Center response is invalid.');
   var seen=Object.create(null);
   value.sources.forEach(function(source){
    if(!object(source)||['labor','travel','asset','material','crm_field_service','project_change_order','communication','financial'].indexOf(source.sourceKind)<0||!KEY.test(source.sourceKey)||!Array.isArray(source.serviceKeys)||

@@ -5,7 +5,7 @@
   var session = global.NorthStarAccountSession;
   var demo = global.location.pathname.indexOf('/demo/') === 0;
   if (global.history && 'scrollRestoration' in global.history) global.history.scrollRestoration = 'manual';
-  var state = { center: null, sourceKind: null, sourceKey: null, partnerSourceKey: null, detail: null, consents: {}, matches: null, calibration: null, health: null, healthReference: null, operations: null, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0, healthGeneration: 0 };
+  var state = { center: null, sourceKind: null, sourceKey: null, partnerSourceKey: null, detail: null, consents: {}, matches: null, calibration: null, health: null, healthReference: null, operations: null, jobOutcome: { graphConsent: null, proposalConsent: null, serviceKey: null, proposal: null, registry: null, planning: null, preview: null, error: null }, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0, healthGeneration: 0, outcomeGeneration: 0 };
   var el = function (id) { return document.getElementById(id); };
 
   function node(tag, className, text) {
@@ -17,6 +17,8 @@
   function clear(target) { while (target.firstChild) target.removeChild(target.firstChild); }
   function status(message, tone) { el('learningStatus').textContent = message; el('learningStatus').dataset.tone = tone || ''; }
   function integer(value) { return Number.isSafeInteger(value) ? value : 0; }
+  function object(value) { return value && typeof value === 'object' && !Array.isArray(value); }
+  function plain(value, fallback) { var safe = contract.safeLabel(value); return safe && !/\b(?:provider|credentials?|token|schema|digest|revision|projection|authority|idempotency|internal state)\b/i.test(safe) ? safe : fallback; }
   function currentPair(consent) {
     return consent && consent.current ? { revision: consent.current.revision, digest: consent.current.digest } : { revision: 0, digest: 'none' };
   }
@@ -89,7 +91,7 @@
     var consent = { active: true, current: { revision: 1, digest: digest, action: 'grant' }, history: [], total: 1, truncated: false };
     var travel = kind === 'travel', asset = kind === 'asset', material = kind === 'material';
     var model = {
-      center: { version: 'm25-learning-center-v5', authority: 'isolated_demo_postgresql', evaluatedAt: now,
+      center: { version: 'm25-learning-center-v6', authority: 'isolated_demo_postgresql', evaluatedAt: now, outcomeServiceKeys: ['tree-service'], outcomeServiceTotal: 1, outcomeServicesTruncated: false,
         nativeLabor: consent, nativeEquipment: consent, nativeMaterial: consent, sourceTotal: 8, sourcesTruncated: false,
         sources: [
           { sourceKind: 'labor', sourceKey: 'crewclock.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
@@ -195,6 +197,119 @@
       model.calibration = { sourceKey: kind === 'communication' ? 'customers.demo' : businessKey, serviceKey: 'tree-service', activeConsent: true, history: [], total: 1, truncated: false, refreshRequired: false, current: { fresh: true, advisoryAvailable: true, sampleSize: 7, staleExcludedCount: 1, metrics: dimensions } };
     }
     return model;
+  }
+
+  function jobOutcomeDemo() {
+    var digest = 'b'.repeat(64), id = '11111111-1111-4111-8111-111111111111';
+    var consent = { current: { revision: 1, digest: digest, action: 'grant' }, history: [], total: 1, truncated: false, active: true };
+    var preview = { version: 'm25-job-outcome-proposal-registry-preview-v1', serviceKey: 'tree-service', cohortSize: 8, status: 'review_available', availableImpactCount: 3, unavailableImpactCount: 2,
+      areas: [
+        { area: 'labor', label: 'Labor', status: 'review_available', measures: [{ metric: { metricKey: 'worker_hours', label: 'Worker hours', basis: 'NorthStar worker hours' }, impact: { status: 'relative_review', planningArea: 'labor_planning', direction: 'increase', changePercent: '8.00', statement: 'Future worker-hour planning would be reviewed at 8 percent higher.', absoluteValueStatus: 'unavailable' } }] },
+        { area: 'travel', label: 'Travel', status: 'review_available', measures: [{ metric: { metricKey: 'distance', label: 'Travel distance', basis: 'Connected travel|mile' }, impact: { status: 'relative_review', planningArea: 'travel_planning', direction: 'keep', changePercent: '2.00', statement: 'Future travel planning remains inside the five percent keep range.', absoluteValueStatus: 'unavailable' } }] },
+        { area: 'equipment', label: 'Equipment', status: 'review_available', measures: [{ metric: { metricKey: 'equipment_hours', label: 'Equipment hours', basis: 'NorthStar equipment|machine_hour' }, impact: { status: 'relative_review', planningArea: 'equipment_planning', direction: 'decrease', changePercent: '-6.00', statement: 'Future equipment-hour planning would be reviewed at 6 percent lower.', absoluteValueStatus: 'unavailable' } }] },
+        { area: 'materials', label: 'Materials', status: 'unavailable', measures: [] }, { area: 'scope', label: 'Scope', status: 'unavailable', measures: [] }, { area: 'financial', label: 'Financial reference', status: 'unavailable', measures: [] }
+      ], uncertaintyBoundary: 'This sample describes eight selected completed jobs. It is not a forecast or promise.' };
+    return { graphConsent: consent, proposalConsent: consent, serviceKey: 'tree-service',
+      proposal: { activeConsent: true, current: { id: id, digest: digest, fresh: true, available: true, cohortSize: 8, statusMessage: 'Advice from the selected comparable jobs is ready for review.' }, total: 1 },
+      registry: { activeConsent: true, current: { id: id, digest: digest, previewDigest: digest, fresh: true, available: true, preview: preview, statusMessage: 'This saved proposal preview is ready for owner review.' }, history: [], total: 1 },
+      planning: { serviceKey: 'tree-service', current: [{ id: id, revision: 1, digest: digest, state: 'active', planningArea: 'labor_planning', metricKey: 'worker_hours', basis: 'NorthStar worker hours', multiplier: '1.080000', statusMessage: 'This owner-adopted service planning value is current.', lineage: { status: 'current', requiresOwnerReview: false, planningValueInEffect: true } }], history: [], total: 1 }, preview: null, error: null };
+  }
+
+  function outcomeServices() {
+    var seen = Object.create(null), values = [];
+    (state.center && state.center.outcomeServiceKeys || []).forEach(function (key) { if (!seen[key]) { seen[key] = true; values.push(key); } });
+    (state.center ? state.center.sources : []).forEach(function (source) { source.serviceKeys.forEach(function (key) { if (!seen[key]) { seen[key] = true; values.push(key); } }); });
+    return values.sort();
+  }
+  function consentActive(value) { return Boolean(value && value.current && value.current.action === 'grant'); }
+  function outcomeConsentCard(title, copy, value, version, path) {
+    var card = node('article', 'learning-outcome-permission'), heading = node('div', 'learning-card-heading'), active = consentActive(value);
+    heading.appendChild(node('h3', '', title)); var pill = node('span', 'learning-pill', active ? 'Allowed' : 'Not allowed'); pill.dataset.state = active ? 'active' : 'inactive'; heading.appendChild(pill); card.appendChild(heading); card.appendChild(node('p', '', copy));
+    var action = button(demo ? 'Demo preview' : (active ? 'Stop using these records' : 'Allow this review'), function () {
+      action.disabled = true; var body = consentBody(value, active ? 'revoke' : 'grant', version, active ? 'Owner stopped this completed-job learning use in the Learning Center.' : 'Owner allowed this completed-job learning use in the Learning Center.');
+      mutate(path, body).then(loadJobOutcome).catch(outcomeFail);
+    }, !active); action.disabled = demo || Boolean(state.jobOutcome.error); card.appendChild(node('div', 'learning-actions')).appendChild(action); return card;
+  }
+  function outcomeFail(error) {
+    state.jobOutcome.error = error && error.status === 403 ? 'Only the company owner can review or change these planning suggestions.' : error && error.status === 409 ? 'The learning evidence changed. Refresh this review before continuing.' : 'Completed job learning is temporarily unavailable. Refresh and try again.';
+    renderJobOutcome();
+  }
+  function lifecycleLabel(value) {
+    var labels = { current: 'Current', not_set: 'Not set', planning_value_superseded: 'Earlier decision', proposal_superseded: 'New suggestion available', permission_revoked: 'Permission removed', permission_replaced: 'New permission period', evidence_changed_or_unavailable: 'Evidence changed', lineage_unavailable: 'Source unavailable' };
+    return labels[value] || 'Needs review';
+  }
+  function percentLabel(value) {
+    var numberValue = Number(value); if (!Number.isFinite(numberValue)) return 'Unavailable';
+    if (Math.abs(numberValue) < 0.005) return 'No change'; return Math.abs(numberValue).toFixed(2).replace(/\.00$/, '') + '% ' + (numberValue > 0 ? 'higher' : 'lower');
+  }
+  function renderJobOutcome() {
+    var root = el('jobOutcomePermissions'), workspace = el('jobOutcomeWorkspace'), content = el('jobOutcomeContent'), outcome = state.jobOutcome; clear(root); clear(content);
+    root.appendChild(outcomeConsentCard('Completed job comparisons', 'Allows NorthStar to review accepted outcomes together for the same completed job.', outcome.graphConsent, 'm25-job-outcome-graph-consent-v1', '/job-outcome-graph/consent'));
+    root.appendChild(outcomeConsentCard('Planning suggestions', 'Allows NorthStar to compare at least five reviewed completed jobs for the same service.', outcome.proposalConsent, 'm25-job-outcome-proposal-consent-v1', '/job-outcome-proposals/consent'));
+    if (outcome.error) { workspace.hidden = false; content.appendChild(node('p', 'learning-empty', outcome.error)); setPill(el('jobOutcomeState'), false, true); return; }
+    var ready = consentActive(outcome.graphConsent) && consentActive(outcome.proposalConsent), services = outcomeServices(); setPill(el('jobOutcomeState'), ready, !ready);
+    if (!ready) { workspace.hidden = false; content.appendChild(node('p', 'learning-empty', 'Allow both uses above before reviewing service planning suggestions. Earlier suggestions do not become current again after permission is restored.')); return; }
+    workspace.hidden = false; var select = el('jobOutcomeService'); clear(select);
+    services.forEach(function (key) { var option = node('option', '', contract.label(key, 'Company service')); option.value = key; select.appendChild(option); });
+    if (!services.length) { select.disabled = true; content.appendChild(node('p', 'learning-empty', 'No reviewed service history is available yet. Complete and review jobs before preparing a cross-job suggestion.')); return; }
+    select.disabled = false; select.value = outcome.serviceKey && services.indexOf(outcome.serviceKey) >= 0 ? outcome.serviceKey : services[0];
+    if (outcome.serviceKey !== select.value) { outcome.serviceKey = select.value; loadJobOutcomeService(select.value); return; }
+    if (demo) content.appendChild(node('p', 'learning-outcome-demo', 'This is fictional demonstration data. Review, adoption and rollback controls are read-only and cannot change a company.'));
+    var grid = node('div', 'learning-outcome-grid'); renderProposalCard(grid); renderPlanningCard(grid); content.appendChild(grid);
+  }
+  function renderProposalCard(grid) {
+    var outcome = state.jobOutcome, read = object(outcome.proposal) ? outcome.proposal : {}, current = object(read.current) ? read.current : null, registry = object(outcome.registry) && object(outcome.registry.current) ? outcome.registry.current : null;
+    var card = node('article', 'learning-outcome-card'); var heading = node('div', 'learning-outcome-heading'); heading.appendChild(node('h3', '', 'Evidence review'));
+    var pill = node('span', 'learning-pill', current && current.fresh ? 'Ready to review' : current ? 'Needs refresh' : 'Not available'); pill.dataset.state = current && current.fresh ? 'current' : 'review'; heading.appendChild(pill); card.appendChild(heading);
+    if (!current) { card.appendChild(node('p', '', 'No current cross-job suggestion is available for this service. At least five compatible reviewed job summaries are required.')); grid.appendChild(card); return; }
+    card.appendChild(node('p', '', plain(current.statusMessage, current.fresh ? 'Comparable completed jobs are ready for review.' : 'The supporting evidence changed and this suggestion must be prepared again.')));
+    var meta = node('div', 'learning-outcome-meta'); [['Completed jobs', integer(current.cohortSize) || 'Unavailable'], ['Evidence state', current.fresh === true ? 'Current' : 'Needs review'], ['Saved review', registry && registry.fresh === true ? 'Available' : 'Not saved']].forEach(function (item) { var box = node('div'); box.appendChild(node('span', '', item[0])); box.appendChild(node('strong', '', String(item[1]))); meta.appendChild(box); }); card.appendChild(meta);
+    if (current.fresh && current.available && (!registry || !registry.fresh)) { var review = button(demo ? 'Demo preview' : 'Review planning impact', function () { review.disabled = true; mutate('/job-outcome-proposal-registry/' + encodeURIComponent(outcome.serviceKey) + '/impact-preview', { proposalId: current.id, expectedProposalDigest: current.digest }).then(function (value) { outcome.preview = value; renderJobOutcome(); }).catch(outcomeFail); }, true); review.disabled = demo; card.appendChild(node('div', 'learning-actions')).appendChild(review); }
+    if (outcome.preview && outcome.preview.preview) renderImpactDecision(card, outcome.preview);
+    else if (registry && registry.preview) renderSuggestionList(card, registry);
+    card.appendChild(node('p', 'learning-outcome-note', 'Suggestions describe the selected completed jobs. They do not promise a future result or change an existing estimate, price, schedule or financial record.')); grid.appendChild(card);
+  }
+  function renderImpactDecision(card, impact) {
+    renderSuggestionList(card, { preview: impact.preview }); var decision = node('div', 'learning-decision'); decision.appendChild(node('strong', '', 'Save this reviewed suggestion?')); decision.appendChild(node('p', '', 'Saving keeps this exact review available for a separate owner planning decision.'));
+    var confirm = node('label', 'learning-confirmation'), box = node('input'); box.type = 'checkbox'; confirm.appendChild(box); confirm.appendChild(node('span', '', 'I reviewed the evidence and understand that saving does not change company planning.')); decision.appendChild(confirm);
+    var save = button('Save reviewed suggestion', function () { save.disabled = true; var registry = state.jobOutcome.registry && state.jobOutcome.registry.current; mutate('/job-outcome-proposal-registry/' + encodeURIComponent(state.jobOutcome.serviceKey) + '/versions', { proposalId: impact.proposalPin.id, expectedProposalDigest: impact.proposalPin.digest, expectedPreviewDigest: impact.previewDigest, expectedRegistryRevision: registry ? registry.revision : 0, expectedRegistryDigest: registry ? registry.digest : 'none', reason: 'Owner saved this reviewed completed-job planning impact.', confirmed: true, confirmationVersion: 'm25-job-outcome-proposal-registry-v1' }).then(function () { state.jobOutcome.preview = null; return loadJobOutcomeService(state.jobOutcome.serviceKey); }).catch(outcomeFail); }, true); save.disabled = true; box.addEventListener('change', function () { save.disabled = !box.checked; }); decision.appendChild(node('div', 'learning-actions')).appendChild(save); card.appendChild(decision);
+  }
+  function renderSuggestionList(card, registry) {
+    var list = node('div', 'learning-suggestion-list'), preview = object(registry.preview) ? registry.preview : { areas: [] };
+    (Array.isArray(preview.areas) ? preview.areas : []).forEach(function (area) { (Array.isArray(area.measures) ? area.measures : []).forEach(function (measure) { if (!object(measure) || !object(measure.metric) || !object(measure.impact)) return; var item = node('div', 'learning-suggestion'), heading = node('div', 'learning-suggestion-heading'); heading.appendChild(node('h4', '', plain(measure.metric.label, contract.label(measure.metric.metricKey, 'Planning measure')))); var impact = measure.impact; var pill = node('span', 'learning-pill', impact.status === 'relative_review' ? percentLabel(impact.changePercent) : 'Unavailable'); pill.dataset.state = impact.status === 'relative_review' ? 'current' : 'review'; heading.appendChild(pill); item.appendChild(heading); item.appendChild(node('p', '', plain(impact.statement, 'Current evidence does not support a planning suggestion for this measure.')));
+      if (registry.id && impact.status === 'relative_review' && impact.planningArea !== 'financial_reference') { var action = button(demo ? 'Demo preview' : 'Review for adoption', function () { action.disabled = true; mutate('/job-outcome-planning-values/' + encodeURIComponent(state.jobOutcome.serviceKey) + '/adoption-preview', { registryVersionId: registry.id, expectedRegistryDigest: registry.digest, expectedPreviewDigest: registry.previewDigest, planningArea: impact.planningArea, metricKey: measure.metric.metricKey, basis: measure.metric.basis }).then(function (selection) { renderAdoptionDecision(item, registry, measure, selection); }).catch(outcomeFail); }); action.disabled = demo; item.appendChild(node('div', 'learning-actions')).appendChild(action); }
+      list.appendChild(item); }); });
+    if (!list.childNodes.length) list.appendChild(node('p', 'learning-empty', 'No planning measure is available from the current evidence.')); card.appendChild(list);
+  }
+  function renderAdoptionDecision(item, registry, measure, selection) {
+    if (!object(selection) || !Number.isFinite(Number(selection.multiplier)) || !contract.safeLabel(selection.planningArea) || !contract.safeLabel(selection.metricKey) || !contract.safeLabel(selection.basis)) { outcomeFail({ status: 503 }); return; }
+    var old = item.querySelector('.learning-decision'); if (old) old.remove(); var decision = node('div', 'learning-decision'); decision.appendChild(node('strong', '', 'Owner planning decision')); decision.appendChild(node('p', '', 'Proposed future planning multiplier: ' + Number(selection.multiplier).toFixed(2) + '×. This affects future planning for this service only.'));
+    var label = node('label', '', 'Reason for this decision'); var reason = node('textarea'); reason.maxLength = 2000; reason.value = 'Adopt this reviewed completed-job suggestion for future service planning.'; decision.appendChild(label); decision.appendChild(reason);
+    var confirm = node('label', 'learning-confirmation'), box = node('input'); box.type = 'checkbox'; confirm.appendChild(box); confirm.appendChild(node('span', '', 'I understand this changes a future planning multiplier and does not rewrite existing work.')); decision.appendChild(confirm);
+    var currentValues = object(state.jobOutcome.planning) && Array.isArray(state.jobOutcome.planning.current) ? state.jobOutcome.planning.current : []; var current = currentValues.filter(function (value) { return value.planningArea === selection.planningArea && value.metricKey === selection.metricKey && value.basis === selection.basis; })[0];
+    var adopt = button('Adopt planning value', function () { adopt.disabled = true; mutate('/job-outcome-planning-values/' + encodeURIComponent(state.jobOutcome.serviceKey) + '/adoptions', { registryVersionId: registry.id, expectedRegistryDigest: registry.digest, expectedPreviewDigest: registry.previewDigest, planningArea: selection.planningArea, metricKey: selection.metricKey, basis: selection.basis, expectedSelectionDigest: selection.selectionDigest, expectedPlanningRevision: current ? current.revision : 0, expectedPlanningDigest: current ? current.digest : 'none', reason: reason.value.trim(), confirmed: true, confirmationVersion: 'm25-job-outcome-planning-adoption-v1' }).then(function () { return loadJobOutcomeService(state.jobOutcome.serviceKey); }).catch(outcomeFail); }, true); adopt.disabled = true; box.addEventListener('change', function () { adopt.disabled = !box.checked || !reason.value.trim(); }); reason.addEventListener('input', function () { adopt.disabled = !box.checked || !reason.value.trim(); }); decision.appendChild(node('div', 'learning-actions')).appendChild(adopt); item.appendChild(decision); reason.focus();
+  }
+  function renderPlanningCard(grid) {
+    var card = node('article', 'learning-outcome-card'); card.appendChild(node('h3', '', 'Current owner planning values')); var values = object(state.jobOutcome.planning) && Array.isArray(state.jobOutcome.planning.current) ? state.jobOutcome.planning.current : [];
+    if (!values.length) { card.appendChild(node('p', '', 'No completed-job suggestion has been adopted for this service.')); grid.appendChild(card); return; }
+    var list = node('div', 'learning-suggestion-list'); values.forEach(function (value) { if (!object(value)) return; var item = node('div', 'learning-suggestion'), heading = node('div', 'learning-suggestion-heading'); heading.appendChild(node('h4', '', contract.label(value.metricKey, 'Planning value'))); var lineage = object(value.lineage) ? value.lineage : {}, pill = node('span', 'learning-pill', lifecycleLabel(lineage.status)); pill.dataset.state = lineage.requiresOwnerReview ? 'review' : 'current'; heading.appendChild(pill); item.appendChild(heading); item.appendChild(node('p', '', plain(value.statusMessage, 'This owner planning value is available for review.'))); if (value.state === 'active' && Number.isFinite(Number(value.multiplier))) item.appendChild(node('strong', '', 'Current multiplier: ' + Number(value.multiplier).toFixed(2) + '×'));
+      var rollback = button(demo ? 'Demo preview' : 'Review rollback', function () { renderRollbackDecision(item, value); }); rollback.disabled = demo || value.state !== 'active'; item.appendChild(node('div', 'learning-actions')).appendChild(rollback); list.appendChild(item); }); card.appendChild(list); card.appendChild(node('p', 'learning-outcome-note', 'A source may need review while an adopted value remains in effect. Only an owner adoption or rollback changes that value.')); grid.appendChild(card);
+  }
+  function renderRollbackDecision(item, value) {
+    var old = item.querySelector('.learning-decision'); if (old) old.remove(); var decision = node('div', 'learning-decision'); decision.appendChild(node('strong', '', 'Remove this planning value?')); decision.appendChild(node('p', '', 'Future planning for this service will no longer use this multiplier. Existing work remains unchanged.'));
+    var confirm = node('label', 'learning-confirmation'), box = node('input'); box.type = 'checkbox'; confirm.appendChild(box); confirm.appendChild(node('span', '', 'I understand this removes the current future-planning value.')); decision.appendChild(confirm); var action = button('Remove planning value', function () { action.disabled = true; mutate('/job-outcome-planning-values/' + encodeURIComponent(state.jobOutcome.serviceKey) + '/rollbacks', { planningArea: value.planningArea, metricKey: value.metricKey, basis: value.basis, expectedPlanningRevision: value.revision, expectedPlanningDigest: value.digest, rollbackToId: null, expectedRollbackToDigest: 'none', reason: 'Owner removed this completed-job planning value.', confirmed: true, confirmationVersion: 'm25-job-outcome-planning-adoption-v1' }).then(function () { return loadJobOutcomeService(state.jobOutcome.serviceKey); }).catch(outcomeFail); }, true); action.disabled = true; box.addEventListener('change', function () { action.disabled = !box.checked; }); decision.appendChild(node('div', 'learning-actions')).appendChild(action); item.appendChild(decision); box.focus();
+  }
+  function loadJobOutcomeService(serviceKey) {
+    state.jobOutcome.serviceKey = serviceKey; state.jobOutcome.proposal = null; state.jobOutcome.registry = null; state.jobOutcome.planning = null; state.jobOutcome.preview = null; state.jobOutcome.error = null; renderJobOutcome();
+    if (demo) { var model = jobOutcomeDemo(); state.jobOutcome = model; renderJobOutcome(); return Promise.resolve(); }
+    var generation = ++state.outcomeGeneration;
+    return Promise.all([api('/job-outcome-proposals/' + encodeURIComponent(serviceKey)), api('/job-outcome-proposal-registry/' + encodeURIComponent(serviceKey)), api('/job-outcome-planning-values/' + encodeURIComponent(serviceKey))]).then(function (values) { if (generation !== state.outcomeGeneration) return; state.jobOutcome.proposal = values[0]; state.jobOutcome.registry = values[1]; state.jobOutcome.planning = values[2]; renderJobOutcome(); }).catch(function (error) { if (generation === state.outcomeGeneration) outcomeFail(error); });
+  }
+  function loadJobOutcome() {
+    state.jobOutcome.error = null;
+    if (demo) { state.jobOutcome = jobOutcomeDemo(); renderJobOutcome(); return Promise.resolve(); }
+    var generation = ++state.outcomeGeneration;
+    return Promise.all([api('/job-outcome-graph/consent'), api('/job-outcome-proposals/consent')]).then(function (values) { if (generation !== state.outcomeGeneration) return; state.jobOutcome.graphConsent = values[0]; state.jobOutcome.proposalConsent = values[1]; var services = outcomeServices(), selected = services.indexOf(state.jobOutcome.serviceKey) >= 0 ? state.jobOutcome.serviceKey : services[0]; renderJobOutcome(); if (selected && consentActive(values[0]) && consentActive(values[1])) return loadJobOutcomeService(selected); }).catch(function (error) { if (generation === state.outcomeGeneration) outcomeFail(error); });
   }
 
   function renderSummary() {
@@ -603,7 +718,7 @@
     return promise.then(function (value) {
       if (generation !== state.loadGeneration) return;
       state.center = contract.center(value); state.sourceKind = null; state.sourceKey = null; state.partnerSourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.health = null; state.healthReference = null; state.operations = null;
-      el('learningBoundary').textContent = state.center.learningBoundary; renderNative(); renderSources(); renderSummary();
+      el('learningBoundary').textContent = state.center.learningBoundary; renderNative(); renderSources(); renderSummary(); loadJobOutcome();
       if (state.center.sources.length) {
         var preferred = state.center.sources.filter(function (source) { return source.sourceKind === preferredKind && source.sourceKey === preferredKey; })[0] || state.center.sources[0];
         return selectSource(preferred.sourceKind, preferred.sourceKey);
@@ -629,6 +744,7 @@
   }
 
   el('learningRefresh').addEventListener('click', load);
+  el('jobOutcomeService').addEventListener('change', function () { loadJobOutcomeService(el('jobOutcomeService').value); });
   el('learningSourceForm').addEventListener('submit', function (event) {
     event.preventDefault(); if (demo) return;
     var input = el('learningSourceKey'), sourceKind = el('learningSourceKind').value, sourceKey = input.value.trim().toLowerCase();

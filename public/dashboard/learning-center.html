@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Learning Center - NorthStar</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-  <script src="/js/command-center-contract.js?v=m25-business-learning-20260918"></script>
-  <script src="/js/demo-runtime.js?v=m25-business-learning-20260918"></script>
+  <script src="/js/command-center-contract.js?v=m25-outcome-review-20260918"></script>
+  <script src="/js/demo-runtime.js?v=m25-outcome-review-20260918"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/learning-center.css?v=m25-business-learning-20260918">
+  <link rel="stylesheet" href="/css/learning-center.css?v=m25-outcome-review-20260918">
   <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
 </head>
 <body class="learning-center-page">
@@ -42,6 +42,24 @@
           <article class="learning-consent-card"><div class="learning-card-heading"><h3>Materials used</h3><span id="nativeMaterialLearningState" class="learning-pill">Checking</span></div><p>Compare accepted material movements with the adopted material plan for the same completed job. Missing quantities or units remain unavailable.</p><div class="learning-actions"><button id="nativeMaterialLearningAction" class="btn btn-secondary" type="button" disabled>Checking permission</button></div></article>
         </div>
       </section>
+      <section id="jobOutcomeReview" class="learning-panel learning-outcome-panel" aria-labelledby="jobOutcomeTitle">
+        <div class="learning-panel-heading">
+          <div>
+            <p class="learning-kicker">Completed job learning</p>
+            <h2 id="jobOutcomeTitle">Review planning suggestions</h2>
+            <p>Compare reviewed completed jobs, understand the evidence, and decide whether a suggestion belongs in future planning.</p>
+          </div>
+          <span id="jobOutcomeState" class="learning-pill">Checking</span>
+        </div>
+        <div id="jobOutcomePermissions" class="learning-outcome-permissions" aria-live="polite"></div>
+        <div id="jobOutcomeWorkspace" class="learning-outcome-workspace" hidden>
+          <div class="learning-outcome-toolbar">
+            <label for="jobOutcomeService">Service to review</label>
+            <select id="jobOutcomeService" name="jobOutcomeService"></select>
+          </div>
+          <div id="jobOutcomeContent" aria-live="polite"></div>
+        </div>
+      </section>
       <section class="learning-panel" aria-labelledby="sourcesTitle">
         <div class="learning-panel-heading">
           <div><p class="learning-kicker">Connected history</p><h2 id="sourcesTitle">External operating sources</h2></div>
@@ -71,9 +89,9 @@
     </main>
   </div>
   <script src="/js/auth-session.js"></script>
-  <script src="/js/nav-component.js?v=m25-business-learning-20260918"></script>
-  <script src="/js/learning-center-contract.js?v=m25-business-learning-20260918"></script>
-  <script src="/js/learning-center-page.js?v=m25-business-learning-20260918"></script>
+  <script src="/js/nav-component.js?v=m25-outcome-review-20260918"></script>
+  <script src="/js/learning-center-contract.js?v=m25-outcome-review-20260918"></script>
+  <script src="/js/learning-center-page.js?v=m25-outcome-review-20260918"></script>
   <script>NavComponent.init('learning-center');</script>
 </body>
 </html>

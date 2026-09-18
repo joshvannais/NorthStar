@@ -26,7 +26,7 @@ describe('Mission 25 Part 12K business-system Learning Center API', () => {
     }
     for (const actorName of ['owner','admin']) {
       const response = await request(fixture.app).get('/api/v1/learning/center').set(fixture.actors[actorName].session.headers);
-      expect(response.status).toBe(200); expect(response.body.data.version).toBe('m25-learning-center-v5'); expect(response.body.data.sourceTotal).toBe(4);
+      expect(response.status).toBe(200); expect(response.body.data.version).toBe('m25-learning-center-v6'); expect(response.body.data.sourceTotal).toBe(4);
     }
     const pairRoot = '/api/v1/learning/external-customer-outcome-sources/crm.api/conversations.api';
     let pairConsent = await request(fixture.app).get(`${pairRoot}/consent`).set(fixture.actors.owner.session.headers);

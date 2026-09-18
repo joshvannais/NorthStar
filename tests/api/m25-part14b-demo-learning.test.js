@@ -71,4 +71,25 @@ realPostgres('Mission 25 Part 14B mounted resettable fictional demo', () => {
     expect(foreign.status).toBe(403);
     await expect(fixture.ownerPool.query("INSERT INTO demo_command_center_mutations(session_id,idempotency_hash,operation,request_digest,response_revision,response_digest) SELECT id,$1,'paid_write',$1,revision,$1 FROM demo_command_center_sessions LIMIT 1", ['f'.repeat(64)])).rejects.toMatchObject({ code: '23514' });
   }, 120000);
+
+  test('accepts exactly five current unique fictional jobs and rejects every neighboring or invalid cohort', async () => {
+    const entry = await request(fixture.app).get('/api/demo/learning-center').set('Host', 'northstar.test');
+    const savedCookie = cookie(entry), ids = entry.body.data.center.outcomeServices[0].summaries.map(value => value.summaryId);
+    let revision = entry.body.data.jobOutcome.demoWorkspaceRevision;
+    for (const action of ['grant_graph', 'grant_proposal']) {
+      const response = await post(fixture.app, savedCookie, '/api/demo/learning-center/actions', 'learning-journey', crypto.randomUUID(), { action, details: { path: 'cohort-' + action }, expectedRevision: revision });
+      expect(response.status).toBe(201); revision = response.body.data.jobOutcome.demoWorkspaceRevision;
+    }
+    for (const count of [4, 6, 7, 8]) {
+      const response = await post(fixture.app, savedCookie, '/api/demo/learning-center/actions', 'learning-journey', crypto.randomUUID(), { action: 'prepare', details: { path: 'cohort-' + count, summaryIds: ids.slice(0, count) }, expectedRevision: revision });
+      expect(response.status).toBe(400);
+    }
+    const duplicate = await post(fixture.app, savedCookie, '/api/demo/learning-center/actions', 'learning-journey', crypto.randomUUID(), { action: 'prepare', details: { path: 'cohort-duplicate', summaryIds: [ids[0], ids[1], ids[2], ids[3], ids[3]] }, expectedRevision: revision });
+    expect(duplicate.status).toBe(400);
+    const foreign = await post(fixture.app, savedCookie, '/api/demo/learning-center/actions', 'learning-journey', crypto.randomUUID(), { action: 'prepare', details: { path: 'cohort-foreign', summaryIds: [...ids.slice(0, 4), '99999999-9999-4999-8999-999999999999'] }, expectedRevision: revision });
+    expect(foreign.status).toBe(409);
+    const accepted = await post(fixture.app, savedCookie, '/api/demo/learning-center/actions', 'learning-journey', crypto.randomUUID(), { action: 'prepare', details: { path: 'cohort-five', summaryIds: ids.slice(0, 5) }, expectedRevision: revision });
+    expect(accepted.status).toBe(201);
+    expect(accepted.body.data.jobOutcome).toMatchObject({ demoJourneyStage: 'prepared', proposal: { current: { cohortSize: 5, proposal: { cohortSize: 5 } } } });
+  }, 120000);
 });

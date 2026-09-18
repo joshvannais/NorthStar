@@ -27,6 +27,7 @@ describe('Mission 25 Part 14B resettable fictional demo acceptance', () => {
     expect(migration).toContain("'learning_step'");
     for (const action of ['grant_graph', 'grant_proposal', 'prepare', 'preview', 'save', 'adoption_preview', 'adopt', 'rollback']) expect(journey).toContain(action);
     expect(journey).toContain('selectedSummaryIds');
+    expect(journey).toContain('details.summaryIds.length !== 5');
     expect(browser).toContain("details.summaryIds = body.summaryIds");
     expect(browser).toContain("global.fetch('/api/demo/learning-center' + path");
     expect(browser).toContain("return demoRequest('/actions'");

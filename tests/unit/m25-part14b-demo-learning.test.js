@@ -31,6 +31,7 @@ describe('Mission 25 Part 14B fictional learning journey contract', () => {
     expect(() => step(state, 'adopt')).toThrow('Review the current fictional planning value');
     const ids = journey.center(state, 1).outcomeServices[0].summaries.map(value => value.summaryId);
     expect(() => journey.apply(state, { learningAction: { action: 'prepare', details: { path: 'four-jobs', summaryIds: ids.slice(0, 4) } } })).toThrow('supported fictional');
+    for (const count of [6, 7, 8]) expect(() => journey.apply(state, { learningAction: { action: 'prepare', details: { path: count + '-jobs', summaryIds: ids.slice(0, count) } } })).toThrow('supported fictional');
     expect(() => journey.apply(state, { learningAction: { action: 'prepare', details: { path: 'duplicate-job', summaryIds: [ids[0], ids[1], ids[2], ids[3], ids[3]] } } })).toThrow('supported fictional');
     expect(() => journey.apply(state, { learningAction: { action: 'prepare', details: { path: 'foreign-job', summaryIds: [...ids.slice(0, 4), '99999999-9999-4999-8999-999999999999'] } } })).toThrow('selection changed');
   });

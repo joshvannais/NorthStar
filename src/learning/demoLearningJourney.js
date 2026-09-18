@@ -24,7 +24,7 @@ function validate(value) {
       !Number.isSafeInteger(candidate.sequence) || candidate.sequence < 0 || candidate.sequence > 16 ||
       keys.some(key => !allowedKeys.includes(key)) ||
       (candidate.selectedSummaryIds !== undefined && (!Array.isArray(candidate.selectedSummaryIds) ||
-        candidate.selectedSummaryIds.length < 5 || candidate.selectedSummaryIds.length > 8 ||
+        candidate.selectedSummaryIds.length !== 5 ||
         new Set(candidate.selectedSummaryIds).size !== candidate.selectedSummaryIds.length ||
         candidate.selectedSummaryIds.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/.test(id))))) {
     failure(503, 'DEMO_LEARNING_STATE_INVALID', 'The fictional learning journey is unavailable. Reset the demo and try again.');
@@ -45,7 +45,7 @@ function normalizeAction(value) {
       !details || typeof details !== 'object' || Array.isArray(details) ||
       Object.keys(details).some(key => !['path', 'summaryIds'].includes(key)) ||
       typeof details.path !== 'string' || details.path.length < 1 || details.path.length > 256 ||
-      (value.action === 'prepare' ? (!Array.isArray(details.summaryIds) || details.summaryIds.length < 5 || details.summaryIds.length > 8 ||
+      (value.action === 'prepare' ? (!Array.isArray(details.summaryIds) || details.summaryIds.length !== 5 ||
         new Set(details.summaryIds).size !== details.summaryIds.length || details.summaryIds.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/.test(id)))
         : details.summaryIds !== undefined) || Buffer.byteLength(JSON.stringify(details)) > 32768) {
     failure(400, 'DEMO_LEARNING_ACTION_INVALID', 'Choose a supported fictional learning step.');

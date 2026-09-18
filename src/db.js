@@ -1379,6 +1379,23 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_read(uuid,uuid,text,uuid,text,text,text,text) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_business_adapter_revisions') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_business_adapter_revisions, public.canonical_external_business_retention_revisions, public.canonical_external_business_deletion_revisions, public.canonical_external_business_hold_revisions, public.canonical_external_business_lifecycle_gates, public.canonical_external_business_request_keys, public.canonical_external_business_cleanup_runs FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_source_prefix(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_lifecycle_lock(uuid,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_request_claim(uuid,uuid,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_operation_projection(text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_cleanup_projection(public.canonical_external_business_cleanup_runs) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_source_exists(uuid,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_deletion_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_adapter_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_retention_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_deletion_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_hold_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_operations_read(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_cleanup_execute(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_external_material_import_consents') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_import_consents, public.canonical_external_material_import_runs, public.canonical_external_material_import_records FROM %I',
@@ -2126,6 +2143,33 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_consent_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_proposal_guard()','EXECUTE')
        )) AS external_business_calibration_helpers_withheld,
+       (to_regclass('public.canonical_external_business_adapter_revisions') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_business_adapter_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_retention_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_deletion_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_hold_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_lifecycle_gates','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_request_keys','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_cleanup_runs','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_business_operations_tables_withheld,
+       (to_regclass('public.canonical_external_business_adapter_revisions') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_business_adapter_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_retention_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_deletion_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_hold_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_operations_read(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_cleanup_execute(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+       )) AS external_business_operations_entry_execute,
+       (to_regclass('public.canonical_external_business_adapter_revisions') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_business_source_prefix(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_lifecycle_lock(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_request_claim(uuid,uuid,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_operation_projection(text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_cleanup_projection(public.canonical_external_business_cleanup_runs)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_source_exists(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_deletion_guard()','EXECUTE')
+       )) AS external_business_operations_helpers_withheld,
        (to_regclass('public.canonical_external_material_import_consents') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_external_material_import_consents','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_external_material_import_runs','SELECT,INSERT,UPDATE,DELETE')
@@ -2400,6 +2444,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.external_business_calibration_tables_withheld ||
       !runtimePrivileges.external_business_calibration_entry_execute ||
       !runtimePrivileges.external_business_calibration_helpers_withheld ||
+      !runtimePrivileges.external_business_operations_tables_withheld ||
+      !runtimePrivileges.external_business_operations_entry_execute ||
+      !runtimePrivileges.external_business_operations_helpers_withheld ||
       !runtimePrivileges.external_material_import_tables_withheld ||
       !runtimePrivileges.external_material_import_entry_execute ||
       !runtimePrivileges.external_material_import_helpers_withheld ||

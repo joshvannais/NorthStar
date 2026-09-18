@@ -53,6 +53,8 @@ const financialOutcomeContract = require('../learning/externalFinancialOutcomeCo
 const financialOutcomeRepository = require('../learning/externalFinancialOutcomeRepository');
 const businessCalibrationContract = require('../learning/externalBusinessCalibrationContract');
 const businessCalibrationRepository = require('../learning/externalBusinessCalibrationRepository');
+const businessOperationsContract = require('../learning/externalBusinessOperationsContract');
+const businessOperationsRepository = require('../learning/externalBusinessOperationsRepository');
 const materialOperationsContract = require('../learning/externalMaterialOperationsContract');
 const materialOperationsRepository = require('../learning/externalMaterialOperationsRepository');
 const materialMatchContract = require('../learning/externalMaterialReconciliationContract');
@@ -96,7 +98,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_EXTERNAL_BUSINESS_CALIBRATION_') ? 'Business calibration is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_EXTERNAL_BUSINESS_OPERATIONS_') ? 'Source operations are temporarily unavailable.' :
+    code.startsWith('M25_EXTERNAL_BUSINESS_CALIBRATION_') ? 'Business calibration is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_FINANCIAL_OUTCOME_') ? 'Financial outcome learning is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_PROJECT_OUTCOME_') ? 'Project outcome learning is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_CUSTOMER_OUTCOME_') ? 'Customer outcome learning is temporarily unavailable.' :
@@ -183,6 +186,34 @@ function createLearningRouter(options = {}) {
   const businessCalibrationOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('Business calibration is restricted to current owners and administrators.'),
       { code: 'M25_EXTERNAL_BUSINESS_CALIBRATION_FORBIDDEN', status: 403 }));
+  const businessOperationsOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
+    Object.assign(new Error('Source operations are restricted to current owners and administrators.'),
+      { code: 'M25_EXTERNAL_BUSINESS_OPERATIONS_FORBIDDEN', status: 403 }));
+
+  router.get('/external-business-sources/:sourceClass/:sourceKey/operations', headers, tenantAuth,
+    businessOperationsOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
+      try {
+        const normalized = businessOperationsContract.identity(req.params.sourceClass, req.params.sourceKey);
+        const data = await businessOperationsRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  const businessOperationMutation = (suffix, normalizer, method) => router.post(
+    `/external-business-sources/:sourceClass/:sourceKey/${suffix}`, headers, mutationAuth,
+    businessOperationsOwnerOnly, throttle, permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = normalizer(req.params.sourceClass, req.params.sourceKey, req.body);
+        const data = await method(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+  businessOperationMutation('adapter', businessOperationsContract.normalizeAdapter, businessOperationsRepository.mutateAdapter);
+  businessOperationMutation('retention', businessOperationsContract.normalizeRetention, businessOperationsRepository.mutateRetention);
+  businessOperationMutation('deletion', businessOperationsContract.normalizeDeletion, businessOperationsRepository.mutateDeletion);
+  businessOperationMutation('hold', businessOperationsContract.normalizeHold, businessOperationsRepository.mutateHold);
+  businessOperationMutation('cleanup', businessOperationsContract.normalizeCleanup, businessOperationsRepository.executeCleanup);
 
   router.get('/external-business-calibration/:kind/:sourceKey/consent', headers, tenantAuth, businessCalibrationOwnerOnly, throttle,
     permission('operations', 'read'), async (req, res) => {

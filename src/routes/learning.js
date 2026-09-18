@@ -87,6 +87,8 @@ const jobOutcomeProposalContract = require('../learning/jobOutcomeProposalContra
 const jobOutcomeProposalRepository = require('../learning/jobOutcomeProposalRepository');
 const jobOutcomeProposalRegistryContract = require('../learning/jobOutcomeProposalRegistryContract');
 const jobOutcomeProposalRegistryRepository = require('../learning/jobOutcomeProposalRegistryRepository');
+const jobOutcomePlanningValueContract = require('../learning/jobOutcomePlanningValueContract');
+const jobOutcomePlanningValueRepository = require('../learning/jobOutcomePlanningValueRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -108,7 +110,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_JOB_OUTCOME_REGISTRY_') ? 'Proposal registry review is temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_JOB_OUTCOME_PLANNING_') ? 'Service planning values are temporarily unavailable.' :
+    code.startsWith('M25_JOB_OUTCOME_REGISTRY_') ? 'Proposal registry review is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_BUSINESS_OPERATIONS_') ? 'Source operations are temporarily unavailable.' :
     code.startsWith('M25_JOB_OUTCOME_GRAPH_') ? 'Job outcome review is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_BUSINESS_CALIBRATION_') ? 'Business calibration is temporarily unavailable.' :
@@ -204,6 +207,9 @@ function createLearningRouter(options = {}) {
   const jobOutcomeGraphOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('Job outcome review is restricted to current owners and administrators.'),
       { code: 'M25_JOB_OUTCOME_GRAPH_FORBIDDEN', status: 403 }));
+  const jobOutcomePlanningOwnerOnly = (req, res, next) => req.userRole === 'owner' ? next() : replyError(req, res,
+    Object.assign(new Error('Planning changes require the current owner.'),
+      { code: 'M25_JOB_OUTCOME_PLANNING_FORBIDDEN', status: 403 }));
 
   router.get('/external-business-sources/:sourceClass/:sourceKey/operations', headers, tenantAuth,
     businessOperationsOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
@@ -1570,6 +1576,46 @@ function createLearningRouter(options = {}) {
         const data = await jobOutcomeProposalRegistryRepository.save(poolProvider(), {
           ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
         });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-planning-values/:serviceKey/adoption-preview', headers, tenantAuth, jobOutcomePlanningOwnerOnly, throttle,
+    permission('settings', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomePlanningValueContract.normalizePreview(req.params.serviceKey, req.body);
+        const data = await jobOutcomePlanningValueRepository.preview(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/job-outcome-planning-values/:serviceKey', headers, tenantAuth, jobOutcomePlanningOwnerOnly, throttle,
+    permission('settings', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomePlanningValueContract.normalizeRead(req.params.serviceKey);
+        const data = await jobOutcomePlanningValueRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-planning-values/:serviceKey/adoptions', headers, mutationAuth, jobOutcomePlanningOwnerOnly, throttle,
+    permission('settings', 'update'), async (req, res) => {
+      try {
+        const normalized = jobOutcomePlanningValueContract.normalizeAdopt(req.params.serviceKey, req.body);
+        const data = await jobOutcomePlanningValueRepository.adopt(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-planning-values/:serviceKey/rollbacks', headers, mutationAuth, jobOutcomePlanningOwnerOnly, throttle,
+    permission('settings', 'update'), async (req, res) => {
+      try {
+        const normalized = jobOutcomePlanningValueContract.normalizeRollback(req.params.serviceKey, req.body);
+        const data = await jobOutcomePlanningValueRepository.rollback(poolProvider(), { ...actor(req), ...normalized,
+          csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key') });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
       } catch (error) { return replyError(req, res, error); }

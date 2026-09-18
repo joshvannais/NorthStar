@@ -5,7 +5,7 @@
   var session = global.NorthStarAccountSession;
   var demo = global.location.pathname.indexOf('/demo/') === 0;
   if (global.history && 'scrollRestoration' in global.history) global.history.scrollRestoration = 'manual';
-  var state = { center: null, accountRole: demo ? 'owner' : null, sourceKind: null, sourceKey: null, partnerSourceKey: null, detail: null, consents: {}, matches: null, calibration: null, health: null, healthReference: null, operations: null, jobOutcome: { graphConsent: null, proposalConsent: null, serviceKey: null, proposal: null, registry: null, planning: null, planningError: null, preview: null, error: null }, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0, healthGeneration: 0, outcomeGeneration: 0, reasonSequence: 0 };
+  var state = { center: null, accountRole: demo ? 'owner' : null, sourceKind: null, sourceKey: null, partnerSourceKey: null, detail: null, consents: {}, matches: null, calibration: null, health: null, healthReference: null, operations: null, demoRevision: null, jobOutcome: { graphConsent: null, proposalConsent: null, serviceKey: null, proposal: null, registry: null, planning: null, planningError: null, preview: null, error: null }, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0, healthGeneration: 0, outcomeGeneration: 0, reasonSequence: 0 };
   var el = function (id) { return document.getElementById(id); };
 
   function node(tag, className, text) {
@@ -29,7 +29,34 @@
   function api(path, options) {
     return session.json('/api/v1/learning' + path, options || { method: 'GET', cache: 'no-store' }).then(function (body) { return body.data; });
   }
+  function demoRequest(path, options) {
+    return global.fetch('/api/demo/learning-center' + path, Object.assign({ credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } }, options || {})).then(function (response) {
+      return response.json().catch(function () { return null; }).then(function (body) {
+        if (!response.ok || !body || body.success !== true || !body.data) { var error = new Error(body && body.error && body.error.message || 'The fictional learning journey is unavailable.'); error.status = response.status; throw error; }
+        return body.data;
+      });
+    });
+  }
+  function demoAction(path) {
+    if (path === '/job-outcome-graph/consent') return 'grant_graph';
+    if (path === '/job-outcome-proposals/consent') return 'grant_proposal';
+    if (/\/job-outcome-proposals\//.test(path)) return 'prepare';
+    if (/\/impact-preview$/.test(path)) return 'preview';
+    if (/\/versions$/.test(path)) return 'save';
+    if (/\/adoption-preview$/.test(path)) return 'adoption_preview';
+    if (/\/adoptions$/.test(path)) return 'adopt';
+    if (/\/rollbacks$/.test(path)) return 'rollback';
+    return null;
+  }
+  function demoMutate(path, body) {
+    var action = demoAction(path); if (!action) return Promise.reject(Object.assign(new Error('This fictional action is unavailable.'), { status: 403 }));
+    var details = { path: path }; if (action === 'prepare') details.summaryIds = body.summaryIds;
+    return demoRequest('/actions', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': idempotency(), 'X-NorthStar-Demo-Intent': 'learning-journey' }, body: JSON.stringify({ action: action, details: details, expectedRevision: state.demoRevision }) }).then(function (data) {
+      state.center = contract.center(data.center); state.jobOutcome = data.jobOutcome; state.demoRevision = data.jobOutcome.demoWorkspaceRevision; return data.result || data.jobOutcome;
+    });
+  }
   function mutate(path, body) {
+    if (demo) return demoMutate(path, body);
     return api(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotency() }, body: JSON.stringify(body) });
   }
   function consentBody(consent, action, version, reason) {
@@ -201,23 +228,6 @@
     return model;
   }
 
-  function jobOutcomeDemo() {
-    var digest = 'b'.repeat(64), id = '11111111-1111-4111-8111-111111111111';
-    var consent = { current: { revision: 1, digest: digest, action: 'grant' }, history: [], total: 1, truncated: false, active: true };
-    var metric = function (key, label, basis, median, lower, upper) { return { metricKey: key, label: label, kind: 'multiplier', basis: basis, sampleSize: 8, cohortSize: 8, coveragePercent: '100.00', median: median, lowerQuartile: lower, upperQuartile: upper, interquartileRange: (Number(upper) - Number(lower)).toFixed(6), advisoryAvailable: true, proposedValue: median, unavailableReason: null }; };
-    var preview = { version: 'm25-job-outcome-proposal-registry-preview-v1', serviceKey: 'tree-service', cohortSize: 8, status: 'review_available', availableImpactCount: 3, unavailableImpactCount: 2,
-      areas: [
-        { area: 'labor', label: 'Labor', status: 'review_available', message: 'Comparable labor evidence is available.', measures: [{ metric: metric('worker_hours', 'Worker hours', 'NorthStar worker hours', '1.080000', '0.960000', '1.170000'), impact: { status: 'relative_review', planningArea: 'labor_planning', direction: 'increase', changePercent: '8.00', statement: 'Future worker-hour planning would be reviewed at 8 percent higher.', absoluteValueStatus: 'unavailable' } }] },
-        { area: 'travel', label: 'Travel', status: 'review_available', message: 'Comparable travel evidence is available.', measures: [{ metric: metric('distance', 'Travel distance', 'Connected travel|mile', '1.020000', '0.970000', '1.090000'), impact: { status: 'relative_review', planningArea: 'travel_planning', direction: 'keep', changePercent: '2.00', statement: 'Future travel planning remains inside the five percent keep range.', absoluteValueStatus: 'unavailable' } }] },
-        { area: 'equipment', label: 'Vehicles And Equipment', status: 'review_available', message: 'Comparable equipment evidence is available.', measures: [{ metric: metric('equipment_hours', 'Equipment hours', 'NorthStar equipment|machine_hour', '0.940000', '0.900000', '1.030000'), impact: { status: 'relative_review', planningArea: 'equipment_planning', direction: 'decrease', changePercent: '-6.00', statement: 'Future equipment-hour planning would be reviewed at 6 percent lower.', absoluteValueStatus: 'unavailable' } }] },
-        { area: 'materials', label: 'Materials', status: 'unavailable', message: 'Five compatible current material outcomes are not available.', measures: [] }, { area: 'scope', label: 'Scope', status: 'unavailable', message: 'Current scope evidence does not establish one reusable planning value.', measures: [] }, { area: 'financial', label: 'Financial Results', status: 'unavailable', message: 'Compatible financial evidence is not available.', measures: [] }
-      ], uncertaintyBoundary: 'The sample and range describe only the selected completed jobs. They are not a forecast or promise.', valueBoundary: 'Relative suggestions do not establish an absolute company value. Financial percentages remain reference-only until compatible NorthStar financial records exist.', adoptionBoundary: 'Saving this review does not change a business profile, planning value, estimate, price, schedule, job or financial record.' };
-    return { graphConsent: consent, proposalConsent: consent, serviceKey: 'tree-service',
-      proposal: { activeConsent: true, current: { id: id, digest: digest, fresh: true, available: true, cohortSize: 8, proposal: { cohortSize: 8, domains: [], uncertaintyBoundary: preview.uncertaintyBoundary, evidenceBoundary: 'Only current same-service completed jobs are compared. Missing or incompatible evidence remains unavailable and is never treated as zero.', adoptionBoundary: preview.adoptionBoundary }, statusMessage: 'Advice from the selected comparable jobs is ready for review.' }, total: 1 },
-      registry: { activeConsent: true, current: { id: id, digest: digest, previewDigest: digest, fresh: true, available: true, preview: preview, statusMessage: 'This saved proposal preview is ready for owner review.' }, history: [], total: 1 },
-      planning: { serviceKey: 'tree-service', current: [{ id: id, revision: 1, digest: digest, state: 'active', planningArea: 'labor_planning', metricKey: 'worker_hours', basis: 'NorthStar worker hours', multiplier: '1.080000', statusMessage: 'This owner-adopted service planning value is current.', lineage: { status: 'current', requiresOwnerReview: false, planningValueInEffect: true } }], history: [], total: 1 }, preview: null, error: null };
-  }
-
   function outcomeServices() {
     var seen = Object.create(null), values = [];
     (state.center && state.center.outcomeServiceKeys || []).forEach(function (key) { if (!seen[key]) { seen[key] = true; values.push(key); } });
@@ -231,10 +241,11 @@
   function outcomeConsentCard(title, copy, value, version, path) {
     var card = node('article', 'learning-outcome-permission'), heading = node('div', 'learning-card-heading'), active = consentActive(value);
     heading.appendChild(node('h3', '', title)); var pill = node('span', 'learning-pill', active ? 'Allowed' : 'Not allowed'); pill.dataset.state = active ? 'active' : 'inactive'; heading.appendChild(pill); card.appendChild(heading); card.appendChild(node('p', '', copy));
-    var action = button(demo ? 'Demo preview' : (active ? 'Stop using these records' : 'Allow this review'), function () {
+    var action = button(demo ? (active ? 'Allowed for this demo' : 'Allow this demo review') : (active ? 'Stop using these records' : 'Allow this review'), function () {
+      if (demo && active) return;
       action.disabled = true; var body = consentBody(value, active ? 'revoke' : 'grant', version, active ? 'Owner stopped this completed-job learning use in the Learning Center.' : 'Owner allowed this completed-job learning use in the Learning Center.');
       mutate(path, body).then(loadJobOutcome).catch(outcomeFail);
-    }, !active); action.disabled = demo || Boolean(state.jobOutcome.error); card.appendChild(node('div', 'learning-actions')).appendChild(action); return card;
+    }, !active); action.disabled = Boolean(state.jobOutcome.error) || (demo && active); card.appendChild(node('div', 'learning-actions')).appendChild(action); return card;
   }
   function outcomeFail(error) {
     state.jobOutcome.error = error && error.status === 403 ? 'You do not have permission to complete this planning action.' : error && error.status === 409 ? 'The learning evidence changed. Refresh this review before continuing.' : 'Completed job learning is temporarily unavailable. Refresh and try again.';
@@ -260,7 +271,7 @@
     if (!services.length) { select.disabled = true; content.appendChild(node('p', 'learning-empty', 'No reviewed service history is available yet. Complete and review jobs before preparing a cross-job suggestion.')); return; }
     select.disabled = false; select.value = outcome.serviceKey && services.indexOf(outcome.serviceKey) >= 0 ? outcome.serviceKey : services[0];
     if (outcome.serviceKey !== select.value) { outcome.serviceKey = select.value; loadJobOutcomeService(select.value); return; }
-    if (demo) content.appendChild(node('p', 'learning-outcome-demo', 'This is fictional demonstration data. Review, adoption and rollback controls are read-only and cannot change a company.'));
+    if (demo) content.appendChild(node('p', 'learning-outcome-demo', 'This is fictional demonstration data. Try the full review, adoption and removal journey here. It stays inside this demo and cannot change a company.'));
     var grid = node('div', 'learning-outcome-grid'); renderProposalCard(grid); renderPlanningCard(grid); content.appendChild(grid);
   }
   function renderProposalCard(grid) {
@@ -273,7 +284,7 @@
     }
     card.appendChild(node('p', '', plain(current.statusMessage, 'Comparable completed jobs are ready for review.')));
     var meta = node('div', 'learning-outcome-meta'); [['Completed jobs', integer(current.cohortSize) || 'Unavailable'], ['Evidence state', current.fresh === true ? 'Current' : 'Needs review'], ['Saved review', registry && registry.fresh === true ? 'Available' : 'Not saved']].forEach(function (item) { var box = node('div'); box.appendChild(node('span', '', item[0])); box.appendChild(node('strong', '', String(item[1]))); meta.appendChild(box); }); card.appendChild(meta);
-    if (current.fresh && current.available && (!registry || !registry.fresh)) { var review = button(demo ? 'Demo preview' : 'Review planning impact', function () { review.disabled = true; mutate('/job-outcome-proposal-registry/' + encodeURIComponent(outcome.serviceKey) + '/impact-preview', { proposalId: current.id, expectedProposalDigest: current.digest }).then(function (value) { outcome.preview = value; renderJobOutcome(); }).catch(outcomeFail); }, true); review.disabled = demo; card.appendChild(node('div', 'learning-actions')).appendChild(review); }
+    if (current.fresh && current.available && (!registry || !registry.fresh)) { var review = button('Review planning impact', function () { review.disabled = true; mutate('/job-outcome-proposal-registry/' + encodeURIComponent(outcome.serviceKey) + '/impact-preview', { proposalId: current.id, expectedProposalDigest: current.digest }).then(function (value) { outcome.preview = value; renderJobOutcome(); }).catch(outcomeFail); }, true); card.appendChild(node('div', 'learning-actions')).appendChild(review); }
     if (outcome.preview && outcome.preview.preview) renderImpactDecision(card, outcome.preview);
     else if (registry && registry.preview) renderSuggestionList(card, registry);
     else if (object(current.proposal)) renderEvidenceDetails(card, current.proposal);
@@ -292,8 +303,8 @@
     var help = node('p', 'learning-outcome-note', 'Choose only jobs you consider comparable. NorthStar checks that every selected job is still current and belongs to this exact service before preparing a suggestion.'); help.id = 'jobOutcomeCohortHelp'; fieldset.appendChild(help); card.appendChild(fieldset);
     var decision = node('div', 'learning-decision'), reasonId = 'jobOutcomeCohortReason-' + (++state.reasonSequence), reasonLabel = node('label', '', 'Reason for preparing this suggestion'), reason = node('textarea'); reason.id = reasonId; reasonLabel.htmlFor = reasonId; reason.maxLength = 2000; reason.value = 'Prepare a planning suggestion from these reviewed comparable completed jobs.'; decision.appendChild(reasonLabel); decision.appendChild(reason);
     var confirmation = node('label', 'learning-confirmation'), confirm = node('input'); confirm.type = 'checkbox'; confirmation.appendChild(confirm); confirmation.appendChild(node('span', '', 'I selected these completed jobs for comparison and understand this does not change company planning.')); decision.appendChild(confirmation);
-    var prepare = button(demo ? 'Demo preview' : 'Prepare suggestion', function () { var summaryIds = checks.filter(function (box) { return box.checked; }).map(function (box) { return box.value; }).sort(); prepare.disabled = true; mutate('/job-outcome-proposals/' + encodeURIComponent(state.jobOutcome.serviceKey), { expectedConsentRevision: state.jobOutcome.proposalConsent.current.revision, expectedConsentDigest: state.jobOutcome.proposalConsent.current.digest, summaryIds: summaryIds, reason: reason.value.trim(), confirmed: true, confirmationVersion: 'm25-cross-job-proposal-generation-v1' }).then(function () { return load(); }).catch(outcomeFail); }, true);
-    function update() { var count = checks.filter(function (box) { return box.checked; }).length; counter.textContent = count + ' selected · select 5 to 100'; prepare.disabled = demo || count<5 || count>100 || !confirm.checked || !reason.value.trim(); }
+    var prepare = button('Prepare suggestion', function () { var summaryIds = checks.filter(function (box) { return box.checked; }).map(function (box) { return box.value; }).sort(); prepare.disabled = true; mutate('/job-outcome-proposals/' + encodeURIComponent(state.jobOutcome.serviceKey), { expectedConsentRevision: state.jobOutcome.proposalConsent.current.revision, expectedConsentDigest: state.jobOutcome.proposalConsent.current.digest, summaryIds: summaryIds, reason: reason.value.trim(), confirmed: true, confirmationVersion: 'm25-cross-job-proposal-generation-v1' }).then(function () { return loadJobOutcomeService(state.jobOutcome.serviceKey); }).catch(outcomeFail); }, true);
+    function update() { var count = checks.filter(function (box) { return box.checked; }).length; counter.textContent = count + ' selected · select 5 to 100'; prepare.disabled = count<5 || count>100 || !confirm.checked || !reason.value.trim(); }
     checks.forEach(function (box) { box.addEventListener('change', update); }); confirm.addEventListener('change', update); reason.addEventListener('input', update); prepare.disabled = true; decision.appendChild(node('div', 'learning-actions')).appendChild(prepare); card.appendChild(decision);
   }
   function evidenceNumber(value) { return typeof value === 'string' && /^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$/.test(value) ? value : 'Unavailable'; }
@@ -314,7 +325,7 @@
     var list = node('div', 'learning-suggestion-list'), preview = object(registry.preview) ? registry.preview : { areas: [] };
     renderEvidenceDetails(card, preview);
     (Array.isArray(preview.areas) ? preview.areas : []).forEach(function (area) { (Array.isArray(area.measures) ? area.measures : []).forEach(function (measure) { if (!object(measure) || !object(measure.metric) || !object(measure.impact)) return; var item = node('div', 'learning-suggestion'), heading = node('div', 'learning-suggestion-heading'); heading.appendChild(node('h4', '', plain(measure.metric.label, contract.label(measure.metric.metricKey, 'Planning measure')))); var impact = measure.impact; var pill = node('span', 'learning-pill', impact.status === 'relative_review' ? percentLabel(impact.changePercent) : 'Unavailable'); pill.dataset.state = impact.status === 'relative_review' ? 'current' : 'review'; heading.appendChild(pill); item.appendChild(heading); item.appendChild(node('p', '', plain(impact.statement, 'Current evidence does not support a planning suggestion for this measure.')));
-      if (registry.id && impact.status === 'relative_review' && impact.planningArea !== 'financial_reference' && isOwner()) { var action = button(demo ? 'Demo preview' : 'Review for adoption', function () { action.disabled = true; mutate('/job-outcome-planning-values/' + encodeURIComponent(state.jobOutcome.serviceKey) + '/adoption-preview', { registryVersionId: registry.id, expectedRegistryDigest: registry.digest, expectedPreviewDigest: registry.previewDigest, planningArea: impact.planningArea, metricKey: measure.metric.metricKey, basis: measure.metric.basis }).then(function (selection) { renderAdoptionDecision(item, registry, measure, selection); }).catch(outcomeFail); }); action.disabled = demo; item.appendChild(node('div', 'learning-actions')).appendChild(action); }
+      if (registry.id && impact.status === 'relative_review' && impact.planningArea !== 'financial_reference' && isOwner()) { var action = button('Review for adoption', function () { action.disabled = true; mutate('/job-outcome-planning-values/' + encodeURIComponent(state.jobOutcome.serviceKey) + '/adoption-preview', { registryVersionId: registry.id, expectedRegistryDigest: registry.digest, expectedPreviewDigest: registry.previewDigest, planningArea: impact.planningArea, metricKey: measure.metric.metricKey, basis: measure.metric.basis }).then(function (selection) { renderAdoptionDecision(item, registry, measure, selection); }).catch(outcomeFail); }); item.appendChild(node('div', 'learning-actions')).appendChild(action); }
       list.appendChild(item); }); });
     if (!list.childNodes.length) list.appendChild(node('p', 'learning-empty', 'No planning measure is available from the current evidence.')); card.appendChild(list);
     if (!isOwner()) card.appendChild(node('p', 'learning-outcome-note', 'A company owner can adopt or remove future planning values after this evidence review is saved.'));
@@ -334,7 +345,7 @@
     var values = object(state.jobOutcome.planning) && Array.isArray(state.jobOutcome.planning.current) ? state.jobOutcome.planning.current : [];
     if (!values.length) { card.appendChild(node('p', '', 'No completed-job suggestion has been adopted for this service.')); grid.appendChild(card); return; }
     var list = node('div', 'learning-suggestion-list'); values.forEach(function (value) { if (!object(value)) return; var item = node('div', 'learning-suggestion'), heading = node('div', 'learning-suggestion-heading'); heading.appendChild(node('h4', '', contract.label(value.metricKey, 'Planning value'))); var lineage = object(value.lineage) ? value.lineage : {}, pill = node('span', 'learning-pill', lifecycleLabel(lineage.status)); pill.dataset.state = lineage.requiresOwnerReview ? 'review' : 'current'; heading.appendChild(pill); item.appendChild(heading); item.appendChild(node('p', '', plain(value.statusMessage, 'This owner planning value is available for review.'))); if (value.state === 'active' && Number.isFinite(Number(value.multiplier))) item.appendChild(node('strong', '', 'Current multiplier: ' + Number(value.multiplier).toFixed(2) + '×'));
-      var rollback = button(demo ? 'Demo preview' : 'Review rollback', function () { renderRollbackDecision(item, value); }); rollback.disabled = demo || value.state !== 'active'; item.appendChild(node('div', 'learning-actions')).appendChild(rollback); list.appendChild(item); }); card.appendChild(list); card.appendChild(node('p', 'learning-outcome-note', 'A source may need review while an adopted value remains in effect. Only an owner adoption or rollback changes that value.')); grid.appendChild(card);
+      var rollback = button('Review rollback', function () { renderRollbackDecision(item, value); }); rollback.disabled = value.state !== 'active'; item.appendChild(node('div', 'learning-actions')).appendChild(rollback); list.appendChild(item); }); card.appendChild(list); card.appendChild(node('p', 'learning-outcome-note', 'A source may need review while an adopted value remains in effect. Only an owner adoption or rollback changes that value.')); grid.appendChild(card);
   }
   function renderRollbackDecision(item, value) {
     var old = item.querySelector('.learning-decision'); if (old) old.remove(); var decision = node('div', 'learning-decision'); decision.appendChild(node('strong', '', 'Remove this planning value?')); decision.appendChild(node('p', '', 'Future planning for this service will no longer use this multiplier. Existing work remains unchanged.'));
@@ -342,13 +353,13 @@
   }
   function loadJobOutcomeService(serviceKey) {
     state.jobOutcome.serviceKey = serviceKey; state.jobOutcome.proposal = null; state.jobOutcome.registry = null; state.jobOutcome.planning = null; state.jobOutcome.planningError = null; state.jobOutcome.preview = null; state.jobOutcome.error = null; renderJobOutcome();
-    if (demo) { var model = jobOutcomeDemo(); state.jobOutcome = model; renderJobOutcome(); return Promise.resolve(); }
+    if (demo) { return demoRequest('').then(function (data) { state.center = contract.center(data.center); state.jobOutcome = data.jobOutcome; state.jobOutcome.serviceKey = serviceKey; state.demoRevision = data.jobOutcome.demoWorkspaceRevision; renderJobOutcome(); }); }
     var generation = ++state.outcomeGeneration;
     return Promise.all([api('/job-outcome-proposals/' + encodeURIComponent(serviceKey)), api('/job-outcome-proposal-registry/' + encodeURIComponent(serviceKey))]).then(function (values) { if (generation !== state.outcomeGeneration) return; state.jobOutcome.proposal = values[0]; state.jobOutcome.registry = values[1]; renderJobOutcome(); if (!isOwner()) return null; return api('/job-outcome-planning-values/' + encodeURIComponent(serviceKey)).then(function (planning) { if (generation !== state.outcomeGeneration) return; state.jobOutcome.planning = planning; renderJobOutcome(); }).catch(function () { if (generation !== state.outcomeGeneration) return; state.jobOutcome.planningError = 'Current owner planning values are temporarily unavailable. The evidence review above is still available.'; renderJobOutcome(); }); }).catch(function (error) { if (generation === state.outcomeGeneration) outcomeFail(error); });
   }
   function loadJobOutcome() {
     state.jobOutcome.error = null;
-    if (demo) { state.jobOutcome = jobOutcomeDemo(); renderJobOutcome(); return Promise.resolve(); }
+    if (demo) { return demoRequest('').then(function (data) { state.center = contract.center(data.center); state.jobOutcome = data.jobOutcome; state.demoRevision = data.jobOutcome.demoWorkspaceRevision; renderJobOutcome(); }); }
     var generation = ++state.outcomeGeneration;
     return Promise.all([api('/job-outcome-graph/consent'), api('/job-outcome-proposals/consent')]).then(function (values) { if (generation !== state.outcomeGeneration) return; state.jobOutcome.graphConsent = values[0]; state.jobOutcome.proposalConsent = values[1]; var services = outcomeServices(), selected = services.indexOf(state.jobOutcome.serviceKey) >= 0 ? state.jobOutcome.serviceKey : services[0]; renderJobOutcome(); if (selected && consentActive(values[0]) && consentActive(values[1])) return loadJobOutcomeService(selected); }).catch(function (error) { if (generation === state.outcomeGeneration) outcomeFail(error); });
   }
@@ -748,14 +759,14 @@
     if (generation !== state.selectionGeneration || !state.detail || !state.matches || !state.operations) return;
     el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey, 'Company source') + ' · ' + sourceTitle(state.sourceKind);
     setPill(el('learningDetailState'), state.detail.activeConsent, !state.detail.activeConsent); renderConsentCards(); renderOperations(); renderEvidence(); renderMatches(); renderCalibration(); renderSummary();
-    status(demo ? 'Showing isolated demo records. Controls are read-only.' : 'Learning Center is current.', 'success'); el('learningMain').setAttribute('aria-busy', 'false');
+    status(demo ? 'Showing isolated fictional records. Source controls are read-only; the completed-job journey is safe to try.' : 'Learning Center is current.', 'success'); el('learningMain').setAttribute('aria-busy', 'false');
   }
   function load(preferredKind, preferredKey) {
     if (typeof preferredKind !== 'string' || typeof preferredKey !== 'string') { preferredKind = null; preferredKey = null; }
     var generation = ++state.loadGeneration, entryLoad = state.center === null; ++state.selectionGeneration; ++state.calibrationGeneration; ++state.healthGeneration;
     if (entryLoad) global.scrollTo(0, 0);
     status('Loading your company learning controls.'); el('learningRefresh').disabled = true; el('learningMain').setAttribute('aria-busy', 'true');
-    var promise = demo ? Promise.resolve(demoModel('labor').center) : api('/center');
+    var promise = demo ? demoRequest('').then(function (data) { state.jobOutcome = data.jobOutcome; state.demoRevision = data.jobOutcome.demoWorkspaceRevision; return data.center; }) : api('/center');
     return promise.then(function (value) {
       if (generation !== state.loadGeneration) return;
       state.center = contract.center(value); state.sourceKind = null; state.sourceKey = null; state.partnerSourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.health = null; state.healthReference = null; state.operations = null;
@@ -785,6 +796,15 @@
   }
 
   el('learningRefresh').addEventListener('click', load);
+  if (demo) {
+    el('learningDemoReset').hidden = false;
+    el('learningDemoReset').addEventListener('click', function () {
+      var control = el('learningDemoReset'); control.disabled = true; status('Resetting the fictional learning journey.');
+      demoRequest('/reset', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': idempotency(), 'X-NorthStar-Demo-Intent': 'learning-journey-reset' }, body: JSON.stringify({ expectedRevision: state.demoRevision }) })
+        .then(function (data) { state.center = contract.center(data.center); state.jobOutcome = data.jobOutcome; state.demoRevision = data.jobOutcome.demoWorkspaceRevision; return load(); })
+        .catch(fail).finally(function () { control.disabled = false; });
+    });
+  }
   el('jobOutcomeService').addEventListener('change', function () { loadJobOutcomeService(el('jobOutcomeService').value); });
   el('learningSourceForm').addEventListener('submit', function (event) {
     event.preventDefault(); if (demo) return;

@@ -13,7 +13,7 @@ describe('Mission 25 Part 12J authority ratification',()=>{
   expect((migration.match(/EXECUTE FUNCTION public\.canonical_external_business_deletion_guard\(\)/g)||[]).length).toBe(8);
  });
  test('returns replays only while their source authority remains current',()=>{
-  expect(migration).toContain('external_business_retired_operation_replay');expect(migration).toContain('external_business_retired_adapter_replay');expect(migration).toContain('source_consent_digest');expect(migration).toContain('external_business_retired_hold_replay');expect(migration).toContain('external_business_retired_cleanup_replay');
+  expect(migration).toContain('external_business_retired_operation_replay');expect(migration).toContain('external_business_retired_adapter_replay');expect(migration).toContain('external_business_retired_retention_replay');expect(migration).toContain('external_business_retired_hold_replay');expect(migration).toContain('external_business_retired_hold_consent_replay');expect(migration).toContain('source_consent_digest');expect(migration).toContain('source_consent_action');expect(migration).toContain('external_business_retired_cleanup_replay');
   for(const number of [113,114,115,116]){const source=read(`migrations/${fs.readdirSync(path.join(root,'migrations')).find(file=>file.startsWith(number+'_'))}`);expect(source).toContain('external_business_retired_consent_replay');expect(source).toContain('external_business_retired_import_replay');}
  });
  test('runs migration 122 inside the reviewed bounded timeout lane',()=>{

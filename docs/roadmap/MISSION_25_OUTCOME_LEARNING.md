@@ -20,10 +20,10 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Released — Slices A-F accepted |
 | 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Released — Slices A-H independently accepted |
-| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | In progress — Slices A-G accepted; Slice H candidate |
-| 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Planned |
-| 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | In progress — Slices A-F accepted; Slice G candidate |
-| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | Planned |
+| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Complete — Slices A-H independently accepted |
+| 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Complete — Slices A-K independently accepted |
+| 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Complete — Slices A-H independently accepted |
+| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | In progress — Slice A candidate |
 
 ## Frozen slice structure for Parts 9-14
 
@@ -122,6 +122,12 @@ Slice G is implemented as a candidate at migration 130. The owner planning-value
 | G | Normal merge, deployment, production health, founder visual verdict and final Mission 25 acceptance. |
 
 Part 12 may consume authorized external invoice, payment and collection evidence. Native NorthStar invoice/payment/collection records remain unavailable until Mission 27 creates that authority; Mission 25 records the compatibility boundary and must not invent those records early. Part 14 cannot pass with placeholder connectors, sample-only cards, an API-only owner workflow, fabricated outcomes or unresolved tenant/deletion boundaries.
+
+## Part 14 Slice A candidate — complete paid-tenant learning journey
+
+The paid-tenant acceptance journey uses one mounted production application and a fresh PostgreSQL database to prove the complete path from provider-neutral source permission and import, through exact reviewed reconciliation, single-job observation and robust five-job calibration, to cross-source graph evaluation, complete job summaries, a pinned cross-job proposal, owner-readable preview and explicit owner adoption and rollback. It reuses the released authorities instead of adding a parallel learning or mutation path.
+
+The journey proves exact replay, tenant isolation, current source and purpose permission, complete source manifests, current reviewed links and adopted-plan lineage. It also proves that learning remains advisory until the company owner explicitly adopts one supported value, and that adoption or rollback does not rewrite customers, estimates, cost plans, source evidence, financial records or other operating truth. The isolated-demo journey, mission-wide recovery, performance, accessibility, responsive review, independent audit, merge, deployment and founder verdict remain Slices B-G.
 
 ## First bounded package — root authority and live-state inventory
 

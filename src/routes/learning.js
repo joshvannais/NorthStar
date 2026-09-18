@@ -83,6 +83,8 @@ const jobOutcomeGraphEvaluationContract = require('../learning/jobOutcomeGraphEv
 const jobOutcomeGraphEvaluationRepository = require('../learning/jobOutcomeGraphEvaluationRepository');
 const jobOutcomeSummaryContract = require('../learning/jobOutcomeSummaryContract');
 const jobOutcomeSummaryRepository = require('../learning/jobOutcomeSummaryRepository');
+const jobOutcomeProposalContract = require('../learning/jobOutcomeProposalContract');
+const jobOutcomeProposalRepository = require('../learning/jobOutcomeProposalRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -1492,6 +1494,47 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = jobOutcomeSummaryContract.normalizeSummary(req.params.estimateId, req.body);
         const data = await jobOutcomeSummaryRepository.build(poolProvider(), {
+          ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/job-outcome-proposals/consent', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const data = await jobOutcomeProposalRepository.readConsent(poolProvider(), actor(req));
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-proposals/consent', headers, mutationAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const body = jobOutcomeProposalContract.normalizeConsent(req.body);
+        const data = await jobOutcomeProposalRepository.mutateConsent(poolProvider(), {
+          ...actor(req), body, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/job-outcome-proposals/:serviceKey', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeProposalContract.normalizeRead(req.params.serviceKey);
+        const data = await jobOutcomeProposalRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-proposals/:serviceKey', headers, mutationAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeProposalContract.normalizeProposal(req.params.serviceKey, req.body);
+        const data = await jobOutcomeProposalRepository.build(poolProvider(), {
           ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
         });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');

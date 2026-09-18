@@ -1,0 +1,9 @@
+'use strict';
+const crypto=require('node:crypto');
+const contract=require('../../src/learning/jobOutcomeProposalContract');
+const repository=require('../../src/learning/jobOutcomeProposalRepository');
+const digest='a'.repeat(64);
+describe('Mission 25 Part 13D cross-job proposal contract',()=>{
+ test('requires exact permission and proposal shapes',()=>{expect(contract.normalizeConsent({action:'grant',expectedRevision:0,expectedDigest:'none',reason:'Prepare advice from comparable jobs.',confirmed:true,confirmationVersion:'m25-job-outcome-proposal-consent-v1'}).action).toBe('grant');expect(()=>contract.normalizeConsent({action:'grant',expectedRevision:0,expectedDigest:'none',reason:'Prepare advice.',confirmed:true,confirmationVersion:'m25-job-outcome-proposal-consent-v1',extra:true})).toThrow('permission details are invalid');const ids=Array.from({length:5},()=>crypto.randomUUID()).sort();expect(contract.normalizeProposal('fence',{expectedConsentRevision:1,expectedConsentDigest:digest,summaryIds:ids,reason:'Prepare exact same-service advice.',confirmed:true,confirmationVersion:'m25-cross-job-proposal-generation-v1'}).summaryIds).toEqual(ids);for(const summaryIds of[[...ids].reverse(),ids.slice(0,4),[...ids.slice(0,4),ids[0]].sort()])expect(()=>contract.normalizeProposal('fence',{expectedConsentRevision:1,expectedConsentDigest:digest,summaryIds,reason:'Prepare exact same-service advice.',confirmed:true,confirmationVersion:'m25-cross-job-proposal-generation-v1'})).toThrow();});
+ test('uses plain recovery messages',()=>{expect(repository.mapped({code:'40001'})).toMatchObject({status:409,message:'Permission or one of the selected job summaries changed. Refresh before continuing.'});expect(repository.mapped({code:'P0002',constraint:'job_outcome_proposal_consent_unavailable'})).toMatchObject({status:409,message:'Current permission is required before preparing cross-job advice.'});});
+});

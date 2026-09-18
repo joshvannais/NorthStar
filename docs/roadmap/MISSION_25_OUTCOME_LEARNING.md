@@ -95,6 +95,8 @@ Parts 1-8 were released as one bounded package each and do not have retroactive 
 | G | Correction, revocation, deletion, proposal supersession and adoption-lineage propagation. |
 | H | Paid and isolated-demo graph and adoption experience, recovery, accessibility, responsive review and independent Part 13 acceptance. |
 
+Slice A is implemented as a candidate at migration 124. It records only exact, current and separately permitted links between accepted per-job outcome observations. It does not combine values, score evidence, generate proposals or adopt changes; those remain Slices B-F. Corrections, source or purpose permission changes, reviewed-link changes and target changes stale the graph, while revocation hides it and a later grant revives nothing from an earlier permission period.
+
 ### Part 14 — seven mission acceptance slices
 
 | Slice | Scope |

@@ -217,6 +217,14 @@ Source permission, imports, holds, deletion and cleanup share one transaction lo
 
 Saved request results are replayable only while they remain current for that source and permission period. Revocation, deletion, cancellation, a new permission period or a later lifecycle or cleanup revision retires the old response; delayed retries are rejected without exposing the retired success payload.
 
+## Part 13 Slice A candidate — canonical job outcome graph
+
+`canonical_job_outcome_graphs` records a tenant-private lineage graph for one canonical estimate. A graph may contain only exact current observations from the accepted labor, travel, equipment, material, customer, project and available external financial authorities. Each node pins its observation identity, revision, digest, source digest and the bounded locator needed to re-read that exact authority. The graph also pins the current estimate target manifest and a separate job-outcome-graph permission period.
+
+Every graph needs at least two distinct current sources across at least two outcome domains. Duplicate identities, stale observations, hidden source detail, mismatched estimates, unsupported locators and incomplete permission are rejected. The graph retains no outcome value and performs no conversion, conflict resolution, completeness assessment, summary, calibration, proposal or adoption. Those remain later Part 13 slices.
+
+Corrections, tombstones, source or purpose permission changes, reviewed-link changes and estimate-target changes make an earlier graph stale and mask its nodes. Revoking graph permission hides all graph history from the current period. A later grant starts empty and cannot revive an earlier graph. Runtime access is limited to four guarded entry functions; storage and resolver helpers remain withheld.
+
 ## Part 12K presentation projection
 
 `canonical_learning_center_read` version 5 adds only bounded source keys and normalized service keys for the four accepted business-system classes. Source detail, reviewed links, outcomes, calibration and lifecycle state continue through their existing guarded entries. The projection does not duplicate operational truth and cannot infer a source relationship, service, unit, currency, state or missing value.

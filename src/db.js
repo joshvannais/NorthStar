@@ -1379,6 +1379,24 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_read(uuid,uuid,text,uuid,text,text,text,text) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_job_outcome_graph_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_graph_consents, public.canonical_job_outcome_graphs FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_locator_valid(text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_node_input_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_node_manifest_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_manifest_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_consent_projection(public.canonical_job_outcome_graph_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_resolve_node(uuid,uuid,text,uuid,uuid,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_resolve_nodes(uuid,uuid,text,uuid,uuid,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_consent_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_projection(public.canonical_job_outcome_graphs,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_consent_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_external_business_adapter_revisions') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_business_adapter_revisions, public.canonical_external_business_retention_revisions, public.canonical_external_business_deletion_revisions, public.canonical_external_business_hold_revisions, public.canonical_external_business_lifecycle_gates, public.canonical_external_business_request_keys, public.canonical_external_business_cleanup_runs FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_source_prefix(text) FROM %I', runtime_role);
@@ -1731,6 +1749,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_external_customer_outcome_%'
            AND relation.relname NOT LIKE 'canonical_external_project_outcome_%'
            AND relation.relname NOT LIKE 'canonical_external_financial_outcome_%'
+           AND relation.relname NOT LIKE 'canonical_job_outcome_graph%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_labor_plans'
            AND relation.relname <> 'canonical_travel_plans'
@@ -2143,6 +2162,29 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_consent_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_proposal_guard()','EXECUTE')
        )) AS external_business_calibration_helpers_withheld,
+       (to_regclass('public.canonical_job_outcome_graph_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_job_outcome_graph_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_job_outcome_graphs','SELECT,INSERT,UPDATE,DELETE')
+       )) AS job_outcome_graph_tables_withheld,
+       (to_regclass('public.canonical_job_outcome_graph_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_job_outcome_graph_consent_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_graph_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_graph_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_graph_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS job_outcome_graph_entry_execute,
+       (to_regclass('public.canonical_job_outcome_graph_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_job_outcome_graph_locator_valid(text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_node_input_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_node_manifest_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_manifest_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_consent_projection(public.canonical_job_outcome_graph_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_resolve_node(uuid,uuid,text,uuid,uuid,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_resolve_nodes(uuid,uuid,text,uuid,uuid,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_consent_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_projection(public.canonical_job_outcome_graphs,uuid,text,uuid)','EXECUTE')
+       )) AS job_outcome_graph_helpers_withheld,
        (to_regclass('public.canonical_external_business_adapter_revisions') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_external_business_adapter_revisions','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_external_business_retention_revisions','SELECT,INSERT,UPDATE,DELETE')
@@ -2444,6 +2486,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.external_business_calibration_tables_withheld ||
       !runtimePrivileges.external_business_calibration_entry_execute ||
       !runtimePrivileges.external_business_calibration_helpers_withheld ||
+      !runtimePrivileges.job_outcome_graph_tables_withheld ||
+      !runtimePrivileges.job_outcome_graph_entry_execute ||
+      !runtimePrivileges.job_outcome_graph_helpers_withheld ||
       !runtimePrivileges.external_business_operations_tables_withheld ||
       !runtimePrivileges.external_business_operations_entry_execute ||
       !runtimePrivileges.external_business_operations_helpers_withheld ||
@@ -2475,7 +2520,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   }
 }
 
-const REVIEWED_MIGRATION_TIMEOUT_FILES = new Set(['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql','100_canonical_imported_asset_health_outcomes.sql','101_canonical_imported_asset_calibration.sql','102_canonical_external_asset_import_operations.sql','103_canonical_learning_center_assets.sql','104_canonical_learning_match_labels.sql','105_canonical_native_material_outcomes.sql','106_canonical_external_material_import_authority.sql','107_canonical_external_material_reconciliation.sql','108_canonical_imported_material_quantity_outcomes.sql','109_canonical_imported_material_cost_observations.sql','110_canonical_imported_material_calibration.sql','111_canonical_external_material_import_operations.sql','112_canonical_learning_center_materials.sql','113_canonical_external_crm_field_service_import_authority.sql','114_canonical_external_project_change_order_import_authority.sql','115_canonical_external_communication_import_authority.sql','116_canonical_external_financial_import_authority.sql','117_canonical_external_business_reconciliation.sql','118_canonical_external_customer_outcomes.sql','119_canonical_external_project_outcomes.sql','120_canonical_external_financial_outcomes.sql','121_canonical_external_business_calibration.sql','122_canonical_external_business_source_operations.sql','123_canonical_learning_center_business_systems.sql']);
+const REVIEWED_MIGRATION_TIMEOUT_FILES = new Set(['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql','100_canonical_imported_asset_health_outcomes.sql','101_canonical_imported_asset_calibration.sql','102_canonical_external_asset_import_operations.sql','103_canonical_learning_center_assets.sql','104_canonical_learning_match_labels.sql','105_canonical_native_material_outcomes.sql','106_canonical_external_material_import_authority.sql','107_canonical_external_material_reconciliation.sql','108_canonical_imported_material_quantity_outcomes.sql','109_canonical_imported_material_cost_observations.sql','110_canonical_imported_material_calibration.sql','111_canonical_external_material_import_operations.sql','112_canonical_learning_center_materials.sql','113_canonical_external_crm_field_service_import_authority.sql','114_canonical_external_project_change_order_import_authority.sql','115_canonical_external_communication_import_authority.sql','116_canonical_external_financial_import_authority.sql','117_canonical_external_business_reconciliation.sql','118_canonical_external_customer_outcomes.sql','119_canonical_external_project_outcomes.sql','120_canonical_external_financial_outcomes.sql','121_canonical_external_business_calibration.sql','122_canonical_external_business_source_operations.sql','123_canonical_learning_center_business_systems.sql','124_canonical_job_outcome_graph.sql']);
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

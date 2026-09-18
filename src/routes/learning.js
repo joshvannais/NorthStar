@@ -77,6 +77,8 @@ const importedAssetHealthContract = require('../learning/importedAssetHealthCont
 const importedAssetHealthRepository = require('../learning/importedAssetHealthRepository');
 const importedAssetCalibrationContract = require('../learning/importedAssetCalibrationContract');
 const importedAssetCalibrationRepository = require('../learning/importedAssetCalibrationRepository');
+const jobOutcomeGraphContract = require('../learning/jobOutcomeGraphContract');
+const jobOutcomeGraphRepository = require('../learning/jobOutcomeGraphRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -99,6 +101,7 @@ function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
   const unavailable = code.startsWith('M25_EXTERNAL_BUSINESS_OPERATIONS_') ? 'Source operations are temporarily unavailable.' :
+    code.startsWith('M25_JOB_OUTCOME_GRAPH_') ? 'Job outcome review is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_BUSINESS_CALIBRATION_') ? 'Business calibration is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_FINANCIAL_OUTCOME_') ? 'Financial outcome learning is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_PROJECT_OUTCOME_') ? 'Project outcome learning is temporarily unavailable.' :
@@ -189,6 +192,9 @@ function createLearningRouter(options = {}) {
   const businessOperationsOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
     Object.assign(new Error('Source operations are restricted to current owners and administrators.'),
       { code: 'M25_EXTERNAL_BUSINESS_OPERATIONS_FORBIDDEN', status: 403 }));
+  const jobOutcomeGraphOwnerOnly = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ? next() : replyError(req, res,
+    Object.assign(new Error('Job outcome review is restricted to current owners and administrators.'),
+      { code: 'M25_JOB_OUTCOME_GRAPH_FORBIDDEN', status: 403 }));
 
   router.get('/external-business-sources/:sourceClass/:sourceKey/operations', headers, tenantAuth,
     businessOperationsOwnerOnly, throttle, permission('operations', 'read'), async (req, res) => {
@@ -1399,6 +1405,47 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = calibrationContract.normalizeProposal(req.params.sourceKey, req.params.serviceKey, req.body);
         const data = await calibrationRepository.propose(poolProvider(), {
+          ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/job-outcome-graph/consent', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const data = await jobOutcomeGraphRepository.readConsent(poolProvider(), actor(req));
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-graph/consent', headers, mutationAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const body = jobOutcomeGraphContract.normalizeConsent(req.body);
+        const data = await jobOutcomeGraphRepository.mutateConsent(poolProvider(), {
+          ...actor(req), body, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/estimates/:estimateId/job-outcome-graph', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeGraphContract.normalizeRead(req.params.estimateId);
+        const data = await jobOutcomeGraphRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/estimates/:estimateId/job-outcome-graph', headers, mutationAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeGraphContract.normalizeGraph(req.params.estimateId, req.body);
+        const data = await jobOutcomeGraphRepository.build(poolProvider(), {
           ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
         });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');

@@ -73,6 +73,19 @@ function migrationTableInventory(migrationsDirectory) {
     .sort();
 }
 
+function operationalTableArea(name) {
+  if (name.startsWith('canonical_external_')) return 'externalSourceAuthority';
+  if (name === 'canonical_business_profiles') return 'companyState';
+  if (/^(?:canonical_customers|canonical_customer_identities|canonical_opportunities|canonical_estimates|canonical_estimate_|canonical_customer_estimate_|canonical_pricing_|canonical_commercial_|canonical_tax_|canonical_travel_(?:plans|fences)$)/.test(name)) return 'customerAndPlans';
+  if (/^(?:canonical_appointments|canonical_schedule_|canonical_workforce_availability_)/.test(name)) return 'schedule';
+  if (/^(?:canonical_operations|canonical_field_|canonical_labor_|canonical_material_|canonical_progress_|canonical_completion_|canonical_handoff_)/.test(name)) return 'jobAndExecution';
+  if (/^(?:tenant_assets$|tenant_asset_|canonical_equipment_)/.test(name)) return 'assets';
+  if (/^(?:canonical_facts|canonical_transcripts|canonical_communications|canonical_polaris_snapshots|canonical_native_[a-z0-9_]+)$/.test(name)) return 'sourceEvidence';
+  if (/^(?:subscriptions|invoices)$/.test(name)) return 'financial';
+  if (/^(?:integration_credentials|phone_numbers|webhooks|webhook_deliveries|retell_webhook_replay_claims|canonical_integration_ownership|canonical_voice_|canonical_call_provider_|polaris_provider_)/.test(name)) return 'provider';
+  return null;
+}
+
 module.exports = {
   assertUniqueMigrationTableDeclarations,
   assertUniqueTableNames,
@@ -80,5 +93,6 @@ module.exports = {
   migrationTableDeclarations,
   migrationTableInventory,
   normalizeIdentifier,
+  operationalTableArea,
   parseTableDeclarations,
 };

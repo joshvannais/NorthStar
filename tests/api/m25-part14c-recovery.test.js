@@ -43,6 +43,12 @@ realPostgres('Mission 25 Part 14C migration and lifecycle recovery', () => {
       expect(fixture.db.readiness()).toEqual({ ready: true, failure: null });
       expect(await migrationLedger()).toEqual(expectedLedger);
     };
+    const expectPublicCleanupRun = run => {
+      expect(Object.keys(run).sort()).toEqual([
+        'complete', 'cursorAfter', 'digest', 'id', 'operation', 'sequence', 'tombstonedCount',
+      ]);
+      expect(JSON.stringify(run)).not.toMatch(/organization_|actor_|membership_|auth_session_|request_|authority_|canonical_|cursor_after|tombstoned_count/);
+    };
 
     const grantKey = crypto.randomUUID(), grantBody = consentBody('grant', 0, 'none', 'Start the reviewed recovery source.');
     let response = await post('/consent', grantBody, grantKey);
@@ -55,16 +61,17 @@ realPostgres('Mission 25 Part 14C migration and lifecycle recovery', () => {
     response = await post('/adapter', { ...connectBody, action: 'pause', expectedRevision: adapter.revision, expectedDigest: adapter.digest });
     expect(response.status).toBe(201); adapter = response.body.data.adapter;
 
-    const initialLedger = await migrationLedger(); expect(initialLedger).toHaveLength(132);
-    const recoveryMigrationChecksum = crypto.createHash('sha256').update(fs.readFileSync(
-      path.join(__dirname, '../../migrations/134_canonical_external_labor_recovery.sql'))).digest('hex');
-    expect(initialLedger.find(row => row.filename === '134_canonical_external_labor_recovery.sql')).toMatchObject({
-      checksum: recoveryMigrationChecksum,
-    });
+    const initialLedger = await migrationLedger(); expect(initialLedger).toHaveLength(133);
+    for (const migration of ['134_canonical_external_labor_recovery.sql', '135_canonical_external_labor_cleanup_projection.sql']) {
+      const checksum = crypto.createHash('sha256').update(fs.readFileSync(
+        path.join(__dirname, '../../migrations', migration))).digest('hex');
+      expect(initialLedger.find(row => row.filename === migration)).toMatchObject({ checksum });
+    }
     expect((await fixture.ownerPool.query(`SELECT
       has_function_privilege($1,'canonical_external_labor_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE') AS consent_entry,
-      has_function_privilege($1,'canonical_external_labor_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE') AS operation_helper`,
-    [fixture.roles.runtime])).rows[0]).toEqual({ consent_entry: true, operation_helper: false });
+      has_function_privilege($1,'canonical_external_labor_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE') AS operation_helper,
+      has_function_privilege($1,'canonical_external_labor_cleanup_projection(canonical_external_labor_cleanup_runs)','EXECUTE') AS cleanup_projection`,
+    [fixture.roles.runtime])).rows[0]).toEqual({ consent_entry: true, operation_helper: false, cleanup_projection: false });
     await restart(initialLedger);
     for (const [suffix, body, key] of [['/consent', grantBody, grantKey], ['/batches', firstBatch, batchKey], ['/adapter', connectBody, adapterKey]]) {
       const replay = await post(suffix, body, key); expect(replay.status).toBe(200); expect(replay.headers['idempotency-replayed']).toBe('true');
@@ -118,9 +125,14 @@ realPostgres('Mission 25 Part 14C migration and lifecycle recovery', () => {
       expectedDigest: deletion.digest, cursorBefore: null, limit: 100, confirmed: true };
     response = await post('/cleanup', firstCleanupBody, firstCleanupKey);
     expect(response.status).toBe(201); expect(response.body.data.run).toMatchObject({ tombstonedCount: 100, complete: false });
-    const resumeCursor = response.body.data.run.cursorAfter; expect(typeof resumeCursor).toBe('string');
+    const firstPublicData = response.body.data; const firstPublicRun = firstPublicData.run; expectPublicCleanupRun(firstPublicRun);
+    const resumeCursor = firstPublicRun.cursorAfter; expect(typeof resumeCursor).toBe('string');
 
     await restart(initialLedger);
+    const firstCleanupReplay = await post('/cleanup', firstCleanupBody, firstCleanupKey);
+    expect(firstCleanupReplay.status).toBe(200); expect(firstCleanupReplay.headers['idempotency-replayed']).toBe('true');
+    expect({ ...firstCleanupReplay.body.data, replayed: false }).toEqual(firstPublicData);
+    expectPublicCleanupRun(firstCleanupReplay.body.data.run);
     read = await request(fixture.app).get(root + '/operations').set(owner.session.headers);
     expect(read.status).toBe(200);
     expect(read.body.data.checkpoints.find(value => value.mode === 'deletion_cleanup')).toMatchObject({ cursorAfter: resumeCursor, complete: false });
@@ -128,8 +140,12 @@ realPostgres('Mission 25 Part 14C migration and lifecycle recovery', () => {
       expectedDigest: deletion.digest, cursorBefore: resumeCursor, limit: 100, confirmed: true };
     response = await post('/cleanup', secondCleanupBody, secondCleanupKey);
     expect(response.status).toBe(201); expect(response.body.data.run).toMatchObject({ tombstonedCount: 1, complete: true });
+    const completedPublicData = response.body.data; const completedPublicRun = completedPublicData.run; expectPublicCleanupRun(completedPublicRun);
+    await restart(initialLedger);
     const cleanupReplay = await post('/cleanup', secondCleanupBody, secondCleanupKey);
     expect(cleanupReplay.status).toBe(200); expect(cleanupReplay.headers['idempotency-replayed']).toBe('true');
+    expect({ ...cleanupReplay.body.data, replayed: false }).toEqual(completedPublicData);
+    expectPublicCleanupRun(cleanupReplay.body.data.run);
     read = await request(fixture.app).get(root + '/operations').set(owner.session.headers);
     expect(read.body.data).toMatchObject({ activeRecordTotal: 0, deletionComplete: true });
     expect(await migrationLedger()).toEqual(initialLedger);

@@ -30,6 +30,7 @@ async function grantAndVerify(client, runtimeRole) {
     'public.canonical_imported_labor_calibration_basis(uuid,text,text)',
     'public.canonical_imported_labor_calibration_projection(public.canonical_external_labor_calibration_proposals)',
     'public.canonical_external_labor_operation_projection(text,jsonb)',
+    'public.canonical_external_labor_cleanup_projection(public.canonical_external_labor_cleanup_runs)',
     'public.canonical_external_labor_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)',
     'public.canonical_external_labor_import_deletion_guard()',
     'public.canonical_learning_center_part11_read(uuid,uuid,text,uuid)'
@@ -101,6 +102,7 @@ async function grantAndVerify(client, runtimeRole) {
       AND NOT has_function_privilege($1,'public.canonical_external_labor_reference_source_basis(uuid,text,text,text)','EXECUTE')
       AND NOT has_function_privilege($1,'public.canonical_external_labor_reference_target_basis(uuid,text,uuid)','EXECUTE')
       AND NOT has_function_privilege($1,'public.canonical_external_labor_reference_match_projection(public.canonical_external_labor_import_reference_matches,jsonb,jsonb,jsonb)','EXECUTE')
+      AND NOT has_function_privilege($1,'public.canonical_external_labor_cleanup_projection(public.canonical_external_labor_cleanup_runs)','EXECUTE')
       AND NOT has_function_privilege($1,'public.canonical_learning_center_part11_read(uuid,uuid,text,uuid)','EXECUTE') helpers_withheld,
     NOT has_function_privilege($1,'public.canonical_imported_labor_learning_consent_projection(public.canonical_external_labor_import_learning_consents)','EXECUTE')
       AND NOT has_function_privilege($1,'public.canonical_imported_labor_learning_basis(uuid,text,uuid,text)','EXECUTE')

@@ -15,7 +15,7 @@ describe('Mission 25 Part 14C recovery acceptance', () => {
 
   test('executes the required recovery sequence against the mounted application', () => {
     const mounted = read('tests/api/m25-part14c-recovery.test.js');
-    for (const proof of ['fixture.db.close()', 'fixture.db.initDatabase()', 'toHaveLength(132)', "['/consent', grantBody, grantKey]", "action: 'resume'", "externalVersion: 2", "consentBody('revoke'", 'retiredReplayStatuses', 'recordTotal).toBe(0)', "operation: 'retention'", 'tombstonedCount: 100', 'cursorBefore: resumeCursor', "mode === 'deletion_cleanup'", "headers['idempotency-replayed']", 'deletionComplete: true']) expect(mounted).toContain(proof);
+    for (const proof of ['fixture.db.close()', 'fixture.db.initDatabase()', 'toHaveLength(133)', "['/consent', grantBody, grantKey]", "action: 'resume'", "externalVersion: 2", "consentBody('revoke'", 'retiredReplayStatuses', 'recordTotal).toBe(0)', "operation: 'retention'", 'tombstonedCount: 100', 'firstCleanupReplay.body.data, replayed: false', 'cleanupReplay.body.data, replayed: false', 'expectPublicCleanupRun', 'cursorBefore: resumeCursor', "mode === 'deletion_cleanup'", "headers['idempotency-replayed']", 'deletionComplete: true']) expect(mounted).toContain(proof);
   });
 
   test('pins restart-safe ledger recognition and retires cross-period labor retries', () => {
@@ -23,9 +23,13 @@ describe('Mission 25 Part 14C recovery acceptance', () => {
     const migration = read('migrations/134_canonical_external_labor_recovery.sql');
     expect(database).toContain("CANONICAL_LEDGER_CONSTRAINTS.filter(constraint => constraint.contype !== 'n')");
     expect(database).toContain("'134_canonical_external_labor_recovery.sql'");
+    expect(database).toContain("'135_canonical_external_labor_cleanup_projection.sql'");
     expect(migration).toContain("CONSTRAINT='external_labor_retired_consent_replay'");
     expect(migration).toContain("CONSTRAINT='external_labor_retired_operation_replay'");
     expect(migration).toContain("body->>'action' IN ('connect','resume') AND consent_row.action IS DISTINCT FROM 'grant'");
+    const cleanup = read('migrations/135_canonical_external_labor_cleanup_projection.sql');
+    expect(cleanup).toContain('canonical_external_labor_cleanup_projection(replay_run)');
+    expect(cleanup).not.toContain("jsonb_build_object('run',to_jsonb(replay_run)");
   });
 
   test('adds no rendered, provider, credential or release path', () => {

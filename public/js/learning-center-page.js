@@ -5,7 +5,7 @@
   var session = global.NorthStarAccountSession;
   var demo = global.location.pathname.indexOf('/demo/') === 0;
   if (global.history && 'scrollRestoration' in global.history) global.history.scrollRestoration = 'manual';
-  var state = { center: null, sourceKind: null, sourceKey: null, detail: null, consents: {}, matches: null, calibration: null, health: null, healthReference: null, operations: null, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0, healthGeneration: 0 };
+  var state = { center: null, sourceKind: null, sourceKey: null, partnerSourceKey: null, detail: null, consents: {}, matches: null, calibration: null, health: null, healthReference: null, operations: null, loadGeneration: 0, selectionGeneration: 0, calibrationGeneration: 0, healthGeneration: 0 };
   var el = function (id) { return document.getElementById(id); };
 
   function node(tag, className, text) {
@@ -49,7 +49,36 @@
     })[0];
   }
   function sourceBase(kind, key) {
-    return '/external-' + kind + '-sources/' + encodeURIComponent(key);
+    var roots = { crm_field_service: 'crm-field-service', project_change_order: 'project-change-order', communication: 'communication', financial: 'financial' };
+    return '/external-' + (roots[kind] || kind) + '-sources/' + encodeURIComponent(key);
+  }
+  function isBusinessKind(kind) { return ['crm_field_service', 'project_change_order', 'communication', 'financial'].indexOf(kind || state.sourceKind) >= 0; }
+  function operationBase(kind, key) { return isBusinessKind(kind) ? '/external-business-sources/' + encodeURIComponent(kind) + '/' + encodeURIComponent(key) : sourceBase(kind, key); }
+  function sourceTitle(kind) { return ({ crm_field_service: 'CRM and field service', project_change_order: 'Projects and change orders', communication: 'Customer communications', financial: 'External financial records' })[kind] || contract.label(kind, 'Operating'); }
+  function importConsentVersion(kind) { return ({ crm_field_service: 'm25-external-crm-field-service-import-consent-v1', project_change_order: 'm25-external-project-change-order-import-consent-v1', communication: 'm25-external-communication-import-consent-v1', financial: 'm25-external-financial-import-consent-v1' })[kind]; }
+  function businessPartnerCandidates(kind) {
+    var partner = kind === 'communication' ? 'crm_field_service' : 'communication';
+    return state.center.sources.filter(function (source) { return source.sourceKind === partner; });
+  }
+  function businessPartner(kind) {
+    var candidates = businessPartnerCandidates(kind);
+    if (candidates.length === 1) return candidates[0];
+    return candidates.filter(function (source) { return source.sourceKey === state.partnerSourceKey; })[0] || null;
+  }
+  function businessOutcomeKind() { return state.sourceKind === 'project_change_order' ? 'project' : (state.sourceKind === 'financial' ? 'financial' : 'customer'); }
+  function businessOutcomeBase() {
+    if (state.sourceKind === 'project_change_order') return '/external-project-outcome-sources/' + encodeURIComponent(state.sourceKey);
+    if (state.sourceKind === 'financial') return '/external-financial-outcome-sources/' + encodeURIComponent(state.sourceKey);
+    var partner = businessPartner(state.sourceKind); if (!partner) return null;
+    var crm = state.sourceKind === 'crm_field_service' ? state.sourceKey : partner.sourceKey;
+    var communication = state.sourceKind === 'communication' ? state.sourceKey : partner.sourceKey;
+    return '/external-customer-outcome-sources/' + encodeURIComponent(crm) + '/' + encodeURIComponent(communication);
+  }
+  function businessCalibrationBase(serviceKey, proposal) {
+    var kind = businessOutcomeKind(), partner = businessPartner(state.sourceKind);
+    var sourceKey = state.sourceKind === 'communication' && partner ? partner.sourceKey : state.sourceKey;
+    var query = kind === 'customer' && partner ? '?secondarySourceKey=' + encodeURIComponent(state.sourceKind === 'communication' ? state.sourceKey : partner.sourceKey) : '';
+    return '/external-business-calibration/' + kind + '/' + encodeURIComponent(sourceKey) + (serviceKey ? '/services/' + encodeURIComponent(serviceKey) + (proposal ? '/proposals' : '') : '/consent') + query;
   }
   function isTravel() { return state.sourceKind === 'travel'; }
   function isAsset() { return state.sourceKind === 'asset'; }
@@ -60,13 +89,17 @@
     var consent = { active: true, current: { revision: 1, digest: digest, action: 'grant' }, history: [], total: 1, truncated: false };
     var travel = kind === 'travel', asset = kind === 'asset', material = kind === 'material';
     var model = {
-      center: { version: 'm25-learning-center-v4', authority: 'isolated_demo_postgresql', evaluatedAt: now,
-        nativeLabor: consent, nativeEquipment: consent, nativeMaterial: consent, sourceTotal: 4, sourcesTruncated: false,
+      center: { version: 'm25-learning-center-v5', authority: 'isolated_demo_postgresql', evaluatedAt: now,
+        nativeLabor: consent, nativeEquipment: consent, nativeMaterial: consent, sourceTotal: 8, sourcesTruncated: false,
         sources: [
           { sourceKind: 'labor', sourceKey: 'crewclock.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
           { sourceKind: 'travel', sourceKey: 'fleet.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
           { sourceKind: 'asset', sourceKey: 'equipment.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
-          { sourceKind: 'material', sourceKey: 'materials.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false }
+          { sourceKind: 'material', sourceKey: 'materials.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
+          { sourceKind: 'crm_field_service', sourceKey: 'customers.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
+          { sourceKind: 'project_change_order', sourceKey: 'projects.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
+          { sourceKind: 'communication', sourceKey: 'conversations.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false },
+          { sourceKind: 'financial', sourceKey: 'accounting.demo', serviceKeys: ['tree-service'], serviceTotal: 1, servicesTruncated: false }
         ],
         learningBoundary: 'Demo records are isolated and illustrative. Learning remains advisory and changes no operating record.' },
       source: { sourceKey: asset ? 'equipment.demo' : (travel ? 'fleet.demo' : 'crewclock.demo'), activeConsent: true, runs: [{ sequence: 4 }], runTotal: 4, runsTruncated: false,
@@ -151,6 +184,16 @@
           purchaseCost: { status: 'compared', label: 'Material purchase cost', basis: 'USD', proposedMultiplier: '1.0600', medianActualToPlannedRatio: '1.0600', advisoryMessage: 'Reviewed purchase costs were about 6% above plan.' }
         } } };
     }
+    if (isBusinessKind(kind)) {
+      var businessKeys = { crm_field_service: 'customers.demo', project_change_order: 'projects.demo', communication: 'conversations.demo', financial: 'accounting.demo' };
+      var businessKey = businessKeys[kind], referenceKind = kind === 'project_change_order' ? 'project' : (kind === 'financial' ? 'accounting_entry' : 'customer');
+      model.source = { sourceKey: businessKey, activeConsent: true, runs: [{ sequence: 4 }], runTotal: 4, runsTruncated: false, currentRecords: [{ externalRecordId: 'private-source-record', sourceUpdatedAt: now }], recordTotal: 32, recordsTruncated: false, latestSourceUpdatedAt: now };
+      model.sourceConsent = Object.assign({ sourceKey: businessKey }, consent); model.outcomeConsent = Object.assign({ sourceKey: businessKey }, consent); model.calibrationConsent = Object.assign({ sourceKey: businessKey }, consent);
+      model.operations = { sourceKey: businessKey, adapter: { revision: 2, digest: digest, action: 'resume', adapterKind: 'provider_api', cadence: 'daily' }, retention: { revision: 1, digest: digest, action: 'set', retentionDays: 365 }, deletion: null, hold: null, checkpoints: [{ mode: 'historical_backfill', sequence: 3, cursorAfter: null, complete: true }, { mode: 'continuous_update', sequence: 4, cursorAfter: 'demo-004', complete: false }], activeRecordTotal: 32, retentionEligibleTotal: 2, deletionComplete: false, boundary: 'Demo cleanup is read-only. Paid cleanup removes source details in bounded batches and makes dependent suggestions unavailable.' };
+      model.matches = { sourceKey: businessKey, activeConsent: true, referenceTotal: 2, references: [{ referenceKind: referenceKind, externalReference: 'private-reference', sourceRecordCount: 6, sourceDigest: digest, match: null }, { referenceKind: 'job', externalReference: 'tree-job', sourceRecordCount: 8, sourceDigest: digest, match: { revision: 1, digest: digest, targetId: '22222222-2222-4222-8222-222222222222', targetDigest: digest, action: 'link', status: 'matched' } }], customerTargets: [{ targetId: '11111111-1111-4111-8111-111111111111', displayLabel: 'Taylor Sample · Tree Service', digest: digest }], estimateTargets: [{ targetId: '22222222-2222-4222-8222-222222222222', displayLabel: 'Taylor Sample · Tree Service Estimate', digest: digest }], executionTargets: [{ targetId: '33333333-3333-4333-8333-333333333333', displayLabel: 'Taylor Sample · Tree Service Visit', digest: digest }] };
+      var dimensions = kind === 'project_change_order' ? { contractChange: { status: 'compared', label: 'Contract change', median: '250.000000', lowerQuartile: '100.000000', upperQuartile: '400.000000', unit: 'currency amount' }, changeOrderValue: { status: 'compared', label: 'Change-order value', median: '325.000000', lowerQuartile: '150.000000', upperQuartile: '500.000000', unit: 'currency amount' }, deliveryDuration: { status: 'compared', label: 'Project duration', median: '172800.000000', lowerQuartile: '86400.000000', upperQuartile: '259200.000000', unit: 'seconds' }, deliveryState: { status: 'compared', label: 'Project delivery state', mode: 'completed', sampleSize: 6 } } : (kind === 'financial' ? { revenue: { status: 'compared', label: 'Recorded revenue', median: '2850.000000', lowerQuartile: '2400.000000', upperQuartile: '3200.000000', unit: 'currency amount' }, collection: { status: 'compared', label: 'Recorded collections', median: '2700.000000', lowerQuartile: '2300.000000', upperQuartile: '3100.000000', unit: 'currency amount' }, realizedCost: { status: 'compared', label: 'Recorded realized cost', median: '1825.000000', lowerQuartile: '1600.000000', upperQuartile: '2050.000000', unit: 'currency amount' }, margin: { status: 'compared', label: 'Recorded margin', median: '35.960000', lowerQuartile: '31.000000', upperQuartile: '39.000000', unit: 'percent' } } : { lead: { status: 'compared', label: 'Lead outcome', mode: 'qualified', sampleSize: 7 }, appointment: { status: 'compared', label: 'Appointment outcome', mode: 'completed', sampleSize: 7 }, issuedEstimate: { status: 'compared', label: 'Issued estimate outcome', mode: 'accepted', sampleSize: 6 }, customerResponse: { status: 'unavailable', label: 'Customer response', unavailableReason: 'Five current reviewed customer responses are required.' } });
+      model.calibration = { sourceKey: kind === 'communication' ? 'customers.demo' : businessKey, serviceKey: 'tree-service', activeConsent: true, history: [], total: 1, truncated: false, refreshRequired: false, current: { fresh: true, advisoryAvailable: true, sampleSize: 7, staleExcludedCount: 1, metrics: dimensions } };
+    }
     return model;
   }
 
@@ -198,13 +241,13 @@
   function renderSources() {
     var root = el('learningSources'); clear(root);
     el('sourcesDescription').textContent = state.center.sources.length ?
-      'Select a labor, travel, vehicle, equipment or material source to review its permission, evidence, links and planning suggestions.' :
+      'Select an operating or business-system source to review its permission, evidence, links and planning suggestions.' :
       'No external source has been recorded yet. Add the first company source to begin a reviewed connection.';
     state.center.sources.forEach(function (source) {
       var card = node('button', 'learning-source-card'); card.type = 'button';
       card.setAttribute('aria-pressed', String(source.sourceKind === state.sourceKind && source.sourceKey === state.sourceKey));
-      card.setAttribute('aria-label', contract.label(source.sourceKey, 'Company source') + ', ' + contract.label(source.sourceKind, 'Operating') + ' source');
-      var kind = node('span', 'learning-source-kind', source.sourceKind === 'material' ? 'Materials · inventory · purchasing' : (source.sourceKind === 'asset' ? 'Vehicles · equipment' : (source.sourceKind === 'travel' ? 'Travel · mileage · fuel' : 'Labor · time')));
+      card.setAttribute('aria-label', contract.label(source.sourceKey, 'Company source') + ', ' + sourceTitle(source.sourceKind) + ' source');
+      var kind = node('span', 'learning-source-kind', isBusinessKind(source.sourceKind) ? sourceTitle(source.sourceKind) : (source.sourceKind === 'material' ? 'Materials · inventory · purchasing' : (source.sourceKind === 'asset' ? 'Vehicles · equipment' : (source.sourceKind === 'travel' ? 'Travel · mileage · fuel' : 'Labor · time'))));
       card.appendChild(kind);
       card.appendChild(node('strong', '', contract.label(source.sourceKey, 'Company source')));
       card.appendChild(node('span', '', source.serviceTotal + ' service ' + (source.serviceTotal === 1 ? 'group' : 'groups') + ' recorded'));
@@ -219,14 +262,36 @@
       mutate(endpoint, consentBody(consent, consent.active ? 'revoke' : 'grant', version,
         'Owner ' + (consent.active ? 'paused' : 'enabled') + ' ' + title.toLowerCase() + ' from the Learning Center.'))
         .then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(fail);
-    }, false); action.disabled = demo || Boolean(blockedText); if (blockedText) card.appendChild(node('small', '', 'Cancel the active deletion request before allowing this source again.')); card.appendChild(node('div', 'learning-actions')).appendChild(action); return card;
+    }, false); action.disabled = demo || Boolean(blockedText);
+    if (blockedText) card.appendChild(node('small', '', blockedText === 'Cancel deletion first' ? 'Cancel the active deletion request before allowing this source again.' : (blockedText === 'Choose paired source first' ? 'Choose the company source that belongs with this customer history.' : 'Record the paired CRM or customer communication source before allowing these comparisons.')));
+    card.appendChild(node('div', 'learning-actions')).appendChild(action); return card;
   }
   function renderConsentCards() {
     var root = el('learningConsentCards'); clear(root);
     var base = sourceBase(state.sourceKind, state.sourceKey);
     var deletionBlocksGrant = state.operations && state.operations.deletion && state.operations.deletion.action === 'request' && !state.consents.source.active;
     root.appendChild(consentCard('Source import', 'Controls whether records from this named source may be imported.', state.consents.source,
-      base + '/consent', isMaterial() ? 'm25-external-material-import-consent-v1' : (isAsset() ? 'm25-external-asset-import-consent-v1' : (isTravel() ? 'm25-external-travel-import-consent-v1' : 'm25-external-labor-import-consent-v1')), deletionBlocksGrant ? 'Cancel deletion first' : null));
+      base + '/consent', isBusinessKind() ? importConsentVersion(state.sourceKind) : (isMaterial() ? 'm25-external-material-import-consent-v1' : (isAsset() ? 'm25-external-asset-import-consent-v1' : (isTravel() ? 'm25-external-travel-import-consent-v1' : 'm25-external-labor-import-consent-v1'))), deletionBlocksGrant ? 'Cancel deletion first' : null));
+    if (isBusinessKind()) {
+      var customerKind = state.sourceKind === 'crm_field_service' || state.sourceKind === 'communication';
+      var partnerCandidates = customerKind ? businessPartnerCandidates(state.sourceKind) : [];
+      var partner = customerKind ? businessPartner(state.sourceKind) : null;
+      if (customerKind && partnerCandidates.length > 1) {
+        var pairCard = node('article', 'learning-consent-card'); pairCard.appendChild(node('h3', '', 'Paired customer source'));
+        pairCard.appendChild(node('p', '', 'Choose the exact CRM and customer communication sources that describe the same customer history.'));
+        var pairLabel = node('label', '', state.sourceKind === 'communication' ? 'CRM source' : 'Customer communication source');
+        var pairSelect = node('select'); pairSelect.setAttribute('aria-label', pairLabel.textContent); pairSelect.appendChild(node('option', '', 'Choose a company source')); pairSelect.firstChild.value = '';
+        partnerCandidates.forEach(function (candidate) { var option = node('option', '', contract.label(candidate.sourceKey, 'Company source')); option.value = candidate.sourceKey; option.selected = candidate.sourceKey === state.partnerSourceKey; pairSelect.appendChild(option); });
+        pairSelect.addEventListener('change', function () { state.partnerSourceKey = pairSelect.value || null; selectSource(state.sourceKind, state.sourceKey, true); });
+        pairLabel.appendChild(pairSelect); pairCard.appendChild(pairLabel); root.appendChild(pairCard);
+      }
+      var partnerMissing = customerKind && !partner;
+      var partnerBlockedText = partnerCandidates.length > 1 ? 'Choose paired source first' : 'Add paired source first';
+      var outcomeTitle = state.sourceKind === 'project_change_order' ? 'Project outcome comparisons' : (state.sourceKind === 'financial' ? 'Financial outcome comparisons' : 'Customer outcome comparisons');
+      root.appendChild(consentCard(outcomeTitle, state.sourceKind === 'project_change_order' ? 'Controls private comparisons of contract changes, change orders and project delivery.' : (state.sourceKind === 'financial' ? 'Controls private comparisons of recorded revenue, collections, realized cost and margin.' : 'Controls private comparisons of lead, appointment, issued-estimate and customer-response outcomes.'), state.consents.outcome, businessOutcomeBase() + '/consent', state.sourceKind === 'project_change_order' ? 'm25-external-project-outcome-consent-v1' : (state.sourceKind === 'financial' ? 'm25-external-financial-outcome-consent-v1' : 'm25-external-customer-outcome-consent-v1'), partnerMissing ? partnerBlockedText : null));
+      root.appendChild(consentCard('Planning suggestions', 'Controls service-level summaries built only from current reviewed outcome comparisons.', state.consents.calibration, businessCalibrationBase(), 'm25-external-business-calibration-consent-v1', partnerMissing ? partnerBlockedText : null));
+      return;
+    }
     if (isMaterial()) {
       root.appendChild(consentCard('Quantity and waste comparisons', 'Controls exact-job comparisons between recorded material use, waste and the adopted material plan.', state.consents.outcome,
         base + '/imported-material-quantity-consent', 'm25-imported-material-quantity-consent-v1'));
@@ -245,9 +310,9 @@
   }
   function operationPair(value) { return value ? { expectedRevision: value.revision, expectedDigest: value.digest } : { expectedRevision: 0, expectedDigest: 'none' }; }
   function operationCard(title, description) { var card = node('article', 'learning-operation-card'); card.appendChild(node('h4', '', title)); card.appendChild(node('p', '', description)); return card; }
-  function checkpoint(mode) { return (state.operations.checkpoints || []).filter(function (item) { return item.mode === mode; })[0] || null; }
+  function checkpoint(mode) { var value = state.operations.checkpoints || []; if (!Array.isArray(value)) value = mode.indexOf('cleanup') >= 0 ? (value.cleanup || []) : (value.imports || []); var normalized = mode === 'retention_cleanup' ? 'retention' : (mode === 'deletion_cleanup' ? 'deletion' : mode); return value.filter(function (item) { return item.mode === normalized || item.operation === normalized; })[0] || null; }
   function saveOperation(path, body, message) {
-    status(message); return mutate(sourceBase(state.sourceKind, state.sourceKey) + path, body)
+    status(message); return mutate(operationBase(state.sourceKind, state.sourceKey) + path, body)
       .then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(function (error) {
         fail(error);
         renderOperations();
@@ -276,12 +341,12 @@
       }, true); importButton.disabled = demo || !state.consents.source.active || Boolean(backfill && backfill.complete); csv.appendChild(node('div', 'learning-actions')).appendChild(importButton); csv.appendChild(node('small', '', backfill && !backfill.complete ? 'Continue the previous import. Required columns are checked before records are saved for review.' : 'Required columns are checked before records are saved for review.')); grid.appendChild(csv);
     } else {
       var continuous = checkpoint('continuous_update');
-       var checkpointCard = operationCard('Import progress', isMaterial() ? 'Authorized connections submit reviewed material, inventory and purchasing records in pages of no more than 100. Progress is saved so a later import can continue safely.' : (isAsset() ? 'Authorized connections submit reviewed vehicle and equipment records in pages of no more than 100. Progress is saved so a later import can continue safely.' : 'Authorized connections submit reviewed route, mileage and fuel records in pages of no more than 100. Progress is saved so a later import can continue safely.'));
+       var checkpointCard = operationCard('Import progress', isBusinessKind() ? 'Authorized connections submit reviewed business records in pages of no more than 100. Progress is saved so a later import can continue safely.' : (isMaterial() ? 'Authorized connections submit reviewed material, inventory and purchasing records in pages of no more than 100. Progress is saved so a later import can continue safely.' : (isAsset() ? 'Authorized connections submit reviewed vehicle and equipment records in pages of no more than 100. Progress is saved so a later import can continue safely.' : 'Authorized connections submit reviewed route, mileage and fuel records in pages of no more than 100. Progress is saved so a later import can continue safely.')));
       var checkpointMetrics = node('div', 'learning-compact-metrics');
       checkpointMetrics.appendChild(metric('Earlier records', backfill ? (backfill.complete ? 'Complete' : 'In progress') : 'Not started'));
       checkpointMetrics.appendChild(metric('Continuous updates', continuous ? ('Run ' + integer(continuous.sequence)) : 'Not started'));
       checkpointCard.appendChild(checkpointMetrics);
-       checkpointCard.appendChild(node('small', '', isMaterial() ? 'Quantities, units, currency, supplier evidence and inventory locations stay as recorded. Missing details remain unavailable.' : (isAsset() ? 'Machine use, cost, maintenance and downtime retain their source units and evidence basis. Missing dimensions remain unavailable.' : 'Distance and fuel retain their source units and evidence basis. Missing dimensions remain unavailable.')));
+       checkpointCard.appendChild(node('small', '', isBusinessKind() ? 'Recorded status, time, quantity and money details keep their source meaning. Missing details remain unavailable.' : (isMaterial() ? 'Quantities, units, currency, supplier evidence and inventory locations stay as recorded. Missing details remain unavailable.' : (isAsset() ? 'Machine use, cost, maintenance and downtime retain their source units and evidence basis. Missing dimensions remain unavailable.' : 'Distance and fuel retain their source units and evidence basis. Missing dimensions remain unavailable.'))));
       grid.appendChild(checkpointCard);
     }
 
@@ -289,7 +354,7 @@
     var adapterCard = operationCard('Continuous updates', adapter ? 'Current state: ' + adapterState + '. Connections are managed outside this page.' : 'Choose how an authorized connection may submit future updates.');
     var canConfigure = !adapter || adapter.action === 'disconnect';
     var kindLabel = node('label', '', 'Connection method'); kindLabel.htmlFor = 'learningAdapterKind'; var kindSelect = node('select'); kindSelect.id = 'learningAdapterKind';
-    [['provider_api', 'Connected service'], ['csv', 'CSV file']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; kindSelect.appendChild(option); }); kindSelect.value = adapter ? adapter.adapterKind : 'provider_api'; kindSelect.disabled = demo || !canConfigure; adapterCard.appendChild(kindLabel); adapterCard.appendChild(kindSelect);
+    [['provider_api', 'Connected service'], [isBusinessKind() ? 'file_import' : 'csv', 'File import']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; kindSelect.appendChild(option); }); kindSelect.value = adapter ? adapter.adapterKind : 'provider_api'; kindSelect.disabled = demo || !canConfigure; adapterCard.appendChild(kindLabel); adapterCard.appendChild(kindSelect);
     var cadenceLabel = node('label', '', 'Update schedule'); cadenceLabel.htmlFor = 'learningAdapterCadence'; var cadenceSelect = node('select'); cadenceSelect.id = 'learningAdapterCadence';
     [['hourly', 'Hourly'], ['daily', 'Daily'], ['manual', 'Manual']].forEach(function (choice) { var option = node('option', '', choice[1]); option.value = choice[0]; cadenceSelect.appendChild(option); }); cadenceSelect.value = adapter ? adapter.cadence : 'daily'; cadenceSelect.disabled = demo || !canConfigure; adapterCard.appendChild(cadenceLabel); adapterCard.appendChild(cadenceSelect);
     var adapterAction = !adapter || adapter.action === 'disconnect' ? 'connect' : (adapter.action === 'pause' ? 'resume' : 'pause');
@@ -302,8 +367,8 @@
     if (adapter && adapter.action !== 'disconnect') { var disconnectButton = button('Stop updates', function () { var pair = operationPair(adapter); disconnectButton.disabled = true; saveOperation('/adapter', { action: 'disconnect', adapterKind: adapter.adapterKind, cadence: adapter.cadence, expectedRevision: pair.expectedRevision, expectedDigest: pair.expectedDigest, confirmed: true }, 'Stopping continuous updates.'); }); disconnectButton.disabled = demo; adapterActions.appendChild(disconnectButton); }
     adapterCard.appendChild(adapterActions); grid.appendChild(adapterCard);
 
-    var hold = state.operations.hold, holdActive = Boolean(isMaterial() && hold && hold.action === 'place');
-    if (isMaterial()) {
+    var hold = state.operations.hold, holdActive = Boolean((isMaterial() || isBusinessKind()) && hold && hold.action === 'place');
+    if (isMaterial() || isBusinessKind()) {
       var holdCard = operationCard('Legal and audit hold', holdActive ? 'Cleanup is paused by the active ' + contract.label(hold.holdKind, 'company') + ' hold.' : 'Place a hold when source records must remain available for a legal or audit review.');
       var holdKindLabel = node('label', '', 'Hold type'); holdKindLabel.htmlFor = 'learningHoldKind'; var holdKind = node('select'); holdKind.id = 'learningHoldKind';
       [['legal', 'Legal hold'], ['audit', 'Audit hold']].forEach(function (choice) { holdKind.appendChild(new Option(choice[1], choice[0])); }); holdKind.value = holdActive ? hold.holdKind : 'legal'; holdKind.disabled = demo || holdActive; holdCard.appendChild(holdKindLabel); holdCard.appendChild(holdKind);
@@ -331,7 +396,7 @@
   }
   function metric(label, value) { var item = node('div', 'learning-metric'); item.appendChild(node('span', '', label)); item.appendChild(node('strong', '', value)); return item; }
   function renderEvidence() {
-    el('evidenceSummary').textContent = state.detail.activeConsent ? (isMaterial() ? 'Current reviewed material, inventory and purchasing evidence. These records do not change jobs, estimates, inventory or purchases.' : (isAsset() ? 'Current reviewed vehicle and equipment evidence. These records do not change jobs, assets or costs.' : (isTravel() ? 'Current reviewed route, mileage and fuel evidence. Records remain separate from operating data.' : 'Current reviewed labor evidence. Records remain separate from operating data.'))) : 'Source permission is inactive.';
+    el('evidenceSummary').textContent = state.detail.activeConsent ? (isBusinessKind() ? 'Current reviewed ' + sourceTitle(state.sourceKind).toLowerCase() + ' evidence. These records remain separate from company operating records.' : (isMaterial() ? 'Current reviewed material, inventory and purchasing evidence. These records do not change jobs, estimates, inventory or purchases.' : (isAsset() ? 'Current reviewed vehicle and equipment evidence. These records do not change jobs, assets or costs.' : (isTravel() ? 'Current reviewed route, mileage and fuel evidence. Records remain separate from operating data.' : 'Current reviewed labor evidence. Records remain separate from operating data.')))) : 'Source permission is inactive.';
     var root = el('evidenceMetrics'); clear(root);
     root.appendChild(metric('Import batches', integer(state.detail.runTotal).toLocaleString()));
     root.appendChild(metric('Current records', integer(state.detail.recordTotal).toLocaleString()));
@@ -341,24 +406,25 @@
   function targetLabel(kind, target) {
     return contract.safeLabel(target.displayLabel || target.label);
   }
-  function referenceLabel(reference) {
+  function referenceLabel(reference, index) {
+    if (isBusinessKind()) return 'Imported ' + contract.label(reference.referenceKind, 'record') + (Number.isInteger(index) ? ' ' + (index + 1) : '');
     return contract.label(reference.externalReference, 'Imported ' + contract.label(reference.referenceKind, 'record'));
   }
   function renderMatches() {
     var root = el('learningMatches'); clear(root); var references = state.matches.references || [];
-    el('matchesSummary').textContent = references.length ? 'Link imported identities to the current company record they describe. Links that no longer match current records need review.' : (isMaterial() ? 'No imported job, material, vendor or inventory location references are available.' : (isAsset() ? 'No imported vehicle, equipment or job references are available.' : (isTravel() ? 'No imported vehicle or job references are available.' : 'No imported worker or job references are available.')));
+    el('matchesSummary').textContent = references.length ? 'Link imported identities to the current company record they describe. Links that no longer match current records need review.' : (isBusinessKind() ? 'No imported customer, job, estimate, project or financial references are available.' : (isMaterial() ? 'No imported job, material, vendor or inventory location references are available.' : (isAsset() ? 'No imported vehicle, equipment or job references are available.' : (isTravel() ? 'No imported vehicle or job references are available.' : 'No imported worker or job references are available.'))));
     if (!references.length) { root.appendChild(node('p', 'learning-empty', 'No references to review.')); renderAssetHealth(); return; }
     var wrap = node('div', 'learning-table-wrap'), table = node('table', 'learning-table'), head = node('thead'), row = node('tr');
     table.appendChild(node('caption', 'learning-visually-hidden', 'Imported reference review for ' + contract.label(state.sourceKey, 'company source')));
     ['Type', 'External reference', 'Evidence', 'Status', 'Company record'].forEach(function (label) { var th = node('th', '', label); th.scope = 'col'; row.appendChild(th); }); head.appendChild(row); table.appendChild(head);
     var body = node('tbody');
-    references.forEach(function (reference) {
-      var safeReference = referenceLabel(reference); var tr = node('tr'); tr.appendChild(node('td', '', contract.label(reference.referenceKind, 'Record'))); tr.appendChild(node('td', '', safeReference));
+    references.forEach(function (reference, index) {
+      var safeReference = referenceLabel(reference, index); var tr = node('tr'); tr.appendChild(node('td', '', contract.label(reference.referenceKind, 'Record'))); tr.appendChild(node('td', '', safeReference));
       tr.appendChild(node('td', '', integer(reference.sourceRecordCount) + ' records'));
       var match = reference.match, matchState = match ? match.status : 'unmatched'; var pill = node('span', 'learning-pill', contract.label(matchState)); pill.dataset.state = matchState === 'matched' ? 'current' : (matchState === 'stale' ? 'stale' : 'review'); tr.appendChild(node('td')).appendChild(pill);
       var cell = node('td'), select = node('select'); select.setAttribute('aria-label', 'Company record for ' + safeReference);
       select.appendChild(new Option('Not linked', ''));
-      var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : (reference.referenceKind === 'vehicle' ? state.matches.vehicleTargets : (reference.referenceKind === 'equipment' ? state.matches.equipmentTargets : (reference.referenceKind === 'material' ? state.matches.materialTargets : (reference.referenceKind === 'vendor' ? state.matches.vendorTargets : (reference.referenceKind === 'inventory_location' ? state.matches.inventoryLocationTargets : state.matches.jobTargets)))));
+      var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : (reference.referenceKind === 'vehicle' ? state.matches.vehicleTargets : (reference.referenceKind === 'equipment' ? state.matches.equipmentTargets : (reference.referenceKind === 'material' ? state.matches.materialTargets : (reference.referenceKind === 'vendor' ? state.matches.vendorTargets : (reference.referenceKind === 'inventory_location' ? state.matches.inventoryLocationTargets : (isBusinessKind() ? (reference.referenceKind === 'customer' ? state.matches.customerTargets : (reference.referenceKind === 'execution' ? state.matches.executionTargets : state.matches.estimateTargets)) : state.matches.jobTargets))))));
       (targets || []).forEach(function (target) { var label = targetLabel(reference.referenceKind, target); if (!label) return; var identity = target.targetId || target.targetReference; var option = new Option(label, identity); option.dataset.digest = target.digest; select.appendChild(option); });
       select.value = match && match.action === 'link' ? (match.targetId || match.targetReference) : ''; select.disabled = demo;
       select.addEventListener('change', function () { saveMatch(reference, select); }); cell.appendChild(select); tr.appendChild(cell); body.appendChild(tr);
@@ -371,10 +437,10 @@
       referenceKind: reference.referenceKind, externalReference: reference.externalReference, action: link ? 'link' : 'unlink',
       expectedRevision: match ? match.revision : 0, expectedDigest: match ? match.digest : 'none', expectedSourceDigest: reference.sourceDigest || 'unavailable',
       expectedTargetDigest: link ? selected.dataset.digest : 'unavailable', reason: 'Owner reviewed this imported reference in the Learning Center.', confirmed: true,
-      confirmationVersion: isMaterial() ? 'm25-external-material-reference-match-v1' : (isAsset() ? 'm25-external-asset-reference-match-v1' : (isTravel() ? 'm25-external-travel-reference-match-v1' : 'm25-external-labor-reference-match-v1'))
+      confirmationVersion: isBusinessKind() ? 'm25-external-business-reference-match-v1' : (isMaterial() ? 'm25-external-material-reference-match-v1' : (isAsset() ? 'm25-external-asset-reference-match-v1' : (isTravel() ? 'm25-external-travel-reference-match-v1' : 'm25-external-labor-reference-match-v1')))
     };
-    if (isMaterial()) body.targetReference = link ? select.value : null; else body.targetId = link ? select.value : null;
-    mutate(sourceBase(state.sourceKind, state.sourceKey) + '/matches', body).then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(fail);
+    if (isMaterial()) body.targetReference = link ? select.value : null; else { body.targetId = link ? select.value : null; if (isBusinessKind()) body.targetKind = link ? (reference.referenceKind === 'customer' ? 'customer' : (reference.referenceKind === 'execution' ? 'execution' : 'estimate')) : null; }
+    mutate(operationBase(state.sourceKind, state.sourceKey) + '/matches', body).then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(fail);
   }
   function assetHealthReferences() {
     return state.matches && isAsset() ? state.matches.references.filter(function (reference) {
@@ -429,8 +495,8 @@
   }
   function renderCalibration() {
     var root = el('learningCalibration'); clear(root); var source = selectedSource();
-    el('calibrationTitle').textContent = isMaterial() ? 'What Polaris has learned about materials' : (isAsset() ? 'What Polaris has learned about vehicles and equipment' : (isTravel() ? 'What Polaris has learned about travel' : 'What Polaris has learned about labor'));
-    el('calibrationDescription').textContent = isMaterial() ? 'Review material use, waste, unit cost, purchasing quantity and purchasing cost separately. Supplier identity and inventory balance do not establish current availability. Saving a suggestion does not apply it.' : (isAsset() ? 'Review machine-hour use and same-currency job operating cost independently. Maintenance, downtime, condition and availability remain separate. Saving a suggestion does not apply it.' : (isTravel() ? 'Review route duration, driving distance, fuel quantity and fuel cost independently. Saving a suggestion does not apply it.' : 'Review a service-level labor summary. Saving a suggestion does not apply it.'));
+    el('calibrationTitle').textContent = isBusinessKind() ? 'What Polaris has learned from ' + sourceTitle(state.sourceKind).toLowerCase() : (isMaterial() ? 'What Polaris has learned about materials' : (isAsset() ? 'What Polaris has learned about vehicles and equipment' : (isTravel() ? 'What Polaris has learned about travel' : 'What Polaris has learned about labor')));
+    el('calibrationDescription').textContent = isBusinessKind() ? 'Review each recorded outcome separately. Unavailable measures remain unavailable, and saving a suggestion does not apply it.' : (isMaterial() ? 'Review material use, waste, unit cost, purchasing quantity and purchasing cost separately. Supplier identity and inventory balance do not establish current availability. Saving a suggestion does not apply it.' : (isAsset() ? 'Review machine-hour use and same-currency job operating cost independently. Maintenance, downtime, condition and availability remain separate. Saving a suggestion does not apply it.' : (isTravel() ? 'Review route duration, driving distance, fuel quantity and fuel cost independently. Saving a suggestion does not apply it.' : 'Review a service-level labor summary. Saving a suggestion does not apply it.')));
     if (!source || !source.serviceKeys.length) { root.appendChild(node('p', 'learning-empty', 'No service group has enough reviewed imported outcome history yet.')); return; }
     var controls = node('div', 'learning-inline'), label = node('label', '', 'Service group'), select = node('select'); label.htmlFor = 'learningService'; select.id = 'learningService';
     source.serviceKeys.forEach(function (key) { select.appendChild(new Option(contract.label(key), key)); });
@@ -439,7 +505,12 @@
     var card = node('article', 'learning-calibration-card'), current = state.calibration.current;
     card.appendChild(node('h4', '', contract.label(state.calibration.serviceKey)));
     if (!current) card.appendChild(node('p', '', state.calibration.activeConsent ? 'No suggestion has been prepared. At least five current reviewed jobs are required.' : 'Planning suggestion permission is inactive.'));
-    else if (isTravel() || isAsset() || isMaterial()) {
+    else if (isBusinessKind()) {
+      card.appendChild(node('p', '', current.fresh ? 'Current reviewed outcome summary. Each measure remains separate.' : 'This saved summary no longer matches current evidence and must be refreshed.'));
+      var businessGrid = node('div', 'learning-travel-calibration-grid');
+      Object.keys(current.metrics || {}).forEach(function (key) { var value = current.metrics[key] || { status: 'unavailable' }, available = value.status === 'compared'; var item = node('section', 'learning-dimension-card'), title = node('div', 'learning-dimension-heading'); title.appendChild(node('h5', '', value.label || contract.label(key))); var dimensionPill = node('span', 'learning-pill', available ? 'Compared' : 'Unavailable'); dimensionPill.dataset.state = available ? 'current' : 'inactive'; title.appendChild(dimensionPill); item.appendChild(title); item.appendChild(node('strong', 'learning-dimension-value', available ? (value.mode ? contract.label(value.mode) : (value.median ? value.median + (value.unit === 'percent' ? '%' : '') : integer(value.sampleSize) + ' reviewed')) : 'Not established')); item.appendChild(node('small', '', available ? (value.mode ? integer(value.sampleSize) + ' current reviewed outcomes' : 'Typical recorded value · middle half ' + (value.lowerQuartile || '—') + ' to ' + (value.upperQuartile || '—') + (value.unit ? ' · ' + contract.label(value.unit) : '')) : (value.unavailableReason || 'Comparable current evidence is unavailable.'))); businessGrid.appendChild(item); });
+      card.appendChild(businessGrid);
+    } else if (isTravel() || isAsset() || isMaterial()) {
       card.appendChild(node('p', '', current.fresh ? (isMaterial() ? 'Current reviewed material planning suggestion. Each measure remains separate.' : (isAsset() ? 'Current reviewed vehicle and equipment planning suggestion. Each measure remains separate.' : 'Current reviewed travel planning suggestion. Each measure remains separate.')) : (isMaterial() ? 'The saved material suggestion no longer matches current evidence and must be refreshed.' : (isAsset() ? 'The saved vehicle and equipment suggestion no longer matches current evidence and must be refreshed.' : 'The saved travel suggestion no longer matches current evidence and must be refreshed.'))));
       var travelGrid = node('div', 'learning-travel-calibration-grid');
       (isMaterial() ? ['totalUse', 'waste', 'unitCost', 'purchaseQuantity', 'purchaseCost'] : (isAsset() ? ['utilization', 'operatingCost'] : ['routeDuration', 'distance', 'fuelQuantity', 'fuelCost'])).forEach(function (key) {
@@ -461,10 +532,10 @@
     var action = button(demo ? 'Demo preview' : (currentAndFresh ? 'Suggestion current' : (current ? 'Refresh suggestion' : 'Prepare suggestion')), function () {
       var consent = state.consents.calibration; if (!consent.active || !consent.current) { status('Allow planning suggestions before preparing one.', 'error'); return; }
       action.disabled = true; status('Preparing a reviewed planning suggestion.');
-       mutate(sourceBase(state.sourceKind, state.sourceKey) + (isMaterial() ? '/imported-material-calibrations/' : (isAsset() ? '/imported-asset-calibrations/' : (isTravel() ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/'))) + encodeURIComponent(state.calibration.serviceKey), {
+       mutate(isBusinessKind() ? businessCalibrationBase(state.calibration.serviceKey, true) : sourceBase(state.sourceKind, state.sourceKey) + (isMaterial() ? '/imported-material-calibrations/' : (isAsset() ? '/imported-asset-calibrations/' : (isTravel() ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/'))) + encodeURIComponent(state.calibration.serviceKey), {
         expectedConsentRevision: consent.current.revision, expectedConsentDigest: consent.current.digest,
-         reason: isMaterial() ? 'Owner requested a current service-level material planning suggestion from the Learning Center.' : (isAsset() ? 'Owner requested a current service-level vehicle and equipment planning suggestion from the Learning Center.' : (isTravel() ? 'Owner requested a current service-level travel planning suggestion from the Learning Center.' : 'Owner requested a current service-level labor planning suggestion from the Learning Center.')), confirmed: true,
-         confirmationVersion: isMaterial() ? 'm25-imported-material-calibration-proposal-v1' : (isAsset() ? 'm25-imported-asset-calibration-proposal-v1' : (isTravel() ? 'm25-imported-travel-calibration-proposal-v1' : 'm25-imported-labor-calibration-proposal-v1'))
+         reason: isBusinessKind() ? 'Owner requested a current service-level business outcome summary from the Learning Center.' : (isMaterial() ? 'Owner requested a current service-level material planning suggestion from the Learning Center.' : (isAsset() ? 'Owner requested a current service-level vehicle and equipment planning suggestion from the Learning Center.' : (isTravel() ? 'Owner requested a current service-level travel planning suggestion from the Learning Center.' : 'Owner requested a current service-level labor planning suggestion from the Learning Center.'))), confirmed: true,
+         confirmationVersion: isBusinessKind() ? 'm25-external-business-calibration-proposal-v1' : (isMaterial() ? 'm25-imported-material-calibration-proposal-v1' : (isAsset() ? 'm25-imported-asset-calibration-proposal-v1' : (isTravel() ? 'm25-imported-travel-calibration-proposal-v1' : 'm25-imported-labor-calibration-proposal-v1')))
       }).then(function () { return selectSource(state.sourceKind, state.sourceKey, true); }).catch(function (error) { action.disabled = false; fail(error); });
     }, true); action.disabled = demo || !state.consents.calibration.active || currentAndFresh; card.appendChild(node('div', 'learning-actions')).appendChild(action); root.appendChild(card);
   }
@@ -472,9 +543,9 @@
   function loadCalibration(serviceKey) {
     if (demo) { state.calibration = demoModel(state.sourceKind).calibration; state.calibration.serviceKey = serviceKey; renderCalibration(); renderSummary(); return Promise.resolve(); }
     var selectionGeneration = state.selectionGeneration, calibrationGeneration = ++state.calibrationGeneration;
-    var base = sourceBase(state.sourceKind, state.sourceKey), travel = isTravel(), asset = isAsset(), material = isMaterial();
+    var base = sourceBase(state.sourceKind, state.sourceKey), travel = isTravel(), asset = isAsset(), material = isMaterial(), business = isBusinessKind();
     state.calibration = null; renderCalibration();
-    return api(base + (material ? '/imported-material-calibrations/' : (asset ? '/imported-asset-calibrations/' : (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/'))) + encodeURIComponent(serviceKey))
+    return api(business ? businessCalibrationBase(serviceKey) : base + (material ? '/imported-material-calibrations/' : (asset ? '/imported-asset-calibrations/' : (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/'))) + encodeURIComponent(serviceKey))
       .then(function (value) {
         if (selectionGeneration !== state.selectionGeneration || calibrationGeneration !== state.calibrationGeneration) return;
         state.calibration = contract.calibration(value); renderCalibration(); renderSummary();
@@ -483,7 +554,8 @@
       });
   }
   function selectSource(sourceKind, sourceKey, refresh) {
-    var generation = ++state.selectionGeneration, travel = sourceKind === 'travel', asset = sourceKind === 'asset', material = sourceKind === 'material'; ++state.calibrationGeneration; ++state.healthGeneration;
+    var generation = ++state.selectionGeneration, travel = sourceKind === 'travel', asset = sourceKind === 'asset', material = sourceKind === 'material', business = isBusinessKind(sourceKind); ++state.calibrationGeneration; ++state.healthGeneration;
+    if (sourceKind !== state.sourceKind || sourceKey !== state.sourceKey) state.partnerSourceKey = null;
     state.sourceKind = sourceKind; state.sourceKey = sourceKey; state.detail = null; state.matches = null; state.calibration = null; state.health = null; state.healthReference = null; state.operations = null;
     renderSources(); el('learningDetail').hidden = true; status('Loading ' + contract.label(sourceKey, 'company source') + '.'); el('learningMain').setAttribute('aria-busy', 'true');
     if (demo) {
@@ -495,13 +567,17 @@
     var costConsentRequest = material ? api(base + '/imported-material-cost-consent') : Promise.resolve(null);
     var calibrationConsentPath = material ? '/imported-material-calibration-consent' : (asset ? '/imported-asset-calibration-consent' : (travel ? '/imported-travel-calibration-consent' : '/imported-labor-calibration-consent'));
     var healthConsentRequest = asset ? api(base + '/imported-asset-health-consent') : Promise.resolve(null);
-    return Promise.all([api(base), api(base + '/consent'), api(base + '/matches'), api(base + outcomeConsentPath), api(base + calibrationConsentPath), api(base + '/operations'), healthConsentRequest, costConsentRequest])
+    var inactiveConsent = { active: false, current: null, history: [], total: 0, truncated: false };
+    var partnerReady = !business || (sourceKind !== 'crm_field_service' && sourceKind !== 'communication') || Boolean(businessPartner(sourceKind));
+    var outcomeConsentRequest = business ? (partnerReady ? api(businessOutcomeBase() + '/consent') : Promise.resolve(inactiveConsent)) : api(base + outcomeConsentPath);
+    var calibrationConsentRequest = business ? (partnerReady ? api(businessCalibrationBase()) : Promise.resolve(inactiveConsent)) : api(base + calibrationConsentPath);
+    return Promise.all([api(base), api(base + '/consent'), api(operationBase(sourceKind, sourceKey) + '/matches'), outcomeConsentRequest, calibrationConsentRequest, api(operationBase(sourceKind, sourceKey) + '/operations'), healthConsentRequest, costConsentRequest])
       .then(function (values) {
         if (generation !== state.selectionGeneration) return null;
         state.detail = contract.source(values[0]); state.consents = { source: contract.consent(values[1]), outcome: contract.consent(values[3]), cost: material ? contract.consent(values[7]) : null, health: asset ? contract.consent(values[6]) : null, calibration: contract.consent(values[4]) };
         state.matches = contract.matches(values[2]); state.operations = contract.operations(values[5]); var source = selectedSource();
         var requests = [];
-        if (source && source.serviceKeys.length) requests.push(api(base + (material ? '/imported-material-calibrations/' : (asset ? '/imported-asset-calibrations/' : (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/'))) + encodeURIComponent(source.serviceKeys[0])).then(function (value) {
+        if (source && source.serviceKeys.length && partnerReady) requests.push(api(business ? businessCalibrationBase(source.serviceKeys[0]) : base + (material ? '/imported-material-calibrations/' : (asset ? '/imported-asset-calibrations/' : (travel ? '/imported-travel-calibrations/' : '/imported-labor-calibrations/'))) + encodeURIComponent(source.serviceKeys[0])).then(function (value) {
           if (generation === state.selectionGeneration) state.calibration = contract.calibration(value);
         })); else state.calibration = null;
         if (asset) { var healthReference = assetHealthReferences()[0]; if (healthReference) requests.push(api(base + '/imported-asset-health-outcomes?assetCategory=' + encodeURIComponent(healthReference.referenceKind) + '&externalAssetReference=' + encodeURIComponent(healthReference.externalReference)).then(function (value) {
@@ -514,7 +590,7 @@
   }
   function finishDetail(generation) {
     if (generation !== state.selectionGeneration || !state.detail || !state.matches || !state.operations) return;
-    el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey, 'Company source') + ' · ' + contract.label(state.sourceKind, 'Operating');
+    el('learningDetail').hidden = false; el('learningDetailTitle').textContent = contract.label(state.sourceKey, 'Company source') + ' · ' + sourceTitle(state.sourceKind);
     setPill(el('learningDetailState'), state.detail.activeConsent, !state.detail.activeConsent); renderConsentCards(); renderOperations(); renderEvidence(); renderMatches(); renderCalibration(); renderSummary();
     status(demo ? 'Showing isolated demo records. Controls are read-only.' : 'Learning Center is current.', 'success'); el('learningMain').setAttribute('aria-busy', 'false');
   }
@@ -526,7 +602,7 @@
     var promise = demo ? Promise.resolve(demoModel('labor').center) : api('/center');
     return promise.then(function (value) {
       if (generation !== state.loadGeneration) return;
-      state.center = contract.center(value); state.sourceKind = null; state.sourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.health = null; state.healthReference = null; state.operations = null;
+      state.center = contract.center(value); state.sourceKind = null; state.sourceKey = null; state.partnerSourceKey = null; state.detail = null; state.matches = null; state.calibration = null; state.health = null; state.healthReference = null; state.operations = null;
       el('learningBoundary').textContent = state.center.learningBoundary; renderNative(); renderSources(); renderSummary();
       if (state.center.sources.length) {
         var preferred = state.center.sources.filter(function (source) { return source.sourceKind === preferredKind && source.sourceKey === preferredKey; })[0] || state.center.sources[0];
@@ -558,7 +634,7 @@
     var input = el('learningSourceKey'), sourceKind = el('learningSourceKind').value, sourceKey = input.value.trim().toLowerCase();
     if (!contract.KEY.test(sourceKey)) { status('Use 2 to 64 lowercase letters, numbers, dots, dashes or underscores.', 'error'); input.focus(); return; }
     el('learningSourceAdd').disabled = true; status('Adding the company source.');
-    mutate(sourceBase(sourceKind, sourceKey) + '/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none', reason: 'Owner added this company source in the Learning Center.', confirmed: true, confirmationVersion: sourceKind === 'material' ? 'm25-external-material-import-consent-v1' : (sourceKind === 'asset' ? 'm25-external-asset-import-consent-v1' : (sourceKind === 'travel' ? 'm25-external-travel-import-consent-v1' : 'm25-external-labor-import-consent-v1')) })
+    mutate(sourceBase(sourceKind, sourceKey) + '/consent', { action: 'grant', expectedRevision: 0, expectedDigest: 'none', reason: 'Owner added this company source in the Learning Center.', confirmed: true, confirmationVersion: isBusinessKind(sourceKind) ? importConsentVersion(sourceKind) : (sourceKind === 'material' ? 'm25-external-material-import-consent-v1' : (sourceKind === 'asset' ? 'm25-external-asset-import-consent-v1' : (sourceKind === 'travel' ? 'm25-external-travel-import-consent-v1' : 'm25-external-labor-import-consent-v1'))) })
       .then(function () { input.value = ''; return load(sourceKind, sourceKey); }).catch(fail).finally(function () { el('learningSourceAdd').disabled = false; });
   });
   if (demo) { el('learningSourceKind').disabled = true; el('learningSourceKey').disabled = true; el('learningSourceAdd').disabled = true; }

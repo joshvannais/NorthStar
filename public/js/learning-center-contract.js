@@ -19,13 +19,13 @@
   return Object.assign({},value,{active:Boolean(value.current&&value.current.action==='grant')});
  }
  function center(value){
-  if(!object(value)||['m25-learning-center-v3','m25-learning-center-v4'].indexOf(value.version)<0||['tenant_private_postgresql','isolated_demo_postgresql'].indexOf(value.authority)<0||
+  if(!object(value)||['m25-learning-center-v3','m25-learning-center-v4','m25-learning-center-v5'].indexOf(value.version)<0||['tenant_private_postgresql','isolated_demo_postgresql'].indexOf(value.authority)<0||
     !text(value.evaluatedAt,64)||!Array.isArray(value.sources)||!integer(value.sourceTotal)||value.sourceTotal<value.sources.length||
     typeof value.sourcesTruncated!=='boolean'||!text(value.learningBoundary,1000)||!object(value.nativeLabor)||!object(value.nativeEquipment)||
-    (value.version==='m25-learning-center-v4'&&!object(value.nativeMaterial)))throw new Error('Learning Center response is invalid.');
+    ((value.version==='m25-learning-center-v4'||value.version==='m25-learning-center-v5')&&!object(value.nativeMaterial)))throw new Error('Learning Center response is invalid.');
   var seen=Object.create(null);
   value.sources.forEach(function(source){
-   if(!object(source)||['labor','travel','asset','material'].indexOf(source.sourceKind)<0||!KEY.test(source.sourceKey)||!Array.isArray(source.serviceKeys)||
+   if(!object(source)||['labor','travel','asset','material','crm_field_service','project_change_order','communication','financial'].indexOf(source.sourceKind)<0||!KEY.test(source.sourceKey)||!Array.isArray(source.serviceKeys)||
      !integer(source.serviceTotal)||source.serviceTotal<source.serviceKeys.length||typeof source.servicesTruncated!=='boolean'||
      source.serviceKeys.length>50||source.serviceKeys.some(function(service){return!KEY.test(service);}))throw new Error('Learning source response is invalid.');
    var identity=source.sourceKind+':'+source.sourceKey;
@@ -42,8 +42,9 @@
  }
  function matches(value){
   if(!object(value)||!KEY.test(value.sourceKey)||typeof value.activeConsent!=='boolean'||!Array.isArray(value.references)||
-    !integer(value.referenceTotal)||value.referenceTotal<value.references.length||!Array.isArray(value.jobTargets)||
-    (!Array.isArray(value.workerTargets)&&!Array.isArray(value.vehicleTargets)&&!Array.isArray(value.equipmentTargets)&&
+    !integer(value.referenceTotal)||value.referenceTotal<value.references.length||
+    (!Array.isArray(value.jobTargets)&&!Array.isArray(value.customerTargets)&&!Array.isArray(value.estimateTargets)&&!Array.isArray(value.executionTargets)&&
+     !Array.isArray(value.workerTargets)&&!Array.isArray(value.vehicleTargets)&&!Array.isArray(value.equipmentTargets)&&
      !Array.isArray(value.materialTargets)&&!Array.isArray(value.vendorTargets)&&!Array.isArray(value.inventoryLocationTargets)))throw new Error('Learning match detail is invalid.');
   return value;
  }
@@ -65,7 +66,7 @@
   return value;
  }
  function operations(value){
-  if(!object(value)||!KEY.test(value.sourceKey)||!Array.isArray(value.checkpoints)||!integer(value.activeRecordTotal)||
+  if(!object(value)||!KEY.test(value.sourceKey)||(!Array.isArray(value.checkpoints)&&!object(value.checkpoints))||!integer(value.activeRecordTotal)||
     !integer(value.retentionEligibleTotal)||(typeof value.deletionComplete!=='boolean'&&value.deletionComplete!==null)||!text(value.boundary,1000))throw new Error('Learning source operations response is invalid.');
   ['adapter','retention','deletion','hold'].forEach(function(key){var item=value[key];if(item!==undefined&&item!==null&&(!object(item)||!integer(item.revision)||item.revision<1||!text(item.action,32)||!digest(item.digest)))throw new Error('Learning source operation is invalid.');});
   return value.deletionComplete===null?Object.assign({},value,{deletionComplete:false}):value;

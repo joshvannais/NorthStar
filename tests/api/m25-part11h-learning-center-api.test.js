@@ -10,7 +10,7 @@ describe('Mission 25 Part 11H material Learning Center API', () => {
 
   test('projects native material permission and tenant-private material sources for owners and administrators', async () => {
     const before = await request(fixture.app).get('/api/v1/learning/center').set(fixture.actors.owner.session.headers);
-    expect(before.status).toBe(200); expect(before.body.data.version).toBe('m25-learning-center-v4');
+    expect(before.status).toBe(200); expect(before.body.data.version).toBe('m25-learning-center-v5');
     expect(before.body.data.nativeMaterial).toBeTruthy(); expect(before.body.data.sources).toEqual([]);
 
     const grant = await request(fixture.app).post('/api/v1/learning/external-material-sources/materials.api/consent')

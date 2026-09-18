@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Learning Center - NorthStar</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-  <script src="/js/command-center-contract.js?v=m25-material-learning-20260917"></script>
-  <script src="/js/demo-runtime.js?v=m25-material-learning-20260917"></script>
+  <script src="/js/command-center-contract.js?v=m25-business-learning-20260918"></script>
+  <script src="/js/demo-runtime.js?v=m25-business-learning-20260918"></script>
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/learning-center.css?v=m25-material-learning-20260917">
+  <link rel="stylesheet" href="/css/learning-center.css?v=m25-business-learning-20260918">
   <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
 </head>
 <body class="learning-center-page">
@@ -50,7 +50,7 @@
         <form id="learningSourceForm" class="learning-source-form">
           <label for="learningSourceKey">Add a company source</label>
           <div class="learning-inline">
-            <select id="learningSourceKind" name="sourceKind" aria-label="Source category"><option value="labor">Labor and time</option><option value="travel">Travel, mileage and fuel</option><option value="asset">Vehicles and equipment</option><option value="material">Materials, inventory and purchasing</option></select>
+            <select id="learningSourceKind" name="sourceKind" aria-label="Source category"><option value="labor">Labor and time</option><option value="travel">Travel, mileage and fuel</option><option value="asset">Vehicles and equipment</option><option value="material">Materials, inventory and purchasing</option><option value="crm_field_service">CRM and field service</option><option value="project_change_order">Projects and change orders</option><option value="communication">Customer communications</option><option value="financial">External financial records</option></select>
             <input id="learningSourceKey" name="sourceKey" type="text" inputmode="text" autocomplete="off" maxlength="64" placeholder="Example: fleet.primary" pattern="[a-z0-9][a-z0-9._-]{1,63}">
             <button id="learningSourceAdd" class="btn btn-secondary" type="submit">Add source</button>
           </div>
@@ -71,9 +71,9 @@
     </main>
   </div>
   <script src="/js/auth-session.js"></script>
-  <script src="/js/nav-component.js?v=m25-material-learning-20260917"></script>
-  <script src="/js/learning-center-contract.js?v=m25-material-learning-20260917"></script>
-  <script src="/js/learning-center-page.js?v=m25-material-learning-20260917"></script>
+  <script src="/js/nav-component.js?v=m25-business-learning-20260918"></script>
+  <script src="/js/learning-center-contract.js?v=m25-business-learning-20260918"></script>
+  <script src="/js/learning-center-page.js?v=m25-business-learning-20260918"></script>
   <script>NavComponent.init('learning-center');</script>
 </body>
 </html>

@@ -81,6 +81,8 @@ const jobOutcomeGraphContract = require('../learning/jobOutcomeGraphContract');
 const jobOutcomeGraphRepository = require('../learning/jobOutcomeGraphRepository');
 const jobOutcomeGraphEvaluationContract = require('../learning/jobOutcomeGraphEvaluationContract');
 const jobOutcomeGraphEvaluationRepository = require('../learning/jobOutcomeGraphEvaluationRepository');
+const jobOutcomeSummaryContract = require('../learning/jobOutcomeSummaryContract');
+const jobOutcomeSummaryRepository = require('../learning/jobOutcomeSummaryRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -1469,6 +1471,27 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = jobOutcomeGraphEvaluationContract.normalizeEvaluation(req.params.estimateId, req.body);
         const data = await jobOutcomeGraphEvaluationRepository.build(poolProvider(), {
+          ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/estimates/:estimateId/job-outcome-summary', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeSummaryContract.normalizeRead(req.params.estimateId);
+        const data = await jobOutcomeSummaryRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/estimates/:estimateId/job-outcome-summary', headers, mutationAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeSummaryContract.normalizeSummary(req.params.estimateId, req.body);
+        const data = await jobOutcomeSummaryRepository.build(poolProvider(), {
           ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
         });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');

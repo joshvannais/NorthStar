@@ -229,6 +229,14 @@ Migration `125_canonical_job_outcome_graph_evaluation.sql` adds immutable, tenan
 
 Every evaluation pins the current graph identity, revision, graph digest, source digest, graph-permission period, normalized required-domain set, deterministic calculation version and request identity. A newer graph or any change that makes the graph stale hides the evaluation detail. Permission revocation blocks reads and delayed retries; a later grant starts an empty period. Runtime can call only guarded evaluation read and build functions. Outcome values, conversions, per-job summaries, cross-job proposals, impact previews and adoption remain unavailable here.
 
+## Part 13 Slice C candidate — complete per-job outcome summary
+
+Migration `126_canonical_job_outcome_summary.sql` records one immutable six-area summary for one exact current graph and its exact current evaluation. Labor, travel, equipment, materials, scope and available external financial evidence are each explicit. A domain is recorded only when the graph has one current source for its claim slot, unavailable when current evidence is absent, and needs review when multiple current sources overlap. Every recorded source retains its accepted authority's values, units, currency and evidence shape without aggregation, conversion, selection or inference.
+
+The summary pins the graph and evaluation identities, revisions, canonical and source digests, current graph-permission period, deterministic calculation version and request identity. Each source is re-read through its guarded accepted outcome entry before the summary is saved or shown. A new graph or evaluation, correction, tombstone, reviewed-link or target change, purpose-permission change or graph-permission change stales and masks prior detail. Revocation blocks history and replay; a later grant starts empty and revives nothing.
+
+Runtime can call only guarded summary read and build entries. The summary changes no source or operating record. Cross-job proposal generation, impact preview, owner adoption and lifecycle propagation remain Slices D-G. The rendered paid and demo experience remains Slice H, and native NorthStar financial truth remains unavailable until Mission 27.
+
 Corrections, tombstones, source or purpose permission changes, reviewed-link changes and estimate-target changes make an earlier graph stale and mask its nodes. Revoking graph permission hides all graph history from the current period. A later grant starts empty and cannot revive an earlier graph. Runtime access is limited to four guarded entry functions; storage and resolver helpers remain withheld.
 
 ## Part 12K presentation projection

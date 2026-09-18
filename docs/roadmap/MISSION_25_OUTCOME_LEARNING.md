@@ -99,6 +99,8 @@ Slice A is implemented as a candidate at migration 124. It records only exact, c
 
 Slice B is implemented as a candidate at migration 125. It evaluates one exact current graph against an explicit, bounded set of outcome domains selected for that review. Freshness, missing required coverage and overlapping claim slots are reported independently. Two sources that cover the same claim slot are marked for review; no value is compared and no source is chosen. The immutable evaluation pins the exact graph revision, graph and source digests, current permission period, normalized required domains, deterministic calculation version and request identity. A newer graph, source correction, reviewed-link change, target change or permission change makes the evaluation stale and masks its details. Revocation and a later grant cannot revive a prior evaluation. Complete per-job outcome summaries and all proposal or adoption work remain Slices C-F.
 
+Slice C is implemented as a candidate at migration 126. It prepares one complete six-area summary from one exact current graph and its current evaluation. Labor, travel, equipment, materials, scope and available external financial evidence are each marked recorded, unavailable or needing review. Values remain source-specific; overlaps stay separate and missing evidence never becomes zero. The immutable summary pins the exact graph, evaluation, permission period, source lineage, calculation version and request identity. Any lineage or permission change makes the result stale and masks its detail, and later permission cannot revive an earlier summary. Cross-job proposals, previews, adoption and propagation remain Slices D-G.
+
 ### Part 14 — seven mission acceptance slices
 
 | Slice | Scope |

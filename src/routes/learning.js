@@ -85,6 +85,8 @@ const jobOutcomeSummaryContract = require('../learning/jobOutcomeSummaryContract
 const jobOutcomeSummaryRepository = require('../learning/jobOutcomeSummaryRepository');
 const jobOutcomeProposalContract = require('../learning/jobOutcomeProposalContract');
 const jobOutcomeProposalRepository = require('../learning/jobOutcomeProposalRepository');
+const jobOutcomeProposalRegistryContract = require('../learning/jobOutcomeProposalRegistryContract');
+const jobOutcomeProposalRegistryRepository = require('../learning/jobOutcomeProposalRegistryRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -106,7 +108,8 @@ function actor(req) {
 function replyError(req, res, error) {
   const status = Number.isInteger(error && (error.status || error.statusCode)) ? (error.status || error.statusCode) : 503;
   const code = error && error.code || 'M25_LEARNING_UNAVAILABLE';
-  const unavailable = code.startsWith('M25_EXTERNAL_BUSINESS_OPERATIONS_') ? 'Source operations are temporarily unavailable.' :
+  const unavailable = code.startsWith('M25_JOB_OUTCOME_REGISTRY_') ? 'Proposal registry review is temporarily unavailable.' :
+    code.startsWith('M25_EXTERNAL_BUSINESS_OPERATIONS_') ? 'Source operations are temporarily unavailable.' :
     code.startsWith('M25_JOB_OUTCOME_GRAPH_') ? 'Job outcome review is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_BUSINESS_CALIBRATION_') ? 'Business calibration is temporarily unavailable.' :
     code.startsWith('M25_EXTERNAL_FINANCIAL_OUTCOME_') ? 'Financial outcome learning is temporarily unavailable.' :
@@ -1535,6 +1538,36 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = jobOutcomeProposalContract.normalizeProposal(req.params.serviceKey, req.body);
         const data = await jobOutcomeProposalRepository.build(poolProvider(), {
+          ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-proposal-registry/:serviceKey/impact-preview', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeProposalRegistryContract.normalizePreview(req.params.serviceKey, req.body);
+        const data = await jobOutcomeProposalRegistryRepository.preview(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/job-outcome-proposal-registry/:serviceKey', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeProposalRegistryContract.normalizeRead(req.params.serviceKey);
+        const data = await jobOutcomeProposalRegistryRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/job-outcome-proposal-registry/:serviceKey/versions', headers, mutationAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeProposalRegistryContract.normalizeSave(req.params.serviceKey, req.body);
+        const data = await jobOutcomeProposalRegistryRepository.save(poolProvider(), {
           ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
         });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');

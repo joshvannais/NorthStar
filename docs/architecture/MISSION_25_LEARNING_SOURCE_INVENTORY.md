@@ -245,6 +245,14 @@ Labor, travel, equipment, material and available connected-financial measures ar
 
 Only guarded permission, read and build entries are available to runtime. Storage and calculation helpers are withheld. A source correction, reviewed-link change, target change, graph or evaluation change, summary replacement, graph-permission change or proposal-permission change stales and masks prior details. Revocation blocks reads and replay, and later grants begin empty. No customer, job, estimate, price, schedule, asset, material, financial record, planning value or company setting changes automatically. The proposal registry and impact preview remain Slice E, adoption remains Slice F, lifecycle propagation remains Slice G, and the rendered paid and demo experience remains Slice H. Native NorthStar financial truth remains unavailable until Mission 27.
 
+## Part 13 Slice E candidate — proposal registry and impact preview
+
+Migration `128_canonical_job_outcome_proposal_registry.sql` prepares an owner-readable impact preview from one exact current Part 13D proposal. Each of the six proposal areas remains separate. Supported multiplier advice is presented as a relative increase, decrease or keep review; connected gross-margin percentages remain reference-only. The preview never invents an absolute company value, scope value or native financial fact.
+
+An owner or administrator can explicitly save one immutable registry revision for the normalized service. The revision pins the current proposal-permission period, exact proposal canonical and source digests, exact preview and preview digest, previous registry revision, deterministic calculation version, actor authority and request identity. Current exact retries are idempotent. A later revision retires an earlier replay.
+
+The saved preview is revalidated through the exact guarded proposal projection before it is shown. Any pinned source, target, graph, evaluation, summary, proposal or permission change makes it stale and masks its proposal identity and detail. Revocation hides the current period; a later grant starts an empty registry and revives nothing. Runtime receives only guarded preview, save and read entries. Registry storage and helpers remain withheld. This authority changes no business profile, planning value, estimate, price, schedule, job, asset, material, financial record or policy. Adoption, lifecycle propagation and the rendered paid/demo experience remain Slices F-H. Native NorthStar financial truth remains Mission 27.
+
 Corrections, tombstones, source or purpose permission changes, reviewed-link changes and estimate-target changes make an earlier graph stale and mask its nodes. Revoking graph permission hides all graph history from the current period. A later grant starts empty and cannot revive an earlier graph. Runtime access is limited to four guarded entry functions; storage and resolver helpers remain withheld.
 
 ## Part 12K presentation projection

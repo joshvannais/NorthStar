@@ -2475,6 +2475,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   }
 }
 
+const REVIEWED_MIGRATION_TIMEOUT_FILES = new Set(['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql','100_canonical_imported_asset_health_outcomes.sql','101_canonical_imported_asset_calibration.sql','102_canonical_external_asset_import_operations.sql','103_canonical_learning_center_assets.sql','104_canonical_learning_match_labels.sql','105_canonical_native_material_outcomes.sql','106_canonical_external_material_import_authority.sql','107_canonical_external_material_reconciliation.sql','108_canonical_imported_material_quantity_outcomes.sql','109_canonical_imported_material_cost_observations.sql','110_canonical_imported_material_calibration.sql','111_canonical_external_material_import_operations.sql','112_canonical_learning_center_materials.sql','113_canonical_external_crm_field_service_import_authority.sql','114_canonical_external_project_change_order_import_authority.sql','115_canonical_external_communication_import_authority.sql','116_canonical_external_financial_import_authority.sql','117_canonical_external_business_reconciliation.sql','118_canonical_external_customer_outcomes.sql','119_canonical_external_project_outcomes.sql','120_canonical_external_financial_outcomes.sql','121_canonical_external_business_calibration.sql','122_canonical_external_business_source_operations.sql']);
+
+function reviewedMigrationTimeoutValues(file, inherited) {
+  if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;
+  return Object.freeze({
+    lockTimeout: String(Math.min(Number(inherited.lock_timeout) || 5000, 5000)) + 'ms',
+    statementTimeout: String(Math.min(Number(inherited.statement_timeout) || 20000, 20000)) + 'ms',
+  });
+}
+
 async function runMigrations(options = {}) {
   const targetPool = options.pool || getPool();
   if (!targetPool) throw new Error('DATABASE_URL is required for PostgreSQL authority');
@@ -2501,15 +2511,15 @@ async function runMigrations(options = {}) {
     // Bound the reviewed Mission 24 and Mission 25 migrations' complete transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
-    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql','100_canonical_imported_asset_health_outcomes.sql','101_canonical_imported_asset_calibration.sql','102_canonical_external_asset_import_operations.sql','103_canonical_learning_center_assets.sql','104_canonical_learning_match_labels.sql','105_canonical_native_material_outcomes.sql','106_canonical_external_material_import_authority.sql','107_canonical_external_material_reconciliation.sql','108_canonical_imported_material_quantity_outcomes.sql','109_canonical_imported_material_cost_observations.sql','110_canonical_imported_material_calibration.sql','111_canonical_external_material_import_operations.sql','112_canonical_learning_center_materials.sql','113_canonical_external_crm_field_service_import_authority.sql','114_canonical_external_project_change_order_import_authority.sql','115_canonical_external_communication_import_authority.sql','116_canonical_external_financial_import_authority.sql','117_canonical_external_business_reconciliation.sql','118_canonical_external_customer_outcomes.sql','119_canonical_external_project_outcomes.sql','120_canonical_external_financial_outcomes.sql','121_canonical_external_business_calibration.sql'].includes(migrations[migrations.length - 1]?.file)) {
+    if (REVIEWED_MIGRATION_TIMEOUT_FILES.has(migrations[migrations.length - 1]?.file)) {
       const settings = await client.query(
         "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
       );
       const inherited = Object.fromEntries(settings.rows.map(row => [row.name, row.setting]));
+      const boundedTimeouts = reviewedMigrationTimeoutValues(migrations[migrations.length - 1]?.file, inherited);
       await client.query(
         "SELECT set_config('lock_timeout',$1,true),set_config('statement_timeout',$2,true)",
-        [String(Math.min(Number(inherited.lock_timeout) || 5000, 5000)) + 'ms',
-          String(Math.min(Number(inherited.statement_timeout) || 20000, 20000)) + 'ms']
+        [boundedTimeouts.lockTimeout, boundedTimeouts.statementTimeout]
       );
     }
     await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_KEY]);
@@ -2685,6 +2695,7 @@ module.exports = {
   isAvailable,
   query,
   readiness,
+  reviewedMigrationTimeoutValues,
   resetForTests,
   loadMigrations,
   runMigrations,

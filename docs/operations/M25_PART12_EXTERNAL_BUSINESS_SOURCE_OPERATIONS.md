@@ -8,6 +8,8 @@ All source permission, import, hold, deletion and cleanup mutations for one comp
 
 A deletion request immediately revokes the current source permission. While deletion is active, imports and permission grants are blocked and ordinary source and downstream learning reads stay hidden through the existing current-period permission boundaries. Recovery requires an explicit deletion cancellation and a new source permission period. That new period starts empty and cannot revive deleted records, earlier reviewed links, observations or calibration.
 
+An exact retry is returned only while the permission, connection, retention, deletion, hold or cleanup result is still the current revision for that source. Connection revisions pin the exact source-permission period that authorized them. A later revocation, deletion, cancellation, policy change, hold change, cleanup page or new permission period retires the earlier result. Retrying its old request key then reports that the source changed and never returns the retired success details.
+
 The authority is tenant private, owner or administrator controlled, bounded, resumable and idempotent. Runtime can use only the guarded read, lifecycle and cleanup entries. It cannot update a customer, lead, job, appointment, estimate, project, change order, execution, schedule, dispatch decision, price, invoice, payment, collection, accounting record or company policy. Native NorthStar financial truth remains unavailable until Mission 27.
 
 This slice adds no rendered page. Part 12K owns the paid and isolated-demo Learning Center, responsive behavior and complete Part 12 acceptance.

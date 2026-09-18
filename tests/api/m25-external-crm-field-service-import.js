@@ -112,7 +112,7 @@ const base = (recordType, externalRecordId) => ({
     response = await write('/consent', revoke); assert.equal(response.status, 201); const revokedConsent = response.body.data.consent;
     source = await request(fixture.app).get(root).set(owner.session.headers); assert.equal(source.body.data.activeConsent, false);
     assert.deepEqual(source.body.data.currentRecords, []);
-    response = await write('/batches', batch(), key); assert.equal(response.status, 200); assert.equal(response.headers['idempotency-replayed'], 'true');
+    response = await write('/batches', batch(), key); assert.equal(response.status, 409); assert.equal(response.headers['idempotency-replayed'], undefined); assert.equal(response.body.data, undefined);
     response = await write('/batches', batch({ reason: 'Changed after revocation.' }), key); assert.equal(response.status, 409);
     response = await write('/consent', { ...grant, expectedRevision: revokedConsent.revision, expectedDigest: revokedConsent.digest,
       reason: 'Start a new reviewed permission period.' }); assert.equal(response.status, 201, JSON.stringify(response.body)); consent = response.body.data.consent;

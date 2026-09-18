@@ -155,9 +155,13 @@ BEGIN IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXC
   OR jsonb_typeof(body->'reason') IS DISTINCT FROM 'string' OR public.canonical_learning_text_valid(body->>'reason',2000) IS NOT TRUE THEN RAISE EXCEPTION 'External communication consent invalid' USING ERRCODE='22023'; END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'actorUserId',actor,'sourceKey',source_value,'body',body));
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-communication-import:'||source_value,0));
- SELECT * INTO replay FROM public.canonical_external_communication_import_consents WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
- IF FOUND THEN IF rtrim(replay.request_digest)<>request_hash THEN RAISE EXCEPTION 'Communication consent key conflict' USING ERRCODE='23505'; END IF; RETURN jsonb_build_object('consent',public.canonical_external_communication_consent_projection(replay),'replayed',TRUE); END IF;
  SELECT * INTO current_row FROM public.canonical_external_communication_import_consents WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE;
+ SELECT * INTO replay FROM public.canonical_external_communication_import_consents WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
+ IF FOUND THEN
+  IF rtrim(replay.request_digest)<>request_hash THEN RAISE EXCEPTION 'Communication consent key conflict' USING ERRCODE='23505'; END IF;
+  IF current_row.id IS DISTINCT FROM replay.id THEN RAISE EXCEPTION 'Communication consent changed' USING ERRCODE='40001',CONSTRAINT='external_business_retired_consent_replay'; END IF;
+  RETURN jsonb_build_object('consent',public.canonical_external_communication_consent_projection(replay),'replayed',TRUE);
+ END IF;
  IF (body->>'expectedRevision')::bigint<>COALESCE(current_row.revision,0) OR body->>'expectedDigest' IS DISTINCT FROM COALESCE(rtrim(current_row.canonical_digest),'none') THEN RAISE EXCEPTION 'Communication consent changed' USING ERRCODE='40001'; END IF;
  IF body->>'action'='revoke' AND (current_row.id IS NULL OR current_row.action<>'grant') OR body->>'action'='grant' AND current_row.action='grant' THEN RAISE EXCEPTION 'Communication consent action invalid' USING ERRCODE='22023'; END IF;
  next_revision:=COALESCE(current_row.revision,0)+1;digest_value:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'sourceKey',source_value,'revision',next_revision,'previousId',current_row.id,'action',body->>'action','actorUserId',actor,'membershipId',(authority->>'membershipId')::uuid,'authSessionId',session_value,'sourceScope','["external_communication_normalized_v1"]'::jsonb,'consentVersion','m25-external-communication-import-consent-v1','reason',body->>'reason','requestDigest',request_hash));
@@ -188,9 +192,13 @@ BEGIN IF current_setting('transaction_isolation')<>'serializable' THEN RAISE EXC
  IF (SELECT count(*) FROM (SELECT x->>'externalRecordId' FROM jsonb_array_elements(body->'records')x GROUP BY x->>'externalRecordId')u)<>jsonb_array_length(body->'records') THEN RAISE EXCEPTION 'Duplicate communication identity' USING ERRCODE='22023'; END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');request_hash:=public.canonical_completion_digest(jsonb_build_object('organizationId',org,'actorUserId',actor,'sourceKey',source_value,'body',body));
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':external-communication-import:'||source_value,0));
- SELECT * INTO replay FROM public.canonical_external_communication_import_runs WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
- IF FOUND THEN IF rtrim(replay.request_digest)<>request_hash THEN RAISE EXCEPTION 'Communication batch key conflict' USING ERRCODE='23505'; END IF; RETURN jsonb_build_object('run',public.canonical_external_communication_run_projection(replay),'replayed',TRUE); END IF;
  SELECT * INTO consent_row FROM public.canonical_external_communication_import_consents WHERE organization_id=org AND source_key=source_value ORDER BY revision DESC LIMIT 1 FOR UPDATE;
+ SELECT * INTO replay FROM public.canonical_external_communication_import_runs WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
+ IF FOUND THEN
+  IF rtrim(replay.request_digest)<>request_hash THEN RAISE EXCEPTION 'Communication batch key conflict' USING ERRCODE='23505'; END IF;
+  IF consent_row.id IS NULL OR consent_row.action IS DISTINCT FROM 'grant' OR replay.consent_id IS DISTINCT FROM consent_row.id OR replay.consent_revision IS DISTINCT FROM consent_row.revision OR rtrim(replay.consent_digest) IS DISTINCT FROM rtrim(consent_row.canonical_digest) THEN RAISE EXCEPTION 'Communication consent changed' USING ERRCODE='40001',CONSTRAINT='external_business_retired_import_replay'; END IF;
+  RETURN jsonb_build_object('run',public.canonical_external_communication_run_projection(replay),'replayed',TRUE);
+ END IF;
  IF consent_row.id IS NULL OR consent_row.action IS DISTINCT FROM 'grant' OR consent_row.revision IS DISTINCT FROM (body->>'expectedConsentRevision')::bigint OR rtrim(consent_row.canonical_digest) IS DISTINCT FROM body->>'expectedConsentDigest' THEN RAISE EXCEPTION 'Communication consent changed' USING ERRCODE='40001'; END IF;
  IF EXISTS(
   SELECT 1 FROM (

@@ -223,6 +223,12 @@ Saved request results are replayable only while they remain current for that sou
 
 Every graph needs at least two distinct current sources across at least two outcome domains. Duplicate identities, stale observations, hidden source detail, mismatched estimates, unsupported locators and incomplete permission are rejected. The graph retains no outcome value and performs no conversion, conflict resolution, completeness assessment, summary, calibration, proposal or adoption. Those remain later Part 13 slices.
 
+## Part 13 Slice B candidate — graph evidence evaluation
+
+Migration `125_canonical_job_outcome_graph_evaluation.sql` adds immutable, tenant-private evaluations of one exact current Part 13A graph. The owner or administrator supplies the bounded outcome domains required for that review; the service does not infer job requirements. The evaluator separately records current freshness, missing required domains, graph coverage and overlapping claim slots. Labor, equipment and material quantity sources share explicit claim slots, while material quantity and material cost remain distinct. Multiple current sources in one claim slot are preserved and marked for review rather than deduplicated or resolved.
+
+Every evaluation pins the current graph identity, revision, graph digest, source digest, graph-permission period, normalized required-domain set, deterministic calculation version and request identity. A newer graph or any change that makes the graph stale hides the evaluation detail. Permission revocation blocks reads and delayed retries; a later grant starts an empty period. Runtime can call only guarded evaluation read and build functions. Outcome values, conversions, per-job summaries, cross-job proposals, impact previews and adoption remain unavailable here.
+
 Corrections, tombstones, source or purpose permission changes, reviewed-link changes and estimate-target changes make an earlier graph stale and mask its nodes. Revoking graph permission hides all graph history from the current period. A later grant starts empty and cannot revive an earlier graph. Runtime access is limited to four guarded entry functions; storage and resolver helpers remain withheld.
 
 ## Part 12K presentation projection

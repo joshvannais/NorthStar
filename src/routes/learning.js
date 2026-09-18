@@ -79,6 +79,8 @@ const importedAssetCalibrationContract = require('../learning/importedAssetCalib
 const importedAssetCalibrationRepository = require('../learning/importedAssetCalibrationRepository');
 const jobOutcomeGraphContract = require('../learning/jobOutcomeGraphContract');
 const jobOutcomeGraphRepository = require('../learning/jobOutcomeGraphRepository');
+const jobOutcomeGraphEvaluationContract = require('../learning/jobOutcomeGraphEvaluationContract');
+const jobOutcomeGraphEvaluationRepository = require('../learning/jobOutcomeGraphEvaluationRepository');
 
 function requestId(req) {
   const value = String(req.requestId || req.correlationId || 'unavailable');
@@ -1446,6 +1448,27 @@ function createLearningRouter(options = {}) {
       try {
         const normalized = jobOutcomeGraphContract.normalizeGraph(req.params.estimateId, req.body);
         const data = await jobOutcomeGraphRepository.build(poolProvider(), {
+          ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
+        });
+        if (data.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(data.replayed ? 200 : 201).json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.get('/estimates/:estimateId/job-outcome-graph/evaluation', headers, tenantAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('learning', 'read'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeGraphEvaluationContract.normalizeRead(req.params.estimateId);
+        const data = await jobOutcomeGraphEvaluationRepository.read(poolProvider(), { ...actor(req), ...normalized });
+        return res.json({ success: true, data, requestId: requestId(req) });
+      } catch (error) { return replyError(req, res, error); }
+    });
+
+  router.post('/estimates/:estimateId/job-outcome-graph/evaluation', headers, mutationAuth, jobOutcomeGraphOwnerOnly, throttle,
+    permission('operations', 'update'), async (req, res) => {
+      try {
+        const normalized = jobOutcomeGraphEvaluationContract.normalizeEvaluation(req.params.estimateId, req.body);
+        const data = await jobOutcomeGraphEvaluationRepository.build(poolProvider(), {
           ...actor(req), ...normalized, csrfToken: req.get('X-CSRF-Token'), idempotencyKey: req.get('Idempotency-Key'),
         });
         if (data.replayed) res.set('Idempotency-Replayed', 'true');

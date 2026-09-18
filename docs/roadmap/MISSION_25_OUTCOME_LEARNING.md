@@ -97,6 +97,8 @@ Parts 1-8 were released as one bounded package each and do not have retroactive 
 
 Slice A is implemented as a candidate at migration 124. It records only exact, current and separately permitted links between accepted per-job outcome observations. It does not combine values, score evidence, generate proposals or adopt changes; those remain Slices B-F. Corrections, source or purpose permission changes, reviewed-link changes and target changes stale the graph, while revocation hides it and a later grant revives nothing from an earlier permission period.
 
+Slice B is implemented as a candidate at migration 125. It evaluates one exact current graph against an explicit, bounded set of outcome domains selected for that review. Freshness, missing required coverage and overlapping claim slots are reported independently. Two sources that cover the same claim slot are marked for review; no value is compared and no source is chosen. The immutable evaluation pins the exact graph revision, graph and source digests, current permission period, normalized required domains, deterministic calculation version and request identity. A newer graph, source correction, reviewed-link change, target change or permission change makes the evaluation stale and masks its details. Revocation and a later grant cannot revive a prior evaluation. Complete per-job outcome summaries and all proposal or adoption work remain Slices C-F.
+
 ### Part 14 — seven mission acceptance slices
 
 | Slice | Scope |

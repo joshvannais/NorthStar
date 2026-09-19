@@ -15,6 +15,20 @@ const auditLog = [];
 const MAX_MEMORY_LOGS = 10000;
 const ANONYMOUS_NOT_FOUND_EVENT = 'anonymous_api_not_found';
 const ANONYMOUS_NOT_FOUND_COUNT_CAP = 1000;
+const PERSISTED_ENTITY_TYPES = new Set(['api_request', 'canonical_voice_session', 'unknown']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function persistedEntityType(value) {
+  return PERSISTED_ENTITY_TYPES.has(value) ? value : 'unknown';
+}
+
+function persistedEntityId(entityType, value) {
+  return entityType === 'canonical_voice_session' && UUID.test(String(value || '')) ? value : null;
+}
+
+function persistedCorrelationId(value) {
+  return UUID.test(String(value || '')) ? value : null;
+}
 
 /**
  * Record an audit log entry.
@@ -22,6 +36,7 @@ const ANONYMOUS_NOT_FOUND_COUNT_CAP = 1000;
  * @param {Object} entry - { actorId, actorRole, action, entityType, entityId, beforeState, afterState, ipAddress, userAgent }
  */
 function createEntry(entry) {
+  const entityType = persistedEntityType(entry.entityType);
   return {
     id: uuidv4(),
     createdAt: new Date().toISOString(),
@@ -30,13 +45,16 @@ function createEntry(entry) {
     actorLabel: entry.actorLabel || (entry.userId ? 'authenticated' : 'system'),
     actorRole: entry.actorRole || 'system',
     action: entry.action || 'unknown',
-    entityType: entry.entityType || 'unknown',
-    entityId: entry.entityId || null,
+    entityType,
+    entityId: persistedEntityId(entityType, entry.entityId),
     beforeState: entry.beforeState || null,
     afterState: entry.afterState || null,
-    ipAddress: entry.ipAddress || null,
-    userAgent: entry.userAgent || null,
-    correlationId: entry.correlationId || null
+    // Request-controlled network/client strings are not durable audit facts.
+    // Correlation and the bounded request classification below remain useful
+    // without retaining an address or arbitrary client text.
+    ipAddress: null,
+    userAgent: null,
+    correlationId: persistedCorrelationId(entry.correlationId)
   };
 }
 
@@ -46,7 +64,6 @@ function detailsFor(logEntry) {
     role: logEntry.actorRole,
     requestId: logEntry.correlationId,
     correlationId: logEntry.correlationId,
-    userAgent: logEntry.userAgent,
     beforeState: logEntry.beforeState,
     afterState: logEntry.afterState,
   };

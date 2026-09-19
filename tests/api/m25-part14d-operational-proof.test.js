@@ -37,8 +37,12 @@ realPostgres('Mission 25 Part 14D bounded operational proof', () => {
     const root = `/api/v1/learning/external-labor-sources/${sourceKey}`;
     return (suffix, body, key = crypto.randomUUID()) => {
       secrets.add(key);
+      secrets.add('audit-smuggle-worker');
+      secrets.add('audit-smuggle-record');
+      const userAgent = `NorthStar/${key}; workerReference=audit-smuggle-worker; body={"records":["audit-smuggle-record"]}`;
       return request(fixture.app).post(root + suffix).set(owner.session.headers)
-        .set('X-CSRF-Token', owner.csrfToken).set('Idempotency-Key', key).send(body);
+        .set('X-CSRF-Token', owner.csrfToken).set('Idempotency-Key', key)
+        .set('User-Agent', userAgent).send(body);
     };
   };
 
@@ -76,18 +80,31 @@ realPostgres('Mission 25 Part 14D bounded operational proof', () => {
     }, {});
     expect(actualActions).toEqual(actions);
     for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual([
+        'action', 'details', 'entity_id', 'entity_type', 'id', 'ip_address', 'organization_id', 'user_id',
+      ]);
       expect(row.organization_id).toBe(fixture.org);
       expect(row.user_id).toBe(fixture.actors.owner.actorUserId);
+      expect(row.entity_type).toBe('api_request');
       expect(row.entity_id).toBe('');
+      expect(row.ip_address).toBe('');
+      expect(Object.keys(row.details).sort()).toEqual([
+        'actorLabel', 'afterState', 'beforeState', 'correlationId', 'requestId', 'role',
+      ]);
       expect(row.details).toMatchObject({
         actorLabel: 'authenticated', role: 'owner', beforeState: null,
         afterState: { method: 'POST', status: Number(row.action.split(' ')[1]) },
       });
+      expect(Object.keys(row.details.afterState).sort()).toEqual(['duration', 'method', 'path', 'status']);
       expect(row.details.requestId).toMatch(uuidPattern);
       expect(row.details.correlationId).toBe(row.details.requestId);
-      expect(row.details.afterState.path).toContain(`/external-labor-sources/${sourceKey}/`);
+      expect([
+        '/api/v1/learning/external-labor-sources/:sourceKey/consent',
+        '/api/v1/learning/external-labor-sources/:sourceKey/batches',
+      ]).toContain(row.details.afterState.path);
       expect(Number.isSafeInteger(row.details.afterState.duration) && row.details.afterState.duration >= 0).toBe(true);
-      const serialized = JSON.stringify(row.details);
+      const serialized = JSON.stringify(row);
+      expect(serialized).not.toContain(sourceKey);
       for (const secret of secrets) expect(serialized).not.toContain(secret);
       expect(serialized).not.toMatch(/-record-|\"records\"|workerReference|jobReference|expectedConsent|sourceUpdatedAt|Idempotency/i);
     }
@@ -173,6 +190,27 @@ realPostgres('Mission 25 Part 14D bounded operational proof', () => {
     expect(totals).toEqual({ consents: 1, runs: 10, records: 10 });
     await expectAuditDelta(auditBefore, sourceKey, 26,
       { 'POST 200': 5, 'POST 201': 11, 'POST 409': 10 }, secrets);
+  }, 120000);
+
+  test('stores bounded audit facts without hostile client, address, entity or request metadata', async () => {
+    const sourceKey = 'part14d.metadata-proof';
+    const owner = fixture.actors.owner;
+    const key = crypto.randomUUID();
+    const secrets = new Set([
+      sourceKey, key, 'audit-smuggle-worker', 'audit-smuggle-record',
+      'private@example.test', '860-555-1212', '198.51.100.77',
+    ]);
+    const auditBefore = new Set((await auditRows()).map(row => row.id));
+    const response = await request(fixture.app)
+      .post(`/api/v1/learning/external-labor-sources/${sourceKey}/consent`)
+      .set(owner.session.headers)
+      .set('X-CSRF-Token', owner.csrfToken)
+      .set('Idempotency-Key', key)
+      .set('User-Agent', `${key} workerReference=audit-smuggle-worker records=audit-smuggle-record private@example.test 860-555-1212`)
+      .set('X-Forwarded-For', '198.51.100.77')
+      .send(grantBody('Use reviewed labor records for audit privacy proof.'));
+    expect(response.status).toBe(201);
+    await expectAuditDelta(auditBefore, sourceKey, 1, { 'POST 201': 1 }, secrets);
   }, 120000);
 
   test('bounds workload, recovers from backpressure and keeps all non-audit operating state byte-equivalent', async () => {

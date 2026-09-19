@@ -8,6 +8,16 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const acceptedBase = '1cd897242fe77d7c4610bd882a7da1e019fc890a';
+const knownNonpassing = [
+  { id: 'm23-part9b-overview', test: 'tests/integration/m23-part9b-overview-postgres.test.js',
+    observation: 'Part 13D accepted-base and candidate: 15 failures; Part 14F selected fixture still fails with SQLSTATE 42501.' },
+  { id: 'm25-part11f-heading', test: 'tests/ratification/m25-part11f-imported-material-calibration.test.js',
+    observation: 'Current Part 14F: 6 passed, 1 stale documentation-heading assertion failed.' },
+  { id: 'm25-part9f-route-literal', test: 'tests/ratification/m25-part9f-travel-learning-center.test.js',
+    observation: 'Independent Part 14F: 3 passed, 1 inherited stale route-literal assertion failed.' },
+  { id: 'm20-phase6a-timing', test: 'tests/api/m20-phase6a-retell-webhook-containment-postgres.test.js',
+    observation: 'Accepted Part 14D base/head: 46 passed, 1 terminal-call fixture timing failure; not rerun in Part 14F.' },
+];
 const parts = {
   '1': 'bd7459eec4d3845dae4c0e33ddfbfd5b80c8e484',
   '2': 'e28ed583c7d4fea30902f0b5459a3acbafcd299c',
@@ -89,6 +99,19 @@ function exactArtifact(file) {
   };
 }
 
+function assertCoverage(ledger, acceptancePaths, requiredNonpassingIds) {
+  const listed = ledger.evidence.map(item => item.file);
+  if (new Set(listed).size !== listed.length ||
+      JSON.stringify(listed) !== JSON.stringify([...acceptancePaths].sort())) {
+    throw new Error('Acceptance-document inventory is incomplete, duplicated or out of order');
+  }
+  const exclusions = ledger.knownNonpassing.map(item => item.id);
+  if (new Set(exclusions).size !== exclusions.length ||
+      JSON.stringify(exclusions) !== JSON.stringify(requiredNonpassingIds)) {
+    throw new Error('Known nonpassing regression inventory is incomplete or duplicated');
+  }
+}
+
 function build() {
   if (git('rev-parse', acceptedBase) !== acceptedBase) throw new Error('Accepted base is missing');
   if (git('merge-base', acceptedBase, 'HEAD') !== acceptedBase) throw new Error('Candidate is not based on accepted 14E');
@@ -97,6 +120,7 @@ function build() {
     'docs/evidence/MISSION_25_PART14F_AUDIT_HANDOFF.md',
     'docs/evidence/MISSION_25_PART14F_IMMUTABLE_LEDGER.json',
     'scripts/mission25-part14f-ledger.js',
+    'tests/ratification/m25-part14f-audit-ledger.test.js',
   ]);
   const changedPaths = git('diff', '--name-only', acceptedBase, 'HEAD').split(/\r?\n/).filter(Boolean);
   for (const file of changedPaths) {
@@ -121,9 +145,13 @@ function build() {
   if (numbers.some((number, i) => number !== expectedNumbers[i])) {
     throw new Error('Migration filenames differ from the accepted 001–012, 015–135 inventory');
   }
-  const evidencePaths = git('ls-tree', '-r', '--name-only', acceptedBase, 'docs/evidence').split(/\r?\n/)
-    .filter(p => /^docs\/evidence\/MISSION_25_.*_ACCEPTANCE\.md$/.test(p));
-  return {
+  const evidencePaths = git('ls-tree', '-r', '--name-only', acceptedBase, 'docs').split(/\r?\n/)
+    .filter(p => /^docs\/.*\/MISSION_25_.*_ACCEPTANCE\.md$/.test(p)).sort();
+  if (evidencePaths.length !== 29 ||
+      !evidencePaths.includes('docs/roadmap/MISSION_25_PART13H_ACCEPTANCE.md')) {
+    throw new Error('Expected 29 source-controlled Mission 25 acceptance documents across docs');
+  }
+  const ledger = {
     schema: 1,
     acceptedBase,
     status: 'Accepted through Part 14E; Part 14F independent audit and Part 14G release remain pending',
@@ -131,15 +159,23 @@ function build() {
     migrationCount: migrationPaths.length,
     migrations: migrationPaths.map(exactArtifact),
     evidence: evidencePaths.map(exactArtifact),
+    knownNonpassing,
+    broadRegression: { suitesPassed: 38, suitesFailed: 1, testsPassed: 168, testsFailed: 1 },
   };
+  assertCoverage(ledger, evidencePaths, knownNonpassing.map(item => item.id));
+  return ledger;
 }
 
 const target = path.join(root, 'docs/evidence/MISSION_25_PART14F_IMMUTABLE_LEDGER.json');
-const expected = JSON.stringify(build(), null, 2) + '\n';
-if (process.argv.includes('--write')) {
-  writeFileSync(target, expected);
-  process.stdout.write(`Wrote ${path.relative(root, target)}\n`);
-} else {
-  if (readFileSync(target, 'utf8') !== expected) throw new Error('Mission 25 Part 14F ledger drift');
-  process.stdout.write('Mission 25 accepted-head ancestry, 133 migration blobs and evidence hashes verified\n');
+if (require.main === module) {
+  const expected = JSON.stringify(build(), null, 2) + '\n';
+  if (process.argv.includes('--write')) {
+    writeFileSync(target, expected);
+    process.stdout.write(`Wrote ${path.relative(root, target)}\n`);
+  } else {
+    if (readFileSync(target, 'utf8') !== expected) throw new Error('Mission 25 Part 14F ledger drift');
+    process.stdout.write('Mission 25 accepted-head ancestry, 133 migration blobs and 29 acceptance hashes verified\n');
+  }
 }
+
+module.exports = { assertCoverage, build, knownNonpassing };

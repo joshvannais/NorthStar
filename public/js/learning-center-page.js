@@ -595,7 +595,10 @@
       var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : (reference.referenceKind === 'vehicle' ? state.matches.vehicleTargets : (reference.referenceKind === 'equipment' ? state.matches.equipmentTargets : (reference.referenceKind === 'material' ? state.matches.materialTargets : (reference.referenceKind === 'vendor' ? state.matches.vendorTargets : (reference.referenceKind === 'inventory_location' ? state.matches.inventoryLocationTargets : (isBusinessKind() ? (reference.referenceKind === 'customer' ? state.matches.customerTargets : (reference.referenceKind === 'execution' ? state.matches.executionTargets : state.matches.estimateTargets)) : state.matches.jobTargets))))));
       (targets || []).forEach(function (target) { var label = targetLabel(reference.referenceKind, target); if (!label) return; var identity = target.targetId || target.targetReference; var option = new Option(label, identity); option.dataset.digest = target.digest; select.appendChild(option); });
       select.value = match && match.action === 'link' ? (match.targetId || match.targetReference) : ''; select.disabled = demo;
-      select.addEventListener('change', function () { saveMatch(reference, select); }); cell.appendChild(select); tr.appendChild(cell);
+      var selectedLabel = node('p', 'learning-selected-target');
+      function showSelectedTarget() { selectedLabel.textContent = select.value ? 'Selected company record: ' + select.options[select.selectedIndex].text : 'No company record linked.'; }
+      showSelectedTarget(); select.addEventListener('change', function () { showSelectedTarget(); saveMatch(reference, select); });
+      cell.appendChild(select); cell.appendChild(selectedLabel); tr.appendChild(cell);
       ['Type', 'External reference', 'Evidence', 'Status', 'Company record'].forEach(function (label, cellIndex) { tr.children[cellIndex].dataset.label = label; });
       body.appendChild(tr);
     }); table.appendChild(body); wrap.appendChild(table); root.appendChild(wrap); renderAssetHealth();

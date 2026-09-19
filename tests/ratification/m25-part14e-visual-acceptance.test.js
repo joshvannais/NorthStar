@@ -18,10 +18,13 @@ describe('Mission 25 Part 14E visual and accessibility acceptance', () => {
     const css = read('public/css/learning-center.css');
     expect(html).toContain('class="learning-skip" href="#learningMain"');
     expect(html).toContain('tabindex="-1" aria-busy="true"');
-    expect(html).toContain('m25-mission-visual-20260918');
+    expect(html).toContain('m25-mission-visual-correction-20260918');
     expect(page).toContain("wrap.tabIndex = 0; wrap.setAttribute('role', 'region')");
     expect(page).toContain("wrap.setAttribute('aria-label', 'Reference review table')");
     expect(page).toContain("tr.children[cellIndex].dataset.label = label");
+    expect(page).toContain("selectedLabel.textContent = select.value ? 'Selected company record: '");
+    expect(css).toContain('.learning-table td:last-child{display:block}');
+    expect(css).toContain('.learning-selected-target{color:var(--theme-text);display:block');
     for (const value of ['textarea:focus-visible', 'a:focus-visible', '@media(prefers-reduced-motion:reduce)', '@media(forced-colors:active)', 'env(safe-area-inset-left)', '.learning-actions>.btn{width:100%}', '.learning-table td::before', 'content:attr(data-label)']) expect(css).toContain(value);
     expect(html).not.toMatch(/(?:Request ID|Database schema|Internal state|Idempotency key)/i);
   });
@@ -35,5 +38,10 @@ describe('Mission 25 Part 14E visual and accessibility acceptance', () => {
     }
     for (const value of ['reducedMotion:\'reduce\'', 'unlabeledControls', 'scrollY', 'externalRequests', 'pageErrors']) expect(paid).toContain(value);
     for (const value of ['permission, cohort selection, evidence review, save, adoption, removal, reload and reset', 'outsideRequests', 'pageErrors']) expect(demo).toContain(value);
+  });
+
+  test('proves long-prefix target choices remain visibly distinguishable on both phone widths and engines', () => {
+    const probe = read('tests/browser/m25-part14e-reference-visibility.js');
+    for (const value of ['Arborist Crew Lead · Regional North', 'Arborist Crew Lead · Regional South', "['chrome','webkit']", 'for(const width of [360,390])', 'assert.notEqual(northPixels,southPixels', 'ledger.mutations.at(-1).targetId', 'northPreview.isVisible()', 'southPreview.isVisible()']) expect(probe).toContain(value);
   });
 });

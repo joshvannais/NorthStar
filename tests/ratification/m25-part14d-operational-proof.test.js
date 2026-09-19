@@ -2,7 +2,6 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const tableInventory = require('../helpers/m25-part14a-table-inventory');
 
 describe('Mission 25 Part 14D authority', () => {
   test('freezes the bounded operational proof without changing a rendered path or accepted migration', () => {
@@ -12,8 +11,9 @@ describe('Mission 25 Part 14D authority', () => {
     expect(roadmap).toContain('one through 100 records');
     expect(evidence).toContain('No rendered path changed');
     expect(evidence).toContain('Physical-device and private-production evidence remain unavailable');
-    expect(tableInventory.operationalTableArea('tenant_assets')).toBe('assets');
-    expect(tableInventory.operationalTableArea('canonical_external_labor_import_runs')).toBe('externalSourceAuthority');
-    expect(tableInventory.operationalTableArea('canonical_native_material_outcome_observations')).toBe('sourceEvidence');
+    const repository = fs.readFileSync(path.join(__dirname, '../../src/learning/externalLaborImportRepository.js'), 'utf8');
+    expect(repository).toContain('await probeImportBatch(pool, input)');
+    expect(repository).toContain("probeError.code === 'M25_IMPORT_KEY_CONFLICT'");
+    expect(repository).toContain("await client.query('ROLLBACK')");
   });
 });

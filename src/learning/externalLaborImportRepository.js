@@ -60,10 +60,44 @@ function mutateConsent(pool, input) {
       [...actorValues(input), input.csrfToken, input.idempotencyKey, input.sourceKey, JSON.stringify(input.body)])).rows[0].value);
 }
 
-function importBatch(pool, input) {
-  return transaction(pool, 'SERIALIZABLE', async client =>
-    (await client.query('SELECT public.canonical_external_labor_import_batch($1,$2,$3,$4,$5,$6,$7,$8::jsonb) value',
-      [...actorValues(input), input.csrfToken, input.idempotencyKey, input.sourceKey, JSON.stringify(input.body)])).rows[0].value);
+function executeImportBatch(client, input) {
+  return client.query('SELECT public.canonical_external_labor_import_batch($1,$2,$3,$4,$5,$6,$7,$8::jsonb) value',
+    [...actorValues(input), input.csrfToken, input.idempotencyKey, input.sourceKey, JSON.stringify(input.body)])
+    .then(result => result.rows[0].value);
+}
+
+async function probeImportBatch(pool, input) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+    await client.query("SET LOCAL statement_timeout='5000ms'");
+    await client.query("SET LOCAL lock_timeout='2000ms'");
+    await client.query("SET LOCAL idle_in_transaction_session_timeout='5000ms'");
+    await client.query('SET LOCAL search_path=pg_catalog,public');
+    const value = await executeImportBatch(client, input);
+    await client.query('ROLLBACK');
+    return value;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw mapped(error);
+  } finally { client.release(); }
+}
+
+async function importBatch(pool, input) {
+  try {
+    return await transaction(pool, 'SERIALIZABLE', client => executeImportBatch(client, input));
+  } catch (error) {
+    if (!error || !['M25_IMPORT_CHANGED', 'M25_IMPORT_KEY_CONFLICT'].includes(error.code)) throw error;
+    let probe;
+    try {
+      probe = await probeImportBatch(pool, input);
+    } catch (probeError) {
+      if (probeError && probeError.code === 'M25_IMPORT_KEY_CONFLICT') throw probeError;
+      throw error;
+    }
+    if (probe && probe.replayed && error.code === 'M25_IMPORT_KEY_CONFLICT') throw mapped({ code: '40001' });
+    throw error;
+  }
 }
 
 function readSource(pool, input) {

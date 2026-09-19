@@ -23,7 +23,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Complete — Slices A-H independently accepted |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Complete — Slices A-K independently accepted |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Complete — Slices A-H independently accepted |
-| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | In progress — Slice A candidate |
+| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | In progress — Slices A-E independently accepted; Slice F audit pending; Slice G release and founder verdict pending |
 
 ## Frozen slice structure for Parts 9-14
 

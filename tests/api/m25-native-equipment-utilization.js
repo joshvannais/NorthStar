@@ -10,7 +10,11 @@ assert.ok(!fs.existsSync(output));
  const estimate=f.estimateGraphs[0].ids.estimate,estimateRoute='/api/v1/canonical/estimates/'+estimate;
  const read=async()=>{const r=await request(f.app).get(estimateRoute+'/review').set(owner.session.headers);assert.equal(r.status,200,JSON.stringify(r.body));return r.body.data;};
  const post=(suffix,body,key=crypto.randomUUID())=>request(f.app).post(estimateRoute+suffix).set(owner.session.headers).set('Idempotency-Key',key).send(body);
- const live=await require('../helpers/m24-readiness-asset').createReadinessAsset(f);
+ // The synthetic M23 execution seed predates the current entry-only runtime ACL.
+ // Keep that fixture-only baseline on the migration role; every Slice A read and
+ // mutation below still exercises the mounted least-privilege HTTP/runtime path.
+ const createExecution=f.createExecution.bind(f);f.createExecution=(options={})=>createExecution({...options,useMigrationRoleForUpstreamSeed:true});
+ const live=await require('../helpers/m24-readiness-asset').createReadinessAsset(f);f.createExecution=createExecution;
  let review=await read();const equipment=require('../helpers/m24-equipment-input');
  const inputs=equipment.inputs([equipment.line({assetId:live.asset.id,identity:live.identity,accessBasis:'owned',task:'Operate the reviewed auger',ownerReview:'Use the exact reviewed company asset.'})]);
  inputs.serviceKey=review.equipmentPlans.sources.serviceKey;

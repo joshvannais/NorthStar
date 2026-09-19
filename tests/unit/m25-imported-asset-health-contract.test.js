@@ -1,0 +1,11 @@
+'use strict';
+const contract = require('../../src/learning/importedAssetHealthContract');
+const repository = require('../../src/learning/importedAssetHealthRepository');
+const digest='a'.repeat(64);
+const consent=()=>({action:'grant',expectedRevision:0,expectedDigest:'none',reason:'Use current asset health evidence.',confirmed:true,confirmationVersion:'m25-imported-asset-health-consent-v1'});
+const observation=()=>({assetCategory:'equipment',externalAssetReference:'auger-1',expectedConsentRevision:1,expectedConsentDigest:digest,reason:'Summarize current maintenance and downtime evidence.',confirmed:true,confirmationVersion:'m25-imported-asset-health-observation-v1'});
+describe('Mission 25 imported asset health contract',()=>{
+ test('accepts exact separate consent and typed asset identity',()=>{expect(contract.normalizeConsent('fleet.primary',consent()).sourceKey).toBe('fleet.primary');expect(contract.normalizeObservation('fleet.primary',observation()).assetCategory).toBe('equipment');expect(contract.normalizeAsset('fleet.primary','vehicle','truck/7').externalAssetReference).toBe('truck/7');});
+ test('rejects missing lineage pins, extra fields and changed confirmation contracts',()=>{for(const change of [v=>{v.expectedConsentDigest=null;},v=>{v.extra=true;},v=>{v.assetCategory='tool';},v=>{v.confirmed=false;},v=>{v.confirmationVersion='wrong';}]){const value=observation();change(value);expect(()=>contract.normalizeObservation('fleet.primary',value)).toThrow('Imported asset health outcome details are invalid.');}});
+ test('maps stale lineage and missing current health evidence to plain review messages',async()=>{const pool=error=>({connect:async()=>({query:async sql=>{if(sql.startsWith('SELECT public.'))throw error;return{rows:[]};},release(){}})});const input={organizationId:'1',actorUserId:'2',actorAccessRole:'owner',authSessionId:'3',csrfToken:'x',idempotencyKey:'1234567890123456',sourceKey:'fleet.primary',...observation()};await expect(repository.observe(pool({code:'40001'}),input)).rejects.toMatchObject({status:409,code:'M25_IMPORTED_ASSET_HEALTH_CHANGED'});await expect(repository.observe(pool({code:'P0002',constraint:'asset_health_lineage_unavailable'}),input)).rejects.toMatchObject({status:409,message:'A current reviewed asset match and current maintenance or downtime evidence are required.'});});
+});

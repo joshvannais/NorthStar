@@ -1,0 +1,5 @@
+'use strict';
+const contract=require('../../src/learning/jobOutcomeProposalRegistryContract');
+const id='11111111-1111-4111-8111-111111111111',digest='a'.repeat(64);
+test('normalizes exact proposal impact preview input',()=>{expect(contract.normalizePreview('fence',{proposalId:id,expectedProposalDigest:digest})).toEqual({serviceKey:'fence',proposalId:id,expectedProposalDigest:digest});expect(()=>contract.normalizePreview('Fence',{proposalId:id,expectedProposalDigest:digest})).toThrow('invalid');});
+test('normalizes exact registry save expectations',()=>{const value={proposalId:id,expectedProposalDigest:digest,expectedPreviewDigest:'b'.repeat(64),expectedRegistryRevision:0,expectedRegistryDigest:'none',reason:'Save this reviewed impact for later owner review.',confirmed:true,confirmationVersion:'m25-job-outcome-proposal-registry-v1'};expect(contract.normalizeSave('fence',value)).toMatchObject({serviceKey:'fence',expectedRegistryRevision:0});expect(()=>contract.normalizeSave('fence',{...value,extra:true})).toThrow('invalid');expect(()=>contract.normalizeSave('fence',{...value,expectedRegistryDigest:digest})).toThrow('invalid');});

@@ -73,20 +73,27 @@ function isPublicEphemeralHomepageMutation(req) {
 }
 
 function requestAuditEntry(req, status, duration) {
-  const path = String(req.path || exactRequestPath(req));
-  const entityType = path.split('/').filter(Boolean)[1] || 'unknown';
+  const routePath = typeof req.route?.path === 'string'
+    ? `${req.baseUrl || ''}${req.route.path}`
+    : '/api';
+  const path = /^\/[A-Za-z0-9_/:.-]{0,239}$/.test(routePath) ? routePath : '/api';
+  const method = safeLogger.methodClass(req.method);
+  const safeStatus = Number.isSafeInteger(status) && status >= 100 && status <= 599 ? status : 500;
+  const safeDuration = Number.isSafeInteger(duration) && duration >= 0
+    ? Math.min(duration, 86_400_000)
+    : 0;
   return {
     organizationId: req.tenantContext?.organizationId || null,
     userId: req.tenantContext?.userId || null,
     actorLabel: req.admin ? 'admin' : (req.user ? 'authenticated' : 'anonymous'),
     actorRole: req.admin ? 'admin' : (req.userRole || 'anonymous'),
-    action: `${req.method} ${status}`,
-    entityType,
-    entityId: req.params?.id || null,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] || null,
+    action: `${method} ${safeStatus}`,
+    entityType: 'api_request',
+    entityId: null,
+    ipAddress: null,
+    userAgent: null,
     correlationId: req.requestId,
-    afterState: { method: req.method, path, status, duration }
+    afterState: { method, path, status: safeStatus, duration: safeDuration }
   };
 }
 

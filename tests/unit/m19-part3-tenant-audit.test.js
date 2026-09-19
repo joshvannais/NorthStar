@@ -207,14 +207,37 @@ describe('Mission 19 Part 3 migrated audit contract', () => {
     expect(sql).not.toMatch(/actor_id|actor_role|before_state|after_state|user_agent|correlation_id/);
     expect(values[0]).toBe(organizationId);
     expect(values[1]).toBe(userId);
-    expect(JSON.parse(values[5])).toMatchObject({
+    expect(JSON.parse(values[5])).toEqual({
       actorLabel,
       role: actorRole,
-      requestId: `request-${actorLabel}`,
-      userAgent: 'M19 Test',
+      requestId: null,
+      correlationId: null,
       beforeState: { state: 'before' },
       afterState: { state: 'after' },
     });
+    expect(values[3]).toBe('unknown');
+    expect(values[4]).toBe('');
+    expect(values[6]).toBe('');
+  });
+
+  test('durable boundary drops hostile client, address and entity metadata', async () => {
+    db.query.mockResolvedValueOnce({ rows: [] });
+    const hostile = 'secret-key workerReference body={"records":["private"]}';
+    await audit.record({
+      action: 'POST 201',
+      entityType: hostile,
+      entityId: hostile,
+      correlationId: hostile,
+      userAgent: hostile,
+      ipAddress: hostile,
+      afterState: { method: 'POST', path: '/api', status: 201, duration: 1 },
+    });
+
+    const [, values] = db.query.mock.calls[0];
+    expect(values[3]).toBe('unknown');
+    expect(values[4]).toBe('');
+    expect(values[6]).toBe('');
+    expect(JSON.stringify(JSON.parse(values[5]))).not.toContain(hostile);
   });
 
   test('audit database outage never fails the business request and emits only a safe correlated warning', async () => {

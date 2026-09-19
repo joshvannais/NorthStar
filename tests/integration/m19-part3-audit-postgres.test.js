@@ -54,7 +54,7 @@ realPostgres('Mission 19 Part 3 audit compatibility on disposable PostgreSQL', (
       actorRole: 'owner',
       action: 'm19.commit1.authenticated',
       entityType: 'test',
-      correlationId: 'request-pg-authenticated',
+      correlationId: '11111111-1111-4111-8111-111111111111',
       userAgent: 'M19 PostgreSQL Test',
       beforeState: { phase: 'before' },
       afterState: { phase: 'after' },
@@ -65,14 +65,14 @@ realPostgres('Mission 19 Part 3 audit compatibility on disposable PostgreSQL', (
       actorRole: 'anonymous',
       action: 'm19.commit1.anonymous',
       entityType: 'test',
-      correlationId: 'request-pg-anonymous',
+      correlationId: '22222222-2222-4222-8222-222222222222',
     });
     await audit.record({
       actorLabel: 'system',
       actorRole: 'system',
       action: 'm19.commit1.system',
       entityType: 'test',
-      correlationId: 'request-pg-system',
+      correlationId: '33333333-3333-4333-8333-333333333333',
     });
 
     const rows = await db.query(
@@ -88,7 +88,7 @@ realPostgres('Mission 19 Part 3 audit compatibility on disposable PostgreSQL', (
       details: expect.objectContaining({
         actorLabel: 'authenticated',
         role: 'owner',
-        requestId: 'request-pg-authenticated',
+        requestId: '11111111-1111-4111-8111-111111111111',
       }),
     });
     expect(rows.rows.find(row => row.action.endsWith('anonymous')).details.actorLabel).toBe('anonymous');

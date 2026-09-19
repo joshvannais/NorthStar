@@ -44,7 +44,7 @@ let fixture;
     await page.goto(`${origin}/demo/learning-center`, { waitUntil: 'networkidle' });
     await page.locator('#learningStatus').filter({ hasText: 'Showing isolated demo records' }).waitFor();
     assert.equal(new URL(page.url()).pathname, '/demo/learning-center');
-    assert.equal(await page.locator('.learning-source-card').count(), 2);
+    assert.equal(await page.locator('.learning-source-card').count(), 3);
     assert.equal(await page.locator('.learning-source-card[aria-pressed="true"] .learning-source-kind').innerText(), 'LABOR · TIME');
     assert.equal(await page.locator('#learningSourceKind').isDisabled(), true);
     assert.equal(await page.locator('#learningSourceKey').isDisabled(), true);
@@ -186,8 +186,9 @@ function jsonCenter() {
   return {
     status: 200,
     contentType: 'application/json; charset=utf-8',
-    body: JSON.stringify({ success: true, data: { version: 'm25-learning-center-v2', authority: 'tenant_private_postgresql',
+    body: JSON.stringify({ success: true, data: { version: 'm25-learning-center-v3', authority: 'tenant_private_postgresql',
       evaluatedAt: '2026-09-16T12:00:00.000Z', nativeLabor: { active: true, current: { revision: 1, digest, action: 'grant' }, history: [], total: 1 },
+      nativeEquipment: { active: false, current: null, history: [], total: 0 },
       sources: [{ sourceKind: 'labor', sourceKey: 'slow.labor', serviceKeys: [], serviceTotal: 0, servicesTruncated: false }],
       sourceTotal: 1, sourcesTruncated: false,
       learningBoundary: 'Synthetic stale center response for request-order regression only.' } }),

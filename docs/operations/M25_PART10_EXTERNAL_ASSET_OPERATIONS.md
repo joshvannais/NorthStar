@@ -1,0 +1,11 @@
+# Mission 25 Part 10 Slice G — vehicle and equipment source operations
+
+Slice G adds provider-neutral source lifecycle, checkpoints, retention policy, deletion requests and bounded cleanup for the tenant-private vehicle and equipment evidence introduced in Slice B. It stores adapter kind and cadence only. It has no field for credentials, provider account identity or remote connection state, and it does not call a provider.
+
+An owner or administrator can connect, pause, resume or disconnect a declared CSV or provider-API adapter. Every lifecycle and policy change is an immutable revision with an exact prior revision and digest, authenticated session, CSRF check and idempotency key. Historical and continuous import checkpoints remain the source of import progress. Retention and deletion cleanup have their own exact authority pins and resumable checkpoints.
+
+Retention is optional and bounded from 30 to 3,650 days. Cleanup processes at most 100 current records per request. It appends a new minimized tombstone revision for each selected record and retains no job, asset, period, evidence, cost, maintenance, downtime or provider detail in that revision. Changing the retention policy starts a new cleanup chain so a prior cursor cannot skip records newly eligible under the new policy.
+
+A deletion request immediately appends source-consent revocation before cleanup continues. New imports and derived reads are blocked. The database rejects a source-consent grant while deletion remains requested. Recovery requires an explicit deletion cancellation followed by a new source-consent period. That new period does not restore deleted details, earlier reviewed reconciliations, observations or calibration advice. Cancellation can stop future deletion batches, but it does not reverse consent revocation or revive tombstoned evidence. Cleanup history remains immutable and tenant private.
+
+These operations never change an estimate, price, equipment plan, schedule, job, vehicle, equipment, assignment, allocation, reimbursement, payroll record or policy. Cleanup invalidates dependent advice through the existing correction and tombstone freshness boundaries. Provider credentials, provider-specific adapters and the rendered Learning Center remain outside this slice.

@@ -1,5 +1,7 @@
 'use strict';
 
+const { applyTargetLabels, readTargetLabels } = require('./reconciliationTargetLabels');
+
 function mapped(error) {
   const constraint = String(error && error.constraint || '');
   const result = Object.assign(new Error('External labor reconciliation is temporarily unavailable.'), { code: 'M25_MATCH_UNAVAILABLE', status: 503 });
@@ -16,8 +18,10 @@ async function tx(pool, isolation, work) { const client = await pool.connect(); 
   await client.query('SET LOCAL search_path=pg_catalog,public'); const value = await work(client); await client.query('COMMIT'); return value;
 } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw mapped(error); } finally { client.release(); } }
 const actor = input => [input.organizationId, input.actorUserId, input.actorAccessRole, input.authSessionId];
-function readMatches(pool, input) { return tx(pool, 'REPEATABLE READ READ ONLY', async client =>
-  (await client.query('SELECT public.canonical_external_labor_reference_matches_read($1,$2,$3,$4,$5) value', [...actor(input), input.sourceKey])).rows[0].value); }
+function readMatches(pool, input) { return tx(pool, 'REPEATABLE READ READ ONLY', async client => {
+  const matches = (await client.query('SELECT public.canonical_external_labor_reference_matches_read($1,$2,$3,$4,$5) value', [...actor(input), input.sourceKey])).rows[0].value;
+  return applyTargetLabels(matches, await readTargetLabels(client, input));
+}); }
 function mutateMatch(pool, input) { return tx(pool, 'SERIALIZABLE', async client =>
   (await client.query('SELECT public.canonical_external_labor_reference_match_mutate($1,$2,$3,$4,$5,$6,$7,$8::jsonb) value',
     [...actor(input), input.csrfToken, input.idempotencyKey, input.sourceKey, JSON.stringify(input.body)])).rows[0].value); }

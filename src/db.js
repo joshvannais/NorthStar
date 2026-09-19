@@ -532,6 +532,17 @@ async function inspectMigrationLedger(client) {
 }
 
 function isCanonicalMigrationLedger(ledger) {
+  // PostgreSQL 18 reports NOT NULL constraints through pg_constraint while
+  // PostgreSQL 17 and earlier expose the same canonical property only through
+  // pg_attribute.attnotnull. The column comparison remains authoritative for
+  // nullability, so both catalog representations are the same ledger shape.
+  const canonicalConstraints = ledger && (
+    rowsEqual(ledger.constraints, CANONICAL_LEDGER_CONSTRAINTS) ||
+    rowsEqual(
+      ledger.constraints,
+      CANONICAL_LEDGER_CONSTRAINTS.filter(constraint => constraint.contype !== 'n')
+    )
+  );
   return ledger &&
     rowsEqual(ledger.relation, {
       relkind: 'r',
@@ -541,7 +552,7 @@ function isCanonicalMigrationLedger(ledger) {
       relforcerowsecurity: false,
     }) &&
     rowsEqual(ledger.columns, CANONICAL_LEDGER_COLUMNS) &&
-    rowsEqual(ledger.constraints, CANONICAL_LEDGER_CONSTRAINTS) &&
+    canonicalConstraints &&
     rowsEqual(ledger.indexes, CANONICAL_LEDGER_INDEXES) &&
     rowsEqual(ledger.sequence, [{
       sequence_schema: 'public',
@@ -1232,11 +1243,352 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_equipment_utilization_observe(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_equipment_utilization_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_material_learning_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_material_learning_consents, public.canonical_native_material_outcome_observations FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_material_learning_consent_projection(public.canonical_material_learning_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_material_bindings_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_material_outcome_basis(uuid,uuid,uuid,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_native_material_outcome_projection(public.canonical_native_material_outcome_observations) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_material_learning_consent_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_material_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_material_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_native_material_outcome_read(uuid,uuid,text,uuid,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_crm_field_service_import_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_crm_field_service_import_consents, public.canonical_external_crm_field_service_import_runs, public.canonical_external_crm_field_service_import_records FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_crm_field_service_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_crm_field_service_consent_projection(public.canonical_external_crm_field_service_import_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_crm_field_service_run_projection(public.canonical_external_crm_field_service_import_runs) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_crm_field_service_record_projection(public.canonical_external_crm_field_service_import_records) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_crm_field_service_import_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_crm_field_service_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_crm_field_service_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_crm_field_service_import_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_project_change_order_import_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_project_change_order_import_consents, public.canonical_external_project_change_order_import_runs, public.canonical_external_project_change_order_import_records FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_change_order_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_change_order_consent_projection(public.canonical_external_project_change_order_import_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_change_order_run_projection(public.canonical_external_project_change_order_import_runs) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_change_order_record_projection(public.canonical_external_project_change_order_import_records) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_change_order_import_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_change_order_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_change_order_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_change_order_import_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_communication_import_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_communication_import_consents, public.canonical_external_communication_import_runs, public.canonical_external_communication_import_records, public.canonical_external_communication_time_zones FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_communication_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_communication_consent_projection(public.canonical_external_communication_import_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_communication_run_projection(public.canonical_external_communication_import_runs) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_communication_record_projection(public.canonical_external_communication_import_records) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_communication_import_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_communication_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_communication_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_communication_import_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_financial_import_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_financial_import_consents, public.canonical_external_financial_import_runs, public.canonical_external_financial_import_records, public.canonical_external_financial_time_zones FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_consent_projection(public.canonical_external_financial_import_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_run_projection(public.canonical_external_financial_import_runs) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_record_projection(public.canonical_external_financial_import_records) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_import_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_import_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_business_reference_matches') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_business_reference_matches FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_reconciliation_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_reconciliation_insert_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_source_consent_basis(uuid,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_source_references(uuid,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_reference_target_basis(uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_reference_match_projection(public.canonical_external_business_reference_matches,jsonb,jsonb,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_reference_matches_read(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_reference_match_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_customer_outcome_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_customer_outcome_consents, public.canonical_external_customer_outcome_observations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_dimension_valid(jsonb,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcomes_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_unavailable(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_consent_projection(public.canonical_external_customer_outcome_consents,jsonb,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_consent_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_basis(uuid,text,text,uuid,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_projection(public.canonical_external_customer_outcome_observations,jsonb,public.canonical_external_customer_outcome_consents,jsonb,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_customer_outcome_observation_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_customer_outcome_consent_read(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_customer_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_customer_outcome_observe(uuid,uuid,text,uuid,text,text,text,text,uuid,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_customer_outcome_read(uuid,uuid,text,uuid,text,text,uuid,text,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_project_outcome_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_project_outcome_consents, public.canonical_external_project_outcome_observations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcome_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_money_claim_valid(jsonb,boolean) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcomes_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcome_unavailable(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcome_consent_projection(public.canonical_external_project_outcome_consents,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcome_consent_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcome_basis(uuid,text,uuid,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcome_projection(public.canonical_external_project_outcome_observations,jsonb,public.canonical_external_project_outcome_consents,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_project_outcome_observation_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_outcome_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_outcome_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_project_outcome_read(uuid,uuid,text,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_financial_outcome_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_financial_outcome_consents, public.canonical_external_financial_outcome_observations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_amount_valid(jsonb,boolean) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcomes_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_unavailable(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_consent_projection(public.canonical_external_financial_outcome_consents,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_consent_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_basis(uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_projection(public.canonical_external_financial_outcome_observations,jsonb,public.canonical_external_financial_outcome_consents,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_financial_outcome_observation_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_outcome_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_outcome_observe(uuid,uuid,text,uuid,text,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_financial_outcome_read(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_business_calibration_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_business_calibration_consents, public.canonical_external_business_calibration_proposals FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_outcome_consent_basis(uuid,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_numeric_metric(jsonb,text,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_categorical_metric(jsonb,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_basis(uuid,text,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_projection(public.canonical_external_business_calibration_proposals) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_hidden_projection(public.canonical_external_business_calibration_proposals) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_consent_projection(public.canonical_external_business_calibration_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_metric_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_metrics_valid(text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_consent_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_calibration_proposal_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_consent_read(uuid,uuid,text,uuid,text,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_calibration_read(uuid,uuid,text,uuid,text,text,text,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_job_outcome_graph_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_graph_consents, public.canonical_job_outcome_graphs FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_locator_valid(text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_node_input_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_node_manifest_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_manifest_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_consent_projection(public.canonical_job_outcome_graph_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_resolve_node(uuid,uuid,text,uuid,uuid,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_resolve_nodes(uuid,uuid,text,uuid,uuid,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_consent_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_projection(public.canonical_job_outcome_graphs,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_consent_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_job_outcome_graph_evaluations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_graph_evaluations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_required_domains_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_evaluate_manifest(jsonb,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_evaluation_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_graph_evaluation_projection(public.canonical_job_outcome_graph_evaluations,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_evaluation_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_graph_evaluation_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_job_outcome_summaries') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_summaries FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_summary_domains_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_summary_claim_slot(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_summary_source(uuid,uuid,text,uuid,uuid,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_summary_compose(uuid,uuid,text,uuid,public.canonical_job_outcome_graphs,public.canonical_job_outcome_graph_evaluations) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_summary_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_summary_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_summary_projection(public.canonical_job_outcome_summaries,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_summary_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_summary_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_proposal_consents, public.canonical_job_outcome_cross_job_proposals FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_consent_projection(public.canonical_job_outcome_proposal_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_consent_current(uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_ratio(text,text,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_percentage(text,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_summary_metrics(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_metric(jsonb,integer,text,text,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_basis(uuid,uuid,text,uuid,text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_manifest_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_metric_valid(jsonb,integer) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_consent_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_cross_job_proposal_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_cross_job_proposal_projection(public.canonical_job_outcome_cross_job_proposals,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_proposal_consent_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_proposal_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_cross_job_proposal_build(uuid,uuid,text,uuid,text,text,text,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_cross_job_proposal_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_job_outcome_proposal_registry_versions') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_proposal_registry_versions FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_registry_preview_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_registry_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_registry_projection(public.canonical_job_outcome_proposal_registry_versions,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_registry_impact(uuid,uuid,text,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_proposal_registry_create(uuid,uuid,text,uuid,text,text,text,uuid,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_proposal_registry_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_job_outcome_planning_value_versions') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_planning_value_versions FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_planning_value_guard() FROM %I', runtime_role);
+        IF pg_catalog.to_regprocedure('public.canonical_job_outcome_planning_value_lineage(public.canonical_job_outcome_planning_value_versions,uuid,text,uuid)') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_planning_value_lineage(public.canonical_job_outcome_planning_value_versions,uuid,text,uuid) FROM %I', runtime_role);
+        END IF;
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_planning_value_projection(public.canonical_job_outcome_planning_value_versions,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_planning_selection(uuid,uuid,text,uuid,text,uuid,text,text,text,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_planning_value_adopt(uuid,uuid,text,uuid,text,text,text,uuid,text,text,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_planning_value_rollback(uuid,uuid,text,uuid,text,text,text,text,text,text,bigint,text,uuid,text,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_planning_value_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_learning_center_part12_read(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_learning_center_part12_read(uuid,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_learning_center_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_business_adapter_revisions') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_business_adapter_revisions, public.canonical_external_business_retention_revisions, public.canonical_external_business_deletion_revisions, public.canonical_external_business_hold_revisions, public.canonical_external_business_lifecycle_gates, public.canonical_external_business_request_keys, public.canonical_external_business_cleanup_runs FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_source_prefix(text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_lifecycle_lock(uuid,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_request_claim(uuid,uuid,text,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_operation_projection(text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_cleanup_projection(public.canonical_external_business_cleanup_runs) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_source_exists(uuid,text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,text,jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_business_deletion_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_adapter_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_retention_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_deletion_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_hold_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_operations_read(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_business_cleanup_execute(uuid,uuid,text,uuid,text,text,text,text,jsonb) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_external_material_import_consents') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_import_consents, public.canonical_external_material_import_runs, public.canonical_external_material_import_records FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_quantity_valid(jsonb,boolean) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_cost_valid(jsonb) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_consent_projection(public.canonical_external_material_import_consents) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_run_projection(public.canonical_external_material_import_runs) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_record_projection(public.canonical_external_material_import_records) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_import_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_import_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        IF pg_catalog.to_regclass('public.canonical_external_material_cleanup_runs') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_adapter_revisions, public.canonical_external_material_retention_revisions, public.canonical_external_material_deletion_revisions, public.canonical_external_material_hold_revisions, public.canonical_external_material_lifecycle_gates, public.canonical_external_material_cleanup_runs FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_operation_projection(text,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_cleanup_projection(public.canonical_external_material_cleanup_runs) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_lifecycle_lock(uuid,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_import_deletion_guard() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_consent_deletion_guard() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_adapter_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_retention_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_deletion_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_hold_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_operations_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_cleanup_execute(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_material_reference_matches') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_reference_matches FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_reference_source_basis(uuid,text,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_reference_target_basis(uuid,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_material_reference_match_projection(public.canonical_external_material_reference_matches,jsonb,jsonb,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_reference_matches_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_material_reference_match_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_material_quantity_observations') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_outcome_consents, public.canonical_external_material_quantity_observations FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_outcome_consent_projection(public.canonical_external_material_outcome_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_bindings_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_dimension(numeric,text,boolean,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_outcome_basis(uuid,text,uuid,text,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_quantity_projection(public.canonical_external_material_quantity_observations) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_outcome_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_quantity_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_quantity_read(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_material_cost_observations') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_cost_consents, public.canonical_external_material_cost_observations FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_cost_consent_projection(public.canonical_external_material_cost_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_cost_bindings_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_cost_match(uuid,text,uuid,text,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_cost_basis(uuid,text,uuid,text,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_cost_projection(public.canonical_external_material_cost_observations) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_cost_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_cost_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_cost_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,jsonb,text,boolean,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_cost_read(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_material_calibration_consents') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_material_calibration_consents, public.canonical_external_material_calibration_proposals FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_metric_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_metrics_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_eligible_count(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_consent_projection(public.canonical_external_material_calibration_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_job_metrics(jsonb,jsonb,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_metric(jsonb,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_basis(uuid,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_masked_metrics(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_projection(public.canonical_external_material_calibration_proposals) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_material_calibration_hidden_projection(public.canonical_external_material_calibration_proposals) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_calibration_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_material_calibration_read(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        END IF;
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_external_asset_import_consents') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_import_consents, public.canonical_external_asset_import_runs, public.canonical_external_asset_import_records FROM %I',
           runtime_role
         );
+        IF pg_catalog.to_regclass('public.canonical_external_asset_cleanup_runs') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_adapter_revisions, public.canonical_external_asset_retention_revisions, public.canonical_external_asset_deletion_revisions, public.canonical_external_asset_cleanup_runs FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_operation_projection(text,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_cleanup_projection(public.canonical_external_asset_cleanup_runs) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_import_deletion_guard() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_consent_deletion_guard() FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_adapter_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_retention_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_deletion_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_operations_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_cleanup_execute(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        END IF;
         IF pg_catalog.to_regclass('public.canonical_external_asset_reference_matches') IS NOT NULL THEN
           EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_reference_matches FROM %I', runtime_role);
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_reference_source_basis(uuid,text,text,text) FROM %I', runtime_role);
@@ -1244,6 +1596,57 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_reference_match_projection(public.canonical_external_asset_reference_matches,jsonb,jsonb,jsonb) FROM %I', runtime_role);
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_reference_matches_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
           EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_external_asset_reference_match_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regprocedure('public.canonical_learning_reconciliation_target_labels_read(uuid,uuid,text,uuid)') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_learning_target_label_text(text,integer) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_learning_target_label_compose(text,text,integer) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_learning_reconciliation_target_labels_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_asset_outcome_consents') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_outcome_consents, public.canonical_external_asset_outcome_observations FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_metric(numeric,numeric,text,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_metric_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_metrics_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_planned_operating_cost(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_target_coverage(jsonb,jsonb,jsonb,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_unavailable_metrics(text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_learning_consent_projection(public.canonical_external_asset_outcome_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_learning_basis(uuid,text,uuid,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_outcome_projection(public.canonical_external_asset_outcome_observations) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_learning_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_learning_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_outcome_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_outcome_read(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_asset_health_consents') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_health_consents, public.canonical_external_asset_health_observations FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_unavailable(text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_maintenance_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_downtime_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_outcomes_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_consent_projection(public.canonical_external_asset_health_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_basis(uuid,text,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_health_projection(public.canonical_external_asset_health_observations,jsonb,public.canonical_external_asset_health_consents,public.canonical_external_asset_import_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_observe(uuid,uuid,text,uuid,text,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_health_read(uuid,uuid,text,uuid,text,text,text) TO %I', runtime_role);
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_external_asset_calibration_consents') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_external_asset_calibration_consents, public.canonical_external_asset_calibration_proposals FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_metric_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_metrics_valid(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_eligible_count(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_consent_projection(public.canonical_external_asset_calibration_consents) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_metric(jsonb,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_basis(uuid,text,text) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_masked_metrics(jsonb) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_projection(public.canonical_external_asset_calibration_proposals) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_imported_asset_calibration_hidden_projection(public.canonical_external_asset_calibration_proposals) FROM %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_calibration_consent_read(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,bigint,text,text,boolean,text) TO %I', runtime_role);
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_imported_asset_calibration_read(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         END IF;
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_external_asset_utilization_valid(jsonb,boolean) FROM %I', runtime_role);
@@ -1414,6 +1817,20 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_external_labor_%'
            AND relation.relname NOT LIKE 'canonical_external_travel_%'
            AND relation.relname NOT LIKE 'canonical_external_asset_%'
+           AND relation.relname NOT LIKE 'canonical_external_material_%'
+           AND relation.relname NOT LIKE 'canonical_external_crm_field_service_%'
+           AND relation.relname NOT LIKE 'canonical_external_project_change_order_%'
+           AND relation.relname NOT LIKE 'canonical_external_communication_%'
+           AND relation.relname NOT LIKE 'canonical_external_financial_%'
+           AND relation.relname NOT LIKE 'canonical_external_business_%'
+           AND relation.relname NOT LIKE 'canonical_external_customer_outcome_%'
+           AND relation.relname NOT LIKE 'canonical_external_project_outcome_%'
+           AND relation.relname NOT LIKE 'canonical_external_financial_outcome_%'
+           AND relation.relname NOT LIKE 'canonical_job_outcome_graph%'
+           AND relation.relname NOT LIKE 'canonical_job_outcome_summar%'
+           AND relation.relname NOT LIKE 'canonical_job_outcome_proposal%'
+           AND relation.relname NOT LIKE 'canonical_job_outcome_cross_job_proposal%'
+           AND relation.relname NOT LIKE 'canonical_job_outcome_planning%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_labor_plans'
            AND relation.relname <> 'canonical_travel_plans'
@@ -1454,6 +1871,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              'canonical_labor_outcome_observations',
              'canonical_equipment_learning_consents',
              'canonical_native_equipment_utilization_observations',
+             'canonical_material_learning_consents',
+             'canonical_native_material_outcome_observations',
              'canonical_material_movements',
              'canonical_material_events',
              'canonical_material_revisions',
@@ -1637,6 +2056,451 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_native_equipment_utilization_basis(uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_native_equipment_utilization_projection(public.canonical_native_equipment_utilization_observations)','EXECUTE')
        )) AS native_equipment_learning_helpers_withheld,
+       (to_regclass('public.canonical_material_learning_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_material_learning_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_native_material_outcome_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS native_material_learning_tables_withheld,
+       (to_regclass('public.canonical_material_learning_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_material_learning_consent_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_material_learning_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_native_material_outcome_observe(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_native_material_outcome_read(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE')
+       )) AS native_material_learning_entry_execute,
+       (to_regclass('public.canonical_material_learning_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_material_learning_consent_projection(public.canonical_material_learning_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_material_bindings_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_material_outcome_basis(uuid,uuid,uuid,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_native_material_outcome_projection(public.canonical_native_material_outcome_observations)','EXECUTE')
+       )) AS native_material_learning_helpers_withheld,
+       (to_regclass('public.canonical_external_crm_field_service_import_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_crm_field_service_import_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_crm_field_service_import_runs','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_crm_field_service_import_records','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_crm_field_service_import_tables_withheld,
+       (to_regclass('public.canonical_external_crm_field_service_import_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_crm_field_service_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_crm_field_service_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_crm_field_service_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_crm_field_service_import_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS external_crm_field_service_import_entry_execute,
+       (to_regclass('public.canonical_external_crm_field_service_import_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_crm_field_service_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_crm_field_service_consent_projection(public.canonical_external_crm_field_service_import_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_crm_field_service_run_projection(public.canonical_external_crm_field_service_import_runs)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_crm_field_service_record_projection(public.canonical_external_crm_field_service_import_records)','EXECUTE')
+       )) AS external_crm_field_service_import_helpers_withheld,
+       (to_regclass('public.canonical_external_project_change_order_import_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_project_change_order_import_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_project_change_order_import_runs','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_project_change_order_import_records','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_project_change_order_import_tables_withheld,
+       (to_regclass('public.canonical_external_project_change_order_import_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_project_change_order_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_project_change_order_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_project_change_order_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_project_change_order_import_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS external_project_change_order_import_entry_execute,
+       (to_regclass('public.canonical_external_project_change_order_import_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_project_change_order_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_change_order_consent_projection(public.canonical_external_project_change_order_import_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_change_order_run_projection(public.canonical_external_project_change_order_import_runs)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_change_order_record_projection(public.canonical_external_project_change_order_import_records)','EXECUTE')
+       )) AS external_project_change_order_import_helpers_withheld,
+       (to_regclass('public.canonical_external_communication_import_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_communication_import_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_communication_import_runs','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_communication_import_records','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_communication_time_zones','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_communication_import_tables_withheld,
+       (to_regclass('public.canonical_external_communication_import_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_communication_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_communication_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_communication_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_communication_import_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS external_communication_import_entry_execute,
+       (to_regclass('public.canonical_external_communication_import_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_communication_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_communication_consent_projection(public.canonical_external_communication_import_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_communication_run_projection(public.canonical_external_communication_import_runs)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_communication_record_projection(public.canonical_external_communication_import_records)','EXECUTE')
+       )) AS external_communication_import_helpers_withheld,
+       (to_regclass('public.canonical_external_financial_import_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_financial_import_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_financial_import_runs','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_financial_import_records','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_financial_time_zones','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_financial_import_tables_withheld,
+       (to_regclass('public.canonical_external_financial_import_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_financial_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_financial_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_financial_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_financial_import_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS external_financial_import_entry_execute,
+       (to_regclass('public.canonical_external_financial_import_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_financial_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_consent_projection(public.canonical_external_financial_import_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_run_projection(public.canonical_external_financial_import_runs)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_record_projection(public.canonical_external_financial_import_records)','EXECUTE')
+       )) AS external_financial_import_helpers_withheld,
+       (to_regclass('public.canonical_external_business_reference_matches') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_business_reference_matches','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_business_match_table_withheld,
+       (to_regclass('public.canonical_external_business_reference_matches') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_business_reference_matches_read(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_reference_match_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+       )) AS external_business_match_entry_execute,
+       (to_regclass('public.canonical_external_business_reference_matches') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_business_reconciliation_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_reconciliation_insert_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_source_consent_basis(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_source_references(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_reference_target_basis(uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_reference_match_projection(public.canonical_external_business_reference_matches,jsonb,jsonb,jsonb)','EXECUTE')
+       )) AS external_business_match_helpers_withheld,
+       (to_regclass('public.canonical_external_customer_outcome_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_customer_outcome_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_customer_outcome_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_customer_outcome_tables_withheld,
+       (to_regclass('public.canonical_external_customer_outcome_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_customer_outcome_consent_read(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_customer_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_customer_outcome_observe(uuid,uuid,text,uuid,text,text,text,text,uuid,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_customer_outcome_read(uuid,uuid,text,uuid,text,text,uuid,text,text)','EXECUTE')
+       )) AS external_customer_outcome_entry_execute,
+       (to_regclass('public.canonical_external_customer_outcome_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_customer_outcome_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcome_dimension_valid(jsonb,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcomes_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcome_unavailable(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcome_consent_projection(public.canonical_external_customer_outcome_consents,jsonb,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcome_consent_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcome_basis(uuid,text,text,uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcome_projection(public.canonical_external_customer_outcome_observations,jsonb,public.canonical_external_customer_outcome_consents,jsonb,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_customer_outcome_observation_guard()','EXECUTE')
+       )) AS external_customer_outcome_helpers_withheld,
+       (to_regclass('public.canonical_external_project_outcome_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_project_outcome_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_project_outcome_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_project_outcome_tables_withheld,
+       (to_regclass('public.canonical_external_project_outcome_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_project_outcome_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_project_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_project_outcome_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_project_outcome_read(uuid,uuid,text,uuid,text,uuid,text)','EXECUTE')
+       )) AS external_project_outcome_entry_execute,
+       (to_regclass('public.canonical_external_project_outcome_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_project_outcome_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_money_claim_valid(jsonb,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_outcomes_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_outcome_unavailable(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_outcome_consent_projection(public.canonical_external_project_outcome_consents,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_outcome_consent_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_outcome_basis(uuid,text,uuid,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_outcome_projection(public.canonical_external_project_outcome_observations,jsonb,public.canonical_external_project_outcome_consents,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_project_outcome_observation_guard()','EXECUTE')
+       )) AS external_project_outcome_helpers_withheld,
+       (to_regclass('public.canonical_external_financial_outcome_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_financial_outcome_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_financial_outcome_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_financial_outcome_tables_withheld,
+       (to_regclass('public.canonical_external_financial_outcome_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_financial_outcome_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_financial_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_financial_outcome_observe(uuid,uuid,text,uuid,text,text,text,uuid,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_financial_outcome_read(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+       )) AS external_financial_outcome_entry_execute,
+       (to_regclass('public.canonical_external_financial_outcome_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_financial_outcome_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcome_amount_valid(jsonb,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcomes_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcome_unavailable(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcome_consent_projection(public.canonical_external_financial_outcome_consents,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcome_consent_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcome_basis(uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcome_projection(public.canonical_external_financial_outcome_observations,jsonb,public.canonical_external_financial_outcome_consents,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_financial_outcome_observation_guard()','EXECUTE')
+       )) AS external_financial_outcome_helpers_withheld,
+       (to_regclass('public.canonical_external_business_calibration_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_business_calibration_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_calibration_proposals','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_business_calibration_tables_withheld,
+       (to_regclass('public.canonical_external_business_calibration_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_business_calibration_consent_read(uuid,uuid,text,uuid,text,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_calibration_read(uuid,uuid,text,uuid,text,text,text,text)','EXECUTE')
+       )) AS external_business_calibration_entry_execute,
+       (to_regclass('public.canonical_external_business_calibration_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_business_calibration_outcome_consent_basis(uuid,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_numeric_metric(jsonb,text,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_categorical_metric(jsonb,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_basis(uuid,text,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_projection(public.canonical_external_business_calibration_proposals)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_hidden_projection(public.canonical_external_business_calibration_proposals)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_consent_projection(public.canonical_external_business_calibration_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_metric_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_metrics_valid(text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_consent_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_calibration_proposal_guard()','EXECUTE')
+       )) AS external_business_calibration_helpers_withheld,
+       (to_regclass('public.canonical_job_outcome_graph_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_job_outcome_graph_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_job_outcome_graphs','SELECT,INSERT,UPDATE,DELETE')
+       )) AS job_outcome_graph_tables_withheld,
+       (to_regclass('public.canonical_job_outcome_graph_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_job_outcome_graph_consent_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_graph_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_graph_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_graph_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS job_outcome_graph_entry_execute,
+       (to_regclass('public.canonical_job_outcome_graph_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_job_outcome_graph_locator_valid(text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_node_input_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_node_manifest_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_manifest_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_consent_projection(public.canonical_job_outcome_graph_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_resolve_node(uuid,uuid,text,uuid,uuid,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_resolve_nodes(uuid,uuid,text,uuid,uuid,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_consent_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_projection(public.canonical_job_outcome_graphs,uuid,text,uuid)','EXECUTE')
+       )) AS job_outcome_graph_helpers_withheld,
+       (to_regclass('public.canonical_job_outcome_graph_evaluations') IS NULL OR NOT has_table_privilege($1,'public.canonical_job_outcome_graph_evaluations','SELECT,INSERT,UPDATE,DELETE')) AS job_outcome_graph_evaluation_table_withheld,
+       (to_regclass('public.canonical_job_outcome_graph_evaluations') IS NULL OR (
+         has_function_privilege($1,'public.canonical_job_outcome_graph_evaluation_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_graph_evaluation_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS job_outcome_graph_evaluation_entry_execute,
+       (to_regclass('public.canonical_job_outcome_graph_evaluations') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_job_outcome_graph_required_domains_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_evaluate_manifest(jsonb,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_evaluation_guard()','EXECUTE')
+       AND NOT has_function_privilege($1,'public.canonical_job_outcome_graph_evaluation_projection(public.canonical_job_outcome_graph_evaluations,uuid,text,uuid)','EXECUTE')
+       )) AS job_outcome_graph_evaluation_helpers_withheld,
+       (to_regclass('public.canonical_job_outcome_summaries') IS NULL OR NOT has_table_privilege($1,'public.canonical_job_outcome_summaries','SELECT,INSERT,UPDATE,DELETE')) AS job_outcome_summary_table_withheld,
+       (to_regclass('public.canonical_job_outcome_summaries') IS NULL OR (
+         has_function_privilege($1,'public.canonical_job_outcome_summary_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_summary_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS job_outcome_summary_entry_execute,
+       (to_regclass('public.canonical_job_outcome_summaries') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_job_outcome_summary_domains_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_claim_slot(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_source(uuid,uuid,text,uuid,uuid,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_compose(uuid,uuid,text,uuid,public.canonical_job_outcome_graphs,public.canonical_job_outcome_graph_evaluations)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_projection(public.canonical_job_outcome_summaries,uuid,text,uuid)','EXECUTE')
+       )) AS job_outcome_summary_helpers_withheld,
+       (to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_job_outcome_proposal_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_job_outcome_cross_job_proposals','SELECT,INSERT,UPDATE,DELETE')
+       )) AS job_outcome_proposal_tables_withheld,
+       (to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NULL OR (
+         has_function_privilege($1,'public.canonical_job_outcome_proposal_consent_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_proposal_consent_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_cross_job_proposal_build(uuid,uuid,text,uuid,text,text,text,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_cross_job_proposal_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS job_outcome_proposal_entry_execute,
+       (to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_consent_projection(public.canonical_job_outcome_proposal_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_consent_current(uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_ratio(text,text,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_percentage(text,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_summary_metrics(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_metric(jsonb,integer,text,text,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_basis(uuid,uuid,text,uuid,text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_manifest_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_metric_valid(jsonb,integer)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_consent_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_cross_job_proposal_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_cross_job_proposal_projection(public.canonical_job_outcome_cross_job_proposals,uuid,text,uuid)','EXECUTE')
+       )) AS job_outcome_proposal_helpers_withheld,
+       (to_regclass('public.canonical_job_outcome_proposal_registry_versions') IS NULL OR NOT has_table_privilege($1,'public.canonical_job_outcome_proposal_registry_versions','SELECT,INSERT,UPDATE,DELETE')) AS job_outcome_registry_table_withheld,
+       (to_regclass('public.canonical_job_outcome_proposal_registry_versions') IS NULL OR (
+         has_function_privilege($1,'public.canonical_job_outcome_registry_impact(uuid,uuid,text,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_proposal_registry_create(uuid,uuid,text,uuid,text,text,text,uuid,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_proposal_registry_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS job_outcome_registry_entry_execute,
+       (to_regclass('public.canonical_job_outcome_proposal_registry_versions') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_job_outcome_registry_preview_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_registry_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_proposal_registry_projection(public.canonical_job_outcome_proposal_registry_versions,uuid,text,uuid)','EXECUTE')
+       )) AS job_outcome_registry_helpers_withheld,
+       (to_regclass('public.canonical_job_outcome_planning_value_versions') IS NULL OR NOT has_table_privilege($1,'public.canonical_job_outcome_planning_value_versions','SELECT,INSERT,UPDATE,DELETE')) AS job_outcome_planning_table_withheld,
+       (to_regclass('public.canonical_job_outcome_planning_value_versions') IS NULL OR (
+         has_function_privilege($1,'public.canonical_job_outcome_planning_selection(uuid,uuid,text,uuid,text,uuid,text,text,text,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_planning_value_adopt(uuid,uuid,text,uuid,text,text,text,uuid,text,text,text,text,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_planning_value_rollback(uuid,uuid,text,uuid,text,text,text,text,text,text,bigint,text,uuid,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_job_outcome_planning_value_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS job_outcome_planning_entry_execute,
+       (to_regclass('public.canonical_job_outcome_planning_value_versions') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_job_outcome_planning_value_guard()','EXECUTE')
+         AND (to_regprocedure('public.canonical_job_outcome_planning_value_lineage(public.canonical_job_outcome_planning_value_versions,uuid,text,uuid)') IS NULL OR NOT has_function_privilege($1,'public.canonical_job_outcome_planning_value_lineage(public.canonical_job_outcome_planning_value_versions,uuid,text,uuid)','EXECUTE'))
+         AND NOT has_function_privilege($1,'public.canonical_job_outcome_planning_value_projection(public.canonical_job_outcome_planning_value_versions,uuid,text,uuid)','EXECUTE')
+       )) AS job_outcome_planning_helpers_withheld,
+       (to_regprocedure('public.canonical_learning_center_part12_read(uuid,uuid,text,uuid)') IS NULL OR (
+         has_function_privilege($1,'public.canonical_learning_center_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_learning_center_part12_read(uuid,uuid,text,uuid)','EXECUTE')
+       )) AS learning_center_job_outcome_acl,
+       (to_regclass('public.canonical_external_business_adapter_revisions') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_business_adapter_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_retention_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_deletion_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_hold_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_lifecycle_gates','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_request_keys','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_business_cleanup_runs','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_business_operations_tables_withheld,
+       (to_regclass('public.canonical_external_business_adapter_revisions') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_business_adapter_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_retention_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_deletion_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_hold_mutate(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_operations_read(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_business_cleanup_execute(uuid,uuid,text,uuid,text,text,text,text,jsonb)','EXECUTE')
+       )) AS external_business_operations_entry_execute,
+       (to_regclass('public.canonical_external_business_adapter_revisions') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_business_source_prefix(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_lifecycle_lock(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_request_claim(uuid,uuid,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_operation_projection(text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_cleanup_projection(public.canonical_external_business_cleanup_runs)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_source_exists(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_operation_mutate(uuid,uuid,text,uuid,text,text,text,text,text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_business_deletion_guard()','EXECUTE')
+       )) AS external_business_operations_helpers_withheld,
+       (to_regclass('public.canonical_external_material_import_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_material_import_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_material_import_runs','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_material_import_records','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_material_import_tables_withheld,
+       (to_regclass('public.canonical_external_material_import_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_material_import_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_material_import_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_material_import_batch(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_material_import_read(uuid,uuid,text,uuid,text)','EXECUTE')
+       )) AS external_material_import_entry_execute,
+       (to_regclass('public.canonical_external_material_import_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_material_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_material_quantity_valid(jsonb,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_material_cost_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_material_consent_projection(public.canonical_external_material_import_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_material_run_projection(public.canonical_external_material_import_runs)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_material_record_projection(public.canonical_external_material_import_records)','EXECUTE')
+       )) AS external_material_import_helpers_withheld,
+       (to_regclass('public.canonical_external_material_reference_matches') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_material_reference_matches','SELECT,INSERT,UPDATE,DELETE')
+       )) AS external_material_match_table_withheld,
+       (to_regclass('public.canonical_external_material_reference_matches') IS NULL OR (
+         has_function_privilege($1,'public.canonical_external_material_reference_matches_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_external_material_reference_match_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+       )) AS external_material_match_entry_execute,
+       (to_regclass('public.canonical_external_material_reference_matches') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_external_material_reference_source_basis(uuid,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_material_reference_target_basis(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_external_material_reference_match_projection(public.canonical_external_material_reference_matches,jsonb,jsonb,jsonb)','EXECUTE')
+       )) AS external_material_match_helpers_withheld,
+       (to_regclass('public.canonical_external_material_quantity_observations') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_material_outcome_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_material_quantity_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS imported_material_outcome_tables_withheld,
+       (to_regclass('public.canonical_external_material_quantity_observations') IS NULL OR (
+         has_function_privilege($1,'public.canonical_imported_material_outcome_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_outcome_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_quantity_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_quantity_read(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+       )) AS imported_material_outcome_entry_execute,
+       (to_regclass('public.canonical_external_material_quantity_observations') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_imported_material_outcome_consent_projection(public.canonical_external_material_outcome_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_bindings_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_dimension(numeric,text,boolean,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_outcome_basis(uuid,text,uuid,text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_quantity_projection(public.canonical_external_material_quantity_observations)','EXECUTE')
+       )) AS imported_material_outcome_helpers_withheld,
+       (to_regclass('public.canonical_external_material_cost_observations') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_material_cost_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_material_cost_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS imported_material_cost_tables_withheld,
+       (to_regclass('public.canonical_external_material_cost_observations') IS NULL OR (
+         has_function_privilege($1,'public.canonical_imported_material_cost_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_cost_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_cost_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,jsonb,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_cost_read(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+       )) AS imported_material_cost_entry_execute,
+       (to_regclass('public.canonical_external_material_cost_observations') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_imported_material_cost_consent_projection(public.canonical_external_material_cost_consents)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_cost_bindings_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_cost_match(uuid,text,uuid,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_cost_basis(uuid,text,uuid,text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_cost_projection(public.canonical_external_material_cost_observations)','EXECUTE')
+       )) AS imported_material_cost_helpers_withheld,
+       (to_regclass('public.canonical_external_material_calibration_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_material_calibration_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_material_calibration_proposals','SELECT,INSERT,UPDATE,DELETE')
+       )) AS imported_material_calibration_tables_withheld,
+       (to_regclass('public.canonical_external_material_calibration_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_imported_material_calibration_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_material_calibration_read(uuid,uuid,text,uuid,text,text)','EXECUTE')
+       )) AS imported_material_calibration_entry_execute,
+       (to_regclass('public.canonical_external_material_calibration_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_imported_material_calibration_job_metrics(jsonb,jsonb,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_calibration_basis(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_calibration_metric(jsonb,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_calibration_projection(public.canonical_external_material_calibration_proposals)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_material_calibration_hidden_projection(public.canonical_external_material_calibration_proposals)','EXECUTE')
+       )) AS imported_material_calibration_helpers_withheld,
+       (to_regclass('public.canonical_external_asset_outcome_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_asset_outcome_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_asset_outcome_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS imported_asset_outcome_tables_withheld,
+       (to_regclass('public.canonical_external_asset_outcome_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_imported_asset_learning_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_learning_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_outcome_observe(uuid,uuid,text,uuid,text,text,text,uuid,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_outcome_read(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+       )) AS imported_asset_outcome_entry_execute,
+       (to_regclass('public.canonical_external_asset_outcome_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_imported_asset_learning_basis(uuid,text,uuid,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_planned_operating_cost(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_target_coverage(jsonb,jsonb,jsonb,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_outcome_projection(public.canonical_external_asset_outcome_observations)','EXECUTE')
+       )) AS imported_asset_outcome_helpers_withheld,
+       (to_regclass('public.canonical_external_asset_health_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_asset_health_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_asset_health_observations','SELECT,INSERT,UPDATE,DELETE')
+       )) AS imported_asset_health_tables_withheld,
+       (to_regclass('public.canonical_external_asset_health_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_imported_asset_health_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_health_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_health_observe(uuid,uuid,text,uuid,text,text,text,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_health_read(uuid,uuid,text,uuid,text,text,text)','EXECUTE')
+       )) AS imported_asset_health_entry_execute,
+       (to_regclass('public.canonical_external_asset_health_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_imported_asset_health_basis(uuid,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_unavailable(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_maintenance_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_downtime_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_health_projection(public.canonical_external_asset_health_observations,jsonb,public.canonical_external_asset_health_consents,public.canonical_external_asset_import_consents)','EXECUTE')
+       )) AS imported_asset_health_helpers_withheld,
+       (to_regclass('public.canonical_external_asset_calibration_consents') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_external_asset_calibration_consents','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_external_asset_calibration_proposals','SELECT,INSERT,UPDATE,DELETE')
+       )) AS imported_asset_calibration_tables_withheld,
+       (to_regclass('public.canonical_external_asset_calibration_consents') IS NULL OR (
+         has_function_privilege($1,'public.canonical_imported_asset_calibration_consent_read(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_calibration_consent_mutate(uuid,uuid,text,uuid,text,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_calibration_propose(uuid,uuid,text,uuid,text,text,text,text,bigint,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_imported_asset_calibration_read(uuid,uuid,text,uuid,text,text)','EXECUTE')
+       )) AS imported_asset_calibration_entry_execute,
+       (to_regclass('public.canonical_external_asset_calibration_consents') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_imported_asset_calibration_basis(uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_calibration_metric(jsonb,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_calibration_projection(public.canonical_external_asset_calibration_proposals)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_imported_asset_calibration_hidden_projection(public.canonical_external_asset_calibration_proposals)','EXECUTE')
+       )) AS imported_asset_calibration_helpers_withheld,
        (to_regclass('public.canonical_material_movements') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_material_movements','SELECT')
          AND NOT has_table_privilege($1,'public.canonical_material_movements','INSERT')
@@ -1750,6 +2614,76 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.native_equipment_learning_tables_withheld ||
       !runtimePrivileges.native_equipment_learning_entry_execute ||
       !runtimePrivileges.native_equipment_learning_helpers_withheld ||
+      !runtimePrivileges.native_material_learning_tables_withheld ||
+      !runtimePrivileges.native_material_learning_entry_execute ||
+      !runtimePrivileges.native_material_learning_helpers_withheld ||
+      !runtimePrivileges.external_crm_field_service_import_tables_withheld ||
+      !runtimePrivileges.external_crm_field_service_import_entry_execute ||
+      !runtimePrivileges.external_crm_field_service_import_helpers_withheld ||
+      !runtimePrivileges.external_project_change_order_import_tables_withheld ||
+      !runtimePrivileges.external_project_change_order_import_entry_execute ||
+      !runtimePrivileges.external_project_change_order_import_helpers_withheld ||
+      !runtimePrivileges.external_communication_import_tables_withheld ||
+      !runtimePrivileges.external_communication_import_entry_execute ||
+      !runtimePrivileges.external_communication_import_helpers_withheld ||
+      !runtimePrivileges.external_financial_import_tables_withheld ||
+      !runtimePrivileges.external_financial_import_entry_execute ||
+      !runtimePrivileges.external_financial_import_helpers_withheld ||
+      !runtimePrivileges.external_business_match_table_withheld ||
+      !runtimePrivileges.external_business_match_entry_execute ||
+      !runtimePrivileges.external_business_match_helpers_withheld ||
+      !runtimePrivileges.external_customer_outcome_tables_withheld ||
+      !runtimePrivileges.external_customer_outcome_entry_execute ||
+      !runtimePrivileges.external_customer_outcome_helpers_withheld ||
+      !runtimePrivileges.external_project_outcome_tables_withheld ||
+      !runtimePrivileges.external_project_outcome_entry_execute ||
+      !runtimePrivileges.external_project_outcome_helpers_withheld ||
+      !runtimePrivileges.external_financial_outcome_tables_withheld ||
+      !runtimePrivileges.external_financial_outcome_entry_execute ||
+      !runtimePrivileges.external_financial_outcome_helpers_withheld ||
+      !runtimePrivileges.external_business_calibration_tables_withheld ||
+      !runtimePrivileges.external_business_calibration_entry_execute ||
+      !runtimePrivileges.external_business_calibration_helpers_withheld ||
+      !runtimePrivileges.job_outcome_graph_tables_withheld ||
+      !runtimePrivileges.job_outcome_graph_entry_execute ||
+      !runtimePrivileges.job_outcome_graph_helpers_withheld ||
+      !runtimePrivileges.job_outcome_graph_evaluation_table_withheld ||
+      !runtimePrivileges.job_outcome_graph_evaluation_entry_execute ||
+      !runtimePrivileges.job_outcome_graph_evaluation_helpers_withheld ||
+      !runtimePrivileges.job_outcome_summary_table_withheld ||
+      !runtimePrivileges.job_outcome_summary_entry_execute ||
+      !runtimePrivileges.job_outcome_summary_helpers_withheld ||
+      !runtimePrivileges.job_outcome_proposal_tables_withheld ||
+      !runtimePrivileges.job_outcome_proposal_entry_execute ||
+      !runtimePrivileges.job_outcome_proposal_helpers_withheld ||
+      !runtimePrivileges.job_outcome_registry_table_withheld ||
+      !runtimePrivileges.job_outcome_registry_entry_execute ||
+      !runtimePrivileges.job_outcome_registry_helpers_withheld ||
+      !runtimePrivileges.job_outcome_planning_table_withheld ||
+      !runtimePrivileges.job_outcome_planning_entry_execute ||
+      !runtimePrivileges.job_outcome_planning_helpers_withheld ||
+      !runtimePrivileges.learning_center_job_outcome_acl ||
+      !runtimePrivileges.external_business_operations_tables_withheld ||
+      !runtimePrivileges.external_business_operations_entry_execute ||
+      !runtimePrivileges.external_business_operations_helpers_withheld ||
+      !runtimePrivileges.external_material_import_tables_withheld ||
+      !runtimePrivileges.external_material_import_entry_execute ||
+      !runtimePrivileges.external_material_import_helpers_withheld ||
+      !runtimePrivileges.imported_material_cost_tables_withheld ||
+      !runtimePrivileges.imported_material_cost_entry_execute ||
+      !runtimePrivileges.imported_material_cost_helpers_withheld ||
+      !runtimePrivileges.imported_material_calibration_tables_withheld ||
+      !runtimePrivileges.imported_material_calibration_entry_execute ||
+      !runtimePrivileges.imported_material_calibration_helpers_withheld ||
+      !runtimePrivileges.imported_asset_outcome_tables_withheld ||
+      !runtimePrivileges.imported_asset_outcome_entry_execute ||
+      !runtimePrivileges.imported_asset_outcome_helpers_withheld ||
+      !runtimePrivileges.imported_asset_health_tables_withheld ||
+      !runtimePrivileges.imported_asset_health_entry_execute ||
+      !runtimePrivileges.imported_asset_health_helpers_withheld ||
+      !runtimePrivileges.imported_asset_calibration_tables_withheld ||
+      !runtimePrivileges.imported_asset_calibration_entry_execute ||
+      !runtimePrivileges.imported_asset_calibration_helpers_withheld ||
       !runtimePrivileges.material_tables_withheld ||
       !runtimePrivileges.material_entry_execute ||
       !runtimePrivileges.material_helpers_withheld ||
@@ -1758,6 +2692,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.ledger_sequence_withheld) {
     throw new Error(`Runtime database role privilege verification failed: ${JSON.stringify(runtimePrivileges)}`);
   }
+}
+
+const REVIEWED_MIGRATION_TIMEOUT_FILES = new Set(['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql','100_canonical_imported_asset_health_outcomes.sql','101_canonical_imported_asset_calibration.sql','102_canonical_external_asset_import_operations.sql','103_canonical_learning_center_assets.sql','104_canonical_learning_match_labels.sql','105_canonical_native_material_outcomes.sql','106_canonical_external_material_import_authority.sql','107_canonical_external_material_reconciliation.sql','108_canonical_imported_material_quantity_outcomes.sql','109_canonical_imported_material_cost_observations.sql','110_canonical_imported_material_calibration.sql','111_canonical_external_material_import_operations.sql','112_canonical_learning_center_materials.sql','113_canonical_external_crm_field_service_import_authority.sql','114_canonical_external_project_change_order_import_authority.sql','115_canonical_external_communication_import_authority.sql','116_canonical_external_financial_import_authority.sql','117_canonical_external_business_reconciliation.sql','118_canonical_external_customer_outcomes.sql','119_canonical_external_project_outcomes.sql','120_canonical_external_financial_outcomes.sql','121_canonical_external_business_calibration.sql','122_canonical_external_business_source_operations.sql','123_canonical_learning_center_business_systems.sql','124_canonical_job_outcome_graph.sql','125_canonical_job_outcome_graph_evaluation.sql','126_canonical_job_outcome_summary.sql','127_canonical_job_outcome_cross_job_proposals.sql','128_canonical_job_outcome_proposal_registry.sql','129_canonical_job_outcome_planning_adoption.sql','130_canonical_job_outcome_lifecycle_propagation.sql','131_canonical_learning_center_job_outcomes.sql','132_canonical_paid_learning_calibration_lineage.sql','133_demo_learning_journey.sql','134_canonical_external_labor_recovery.sql','135_canonical_external_labor_cleanup_projection.sql']);
+
+function reviewedMigrationTimeoutValues(file, inherited) {
+  if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;
+  return Object.freeze({
+    lockTimeout: String(Math.min(Number(inherited.lock_timeout) || 5000, 5000)) + 'ms',
+    statementTimeout: String(Math.min(Number(inherited.statement_timeout) || 20000, 20000)) + 'ms',
+  });
 }
 
 async function runMigrations(options = {}) {
@@ -1786,15 +2730,15 @@ async function runMigrations(options = {}) {
     // Bound the reviewed Mission 24 and Mission 25 migrations' complete transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
-    if (['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql'].includes(migrations[migrations.length - 1]?.file)) {
+    if (REVIEWED_MIGRATION_TIMEOUT_FILES.has(migrations[migrations.length - 1]?.file)) {
       const settings = await client.query(
         "SELECT name,setting FROM pg_catalog.pg_settings WHERE name IN ('lock_timeout','statement_timeout')"
       );
       const inherited = Object.fromEntries(settings.rows.map(row => [row.name, row.setting]));
+      const boundedTimeouts = reviewedMigrationTimeoutValues(migrations[migrations.length - 1]?.file, inherited);
       await client.query(
         "SELECT set_config('lock_timeout',$1,true),set_config('statement_timeout',$2,true)",
-        [String(Math.min(Number(inherited.lock_timeout) || 5000, 5000)) + 'ms',
-          String(Math.min(Number(inherited.statement_timeout) || 20000, 20000)) + 'ms']
+        [boundedTimeouts.lockTimeout, boundedTimeouts.statementTimeout]
       );
     }
     await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [MIGRATION_LOCK_KEY]);
@@ -1961,15 +2905,22 @@ function resetForTests() {
   readinessFailure = null;
 }
 
+async function grantAndVerifyRuntimeAuthorityForTests(client, authority) {
+  if (process.env.NODE_ENV !== 'test') throw new Error('Runtime authority verification helper is test-only');
+  return grantAndVerifyRuntimeAuthority(client, authority);
+}
+
 module.exports = {
   PROTECTED_LEGACY_MIGRATION_CHECKSUMS,
   canonicalizeMigrationChecksumBytes,
   close,
   getPool,
+  grantAndVerifyRuntimeAuthorityForTests,
   initDatabase,
   isAvailable,
   query,
   readiness,
+  reviewedMigrationTimeoutValues,
   resetForTests,
   loadMigrations,
   runMigrations,

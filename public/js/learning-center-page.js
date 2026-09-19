@@ -582,6 +582,7 @@
     el('matchesSummary').textContent = references.length ? 'Link imported identities to the current company record they describe. Links that no longer match current records need review.' : (isBusinessKind() ? 'No imported customer, job, estimate, project or financial references are available.' : (isMaterial() ? 'No imported job, material, vendor or inventory location references are available.' : (isAsset() ? 'No imported vehicle, equipment or job references are available.' : (isTravel() ? 'No imported vehicle or job references are available.' : 'No imported worker or job references are available.'))));
     if (!references.length) { root.appendChild(node('p', 'learning-empty', 'No references to review.')); renderAssetHealth(); return; }
     var wrap = node('div', 'learning-table-wrap'), table = node('table', 'learning-table'), head = node('thead'), row = node('tr');
+    wrap.tabIndex = 0; wrap.setAttribute('role', 'region'); wrap.setAttribute('aria-label', 'Reference review table');
     table.appendChild(node('caption', 'learning-visually-hidden', 'Imported reference review for ' + contract.label(state.sourceKey, 'company source')));
     ['Type', 'External reference', 'Evidence', 'Status', 'Company record'].forEach(function (label) { var th = node('th', '', label); th.scope = 'col'; row.appendChild(th); }); head.appendChild(row); table.appendChild(head);
     var body = node('tbody');
@@ -594,7 +595,9 @@
       var targets = reference.referenceKind === 'worker' ? state.matches.workerTargets : (reference.referenceKind === 'vehicle' ? state.matches.vehicleTargets : (reference.referenceKind === 'equipment' ? state.matches.equipmentTargets : (reference.referenceKind === 'material' ? state.matches.materialTargets : (reference.referenceKind === 'vendor' ? state.matches.vendorTargets : (reference.referenceKind === 'inventory_location' ? state.matches.inventoryLocationTargets : (isBusinessKind() ? (reference.referenceKind === 'customer' ? state.matches.customerTargets : (reference.referenceKind === 'execution' ? state.matches.executionTargets : state.matches.estimateTargets)) : state.matches.jobTargets))))));
       (targets || []).forEach(function (target) { var label = targetLabel(reference.referenceKind, target); if (!label) return; var identity = target.targetId || target.targetReference; var option = new Option(label, identity); option.dataset.digest = target.digest; select.appendChild(option); });
       select.value = match && match.action === 'link' ? (match.targetId || match.targetReference) : ''; select.disabled = demo;
-      select.addEventListener('change', function () { saveMatch(reference, select); }); cell.appendChild(select); tr.appendChild(cell); body.appendChild(tr);
+      select.addEventListener('change', function () { saveMatch(reference, select); }); cell.appendChild(select); tr.appendChild(cell);
+      ['Type', 'External reference', 'Evidence', 'Status', 'Company record'].forEach(function (label, cellIndex) { tr.children[cellIndex].dataset.label = label; });
+      body.appendChild(tr);
     }); table.appendChild(body); wrap.appendChild(table); root.appendChild(wrap); renderAssetHealth();
   }
   function saveMatch(reference, select) {

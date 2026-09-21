@@ -1,6 +1,6 @@
 # Mission 26 Part 2A — immutable as-of source snapshots
 
-Status: release candidate. The first bounded source capture reads the existing Mission 24 commercial-decision ledger and persists an immutable receipt. No forecast route, prediction, generic historical reconstruction or backtest is live.
+Status: independently accepted and released through [PR #285](https://github.com/joshvannais/NorthStar/pull/285). Exact head `3e42f910833eebe8f3b609df460e0b39d6ff59ca` passed independent review with zero P0-P3 findings; normal merge `9c54616b3a21a679ea8da3a89df47795e5db4d78` deployed successfully as Railway deployment `ce17b61a-f3fa-47e6-b6c2-354fe81c3afe`. Read-only production inspection found migration 136 applied with 134 of 134 matching migrations and zero pending, and public health reported database and canonical persistence healthy. The first bounded source capture reads the existing Mission 24 commercial-decision ledger and persists an immutable receipt. No forecast route, prediction, generic historical reconstruction or backtest is live. PostgreSQL 18 rehearsal, hosted CI, provider/private-account behavior and backup restore were unavailable, not passing evidence.
 
 ## Temporal rule
 

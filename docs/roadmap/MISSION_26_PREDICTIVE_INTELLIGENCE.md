@@ -46,6 +46,8 @@ Part 1C's [forecast governance architecture](../architecture/MISSION_26_PART1C_F
 | C | Versioned feature definitions with explicit known, missing, stale, conflicting and inapplicable states plus exact units and currency. |
 | D | Correction, revocation, tombstone, retention and deletion propagation with bounded replay, restart and recovery. |
 
+Part 2A's [immutable as-of source capture](../architecture/MISSION_26_PART2A_AS_OF_SNAPSHOTS.md) is independently accepted and released as a bounded approved-estimate decision source. It does not supply other source kinds, historical backtests or a forecast. Part 2B's [reporting-window candidate](../architecture/MISSION_26_PART2B_TIME_SERIES_WINDOWS.md) remains internal until its own review and release.
+
 ## Part 3 — four evaluation and model-governance slices
 
 | Slice | Scope |

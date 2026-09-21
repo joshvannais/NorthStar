@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { graphRequest } = require('../../src/services/canonicalRetellIngestion');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const key = () => crypto.randomUUID();
@@ -33,7 +34,10 @@ realPostgres('Mission 26 guarded Retell scan inputs', () => {
     finally { client.release(); }
 
     const op = key(), graph = key(), customer = key(), transcript = key();
-    const occurred = '2026-09-20T12:00:00.000Z';
+    const occurred = graphRequest({ event: 'call_ended', call: {
+      call_id: external, agent_id: agent, start_timestamp: 1789905600000,
+    } }, { organizationId: fixture.org }, null, 'synthetic-event').occurredAt;
+    expect(occurred).toBe('2026-09-20T12:00:00.000Z');
     await fixture.ownerPool.query(
       `INSERT INTO canonical_operations(id,organization_id,graph_id,idempotency_key_hash,
        payload_fingerprint,state,lease_owner,lease_expires_at,result_status,result_body,completed_at)

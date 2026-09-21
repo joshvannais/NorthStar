@@ -252,6 +252,30 @@ async function getCall(callId) {
   return request('GET', '/v2/get-call/' + providerIdentifier(callId, 'call_id'));
 }
 
+/** One bounded provider page for internal forecast-source reconciliation. */
+async function listInboundCallsPage({ agentId, startsAtMs, endsAtMs, paginationKey }) {
+  providerIdentifier(agentId, 'agent_id');
+  if (!Number.isSafeInteger(startsAtMs) || !Number.isSafeInteger(endsAtMs) ||
+      startsAtMs < 0 || endsAtMs <= startsAtMs || endsAtMs - startsAtMs > 35 * 86400000 ||
+      (paginationKey !== undefined &&
+        (typeof paginationKey !== 'string' || !paginationKey || paginationKey.length > 512))) {
+    throw new DiagnosticError('validation', 'RETELL_CALL_WINDOW_INVALID',
+      'The Retell call-list window or cursor is invalid.', 400);
+  }
+  return request('POST', '/v3/list-calls', {
+    filter_criteria: {
+      agent: [{ agent_id: agentId }],
+      call_type: { type: 'enum', op: 'in', value: ['phone_call'] },
+      direction: { type: 'enum', op: 'in', value: ['inbound'] },
+      start_timestamp: { type: 'range', op: 'bt', value: [startsAtMs, endsAtMs - 1] },
+    },
+    sort_order: 'ascending',
+    limit: 50,
+    include_total: false,
+    ...(paginationKey === undefined ? {} : { pagination_key: paginationKey }),
+  });
+}
+
 function providerIdentifier(value, field) {
   const result = typeof value === 'string' ? value.trim() : '';
   if (!result || result.length > 160 || !/^[A-Za-z0-9_-]+$/.test(result)) {
@@ -592,6 +616,7 @@ module.exports = {
   buildPrompt,
   registerWebhook,
   getCall,
+  listInboundCallsPage,
   getAgent,
   createWebCall,
   stopCall,

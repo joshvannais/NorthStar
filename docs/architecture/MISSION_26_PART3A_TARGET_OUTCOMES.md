@@ -1,6 +1,6 @@
 # Mission 26 Part 3A — forecast targets and outcome eligibility
 
-Status: architecture candidate. This is a versioned target catalog and evaluation contract, not a mounted forecast, actual-outcome reader, backtest, calibrated probability, or permission to consume a source. Parts 3B–D and the family slices must implement and validate their own readers before a target can produce a number.
+Status: architecture-only Part 3A independently accepted and released through [PR #289](https://github.com/joshvannais/NorthStar/pull/289). Exact head `4af1fb777c6ce7c5a1d1bc4f23d1fdb9ba92f3d7` passed independent review with zero P0-P3 findings; normal merge `28689f5ddade84ad68185e59a7a90188b59d5ed6` deployed successfully as Railway deployment `d5341209-403e-4432-8898-b7fbd024f71f`, and public health reported database and canonical persistence healthy. No migration or frontend surface changed. This is a versioned target catalog and evaluation contract, not a mounted forecast, actual-outcome reader, backtest, calibrated probability, or permission to consume a source. Parts 3B–D and the family slices must implement and validate their own readers before a target can produce a number.
 
 ## Common outcome boundary
 

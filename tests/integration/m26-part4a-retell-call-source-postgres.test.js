@@ -34,6 +34,28 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
     finally { client.release(); }
   }
+  async function review(actor, snapshotId, body, requestKey = key()) {
+    const client = await fixture.runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const result = await client.query(
+        'SELECT public.canonical_forecast_retell_call_review_mutate($1,$2,$3,$4,$5,$6,$7,$8::jsonb) value',
+        [actor.organizationId, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, actor.csrfToken, requestKey, snapshotId, JSON.stringify(body)]);
+      await client.query('COMMIT');
+      return result.rows[0].value;
+    } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
+    finally { client.release(); }
+  }
+  const reviewBody = (pin, disposition, anchorTranscriptId = null, changes = {}) => ({
+    transcriptId: pin.sourceId, expectedSourceDigest: pin.digest,
+    expectedRevision: 0, expectedDigest: 'none', disposition, anchorTranscriptId,
+    reason: 'Explicit fictional owner review', confirmed: true,
+    confirmationVersion: 'm26-retell-call-review-v1', ...changes,
+  });
+  const reviewRead = (actor, snapshotId) => fixture.runtimePool.query(
+    'SELECT public.canonical_forecast_retell_call_reviews_read($1,$2,$3,$4,$5) value',
+    [actor.organizationId, actor.actorUserId, actor.actorAccessRole, actor.authSessionId, snapshotId]);
   async function call({ tenant = fixture.org, source = 'retell',
     eventAt = new Date(Date.now() - 3600000).toISOString(),
     direction = 'inbound', channel = 'voice_call', customerId = null,
@@ -123,6 +145,12 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
       [fixture.org, fixture.actors.member.actorUserId, fixture.actors.member.actorAccessRole,
         fixture.actors.member.authSessionId, saved.snapshot.id]))
       .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(readSql,
+      [fixture.org, fixture.actors.member.actorUserId, null,
+        fixture.actors.member.authSessionId, saved.snapshot.id]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(capture({ ...fixture.actors.member, actorAccessRole: null }))
+      .rejects.toMatchObject({ code: '42501' });
     const other = fixture.actors.otherOwner;
     const cross = await fixture.runtimePool.query(readSql,
       [fixture.otherOrg, other.actorUserId, other.actorAccessRole, other.authSessionId, saved.snapshot.id]);
@@ -187,6 +215,93 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
       await ownerTx.query('ROLLBACK').catch(() => {});
       await captureTx.query('ROLLBACK').catch(() => {});
       ownerTx.release(); captureTx.release();
+    }
+  }, 120000);
+
+  test('owner reviews distinct lead, repeat call and nonlead without modifying canonical opportunities', async () => {
+    const first = await call(), repeat = await call({ customerId: first.customer }), nonlead = await call();
+    const receipt = (await capture(fixture.actors.owner)).snapshot;
+    const pin = id => receipt.sources.find(item => item.sourceId === id);
+    const before = (await reviewRead(fixture.actors.owner, receipt.id)).rows[0].value;
+    expect(before).toMatchObject({ reviewedCount: 0 });
+    expect(before.callCount).toBeGreaterThanOrEqual(3);
+    expect(before.unresolvedCount).toBe(before.callCount);
+    const firstBody = reviewBody(pin(first.transcript), 'new_lead');
+    const firstKey = key();
+    const anchor = await review(fixture.actors.owner, receipt.id, firstBody, firstKey);
+    expect(anchor).toMatchObject({ status: 'recorded', revision: 1, replayed: false });
+    expect(await review(fixture.actors.owner, receipt.id, firstBody, firstKey))
+      .toMatchObject({ id: anchor.id, replayed: true, status: 'recorded' });
+    const linkedBody = reviewBody(pin(repeat.transcript), 'repeat_lead', first.transcript);
+    const linkedKey = key();
+    const linked = await review(fixture.actors.owner, receipt.id, linkedBody, linkedKey);
+    expect(linked).toMatchObject({ status: 'recorded', revision: 1 });
+    await review(fixture.actors.owner, receipt.id, reviewBody(pin(nonlead.transcript), 'not_lead'));
+    const ready = (await reviewRead(fixture.actors.owner, receipt.id)).rows[0].value;
+    expect(ready).toMatchObject({ reviewedCount: 3, stale: false });
+    expect(ready.unresolvedCount).toBe(before.callCount - 3);
+    expect(ready.boundary).toMatch(/not certified provider coverage or a lead forecast/);
+    expect(ready.calls.find(item => item.callSourceId === repeat.transcript))
+      .toMatchObject({ disposition: 'repeat_lead', anchorCallSourceId: first.transcript });
+    expect((await fixture.ownerPool.query(
+      'SELECT COUNT(*)::int count FROM canonical_opportunities WHERE id IN ($1,$2,$3)',
+      [first.opportunity, repeat.opportunity, nonlead.opportunity])).rows[0].count).toBe(3);
+    const correction = await review(fixture.actors.owner, receipt.id,
+      reviewBody(pin(first.transcript), 'unresolved', null,
+        { expectedRevision: 1, expectedDigest: anchor.digest }));
+    expect(correction.revision).toBe(2);
+    const staleLink = (await reviewRead(fixture.actors.owner, receipt.id)).rows[0].value;
+    expect(staleLink.reviewedCount).toBe(1);
+    expect(staleLink.unresolvedCount).toBe(before.callCount - 1);
+    expect(await review(fixture.actors.owner, receipt.id, linkedBody, linkedKey))
+      .toMatchObject({ id: linked.id, replayed: true, status: 'stale' });
+    expect(await review(fixture.actors.owner, receipt.id, firstBody, firstKey))
+      .toMatchObject({ id: anchor.id, replayed: true, status: 'stale' });
+    await expect(review(fixture.actors.owner, receipt.id,
+      reviewBody(pin(first.transcript), 'new_lead'))).rejects.toMatchObject({ code: '40001' });
+  }, 120000);
+
+  test('call review denies cross-tenant, stale source, invalid authority and direct mutation', async () => {
+    const source = await call();
+    const receipt = (await capture(fixture.actors.owner)).snapshot;
+    const body = reviewBody(receipt.sources.find(item => item.sourceId === source.transcript), 'new_lead');
+    await expect(review(fixture.actors.member, receipt.id, body)).rejects.toMatchObject({ code: '42501' });
+    await expect(review({ ...fixture.actors.member, actorAccessRole: null }, receipt.id, body))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(reviewRead({ ...fixture.actors.member, actorAccessRole: null }, receipt.id))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(review(fixture.actors.owner, receipt.id,
+      { ...body, confirmationVersion: null })).rejects.toMatchObject({ code: '22023' });
+    await expect(review({ ...fixture.actors.owner, csrfToken: 'bad' }, receipt.id, body))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(review(fixture.actors.otherOwner, receipt.id, body)).rejects.toMatchObject({ code: '40001' });
+    await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_retell_call_reviews'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(
+      'SELECT canonical_forecast_retell_call_review_source($1,$2,$3)',
+      [fixture.org, receipt.id, source.transcript])).rejects.toMatchObject({ code: '42501' });
+    const saved = await review(fixture.actors.owner, receipt.id, body);
+    await expect(fixture.ownerPool.query(
+      'UPDATE canonical_forecast_retell_call_reviews SET reason=reason WHERE id=$1',
+      [saved.id])).rejects.toMatchObject({ code: '23514' });
+    await fixture.ownerPool.query('UPDATE canonical_transcripts SET occurred_at=NOW() WHERE id=$1',
+      [source.transcript]);
+    expect((await reviewRead(fixture.actors.owner, receipt.id)).rows[0].value)
+      .toMatchObject({ stale: true, calls: [] });
+    await expect(review(fixture.actors.owner, receipt.id, body)).rejects.toMatchObject({ code: '40001' });
+  }, 120000);
+
+  test('does not attach an earlier or undated call to a later first-lead receipt', async () => {
+    const first = await call({ eventAt: '2026-09-20T12:00:00.000Z' });
+    const earlier = await call({ eventAt: '2026-09-19T12:00:00.000Z' });
+    const undated = await call({ eventAt: null });
+    const receipt = (await capture(fixture.actors.owner)).snapshot;
+    const pin = id => receipt.sources.find(item => item.sourceId === id);
+    await review(fixture.actors.owner, receipt.id, reviewBody(pin(first.transcript), 'new_lead'));
+    for (const candidate of [earlier, undated]) {
+      await expect(review(fixture.actors.owner, receipt.id,
+        reviewBody(pin(candidate.transcript), 'repeat_lead', first.transcript)))
+        .rejects.toMatchObject({ code: '40001' });
     }
   }, 120000);
 

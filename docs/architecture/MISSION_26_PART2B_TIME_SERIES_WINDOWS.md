@@ -1,6 +1,6 @@
 # Mission 26 Part 2B — comparable reporting windows
 
-Status: implementation candidate. This is an unmounted internal projection, not a forecast, source authorization, feature value, calendar-policy change, or demo behavior.
+Status: independently accepted and released through [PR #286](https://github.com/joshvannais/NorthStar/pull/286). Corrected exact head `da2fbdc36ca4ac6c7afba913e2c5d9881b715b01` passed independent review with zero P0-P3 findings and 26 focused tests. Normal merge `665b136fd30227b169c8093e7ad9ee1aebf8df78` deployed successfully as Railway deployment `75ac29c4-b38d-4098-a0ec-62f225b2daea`; public health reported database and canonical persistence healthy. This remains an unmounted internal projection, not a forecast, source authorization, feature value, calendar-policy change, or demo behavior. CI, provider/private-account, physical-device and real historical forecast evidence are unavailable.
 
 ## Reused authority
 

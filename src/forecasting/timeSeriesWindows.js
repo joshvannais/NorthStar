@@ -12,6 +12,11 @@ const DIGEST = /^[0-9a-f]{64}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TOKEN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 const GRAINS = new Set(['day', 'week', 'month', 'quarter', 'year']);
+const WINDOW_KEYS = ['version', 'organizationId', 'businessProfileId',
+  'businessProfileVersion', 'businessProfileHash', 'timeZone', 'grain',
+  'serviceKey', 'areaScope', 'areaDigest', 'calendarState', 'calendarDigest',
+  'localStartDate', 'localEndDate', 'startsAt', 'endsAt', 'elapsedMinutes',
+  'openMinutes', 'openMinutesBasis'];
 
 function invalid() {
   const error = new Error('Forecast reporting window details are invalid.');
@@ -144,6 +149,12 @@ function deriveReportingWindow(input) {
 
 function validateReportingWindow(window) {
   if (!window || typeof window !== 'object' || Array.isArray(window) ||
+      Object.getPrototypeOf(window) !== Object.prototype ||
+      Reflect.ownKeys(window).length !== WINDOW_KEYS.length ||
+      !Reflect.ownKeys(window).every(key => typeof key === 'string' &&
+        WINDOW_KEYS.includes(key) &&
+        Object.getOwnPropertyDescriptor(window, key).enumerable &&
+        Object.prototype.hasOwnProperty.call(Object.getOwnPropertyDescriptor(window, key), 'value')) ||
       window.version !== VERSION ||
       typeof window.organizationId !== 'string' || !UUID.test(window.organizationId) ||
       typeof window.businessProfileId !== 'string' || !UUID.test(window.businessProfileId) ||
@@ -192,4 +203,4 @@ function compareReportingWindows(left, right) {
   });
 }
 
-module.exports = { VERSION, deriveReportingWindow, compareReportingWindows };
+module.exports = { VERSION, deriveReportingWindow, validateReportingWindow, compareReportingWindows };

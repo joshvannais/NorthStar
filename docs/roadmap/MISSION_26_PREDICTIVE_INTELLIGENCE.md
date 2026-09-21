@@ -33,7 +33,9 @@ The part and slice counts are frozen before Mission 26 implementation begins. A 
 
 Part 1A's [forecast authority and live-source readiness inventory](../architecture/MISSION_26_PART1A_SOURCE_READINESS.md) is independently accepted and released as architecture only. It does not complete Parts 1B-C or authorize a runtime forecast.
 
-Part 1B's [forecast output contract](../architecture/MISSION_26_PART1B_FORECAST_OUTPUT_CONTRACT.md) validates an internal shape only. It does not create an as-of snapshot, calibrate an interval, mount a forecast route, or complete Part 1C.
+Part 1B's [forecast output contract](../architecture/MISSION_26_PART1B_FORECAST_OUTPUT_CONTRACT.md) is independently accepted and released as an internal shape only. It does not create an as-of snapshot, calibrate an interval, mount a forecast route, or complete Part 1C.
+
+Part 1C's [forecast governance architecture](../architecture/MISSION_26_PART1C_FORECAST_GOVERNANCE.md) defines the future tenant, role, privacy, audit and fictional-demo gates. It adds no runtime permission or route.
 
 ## Part 2 — four as-of data and feature slices
 

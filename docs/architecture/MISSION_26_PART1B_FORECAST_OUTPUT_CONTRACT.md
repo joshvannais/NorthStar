@@ -1,5 +1,7 @@
 # Mission 26 Part 1B — forecast output contract
 
+Status: Part 1B released through [PR #283](https://github.com/joshvannais/NorthStar/pull/283). Corrected exact head `d58268a95a9ab3e523d5eb7e2d91ca2f383419c6` passed independent review with zero P0-P3 findings and seven focused tests; normal merge `055858972cf525cbf83d0407327170ed6ec86915` deployed successfully as Railway deployment `e1c25fa3-98f5-4f0e-a297-ea24ae6f9b32`, with database and canonical persistence healthy.
+
 This slice defines and validates the internal `m26-forecast-output-v1` envelope in `src/forecasting/outputContract.js`. It produces no forecast, route, database record, dashboard value, provider request or commercial action. An accepted shape is not proof that an input source is authorized, a target is applicable, an algorithm is valid, or an interval is calibrated. Parts 1C, 2, 3 and the individual forecast-family slices must enforce those separate authorities before any output is issued.
 
 ## Envelope

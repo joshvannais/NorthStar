@@ -70,10 +70,12 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     await client.query(
       `INSERT INTO canonical_voice_sessions(organization_id,external_session_id,provider,
          provider_session_id,integration_ownership_id,business_profile_id,business_profile_version,
-         business_profile_hash,status,direction,canonical_operation_id,completed_at)
-       VALUES($1,$2,'retell',$2,$3,$4,$5,$6,'completed',$7,$8,NOW())`,
+         business_profile_hash,status,direction,metadata,canonical_operation_id,completed_at)
+       VALUES($1,$2,'retell',$2,$3,$4,$5,$6,'completed',COALESCE($7,'inbound'),$8::jsonb,$9,NOW())`,
       [tenant, external, fixture.retellOwnership[tenant], profile.businessProfileId,
-        'org-profile-v1', profile.hash, direction, operation]);
+        'org-profile-v1', profile.hash, direction,
+        JSON.stringify(direction === 'inbound' || direction === 'outbound'
+          ? { retellPayloadDirection: direction } : {}), operation]);
     return { transcript, opportunity, external, customer };
   }
 
@@ -86,6 +88,7 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     const second = await call({ customerId: first.customer, eventAt: null });
     await call({ source: 'lead' });
     await call({ direction: 'outbound' });
+    await call({ direction: null }); // Defaulted session direction is not provider evidence.
     await call({ tenant: fixture.otherOrg });
     expect((await capture(owner, emptyKey)).snapshot).toEqual(empty.snapshot);
     const captured = await capture(owner);
@@ -220,9 +223,9 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
       const profile = fixture.profiles[fixture.org];
       await client.query(`INSERT INTO canonical_voice_sessions(organization_id,external_session_id,
           provider,provider_session_id,integration_ownership_id,business_profile_id,
-          business_profile_version,business_profile_hash,status,direction,canonical_operation_id,completed_at)
+          business_profile_version,business_profile_hash,status,direction,metadata,canonical_operation_id,completed_at)
         SELECT $1,'m26-bulk-'||n,'retell','m26-bulk-'||n,$2,$3,'org-profile-v1',$4,
-          'completed','inbound',operation_id,NOW() FROM m26_bulk_calls`,
+          'completed','inbound','{"retellPayloadDirection":"inbound"}'::jsonb,operation_id,NOW() FROM m26_bulk_calls`,
       [fixture.org, fixture.retellOwnership[fixture.org], profile.businessProfileId, profile.hash]);
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }

@@ -30,6 +30,7 @@ RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pu
      AND voice_session.canonical_operation_id=operation.id
      AND voice_session.provider='retell' AND voice_session.provider_session_id=transcript.external_call_id
      AND voice_session.status='completed' AND voice_session.direction='inbound'
+     AND voice_session.metadata->>'retellPayloadDirection'='inbound'
    WHERE operation.organization_id=org AND operation.state='completed'
      AND operation.completed_at<=cutoff AND transcript.source='retell'
      AND transcript.external_call_id IS NOT NULL

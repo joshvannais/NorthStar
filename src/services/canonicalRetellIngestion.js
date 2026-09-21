@@ -244,6 +244,7 @@ async function ingestRetellPayload(payload, options) {
     }
     if (!voiceSession) {
       const profile = await getActiveBusinessProfile(pool, ownership.organizationId);
+      const explicitDirection = text(call.direction);
       voiceSession = await voiceSessions.createSession(pool, {
         organizationId: ownership.organizationId,
         externalSessionId: callId,
@@ -256,7 +257,11 @@ async function ingestRetellPayload(payload, options) {
         direction: text(call.direction) === 'outbound' ? 'outbound' : 'inbound',
         fromNumber: text(call.from_number),
         toNumber: text(call.to_number),
-        metadata: { source: options && options.ingestionSource === 'voice' ? 'voice-webhook' : 'retell-webhook' },
+        metadata: {
+          source: options && options.ingestionSource === 'voice' ? 'voice-webhook' : 'retell-webhook',
+          ...(explicitDirection === 'inbound' || explicitDirection === 'outbound'
+            ? { retellPayloadDirection: explicitDirection } : {}),
+        },
       });
     }
     const authoritySessionId = voiceSession.externalSessionId;

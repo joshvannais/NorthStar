@@ -1,0 +1,33 @@
+# Mission 26 Part 1C — forecast access, privacy, audit and demo isolation
+
+Status: architecture candidate. This defines future gates; it adds no route, permission, database table, provider call, forecast execution or demo mutation. [Part 1A](MISSION_26_PART1A_SOURCE_READINESS.md) inventories possible sources and [Part 1B](MISSION_26_PART1B_FORECAST_OUTPUT_CONTRACT.md) validates an internal output shape. Neither grants source access or proves statistical readiness.
+
+## Existing boundaries to preserve
+
+| Current authority | Reusable control and limit |
+| --- | --- |
+| `src/auth/middleware.js` | Paid requests resolve a current PostgreSQL-backed cookie session, active membership, server-derived organization/user/role and CSRF on mutation. Browser tenant IDs, bearer claims and stale membership do not create forecast authority. |
+| `src/auth/permissions.js` and `src/routes/learning.js` | The current learning permission and owner/administrator-only Learning Center are precedents for private data access. There is no Mission 26 forecast permission or route yet; learning access is not an implicit forecast grant. |
+| `src/learning/jobOutcomeGraphRepository.js`, `src/learning/jobOutcomePlanningValueRepository.js`, [Mission 25 architecture](MISSION_25_LEARNING_ARCHITECTURE.md) | Purpose-consented, reconciled tenant-private learning, guarded persistence, lineage and revocation are existing protections. An import grant or learning purpose grant is not blanket consent for a new forecasting purpose. |
+| `src/routes/demo.js`, `src/learning/demoLearningJourney.js`, migration `133_demo_learning_journey.sql` | The existing fictional Learning Center uses a bounded, expiring, cookie-bound demo workspace, same-origin/intent checks and isolated demo state. It proves a pattern, not an existing Mission 26 demo forecast. |
+| `src/forecasting/outputContract.js` | The output envelope carries tenant identity and source/calculation pins but performs shape validation only. It is unmounted and does not authenticate a caller, authorize a source, or prove a digest or interval is genuine. |
+
+## Future paid forecast path
+
+1. A request must resolve a current paid session, tenant, individual membership, role, entitlement and forecast-specific permission on the server. The first full company-wide financial, workforce and learning view is owner/administrator only. Members and viewers have no full forecast access by default; any narrower role/record projection requires a separate accepted authority. A forecast does not inherit `dashboard:read`, `ai:read` or `learning:read` as a broad grant.
+2. A target-specific source reader verifies each owning mission's permission, exact source purpose, current consent period where applicable, record scope, correction/revocation state and data minimization **before** it creates the immutable as-of snapshot owned by Part 2A. A source unavailable to this forecast remains unavailable, even if it is visible elsewhere in NorthStar. Cross-tenant joining, training, benchmarking or fallback is forbidden by default.
+3. The calculation receives only the authorized as-of projection and versioned target/algorithm definitions. It may output advisory values and coded uncertainty. It may not write to Mission 20 policy, Mission 22 schedule/dispatch, Mission 23 execution, Mission 24 estimate/price, Mission 25 learning or Mission 27 financial authority. Part 11D later owns an explicit reviewed handoff to any receiving workflow.
+4. Paid forecast reads and exports must recheck current tenant, individual role, record scope and source validity; use private, no-store responses and safe customer-free errors. A saved result whose source permission is revoked, corrected, deleted or stale must not continue to appear as current. Parts 2D and 11C own bounded invalidation and historical receipt behavior. There is no public customer quote or share link from this architecture.
+5. Creating, freezing, comparing, promoting or handing off a saved forecast later requires current mutation authority, CSRF, idempotency and exact current revisions where applicable. Forecast creation changes forecast history only; advice never approves or applies an operating or commercial action.
+
+## Audit and data minimization
+
+Future audit events must bind tenant, current actor/session, purpose, target, as-of snapshot digest, calculation/algorithm version, action, result, correlation identity and time. Record only the minimum metadata needed to investigate who generated, viewed, exported, superseded or handed off a forecast. Raw transcript text, customer contact details, wage detail, provider payloads, secret tokens, request bodies and private source rows do not belong in request logs, browser telemetry or exported evidence. A user-facing explanation can show authorized aggregate drivers and source coverage; deeper private drilldown remains role- and source-gated. Deletion and retention propagate to derived current results under the owning source authority while preserving only lawful, minimized audit receipts.
+
+## Fictional demo path
+
+The eventual demo must use a typed **demo** execution context backed only by an isolated, expiring fictional workspace. Paid execution uses a typed **paid** context from the trusted session. Both may call the same pure calculation function, but they must not share a source reader, snapshot store, run history, calibration sample, tenant identifier or mutation entry point. The demo may use a synthetic organization identifier inside its output envelope; that identifier never qualifies for a paid table or paid route. Demo outputs and screens must say they are simulated, must not imply a live provider, reservation, customer approval or current market price, and must not train or validate paid-tenant models. Reset and expiry make previous demo results unavailable. A public demo visitor never gains paid forecast access by modifying the output's `organizationId`.
+
+## Proof required before runtime adoption
+
+Later slices must test current-session and role denial, member/viewer/default-deny behavior, same-tenant versus other-tenant identifiers, source-purpose revocation, corrected/deleted/stale sources, record-scope limits, CSRF/idempotency on saved runs, no-store responses, safe audit redaction, paid/demo source and storage separation, two independent demo cookies, expiry/reset, and a prediction that cannot mutate an owning authority even when an action is requested. Part 12's paid/demo journeys and independent security audit remain separate mission gates. These tests are requirements, not passing evidence for Part 1C.

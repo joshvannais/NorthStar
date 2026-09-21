@@ -70,6 +70,10 @@ describe('Mission 26 Part 3C descriptive evaluation boundary', () => {
         totalAbsolute: '8', meanAbsolute: '4', meanSigned: '4' },
       sampleSufficiency: { state: 'unavailable' },
       calibration: { state: 'unavailable' }, drift: { state: 'unavailable' } });
+    expect(result.unavailableReasonCounts).toEqual({ outcome_not_supplied: 1 });
+    expect(result.predictionAsOfRange).toEqual({
+      earliest: a.output.asOf, latest: c.output.asOf });
+    expect(result.outcomeCutoffRange).toEqual({ earliest: end, latest: end });
     expect(result.digest).toBe(measureEvaluation(input).digest);
     expect(Object.isFrozen(result.statusCounts)).toBe(true);
   });
@@ -88,6 +92,23 @@ describe('Mission 26 Part 3C descriptive evaluation boundary', () => {
     expect(result.descriptiveError).toMatchObject({ state: 'unavailable',
       reason: 'no_paired_actuals', totalAbsolute: null });
     expect(result.statusCounts.outcome_unavailable).toBe(1);
+  });
+
+  test('retains distinct unfinalized reasons and their cutoff bounds', () => {
+    const a = run(0, '10');
+    const b = run(1, '12');
+    const revoked = outcome(a, '44444444-4444-4444-8444-444444444444', '1');
+    Object.assign(revoked, { state: 'revoked', amount: null, reason: 'source_revoked',
+      sourceDigest: null, observedThrough: null });
+    const pending = outcome(b, '66666666-6666-4666-8666-666666666666', '1');
+    Object.assign(pending, { state: 'pending', amount: null, reason: 'source_pending',
+      sourceDigest: null, observedThrough: null });
+    const result = measureEvaluation({ version: VERSION, runs: [a, b],
+      outcomes: [pending, revoked] });
+    expect(result.statusCounts.outcome_unavailable).toBe(2);
+    expect(result.unavailableReasonCounts).toEqual({ source_pending: 1, source_revoked: 1 });
+    expect(result.outcomeCutoffRange).toEqual({ earliest: null, latest: null });
+    expect(result.descriptiveError.state).toBe('unavailable');
   });
 
   test('keeps a finalized outcome out of error until its window is normalized', () => {
@@ -137,6 +158,21 @@ describe('Mission 26 Part 3C descriptive evaluation boundary', () => {
       .toThrow('Rolling backtest comparison details are invalid.');
     expect(() => measureEvaluation({ version: VERSION, runs: [first], outcomes: [],
       threshold: 1 })).toThrow('Forecast evaluation details are invalid.');
+  });
+
+  test('rounds a negative money mean at six-place ties away from zero', () => {
+    const a = run(0, '0');
+    const b = run(1, '0');
+    for (const saved of [a, b]) {
+      saved.output.target.key = 'revenue.approved_price_flow';
+      saved.output.unit = { key: 'money', currency: 'USD' };
+      saved.outputDigest = sha256(saved.output);
+    }
+    const result = measureEvaluation({ version: VERSION, runs: [a, b],
+      outcomes: [outcome(a, '44444444-4444-4444-8444-444444444444', '0.000001'),
+        outcome(b, '66666666-6666-4666-8666-666666666666', '0')] });
+    expect(result.descriptiveError).toMatchObject({ totalAbsolute: '0.000001',
+      meanAbsolute: '0.000001', meanSigned: '-0.000001' });
   });
 
 });

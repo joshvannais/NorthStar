@@ -42,6 +42,7 @@ function decimal(value) {
 }
 
 function mean(sum, count) {
+  // Six decimal places in the declared unit, with half-unit ties away from zero.
   const absolute = sum < 0n ? -sum : sum;
   const rounded = (absolute + BigInt(count) / 2n) / BigInt(count);
   return decimal(sum < 0n ? -rounded : rounded);
@@ -64,6 +65,9 @@ function measureEvaluation(input) {
     runs: input.runs, outcomes: input.outcomes,
   });
   const statusCounts = Object.fromEntries(STATUSES.map(status => [status, 0]));
+  const reasonCounts = new Map();
+  let earliestOutcomeCutoff = null;
+  let latestOutcomeCutoff = null;
   let totalAbsolute = 0n;
   let totalSigned = 0n;
   let pointCount = 0;
@@ -73,6 +77,17 @@ function measureEvaluation(input) {
   let calibratedIntervalHits = 0;
   for (const pair of backtest.comparisons) {
     statusCounts[pair.status] += 1;
+    if (pair.status !== 'paired') {
+      reasonCounts.set(pair.reason, (reasonCounts.get(pair.reason) || 0) + 1);
+    }
+    if (pair.outcomeCutoff !== null) {
+      if (earliestOutcomeCutoff === null || pair.outcomeCutoff < earliestOutcomeCutoff) {
+        earliestOutcomeCutoff = pair.outcomeCutoff;
+      }
+      if (latestOutcomeCutoff === null || pair.outcomeCutoff > latestOutcomeCutoff) {
+        latestOutcomeCutoff = pair.outcomeCutoff;
+      }
+    }
     if (pair.status !== 'paired') continue;
     const actual = scaled(pair.outcomeAmount);
     const value = pair.forecastValue;
@@ -104,6 +119,13 @@ function measureEvaluation(input) {
     originCount: backtest.originCount,
     comparisonCount: backtest.comparisons.length,
     statusCounts,
+    unavailableReasonCounts: Object.fromEntries([...reasonCounts].sort(([a], [b]) =>
+      a.localeCompare(b))),
+    predictionAsOfRange: {
+      earliest: backtest.comparisons[0].predictionAsOf,
+      latest: backtest.comparisons[backtest.comparisons.length - 1].predictionAsOf,
+    },
+    outcomeCutoffRange: { earliest: earliestOutcomeCutoff, latest: latestOutcomeCutoff },
     descriptiveError: pairedCount === 0 ?
       { state: 'unavailable', reason: 'no_paired_actuals', pairedCount: 0,
         totalAbsolute: null, meanAbsolute: null, meanSigned: null } :

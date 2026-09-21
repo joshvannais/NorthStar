@@ -33,7 +33,10 @@ async function reconcileRetellInboundCalls(input, fetchPage = listInboundCallsPa
   if (typeof agentId !== 'string' || !CALL_ID.test(agentId) ||
       startsAtMs === null || endsAtMs === null || endsAtMs <= startsAtMs ||
       endsAtMs - startsAtMs > 35 * 86400000 || !Array.isArray(expected) ||
-      expected.length > MAX_CALLS || expected.some(value => typeof value !== 'string' || !DIGEST.test(value)) ||
+      expected.length > MAX_CALLS ||
+      Array.from({ length: expected.length }, (_, index) => index).some(index =>
+        !Object.prototype.hasOwnProperty.call(expected, index) ||
+        typeof expected[index] !== 'string' || !DIGEST.test(expected[index])) ||
       new Set(expected).size !== expected.length || typeof fetchPage !== 'function') {
     return unavailable('invalid_scan_input');
   }
@@ -50,13 +53,15 @@ async function reconcileRetellInboundCalls(input, fetchPage = listInboundCallsPa
     }
     if (!page || typeof page !== 'object' || typeof page.has_more !== 'boolean' ||
         !Array.isArray(page.items) || page.items.length > PAGE_LIMIT ||
+        (pageNumber > 0 && page.items.length === 0) ||
         (page.has_more && (page.items.length === 0 || typeof page.pagination_key !== 'string' ||
           !page.pagination_key || page.pagination_key.length > 512 || cursors.has(page.pagination_key)))) {
       return unavailable('provider_page_invalid');
     }
     for (const item of page.items) {
       if (!item || item.agent_id !== agentId || item.call_type !== 'phone_call' ||
-          item.direction !== 'inbound' || !CALL_ID.test(item.call_id) ||
+          item.direction !== 'inbound' || typeof item.call_id !== 'string' ||
+          !CALL_ID.test(item.call_id) ||
           !Number.isSafeInteger(item.start_timestamp) ||
           item.start_timestamp < startsAtMs || item.start_timestamp >= endsAtMs ||
           item.call_status !== 'ended') {

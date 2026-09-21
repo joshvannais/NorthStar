@@ -37,6 +37,7 @@ describe('Mission 26 Retell call-list diagnostic', () => {
     ['outbound result', input([]), { has_more: false, items: [call('call_a', { direction: 'outbound' })] }, 'provider_call_unresolved'],
     ['ongoing result', input([]), { has_more: false, items: [call('call_a', { call_status: 'ongoing' })] }, 'provider_call_unresolved'],
     ['outside window', input([]), { has_more: false, items: [call('call_a', { start_timestamp: Date.parse(endsAt) })] }, 'provider_call_unresolved'],
+    ['numeric call identity', input([]), { has_more: false, items: [call(123)] }, 'provider_call_unresolved'],
     ['missing cursor', input([]), { has_more: true, items: [call('call_a')] }, 'provider_page_invalid'],
     ['duplicate call', input(['call_a']), { has_more: false, items: [call('call_a'), call('call_a')] }, 'provider_duplicate_call'],
   ])('%s fails closed', async (_name, source, page, reason) => {
@@ -50,6 +51,19 @@ describe('Mission 26 Retell call-list diagnostic', () => {
       .resolves.toEqual({ state: 'unavailable', reason: 'provider_request_failed' });
     const page = { has_more: true, pagination_key: 'same', items: [call('call_a')] };
     await expect(reconcileRetellInboundCalls(input(['call_a']), async () => page))
+      .resolves.toEqual({ state: 'unavailable', reason: 'provider_page_invalid' });
+  });
+
+  test('sparse canonical pins and an empty successor page cannot match', async () => {
+    const sparse = input([]);
+    sparse.canonicalCallDigests = new Array(1);
+    await expect(reconcileRetellInboundCalls(sparse, async () => ({ has_more: false, items: [] })))
+      .resolves.toEqual({ state: 'unavailable', reason: 'invalid_scan_input' });
+    const pages = [
+      { has_more: true, pagination_key: 'next', items: [call('call_a')] },
+      { has_more: false, items: [] },
+    ];
+    await expect(reconcileRetellInboundCalls(input(['call_a']), async () => pages.shift()))
       .resolves.toEqual({ state: 'unavailable', reason: 'provider_page_invalid' });
   });
 

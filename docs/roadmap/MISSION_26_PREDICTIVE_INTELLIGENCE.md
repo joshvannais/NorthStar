@@ -31,6 +31,8 @@ The part and slice counts are frozen before Mission 26 implementation begins. A 
 | B | Canonical forecast-output contract: as-of time, horizon, target, units, currency, point estimate or range, confidence, uncertainty, evidence coverage, applicability and calculation version. |
 | C | Tenant, role, privacy, audit and demo-isolation architecture with the rule that predictions remain advisory and cannot mutate an owning authority. |
 
+Part 1A's [forecast authority and live-source readiness inventory](../architecture/MISSION_26_PART1A_SOURCE_READINESS.md) is an architecture candidate. It does not complete Parts 1B-C or authorize a runtime forecast.
+
 ## Part 2 — four as-of data and feature slices
 
 | Slice | Scope |

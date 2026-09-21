@@ -121,6 +121,10 @@ describe('Mission 26 Part 2D pull-based feature lineage', () => {
       current: receipt(later, [source({ digest: 'b'.repeat(64) })], 'e'.repeat(64)) }))
       .toThrow('Forecast feature lineage details are invalid.');
     expect(() => replayFeatureLineage({ ...request, cursor: first.nextCursor,
+      current: receipt(later, [source({ digest: 'b'.repeat(64) })],
+        request.current.digest) }))
+      .toThrow('Forecast feature lineage details are invalid.');
+    expect(() => replayFeatureLineage({ ...request, cursor: first.nextCursor,
       items: items.slice(0, 2) }))
       .toThrow('Forecast feature lineage details are invalid.');
   });
@@ -130,6 +134,12 @@ describe('Mission 26 Part 2D pull-based feature lineage', () => {
       current: current(), cursor: null, limit: 1,
       sourceAccess: 'granted', retention: 'current' };
     expect(() => replayFeatureLineage({ ...request, limit: 26 }))
+      .toThrow('Forecast feature lineage details are invalid.');
+    expect(() => replayFeatureLineage({ ...request, items: new Array(1) }))
+      .toThrow('Forecast feature lineage details are invalid.');
+    const extraItems = [...request.items];
+    extraItems.unexpected = 'skip';
+    expect(() => replayFeatureLineage({ ...request, items: extraItems }))
       .toThrow('Forecast feature lineage details are invalid.');
     expect(() => replayFeatureLineage({ ...request, sourceAccess: 'revoked' }))
       .toThrow('Forecast feature lineage is unavailable.');

@@ -26,6 +26,16 @@ function exact(value, keys) {
     Object.prototype.hasOwnProperty.call(Object.getOwnPropertyDescriptor(value, key), 'value'));
 }
 
+function denseArray(value, maximum) {
+  return Array.isArray(value) && value.length >= 1 && value.length <= maximum &&
+    Reflect.ownKeys(value).length === value.length + 1 &&
+    Array.from({ length: value.length }, (_, index) => index).every(index => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, index);
+      return descriptor && descriptor.enumerable &&
+        Object.prototype.hasOwnProperty.call(descriptor, 'value');
+    });
+}
+
 function instantKey(value) {
   return value.replace(/\.(\d{3})(\d{3})?Z$/, (_, millis, micros) =>
     `.${millis}${micros || '000'}Z`);
@@ -88,7 +98,7 @@ function replayFeatureLineage(input) {
   if (!exact(input, ['items', 'current', 'cursor', 'limit', 'sourceAccess', 'retention']) ||
       !['granted', 'revoked'].includes(input.sourceAccess) ||
       !['current', 'expired', 'deleted'].includes(input.retention) ||
-      !Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100 ||
+      !denseArray(input.items, 100) ||
       !Number.isInteger(input.limit) || input.limit < 1 || input.limit > 25) invalid();
   if (input.sourceAccess !== 'granted' || input.retention !== 'current') {
     const error = new Error('Forecast feature lineage is unavailable.');
@@ -97,6 +107,7 @@ function replayFeatureLineage(input) {
     throw error;
   }
   const latest = normalizeReceipt(input.current);
+  const currentDigest = sha256(latest);
   const items = input.items.map(item => {
     if (!exact(item, ['feature', 'captured'])) invalid();
     // Validate every item before returning any page or computing the replay pin.
@@ -110,7 +121,7 @@ function replayFeatureLineage(input) {
     if (!exact(input.cursor, ['version', 'offset', 'currentDigest', 'inputDigest']) ||
         input.cursor.version !== VERSION || !Number.isInteger(input.cursor.offset) ||
         input.cursor.offset <= 0 || input.cursor.offset >= items.length ||
-        input.cursor.currentDigest !== latest.digest ||
+        input.cursor.currentDigest !== currentDigest ||
         input.cursor.inputDigest !== inputDigest) invalid();
     offset = input.cursor.offset;
   }
@@ -126,7 +137,7 @@ function replayFeatureLineage(input) {
   const nextOffset = offset + page.length;
   return Object.freeze({ results: Object.freeze(page),
     nextCursor: nextOffset === items.length ? null : Object.freeze({
-      version: VERSION, offset: nextOffset, currentDigest: latest.digest,
+      version: VERSION, offset: nextOffset, currentDigest,
       inputDigest,
     }) });
 }

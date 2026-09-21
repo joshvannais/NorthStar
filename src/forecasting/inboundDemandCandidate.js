@@ -1,7 +1,8 @@
 'use strict';
 
 // Pure, unmounted Part 4A candidate. An owning reader must authenticate the
-// source and its completeness receipt before supplying these observations.
+// source, its completeness receipt and distinct LEAD identity. A Retell call
+// ID only deduplicates provider retries; raw call counts are not lead counts.
 const { normalizeForecastOutput, VERSION: OUTPUT_VERSION } = require('./outputContract');
 const { validateReportingWindow, compareReportingWindows } = require('./timeSeriesWindows');
 

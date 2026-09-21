@@ -58,8 +58,8 @@ function freeze(value) {
 
 function measureEvaluation(input) {
   if (!exact(input, ['version', 'runs', 'outcomes']) || input.version !== VERSION) invalid();
-  // Rebuild the complete bounded comparison rather than accepting a copied
-  // digest or a caller-selected subset of its difficult origins.
+  // Rebuild the bounded comparison from supplied receipts, not a copied digest.
+  // Only a future trusted inventory can prove the supplied runs are complete.
   const backtest = buildRollingBacktest({
     version: BACKTEST_VERSION,
     runs: input.runs, outcomes: input.outcomes,

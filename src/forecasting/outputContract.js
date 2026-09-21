@@ -70,9 +70,11 @@ function normalizeForecastOutput(input) {
   if (!exact(input, ['contractVersion', 'organizationId', 'asOf', 'horizon',
     'target', 'unit', 'value', 'confidence', 'uncertainty', 'evidenceCoverage',
     'applicability', 'calculationVersion', 'sourceSnapshotDigest']) ||
-    input.contractVersion !== VERSION || !UUID.test(String(input.organizationId || '')) ||
+    input.contractVersion !== VERSION || typeof input.organizationId !== 'string' ||
+    !UUID.test(input.organizationId) ||
     !instant(input.asOf) || !token(input.calculationVersion) ||
-    !(input.sourceSnapshotDigest === null || DIGEST.test(String(input.sourceSnapshotDigest || '')))) invalid();
+    !(input.sourceSnapshotDigest === null ||
+      (typeof input.sourceSnapshotDigest === 'string' && DIGEST.test(input.sourceSnapshotDigest)))) invalid();
 
   const horizon = input.horizon;
   if (!exact(horizon, ['startsAt', 'endsAt', 'grain']) ||
@@ -86,7 +88,9 @@ function normalizeForecastOutput(input) {
 
   const unit = input.unit;
   if (!exact(unit, ['key', 'currency']) || !token(unit.key) ||
-    (unit.key === 'money' ? !/^[A-Z]{3}$/.test(String(unit.currency || '')) : unit.currency !== null)) invalid();
+    (unit.key === 'money' ?
+      !(typeof unit.currency === 'string' && /^[A-Z]{3}$/.test(unit.currency)) :
+      unit.currency !== null)) invalid();
 
   const coverage = input.evidenceCoverage;
   if (!exact(coverage, ['included', 'excluded', 'missing', 'stale', 'conflicting']) ||
@@ -102,7 +106,8 @@ function normalizeForecastOutput(input) {
   if (!exact(confidence, ['state', 'backtestDigest']) ||
     !['unavailable', 'calibrated'].includes(confidence.state) ||
     (confidence.state === 'unavailable' ? confidence.backtestDigest !== null :
-      !DIGEST.test(String(confidence.backtestDigest || '')))) invalid();
+      !(typeof confidence.backtestDigest === 'string' &&
+        DIGEST.test(confidence.backtestDigest)))) invalid();
 
   const uncertainty = input.uncertainty;
   if (!exact(uncertainty, ['state', 'drivers']) ||

@@ -95,4 +95,24 @@ describe('Mission 26 Part 1B forecast output shape', () => {
     Object.defineProperty(hidden, 'toJSON', { value: () => ({}) });
     expect(() => normalizeForecastOutput(hidden)).toThrow('Forecast output details are invalid.');
   });
+
+  test('rejects objects disguised as tenant, currency or evidence strings', () => {
+    const impersonator = value => ({
+      toString: () => value,
+      toJSON: () => ({ secret: 'private customer detail' }),
+    });
+    const uuid = output().organizationId;
+    const range = { kind: 'range', lower: '8', central: '12', upper: '17', basis: 'calibrated_interval' };
+    const uncertainty = { state: 'calibrated_interval', drivers: [] };
+    for (const bad of [
+      output({ organizationId: [uuid] }),
+      output({ organizationId: impersonator(uuid) }),
+      output({ sourceSnapshotDigest: [digest] }),
+      output({ sourceSnapshotDigest: impersonator(digest) }),
+      output({ unit: { key: 'money', currency: ['USD'] } }),
+      output({ unit: { key: 'money', currency: impersonator('USD') } }),
+      output({ value: range, uncertainty, confidence: { state: 'calibrated', backtestDigest: [backtestDigest] } }),
+      output({ value: range, uncertainty, confidence: { state: 'calibrated', backtestDigest: impersonator(backtestDigest) } }),
+    ]) expect(() => normalizeForecastOutput(bad)).toThrow('Forecast output details are invalid.');
+  });
 });

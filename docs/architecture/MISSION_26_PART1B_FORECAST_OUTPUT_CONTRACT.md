@@ -18,7 +18,7 @@ This slice defines and validates the internal `m26-forecast-output-v1` envelope 
 | `applicability` | Optional service and area keys plus bounded coded limits. Null service/area is a declared broad scope, not proof the result applies to every job or region. |
 | `calculationVersion`, `sourceSnapshotDigest` | Exact calculation identity and an as-of source pin. A point or range requires a snapshot digest. Part 2A must create and authorize real immutable snapshots; this contract cannot make a caller-supplied digest trustworthy. |
 
-The validator accepts only exact keys and JSON-like values, rejects ambiguous time offsets, invalid dates, numeric floating-point amounts, reversed ranges, mismatched range/confidence states and unexplained monetary currency, and returns a detached frozen object. Decimal ordering uses scaled integers, not binary floating-point arithmetic. It intentionally does not calculate price, forecast outcome, interval coverage, accuracy, eligibility, or the commercial meaning of a target.
+The validator accepts only exact keys and JSON-like values. Tenant identity, currency and evidence digests must be primitive strings; arrays or objects cannot pass through string coercion. It rejects ambiguous time offsets, invalid dates, numeric floating-point amounts, reversed ranges, mismatched range/confidence states and unexplained monetary currency, and returns a detached frozen object. Decimal ordering uses scaled integers, not binary floating-point arithmetic. It intentionally does not calculate price, forecast outcome, interval coverage, accuracy, eligibility, or the commercial meaning of a target.
 
 ## Boundary and next gates
 

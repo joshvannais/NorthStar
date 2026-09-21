@@ -1,6 +1,92 @@
 -- Mission 26 Part 4A: forecast-only review of a pinned Retell call.
 -- This is not a canonical customer/lead merge, a coverage certificate or a forecast.
 
+-- Correct the already released source entries: SQL NULL is not an authorized role.
+CREATE OR REPLACE FUNCTION public.canonical_forecast_retell_call_snapshot_capture(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,key_value TEXT)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE authority JSONB;old public.canonical_forecast_retell_call_snapshots%ROWTYPE;
+ inserted public.canonical_forecast_retell_call_snapshots%ROWTYPE;
+ key_hash TEXT;request_hash TEXT;cutoff TIMESTAMPTZ;pins JSONB;digest_value TEXT;
+BEGIN
+ IF current_setting('transaction_isolation')<>'serializable' THEN
+  RAISE EXCEPTION 'Serializable required' USING ERRCODE='25001';END IF;
+ IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
+  RAISE EXCEPTION 'Forecast source access restricted' USING ERRCODE='42501';END IF;
+ PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Subscription unavailable' USING ERRCODE='42501';END IF;
+ authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE);
+ IF key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' THEN
+  RAISE EXCEPTION 'Retell source request invalid' USING ERRCODE='22023';END IF;
+ key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
+ request_hash:=public.canonical_completion_digest(jsonb_build_object(
+  'version','m26-as-of-snapshot-request-v1','organizationId',org,
+  'actorUserId',actor,'purposeKey','forecast_demand_source',
+  'targetKey','retell.inbound_calls'));
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':retell-call-snapshot:'||actor::text||':'||key_hash,0));
+ PERFORM public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,csrf,TRUE);
+ SELECT * INTO old FROM public.canonical_forecast_retell_call_snapshots
+  WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
+ IF old.id IS NOT NULL THEN
+  IF rtrim(old.request_digest)<>request_hash THEN
+   RAISE EXCEPTION 'Retell source request key conflict' USING ERRCODE='23505';END IF;
+  IF old.source_manifest IS DISTINCT FROM
+    public.canonical_forecast_retell_call_pins(org,old.as_of) THEN
+   RETURN jsonb_build_object('snapshot',jsonb_build_object(
+    'id',old.id,'stale',TRUE,'refreshRequired',TRUE,
+    'sourceSnapshotDigest',rtrim(old.snapshot_digest),'sources','[]'::jsonb,
+    'reason','The recorded call source changed. Capture a new receipt before using it.'),
+    'replayed',TRUE);
+  END IF;
+  RETURN jsonb_build_object('snapshot',public.canonical_forecast_retell_call_snapshot_projection(old),'replayed',TRUE);
+ END IF;
+ cutoff:=clock_timestamp();
+ pins:=public.canonical_forecast_retell_call_pins(org,cutoff);
+ IF jsonb_array_length(pins)>1000 OR octet_length(pins::text)>262144 THEN
+  RAISE EXCEPTION 'Retell source cohort exceeds bounded snapshot size' USING ERRCODE='54000';END IF;
+ digest_value:=public.canonical_completion_digest(jsonb_build_object(
+  'version','m26-as-of-source-manifest-v1','organizationId',org,
+  'asOf',public.canonical_forecast_utc_instant(cutoff),
+  'purposeKey','forecast_demand_source','targetKey','retell.inbound_calls','sources',pins));
+ INSERT INTO public.canonical_forecast_retell_call_snapshots(
+  organization_id,as_of,purpose_key,target_key,source_manifest,snapshot_digest,
+  actor_user_id,membership_id,auth_session_id,request_key_hash,request_digest,created_at)
+ VALUES(org,cutoff,'forecast_demand_source','retell.inbound_calls',pins,digest_value,
+  actor,(authority->>'membershipId')::uuid,session_value,key_hash,request_hash,cutoff)
+ RETURNING * INTO inserted;
+ RETURN jsonb_build_object('snapshot',public.canonical_forecast_retell_call_snapshot_projection(inserted),'replayed',FALSE);
+END $$;
+
+CREATE OR REPLACE FUNCTION public.canonical_forecast_retell_call_snapshot_read(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,snapshot_value UUID)
+RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE selected public.canonical_forecast_retell_call_snapshots%ROWTYPE;
+BEGIN
+ IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
+  RAISE EXCEPTION 'Forecast source access restricted' USING ERRCODE='42501';END IF;
+ PERFORM public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,NULL,FALSE);
+ PERFORM 1 FROM public.subscriptions subscription
+  JOIN public.organization_onboarding onboarding
+    ON onboarding.organization_id=subscription.organization_id
+  WHERE subscription.organization_id=org AND onboarding.status='complete'
+    AND (subscription.status='active' OR
+      (subscription.status='trialing' AND subscription.trial_started_at IS NOT NULL
+        AND subscription.trial_ends_at=subscription.trial_started_at+INTERVAL '14 days'
+        AND subscription.trial_ends_at>clock_timestamp()));
+ IF NOT FOUND THEN RAISE EXCEPTION 'Current forecast access unavailable' USING ERRCODE='42501';END IF;
+ SELECT * INTO selected FROM public.canonical_forecast_retell_call_snapshots
+  WHERE organization_id=org AND id=snapshot_value;
+ IF selected.id IS NULL THEN RETURN NULL;END IF;
+ IF selected.source_manifest IS DISTINCT FROM
+   public.canonical_forecast_retell_call_pins(org,selected.as_of) THEN
+  RETURN jsonb_build_object('id',selected.id,'stale',TRUE,'refreshRequired',TRUE,
+   'sourceSnapshotDigest',rtrim(selected.snapshot_digest),'sources','[]'::jsonb,
+   'reason','The recorded call source changed. Capture a new receipt before using it.');
+ END IF;
+ RETURN public.canonical_forecast_retell_call_snapshot_projection(selected)||
+   jsonb_build_object('stale',FALSE,'refreshRequired',FALSE);
+END $$;
+
 CREATE TABLE public.canonical_forecast_retell_call_reviews (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  organization_id UUID NOT NULL,
@@ -76,7 +162,7 @@ BEGIN
  SELECT role INTO actual_role FROM public.organization_memberships
   WHERE organization_id=NEW.organization_id AND id=NEW.membership_id
     AND user_id=NEW.actor_user_id AND status='active';
- IF actual_role NOT IN ('owner','admin') THEN
+ IF actual_role IS NULL OR actual_role NOT IN ('owner','admin') THEN
   RAISE EXCEPTION 'Call review access restricted' USING ERRCODE='42501';END IF;
  PERFORM public.canonical_field_execution_actor_authority(
   NEW.organization_id,NEW.actor_user_id,actual_role,NEW.auth_session_id,NULL,FALSE);
@@ -123,6 +209,7 @@ CREATE FUNCTION public.canonical_forecast_retell_call_review_mutate(
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB;current_row public.canonical_forecast_retell_call_reviews%ROWTYPE;
  replay public.canonical_forecast_retell_call_reviews%ROWTYPE;
+ latest_replay public.canonical_forecast_retell_call_reviews%ROWTYPE;
  inserted public.canonical_forecast_retell_call_reviews%ROWTYPE;
  anchor_row public.canonical_forecast_retell_call_reviews%ROWTYPE;
  source_value JSONB;anchor_source JSONB;key_hash TEXT;request_hash TEXT;digest_value TEXT;
@@ -130,7 +217,7 @@ DECLARE authority JSONB;current_row public.canonical_forecast_retell_call_review
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN
   RAISE EXCEPTION 'Serializable required' USING ERRCODE='25001';END IF;
- IF role_value NOT IN ('owner','admin') THEN
+ IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
   RAISE EXCEPTION 'Call review access restricted' USING ERRCODE='42501';END IF;
  PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Subscription unavailable' USING ERRCODE='42501';END IF;
@@ -139,6 +226,13 @@ BEGIN
    public.canonical_field_evidence_object_keys_exact(body,ARRAY[
      'transcriptId','expectedSourceDigest','expectedRevision','expectedDigest',
      'disposition','anchorTranscriptId','reason','confirmed','confirmationVersion']) IS NOT TRUE OR
+   jsonb_typeof(body->'transcriptId') IS DISTINCT FROM 'string' OR
+   jsonb_typeof(body->'expectedSourceDigest') IS DISTINCT FROM 'string' OR
+   jsonb_typeof(body->'expectedRevision') IS DISTINCT FROM 'number' OR
+   jsonb_typeof(body->'expectedDigest') IS DISTINCT FROM 'string' OR
+   jsonb_typeof(body->'disposition') IS DISTINCT FROM 'string' OR
+   jsonb_typeof(body->'reason') IS DISTINCT FROM 'string' OR
+   jsonb_typeof(body->'confirmationVersion') IS DISTINCT FROM 'string' OR
    (body->>'transcriptId'~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') IS NOT TRUE OR
    (body->>'expectedSourceDigest'~'^[0-9a-f]{64}$') IS NOT TRUE OR
    (body->>'expectedRevision'~'^(0|[1-9][0-9]{0,3}|10000)$') IS NOT TRUE OR
@@ -146,10 +240,11 @@ BEGIN
    body->>'disposition' NOT IN ('new_lead','repeat_lead','not_lead','unresolved') OR
    public.canonical_learning_text_valid(body->>'reason',1000) IS NOT TRUE OR
    body->'confirmed' IS DISTINCT FROM 'true'::jsonb OR
-   body->>'confirmationVersion'<>'m26-retell-call-review-v1' OR
+   body->>'confirmationVersion' IS DISTINCT FROM 'm26-retell-call-review-v1' OR
    (body->>'disposition'='repeat_lead' AND
-      (body->>'anchorTranscriptId'~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') IS NOT TRUE) OR
-   (body->>'disposition'<>'repeat_lead' AND body->'anchorTranscriptId'<>'null'::jsonb)
+      (jsonb_typeof(body->'anchorTranscriptId') IS DISTINCT FROM 'string' OR
+       (body->>'anchorTranscriptId'~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') IS NOT TRUE)) OR
+   (body->>'disposition'<>'repeat_lead' AND body->'anchorTranscriptId' IS DISTINCT FROM 'null'::jsonb)
  THEN RAISE EXCEPTION 'Call review request invalid' USING ERRCODE='22023';END IF;
  transcript_value:=(body->>'transcriptId')::uuid;
  anchor_value:=CASE WHEN body->>'disposition'='new_lead' THEN transcript_value
@@ -166,6 +261,8 @@ BEGIN
   IF replay.request_digest<>request_hash THEN
    RAISE EXCEPTION 'Call review key conflict' USING ERRCODE='23505';END IF;
   source_value:=public.canonical_forecast_retell_call_review_source(org,replay.snapshot_id,replay.transcript_id);
+  SELECT * INTO latest_replay FROM public.canonical_forecast_retell_call_reviews
+   WHERE organization_id=org AND transcript_id=replay.transcript_id ORDER BY revision DESC LIMIT 1;
   IF replay.disposition='repeat_lead' THEN
    SELECT * INTO anchor_row FROM public.canonical_forecast_retell_call_reviews
     WHERE organization_id=org AND transcript_id=replay.anchor_transcript_id
@@ -175,7 +272,8 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('id',replay.id,'revision',replay.revision,
    'digest',replay.canonical_digest,'replayed',TRUE,
-   'status',CASE WHEN source_value IS NULL OR source_value->>'digest' IS DISTINCT FROM replay.source_digest
+   'status',CASE WHEN latest_replay.id IS DISTINCT FROM replay.id OR
+     source_value IS NULL OR source_value->>'digest' IS DISTINCT FROM replay.source_digest
      OR (replay.disposition='repeat_lead' AND (anchor_row.id IS DISTINCT FROM replay.anchor_review_id
        OR anchor_source IS NULL OR anchor_row.source_digest IS DISTINCT FROM anchor_source->>'digest'))
      THEN 'stale' ELSE 'recorded' END);
@@ -228,6 +326,8 @@ DECLARE receipt JSONB;pin JSONB;latest public.canonical_forecast_retell_call_rev
  anchor_row public.canonical_forecast_retell_call_reviews%ROWTYPE;
  items JSONB:='[]'::jsonb;state_value TEXT;reviewed_count INTEGER:=0;
 BEGIN
+ IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
+  RAISE EXCEPTION 'Call review access restricted' USING ERRCODE='42501';END IF;
  receipt:=public.canonical_forecast_retell_call_snapshot_read(org,actor,role_value,session_value,snapshot_value);
  IF receipt IS NULL THEN RETURN NULL;END IF;
  IF receipt->>'stale'='true' THEN

@@ -145,6 +145,12 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
       [fixture.org, fixture.actors.member.actorUserId, fixture.actors.member.actorAccessRole,
         fixture.actors.member.authSessionId, saved.snapshot.id]))
       .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(readSql,
+      [fixture.org, fixture.actors.member.actorUserId, null,
+        fixture.actors.member.authSessionId, saved.snapshot.id]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(capture({ ...fixture.actors.member, actorAccessRole: null }))
+      .rejects.toMatchObject({ code: '42501' });
     const other = fixture.actors.otherOwner;
     const cross = await fixture.runtimePool.query(readSql,
       [fixture.otherOrg, other.actorUserId, other.actorAccessRole, other.authSessionId, saved.snapshot.id]);
@@ -249,6 +255,8 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     expect(staleLink.unresolvedCount).toBe(before.callCount - 1);
     expect(await review(fixture.actors.owner, receipt.id, linkedBody, linkedKey))
       .toMatchObject({ id: linked.id, replayed: true, status: 'stale' });
+    expect(await review(fixture.actors.owner, receipt.id, firstBody, firstKey))
+      .toMatchObject({ id: anchor.id, replayed: true, status: 'stale' });
     await expect(review(fixture.actors.owner, receipt.id,
       reviewBody(pin(first.transcript), 'new_lead'))).rejects.toMatchObject({ code: '40001' });
   }, 120000);
@@ -258,6 +266,12 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     const receipt = (await capture(fixture.actors.owner)).snapshot;
     const body = reviewBody(receipt.sources.find(item => item.sourceId === source.transcript), 'new_lead');
     await expect(review(fixture.actors.member, receipt.id, body)).rejects.toMatchObject({ code: '42501' });
+    await expect(review({ ...fixture.actors.member, actorAccessRole: null }, receipt.id, body))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(reviewRead({ ...fixture.actors.member, actorAccessRole: null }, receipt.id))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(review(fixture.actors.owner, receipt.id,
+      { ...body, confirmationVersion: null })).rejects.toMatchObject({ code: '22023' });
     await expect(review({ ...fixture.actors.owner, csrfToken: 'bad' }, receipt.id, body))
       .rejects.toMatchObject({ code: '42501' });
     await expect(review(fixture.actors.otherOwner, receipt.id, body)).rejects.toMatchObject({ code: '40001' });

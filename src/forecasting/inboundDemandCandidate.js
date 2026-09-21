@@ -26,11 +26,14 @@ function exact(value, keys) {
 }
 
 function dense(values) {
-  if (!Array.isArray(values) || Reflect.ownKeys(values).length !== values.length + 1) return false;
-  return values.every((_, index) => {
+  if (!Array.isArray(values) || Object.getPrototypeOf(values) !== Array.prototype ||
+      values.length > 52 || Reflect.ownKeys(values).length !== values.length + 1) return false;
+  for (let index = 0; index < values.length; index += 1) {
     const descriptor = Object.getOwnPropertyDescriptor(values, index);
-    return descriptor?.enumerable && Object.prototype.hasOwnProperty.call(descriptor, 'value');
-  });
+    if (!descriptor?.enumerable ||
+        !Object.prototype.hasOwnProperty.call(descriptor, 'value')) return false;
+  }
+  return true;
 }
 
 function instant(value) {
@@ -42,8 +45,8 @@ function buildInboundDemandCandidate(input) {
   if (!exact(input, ['version', 'organizationId', 'asOf', 'horizon',
     'reportingWindow', 'sourceSnapshotDigest', 'observations']) ||
     input.version !== VERSION || !instant(input.asOf) ||
-    !DIGEST.test(input.sourceSnapshotDigest || '') ||
-    !dense(input.observations) || input.observations.length > 52) invalid();
+    typeof input.sourceSnapshotDigest !== 'string' ||
+    !DIGEST.test(input.sourceSnapshotDigest) || !dense(input.observations)) invalid();
   try { validateReportingWindow(input.reportingWindow); }
   catch (_error) { invalid(); }
   const reference = input.reportingWindow;
@@ -57,14 +60,17 @@ function buildInboundDemandCandidate(input) {
 
   const seen = new Set();
   let total = 0n;
+  let included = 0;
+  let excluded = 0;
   let missing = 0;
-  let comparable = true;
+  let stale = 0;
   for (const item of input.observations) {
     if (!exact(item, ['window', 'count', 'state', 'sourceRecordedThrough',
       'coverageReceiptDigest']) ||
       !['complete', 'incomplete', 'revoked'].includes(item.state) ||
       !instant(item.sourceRecordedThrough) ||
-      !DIGEST.test(item.coverageReceiptDigest || '') ||
+      typeof item.coverageReceiptDigest !== 'string' ||
+      !DIGEST.test(item.coverageReceiptDigest) ||
       (item.state === 'complete' ?
         !Number.isSafeInteger(item.count) || item.count < 0 || item.count > 1000000000 :
         item.count !== null)) invalid();
@@ -77,15 +83,16 @@ function buildInboundDemandCandidate(input) {
         item.sourceRecordedThrough < item.window.endsAt ||
         seen.has(item.window.startsAt)) invalid();
     seen.add(item.window.startsAt);
-    if (item.state !== 'complete') missing += 1;
     const comparison = compareReportingWindows(reference, item.window);
-    if (!comparison.comparableContext || comparison.normalizationRequired) comparable = false;
-    if (item.state === 'complete') total += BigInt(item.count);
+    if (item.state === 'incomplete') missing += 1;
+    else if (item.state === 'revoked') stale += 1;
+    else if (!comparison.comparableContext || comparison.normalizationRequired) excluded += 1;
+    else { included += 1; total += BigInt(item.count); }
   }
   const enough = input.observations.length >= 3;
   // This is an arithmetic mean of complete comparable prior periods only;
   // it is not a trained, calibrated or live demand forecast.
-  const ready = enough && missing === 0 && comparable;
+  const ready = enough && missing === 0 && stale === 0 && excluded === 0;
   const scale = ready ? (total * 1000000n + BigInt(input.observations.length) / 2n) /
     BigInt(input.observations.length) : null;
   const amount = scale === null ? null : `${scale / 1000000n}${scale % 1000000n === 0n ? '' :
@@ -96,13 +103,12 @@ function buildInboundDemandCandidate(input) {
     target: { key: 'demand.inbound_leads', definitionVersion: 'v1' },
     unit: { key: 'count', currency: null },
     value: ready ? { kind: 'point', amount } : {
-      kind: 'unavailable', reason: !enough ? 'insufficient_history' :
-        missing ? 'incomplete_source_coverage' : 'window_normalization_required',
+      kind: 'unavailable', reason: missing || stale ? 'incomplete_source_coverage' :
+        excluded ? 'window_normalization_required' : 'insufficient_history',
     },
     confidence: { state: 'unavailable', backtestDigest: null },
     uncertainty: { state: 'unquantified', drivers: ['retell_only', 'uncalibrated'] },
-    evidenceCoverage: { included: ready ? input.observations.length : 0,
-      excluded: 0, missing, stale: 0, conflicting: 0 },
+    evidenceCoverage: { included, excluded, missing, stale, conflicting: 0 },
     applicability: { serviceKey: null, areaKey: null, limits: ['retell_only'] },
     calculationVersion: VERSION, sourceSnapshotDigest: input.sourceSnapshotDigest,
   });

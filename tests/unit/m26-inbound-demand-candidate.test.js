@@ -55,6 +55,11 @@ describe('Mission 26 Part 4A unmounted inbound demand candidate', () => {
     expect(output.evidenceCoverage.missing).toBe(1);
     expect(buildInboundDemandCandidate(candidate({ observations: [] })).value.reason)
       .toBe('insufficient_history');
+    const short = buildInboundDemandCandidate(candidate({ observations: [
+      observation('2026-09-17', 0), observation('2026-09-18', 1)],
+    }));
+    expect(short.value.reason).toBe('insufficient_history');
+    expect(short.evidenceCoverage).toMatchObject({ included: 2, missing: 0 });
   });
 
   test('refuses incompatible windows, including daylight exposure and unknown calendars', () => {
@@ -79,7 +84,9 @@ describe('Mission 26 Part 4A unmounted inbound demand candidate', () => {
         }).endsAt }),
         observation('2026-03-08', 1, { window: day, sourceRecordedThrough: day.endsAt }),
       ] });
-    expect(buildInboundDemandCandidate(input).value.reason).toBe('window_normalization_required');
+    const output = buildInboundDemandCandidate(input);
+    expect(output.value.reason).toBe('window_normalization_required');
+    expect(output.evidenceCoverage).toMatchObject({ included: 2, excluded: 1 });
   });
 
   test('rejects future leakage, duplicate periods, mixed tenant and unsupported filters', () => {
@@ -95,10 +102,25 @@ describe('Mission 26 Part 4A unmounted inbound demand candidate', () => {
         rawProfile: { company: { timeZone: 'UTC' }, hours,
           serviceArea: { primaryTerritory: 'West' } } }) },
       { observations: [observation('2026-09-17', 0, { state: 'revoked' })] },
+      { observations: [observation('2026-09-17', 1, { coverageReceiptDigest: {
+        toString: () => 'b'.repeat(64),
+      } })] },
+      { observations: Array.from({ length: 53 }, (_, index) =>
+        observation('2026-09-17', index)) },
     ]) {
       let failure;
       try { buildInboundDemandCandidate(candidate(change)); } catch (error) { failure = error; }
       expect(failure).toMatchObject({ code: 'M26_INBOUND_DEMAND_INVALID' });
     }
+    const sparse = [observation('2026-09-17', 1), , observation('2026-09-19', 1)];
+    const inherited = Object.create(Array.prototype);
+    inherited[1] = observation('2026-09-18', 1);
+    inherited.every = () => true;
+    Object.setPrototypeOf(sparse, inherited);
+    sparse.extra = 'padding';
+    let failure;
+    try { buildInboundDemandCandidate(candidate({ observations: sparse })); }
+    catch (error) { failure = error; }
+    expect(failure).toMatchObject({ code: 'M26_INBOUND_DEMAND_INVALID' });
   });
 });

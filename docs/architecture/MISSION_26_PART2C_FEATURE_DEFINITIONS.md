@@ -1,6 +1,6 @@
 # Mission 26 Part 2C — versioned feature definitions
 
-Status: implementation candidate. These contracts are unmounted. They produce no forecast, real feature value, source read, customer-facing number, scheduling decision or commercial action.
+Status: independently accepted and released through [PR #287](https://github.com/joshvannais/NorthStar/pull/287). Corrected exact head `bbc7ef6e3ff86c47a4e67ddfd633035005d92e56` passed independent review with zero P0-P3 findings; normal merge `1e916e67aa3373779b29e0c3e2a57eb18c88f521` deployed successfully as Railway deployment `1365ee46-0f1f-4638-a872-79f5b9daf817`. Public health reported database and canonical persistence healthy. These contracts remain unmounted. They produce no forecast, real feature value, source read, customer-facing number, scheduling decision or commercial action. CI, provider/private-account, physical-device and historical forecast evidence are unavailable.
 
 ## Definition and registration
 

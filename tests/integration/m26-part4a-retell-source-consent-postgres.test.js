@@ -55,8 +55,10 @@ realPostgres('Mission 26 Part 4A Retell forecast source permission', () => {
     const owner = fixture.actors.owner;
     expect(await read(owner)).toMatchObject({ active: false, total: 0, current: null });
     await expect(capture(owner)).rejects.toMatchObject({ code: '42501' });
-    const grant = await mutate(owner, input('grant'));
-    expect(grant).toMatchObject({ replayed: false, consent: { revision: 1, action: 'grant',
+    const grantKey = key();
+    const grant = await mutate(owner, input('grant'), grantKey);
+    expect(grant).toMatchObject({ replayed: false, current: true, active: true,
+      consent: { revision: 1, action: 'grant',
       sourceScope: ['retell.inbound_calls'] } });
     expect(grant.consent.boundary).toMatch(/does not establish caller consent/);
     expect(await read(owner)).toMatchObject({ active: true, total: 1 });
@@ -69,7 +71,11 @@ realPostgres('Mission 26 Part 4A Retell forecast source permission', () => {
     expect((await snapshotRead(owner, receipt.id)).rows[0].value.stale).toBe(false);
     const revoke = await mutate(owner, input('revoke', grant.consent));
     expect(revoke.consent).toMatchObject({ revision: 2, previousId: grant.consent.id, action: 'revoke' });
+    expect(revoke).toMatchObject({ current: true, active: false });
     expect(await read(owner)).toMatchObject({ active: false, total: 2 });
+    expect(await mutate(owner, input('grant'), grantKey))
+      .toMatchObject({ replayed: true, current: false, active: false,
+        consent: { id: grant.consent.id, action: 'grant' } });
     expect((await snapshotRead(owner, receipt.id)).rows[0].value)
       .toMatchObject({ stale: true, refreshRequired: true, sources: [] });
     expect((await capture(owner, receiptKey)).snapshot)
@@ -79,6 +85,8 @@ realPostgres('Mission 26 Part 4A Retell forecast source permission', () => {
     expect(newGrant.consent).toMatchObject({ revision: 3, previousId: revoke.consent.id, action: 'grant' });
     expect(await read(owner)).toMatchObject({ active: true, total: 3 });
     expect(newGrant.consent.id).not.toBe(grant.consent.id);
+    expect(await mutate(owner, input('grant'), grantKey))
+      .toMatchObject({ replayed: true, current: false, active: false });
     expect((await snapshotRead(owner, receipt.id)).rows[0].value.stale).toBe(true);
   }, 120000);
 

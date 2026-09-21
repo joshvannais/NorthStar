@@ -122,8 +122,12 @@ BEGIN
  IF replay.id IS NOT NULL THEN
   IF replay.request_digest<>request_hash THEN
    RAISE EXCEPTION 'Forecast source permission key conflict' USING ERRCODE='23505';END IF;
+  SELECT * INTO current_row FROM public.canonical_forecast_retell_source_consents
+   WHERE organization_id=org AND purpose_key='forecast_demand_source'
+   ORDER BY revision DESC LIMIT 1;
   RETURN jsonb_build_object('consent',public.canonical_forecast_retell_source_consent_projection(replay),
-   'replayed',TRUE);
+   'replayed',TRUE,'current',replay.id=current_row.id,
+   'active',replay.id=current_row.id AND replay.action='grant');
  END IF;
  SELECT * INTO current_row FROM public.canonical_forecast_retell_source_consents
   WHERE organization_id=org AND purpose_key='forecast_demand_source'
@@ -152,7 +156,7 @@ BEGIN
   actor,(authority->>'membershipId')::uuid,session_value,body->>'reason',
   key_hash,request_hash,digest_value) RETURNING * INTO inserted;
  RETURN jsonb_build_object('consent',public.canonical_forecast_retell_source_consent_projection(inserted),
-  'replayed',FALSE);
+  'replayed',FALSE,'current',TRUE,'active',inserted.action='grant');
 END $$;
 
 -- Bind every newly captured source receipt to the exact company permission

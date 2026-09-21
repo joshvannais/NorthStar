@@ -23,7 +23,7 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Complete — Slices A-H independently accepted |
 | 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Complete — Slices A-K independently accepted |
 | 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Complete — Slices A-H independently accepted |
-| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | In progress — Slices A-E independently accepted; Slice F audit pending; Slice G release and founder verdict pending |
+| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | In progress — Slices A-F independently accepted at their recorded heads; Slice G release and founder verdict pending |
 
 ## Frozen slice structure for Parts 9-14
 
@@ -154,6 +154,10 @@ The complete paid and isolated fictional-demo Learning Center journeys are revie
 The rendered surface now gives every control an accessible name, preserves a visible skip target and keyboard focus, shows reference reviews as readable stacked records on narrow screens while retaining an identified semantic table on larger screens, keeps touch controls usable and respects reduced-motion, high-contrast and mobile safe-area preferences. Every reviewed layout must reload at the top, retain the selected theme, avoid page-level horizontal overflow and clipped actions, expose no internal identifier or implementation wording, make no outside request and produce no browser page error. This slice changes no backend authority or migration. Physical Safari, physical phones and tablets, manual assistive-technology results and the founder visual verdict remain explicitly unavailable for this candidate. Independent exact-head audit remains Slice F; release and founder acceptance remain Slice G.
 
 The mobile reference-review correction also places the full chosen company-record label beneath its full-width selector. This keeps a late distinguishing name or location visible after an exact link choice; the preview uses the same safe label as the selected option and never displays its opaque record identity. A mounted Chrome/WebKit phone-width adversary verifies visually different selected-state pixels for otherwise identical North and South labels while preserving their distinct target mapping.
+
+## Part 14 Slice F — independent mission-wide audit
+
+The independent correction audit passed with zero P0-P3 findings at exact head `acbe7ac044be3e7298fd816d833515c37f150f6a`, after the first audit's evidence-inventory findings were corrected. Its separate local report is `C:\Users\joshv\Documents\Codex\2026-09-19\m25-part14f-correction-independent-evidence-acbe7ac0\INDEPENDENT_CORRECTION_AUDIT.md` (SHA-256 `df2163c009645ceb1b7d66bcc748610dad29409ee2c6674e366f660cba616fa7`). The audit retains the inherited Part 9F, Part 11F, Mission 23 fixture and Phase 6A timing failures as nonpassing evidence, rather than counting them as green. Its mounted PostgreSQL 17 and rendered Chrome/WebKit evidence does not prove PostgreSQL 18 migration execution, private production, real providers, physical devices, manual assistive technology or the founder's visual verdict. Slice G must separately reconcile the audited head with current main, perform the release checks and record the final disposition.
 
 ## First bounded package — root authority and live-state inventory
 

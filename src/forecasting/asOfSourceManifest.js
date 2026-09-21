@@ -6,7 +6,7 @@ const VERSION = 'm26-as-of-source-manifest-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 const TOKEN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
-const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.(?:\d{3}|\d{6})Z$/;
 
 function invalid() {
   const error = new Error('Forecast source snapshot details are invalid.');
@@ -28,7 +28,13 @@ function exact(value, keys) {
 function instant(value) {
   if (typeof value !== 'string' || !INSTANT.test(value)) return false;
   const date = new Date(value);
-  return Number.isFinite(date.getTime()) && date.toISOString() === value;
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString() === `${value.slice(0, 23)}Z`;
+}
+
+function instantKey(value) {
+  return value.replace(/\.(\d{3})(\d{3})?Z$/, (_, millis, micros) =>
+    `.${millis}${micros || '000'}Z`);
 }
 
 function token(value) {
@@ -47,7 +53,7 @@ function normalizeAsOfSourceManifest(input) {
   if (!exact(input, ['version', 'organizationId', 'asOf', 'capturedAt', 'purposeKey', 'targetKey', 'sources']) ||
     input.version !== VERSION || typeof input.organizationId !== 'string' ||
     !UUID.test(input.organizationId) || !instant(input.asOf) ||
-    !instant(input.capturedAt) || input.asOf > input.capturedAt ||
+    !instant(input.capturedAt) || instantKey(input.asOf) > instantKey(input.capturedAt) ||
     !token(input.purposeKey) || !token(input.targetKey) ||
     !Array.isArray(input.sources) || input.sources.length > 1000) invalid();
 
@@ -62,7 +68,7 @@ function normalizeAsOfSourceManifest(input) {
       !UUID.test(source.sourceId) || !Number.isSafeInteger(source.revision) ||
       source.revision < 1 || source.revision > 1000000000 ||
       typeof source.digest !== 'string' || !DIGEST.test(source.digest) ||
-      !instant(source.recordedAt) || source.recordedAt > input.asOf ||
+      !instant(source.recordedAt) || instantKey(source.recordedAt) > instantKey(input.asOf) ||
       !(source.eventAt === null || instant(source.eventAt)) ||
       !['active', 'tombstone'].includes(source.state)) invalid();
     const identity = `${source.sourceKind}:${source.sourceId.toLowerCase()}`;

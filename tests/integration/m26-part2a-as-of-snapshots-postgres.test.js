@@ -36,10 +36,10 @@ realPostgres('Mission 26 Part 2A PostgreSQL as-of snapshots', () => {
     } finally { client.release(); }
   }
 
-  async function decision(estimateId, action, revision, previousId = null) {
+  async function decision(estimateId, action, revision, previousId = null, client = fixture.ownerPool) {
     const actor = fixture.actors.owner;
     const id = crypto.randomUUID();
-    await fixture.ownerPool.query(
+    await client.query(
       `INSERT INTO canonical_estimate_decisions(
          id,organization_id,estimate_id,revision,previous_id,action,actor_user_id,
          membership_id,auth_session_id,actor_name,source_pins,scope_summary,
@@ -130,6 +130,36 @@ realPostgres('Mission 26 Part 2A PostgreSQL as-of snapshots', () => {
       [fixture.org]
     )).rows[0].total;
     expect(persisted).toBe(3);
+  }, 120000);
+
+  test('does not date a concurrent committed decision before its visibility', async () => {
+    const estimateId = await estimate();
+    const decisionClient = await fixture.ownerPool.connect();
+    const captureClient = await fixture.runtimePool.connect();
+    try {
+      await decisionClient.query('BEGIN');
+      const approvalId = await decision(estimateId, 'approve', 1, null, decisionClient);
+      await captureClient.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await decisionClient.query('COMMIT');
+      const committedAt = (await fixture.ownerPool.query(
+        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') value`
+      )).rows[0].value;
+      const owner = fixture.actors.owner;
+      const captured = (await captureClient.query(
+        'SELECT public.canonical_forecast_estimate_decision_snapshot_capture($1,$2,$3,$4,$5,$6) value',
+        [owner.organizationId, owner.actorUserId, owner.actorAccessRole,
+          owner.authSessionId, owner.csrfToken, key()]
+      )).rows[0].value;
+      await captureClient.query('COMMIT');
+      expect(captured.snapshot.sources.some(source => source.sourceId === approvalId)).toBe(true);
+      expect(captured.snapshot.asOf >= committedAt).toBe(true);
+    } finally {
+      await decisionClient.query('ROLLBACK').catch(() => {});
+      await captureClient.query('ROLLBACK').catch(() => {});
+      decisionClient.release();
+      captureClient.release();
+    }
   }, 120000);
 
   test('denies member and cross-tenant access and prevents history edits', async () => {

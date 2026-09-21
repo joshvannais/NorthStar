@@ -57,4 +57,19 @@ describe('Mission 26 Part 2A as-of source manifest', () => {
     expect(result.sources.map(item => item.sourceKind)).toEqual(['lead', 'work']);
     expect(normalizeAsOfSourceManifest(manifest({ sources: [] })).sources).toEqual([]);
   });
+
+  test('compares microsecond database instants without losing precision', () => {
+    const cutoff = '2026-09-21T12:00:00.123456Z';
+    expect(normalizeAsOfSourceManifest(manifest({
+      asOf: cutoff, capturedAt: cutoff,
+      sources: [source({ recordedAt: '2026-09-21T12:00:00.123455Z' })],
+    })).sources).toHaveLength(1);
+    expect(() => normalizeAsOfSourceManifest(manifest({
+      asOf: cutoff, capturedAt: cutoff,
+      sources: [source({ recordedAt: '2026-09-21T12:00:00.123457Z' })],
+    }))).toThrow('Forecast source snapshot details are invalid.');
+    expect(() => normalizeAsOfSourceManifest(manifest({
+      asOf: cutoff, capturedAt: '2026-09-21T12:00:00.123Z',
+    }))).toThrow('Forecast source snapshot details are invalid.');
+  });
 });

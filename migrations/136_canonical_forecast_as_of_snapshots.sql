@@ -1,9 +1,9 @@
 -- Mission 26 Part 2A. The first source-specific as-of capture reads only the
 -- immutable Mission 24 decision ledger. Other sources require separate guards.
 
-CREATE FUNCTION public.canonical_forecast_utc_millis(value TIMESTAMPTZ)
+CREATE FUNCTION public.canonical_forecast_utc_instant(value TIMESTAMPTZ)
 RETURNS TEXT LANGUAGE sql STABLE SET search_path=pg_catalog,public,pg_temp AS $$
- SELECT to_char(value AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+ SELECT to_char(value AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
 $$;
 
 CREATE FUNCTION public.canonical_forecast_estimate_decision_pins(org UUID,cutoff TIMESTAMPTZ)
@@ -11,7 +11,7 @@ RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pu
  SELECT COALESCE(jsonb_agg(jsonb_build_object(
    'sourceKind','estimate_decision','sourceId',decision.id,
    'revision',decision.revision,'digest',decision.digest,
-   'recordedAt',public.canonical_forecast_utc_millis(decision.created_at),
+   'recordedAt',public.canonical_forecast_utc_instant(decision.created_at),
    'eventAt',NULL,'state',CASE decision.action WHEN 'approve' THEN 'active' ELSE 'tombstone' END
  ) ORDER BY decision.id),'[]'::jsonb)
  FROM (
@@ -37,15 +37,15 @@ CREATE TABLE public.canonical_forecast_source_snapshots (
  auth_session_id UUID NOT NULL,
  request_key_hash CHAR(64) NOT NULL CHECK(request_key_hash~'^[0-9a-f]{64}$'),
  request_digest CHAR(64) NOT NULL CHECK(request_digest~'^[0-9a-f]{64}$'),
- created_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
+ created_at TIMESTAMPTZ NOT NULL,
  UNIQUE(organization_id,id),
  UNIQUE(organization_id,actor_user_id,request_key_hash),
  FOREIGN KEY(organization_id,membership_id) REFERENCES public.organization_memberships(organization_id,id) ON DELETE RESTRICT,
  FOREIGN KEY(organization_id,actor_user_id,auth_session_id) REFERENCES public.auth_sessions(organization_id,user_id,id) ON DELETE RESTRICT,
- CHECK(as_of=date_trunc('milliseconds',created_at)),
+ CHECK(as_of=created_at),
  CHECK(rtrim(snapshot_digest)=public.canonical_completion_digest(jsonb_build_object(
    'version','m26-as-of-source-manifest-v1','organizationId',organization_id,
-   'asOf',public.canonical_forecast_utc_millis(as_of),
+   'asOf',public.canonical_forecast_utc_instant(as_of),
    'purposeKey',purpose_key,'targetKey',target_key,'sources',source_manifest)))
 );
 CREATE INDEX canonical_forecast_source_snapshots_tenant_time_idx
@@ -63,8 +63,7 @@ RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pub
 DECLARE actual_role TEXT;expected_request TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' OR
-   NEW.created_at<>transaction_timestamp() OR
-   NEW.as_of<>date_trunc('milliseconds',transaction_timestamp()) OR
+   NEW.created_at<>NEW.as_of OR NEW.as_of>clock_timestamp() OR
    NEW.source_manifest IS DISTINCT FROM public.canonical_forecast_estimate_decision_pins(NEW.organization_id,NEW.as_of)
  THEN RAISE EXCEPTION 'Forecast snapshot source or cutoff changed' USING ERRCODE='23514';END IF;
  SELECT role INTO actual_role FROM public.organization_memberships
@@ -89,8 +88,8 @@ CREATE FUNCTION public.canonical_forecast_source_snapshot_projection(
 RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT jsonb_build_object('id',value.id,'version','m26-as-of-source-manifest-v1',
   'organizationId',value.organization_id,
-  'asOf',public.canonical_forecast_utc_millis(value.as_of),
-  'capturedAt',public.canonical_forecast_utc_millis(value.created_at),
+  'asOf',public.canonical_forecast_utc_instant(value.as_of),
+  'capturedAt',public.canonical_forecast_utc_instant(value.created_at),
   'purposeKey',value.purpose_key,'targetKey',value.target_key,
   'sources',value.source_manifest,'sourceCount',jsonb_array_length(value.source_manifest),
   'sourceSnapshotDigest',rtrim(value.snapshot_digest),
@@ -127,19 +126,22 @@ BEGIN
    RAISE EXCEPTION 'Forecast snapshot request key conflict' USING ERRCODE='23505';END IF;
   RETURN jsonb_build_object('snapshot',public.canonical_forecast_source_snapshot_projection(old),'replayed',TRUE);
  END IF;
- cutoff:=date_trunc('milliseconds',transaction_timestamp());
+ -- The subscription/authority reads have already acquired this transaction's
+ -- MVCC snapshot. Minting the cutoff afterward prevents a concurrent commit
+ -- from appearing in a receipt dated before that commit became visible.
+ cutoff:=clock_timestamp();
  pins:=public.canonical_forecast_estimate_decision_pins(org,cutoff);
  IF jsonb_array_length(pins)>1000 OR octet_length(pins::text)>262144 THEN
   RAISE EXCEPTION 'Forecast source cohort exceeds bounded snapshot size' USING ERRCODE='54000';END IF;
  digest_value:=public.canonical_completion_digest(jsonb_build_object(
    'version','m26-as-of-source-manifest-v1','organizationId',org,
-   'asOf',public.canonical_forecast_utc_millis(cutoff),
+   'asOf',public.canonical_forecast_utc_instant(cutoff),
    'purposeKey','forecast_pipeline','targetKey','pipeline.approved_estimates','sources',pins));
  INSERT INTO public.canonical_forecast_source_snapshots(
   organization_id,as_of,purpose_key,target_key,source_manifest,snapshot_digest,
-  actor_user_id,membership_id,auth_session_id,request_key_hash,request_digest)
- VALUES(org,cutoff,'forecast_pipeline','pipeline.approved_estimates',pins,digest_value,
-  actor,(authority->>'membershipId')::uuid,session_value,key_hash,request_hash)
+  actor_user_id,membership_id,auth_session_id,request_key_hash,request_digest,created_at)
+VALUES(org,cutoff,'forecast_pipeline','pipeline.approved_estimates',pins,digest_value,
+  actor,(authority->>'membershipId')::uuid,session_value,key_hash,request_hash,cutoff)
  RETURNING * INTO inserted;
  RETURN jsonb_build_object('snapshot',public.canonical_forecast_source_snapshot_projection(inserted),'replayed',FALSE);
 END $$;
@@ -168,7 +170,7 @@ BEGIN
 END $$;
 
 REVOKE ALL ON TABLE public.canonical_forecast_source_snapshots FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.canonical_forecast_utc_millis(TIMESTAMPTZ) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_utc_instant(TIMESTAMPTZ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_estimate_decision_pins(UUID,TIMESTAMPTZ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_source_snapshot_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_source_snapshot_guard() FROM PUBLIC;

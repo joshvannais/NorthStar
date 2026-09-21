@@ -1431,7 +1431,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_source_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_source_snapshots FROM %I', runtime_role);
-        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_utc_millis(timestamptz) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_utc_instant(timestamptz) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_estimate_decision_pins(uuid,timestamptz) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_source_snapshot_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_source_snapshot_guard() FROM %I', runtime_role);
@@ -2309,7 +2309,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND has_function_privilege($1,'public.canonical_forecast_source_snapshot_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
        )) AS forecast_snapshot_entries_allowed,
        (to_regclass('public.canonical_forecast_source_snapshots') IS NULL OR (
-         NOT has_function_privilege($1,'public.canonical_forecast_utc_millis(timestamptz)','EXECUTE')
+         NOT has_function_privilege($1,'public.canonical_forecast_utc_instant(timestamptz)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_estimate_decision_pins(uuid,timestamptz)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_guard()','EXECUTE')

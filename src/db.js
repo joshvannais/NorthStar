@@ -1448,6 +1448,14 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_reviews') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_reviews FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_review_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_review_source(uuid,uuid,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_review_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_review_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_reviews_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_proposal_consents, public.canonical_job_outcome_cross_job_proposals FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_consent_projection(public.canonical_job_outcome_proposal_consents) FROM %I', runtime_role);
@@ -2336,6 +2344,17 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_projection(public.canonical_forecast_retell_call_snapshots)','EXECUTE')
        )) AS retell_snapshot_helpers_withheld,
+       (to_regclass('public.canonical_forecast_retell_call_reviews') IS NULL OR
+         NOT has_table_privilege($1,'public.canonical_forecast_retell_call_reviews','SELECT,INSERT,UPDATE,DELETE')) AS retell_review_table_withheld,
+       (to_regclass('public.canonical_forecast_retell_call_reviews') IS NULL OR (
+         has_function_privilege($1,'public.canonical_forecast_retell_call_review_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_retell_call_reviews_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS retell_review_entries_allowed,
+       (to_regclass('public.canonical_forecast_retell_call_reviews') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_forecast_retell_call_review_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_review_source(uuid,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_review_guard()','EXECUTE')
+       )) AS retell_review_helpers_withheld,
        (to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_job_outcome_proposal_consents','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_job_outcome_cross_job_proposals','SELECT,INSERT,UPDATE,DELETE')
@@ -2704,6 +2723,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||
+      !runtimePrivileges.retell_review_table_withheld ||
+      !runtimePrivileges.retell_review_entries_allowed ||
+      !runtimePrivileges.retell_review_helpers_withheld ||
       !runtimePrivileges.job_outcome_proposal_tables_withheld ||
       !runtimePrivileges.job_outcome_proposal_entry_execute ||
       !runtimePrivileges.job_outcome_proposal_helpers_withheld ||
@@ -2753,6 +2775,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('136_canonical_forecast_as_of_snapshots.sql
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('137_canonical_forecast_lineage_current_source.sql');
 // The Part 4A source receipt DDL and privilege checks use the same bounded startup lane.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('138_canonical_forecast_retell_call_source.sql');
+// The additive call-review history and guarded entries use the bounded startup lane.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('139_canonical_forecast_retell_call_reviews.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

@@ -1447,6 +1447,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_snapshot_projection(public.canonical_forecast_retell_call_snapshots) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        IF pg_catalog.to_regprocedure('public.canonical_forecast_retell_scan_inputs_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz)') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_scan_inputs_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz) TO %I', runtime_role);
+        END IF;
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_reviews') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_reviews FROM %I', runtime_role);
@@ -2346,6 +2349,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
        )) AS retell_snapshot_entries_allowed,
+       (to_regprocedure('public.canonical_forecast_retell_scan_inputs_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz)') IS NULL OR
+         has_function_privilege($1,'public.canonical_forecast_retell_scan_inputs_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz)','EXECUTE')) AS retell_scan_entry_allowed,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
          NOT has_function_privilege($1,'public.canonical_forecast_retell_call_pins(uuid,timestamptz)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_immutable()','EXECUTE')
@@ -2800,6 +2805,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('138_canonical_forecast_retell_call_source.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('139_canonical_forecast_retell_call_reviews.sql');
 // Forecast-only source permission uses the same bounded startup lock lane.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('140_canonical_forecast_retell_source_consent.sql');
+// Read-only hashed call scan inputs use the reviewed bounded startup lane.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('141_canonical_forecast_retell_scan_inputs.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

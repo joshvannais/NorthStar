@@ -61,7 +61,9 @@ Part 3A's [target and outcome eligibility catalog](../architecture/MISSION_26_PA
 
 Part 3B's [rolling-origin backtest boundary](../architecture/MISSION_26_PART3B_ROLLING_BACKTESTS.md) is independently accepted and released as an unmounted internal contract. No saved forecast runs or authorized actual-outcome reader are yet mounted, so it does not claim production backtest or accuracy evidence.
 
-Part 3C's [evaluation and calibration gates](../architecture/MISSION_26_PART3C_EVALUATION_GATES.md) are an unmounted descriptive-measurement candidate. Descriptive error on synthetic inputs cannot claim empirical accuracy, calibrated confidence or production source authorization.
+Part 3C's [evaluation and calibration gates](../architecture/MISSION_26_PART3C_EVALUATION_GATES.md) are independently accepted and released as an unmounted descriptive-measurement contract. Descriptive error on synthetic inputs cannot claim empirical accuracy, calibrated confidence or production source authorization.
+
+Part 3D's [algorithm identity and promotion governance](../architecture/MISSION_26_PART3D_ALGORITHM_GOVERNANCE.md) is a candidate. The pure identity catalog does not register an executable algorithm, authenticate a comparison or promote/rollback a tenant's active selection.
 
 ## Part 4 — four demand and commercial slices
 

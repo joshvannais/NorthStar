@@ -1,6 +1,6 @@
 # Mission 26 Part 3C — evaluation and calibration gates
 
-Status: unmounted descriptive-measurement candidate. No authenticated saved forecast, authorized actual reader, verified calibrated interval, empirical accuracy, or production evaluation exists. Part 3B's released comparator is an unmounted input contract, not evidence that any target can be forecast. This slice defines what a later measurement must prove before an output may claim confidence.
+Status: bounded internal descriptive-measurement contract independently accepted and released through [PR #291](https://github.com/joshvannais/NorthStar/pull/291). Corrected exact head `32a2e5965a24c7be98b96484e1aa753527e00b26` passed independent review with zero P0–P3 findings; 51 focused Mission 26 tests passed, including 19 independently run Part 3B/3C tests before a comment-only final correction. Normal merge `a0b56ff93fa6c2b9e384a2a3502754f1acda132f` deployed successfully as sole automatic Railway deployment `a3fd0bed-0809-43fb-a832-e220197e1b41`, and public health reported database and canonical persistence healthy. No migration or frontend surface changed. No authenticated saved forecast, authorized actual reader, verified calibrated interval, empirical accuracy, or production evaluation exists. Part 3B's released comparator is an unmounted input contract, not evidence that any target can be forecast. This slice defines what a later measurement must prove before an output may claim confidence.
 
 ## Evaluation population and authority
 

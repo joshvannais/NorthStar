@@ -18,6 +18,17 @@ function text(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function providerCallStart(call) {
+  const timestamp = call.start_timestamp;
+  if (typeof timestamp === 'number' && Number.isSafeInteger(timestamp) &&
+      timestamp >= 0 && timestamp <= 8640000000000000) {
+    return new Date(timestamp).toISOString();
+  }
+  // Preserve the earlier string-timestamp contract for existing providers.
+  // Invalid or absent provider time stays unknown; never substitute receipt time.
+  return text(timestamp) || text(call.start_time) || null;
+}
+
 function callFrom(payload) {
   return payload && payload.call && typeof payload.call === 'object' ? payload.call : (payload || {});
 }
@@ -140,7 +151,7 @@ function graphRequest(payload, ownership, voiceSession, externalEventId) {
     callDurationSeconds: call.duration_ms !== undefined
       ? Math.max(0, Math.round(Number(call.duration_ms) / 1000))
       : (payload && payload.duration_ms !== undefined ? Math.max(0, Math.round(Number(payload.duration_ms) / 1000)) : null),
-    occurredAt: text(call.start_timestamp) || text(call.start_time) || null,
+    occurredAt: providerCallStart(call),
     businessProfileAuthorityId: voiceSession && voiceSession.profile.id,
     businessProfileAuthorityVersion: voiceSession && voiceSession.profile.version,
     businessProfileAuthorityHash: voiceSession && voiceSession.profile.hash,

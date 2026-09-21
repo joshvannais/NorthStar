@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { normalizeAsOfSourceManifest } = require('../../src/forecasting/asOfSourceManifest');
+const { readReviewedRetellLeadReceipts } = require('../../src/forecasting/retellReviewedLeadReceipts');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -144,6 +145,38 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     expect(captured.snapshot.identityBoundary).toMatch(/not distinct reviewed lead identities/);
   }, 120000);
 
+  test('guarded review projection preserves first receipt and remains uncertified', async () => {
+    const owner = fixture.actors.otherOwner;
+    const client = await fixture.runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await client.query(
+        'SELECT public.canonical_forecast_retell_source_consent_mutate($1,$2,$3,$4,$5,$6,$7::jsonb)',
+        [owner.organizationId, owner.actorUserId, owner.actorAccessRole,
+          owner.authSessionId, owner.csrfToken, key(), JSON.stringify({
+            action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+            reason: 'Fictional forecast-purpose source permission', confirmed: true,
+            confirmationVersion: 'm26-retell-demand-source-consent-v1',
+          })]);
+      await client.query('COMMIT');
+    } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
+    finally { client.release(); }
+    const first = await call({ tenant: fixture.otherOrg, eventAt: '2026-01-10T12:00:00.000Z' });
+    const receipt = (await capture(owner)).snapshot;
+    const pin = receipt.sources.find(item => item.sourceId === first.transcript);
+    await review(owner, receipt.id, reviewBody(pin, 'new_lead'));
+    const args = { pool: fixture.runtimePool, actor: owner, snapshotId: receipt.id,
+      startsAt: '2026-01-10T00:00:00.000Z', endsAt: '2026-01-11T00:00:00.000Z' };
+    await expect(readReviewedRetellLeadReceipts(args)).resolves.toMatchObject({
+      state: 'reviewed_source_only', callCount: 1, reviewedDistinctLeadCount: 1,
+      historicalCoverageCertified: false,
+      leadReceipts: [{ organizationId: fixture.otherOrg, leadId: first.transcript,
+        firstReceiptAt: '2026-01-10T12:00:00.000000Z' }],
+    });
+    await expect(readReviewedRetellLeadReceipts({ ...args,
+      actor: { ...owner, actorAccessRole: null } })).rejects.toMatchObject({ code: '42501' });
+  }, 120000);
+
   test('guards current access, tenant isolation, immutable history and stale source correction', async () => {
     const owner = fixture.actors.owner;
     await expect(capture(fixture.actors.member)).rejects.toMatchObject({ code: '42501' });
@@ -254,6 +287,10 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     await review(fixture.actors.owner, receipt.id, reviewBody(pin(nonlead.transcript), 'not_lead'));
     const ready = (await reviewRead(fixture.actors.owner, receipt.id)).rows[0].value;
     expect(ready).toMatchObject({ reviewedCount: 3, stale: false });
+    expect(ready.calls.find(item => item.callSourceId === first.transcript).reviewedAt)
+      .toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/);
+    expect(ready.calls.find(item => item.callSourceId === repeat.transcript).reviewedAt)
+      .toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/);
     expect(ready.unresolvedCount).toBe(before.callCount - 3);
     expect(ready.boundary).toMatch(/not certified provider coverage or a lead forecast/);
     expect(ready.calls.find(item => item.callSourceId === repeat.transcript))
@@ -267,6 +304,8 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     expect(correction.revision).toBe(2);
     const staleLink = (await reviewRead(fixture.actors.owner, receipt.id)).rows[0].value;
     expect(staleLink.reviewedCount).toBe(1);
+    expect(staleLink.calls.find(item => item.callSourceId === first.transcript).reviewedAt).toBeNull();
+    expect(staleLink.calls.find(item => item.callSourceId === repeat.transcript).reviewedAt).toBeNull();
     expect(staleLink.unresolvedCount).toBe(before.callCount - 1);
     expect(await review(fixture.actors.owner, receipt.id, linkedBody, linkedKey))
       .toMatchObject({ id: linked.id, replayed: true, status: 'stale' });

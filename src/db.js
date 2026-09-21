@@ -2807,6 +2807,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('139_canonical_forecast_retell_call_reviews
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('140_canonical_forecast_retell_source_consent.sql');
 // Read-only hashed call scan inputs use the reviewed bounded startup lane.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('141_canonical_forecast_retell_scan_inputs.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('142_canonical_forecast_retell_review_time.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

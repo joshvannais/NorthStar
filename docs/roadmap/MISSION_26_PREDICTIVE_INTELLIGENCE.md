@@ -57,7 +57,7 @@ Part 2A's [immutable as-of source capture](../architecture/MISSION_26_PART2A_AS_
 | C | Error, interval coverage, calibration, drift, sample sufficiency and applicability measurements with unavailable states for weak evidence. |
 | D | Versioned deterministic/statistical algorithm registry, candidate-versus-current evaluation, human-reviewed promotion and recoverable rollback. |
 
-Part 3A's [target and outcome eligibility catalog](../architecture/MISSION_26_PART3A_TARGET_OUTCOMES.md) is an architecture candidate. It does not activate a source reader, historical outcome, forecast, backtest or probability.
+Part 3A's [target and outcome eligibility catalog](../architecture/MISSION_26_PART3A_TARGET_OUTCOMES.md) is independently accepted and released as architecture only. It does not activate a source reader, historical outcome, forecast, backtest or probability.
 
 ## Part 4 — four demand and commercial slices
 

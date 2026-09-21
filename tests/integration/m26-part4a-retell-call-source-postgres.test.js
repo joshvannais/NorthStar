@@ -18,6 +18,21 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
         `INSERT INTO canonical_integration_ownership(organization_id,provider,external_integration_id)
          VALUES($1,'retell',$2) RETURNING id`, [tenant, 'synthetic-' + key()])).rows[0].id;
     }
+    const actor = fixture.actors.owner;
+    const client = await fixture.runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await client.query(
+        'SELECT public.canonical_forecast_retell_source_consent_mutate($1,$2,$3,$4,$5,$6,$7::jsonb)',
+        [actor.organizationId, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, actor.csrfToken, key(), JSON.stringify({
+            action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+            reason: 'Fictional forecast-purpose source permission', confirmed: true,
+            confirmationVersion: 'm26-retell-demand-source-consent-v1',
+          })]);
+      await client.query('COMMIT');
+    } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
+    finally { client.release(); }
   }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 

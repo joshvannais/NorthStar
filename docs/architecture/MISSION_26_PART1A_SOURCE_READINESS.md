@@ -1,6 +1,6 @@
 # Mission 26 Part 1A — forecast authority and source readiness
 
-Status: architecture candidate. This inventory is not a forecast engine, a release claim for Part 1A, or permission to read a source without its owning authority. It records the live repository at main `a21556c714a65658fb788187ddd32924cd61c01c`, after [Mission 25 final acceptance](../evidence/MISSION_25_PART14G_FINAL_ACCEPTANCE.md). Mission 26's [frozen plan](../roadmap/MISSION_26_PREDICTIVE_INTELLIGENCE.md) owns the 12-part, 51-slice progression.
+Status: architecture-only Part 1A released through [PR #282](https://github.com/joshvannais/NorthStar/pull/282). The corrected exact head `f88d8ce30c1a258f032d3f74358d109b37a63675` passed independent review with zero P0-P3 findings; the normal merge `beefde6aca4dcca7d6f131f313c81fddc4234805` deployed successfully as Railway deployment `9cd6f50d-e5a8-4943-9c27-faf10d4aee48`, and public health reported database and canonical persistence healthy. This inventory is not a forecast engine or permission to read a source without its owning authority. It records the source audit starting from main `a21556c714a65658fb788187ddd32924cd61c01c`, after [Mission 25 final acceptance](../evidence/MISSION_25_PART14G_FINAL_ACCEPTANCE.md). Mission 26's [frozen plan](../roadmap/MISSION_26_PREDICTIVE_INTELLIGENCE.md) owns the 12-part, 51-slice progression.
 
 ## Authority rule
 

@@ -46,7 +46,7 @@ Part 1C's [forecast governance architecture](../architecture/MISSION_26_PART1C_F
 | C | Versioned feature definitions with explicit known, missing, stale, conflicting and inapplicable states plus exact units and currency. |
 | D | Correction, revocation, tombstone, retention and deletion propagation with bounded replay, restart and recovery. |
 
-Part 2A's [immutable as-of source capture](../architecture/MISSION_26_PART2A_AS_OF_SNAPSHOTS.md) is independently accepted and released as a bounded approved-estimate decision source. It does not supply other source kinds, historical backtests or a forecast. Part 2B's [reporting-window contract](../architecture/MISSION_26_PART2B_TIME_SERIES_WINDOWS.md) and Part 2C's [versioned feature-definition contract](../architecture/MISSION_26_PART2C_FEATURE_DEFINITIONS.md) are independently accepted and released as internal projections. Part 2D's [lineage candidate](../architecture/MISSION_26_PART2D_LINEAGE_RECOVERY.md) remains under review.
+Part 2A's [immutable as-of source capture](../architecture/MISSION_26_PART2A_AS_OF_SNAPSHOTS.md) is independently accepted and released as a bounded approved-estimate decision source. It does not supply other source kinds, historical backtests or a forecast. Part 2B's [reporting-window contract](../architecture/MISSION_26_PART2B_TIME_SERIES_WINDOWS.md), Part 2C's [versioned feature-definition contract](../architecture/MISSION_26_PART2C_FEATURE_DEFINITIONS.md), and Part 2D's [bounded current-source lineage contract](../architecture/MISSION_26_PART2D_LINEAGE_RECOVERY.md) are independently accepted and released as internal projections. Part 2D covers only the registered Mission 24 decision source; it does not implement other import lifecycles, saved forecast runs or unattended recovery.
 
 ## Part 3 — four evaluation and model-governance slices
 
@@ -56,6 +56,8 @@ Part 2A's [immutable as-of source capture](../architecture/MISSION_26_PART2A_AS_
 | B | Rolling backtests that compare saved forecasts with later authorized actual outcomes without rewriting either record. |
 | C | Error, interval coverage, calibration, drift, sample sufficiency and applicability measurements with unavailable states for weak evidence. |
 | D | Versioned deterministic/statistical algorithm registry, candidate-versus-current evaluation, human-reviewed promotion and recoverable rollback. |
+
+Part 3A's [target and outcome eligibility catalog](../architecture/MISSION_26_PART3A_TARGET_OUTCOMES.md) is an architecture candidate. It does not activate a source reader, historical outcome, forecast, backtest or probability.
 
 ## Part 4 — four demand and commercial slices
 

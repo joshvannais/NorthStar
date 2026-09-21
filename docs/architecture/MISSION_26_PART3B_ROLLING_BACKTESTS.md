@@ -1,6 +1,6 @@
 # Mission 26 Part 3B — rolling-origin backtest boundary
 
-Status: internal comparison candidate. No saved Mission 26 forecast run, authorized actual-outcome reader, backtest result store or calibrated probability is currently mounted. This document does not treat a retrospective estimate, customer outcome, or current source snapshot as a historical prediction.
+Status: bounded internal comparison contract independently accepted and released through [PR #290](https://github.com/joshvannais/NorthStar/pull/290). Corrected exact head `cf92092fcae11b93d0a24ab899dd694d25dca46e` passed independent review with zero P0–P3 findings and 43 focused tests. Normal merge `ead798f93aa3a74e908884eb16648b7f4cadc099` deployed successfully as the sole automatic Railway deployment `71266620-0617-438c-900b-9eaba8536718`; credential-free public health reported database and canonical persistence healthy. No migration or frontend surface changed. No saved Mission 26 forecast run, authorized actual-outcome reader, backtest result store or calibrated probability is currently mounted. This document does not treat a retrospective estimate, customer outcome, or current source snapshot as a historical prediction.
 
 ## The comparison that Part 3B must make
 

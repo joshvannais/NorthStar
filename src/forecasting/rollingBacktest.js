@@ -3,6 +3,7 @@
 // A bounded, unmounted comparison contract. The future owning readers must
 // authenticate saved runs and actual receipts before supplying either array.
 const { normalizeForecastOutput } = require('./outputContract');
+const { validateReportingWindow, compareReportingWindows } = require('./timeSeriesWindows');
 const { sha256 } = require('../services/businessProfileAdapter');
 
 const VERSION = 'm26-rolling-backtest-v1';
@@ -45,11 +46,12 @@ function exact(value, keys) {
 function dense(values) {
   if (!Array.isArray(values) || values.length > MAX_RUNS ||
       Reflect.ownKeys(values).length !== values.length + 1) return false;
-  return values.every((_, index) => {
+  for (let index = 0; index < values.length; index += 1) {
     const descriptor = Object.getOwnPropertyDescriptor(values, index);
-    return descriptor && descriptor.enumerable &&
-      Object.prototype.hasOwnProperty.call(descriptor, 'value');
-  });
+    if (!descriptor || !descriptor.enumerable ||
+        !Object.prototype.hasOwnProperty.call(descriptor, 'value')) return false;
+  }
+  return true;
 }
 
 function instant(value) {
@@ -91,13 +93,16 @@ function freeze(value) {
 
 function normalizeRun(input) {
   if (!exact(input, ['id', 'savedAt', 'outputDigest', 'sourceSnapshotAsOf',
-    'latestSourceRecordedAt', 'output']) ||
+    'latestSourceRecordedAt', 'reportingWindow', 'output']) ||
       !uuid(input.id) || !instant(input.savedAt) || !digest(input.outputDigest) ||
       !(input.sourceSnapshotAsOf === null || sourceInstant(input.sourceSnapshotAsOf)) ||
       !(input.latestSourceRecordedAt === null || sourceInstant(input.latestSourceRecordedAt))) invalid();
   let output;
   try { output = normalizeForecastOutput(input.output); }
   catch (_error) { invalid(); }
+  try { validateReportingWindow(input.reportingWindow); }
+  catch (_error) { invalid(); }
+  const window = input.reportingWindow;
   if (output.target.definitionVersion !== 'v1' ||
       !UNSCOPED_TARGETS.has(output.target.key) ||
       output.asOf > input.savedAt || input.savedAt > output.horizon.startsAt ||
@@ -107,10 +112,18 @@ function normalizeRun(input) {
         instantKey(input.sourceSnapshotAsOf) > instantKey(output.asOf) ||
         (input.latestSourceRecordedAt !== null &&
           instantKey(input.latestSourceRecordedAt) > instantKey(input.sourceSnapshotAsOf))) ||
-      sha256(output) !== input.outputDigest) invalid();
+      sha256(output) !== input.outputDigest ||
+      window.organizationId !== output.organizationId ||
+      window.startsAt !== output.horizon.startsAt ||
+      window.endsAt !== output.horizon.endsAt ||
+      window.grain !== output.horizon.grain ||
+      window.serviceKey !== output.applicability.serviceKey ||
+      (output.applicability.areaKey === null ? window.areaScope !== 'tenant_all' :
+        window.areaScope !== 'profile_area')) invalid();
   return freeze({ id: input.id.toLowerCase(), savedAt: input.savedAt,
     outputDigest: input.outputDigest, sourceSnapshotAsOf: input.sourceSnapshotAsOf,
-    latestSourceRecordedAt: input.latestSourceRecordedAt, output });
+    latestSourceRecordedAt: input.latestSourceRecordedAt,
+    reportingWindow: { ...window }, output });
 }
 
 function normalizeOutcome(input, run) {
@@ -137,9 +150,7 @@ function normalizeOutcome(input, run) {
     input.unit.currency !== run.output.unit.currency ||
     input.applicability.serviceKey !== run.output.applicability.serviceKey ||
     input.applicability.areaKey !== run.output.applicability.areaKey ||
-    !Array.isArray(input.applicability.limits) ||
-    Reflect.ownKeys(input.applicability.limits).length !==
-      input.applicability.limits.length + 1 ||
+    !dense(input.applicability.limits) ||
     input.applicability.limits.length !== run.output.applicability.limits.length ||
     !input.applicability.limits.every((limit, index) =>
       Object.prototype.hasOwnProperty.call(input.applicability.limits, index) &&
@@ -178,8 +189,14 @@ function buildRollingBacktest(input) {
   if (runs.some(run => run.output.organizationId !== first.organizationId ||
       run.output.target.key !== first.target.key ||
       run.output.target.definitionVersion !== first.target.definitionVersion ||
+      run.output.calculationVersion !== first.calculationVersion ||
       sha256(run.output.unit) !== sha256(first.unit) ||
       sha256(run.output.applicability) !== sha256(first.applicability))) invalid();
+  runs.sort((left, right) => left.output.asOf.localeCompare(right.output.asOf) ||
+    left.id.localeCompare(right.id));
+  const windowComparisons = new Map(runs.map(run => [run.id,
+    compareReportingWindows(runs[0].reportingWindow, run.reportingWindow)]));
+  if ([...windowComparisons.values()].some(result => !result.comparableContext)) invalid();
   const outcomes = new Map();
   const outcomeIds = new Set();
   for (const raw of input.outcomes) {
@@ -194,16 +211,20 @@ function buildRollingBacktest(input) {
     outcomes.set(run.id, outcome);
     outcomeIds.add(outcome.id);
   }
-  runs.sort((left, right) => left.output.asOf.localeCompare(right.output.asOf) ||
-    left.id.localeCompare(right.id));
   const comparisons = runs.map(run => {
     const outcome = outcomes.get(run.id) || null;
+    const normalizationRequired = windowComparisons.get(run.id).normalizationRequired;
     const status = run.output.value.kind === 'unavailable' ? 'forecast_unavailable' :
       outcome === null ? 'outcome_unavailable' :
-        outcome.state === 'known' ? 'paired' : 'outcome_unavailable';
+        outcome.state !== 'known' ? 'outcome_unavailable' :
+          normalizationRequired ? 'window_normalization_required' : 'paired';
     const comparison = {
       forecastRunId: run.id, forecastOutputDigest: run.outputDigest,
       predictionAsOf: run.output.asOf, savedAt: run.savedAt,
+      calculationVersion: run.output.calculationVersion,
+      reportingWindowDigest: sha256(run.reportingWindow),
+      windowNormalizationRequired: normalizationRequired,
+      sourceSnapshotDigest: run.output.sourceSnapshotDigest,
       sourceSnapshotAsOf: run.sourceSnapshotAsOf,
       latestSourceRecordedAt: run.latestSourceRecordedAt,
       horizon: { ...run.output.horizon },
@@ -215,6 +236,7 @@ function buildRollingBacktest(input) {
       status,
       reason: status === 'paired' ? null :
         status === 'forecast_unavailable' ? run.output.value.reason :
+          status === 'window_normalization_required' ? 'window_normalization_required' :
           outcome?.reason || 'outcome_not_supplied',
     };
     return freeze({ ...comparison, digest: sha256(comparison) });
@@ -224,6 +246,17 @@ function buildRollingBacktest(input) {
     organizationId: first.organizationId,
     target: { ...first.target }, unit: { ...first.unit },
     applicability: { ...first.applicability },
+    calculationVersion: first.calculationVersion,
+    reportingWindowBasis: {
+      grain: runs[0].reportingWindow.grain,
+      timeZone: runs[0].reportingWindow.timeZone,
+      serviceKey: runs[0].reportingWindow.serviceKey,
+      areaScope: runs[0].reportingWindow.areaScope,
+      areaDigest: runs[0].reportingWindow.areaDigest,
+      calendarState: runs[0].reportingWindow.calendarState,
+      calendarDigest: runs[0].reportingWindow.calendarDigest,
+      openMinutesBasis: runs[0].reportingWindow.openMinutesBasis,
+    },
     originCount: new Set(runs.map(run => run.output.asOf)).size,
     comparisons,
   };

@@ -4,11 +4,23 @@
 
 Future mission. This document records the authorized product concept only. Mission 32 must not begin until the preceding roadmap missions and their release gates are complete.
 
+On 2026-09-21, the founder assigned **execution planning** to Mission 32. This is future authority for the on-site calculator and rapid Estimate Studio to construct and revise a job-specific method of work. It does not reopen sealed Mission 24 or broaden Mission 25's remaining acceptance scope. This authority decision does not itself start Mission 32 implementation.
+
 ## Product outcome
 
 Give an authorized owner or estimator a fast, explainable calculation while a prospective job is being discussed or immediately afterward. The user records what is known through a concise manual, conversational, or mobile-friendly intake. NorthStar pre-fills recognized Business Profile, workforce, asset, inventory, travel, tax, overhead, margin, scheduling, knowledge, and learned-company facts; Polaris identifies what remains unknown and produces a non-binding planning range the contractor can remember, compare, save, and revisit.
 
 The product name is **On-the-Fly Calculator**. It may also be presented as the rapid Estimate Studio when the workflow expands into a reviewed customer estimate, but it remains distinct from the investor calculator and from autonomous pricing.
+
+## Execution-planning authority
+
+Mission 32 owns the smallest additive, versioned representation needed to connect a customer scope to a proposed method of execution. Where existing Mission 24 scope, estimate revisions, component plans, stages, resources, dependencies, provenance and cost-coverage contracts suffice, consume them. Introduce a bounded operation or execution-plan contract only for a demonstrated gap, such as repeated onsite material transfer, operation inputs and outputs, conditioned production rates, equipment operating states, or multi-phase resource dependencies. It must remain linked to canonical estimate identity and revisions, not become a second estimating or pricing engine.
+
+Polaris may propose operations, conditional follow-up questions, feasible method alternatives and consequential assumptions. Authorized domain calculators determine quantities, cycles, utilization, duration and costs from explicit inputs; Capella challenges evidence, feasibility, sensitivity and downside. An inferred site condition, nominal asset specification, researched price or customer statement must not silently become a measurement, supplier quote, suitability approval or human decision. Unknown consequential inputs remain visible and actionable.
+
+The field workflow starts from an existing lead, customer, call-derived scope, Prepared Estimate and authorized Business Profile facts where available. An estimator can confirm, correct, reject or add observations onsite; consequential changes invalidate dependent assumptions for review and create a traceable version. Repeated operations should be represented by a validated pattern and count rather than thousands of individual records. The default view remains concise; detailed operations and calculations are inspectable on demand. Customer output continues through Mission 24's customer-safe, human-approved boundary.
+
+Mission 25's accepted tenant-private actuals and learning may supply authorized historical evidence without changing Mission 25's scope. Mission 26 owns statistically calibrated distributions only when sufficient trustworthy outcomes exist. Mission 23 owns field actuals; Mission 22 owns scheduling and dispatch decisions; Mission 27 owns billing and payments; Mission 33 owns NorthStar platform administration rather than contractor estimate decisions. Provider adapters remain replaceable and tenant-private. Any execution-planning capability that cannot fit these boundaries must be brought back for founder review before implementation.
 
 ## Core workflow
 
@@ -62,6 +74,8 @@ Saved calculations must support status, owner, created/updated time, customer or
 - Mounted production modules and durable PostgreSQL authority
 - Concurrency, tenant-isolation, role-authorization, tamper, replay, and versioning tests
 - Authentic multi-engine calculations using the complete authorized NorthStar engine set
+- Component-level validation of scope, quantities, feasible methods, material flow, production, crew and equipment utilization, internal and external logistics, dependency-constrained duration, sourced costs, overlap protection, uncertainty, provenance, revisions, human approval and customer-safe output
+- A synthetic long, restricted-access job whose repeated onsite movements are derived from quantities, payload, routes and cycle times; and a small service job that remains fast and simple
 - Desktop, tablet, and mobile interaction validation in Chrome and actual Playwright WebKit
 - Independent security/release audit at an immutable ref
 - Normal merge, exact automatic deployment, health, passive production acceptance, and final-ref seal

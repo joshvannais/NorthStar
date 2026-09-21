@@ -1439,6 +1439,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_estimate_decision_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_source_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_snapshot_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_snapshot_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_snapshot_projection(public.canonical_forecast_retell_call_snapshots) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_call_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_proposal_consents, public.canonical_job_outcome_cross_job_proposals FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_consent_projection(public.canonical_job_outcome_proposal_consents) FROM %I', runtime_role);
@@ -2315,6 +2324,18 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_projection(public.canonical_forecast_source_snapshots)','EXECUTE')
        )) AS forecast_snapshot_helpers_withheld,
+       (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
+         NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
+       (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
+         has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS retell_snapshot_entries_allowed,
+       (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_forecast_retell_call_pins(uuid,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_retell_call_snapshot_projection(public.canonical_forecast_retell_call_snapshots)','EXECUTE')
+       )) AS retell_snapshot_helpers_withheld,
        (to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_job_outcome_proposal_consents','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_job_outcome_cross_job_proposals','SELECT,INSERT,UPDATE,DELETE')
@@ -2680,6 +2701,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_snapshot_table_withheld ||
       !runtimePrivileges.forecast_snapshot_entries_allowed ||
       !runtimePrivileges.forecast_snapshot_helpers_withheld ||
+      !runtimePrivileges.retell_snapshot_table_withheld ||
+      !runtimePrivileges.retell_snapshot_entries_allowed ||
+      !runtimePrivileges.retell_snapshot_helpers_withheld ||
       !runtimePrivileges.job_outcome_proposal_tables_withheld ||
       !runtimePrivileges.job_outcome_proposal_entry_execute ||
       !runtimePrivileges.job_outcome_proposal_helpers_withheld ||

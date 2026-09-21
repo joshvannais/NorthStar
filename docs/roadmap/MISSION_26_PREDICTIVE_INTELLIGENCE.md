@@ -67,7 +67,7 @@ Part 3D's [algorithm identity and promotion governance](../architecture/MISSION_
 
 ## Part 4 — four demand and commercial slices
 
-Part 4A's [inbound demand source and forecast boundary](../architecture/MISSION_26_PART4A_DEMAND_SOURCE_AND_FORECAST.md) is being implemented. Bounded unmounted candidates are released; a separate guarded Retell **call** source receipt is in progress. No production lead forecast is accepted. Retell call IDs deduplicate retries, not repeat calls about one lead. The source must prove reviewed distinct lead identity and complete coverage; heuristic service labels, customer addresses and unsaved historical inputs are not verified forecasts.
+Part 4A's [inbound demand source and forecast boundary](../architecture/MISSION_26_PART4A_DEMAND_SOURCE_AND_FORECAST.md) is being implemented. Bounded unmounted candidates and a separate guarded Retell **call** source receipt are released. No production lead forecast is accepted. Retell call IDs deduplicate retries, not repeat calls about one lead. The source must prove reviewed distinct lead identity and complete coverage; heuristic service labels, customer addresses and unsaved historical inputs are not verified forecasts.
 
 | Slice | Scope |
 | --- | --- |

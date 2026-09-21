@@ -1429,6 +1429,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_summary_build(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_job_outcome_summary_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_source_snapshots') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_source_snapshots FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_utc_instant(timestamptz) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_estimate_decision_pins(uuid,timestamptz) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_source_snapshot_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_source_snapshot_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_source_snapshot_projection(public.canonical_forecast_source_snapshots) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_estimate_decision_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_source_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_job_outcome_proposal_consents, public.canonical_job_outcome_cross_job_proposals FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_job_outcome_proposal_consent_projection(public.canonical_job_outcome_proposal_consents) FROM %I', runtime_role);
@@ -1831,6 +1841,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_job_outcome_proposal%'
            AND relation.relname NOT LIKE 'canonical_job_outcome_cross_job_proposal%'
            AND relation.relname NOT LIKE 'canonical_job_outcome_planning%'
+           AND relation.relname NOT LIKE 'canonical_forecast_%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_labor_plans'
            AND relation.relname <> 'canonical_travel_plans'
@@ -2291,6 +2302,19 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_job_outcome_summary_projection(public.canonical_job_outcome_summaries,uuid,text,uuid)','EXECUTE')
        )) AS job_outcome_summary_helpers_withheld,
+       (to_regclass('public.canonical_forecast_source_snapshots') IS NULL OR
+         NOT has_table_privilege($1,'public.canonical_forecast_source_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS forecast_snapshot_table_withheld,
+       (to_regclass('public.canonical_forecast_source_snapshots') IS NULL OR (
+         has_function_privilege($1,'public.canonical_forecast_estimate_decision_snapshot_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_source_snapshot_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS forecast_snapshot_entries_allowed,
+       (to_regclass('public.canonical_forecast_source_snapshots') IS NULL OR (
+         NOT has_function_privilege($1,'public.canonical_forecast_utc_instant(timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_estimate_decision_pins(uuid,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_projection(public.canonical_forecast_source_snapshots)','EXECUTE')
+       )) AS forecast_snapshot_helpers_withheld,
        (to_regclass('public.canonical_job_outcome_cross_job_proposals') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_job_outcome_proposal_consents','SELECT,INSERT,UPDATE,DELETE')
          AND NOT has_table_privilege($1,'public.canonical_job_outcome_cross_job_proposals','SELECT,INSERT,UPDATE,DELETE')
@@ -2653,6 +2677,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.job_outcome_summary_table_withheld ||
       !runtimePrivileges.job_outcome_summary_entry_execute ||
       !runtimePrivileges.job_outcome_summary_helpers_withheld ||
+      !runtimePrivileges.forecast_snapshot_table_withheld ||
+      !runtimePrivileges.forecast_snapshot_entries_allowed ||
+      !runtimePrivileges.forecast_snapshot_helpers_withheld ||
       !runtimePrivileges.job_outcome_proposal_tables_withheld ||
       !runtimePrivileges.job_outcome_proposal_entry_execute ||
       !runtimePrivileges.job_outcome_proposal_helpers_withheld ||
@@ -2696,6 +2723,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
 
 const REVIEWED_MIGRATION_TIMEOUT_FILES = new Set(['057_canonical_estimate_decisions.sql','058_canonical_material_plans.sql','059_canonical_estimate_revisions.sql','060_demo_schedule_times.sql','061_canonical_multi_material_plans.sql','062_canonical_material_cost_sources.sql','063_canonical_material_availability.sql','064_owner_operations_demo_parity.sql','065_canonical_labor_plans.sql','066_canonical_cost_composition.sql','067_canonical_equipment_plans.sql','068_canonical_equipment_costs.sql','069_canonical_equipment_readiness.sql','070_canonical_travel_plans.sql','071_canonical_pricing_plans.sql','072_canonical_pricing_policies.sql','073_canonical_commercial_terms.sql','074_connected_reasoning.sql','075_tax_applicability.sql','076_canonical_proposal_adoptions.sql','077_provider_canary_accounting.sql','078_canonical_customer_estimate_versions.sql','079_demo_estimate_issue_operation_capacity.sql','080_customer_estimate_delivery.sql','081_job_control_authority.sql','082_demo_estimate_state_capacity.sql','083_canonical_labor_outcome_learning.sql','084_canonical_external_labor_import_authority.sql','085_canonical_external_labor_reconciliation.sql','086_canonical_imported_labor_outcomes.sql','087_canonical_imported_labor_calibration.sql','088_canonical_learning_center.sql','089_canonical_external_labor_import_operations.sql','090_canonical_external_travel_import_authority.sql','091_canonical_external_travel_reconciliation.sql','092_canonical_imported_travel_outcomes.sql','093_canonical_imported_travel_calibration.sql','094_canonical_external_travel_import_operations.sql','095_canonical_learning_center_travel.sql','096_canonical_native_equipment_utilization.sql','097_canonical_external_asset_import_authority.sql','098_canonical_external_asset_reconciliation.sql','099_canonical_imported_asset_outcomes.sql','100_canonical_imported_asset_health_outcomes.sql','101_canonical_imported_asset_calibration.sql','102_canonical_external_asset_import_operations.sql','103_canonical_learning_center_assets.sql','104_canonical_learning_match_labels.sql','105_canonical_native_material_outcomes.sql','106_canonical_external_material_import_authority.sql','107_canonical_external_material_reconciliation.sql','108_canonical_imported_material_quantity_outcomes.sql','109_canonical_imported_material_cost_observations.sql','110_canonical_imported_material_calibration.sql','111_canonical_external_material_import_operations.sql','112_canonical_learning_center_materials.sql','113_canonical_external_crm_field_service_import_authority.sql','114_canonical_external_project_change_order_import_authority.sql','115_canonical_external_communication_import_authority.sql','116_canonical_external_financial_import_authority.sql','117_canonical_external_business_reconciliation.sql','118_canonical_external_customer_outcomes.sql','119_canonical_external_project_outcomes.sql','120_canonical_external_financial_outcomes.sql','121_canonical_external_business_calibration.sql','122_canonical_external_business_source_operations.sql','123_canonical_learning_center_business_systems.sql','124_canonical_job_outcome_graph.sql','125_canonical_job_outcome_graph_evaluation.sql','126_canonical_job_outcome_summary.sql','127_canonical_job_outcome_cross_job_proposals.sql','128_canonical_job_outcome_proposal_registry.sql','129_canonical_job_outcome_planning_adoption.sql','130_canonical_job_outcome_lifecycle_propagation.sql','131_canonical_learning_center_job_outcomes.sql','132_canonical_paid_learning_calibration_lineage.sql','133_demo_learning_journey.sql','134_canonical_external_labor_recovery.sql','135_canonical_external_labor_cleanup_projection.sql']);
 
+// The additive M26 snapshot migration has the same bounded startup lock lane.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('136_canonical_forecast_as_of_snapshots.sql');
+
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;
   return Object.freeze({
@@ -2727,7 +2757,7 @@ async function runMigrations(options = {}) {
       : null;
     await client.query('BEGIN');
     transactionOpen = true;
-    // Bound the reviewed Mission 24 and Mission 25 migrations' complete transaction lane, including
+    // Bound the reviewed Mission 24-26 migrations' complete transaction lane, including
     // the startup advisory wait and grant verification. No persistent settings.
     // A later candidate must review its own timeout/recovery policy explicitly.
     if (REVIEWED_MIGRATION_TIMEOUT_FILES.has(migrations[migrations.length - 1]?.file)) {

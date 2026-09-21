@@ -1,6 +1,6 @@
 # Mission 26 Part 1C — forecast access, privacy, audit and demo isolation
 
-Status: architecture candidate. This defines future gates; it adds no route, permission, database table, provider call, forecast execution or demo mutation. [Part 1A](MISSION_26_PART1A_SOURCE_READINESS.md) inventories possible sources and [Part 1B](MISSION_26_PART1B_FORECAST_OUTPUT_CONTRACT.md) validates an internal output shape. Neither grants source access or proves statistical readiness.
+Status: independently accepted and released architecture. This defines future gates; it adds no route, permission, database table, provider call, forecast execution or demo mutation. [Part 1A](MISSION_26_PART1A_SOURCE_READINESS.md) inventories possible sources and [Part 1B](MISSION_26_PART1B_FORECAST_OUTPUT_CONTRACT.md) validates an internal output shape. Neither grants source access or proves statistical readiness.
 
 ## Existing boundaries to preserve
 

@@ -1,0 +1,9 @@
+# Mission 25 Part 13D cross-job proposal generation
+
+Part 13D prepares reviewable advice from an owner-selected cohort of five to 100 current job summaries for one service. It uses a separate permission from the job-outcome graph and pins that graph-permission period, every selected summary, each summary's graph and evaluation, all source digests, the calculation version and the exact request identity.
+
+Each measure is handled independently. Only one compatible value from one job counts as one sample. Units, currencies, material identities and NorthStar-versus-connected source classes must already match. The result reports sample size, cohort coverage, median, lower quartile, upper quartile and interquartile range. These figures describe the selected jobs; they do not claim forecast probability. Ratio advice is offered only from `0.25` through `4.00`, and recorded gross-margin advice is bounded from zero through 100. Raw statistics remain visible when an outlier withholds advice. Missing, ambiguous, duplicate, stale or incompatible evidence stays unavailable and never becomes zero.
+
+Scope advice is unavailable because the accepted project records do not identify a reusable numeric planning value. Native NorthStar invoice, payment, collection and accounting truth remains unavailable until Mission 27. The versioned registry, impact preview, adoption controls, lifecycle propagation and rendered experience remain Parts 13E-H.
+
+Runtime can call only guarded permission, proposal-build and proposal-read entries. It cannot read the two storage tables or execute validation, cohort, statistics, projection or trigger helpers. Changes to any pinned source, graph, evaluation, summary or permission mask the proposal. Revocation blocks reads and delayed replay; a later grant starts empty. No estimate, price, schedule, job, asset, material, financial record, business profile, planning assumption or company policy changes automatically.

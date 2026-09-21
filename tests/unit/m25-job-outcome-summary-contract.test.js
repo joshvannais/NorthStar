@@ -1,0 +1,9 @@
+'use strict';
+const crypto=require('node:crypto');
+const contract=require('../../src/learning/jobOutcomeSummaryContract');
+const repository=require('../../src/learning/jobOutcomeSummaryRepository');
+describe('Mission 25 Part 13C job outcome summary contract',()=>{
+ const id=crypto.randomUUID(),digest='a'.repeat(64);
+ test('accepts only exact confirmed evaluation pins',()=>{expect(contract.normalizeSummary(id,{expectedEvaluationRevision:2,expectedEvaluationDigest:digest,reason:'Prepare the current job outcome summary.',confirmed:true,confirmationVersion:'m25-job-outcome-summary-v1'})).toMatchObject({estimateId:id,expectedEvaluationRevision:2});for(const body of [{expectedEvaluationRevision:2,expectedEvaluationDigest:digest,reason:'Prepare the current job outcome summary.',confirmed:true,confirmationVersion:'m25-job-outcome-summary-v1',extra:true},{expectedEvaluationRevision:0,expectedEvaluationDigest:digest,reason:'Prepare the current job outcome summary.',confirmed:true,confirmationVersion:'m25-job-outcome-summary-v1'},{expectedEvaluationRevision:2,expectedEvaluationDigest:'bad',reason:'Prepare the current job outcome summary.',confirmed:true,confirmationVersion:'m25-job-outcome-summary-v1'},{expectedEvaluationRevision:2,expectedEvaluationDigest:digest,reason:' Prepare ',confirmed:true,confirmationVersion:'m25-job-outcome-summary-v1'}])expect(()=>contract.normalizeSummary(id,body)).toThrow('Job outcome summary details are invalid.');});
+ test('normalizes reads and maps plain recovery messages',()=>{expect(contract.normalizeRead(id)).toEqual({estimateId:id});expect(repository.mapped({code:'40001'})).toMatchObject({status:409,message:'Connected job outcomes changed. Refresh before continuing.'});expect(repository.mapped({code:'P0002',constraint:'job_outcome_summary_evaluation_unavailable'})).toMatchObject({status:409,message:'A current complete job outcome review is required.'});});
+});

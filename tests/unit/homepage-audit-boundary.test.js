@@ -41,11 +41,14 @@ describe('Homepage ephemeral audit boundary', () => {
     expect(isPublicEphemeralHomepageMutation(req(method, url))).toBe(false);
   });
 
-  test('ordinary audit entries still retain their established source fields', () => {
+  test('ordinary audit entries retain bounded request facts without raw client metadata', () => {
     expect(requestAuditEntry(req('POST', '/api/auth/login'), 401, 12)).toEqual(expect.objectContaining({
-      ipAddress: '203.0.113.42',
-      userAgent: 'test-agent',
+      entityType: 'api_request',
+      entityId: null,
+      ipAddress: null,
+      userAgent: null,
       correlationId: 'request-id',
+      afterState: { method: 'POST', path: '/api', status: 401, duration: 12 },
     }));
   });
 

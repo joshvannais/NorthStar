@@ -49,6 +49,7 @@ const {
 const { DEFAULT_SELECTION, normalizeSelection } = require('./scenarioSpace');
 const { addRecordedCostExample } = require('./demoEstimateExample');
 const treeBusinessProfiles = require('./demoTreeBusinessProfiles');
+const demoLearningJourney = require('../learning/demoLearningJourney');
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
@@ -109,6 +110,7 @@ function state(value) {
     value.graphs.forEach(graph => validateDemoGraphAgainstWorkspace(graph, value.workspace));
     demoScheduling.validateState(value);
     demoOperations.validateState(value);
+    if (value.learningJourney !== undefined) demoLearningJourney.validate(value.learningJourney);
     const graphIds = value.graphs.map(graph => graph.ids.graph);
     if (new Set(graphIds).size !== graphIds.length) {
       throw new Error('The persisted demo state contains duplicate graph authority.');
@@ -291,7 +293,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['customer_estimate_issue','proposal_adopt','simulate_lead', 'reset', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['customer_estimate_issue','proposal_adopt','simulate_lead', 'reset', 'learning_step', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -305,6 +307,7 @@ function mutationInput(input) {
     expectedRevision: input.expectedRevision,
     idempotencyHash: sha256(input.idempotencyKey),
   };
+  if (input.operation === 'learning_step') normalized.learningAction = demoLearningJourney.normalizeAction(input.learningAction);
   if (input.operation === 'work_action') {
     if (!/^[0-9a-f-]{36}$/.test(input.appointmentId || '') || !input.operations ||
       Object.keys(input.operations).some(k => !['family','body'].includes(k)) ||
@@ -360,6 +363,7 @@ function mutationInput(input) {
     ...(normalized.operation==='material_plan'?{estimateId:normalized.estimateId,plan:normalized.plan}:{}),
     ...(normalized.operation.startsWith('schedule_')?{appointmentId:normalized.appointmentId,scheduleBody:normalized.scheduleBody}:{}),
     ...(normalized.operation==='work_action'?{appointmentId:normalized.appointmentId,operations:normalized.operations}:{}),
+    ...(normalized.operation==='learning_step'?{learningAction:normalized.learningAction}:{}),
   });
   return normalized;
 }
@@ -808,7 +812,9 @@ class DemoCommandCenterRepository {
       let operationsResponse;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if(aggregate){
+      if(input.operation==='learning_step'){
+        nextState=demoLearningJourney.apply(current.state,input);
+      } else if(aggregate){
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});
         const item=demoCanonicalItems(workspace).find(i=>i.ids.estimate===input.estimateId);if(!item)fail(404,'PROPOSAL_ADOPTION_UNAVAILABLE','That demo estimate is unavailable.');
         nextState=(await require('./demoProposalAdoption').apply(current,item,input.plan,input.idempotencyHash,workspace,now)).state;

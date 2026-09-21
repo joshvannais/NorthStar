@@ -18,8 +18,9 @@ assert.ok(!fs.existsSync(output));
     const route = '/api/v1/learning/center';
     let response = await request(f.app).get(route).set(f.actors.owner.session.headers);
     assert.equal(response.status, 200, JSON.stringify(response.body));
-    assert.equal(response.body.data.version, 'm25-learning-center-v2');
+    assert.equal(response.body.data.version, 'm25-learning-center-v3');
     assert.equal(response.body.data.authority, 'tenant_private_postgresql');
+    assert.equal(response.body.data.nativeEquipment.active, false);
     assert.deepEqual(response.body.data.sources, []);
     assert.match(response.body.data.learningBoundary, /does not automatically change estimates/);
     ledger.cases.push('An owner reads an empty bounded tenant-private Learning Center projection.');
@@ -58,13 +59,29 @@ assert.ok(!fs.existsSync(output));
     ]);
     ledger.cases.push('Labor and travel sources with the same tenant label remain distinct and bounded.');
 
+    response = await request(f.app).post(`/api/v1/learning/external-asset-sources/${source}/consent`)
+      .set(f.actors.owner.session.headers).set('X-CSRF-Token', f.actors.owner.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send({ action: 'grant', expectedRevision: 0, expectedDigest: 'none',
+        reason: 'Enable the owner-reviewed vehicle and equipment source.', confirmed: true,
+        confirmationVersion: 'm25-external-asset-import-consent-v1' });
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    response = await request(f.app).get(route).set(f.actors.owner.session.headers);
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.data.sourceTotal, 3);
+    assert.deepEqual(response.body.data.sources, [
+      { sourceKind: 'asset', sourceKey: source, serviceKeys: [], serviceTotal: 0, servicesTruncated: false },
+      { sourceKind: 'labor', sourceKey: source, serviceKeys: [], serviceTotal: 0, servicesTruncated: false },
+      { sourceKind: 'travel', sourceKey: source, serviceKeys: [], serviceTotal: 0, servicesTruncated: false },
+    ]);
+    ledger.cases.push('Vehicle and equipment history remains a distinct tenant-private source category.');
+
     const privileges = (await f.ownerPool.query(`SELECT
       has_function_privilege($1,'canonical_learning_center_read(uuid,uuid,text,uuid)','EXECUTE') entry,
       has_table_privilege($1,'canonical_external_labor_import_consents','SELECT') source_table`, [f.roles.runtime])).rows[0];
     assert.deepEqual(privileges, { entry: true, source_table: false });
-    const bytes = fs.readFileSync(path.join(__dirname, '../../migrations/095_canonical_learning_center_travel.sql'));
+    const bytes = fs.readFileSync(path.join(__dirname, '../../migrations/103_canonical_learning_center_assets.sql'));
     const checksum = crypto.createHash('sha256').update(bytes).digest('hex');
-    const applied = (await f.ownerPool.query("SELECT trim(checksum) checksum FROM _migrations WHERE filename='095_canonical_learning_center_travel.sql'")).rows;
+    const applied = (await f.ownerPool.query("SELECT trim(checksum) checksum FROM _migrations WHERE filename='103_canonical_learning_center_assets.sql'")).rows;
     assert.deepEqual(applied, [{ checksum }]);
     ledger.cases.push('Runtime access stays entry-only and the applied migration checksum matches exact bytes.');
     ledger.pass = true;

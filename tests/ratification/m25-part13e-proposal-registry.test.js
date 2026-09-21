@@ -1,0 +1,9 @@
+'use strict';
+const fs=require('node:fs');const path=require('node:path');const root=path.resolve(__dirname,'../..');const read=value=>fs.readFileSync(path.join(root,value),'utf8');
+describe('Mission 25 Part 13E proposal registry ratification',()=>{
+ const migration=read('migrations/128_canonical_job_outcome_proposal_registry.sql'),db=read('src/db.js'),routes=read('src/routes/learning.js');
+ test('pins proposal and current permission into an immutable revision chain',()=>{for(const token of['proposal_consent_id UUID NOT NULL','revision BIGINT NOT NULL','previous_id UUID','proposal_id UUID NOT NULL','proposal_digest CHAR(64) NOT NULL','preview_digest CHAR(64) NOT NULL','canonical_job_outcome_proposal_registry_immutable'])expect(migration).toContain(token);});
+ test('keeps owner impact readable and advisory',()=>{for(const token of['relative planning review','reference for owner review','does not establish one reusable company amount','does not change a business profile, planning value, estimate, price, schedule, job or financial record'])expect(migration).toContain(token);});
+ test('withholds storage and helpers while exposing three guarded entries',()=>{for(const token of['job_outcome_registry_table_withheld','job_outcome_registry_entry_execute','job_outcome_registry_helpers_withheld',"'128_canonical_job_outcome_proposal_registry.sql'"])expect(db).toContain(token);for(const route of["'/job-outcome-proposal-registry/:serviceKey/impact-preview'","'/job-outcome-proposal-registry/:serviceKey'","'/job-outcome-proposal-registry/:serviceKey/versions'"])expect(routes).toContain(route);});
+ test('changes no rendered path and leaves adoption outside this slice',()=>{expect(migration).not.toMatch(/\bUPDATE\s+(canonical_(?:labor|travel|equipment|material|pricing)|organizations|canonical_business)/i);expect(routes).not.toContain('public/');});
+});

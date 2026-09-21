@@ -39,6 +39,7 @@ const {
   surfaceProjection,
 } = require('./canonicalPolaris');
 const scenarios = require('./simulation/scenario-catalog');
+const demoLearningJourney = require('../learning/demoLearningJourney');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -311,6 +312,56 @@ router.get('/command-center', async function (req, res) {
   } catch (error) {
     return commandCenterFailure(req, res, error);
   }
+});
+
+function learningJourneyResponse(record) {
+  return {
+    center: demoLearningJourney.center(record.state, record.revision),
+    jobOutcome: demoLearningJourney.project(record.state, record.revision),
+  };
+}
+
+router.get('/learning-center', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    return res.json({ success: true, data: learningJourneyResponse(record) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.post('/learning-center/actions', express.json({ limit: '40kb' }), async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (!mutationBoundary(req, res, 'learning-journey')) return undefined;
+  if (!exactBody(req.body, ['action', 'details', 'expectedRevision'])) {
+    return res.status(400).json({ success: false, error: { message: 'Check the fictional learning step and try again.' } });
+  }
+  try {
+    const token = commandCenterToken(req, res);
+    const result = await commandCenterRepository.mutate(token, {
+      operation: 'learning_step', expectedRevision: req.body.expectedRevision,
+      learningAction: { action: req.body.action, details: req.body.details },
+      idempotencyKey: req.get('Idempotency-Key'),
+    }, { sourceHash: durableSourceHash(req) });
+    const data = learningJourneyResponse(result.record);
+    data.result = demoLearningJourney.resultFor(result.record.state, req.body.action);
+    return res.status(result.replayed ? 200 : 201).json({ success: true, replayed: result.replayed, data });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.post('/learning-center/reset', express.json({ limit: '4kb' }), async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (!mutationBoundary(req, res, 'learning-journey-reset')) return undefined;
+  if (!exactBody(req.body, ['expectedRevision'])) {
+    return res.status(400).json({ success: false, error: { message: 'Refresh the fictional learning journey before resetting it.' } });
+  }
+  try {
+    const token = commandCenterToken(req, res);
+    const result = await commandCenterRepository.mutate(token, {
+      operation: 'reset', expectedRevision: req.body.expectedRevision,
+      idempotencyKey: req.get('Idempotency-Key'),
+    }, { sourceHash: durableSourceHash(req) });
+    return res.json({ success: true, replayed: result.replayed, data: learningJourneyResponse(result.record) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
 });
 
 router.get('/command-center/operator-targets',async function(req,res){

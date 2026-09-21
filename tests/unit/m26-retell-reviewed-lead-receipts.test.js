@@ -5,7 +5,7 @@ const org = '11111111-1111-4111-8111-111111111111';
 const ids = ['22222222-2222-4222-8222-222222222222',
   '33333333-3333-4333-8333-333333333333',
   '44444444-4444-4444-8444-444444444444'];
-const snapshotId = '55555555-5555-4555-8555-555555555555';
+const snapshotId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const actor = { organizationId: org, actorUserId: '66666666-6666-4666-8666-666666666666',
   actorAccessRole: 'owner', authSessionId: '77777777-7777-4777-8777-777777777777' };
 const window = { actor, snapshotId, startsAt: '2026-08-01T00:00:00.000Z',
@@ -63,6 +63,7 @@ test('microsecond window boundaries do not count an earlier call', async () => {
 });
 
 test('normalizes a valid uppercase snapshot ID and rejects normalized calendar dates', async () => {
+  expect(snapshotId.toUpperCase()).not.toBe(snapshotId);
   const upper = run(source, reviews, { snapshotId: snapshotId.toUpperCase() });
   await expect(upper.result).resolves.toMatchObject({ state: 'reviewed_source_only' });
   expect(upper.query.mock.calls[0][1][4]).toBe(snapshotId);

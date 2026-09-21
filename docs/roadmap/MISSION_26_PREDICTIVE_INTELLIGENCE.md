@@ -63,9 +63,11 @@ Part 3B's [rolling-origin backtest boundary](../architecture/MISSION_26_PART3B_R
 
 Part 3C's [evaluation and calibration gates](../architecture/MISSION_26_PART3C_EVALUATION_GATES.md) are independently accepted and released as an unmounted descriptive-measurement contract. Descriptive error on synthetic inputs cannot claim empirical accuracy, calibrated confidence or production source authorization.
 
-Part 3D's [algorithm identity and promotion governance](../architecture/MISSION_26_PART3D_ALGORITHM_GOVERNANCE.md) is a candidate. The pure identity catalog does not register an executable algorithm, authenticate a comparison or promote/rollback a tenant's active selection.
+Part 3D's [algorithm identity and promotion governance](../architecture/MISSION_26_PART3D_ALGORITHM_GOVERNANCE.md) is independently accepted and released as an unmounted static candidate contract. The pure identity catalog does not register an executable algorithm, authenticate a comparison or promote/rollback a tenant's active selection.
 
 ## Part 4 — four demand and commercial slices
+
+Part 4A's [inbound demand source and forecast boundary](../architecture/MISSION_26_PART4A_DEMAND_SOURCE_AND_FORECAST.md) is being implemented. The first source must preserve Retell-only coverage and cannot treat heuristic service labels, customer addresses or unsaved historical inputs as verified forecasts.
 
 | Slice | Scope |
 | --- | --- |

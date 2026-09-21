@@ -19,11 +19,11 @@ Mission 25 currently has fourteen top-level parts. A part may use bounded slices
 | 7 | Owner Learning Center: source, consent, freshness, conflict and calibration review interface | Released |
 | 8 | Usable import operations: CSV backfill, continuous adapter lifecycle, checkpoints, retention and deletion orchestration | Released |
 | 9 | Travel, routing, mileage and fuel estimate-versus-actual outcomes and calibration | Released — Slices A-F accepted |
-| 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Slices A-C released; D-H independently accepted, release pending |
-| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Slices A-H independently accepted, release pending |
-| 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Slices A-K independently accepted, release pending |
-| 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Slices A-H independently accepted, release pending |
-| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | In progress — Slices A-F independently accepted at their recorded heads; Slice G release and founder verdict pending |
+| 10 | Vehicle and equipment utilization, operating cost, maintenance and downtime outcomes and calibration | Released — Slices A-H accepted |
+| 11 | Materials, inventory, purchasing, vendor cost and waste outcomes and calibration | Released — Slices A-H accepted |
+| 12 | CRM, field-service, project/change-order, communications and external financial outcome reconciliation | Released — Slices A-K accepted |
+| 13 | Cross-source job outcome graph and explicit owner adoption into the owning business-profile or planning workflow | Released — Slices A-H accepted |
+| 14 | Complete demo/paid experience, recovery and migration proof, accessibility/responsive review, independent audit and mission acceptance | Released — Slices A-G accepted; see [final acceptance](../evidence/MISSION_25_PART14G_FINAL_ACCEPTANCE.md) |
 
 ## Frozen slice structure for Parts 9-14
 

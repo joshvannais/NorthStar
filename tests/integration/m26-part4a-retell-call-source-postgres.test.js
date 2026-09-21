@@ -10,7 +10,15 @@ const key = () => crypto.randomUUID();
 
 realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
   let fixture;
-  beforeAll(async () => { fixture = await createDatabaseFixture(); }, 120000);
+  beforeAll(async () => {
+    fixture = await createDatabaseFixture();
+    fixture.retellOwnership = {};
+    for (const tenant of [fixture.org, fixture.otherOrg]) {
+      fixture.retellOwnership[tenant] = (await fixture.ownerPool.query(
+        `INSERT INTO canonical_integration_ownership(organization_id,provider,external_integration_id)
+         VALUES($1,'retell',$2) RETURNING id`, [tenant, 'synthetic-' + key()])).rows[0].id;
+    }
+  }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
   async function capture(actor, requestKey = key()) {
@@ -51,13 +59,21 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     await client.query(
       `INSERT INTO canonical_communications(id,organization_id,operation_id,graph_id,
          customer_id,transcript_id,channel,direction,body,occurred_at)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,'Synthetic call',$9)`,
-      [key(), tenant, operation, graph, customer, transcript, channel, direction, eventAt]);
+       VALUES($1,$2,$3,$4,$5,$6,$7,'inbound','Synthetic call',$8)`,
+      [key(), tenant, operation, graph, customer, transcript, channel, eventAt]);
     await client.query(
       `INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,
          customer_id,status,service_type,job_scope)
        VALUES($1,$2,$3,$4,$5,'lead','general','{}')`,
       [opportunity, tenant, operation, graph, customer]);
+    const profile = fixture.profiles[tenant];
+    await client.query(
+      `INSERT INTO canonical_voice_sessions(organization_id,external_session_id,provider,
+         provider_session_id,integration_ownership_id,business_profile_id,business_profile_version,
+         business_profile_hash,status,direction,canonical_operation_id,completed_at)
+       VALUES($1,$2,'retell',$2,$3,$4,$5,$6,'completed',$7,$8,NOW())`,
+      [tenant, external, fixture.retellOwnership[tenant], profile.businessProfileId,
+        'org-profile-v1', profile.hash, direction, operation]);
     return { transcript, opportunity, external, customer };
   }
 
@@ -117,6 +133,16 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
       [saved.snapshot.id])).rejects.toMatchObject({ code: '23514' });
     const source = saved.snapshot.sources.find(row => row.sourceId === seeded.transcript);
     expect(source).toBeDefined();
+    // The graph communication is always labelled inbound by the current Retell adapter.
+    // Only the linked provider voice session proves call direction for this source.
+    await fixture.ownerPool.query(
+      `UPDATE canonical_voice_sessions SET direction='outbound'
+       WHERE organization_id=$1 AND provider_session_id=$2`, [fixture.org, seeded.external]);
+    expect((await fixture.runtimePool.query(readSql, params)).rows[0].value)
+      .toMatchObject({ stale: true, refreshRequired: true, sources: [] });
+    await fixture.ownerPool.query(
+      `UPDATE canonical_voice_sessions SET direction='inbound'
+       WHERE organization_id=$1 AND provider_session_id=$2`, [fixture.org, seeded.external]);
     await fixture.ownerPool.query('UPDATE canonical_transcripts SET occurred_at=NOW() WHERE id=$1',
       [source.sourceId]);
     const stale = await fixture.runtimePool.query(readSql, params);
@@ -190,7 +216,14 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
       await client.query(`INSERT INTO canonical_opportunities(id,organization_id,operation_id,
           graph_id,customer_id,status,service_type,job_scope)
         SELECT opportunity_id,$1,operation_id,graph_id,customer_id,
-          'lead','general','{}' FROM m26_bulk_calls`, [fixture.org]);
+        'lead','general','{}' FROM m26_bulk_calls`, [fixture.org]);
+      const profile = fixture.profiles[fixture.org];
+      await client.query(`INSERT INTO canonical_voice_sessions(organization_id,external_session_id,
+          provider,provider_session_id,integration_ownership_id,business_profile_id,
+          business_profile_version,business_profile_hash,status,direction,canonical_operation_id,completed_at)
+        SELECT $1,'m26-bulk-'||n,'retell','m26-bulk-'||n,$2,$3,'org-profile-v1',$4,
+          'completed','inbound',operation_id,NOW() FROM m26_bulk_calls`,
+      [fixture.org, fixture.retellOwnership[fixture.org], profile.businessProfileId, profile.hash]);
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
     finally { client.release(); }

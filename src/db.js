@@ -2751,6 +2751,8 @@ const REVIEWED_MIGRATION_TIMEOUT_FILES = new Set(['057_canonical_estimate_decisi
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('136_canonical_forecast_as_of_snapshots.sql');
 // The read-only Part 2D lineage entry also uses the bounded startup lock lane.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('137_canonical_forecast_lineage_current_source.sql');
+// The Part 4A source receipt DDL and privilege checks use the same bounded startup lane.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('138_canonical_forecast_retell_call_source.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

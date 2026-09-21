@@ -26,10 +26,14 @@ RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pu
      AND communication.transcript_id=transcript.id
    JOIN public.canonical_opportunities opportunity ON opportunity.organization_id=operation.organization_id
      AND opportunity.operation_id=operation.id AND opportunity.graph_id=operation.graph_id
+   JOIN public.canonical_voice_sessions voice_session ON voice_session.organization_id=operation.organization_id
+     AND voice_session.canonical_operation_id=operation.id
+     AND voice_session.provider='retell' AND voice_session.provider_session_id=transcript.external_call_id
+     AND voice_session.status='completed' AND voice_session.direction='inbound'
    WHERE operation.organization_id=org AND operation.state='completed'
      AND operation.completed_at<=cutoff AND transcript.source='retell'
      AND transcript.external_call_id IS NOT NULL
-     AND communication.direction='inbound' AND communication.channel='voice_call'
+     AND communication.channel='voice_call'
    ORDER BY transcript.id LIMIT 1001
  ) source
 $$;

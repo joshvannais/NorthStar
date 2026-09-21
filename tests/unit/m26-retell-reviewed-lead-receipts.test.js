@@ -17,9 +17,9 @@ const reviews = { snapshotId, stale: false, sourceSnapshotDigest: source.sourceS
   calls: ids.map((callSourceId, index) => ({ callSourceId, status: 'reviewed',
     disposition: ['new_lead', 'repeat_lead', 'not_lead'][index],
     reviewDigest: 'c'.repeat(64), reviewedAt: '2026-09-02T12:00:00.000000Z' })) };
-const run = (s = source, r = reviews) => {
+const run = (s = source, r = reviews, overrides = {}) => {
   const query = jest.fn(async () => ({ rows: [{ source: s, reviews: r }] }));
-  return { query, result: readReviewedRetellLeadReceipts({ ...window, pool: { query } }) };
+  return { query, result: readReviewedRetellLeadReceipts({ ...window, ...overrides, pool: { query } }) };
 };
 
 test('projects only reviewed distinct first receipts without certifying coverage', async () => {
@@ -27,8 +27,8 @@ test('projects only reviewed distinct first receipts without certifying coverage
   await expect(result).resolves.toMatchObject({ state: 'reviewed_source_only',
     callCount: 3, reviewedDistinctLeadCount: 1, historicalCoverageCertified: false,
     leadReceipts: [{ organizationId: org, leadId: ids[0],
-      firstReceiptAt: '2026-08-01T12:00:00.000Z',
-      reviewedAt: '2026-09-02T12:00:00.000Z' }] });
+      firstReceiptAt: '2026-08-01T12:00:00.000000Z',
+      reviewedAt: '2026-09-02T12:00:00.000000Z' }] });
   expect(query).toHaveBeenCalledTimes(1);
   expect(query.mock.calls[0][0]).toContain('canonical_forecast_retell_call_reviews_read');
   expect(query.mock.calls[0][1]).toEqual([org, actor.actorUserId, 'owner', actor.authSessionId, snapshotId]);
@@ -51,4 +51,22 @@ test('a reviewed empty set remains a source diagnostic, not a complete zero peri
   const { result } = run({ ...source, sources: [] }, { ...reviews, calls: [] });
   await expect(result).resolves.toMatchObject({ state: 'reviewed_source_only',
     callCount: 0, reviewedDistinctLeadCount: 0, historicalCoverageCertified: false });
+});
+
+test('microsecond window boundaries do not count an earlier call', async () => {
+  const earlier = { ...source, sources: [{ ...source.sources[0],
+    eventAt: '2026-08-01T00:00:00.000100Z' }, ...source.sources.slice(1)] };
+  await expect(run(earlier, reviews, {
+    startsAt: '2026-08-01T00:00:00.000500Z',
+  }).result).resolves.toMatchObject({ state: 'reviewed_source_only',
+    callCount: 2, reviewedDistinctLeadCount: 0 });
+});
+
+test('normalizes a valid uppercase snapshot ID and rejects normalized calendar dates', async () => {
+  const upper = run(source, reviews, { snapshotId: snapshotId.toUpperCase() });
+  await expect(upper.result).resolves.toMatchObject({ state: 'reviewed_source_only' });
+  expect(upper.query.mock.calls[0][1][4]).toBe(snapshotId);
+  await expect(run(source, reviews, {
+    startsAt: '2026-02-30T00:00:00.000Z',
+  }).result).resolves.toEqual({ state: 'unavailable', reason: 'invalid_source_window' });
 });

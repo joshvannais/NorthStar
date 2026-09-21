@@ -7,29 +7,34 @@ const READ = `SELECT
  public.canonical_forecast_retell_call_reviews_read($1,$2,$3,$4,$5) reviews`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
-const INSTANT = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}(?:\d{3})?Z$/;
+const INSTANT = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)\.(\d{3})(\d{3})?Z$/;
 
 function time(value) {
-  if (typeof value !== 'string' || !INSTANT.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isSafeInteger(parsed) ? parsed : null;
+  const match = typeof value === 'string' ? INSTANT.exec(value) : null;
+  if (!match) return null;
+  const millisecondInstant = `${match[1]}.${match[2]}Z`;
+  const parsed = Date.parse(millisecondInstant);
+  if (!Number.isSafeInteger(parsed) || new Date(parsed).toISOString() !== millisecondInstant)
+    return null;
+  return BigInt(parsed) * 1000n + BigInt(match[3] || '000');
 }
 
 function unavailable(reason) { return Object.freeze({ state: 'unavailable', reason }); }
 
 async function readReviewedRetellLeadReceipts({ pool, actor, snapshotId, startsAt, endsAt }) {
   const start = time(startsAt), end = time(endsAt);
+  const normalizedSnapshotId = typeof snapshotId === 'string' ? snapshotId.toLowerCase() : snapshotId;
   if (!pool?.query || !actor || !UUID.test(snapshotId) || start === null || end === null ||
-      end <= start || end - start > 35 * 86400000) return unavailable('invalid_source_window');
+      end <= start || end - start > 35n * 86400000000n) return unavailable('invalid_source_window');
   const params = [actor.organizationId, actor.actorUserId, actor.actorAccessRole,
-    actor.authSessionId, snapshotId];
+    actor.authSessionId, normalizedSnapshotId];
   // Both SECURITY DEFINER reads execute inside one statement snapshot and
   // enforce current tenant, actor, session, entitlement and source consent.
   const row = (await pool.query(READ, params)).rows[0];
   const source = row?.source, reviews = row?.reviews;
   const sourceAsOf = time(source?.asOf);
   if (!source || !reviews || source.stale !== false || reviews.stale !== false ||
-      source.id !== snapshotId || reviews.snapshotId !== snapshotId ||
+      source.id !== normalizedSnapshotId || reviews.snapshotId !== normalizedSnapshotId ||
       source.sourceSnapshotDigest !== reviews.sourceSnapshotDigest ||
       !DIGEST.test(source.sourceSnapshotDigest) || !Array.isArray(source.sources) ||
       !Array.isArray(reviews.calls) || source.sources.length !== reviews.calls.length ||
@@ -62,8 +67,8 @@ async function readReviewedRetellLeadReceipts({ pool, actor, snapshotId, startsA
       return unavailable('call_review_incomplete');
     if (review.disposition === 'new_lead') {
       leads.push(Object.freeze({ organizationId: actor.organizationId,
-        leadId: pin.sourceId, firstReceiptAt: new Date(event).toISOString(),
-        reviewedAt: new Date(reviewedAt).toISOString(),
+        leadId: pin.sourceId, firstReceiptAt: pin.eventAt,
+        reviewedAt: review.reviewedAt,
         sourceDigest: pin.digest, state: 'active' }));
     }
   }

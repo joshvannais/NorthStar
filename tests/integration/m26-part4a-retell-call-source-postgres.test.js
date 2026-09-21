@@ -171,7 +171,7 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
       state: 'reviewed_source_only', callCount: 1, reviewedDistinctLeadCount: 1,
       historicalCoverageCertified: false,
       leadReceipts: [{ organizationId: fixture.otherOrg, leadId: first.transcript,
-        firstReceiptAt: '2026-01-10T12:00:00.000Z' }],
+        firstReceiptAt: '2026-01-10T12:00:00.000000Z' }],
     });
     await expect(readReviewedRetellLeadReceipts({ ...args,
       actor: { ...owner, actorAccessRole: null } })).rejects.toMatchObject({ code: '42501' });

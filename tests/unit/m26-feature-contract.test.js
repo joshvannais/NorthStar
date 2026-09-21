@@ -58,6 +58,9 @@ describe('Mission 26 Part 2C feature boundary', () => {
     expect(registeredFeatureDefinition('pipeline.approved_estimate_stock', 'v2')).toBeNull();
     expect(normalizeRegisteredFeatureValue(value({ amount: '0',
       latestSourceRecordedAt: null })).amount).toBe('0');
+    expect(() => normalizeRegisteredFeatureValue(value({ amount: '4',
+      latestSourceRecordedAt: null })))
+      .toThrow('Forecast feature source record time is required.');
     expect(() => normalizeRegisteredFeatureValue(value({ definitionVersion: 'v2' })))
       .toThrow('Forecast feature definition is not registered.');
   });

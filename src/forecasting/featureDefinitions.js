@@ -30,7 +30,18 @@ function normalizeRegisteredFeatureValue(input) {
     error.status = 400;
     throw error;
   }
-  return normalizeFeatureValue(input, definition);
+  const value = normalizeFeatureValue(input, definition);
+  // This stock counts active decision rows. A positive count cannot come from
+  // an empty source set, while an authorized empty snapshot can prove zero.
+  if (definition.derivationKey === 'active_decision_count' &&
+      value.state === 'known' && value.amount !== '0' &&
+      value.latestSourceRecordedAt === null) {
+    const error = new Error('Forecast feature source record time is required.');
+    error.code = 'M26_FEATURE_SOURCE_TIME_REQUIRED';
+    error.status = 400;
+    throw error;
+  }
+  return value;
 }
 
 module.exports = { DEFINITIONS, registeredFeatureDefinition,

@@ -420,5 +420,6 @@ module.exports = {
   EVALUATION_VERSION,
   MAXIMUM_RESULT_ENTRIES,
   evaluateConflictEvidence,
+  hoursForDate,
   workingHoursCoverage,
 };

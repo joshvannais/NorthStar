@@ -29,7 +29,8 @@ function exact(value, keys) {
 }
 
 function dense(values, limit) {
-  if (!Array.isArray(values) || values.length > limit ||
+  if (!Array.isArray(values) || Object.getPrototypeOf(values) !== Array.prototype ||
+      values.length > limit ||
       Reflect.ownKeys(values).length !== values.length + 1) return false;
   for (let index = 0; index < values.length; index += 1) {
     const descriptor = Object.getOwnPropertyDescriptor(values, index);

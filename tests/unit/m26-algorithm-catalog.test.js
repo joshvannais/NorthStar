@@ -64,6 +64,20 @@ describe('Mission 26 Part 3D unmounted algorithm identity catalog', () => {
       .toThrow('Forecast algorithm catalog details are invalid.');
   });
 
+  test('rejects arrays whose inherited mapping or validation methods were replaced', () => {
+    const definitions = [descriptor('baseline.mean')];
+    Object.setPrototypeOf(definitions, { map: () => [] });
+    const badFeature = descriptor('baseline.mean');
+    const featureDigests = ['bad'];
+    Object.setPrototypeOf(featureDigests, { every: () => true,
+      [Symbol.iterator]: function* () { yield 'b'.repeat(64); } });
+    badFeature.featureDefinitionDigests = featureDigests;
+    for (const input of [catalog(definitions), catalog([badFeature])]) {
+      try { buildAlgorithmCatalog(input); throw new Error('accepted forged array'); }
+      catch (error) { expect(error.code).toBe('M26_ALGORITHM_CATALOG_INVALID'); }
+    }
+  });
+
   test('empty catalog is valid but supplies no active model or training data', () => {
     const result = buildAlgorithmCatalog(catalog([]));
     expect(result.definitions).toEqual([]);

@@ -160,7 +160,7 @@ describe('authorized Homepage Refresh contracts', () => {
   });
 
   test('responsive, theme, motion, and install metadata remain explicit without offline claims', async () => {
-    expect(homepage).toContain('href="/assets/favicon.svg"');
+    expect(homepage).toContain('href="/assets/northstar-icon-32.png?v=20260920"');
     expect(homepage).toContain('href="/site.webmanifest"');
     expect(homepage).toMatch(/name=["']theme-color["'][^>]*media=["']\(prefers-color-scheme: light\)["']/i);
     expect(homepage).toMatch(/name=["']theme-color["'][^>]*media=["']\(prefers-color-scheme: dark\)["']/i);
@@ -177,12 +177,20 @@ describe('authorized Homepage Refresh contracts', () => {
       short_name: 'NorthStar',
       start_url: '/',
       scope: '/',
-      icons: [{
-        src: '/assets/logo.png',
-        sizes: '1024x1536',
-        type: 'image/png',
-        purpose: 'any',
-      }],
+      icons: [
+        {
+          src: '/assets/northstar-icon-192.png?v=20260920',
+          sizes: '192x192',
+          type: 'image/png',
+          purpose: 'any',
+        },
+        {
+          src: '/assets/northstar-icon-512.png?v=20260920',
+          sizes: '512x512',
+          type: 'image/png',
+          purpose: 'any',
+        },
+      ],
     });
     expect(JSON.stringify(manifest)).not.toMatch(/offline|service.?worker|background.?sync/i);
 

@@ -142,8 +142,39 @@ function deriveReportingWindow(input) {
   });
 }
 
+function validateReportingWindow(window) {
+  if (!window || typeof window !== 'object' || Array.isArray(window) ||
+      window.version !== VERSION ||
+      typeof window.organizationId !== 'string' || !UUID.test(window.organizationId) ||
+      typeof window.businessProfileId !== 'string' || !UUID.test(window.businessProfileId) ||
+      !Number.isSafeInteger(window.businessProfileVersion) || window.businessProfileVersion < 1 ||
+      typeof window.businessProfileHash !== 'string' || !DIGEST.test(window.businessProfileHash) ||
+      !GRAINS.has(window.grain) || !tokenOrNull(window.serviceKey) ||
+      !['tenant_all', 'profile_area'].includes(window.areaScope) ||
+      (window.areaScope === 'tenant_all' ? window.areaDigest !== null :
+        typeof window.areaDigest !== 'string' || !DIGEST.test(window.areaDigest)) ||
+      !['known', 'unknown'].includes(window.calendarState) ||
+      (window.calendarState === 'known' ?
+        typeof window.calendarDigest !== 'string' || !DIGEST.test(window.calendarDigest) ||
+          !Number.isSafeInteger(window.openMinutes) || window.openMinutes < 0 :
+        window.calendarDigest !== null || window.openMinutes !== null) ||
+      window.openMinutesBasis !== 'opening_local_date' ||
+      !schedulingTime.isValidTimeZone(window.timeZone) ||
+      typeof window.localStartDate !== 'string' ||
+      typeof window.localEndDate !== 'string' ||
+      typeof window.startsAt !== 'string' || typeof window.endsAt !== 'string' ||
+      !Number.isSafeInteger(window.elapsedMinutes) || window.elapsedMinutes <= 0) invalid();
+  if (window.localEndDate !== periodEnd(window.localStartDate, window.grain)) invalid();
+  const start = midnight(window.localStartDate, window.timeZone);
+  const end = midnight(window.localEndDate, window.timeZone);
+  if (window.startsAt !== new Date(start).toISOString() ||
+      window.endsAt !== new Date(end).toISOString() ||
+      window.elapsedMinutes !== (end - start) / 60000) invalid();
+}
+
 function compareReportingWindows(left, right) {
-  if (!left || !right || left.version !== VERSION || right.version !== VERSION) invalid();
+  validateReportingWindow(left);
+  validateReportingWindow(right);
   const reasons = [];
   if (left.organizationId !== right.organizationId) reasons.push('different_tenant');
   if (left.grain !== right.grain) reasons.push('different_grain');
@@ -156,7 +187,8 @@ function compareReportingWindows(left, right) {
     comparableContext: reasons.length === 0,
     reasons: Object.freeze(reasons),
     normalizationRequired: reasons.length === 0 &&
-      (left.openMinutes !== right.openMinutes || left.calendarDigest !== right.calendarDigest),
+      (left.elapsedMinutes !== right.elapsedMinutes ||
+        left.openMinutes !== right.openMinutes || left.calendarDigest !== right.calendarDigest),
   });
 }
 

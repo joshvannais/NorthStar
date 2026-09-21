@@ -64,6 +64,35 @@ describe('Mission 26 Part 2B reporting windows', () => {
       'service_area_unknown');
   });
 
+  test('requires normalization when elapsed exposure differs despite equal open hours', () => {
+    const spring = deriveReportingWindow(input());
+    const ordinary = deriveReportingWindow(input({ localStartDate: '2026-03-09' }));
+    expect(spring.openMinutes).toBe(ordinary.openMinutes);
+    expect(spring.elapsedMinutes).not.toBe(ordinary.elapsedMinutes);
+    expect(compareReportingWindows(spring, ordinary)).toMatchObject({
+      comparableContext: true, normalizationRequired: true, reasons: [],
+    });
+  });
+
+  test('refuses incomplete or inconsistent window records', () => {
+    const valid = deriveReportingWindow(input());
+    const incomplete = { version: valid.version, calendarState: 'known' };
+    expect(() => compareReportingWindows(incomplete, incomplete))
+      .toThrow('Forecast reporting window details are invalid.');
+    for (const change of [
+      { organizationId: undefined },
+      { areaDigest: 'a'.repeat(64) },
+      { openMinutes: null },
+      { openMinutesBasis: 'unknown' },
+      { localEndDate: '2026-03-10' },
+      { elapsedMinutes: 1440 },
+      { startsAt: '2026-03-08T00:00:00.000Z' },
+    ]) {
+      expect(() => compareReportingWindows({ ...valid, ...change }, valid))
+        .toThrow('Forecast reporting window details are invalid.');
+    }
+  });
+
   test('pins configured service area and refuses silent time-zone fallback', () => {
     const west = deriveReportingWindow(input({
       areaScope: 'profile_area',

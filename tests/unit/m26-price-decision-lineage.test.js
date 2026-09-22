@@ -84,3 +84,63 @@ test('guarded reader does not call SQL for a member or accept a mismatched recei
     snapshotId: '99999999-9999-4999-8999-999999999999' }))
     .toEqual({ state: 'unavailable', reason: 'source_identity_mismatch' });
 });
+
+test.each(['id', 'organizationId', 'sourceSnapshotDigest'])(
+  'rejects coercible receipt %s', field => {
+    const source = receipt([event(1)]);
+    source[field] = { toString: () => receipt([event(1)])[field] };
+    expect(() => derivePriceDecisionLineage(source)).toThrow();
+  });
+
+test.each(['estimateId', 'decisionId', 'currency', 'priceBeforeTax', 'digest'])(
+  'rejects coercible event %s', field => {
+    const item = event(1);
+    item[field] = { toString: () => event(1)[field] };
+    expect(() => derivePriceDecisionLineage(receipt([item]))).toThrow();
+  });
+
+test('rejects a coercible predecessor and reader identities', async () => {
+  const item = event(2);
+  item.previousId = { toString: () => first };
+  expect(() => derivePriceDecisionLineage(receipt([event(1), item]))).toThrow();
+  const pool = { query: jest.fn() };
+  const actor = { organizationId: org,
+    actorUserId: '77777777-7777-4777-8777-777777777777',
+    authSessionId: '88888888-8888-4888-8888-888888888888',
+    actorAccessRole: 'owner' };
+  const id = '99999999-9999-4999-8999-999999999999';
+  expect(await readPriceDecisionLineage({ pool, actor,
+    snapshotId: { toString: () => id } })).toMatchObject({ state: 'unavailable' });
+  expect(await readPriceDecisionLineage({ pool,
+    actor: { ...actor, organizationId: { toString: () => org } }, snapshotId: id }))
+    .toMatchObject({ state: 'unavailable' });
+  expect(pool.query).not.toHaveBeenCalled();
+});
+
+test('captures receipt and event data descriptors once before deriving output', () => {
+  const source = receipt([event(1)]);
+  let countReads = 0, actionReads = 0;
+  source.events[0] = new Proxy(source.events[0], {
+    getOwnPropertyDescriptor(target, field) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, field);
+      if (field === 'action') return { ...descriptor,
+        value: actionReads++ === 0 ? 'approve' : 'withdraw' };
+      return descriptor;
+    },
+    get() { throw new Error('Event field reread'); },
+  });
+  const changing = new Proxy(source, {
+    getOwnPropertyDescriptor(target, field) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, field);
+      if (field === 'eventCount') return { ...descriptor,
+        value: countReads++ === 0 ? 1 : 999 };
+      return descriptor;
+    },
+    get() { throw new Error('Receipt field reread'); },
+  });
+  const result = derivePriceDecisionLineage(changing);
+  expect(result.eventCount).toBe(1);
+  expect(result.estimates[0].firstApproval.action).toBe('approve');
+  expect(countReads).toBe(1);
+  expect(actionReads).toBe(1);
+});

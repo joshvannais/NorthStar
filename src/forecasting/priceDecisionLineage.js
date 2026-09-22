@@ -18,14 +18,23 @@ function invalid() {
   throw error;
 }
 
-function exact(value, keys) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      Object.getPrototypeOf(value) !== Object.prototype) return false;
-  const own = Reflect.ownKeys(value);
-  return own.length === keys.length && own.every(key =>
-    typeof key === 'string' && keys.includes(key) &&
-    Object.getOwnPropertyDescriptor(value, key)?.enumerable &&
-    Object.hasOwn(Object.getOwnPropertyDescriptor(value, key), 'value'));
+function fields(value, keys, requireExact = true) {
+  try {
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        Object.getPrototypeOf(value) !== Object.prototype) return null;
+    if (requireExact) {
+      const own = Reflect.ownKeys(value);
+      if (own.length !== keys.length || own.some(key =>
+        typeof key !== 'string' || !keys.includes(key))) return null;
+    }
+    const captured = {};
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) return null;
+      captured[key] = descriptor.value;
+    }
+    return captured;
+  } catch { return null; }
 }
 
 function instant(value) {
@@ -35,13 +44,25 @@ function instant(value) {
 }
 
 function dense(value) {
-  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype ||
-      value.length > 1000 || Reflect.ownKeys(value).length !== value.length + 1) return false;
-  return value.every((_, index) => {
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
-    return descriptor?.enumerable && Object.hasOwn(descriptor, 'value');
-  });
+  try {
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return null;
+    const length = Object.getOwnPropertyDescriptor(value, 'length')?.value;
+    if (!Number.isSafeInteger(length) || length < 0 || length > 1000 ||
+        Reflect.ownKeys(value).length !== length + 1) return null;
+    const captured = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) return null;
+      captured.push(descriptor.value);
+    }
+    return captured;
+  } catch { return null; }
 }
+
+const uuid = value => typeof value === 'string' && UUID.test(value);
+const digest = value => typeof value === 'string' && DIGEST.test(value);
+const price = value => typeof value === 'string' && PRICE.test(value);
+const currency = value => typeof value === 'string' && /^[A-Z]{3}$/.test(value);
 
 function freeze(value) {
   if (value && typeof value === 'object') {
@@ -52,28 +73,31 @@ function freeze(value) {
 }
 
 function derivePriceDecisionLineage(receipt) {
-  if (!exact(receipt, RECEIPT_KEYS) || !UUID.test(receipt.id) ||
-      receipt.version !== 'm26-price-event-source-v1' ||
-      !UUID.test(receipt.organizationId) || !instant(receipt.asOf) ||
-      receipt.purposeKey !== 'forecast_approved_price_flow' ||
-      receipt.targetKey !== 'revenue.approved_price_flow' ||
-      !dense(receipt.events) || receipt.eventCount !== receipt.events.length ||
-      !DIGEST.test(receipt.sourceSnapshotDigest) ||
-      typeof receipt.boundary !== 'string') invalid();
+  const source = fields(receipt, RECEIPT_KEYS);
+  const events = dense(source?.events);
+  if (!source || !uuid(source.id) ||
+      source.version !== 'm26-price-event-source-v1' ||
+      !uuid(source.organizationId) || !instant(source.asOf) ||
+      source.purposeKey !== 'forecast_approved_price_flow' ||
+      source.targetKey !== 'revenue.approved_price_flow' ||
+      !events || source.eventCount !== events.length ||
+      !digest(source.sourceSnapshotDigest) ||
+      typeof source.boundary !== 'string') invalid();
 
   const estimates = new Map();
   const decisionIds = new Set();
-  for (const event of receipt.events) {
-    if (!exact(event, EVENT_KEYS) || !UUID.test(event.estimateId) ||
-        !UUID.test(event.decisionId) || decisionIds.has(event.decisionId) ||
+  for (const rawEvent of events) {
+    const event = fields(rawEvent, EVENT_KEYS);
+    if (!event || !uuid(event.estimateId) ||
+        !uuid(event.decisionId) || decisionIds.has(event.decisionId) ||
         !Number.isSafeInteger(event.revision) || event.revision < 1 ||
         event.revision > 10000 ||
-        !(event.previousId === null || UUID.test(event.previousId)) ||
+        !(event.previousId === null || uuid(event.previousId)) ||
         !['approve', 'withdraw'].includes(event.action) ||
-        !/^[A-Z]{3}$/.test(event.currency) ||
-        !instant(event.recordedAt) || event.recordedAt > receipt.asOf ||
-        !DIGEST.test(event.digest) ||
-        (event.action === 'approve' ? !PRICE.test(event.priceBeforeTax) :
+        !currency(event.currency) ||
+        !instant(event.recordedAt) || event.recordedAt > source.asOf ||
+        !digest(event.digest) ||
+        (event.action === 'approve' ? !price(event.priceBeforeTax) :
           event.priceBeforeTax !== null)) invalid();
     decisionIds.add(event.decisionId);
     const prior = estimates.get(event.estimateId);
@@ -102,10 +126,10 @@ function derivePriceDecisionLineage(receipt) {
   const rows = [...estimates.values()].map(row => ({
     ...row, currentState: row.latestDecision.action === 'approve' ? 'approved' : 'withdrawn',
   }));
-  return freeze({ version: VERSION, organizationId: receipt.organizationId,
-    asOf: receipt.asOf, sourceSnapshotId: receipt.id,
-    sourceSnapshotDigest: receipt.sourceSnapshotDigest,
-    eventCount: receipt.eventCount, estimateCount: rows.length,
+  return freeze({ version: VERSION, organizationId: source.organizationId,
+    asOf: source.asOf, sourceSnapshotId: source.id,
+    sourceSnapshotDigest: source.sourceSnapshotDigest,
+    eventCount: source.eventCount, estimateCount: rows.length,
     estimates: rows, historicalOnly: true, sourceAuthenticated: false,
     forecastIssued: false });
 }
@@ -113,28 +137,32 @@ function derivePriceDecisionLineage(receipt) {
 function unavailable(reason) { return Object.freeze({ state: 'unavailable', reason }); }
 
 async function readPriceDecisionLineage({ pool, actor, snapshotId }) {
-  if (!pool?.query || !actor || !UUID.test(snapshotId) ||
-      !UUID.test(actor.organizationId) || !UUID.test(actor.actorUserId) ||
-      !UUID.test(actor.authSessionId) ||
-      !['owner', 'admin'].includes(actor.actorAccessRole)) {
+  const identity = fields(actor, ['organizationId', 'actorUserId',
+    'authSessionId', 'actorAccessRole'], false);
+  const query = pool?.query;
+  if (typeof query !== 'function' || !identity || !uuid(snapshotId) ||
+      !uuid(identity.organizationId) || !uuid(identity.actorUserId) ||
+      !uuid(identity.authSessionId) ||
+      !['owner', 'admin'].includes(identity.actorAccessRole)) {
     return unavailable('invalid_source_request');
   }
   // The SECURITY DEFINER read checks current membership, session, tenant and
   // paid access. The returned receipt is historical; it may no longer be current.
-  const result = await pool.query(
+  const result = await query.call(pool,
     'SELECT public.canonical_forecast_price_event_snapshot_read($1,$2,$3,$4,$5) source',
-    [actor.organizationId, actor.actorUserId, actor.actorAccessRole,
-      actor.authSessionId, snapshotId]);
+    [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+      identity.authSessionId, snapshotId]);
   const source = result.rows[0]?.source;
   if (!source) return unavailable('source_unavailable');
-  if (source.id !== snapshotId || source.organizationId !== actor.organizationId)
-    return unavailable('source_identity_mismatch');
   let lineage;
   try { lineage = derivePriceDecisionLineage(source); }
   catch (error) {
     if (error.code === 'M26_PRICE_LINEAGE_INVALID') return unavailable('source_projection_invalid');
     throw error;
   }
+  if (lineage.sourceSnapshotId !== snapshotId ||
+      lineage.organizationId !== identity.organizationId)
+    return unavailable('source_identity_mismatch');
   return Object.freeze({ state: 'historical_source_only', lineage,
     historicalSourceReadAuthorized: true, currentnessVerified: false,
     forecastIssued: false });

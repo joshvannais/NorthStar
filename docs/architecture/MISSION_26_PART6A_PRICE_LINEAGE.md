@@ -1,0 +1,7 @@
+# Mission 26 Part 6A — approved-price event lineage
+
+The bounded Mission 24 event receipt now has an internal lineage interpreter. For each estimate it identifies the first approval, latest human decision, amendment count, withdrawal count and current approved/withdrawn state. It verifies consecutive revisions, exact predecessor IDs, nondecreasing server-recorded times, one currency per estimate, event identity, amount shape and the source cutoff. A malformed or partial chain fails closed. It never edits the sealed decision ledger.
+
+The pure interpreter cannot authenticate a caller-supplied receipt and explicitly returns `sourceAuthenticated: false`. The internal reader invokes the guarded PostgreSQL snapshot read, which checks current tenant, owner/admin role, session and paid access, then interprets the returned receipt. Its result is **historical source only**: currentness is unverified and no forecast has been issued. Earlier receipts remain unchanged after later amendments or withdrawals.
+
+Withdrawal does not silently erase a historical first approval or become a negative price. This slice does not decide net-flow policy, establish a booked-work link, sum mixed currencies, calculate future price flow, register a model, or show a customer-facing number. Those remain Part 6A/12A acceptance work. Synthetic unit and disposable PostgreSQL tests exercise lineage and guarded read; live tenant prediction quality remains unavailable.

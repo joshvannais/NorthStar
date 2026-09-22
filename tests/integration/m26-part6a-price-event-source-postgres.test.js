@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { readPriceDecisionLineage } = require('../../src/forecasting/priceDecisionLineage');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -95,6 +96,18 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
       .toEqual([firstId, secondId, withdrawalId]);
     expect(withdrawn.snapshot.events[2].priceBeforeTax).toBeNull();
     expect(withdrawn.snapshot.sourceSnapshotDigest).not.toBe(second.snapshot.sourceSnapshotDigest);
+    const authorized = await readPriceDecisionLineage({ pool: fixture.runtimePool,
+      actor: fixture.actors.owner, snapshotId: withdrawn.snapshot.id });
+    expect(authorized).toMatchObject({ state: 'historical_source_only',
+      historicalSourceReadAuthorized: true, currentnessVerified: false,
+      forecastIssued: false, lineage: { sourceAuthenticated: false,
+        estimates: [expect.objectContaining({ currentState: 'withdrawn',
+          amendmentCount: 1, withdrawalCount: 1,
+          firstApproval: expect.objectContaining({ priceBeforeTax: '500.00' }) })] } });
+    const earlier = await readPriceDecisionLineage({ pool: fixture.runtimePool,
+      actor: fixture.actors.owner, snapshotId: first.snapshot.id });
+    expect(earlier.lineage.estimates[0]).toMatchObject({ currentState: 'approved',
+      amendmentCount: 0, withdrawalCount: 0 });
     const replay = await capture(fixture.actors.owner, requestKey);
     expect(replay).toEqual({ snapshot: empty.snapshot, replayed: true });
     expect(first.snapshot.events).toHaveLength(1);

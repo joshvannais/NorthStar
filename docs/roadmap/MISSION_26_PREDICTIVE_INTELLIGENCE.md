@@ -220,6 +220,8 @@ Part 10A has an [unmounted weekly/monthly/quarterly timeline projection prerequi
 
 Part 10B has a [monthly KPI coherence gate](../architecture/MISSION_26_PART10B_MONTHLY_KPI_GATE.md). The six cards and graphs require one authenticated run manifest, compatible source and calculation bases, and explicit unavailable states; no numeric monthly KPI is issued by this prerequisite and final Part 10B acceptance remains open.
 
+Part 10C has an [unmounted supplied drilldown prerequisite](../architecture/MISSION_26_PART10C_DRILLDOWN_POSITION.md) for coverage, uncertainty tokens, exact point deltas and supplied-outcome error. It does not prove source authority, cause attribution or calibration, and final Part 10C acceptance remains open.
+
 ## Part 11 — four forecast-governance and handoff slices
 
 | Slice | Scope |

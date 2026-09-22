@@ -1448,6 +1448,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_event_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_event_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -2364,6 +2367,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_event_snapshot_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_event_snapshot_projection(public.canonical_forecast_price_event_snapshots)','EXECUTE')
        )) AS price_event_snapshot_helpers_withheld,
+       (to_regprocedure('public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+         has_function_privilege($1,'public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid)','EXECUTE')) AS price_event_currentness_read_allowed,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -2767,6 +2772,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||
+      !runtimePrivileges.price_event_currentness_read_allowed ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||
@@ -2833,6 +2839,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('140_canonical_forecast_retell_source_conse
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('141_canonical_forecast_retell_scan_inputs.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('142_canonical_forecast_retell_review_time.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('143_canonical_forecast_price_event_snapshots.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('144_canonical_forecast_price_event_currentness.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

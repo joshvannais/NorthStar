@@ -1,0 +1,7 @@
+# Mission 26 Part 6A — approved-price source currentness
+
+An immutable approved-price event receipt records what was visible at capture. A later Mission 24 amendment, approval or withdrawal must not rewrite it. The guarded comparison in migration 144 reads the historical receipt under **current** paid owner/admin, session and tenant authority, then compares its bounded full event array with the tenant-visible current event array in one serializable transaction. It returns `current` or `stale`, event counts and event-content digests. It returns no raw price or customer detail. A newer check time alone does not make unchanged evidence stale.
+
+The comparison retains the source's 1,000-event, 256-estimate and 256-KiB bounds. Oversize current history fails closed. A missing or wrong-tenant receipt returns unavailable; lost account authority denies the read. It does not recompute a price, issue a forecast, remove an old receipt, or authorize a new commercial decision. Mission 26 still needs forecast-run storage and display invalidation to make this currentness signal affect a saved forecast.
+
+Disposable PostgreSQL tests cover unchanged empty and populated receipts, later approval, amendment and withdrawal, serializable enforcement, nullable-role denial and retained historical lineage. Real tenant coverage, forecasting accuracy, provider evidence and physical-device review remain separate.

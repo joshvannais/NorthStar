@@ -181,6 +181,8 @@ those conditions. Part 7 acceptance and its paid/demo visual journey remain open
 
 Part 8A has an [unmounted material demand position prerequisite](../architecture/MISSION_26_PART8A_MATERIAL_DEMAND_POSITION.md). It groups bounded caller-supplied planned quantities by exact material, location, unit and required time, but cannot verify approved-plan coverage, inventory, future receipts, reorder timing or stockout risk. Part 8A and Part 8 acceptance remain open.
 
+Part 8B has an [unmounted claimed asset-meter position prerequisite](../architecture/MISSION_26_PART8B_ASSET_METER_POSITION.md). It can add bounded claimed operating hours to a matching hours meter and flag when the projected reading reaches a claimed absolute threshold. Asset/meter history, full approved-job coverage, maintenance due, downtime probability and final Part 8B acceptance remain open.
+
 ## Part 9 — five uncertainty, scenario and sensitivity slices
 
 | Slice | Scope |

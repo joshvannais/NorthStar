@@ -235,6 +235,8 @@ Part 10D has an [owner alert, advice and export gate](../architecture/MISSION_26
 
 Part 11A has an [unmounted forecast settings contract](../architecture/MISSION_26_PART11A_FORECAST_SETTINGS_CONTRACT.md) with a disabled system default, explicit owner-reviewed target/horizon preferences, immutable candidate revision linkage and mandatory human review. It grants no source, calibration, actor or persistence authority, and final Part 11A acceptance remains open.
 
+Part 11B has an [unmounted forecast run receipt prerequisite](../architecture/MISSION_26_PART11B_FORECAST_RUN_RECEIPT.md) that pins supplied input/result identities and distinguishes reproduced receipts, changed inputs and result mismatches without rewriting an earlier run. It does not execute or persist a forecast, authenticate its pins or close final Part 11B acceptance.
+
 ## Part 12 — six mission-acceptance slices
 
 | Slice | Scope |

@@ -121,7 +121,7 @@ function normalizeForecastRunReceipt(input) {
 function compareForecastRuns(leftInput, rightInput) {
   const left = normalizeForecastRunReceipt(leftInput);
   const right = normalizeForecastRunReceipt(rightInput);
-  if (left.organizationId !== right.organizationId) invalid();
+  if (left.organizationId !== right.organizationId || left.id === right.id) invalid();
   const state = left.inputDigest !== right.inputDigest ? 'input_changed' :
     left.resultDigest === right.resultDigest ? 'reproduced' : 'result_mismatch';
   const result = { version: VERSION, leftRunId: left.id, rightRunId: right.id,

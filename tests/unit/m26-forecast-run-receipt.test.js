@@ -41,6 +41,16 @@ test('same frozen inputs and outputs reproduce despite new run identity and crea
     sameInputs: true, sameResults: true });
 });
 
+test('one run identity cannot prove its own rerun or name conflicting receipts', () => {
+  const first = run(0);
+  expect(() => compare(first, first)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_RUN_RECEIPT_INVALID' }));
+  const conflicting = run(0);
+  conflicting.outputs[0].outputDigest = '3'.repeat(64);
+  expect(() => compare(first, conflicting)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_RUN_RECEIPT_INVALID' }));
+});
+
 test('same inputs with changed output is a result mismatch, not a reproduced run', () => {
   const left = run(0), right = run(1);
   right.outputs[0].outputDigest = '3'.repeat(64);

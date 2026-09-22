@@ -41,6 +41,7 @@ function instant(value) {
   return typeof value === 'string' && INSTANT.test(value) &&
     Number.isSafeInteger(Date.parse(value)) && new Date(value).toISOString() === value;
 }
+function digest(value) { return typeof value === 'string' && DIGEST.test(value); }
 function count(value) { return Number.isSafeInteger(value) && value >= 0 && value <= MAX_COUNT; }
 function unavailable(base, reason) {
   return Object.freeze({ ...base, state: 'unavailable', reason, observedRate: null,
@@ -53,7 +54,7 @@ function describeTransitionRate(input) {
       typeof input.organizationId !== 'string' || !UUID.test(input.organizationId) ||
       input.organizationId !== input.organizationId.toLowerCase() ||
       !TARGETS.has(input.targetKey) || !instant(input.asOf) ||
-      !DIGEST.test(input.sourceSnapshotDigest) || !dense(input.cohorts)) invalid();
+      !digest(input.sourceSnapshotDigest) || !dense(input.cohorts)) invalid();
   try { validateReportingWindow(input.reportingWindow); }
   catch (_error) { invalid(); }
   const reference = input.reportingWindow;
@@ -71,8 +72,8 @@ function describeTransitionRate(input) {
       'outcomeDigest', 'state', 'eligibleCount', 'transitionedCount', 'unresolvedCount']) ||
         cohort.targetKey !== input.targetKey ||
         !instant(cohort.freezeAt) || !instant(cohort.sourceRecordedThrough) ||
-        !DIGEST.test(cohort.cohortDigest) ||
-        !(cohort.outcomeDigest === null || DIGEST.test(cohort.outcomeDigest)) ||
+        !digest(cohort.cohortDigest) ||
+        !(cohort.outcomeDigest === null || digest(cohort.outcomeDigest)) ||
         !['complete', 'incomplete', 'revoked'].includes(cohort.state) ||
         !count(cohort.eligibleCount) || !count(cohort.transitionedCount) ||
         !count(cohort.unresolvedCount) ||

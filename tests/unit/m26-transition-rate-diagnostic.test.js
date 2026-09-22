@@ -88,3 +88,16 @@ test('rejects future leakage, duplicate windows and impossible transitions', () 
       .toThrow(expect.objectContaining({ code: 'M26_TRANSITION_COHORT_INVALID' }));
   }
 });
+
+test('never coerces digest objects into authenticated-looking strings', () => {
+  const masquerade = () => ({ toString: () => 'a'.repeat(64) });
+  for (const changes of [
+    { sourceSnapshotDigest: masquerade() },
+    { cohorts: [cohort('2026-09-17', 2, 1, { cohortDigest: masquerade() }),
+      cohort('2026-09-18', 2, 1, { cohortDigest: masquerade() })] },
+    { cohorts: [cohort('2026-09-17', 2, 1, { outcomeDigest: masquerade() })] },
+  ]) {
+    expect(() => describeTransitionRate(input(changes)))
+      .toThrow(expect.objectContaining({ code: 'M26_TRANSITION_COHORT_INVALID' }));
+  }
+});

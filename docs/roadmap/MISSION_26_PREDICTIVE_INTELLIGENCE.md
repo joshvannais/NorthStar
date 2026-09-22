@@ -239,6 +239,8 @@ Part 11B has an [unmounted forecast run receipt prerequisite](../architecture/MI
 
 Part 11C has an [unmounted saved-run currentness prerequisite](../architecture/MISSION_26_PART11C_RUN_CURRENTNESS_PREREQUISITE.md) that conservatively withholds current advice after supplied correction, revocation, deletion, retention or algorithm-version changes. It does not authenticate those states, mount saved-run propagation or close final Part 11C acceptance.
 
+Part 11D has a [reviewed handoff gate](../architecture/MISSION_26_PART11D_REVIEWED_HANDOFF_GATE.md) that assigns action decisions to the owning Mission 20, 22, 24, 27, 28 or 32 workflow. It creates no handoff endpoint or cross-mission mutation, and final Part 11D and Part 11 acceptance remain open.
+
 ## Part 12 — six mission-acceptance slices
 
 | Slice | Scope |

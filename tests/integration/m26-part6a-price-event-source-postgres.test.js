@@ -105,14 +105,35 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
 
   test('denies member, cross-tenant and direct runtime source access', async () => {
     await expect(capture(fixture.actors.member)).rejects.toMatchObject({ code: '42501' });
+    await expect(capture({ ...fixture.actors.member, actorAccessRole: null }))
+      .rejects.toMatchObject({ code: '42501' });
     await expect(capture({ ...fixture.actors.owner, csrfToken: 'invalid-csrf' }))
       .rejects.toMatchObject({ code: '42501' });
-    const saved = await capture();
+    const savedKey = key();
+    const saved = await capture(fixture.actors.owner, savedKey);
     const readSql = 'SELECT public.canonical_forecast_price_event_snapshot_read($1,$2,$3,$4,$5) value';
     const owner = fixture.actors.owner;
     const read = await fixture.runtimePool.query(readSql,
       [fixture.org, owner.actorUserId, owner.actorAccessRole, owner.authSessionId, saved.snapshot.id]);
     expect(read.rows[0].value.sourceSnapshotDigest).toBe(saved.snapshot.sourceSnapshotDigest);
+    const member = fixture.actors.member;
+    await expect(fixture.runtimePool.query(readSql,
+      [fixture.org, member.actorUserId, null, member.authSessionId, saved.snapshot.id]))
+      .rejects.toMatchObject({ code: '42501' });
+    await fixture.ownerPool.query(
+      "UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND user_id=$2",
+      [fixture.org, owner.actorUserId]);
+    try {
+      await expect(capture({ ...owner, actorAccessRole: null }, savedKey))
+        .rejects.toMatchObject({ code: '42501' });
+      await expect(fixture.runtimePool.query(readSql,
+        [fixture.org, owner.actorUserId, null, owner.authSessionId, saved.snapshot.id]))
+        .rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await fixture.ownerPool.query(
+        "UPDATE organization_memberships SET role='owner' WHERE organization_id=$1 AND user_id=$2",
+        [fixture.org, owner.actorUserId]);
+    }
     const other = fixture.actors.otherOwner;
     const otherRead = await fixture.runtimePool.query(readSql,
       [fixture.otherOrg, other.actorUserId, other.actorAccessRole,

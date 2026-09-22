@@ -71,7 +71,7 @@ BEGIN
  SELECT role INTO actual_role FROM public.organization_memberships
   WHERE organization_id=NEW.organization_id AND id=NEW.membership_id
     AND user_id=NEW.actor_user_id AND status='active';
- IF actual_role NOT IN ('owner','admin') THEN
+ IF actual_role IS NULL OR actual_role NOT IN ('owner','admin') THEN
    RAISE EXCEPTION 'Forecast price-event access restricted' USING ERRCODE='42501';END IF;
  PERFORM public.canonical_field_execution_actor_authority(
    NEW.organization_id,NEW.actor_user_id,actual_role,NEW.auth_session_id,NULL,FALSE);
@@ -107,7 +107,7 @@ DECLARE authority JSONB;old public.canonical_forecast_price_event_snapshots%ROWT
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN
   RAISE EXCEPTION 'Serializable required' USING ERRCODE='25001';END IF;
- IF role_value NOT IN ('owner','admin') THEN
+ IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
   RAISE EXCEPTION 'Forecast price-event access restricted' USING ERRCODE='42501';END IF;
  PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Subscription unavailable' USING ERRCODE='42501';END IF;
@@ -154,7 +154,7 @@ CREATE FUNCTION public.canonical_forecast_price_event_snapshot_read(
 RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE selected public.canonical_forecast_price_event_snapshots%ROWTYPE;
 BEGIN
- IF role_value NOT IN ('owner','admin') THEN
+ IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
   RAISE EXCEPTION 'Forecast price-event access restricted' USING ERRCODE='42501';END IF;
  PERFORM public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,NULL,FALSE);
  PERFORM 1 FROM public.subscriptions subscription

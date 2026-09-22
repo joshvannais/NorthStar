@@ -64,7 +64,7 @@ function summarizeRevenueFlowPosition(input) {
       input.coverage.recordedThrough > input.asOf ||
       !dense(input.records)) invalid();
 
-  const identities = new Set(), approvalIds = new Set(), bookingIds = new Set();
+  const identities = new Set(), bookingIds = new Set(), decisionOwners = new Map();
   let approvedCents = 0n, bookedCents = 0n, approvedCount = 0, bookedCount = 0;
   let approvalProblem = null, bookingProblem = null;
   for (const record of input.records) {
@@ -83,8 +83,8 @@ function summarizeRevenueFlowPosition(input) {
       approval.at > approval.recordedAt || approval.recordedAt > input.asOf ||
       typeof approval.price !== 'string' || !MONEY.test(approval.price) ||
       !currency(approval.currency))) invalid();
-    if (approval && approvalIds.has(approval.decisionId)) invalid();
-    if (approval) approvalIds.add(approval.decisionId);
+    if (approval && decisionOwners.has(approval.decisionId)) invalid();
+    if (approval) decisionOwners.set(approval.decisionId, record.estimateId);
     const booking = record.booking;
     if (booking !== null && (!exact(booking, ['bookingId', 'at', 'recordedAt',
       'priceDecisionId', 'effectivePrice', 'linkState']) || !uuid(booking.bookingId) ||
@@ -106,6 +106,11 @@ function summarizeRevenueFlowPosition(input) {
          approval.recordedAt !== effective.recordedAt ||
          cents(approval.price) !== cents(effective.price) ||
          approval.currency !== effective.currency)) invalid();
+    if (effective) {
+      const owner = decisionOwners.get(effective.decisionId);
+      if (owner !== undefined && owner !== record.estimateId) invalid();
+      decisionOwners.set(effective.decisionId, record.estimateId);
+    }
 
     if (record.approvalState === 'unknown') approvalProblem ||= 'unresolved_approval';
     if (approval && approval.at >= input.window.startsAt &&

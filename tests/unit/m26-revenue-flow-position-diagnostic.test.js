@@ -106,6 +106,16 @@ test('malformed, repeated, later, or over-bound records fail closed', () => {
     estimateId: estimateB, approval: approval({ decisionId: estimateB }),
   })]))).toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));
   expect(() => summarizeRevenueFlowPosition(input([record({
+    booking: booking({ priceDecisionId: estimateB,
+      effectivePrice: { ...booking().effectivePrice, decisionId: estimateB },
+    }),
+  }), record({ estimateId: estimateB,
+    approval: approval({ decisionId: estimateB }),
+    booking: booking({ bookingId: estimateB, priceDecisionId: estimateB,
+      effectivePrice: { ...booking().effectivePrice, decisionId: estimateB },
+    }),
+  })]))).toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));
+  expect(() => summarizeRevenueFlowPosition(input([record({
     approval: approval({ recordedAt: '2026-10-09T00:00:00.000Z' }) })])))
     .toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));
   expect(() => summarizeRevenueFlowPosition(input([record({

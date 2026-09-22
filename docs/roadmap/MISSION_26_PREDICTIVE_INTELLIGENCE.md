@@ -201,6 +201,8 @@ Part 9A has an [unmounted deterministic baseline reproducibility prerequisite](.
 
 Part 9B's [calibrated-range boundary](../architecture/MISSION_26_PART9B_CALIBRATED_RANGE_BOUNDARY.md) identifies the source, complete saved-run inventory, held-out outcomes, quantile policy and evaluation evidence required before P10/P50/P90 can be issued. Current descriptive evaluation cannot establish calibration, so final Part 9B acceptance remains open.
 
+Part 9C has an [unmounted named open-pipeline scenario prerequisite](../architecture/MISSION_26_PART9C_NAMED_SCENARIO_CANDIDATE.md). It attributes per-estimate adverse/base/favorable assumption weights and reuses Part 6B arithmetic; claimed provenance and source coverage are not authenticated, no forecast is issued, and final Part 9C acceptance remains open.
+
 ## Part 10 — four Forecast Command Center slices
 
 | Slice | Scope |

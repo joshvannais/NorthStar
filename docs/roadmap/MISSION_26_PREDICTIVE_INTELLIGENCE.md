@@ -179,6 +179,8 @@ those conditions. Part 7 acceptance and its paid/demo visual journey remain open
 | C | Route load, mileage, fuel or energy use and logistics-capacity forecasts. |
 | D | Paid and isolated-demo resource-risk UI, explanation, recovery and independent Part 8 acceptance. |
 
+Part 8A has an [unmounted material demand position prerequisite](../architecture/MISSION_26_PART8A_MATERIAL_DEMAND_POSITION.md). It groups bounded caller-supplied planned quantities by exact material, location, unit and required time, but cannot verify approved-plan coverage, inventory, future receipts, reorder timing or stockout risk. Part 8A and Part 8 acceptance remain open.
+
 ## Part 9 — five uncertainty, scenario and sensitivity slices
 
 | Slice | Scope |

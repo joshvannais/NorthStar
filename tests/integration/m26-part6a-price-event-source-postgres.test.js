@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { readPriceDecisionLineage } = require('../../src/forecasting/priceDecisionLineage');
 const { readGuardedApprovedPriceFlow } =
@@ -235,5 +236,45 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
       actor: fixture.actors.member }))
       .toEqual({ state: 'unavailable', reason: 'invalid_source_request',
         forecastIssued: false });
+  }, 120000);
+
+  test('mounted paid price-history route preserves session, tenant, currentness and privacy', async () => {
+    const route = '/api/v1/forecast/price-history/snapshots';
+    const owner = fixture.actors.owner;
+    expect((await request(fixture.app).post(route)
+      .set('Idempotency-Key', key()).send({})).status).toBe(401);
+    expect((await request(fixture.app).post(route)
+      .set(fixture.actors.member.session.headers)
+      .set('Idempotency-Key', key()).send({})).status).toBe(403);
+    expect((await request(fixture.app).post(route)
+      .set('Cookie', owner.session.headers.Cookie)
+      .set('Idempotency-Key', key()).send({})).status).toBe(403);
+    const captured = await request(fixture.app).post(route)
+      .set(owner.session.headers).set('Idempotency-Key', key()).send({});
+    expect(captured.status).toBe(201);
+    expect(captured.body.data).toMatchObject({ state: 'historical_source_only',
+      forecastIssued: false, bookedWorkMeasured: false,
+      earnedRevenueMeasured: false, collectedCashMeasured: false });
+    expect(captured.body.data.events).toBeUndefined();
+    const path = `${route}/${captured.body.data.snapshotId}/approved-flow`;
+    const query = { startsAt: '2020-01-01T00:00:00.000000Z',
+      endsAt: captured.body.data.asOf, currency: 'USD' };
+    const current = await request(fixture.app).get(path)
+      .set('Cookie', owner.session.headers.Cookie).query(query);
+    expect(current.status).toBe(200);
+    expect(current.body.data).toMatchObject({ state: 'current_historical_source_only',
+      forecastIssued: false, historicalOnly: true,
+      position: { state: 'descriptive_only' } });
+    const other = await request(fixture.app).get(path)
+      .set('Cookie', fixture.actors.otherOwner.session.headers.Cookie).query(query);
+    expect(other.status).toBe(200);
+    expect(other.body.data).toMatchObject({ state: 'unavailable' });
+    const estimateId = await estimate();
+    await decision(estimateId, 'approve', 1);
+    const stale = await request(fixture.app).get(path)
+      .set('Cookie', owner.session.headers.Cookie).query(query);
+    expect(stale.status).toBe(200);
+    expect(stale.body.data).toEqual({ state: 'unavailable',
+      reason: 'source_changed', forecastIssued: false });
   }, 120000);
 });

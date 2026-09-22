@@ -67,6 +67,9 @@ function getLimitConfig(group, plan = 'starter') {
     // public API budget or surfacing background 429 errors in the browser.
     'product-telemetry': { starter: 1000, professional: 1000, enterprise: 1000 },
     'internal-api': { starter: 1000, professional: 1000, enterprise: 1000 },
+    // Creating an immutable forecast source receipt is costlier than reading
+    // one. This is an availability limit, not financial or source authority.
+    'forecast-source-capture': { default: 4, window: 60 * 60 * 1000 },
     'auth': { default: 5, window: 15 * 60 * 1000 }, // 5 attempts per 15 min
     'auth-total': { default: 20, window: 15 * 60 * 1000 } // 20 total per 15 min
   };
@@ -74,7 +77,7 @@ function getLimitConfig(group, plan = 'starter') {
   const config = configs[group];
   if (!config) return { limit: 100, window: 60000 };
 
-  if (group === 'auth' || group === 'auth-total') {
+  if (group === 'auth' || group === 'auth-total' || group === 'forecast-source-capture') {
     return { limit: config.default, window: config.window };
   }
 
@@ -177,7 +180,9 @@ function rateLimit(group, getKey) {
         error: {
           code: 'rate_limited',
           message: `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
-          details: { retryAfterSeconds: retryAfter, limit: config.limit, window: '1m' }
+          details: { retryAfterSeconds: retryAfter, limit: config.limit,
+            window: config.window % 3600000 === 0
+              ? `${config.window / 3600000}h` : `${config.window / 60000}m` }
         }
       });
     }

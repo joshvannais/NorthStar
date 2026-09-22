@@ -107,6 +107,8 @@ Part 5B's [guarded operating-window bridge](../architecture/MISSION_26_PART5B_GU
 
 The guarded availability snapshot retains bounded Mission 22 worker skill keys and service associations from the same tenant snapshot. These are assigned records, not verified certifications or job-specific qualification. Mission 23 private certification evidence needs a separate guarded source interface before it can contribute to Part 5B.
 
+Part 5B's [exact as-of source gate](../architecture/MISSION_26_PART5B_AS_OF_SOURCE_GATE.md) records why the guarded current MVCC snapshot and later observation clock cannot certify historical cutoff completeness. Existing revisions are useful inputs, but a source-owned visibility and coverage adapter remains required before numerical available-role capacity or backtested forecasts.
+
 ## Part 6 — four revenue and financial-boundary slices
 
 | Slice | Scope |

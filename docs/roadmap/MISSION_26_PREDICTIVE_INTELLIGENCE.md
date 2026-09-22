@@ -124,6 +124,12 @@ uses. It does not issue earned-revenue or collected-cash forecasts. Native
 financial records await Mission 27, and earned-revenue recognition still needs
 an explicitly approved source authority.
 
+Part 6D's [Executive Brief wording correction](../architecture/MISSION_26_PART6D_EXECUTIVE_WORDING_BOUNDARY.md)
+removes revenue and confidence claims that its existing canonical summary
+cannot substantiate. It is a bounded presentation correction; monthly
+source-backed cards, graphs, drilldowns, recovery and Part 6 acceptance remain
+open.
+
 ## Part 7 — five operating-cost, profit and margin slices
 
 | Slice | Scope |

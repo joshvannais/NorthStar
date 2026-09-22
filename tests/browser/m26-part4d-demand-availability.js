@@ -90,11 +90,20 @@ async function main() {
       else await page.locator('#commandCenterRefresh').evaluate(button => button.click());
       await page.locator('#commandCenterDemandState').getByText('Workspace unavailable').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
-      assert.match(await panel.innerText(), /Refresh to check the forecast status again/);
+      assert.match(await panel.innerText(), /Refresh to retry loading it/);
+      const failedScreenshot = path.join(output, `${mode}-${viewport.name}-workspace-failed.png`);
+      await panel.screenshot({ path: failedScreenshot });
+      failedWorkspace = false;
+      if (mode === 'demo') await page.reload();
+      else await page.locator('#commandCenterRefresh').evaluate(button => button.click());
+      await page.locator('#commandCenterDemandState').getByText('Forecast unavailable').waitFor();
+      if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
+      assert.match(await panel.innerText(), mode === 'demo' ? /fictional leads/i : /verified lead history/i);
       assert.equal(errors.length, 0, errors.join('\n'));
-      const screenshot = path.join(output, `${mode}-${viewport.name}.png`);
-      await panel.screenshot({ path: screenshot });
-      results.push({ mode, viewport: viewport.name, success: true, readyScreenshot, recoveryScreenshot: screenshot });
+      const recoveredScreenshot = path.join(output, `${mode}-${viewport.name}-recovered.png`);
+      await panel.screenshot({ path: recoveredScreenshot });
+      results.push({ mode, viewport: viewport.name, success: true, readyScreenshot,
+        failedScreenshot, recoveredScreenshot });
       await context.close();
     }
     fs.writeFileSync(path.join(output, 'evidence.json'), JSON.stringify({

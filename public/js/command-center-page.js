@@ -770,7 +770,7 @@
       workspace = null;
       byId('commandCenterContent').setAttribute('aria-busy', 'false');
       byId('commandCenterDemandState').textContent = 'Workspace unavailable';
-      byId('commandCenterDemandExplanation').textContent = 'The workspace could not load. Refresh to check the forecast status again.';
+      byId('commandCenterDemandExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
       byId('commandCenterDemandBoundary').textContent = 'No forecast value is shown while workspace data is unavailable.';
       renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');

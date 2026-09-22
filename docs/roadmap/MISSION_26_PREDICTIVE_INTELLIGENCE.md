@@ -252,6 +252,8 @@ Part 11D has a [reviewed handoff gate](../architecture/MISSION_26_PART11D_REVIEW
 | E | Independent exact-head authority, privacy, security, mathematical, data-quality and regression audit. |
 | F | Normal merge, deployment, production health, founder visual verdict and final Mission 26 acceptance. |
 
+Part 12A has a [paid-journey readiness audit](../architecture/MISSION_26_PART12A_PAID_JOURNEY_READINESS.md). It identifies the first missing mounted source-to-run path and leaves Part 12A acceptance open; synthetic paid-tenant implementation proof and live tenant forecast validation remain separate.
+
 ## Non-negotiable evidence boundaries
 
 - A forecast carries its as-of source snapshot, algorithm version, evidence coverage and uncertainty. It is never displayed as a known future fact.

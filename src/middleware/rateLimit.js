@@ -180,7 +180,9 @@ function rateLimit(group, getKey) {
         error: {
           code: 'rate_limited',
           message: `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
-          details: { retryAfterSeconds: retryAfter, limit: config.limit, window: '1m' }
+          details: { retryAfterSeconds: retryAfter, limit: config.limit,
+            window: config.window % 3600000 === 0
+              ? `${config.window / 3600000}h` : `${config.window / 60000}m` }
         }
       });
     }

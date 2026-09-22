@@ -1,11 +1,12 @@
 'use strict';
 
 const express = require('express');
+const crypto = require('node:crypto');
 const request = require('supertest');
 const { createForecastPriceHistoryRouter } =
   require('../../src/routes/forecastPriceHistory');
 const { hasPermission } = require('../../src/auth/permissions');
-const { getLimitConfig } = require('../../src/middleware/rateLimit');
+const { getLimitConfig, rateLimit } = require('../../src/middleware/rateLimit');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
@@ -50,6 +51,20 @@ test('forecast permission is owner/admin only and independent of learning', () =
   expect(hasPermission('viewer', 'forecast', 'read')).toBe(false);
   expect(getLimitConfig('forecast-source-capture', 'enterprise'))
     .toEqual({ limit: 4, window: 60 * 60 * 1000 });
+});
+
+test('capture rate limit reports its actual one-hour window', async () => {
+  // Use one stable key for this request group while isolating it from other tests.
+  const fixed = crypto.randomUUID();
+  const limited = express();
+  limited.get('/capture', rateLimit('forecast-source-capture', () => fixed),
+    (_req, res) => res.sendStatus(204));
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    expect((await request(limited).get('/capture')).status).toBe(204);
+  }
+  const fifth = await request(limited).get('/capture');
+  expect(fifth.status).toBe(429);
+  expect(fifth.body.error.details).toMatchObject({ limit: 4, window: '1h' });
 });
 
 test('capture uses server tenant/session, emits minimized historical receipt, and commits', async () => {

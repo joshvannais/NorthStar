@@ -216,6 +216,8 @@ Part 9E has an [interim paid/demo forecast-range availability state](../architec
 | C | Drilldowns showing source coverage, assumptions, confidence, uncertainty, stale inputs, forecast error and why a value changed. |
 | D | Owner-visible alerts, recommended next moves, exportable evidence and complete paid/demo Command Center behavior without automatic action. |
 
+Part 10A has an [unmounted weekly/monthly/quarterly timeline projection prerequisite](../architecture/MISSION_26_PART10A_TIMELINE_POSITION.md) over supplied Part 3B receipts. Complete run inventory, authorized actuals, paid/demo comparison UI and final Part 10A acceptance remain open.
+
 ## Part 11 — four forecast-governance and handoff slices
 
 | Slice | Scope |

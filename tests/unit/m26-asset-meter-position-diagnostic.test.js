@@ -36,6 +36,16 @@ test('separate non-overlapping uses may belong to the same job', () => {
   expect(summarize(input)).toMatchObject({ state: 'deterministic_claimed_plan_only',
     claimedOperatingHours: '10.625', projectedReading: '503.125' });
 });
+test('preserves six-decimal maintenance threshold without rounding it to meter precision', () => {
+  const input = sample(); input.asset.threshold = '500.625001';
+  expect(summarize(input)).toMatchObject({ projectedReading: '500.625',
+    claimedThresholdReached: false });
+  input.asset.threshold = '500.624999';
+  expect(summarize(input).claimedThresholdReached).toBe(true);
+  input.asset.reading = '501'; input.asset.plannedUses = [];
+  expect(summarize(input)).toMatchObject({ claimedOperatingHours: '0',
+    claimedThresholdReached: true, thresholdCrossingDate: null });
+});
 test('incomplete or conflicting observations withhold the projection', () => {
   for (const change of [
     input => { input.coverage.state = 'revoked'; },
@@ -60,6 +70,7 @@ test('rejects tenant mismatch, coerced identities, mixed units, duplicate jobs a
     input => { input.asset.plannedUses[0].planDigest = { toString: () => 'c'.repeat(64) }; },
     input => { input.asset.unit = 'mi'; },
     input => { input.asset.threshold = '0'; },
+    input => { input.asset.plannedUses[0].claimedOperatingHours = '1.0001'; },
     input => { input.asset.plannedUses.push({ ...input.asset.plannedUses[0] }); },
     input => { input.asset.plannedUses = Array.from({ length: MAX_USES + 1 },
       () => input.asset.plannedUses[0]); },

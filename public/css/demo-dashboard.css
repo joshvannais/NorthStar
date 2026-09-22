@@ -266,6 +266,15 @@
   margin-bottom: 20px;
 }
 
+.command-center-demand-outlook { margin-bottom: 20px; }
+.command-center-demand-outlook .demo-panel-heading { margin-bottom: 12px; }
+.command-center-demand-outlook p { margin: 0; line-height: 1.5; }
+.command-center-demand-outlook .command-center-demand-boundary { margin-top: 8px; font-size: 13px; }
+.command-center-demand-state {
+  flex: 0 0 auto; padding: 6px 10px; border: 1px solid var(--theme-border);
+  border-radius: 999px; color: var(--theme-muted); font-size: 12px; font-weight: 700;
+}
+
 .demo-positive { color: #047857; font-size: 13px; font-weight: 800; }
 .demo-chart { position: relative; height: 250px; margin-top: 10px; }
 .demo-chart-grid { position: absolute; inset: 0 0 32px; display: flex; flex-direction: column; justify-content: space-between; }
@@ -655,6 +664,8 @@ button.command-center-record-link {
   .command-center-blueprint-header { display: none; }
   .command-center-blueprint-main { padding-top: 28px; }
   .demo-daily-brief .demo-panel-heading { flex-direction: column; gap: 8px; }
+  .command-center-demand-outlook .demo-panel-heading { flex-direction: column; gap: 10px; }
+  .command-center-demand-state { align-self: flex-start; }
   .demo-daily-brief .demo-panel-heading > div,
   .demo-daily-brief .demo-updated { width: 100%; min-width: 0; max-width: 100%; }
   .demo-daily-brief .demo-updated { flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }

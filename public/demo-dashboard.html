@@ -14,7 +14,7 @@
   <script src="/js/auth-session.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
-  <link rel="stylesheet" href="/css/demo-dashboard.css?v=command-center-clarity-20260915">
+  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m26-demand-state-20260921">
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
   <link rel="stylesheet" href="/css/scheduling-approval.css?v=command-center-clarity-20260915">
@@ -152,6 +152,18 @@
             </article>
           </section>
 
+          <section class="demo-panel command-center-demand-outlook" aria-labelledby="commandCenterDemandTitle">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Demand outlook</p>
+                <h2 id="commandCenterDemandTitle">Future leads</h2>
+              </div>
+              <span class="command-center-demand-state" id="commandCenterDemandState">Waiting for workspace</span>
+            </div>
+            <p id="commandCenterDemandExplanation">Forecast status will appear after the workspace loads.</p>
+            <p class="command-center-demand-boundary" id="commandCenterDemandBoundary">Current leads and scheduled work are shown separately above.</p>
+          </section>
+
           <section class="demo-bottom-grid" aria-label="Guidance and workspace context">
             <article class="demo-panel demo-coach-panel">
               <p class="demo-panel-kicker">NorthStar Coach</p>
@@ -210,7 +222,7 @@
   <script src="/js/scheduling-time-contract.js"></script>
   <script src="/js/display-projection.js"></script>
   <script src="/js/scheduling-approval-ui.js"></script>
-  <script src="/js/command-center-page.js?v=command-center-clarity-20260915"></script>
+  <script src="/js/command-center-page.js?v=m26-demand-state-20260921"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

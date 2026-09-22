@@ -80,6 +80,8 @@ Part 4B's [transition-probability boundary](../architecture/MISSION_26_PART4B_TR
 
 Part 4C's [demand-to-schedule boundary](../architecture/MISSION_26_PART4C_DEMAND_TO_SCHEDULE_BOUNDARY.md) separates verified seasonality, current approved backlog and future pipeline transitions. It is architecture only; absent source coverage, approved-work linkage and calibrated outcomes keep numerical claims unavailable.
 
+Part 4D has an interim Command Center availability state in the shared paid/demo surface. It distinguishes recorded activity from a forecast, marks demo leads as fictional, and offers a refresh recovery message when the workspace fails. It issues no forecast, does not turn current leads into a prediction, and is not final Part 4 acceptance; source-authorized forecasts, evaluated outputs and independent end-to-end evidence remain required.
+
 ## Part 5 — four workload and capacity slices
 
 | Slice | Scope |

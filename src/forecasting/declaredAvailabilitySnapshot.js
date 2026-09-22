@@ -31,6 +31,10 @@ function instant(value) {
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
+function microsecondKey(value) {
+  return value.replace(/\.(\d{3})Z$/, '.$1000Z');
+}
+
 function validate(input) {
   if (!exact(input, ['organizationId', 'actorUserId', 'actorAccessRole',
     'authSessionId', 'expectedTimeZone', 'horizon']) ||
@@ -70,10 +74,23 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ WRITE');
     await client.query("SET LOCAL statement_timeout = '5000ms'");
     await scheduling.lockOrganization(client, input.organizationId, false);
+    // The first row read above establishes the repeatable-read MVCC snapshot.
+    // Transaction start time predates that snapshot and cannot label it.
+    const observed = (await client.query(
+      `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+         'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS observed_at,
+         pg_current_snapshot()::text AS snapshot_id`
+    )).rows[0];
+    const observedAt = observed?.observed_at;
+    const snapshotId = observed?.snapshot_id;
+    if (typeof observedAt !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(observedAt) ||
+        typeof snapshotId !== 'string' || !snapshotId) {
+      throw error('CANONICAL_PERSISTENCE_UNAVAILABLE', 'Canonical PostgreSQL persistence is unavailable.', 503);
+    }
     await scheduling.requireCurrentActor(client, { ...input, readOnlyOperator: false });
     const profile = await scheduling.currentBusinessProfile(client, { ...input, readOnlyOperator: false });
-    const capturedAt = new Date((await client.query('SELECT transaction_timestamp() AS captured_at')).rows[0].captured_at).toISOString();
-    if (input.horizon.startsAt < capturedAt || !profile.rawProfile.hours ||
+    if (microsecondKey(input.horizon.startsAt) < observedAt || !profile.rawProfile.hours ||
         typeof profile.rawProfile.hours !== 'object' || Array.isArray(profile.rawProfile.hours)) {
       await client.query('COMMIT');
       return unavailable('working_hours_or_future_window_unavailable');
@@ -123,19 +140,20 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
     if (members.some(member => !member.availability ||
         member.availability.coverageStart > input.horizon.startsAt ||
         member.availability.coverageEnd < input.horizon.endsAt ||
-        member.availability.updatedAt > capturedAt)) {
+        microsecondKey(member.availability.updatedAt) > observedAt)) {
       await client.query('COMMIT');
       return unavailable('declared_availability_incomplete');
     }
     const basis = deepFreeze(stableValue({
-      organizationId: input.organizationId, capturedAt, horizon: input.horizon,
+      organizationId: input.organizationId, observedAt, snapshotId, horizon: input.horizon,
       businessProfile: { id: profile.id, version: profile.version, digest: profile.hash,
         timeZone: profile.timeZone, hours: profile.rawProfile.hours },
       members,
     }));
     await client.query('COMMIT');
     return Object.freeze({ state: 'source_snapshot', sourceSnapshotDigest: sha256(basis),
-      basis, sourceAuthenticated: true, roleQualificationVerified: false,
+      basis, sourceAuthenticated: true, temporalCutoffVerified: false,
+      roleQualificationVerified: false,
       commitmentsCovered: false, resourceConstraintsChecked: false,
       forecastIssued: false });
   } catch (cause) {

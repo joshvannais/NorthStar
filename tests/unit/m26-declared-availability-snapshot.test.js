@@ -34,7 +34,8 @@ function fixture(options = {}) {
           raw_profile: { hours: { friday: { open: '08:00', close: '17:00' } } },
           time_zone: 'America/New_York' }],
       };
-      if (sql.includes('transaction_timestamp()')) return { rows: [{ captured_at: '2026-09-22T02:00:00.000Z' }] };
+      if (sql.includes('pg_current_snapshot()')) return { rows: [{
+        observed_at: '2026-09-22T02:00:00.100001Z', snapshot_id: '100:100:' }] };
       if (sql.includes('FROM public.workforce_profiles profile') && sql.includes('JOIN public.users account')) {
         return { rows: options.roster || [{ profile_id: workerId,
           operational_role: 'technician', home_location_id: 'headquarters',
@@ -68,12 +69,17 @@ test('reads guarded M22 availability without claiming capacity or qualification'
   expect(result.basis.members[0].availability.revision).toBe(2);
   expect(result.basis.members[0].availability.intervals).toHaveLength(1);
   expect(result.sourceAuthenticated).toBe(true);
+  expect(result.temporalCutoffVerified).toBe(false);
+  expect(result.basis.observedAt).toBe('2026-09-22T02:00:00.100001Z');
+  expect(result.basis.snapshotId).toBe('100:100:');
   expect(result.roleQualificationVerified).toBe(false);
   expect(result.commitmentsCovered).toBe(false);
   expect(result.forecastIssued).toBe(false);
   expect(result.sourceSnapshotDigest).toMatch(/^[0-9a-f]{64}$/);
   expect(Object.isFrozen(result.basis.members[0].availability.intervals)).toBe(true);
   expect(source.calls.some(call => call.sql.includes('JOIN public.auth_sessions session'))).toBe(true);
+  expect(source.calls.findIndex(call => call.sql.includes('pg_current_snapshot()'))).toBeGreaterThan(
+    source.calls.findIndex(call => call.sql.startsWith('SELECT id FROM public.organizations')));
   expect(source.calls.some(call => call.sql.includes("profile.organization_id = $1"))).toBe(true);
   expect(source.calls.at(-1).sql).toBe('COMMIT');
   expect(source.released).toBe(true);
@@ -84,6 +90,14 @@ test('missing declared availability withholds the source snapshot', async () => 
   const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
   expect(result).toEqual({ state: 'unavailable', reason: 'declared_availability_incomplete', forecastIssued: false });
   expect(source.released).toBe(true);
+});
+
+test('a horizon that begins before the observed snapshot time is withheld', async () => {
+  const source = fixture();
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, {
+    ...input(), horizon: { startsAt: '2026-09-22T02:00:00.100Z', endsAt: end },
+  });
+  expect(result.reason).toBe('working_hours_or_future_window_unavailable');
 });
 
 test('the owning M22 permission check refuses an inactive actor', async () => {

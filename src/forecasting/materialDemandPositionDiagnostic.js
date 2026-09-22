@@ -52,11 +52,13 @@ function quantity(value) {
 function summarizeMaterialDemandPosition(input) {
   if (!exact(input, ['version', 'organizationId', 'asOf', 'horizon',
     'sourceSnapshotDigest', 'coverage', 'rows']) || input.version !== VERSION ||
-    !UUID.test(input.organizationId) || !instant(input.asOf) ||
+    typeof input.organizationId !== 'string' || !UUID.test(input.organizationId) ||
+    !instant(input.asOf) ||
     !exact(input.horizon, ['startsAt', 'endsAt']) ||
     !instant(input.horizon.startsAt) || !instant(input.horizon.endsAt) ||
     input.horizon.startsAt < input.asOf || input.horizon.endsAt <= input.horizon.startsAt ||
     Date.parse(input.horizon.endsAt) - Date.parse(input.horizon.startsAt) > 366 * 86400000 ||
+    typeof input.sourceSnapshotDigest !== 'string' ||
     !DIGEST.test(input.sourceSnapshotDigest) ||
     !exact(input.coverage, ['state', 'hasMore']) ||
     !['complete', 'incomplete', 'revoked'].includes(input.coverage.state) ||
@@ -66,10 +68,13 @@ function summarizeMaterialDemandPosition(input) {
   for (const row of input.rows) {
     if (!exact(row, ['estimateId', 'revision', 'digest', 'lineId', 'organizationId',
       'recordedAt', 'requiredAt', 'materialSpecification', 'procurementLocation',
-      'unit', 'plannedQuantity']) || !UUID.test(row.estimateId) ||
-      !UUID.test(row.lineId) || row.organizationId !== input.organizationId ||
+      'unit', 'plannedQuantity']) || typeof row.estimateId !== 'string' ||
+      !UUID.test(row.estimateId) || typeof row.lineId !== 'string' ||
+      !UUID.test(row.lineId) || typeof row.organizationId !== 'string' ||
+      row.organizationId !== input.organizationId ||
       !Number.isSafeInteger(row.revision) || row.revision < 1 ||
-      !DIGEST.test(row.digest) || !instant(row.recordedAt) ||
+      typeof row.digest !== 'string' || !DIGEST.test(row.digest) ||
+      !instant(row.recordedAt) ||
       row.recordedAt > input.asOf || !instant(row.requiredAt) ||
       !label(row.materialSpecification) || !label(row.procurementLocation) ||
       !label(row.unit) || !Object.hasOwn(material.UNITS, row.unit)) invalid();

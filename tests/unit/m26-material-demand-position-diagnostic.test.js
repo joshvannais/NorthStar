@@ -68,3 +68,14 @@ test('does not execute accessor input', () => {
   expect(() => summarize(input)).toThrow('Material demand position details are invalid.');
   expect(called).toBe(false);
 });
+test('rejects object values even when they stringify to a valid identity or digest', () => {
+  for (const change of [
+    input => { const forged = { toString: () => ORG }; input.organizationId = forged;
+      input.rows[0].organizationId = forged; },
+    input => { input.sourceSnapshotDigest = { toString: () => 'a'.repeat(64) }; },
+    input => { input.rows[0].estimateId = { toString: () => crypto.randomUUID() }; },
+    input => { input.rows[0].lineId = { toString: () => crypto.randomUUID() }; },
+    input => { input.rows[0].digest = { toString: () => 'b'.repeat(64) }; },
+  ]) { const input = sample(); change(input);
+    expect(() => summarize(input)).toThrow('Material demand position details are invalid.'); }
+});

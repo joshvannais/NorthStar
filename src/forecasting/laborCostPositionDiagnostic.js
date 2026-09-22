@@ -98,9 +98,10 @@ function summarizeLaborCostPosition(input) {
   let total = 0n, unresolved = null;
   for (const plan of input.plans) {
     if (!exact(plan, ['estimateId', 'organizationId', 'revision', 'digest',
-      'recordedAt', 'plannedStartsAt', 'plannedEndsAt', 'inputs']) ||
+      'recordedAt', 'currency', 'plannedStartsAt', 'plannedEndsAt', 'inputs']) ||
         typeof plan.estimateId !== 'string' || !UUID.test(plan.estimateId) ||
         seen.has(plan.estimateId) || plan.organizationId !== input.organizationId ||
+        plan.currency !== input.currency ||
         !Number.isSafeInteger(plan.revision) || plan.revision < 1 ||
         typeof plan.digest !== 'string' || !DIGEST.test(plan.digest) ||
         !instant(plan.recordedAt) || plan.recordedAt > input.asOf ||

@@ -15,7 +15,7 @@ function sample() {
     currency: 'USD', sourceSnapshotDigest: 'a'.repeat(64),
     coverage: { state: 'complete', hasMore: false }, plans: [{ estimateId: ESTIMATE,
       organizationId: ORG, revision: 1, digest: 'b'.repeat(64),
-      recordedAt: '2026-09-29T00:00:00.000Z',
+      recordedAt: '2026-09-29T00:00:00.000Z', currency: 'USD',
       plannedStartsAt: '2026-10-02T00:00:00.000Z',
       plannedEndsAt: '2026-10-03T00:00:00.000Z', inputs: inputs([task]) }] };
 }
@@ -50,10 +50,18 @@ test('rejects tenant mismatch, duplicate estimates, later evidence and invalid s
     input => { input.plans[0].recordedAt = '2026-10-01T00:00:00.000Z'; },
     input => { input.plans[0].inputs.lines[0].rateMode = 'all_in'; },
     input => { input.plans[0].digest = 'wrong'; },
+    input => { input.plans[0].currency = 'CAD'; },
     input => { input.plans[0].plannedEndsAt = input.plans[0].plannedStartsAt; },
   ];
   for (const change of variants) { const input = sample(); change(input);
     expect(() => summarize(input)).toThrow('Labor cost position details are invalid.'); }
+});
+test('cannot relabel persisted CAD labor arithmetic as USD', () => {
+  const input = sample(); input.currency = 'CAD';
+  expect(() => summarize(input)).toThrow('Labor cost position details are invalid.');
+  input.plans[0].currency = 'CAD';
+  expect(summarize(input)).toMatchObject({ currency: 'CAD',
+    plannedLaborCost: '960.00', forecastIssued: false });
 });
 test('does not reinterpret a partial or oversized set of records as complete', () => {
   const input = sample(); input.plans = Array.from({ length: MAX_PLANS + 1 }, () => input.plans[0]);

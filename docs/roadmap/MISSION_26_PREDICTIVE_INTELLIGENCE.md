@@ -95,6 +95,8 @@ Part 4D has an interim Command Center availability state in the shared paid/demo
 
 Part 5A's [approved workload position boundary](../architecture/MISSION_26_PART5A_WORKLOAD_POSITION_BOUNDARY.md) has a bounded unmounted descriptive candidate. It separates scheduled and unscheduled remaining approved person-minutes and withholds totals for unresolved source or work status. It is neither an authenticated Mission 22/23 backlog reader nor a future workload or capacity forecast; final Part 5A acceptance remains open.
 
+Part 5B's [dimension-scoped capacity prerequisite](../architecture/MISSION_26_PART5B_SCOPED_CAPACITY_BOUNDARY.md) has an unmounted additive output-shape candidate. It can carry exact role, crew, location, item, asset and operating-class identity without changing released output v1. It cannot authenticate owning sources, calculate capacity, issue a forecast or satisfy final Part 5B acceptance. Those gates remain open.
+
 ## Part 6 — four revenue and financial-boundary slices
 
 | Slice | Scope |

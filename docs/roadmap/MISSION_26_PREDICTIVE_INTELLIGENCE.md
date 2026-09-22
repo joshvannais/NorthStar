@@ -218,6 +218,8 @@ Part 9E has an [interim paid/demo forecast-range availability state](../architec
 
 Part 10A has an [unmounted weekly/monthly/quarterly timeline projection prerequisite](../architecture/MISSION_26_PART10A_TIMELINE_POSITION.md) over supplied Part 3B receipts. Complete run inventory, authorized actuals, paid/demo comparison UI and final Part 10A acceptance remain open.
 
+Part 10B has a [monthly KPI coherence gate](../architecture/MISSION_26_PART10B_MONTHLY_KPI_GATE.md). The six cards and graphs require one authenticated run manifest, compatible source and calculation bases, and explicit unavailable states; no numeric monthly KPI is issued by this prerequisite and final Part 10B acceptance remains open.
+
 ## Part 11 — four forecast-governance and handoff slices
 
 | Slice | Scope |

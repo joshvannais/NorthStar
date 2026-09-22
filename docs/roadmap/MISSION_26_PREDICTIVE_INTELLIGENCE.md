@@ -199,6 +199,8 @@ Part 8D has an [interim paid/demo Resource outlook availability state](../archit
 
 Part 9A has an [unmounted deterministic baseline reproducibility prerequisite](../architecture/MISSION_26_PART9A_DETERMINISTIC_BASELINE.md) over the existing Part 4A Retell-only arithmetic candidate. It does not authenticate a caller's source snapshot, issue a paid forecast, or close final Part 9A acceptance.
 
+Part 9B's [calibrated-range boundary](../architecture/MISSION_26_PART9B_CALIBRATED_RANGE_BOUNDARY.md) identifies the source, complete saved-run inventory, held-out outcomes, quantile policy and evaluation evidence required before P10/P50/P90 can be issued. Current descriptive evaluation cannot establish calibration, so final Part 9B acceptance remains open.
+
 ## Part 10 — four Forecast Command Center slices
 
 | Slice | Scope |

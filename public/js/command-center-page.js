@@ -713,6 +713,18 @@
       : 'Current leads and scheduled work above are recorded activity, not a prediction of future work.';
   }
 
+  function renderResourceOutlook() {
+    // Neither an authenticated resource source nor an issued resource forecast
+    // is mounted. Fictional demo records are not a stock or capacity check.
+    byId('commandCenterResourceState').textContent = 'Forecast unavailable';
+    byId('commandCenterResourceExplanation').textContent = mode === 'demo'
+      ? 'This demo uses fictional jobs. No resource forecast has been issued for this demo workspace.'
+      : 'No resource forecast is ready. NorthStar needs verified material, equipment and travel records before it can assess future needs.';
+    byId('commandCenterResourceBoundary').textContent = mode === 'demo'
+      ? 'Fictional plans do not confirm stock, equipment availability or travel capacity.'
+      : 'Current plans do not confirm stock, equipment availability or travel capacity.';
+  }
+
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -725,6 +737,7 @@
     renderLeads(graphs);
     renderCoachAndStatus(graphs);
     renderDemandOutlook();
+    renderResourceOutlook();
     renderCta();
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
     setStatus('', 'ready');
@@ -772,6 +785,9 @@
       byId('commandCenterDemandState').textContent = 'Workspace unavailable';
       byId('commandCenterDemandExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
       byId('commandCenterDemandBoundary').textContent = 'No forecast value is shown while workspace data is unavailable.';
+      byId('commandCenterResourceState').textContent = 'Workspace unavailable';
+      byId('commandCenterResourceExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
+      byId('commandCenterResourceBoundary').textContent = 'No resource forecast is shown while workspace data is unavailable.';
       renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');
       if (expected) throw new Error('Command Center authoritative refresh failed; the visible scheduling overview is stale and unavailable.');

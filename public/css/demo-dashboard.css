@@ -266,10 +266,11 @@
   margin-bottom: 20px;
 }
 
-.command-center-demand-outlook { margin-bottom: 20px; }
-.command-center-demand-outlook .demo-panel-heading { margin-bottom: 12px; }
-.command-center-demand-outlook p { margin: 0; line-height: 1.5; }
-.command-center-demand-outlook .command-center-demand-boundary { margin-top: 8px; font-size: 13px; }
+.command-center-outlook-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+.command-center-outlook-grid > .demo-panel { min-width: 0; }
+.command-center-outlook-grid .demo-panel-heading { margin-bottom: 12px; }
+.command-center-outlook-grid p { margin: 0; line-height: 1.5; }
+.command-center-outlook-grid .command-center-demand-boundary { margin-top: 8px; font-size: 13px; }
 .command-center-demand-state {
   flex: 0 0 auto; padding: 6px 10px; border: 1px solid var(--theme-border);
   border-radius: 999px; color: var(--theme-muted); font-size: 12px; font-weight: 700;
@@ -664,7 +665,8 @@ button.command-center-record-link {
   .command-center-blueprint-header { display: none; }
   .command-center-blueprint-main { padding-top: 28px; }
   .demo-daily-brief .demo-panel-heading { flex-direction: column; gap: 8px; }
-  .command-center-demand-outlook .demo-panel-heading { flex-direction: column; gap: 10px; }
+  .command-center-outlook-grid { grid-template-columns: minmax(0, 1fr); }
+  .command-center-outlook-grid .demo-panel-heading { flex-direction: column; gap: 10px; }
   .command-center-demand-state { align-self: flex-start; }
   .demo-daily-brief .demo-panel-heading > div,
   .demo-daily-brief .demo-updated { width: 100%; min-width: 0; max-width: 100%; }

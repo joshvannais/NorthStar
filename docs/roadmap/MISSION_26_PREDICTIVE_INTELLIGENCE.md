@@ -118,6 +118,12 @@ Part 5B's [exact as-of source gate](../architecture/MISSION_26_PART5B_AS_OF_SOUR
 | C | External financial evidence compatibility now and native invoice, payment, collection and cash forecasting only after Mission 27 supplies compatible authority. |
 | D | Monthly revenue and pipeline KPI cards, graphs, drilldowns, paid/demo recovery and independent Part 6 acceptance. |
 
+Part 6C's [financial evidence compatibility boundary](../architecture/MISSION_26_PART6C_FINANCIAL_EVIDENCE_COMPATIBILITY.md)
+maps the released Mission 25 external observations to their safe Mission 26
+uses. It does not issue earned-revenue or collected-cash forecasts. Native
+financial records await Mission 27, and earned-revenue recognition still needs
+an explicitly approved source authority.
+
 ## Part 7 — five operating-cost, profit and margin slices
 
 | Slice | Scope |

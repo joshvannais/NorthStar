@@ -79,4 +79,8 @@ test('malformed or oversized windows are rejected', () => {
     .toThrow(expect.objectContaining({ code: 'M26_OPERATING_WINDOW_INVALID' }));
   expect(() => summarizeOperatingWindows({ ...input(week()), surprise: true }))
     .toThrow(expect.objectContaining({ code: 'M26_OPERATING_WINDOW_INVALID' }));
+  expect(() => summarizeOperatingWindows(input(week({ monday: {
+    open: '08:00', close: '17:00' } }),
+  '0099-10-05T00:00:00.000Z', '0099-10-06T00:00:00.000Z')))
+    .toThrow(expect.objectContaining({ code: 'M26_OPERATING_WINDOW_INVALID' }));
 });

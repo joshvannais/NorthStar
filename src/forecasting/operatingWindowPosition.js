@@ -53,6 +53,9 @@ function summarizeOperatingWindows(input) {
       typeof input.sourceSnapshotDigest !== 'string' || !DIGEST.test(input.sourceSnapshotDigest) ||
       !exact(input.horizon, ['startsAt', 'endsAt']) ||
       !instant(input.horizon.startsAt) || !instant(input.horizon.endsAt) ||
+      // The reused M22 weekday helper uses Date.UTC, which remaps years 0-99.
+      // Reserve one preceding local date for overnight work at the boundary.
+      input.horizon.startsAt.slice(0, 4) < '0101' ||
       input.horizon.startsAt >= input.horizon.endsAt ||
       Date.parse(input.horizon.endsAt) - Date.parse(input.horizon.startsAt) > MAX_WINDOW_MS ||
       !schedulingTime.isValidTimeZone(input.timeZone) ||

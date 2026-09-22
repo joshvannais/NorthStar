@@ -254,6 +254,8 @@ Part 11D has a [reviewed handoff gate](../architecture/MISSION_26_PART11D_REVIEW
 
 Part 12A has a [paid-journey readiness audit](../architecture/MISSION_26_PART12A_PAID_JOURNEY_READINESS.md). It selects Mission 26's `revenue.approved_price_flow.v1` target backed by Mission 24 decisions and identifies its first missing guarded event-flow/as-of reader; Part 12A acceptance remains open, and synthetic paid-tenant implementation proof and live tenant forecast validation remain separate.
 
+The first Part 6A source extension is a [guarded approved-price decision event receipt](../architecture/MISSION_26_PART6A_PRICE_EVENT_SOURCE.md). It preserves bounded all-event Mission 24 approval/amendment/withdrawal history without issuing a forecast or closing Part 6A or Part 12A acceptance.
+
 ## Non-negotiable evidence boundaries
 
 - A forecast carries its as-of source snapshot, algorithm version, evidence coverage and uncertainty. It is never displayed as a known future fact.

@@ -183,6 +183,8 @@ Part 8A has an [unmounted material demand position prerequisite](../architecture
 
 Part 8B has an [unmounted claimed asset-meter position prerequisite](../architecture/MISSION_26_PART8B_ASSET_METER_POSITION.md). It can add bounded claimed operating hours to a matching hours meter and flag when the projected reading reaches a claimed absolute threshold. Asset/meter history, full approved-job coverage, maintenance due, downtime probability and final Part 8B acceptance remain open.
 
+Part 8C has an [unmounted declared route-load prerequisite](../architecture/MISSION_26_PART8C_ROUTE_LOAD_POSITION.md). It reuses Mission 24 vehicle-leg counts to summarize caller-declared route distance by unit, while route verification, road-versus-onsite classification, fuel or energy, capacity, source authentication and final Part 8C acceptance remain open.
+
 ## Part 9 — five uncertainty, scenario and sensitivity slices
 
 | Slice | Scope |

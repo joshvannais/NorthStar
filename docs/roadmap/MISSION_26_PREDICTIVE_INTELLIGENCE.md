@@ -237,6 +237,8 @@ Part 11A has an [unmounted forecast settings contract](../architecture/MISSION_2
 
 Part 11B has an [unmounted forecast run receipt prerequisite](../architecture/MISSION_26_PART11B_FORECAST_RUN_RECEIPT.md) that pins supplied input/result identities and distinguishes reproduced receipts, changed inputs and result mismatches without rewriting an earlier run. It does not execute or persist a forecast, authenticate its pins or close final Part 11B acceptance.
 
+Part 11C has an [unmounted saved-run currentness prerequisite](../architecture/MISSION_26_PART11C_RUN_CURRENTNESS_PREREQUISITE.md) that conservatively withholds current advice after supplied correction, revocation, deletion, retention or algorithm-version changes. It does not authenticate those states, mount saved-run propagation or close final Part 11C acceptance.
+
 ## Part 12 — six mission-acceptance slices
 
 | Slice | Scope |

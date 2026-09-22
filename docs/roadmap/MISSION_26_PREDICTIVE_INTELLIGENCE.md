@@ -222,6 +222,8 @@ Part 10B has a [monthly KPI coherence gate](../architecture/MISSION_26_PART10B_M
 
 Part 10C has an [unmounted supplied drilldown prerequisite](../architecture/MISSION_26_PART10C_DRILLDOWN_POSITION.md) for coverage, uncertainty tokens, exact point deltas and supplied-outcome error. It does not prove source authority, cause attribution or calibration, and final Part 10C acceptance remains open.
 
+Part 10D has an [owner alert, advice and export gate](../architecture/MISSION_26_PART10D_ALERT_EXPORT_GATE.md). It separates existing record-based Coach advice from future forecast alerts, requires reviewed handoffs and authorized minimized exports, and leaves final Part 10D and Part 10 acceptance open.
+
 ## Part 11 — four forecast-governance and handoff slices
 
 | Slice | Scope |

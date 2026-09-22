@@ -66,6 +66,11 @@ function projectForecastTimeline(input) {
     };
     const current = items[items.length - 1];
     const prior = items.length > 1 ? items[items.length - 2] : null;
+    if (current.windowNormalizationRequired || prior?.windowNormalizationRequired) {
+      return { horizon: { ...horizon }, suppliedRunCount: items.length,
+        state: 'unavailable', reason: 'window_normalization_required',
+        current: null, prior: null, actual: null };
+    }
     const comparable = prior && current.status === 'paired' && prior.status === 'paired' &&
       current.outcomeAmount === prior.outcomeAmount &&
       current.outcomeSourceDigest === prior.outcomeSourceDigest &&

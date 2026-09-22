@@ -95,6 +95,15 @@ test('duplicate prediction origin cannot silently choose a current run', () => {
     current: null, prior: null, actual: null });
 });
 
+test('changed operating calendar withholds the forecast comparison itself', () => {
+  const older = run(0), newer = run(1);
+  newer.reportingWindow.calendarDigest = 'e'.repeat(64);
+  const result = project(input([older, newer], [actual(older, 0), actual(newer, 1)]));
+  expect(result.periods[0]).toMatchObject({ state: 'unavailable',
+    reason: 'window_normalization_required', current: null, prior: null,
+    actual: null });
+});
+
 test('rejects unsupported grain and cross-tenant supplied receipts', () => {
   const daily = run(0);
   daily.output.horizon.grain = 'day';

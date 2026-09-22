@@ -78,6 +78,8 @@ Part 4A's [inbound demand source and forecast boundary](../architecture/MISSION_
 
 Part 4B's [transition-probability boundary](../architecture/MISSION_26_PART4B_TRANSITION_PROBABILITY_BOUNDARY.md) is a bounded unmounted descriptive candidate. It can be validated with fictional cohort data while real calling remains offline; it is not a paid probability forecast, source authentication or final Part 4B acceptance. No old setup calls are required to advance independent roadmap work.
 
+Part 4C's [demand-to-schedule boundary](../architecture/MISSION_26_PART4C_DEMAND_TO_SCHEDULE_BOUNDARY.md) separates verified seasonality, current approved backlog and future pipeline transitions. It is architecture only; absent source coverage, approved-work linkage and calibrated outcomes keep numerical claims unavailable.
+
 ## Part 5 — four workload and capacity slices
 
 | Slice | Scope |

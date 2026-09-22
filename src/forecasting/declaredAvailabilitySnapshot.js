@@ -144,17 +144,36 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
       await client.query('COMMIT');
       return unavailable('declared_availability_incomplete');
     }
+    const schedules = await scheduling.scheduleEvidence(client, {
+      organizationId: input.organizationId,
+      assignmentId: null,
+      proposal: { scheduledStart: input.horizon.startsAt,
+        scheduledEnd: input.horizon.endsAt },
+    }, 0);
+    if (schedules.truncated) {
+      await client.query('COMMIT');
+      return unavailable('schedule_evidence_bounded');
+    }
+    const activeWorkers = new Set(members.map(member => member.profileId));
+    if (schedules.rows.some(schedule => schedule.approved !== true ||
+        !Array.isArray(schedule.profileIds) || schedule.profileIds.length === 0 ||
+        schedule.profileIds.some(profileId => !activeWorkers.has(profileId)))) {
+      await client.query('COMMIT');
+      return unavailable('schedule_commitment_unresolved');
+    }
     const basis = deepFreeze(stableValue({
       organizationId: input.organizationId, observedAt, snapshotId, horizon: input.horizon,
       businessProfile: { id: profile.id, version: profile.version, digest: profile.hash,
         timeZone: profile.timeZone, hours: profile.rawProfile.hours },
       members,
+      approvedScheduledAssignments: schedules.rows,
     }));
     await client.query('COMMIT');
     return Object.freeze({ state: 'source_snapshot', sourceSnapshotDigest: sha256(basis),
       basis, sourceAuthenticated: true, temporalCutoffVerified: false,
       roleQualificationVerified: false,
-      commitmentsCovered: false, resourceConstraintsChecked: false,
+      approvedScheduleIntervalsRead: true, commitmentsCovered: false,
+      resourceConstraintsChecked: false,
       forecastIssued: false });
   } catch (cause) {
     if (client) await client.query('ROLLBACK').catch(() => {});

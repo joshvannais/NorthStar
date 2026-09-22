@@ -585,7 +585,8 @@ async function scheduleEvidence(client, input, bufferMinutes) {
               LIMIT ${MAXIMUM_CANDIDATE_MEMBERS + 1}
            ) bounded
        ) targets ON TRUE
-      WHERE assignment.organization_id = $1 AND assignment.id <> $2
+      WHERE assignment.organization_id = $1
+        AND ($2::uuid IS NULL OR assignment.id <> $2::uuid)
         AND assignment.schedule_state = 'scheduled'
         AND assignment.appointment_status <> 'cancelled'
         AND assignment.scheduled_start < $4::timestamptz + make_interval(mins => $5)
@@ -808,6 +809,7 @@ module.exports = {
   evaluateInTransaction,
   candidateEvidence,
   attachSkillsAndAvailability,
+  scheduleEvidence,
   // Internal read-only source helpers for M26. These retain M22's actor and
   // Business Profile authority; exporting them grants no route or mutation.
   lockOrganization,

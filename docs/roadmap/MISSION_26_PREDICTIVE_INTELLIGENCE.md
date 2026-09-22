@@ -97,6 +97,8 @@ Part 5A's [approved workload position boundary](../architecture/MISSION_26_PART5
 
 Part 5B's [dimension-scoped capacity prerequisite](../architecture/MISSION_26_PART5B_SCOPED_CAPACITY_BOUNDARY.md) has an unmounted additive output-shape candidate. It can carry exact role, crew, location, item, asset and operating-class identity without changing released output v1. It cannot authenticate owning sources, calculate capacity, issue a forecast or satisfy final Part 5B acceptance. Those gates remain open.
 
+Part 5B also has a [declared role-time position diagnostic](../architecture/MISSION_26_PART5B_ROLE_TIME_POSITION.md). It calculates bounded overlap-free qualified person-minutes from caller-supplied working, availability, absence and commitment intervals but has no authenticated workforce/scheduling reader, travel/asset constraint proof or future forecast authority. Final Part 5B acceptance remains open.
+
 ## Part 6 — four revenue and financial-boundary slices
 
 | Slice | Scope |

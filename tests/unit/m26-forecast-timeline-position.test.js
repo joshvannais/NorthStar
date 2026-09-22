@@ -71,7 +71,7 @@ test.each(['week', 'month', 'quarter'])(
     expect(Object.isFrozen(result.periods[0].current.value)).toBe(true);
   });
 
-test('missing prior or matching final actual remains unavailable, not zero', () => {
+test('missing prior or matching supplied actual remains unavailable, not zero', () => {
   const older = run(0), newer = run(1);
   expect(project(input([newer], [actual(newer, 1)])).periods[0])
     .toMatchObject({ state: 'prior_unavailable', actual: { state: 'unavailable',
@@ -80,7 +80,7 @@ test('missing prior or matching final actual remains unavailable, not zero', () 
     actual(newer, 1, '7')]));
   expect(conflicting.periods[0]).toMatchObject({ state: 'supplied_comparison',
     actual: { state: 'unavailable', amount: null,
-      reason: 'matching_final_actual_not_supplied' } });
+      reason: 'matching_actual_not_supplied' } });
 });
 
 test('duplicate prediction origin cannot silently choose a current run', () => {

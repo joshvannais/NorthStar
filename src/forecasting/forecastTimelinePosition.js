@@ -85,7 +85,7 @@ function projectForecastTimeline(input) {
         observedThrough: current.outcomeCutoff } :
         { state: 'unavailable', amount: null, sourceDigest: null,
           observedThrough: null,
-          reason: prior ? 'matching_final_actual_not_supplied' :
+          reason: prior ? 'matching_actual_not_supplied' :
             'prior_run_not_supplied' },
     };
   }).sort((a, b) => a.horizon.startsAt.localeCompare(b.horizon.startsAt) ||

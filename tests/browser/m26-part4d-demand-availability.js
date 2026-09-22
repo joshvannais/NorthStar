@@ -76,34 +76,47 @@ async function main() {
       });
       await page.goto(origin + (mode === 'demo' ? '/demo' : '/dashboard'));
       await page.locator('#commandCenterDemandState').getByText('Forecast unavailable').waitFor();
-      if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
+      await page.locator('#northstarQuickStartDialog[open]').waitFor({ timeout: 2000 }).catch(() => {});
+      if (await page.locator('#northstarQuickStartDialog[open]').count()) {
+        await page.locator('#northstarQuickStartDialog .northstar-quick-start-close').click();
+      }
       const panel = page.locator('.command-center-demand-outlook');
+      const resource = page.locator('.command-center-resource-outlook');
       const text = await panel.innerText();
       assert.match(text, mode === 'demo' ? /fictional leads/i : /verified lead history/i);
       assert.match(text, /not a prediction of future work/i);
+      await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
+      assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
+      assert.match(await resource.innerText(), /do not confirm stock, equipment availability or travel capacity/i);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       const readyScreenshot = path.join(output, `${mode}-${viewport.name}-unavailable.png`);
       await panel.screenshot({ path: readyScreenshot });
+      const resourceReadyScreenshot = path.join(output, `${mode}-${viewport.name}-resource-unavailable.png`);
+      await page.locator('.command-center-outlook-grid').screenshot({ path: resourceReadyScreenshot });
       await page.waitForFunction(() => !document.querySelector('#commandCenterRefresh').disabled);
       failedWorkspace = true;
       if (mode === 'demo') await page.reload();
       else await page.locator('#commandCenterRefresh').evaluate(button => button.click());
       await page.locator('#commandCenterDemandState').getByText('Workspace unavailable').waitFor();
+      await page.locator('#commandCenterResourceState').getByText('Workspace unavailable').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
       assert.match(await panel.innerText(), /Refresh to retry loading it/);
+      assert.match(await resource.innerText(), /Refresh to retry loading it/);
       const failedScreenshot = path.join(output, `${mode}-${viewport.name}-workspace-failed.png`);
       await panel.screenshot({ path: failedScreenshot });
       failedWorkspace = false;
       if (mode === 'demo') await page.reload();
       else await page.locator('#commandCenterRefresh').evaluate(button => button.click());
       await page.locator('#commandCenterDemandState').getByText('Forecast unavailable').waitFor();
+      await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
       assert.match(await panel.innerText(), mode === 'demo' ? /fictional leads/i : /verified lead history/i);
+      assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
       assert.equal(errors.length, 0, errors.join('\n'));
       const recoveredScreenshot = path.join(output, `${mode}-${viewport.name}-recovered.png`);
       await panel.screenshot({ path: recoveredScreenshot });
       results.push({ mode, viewport: viewport.name, success: true, readyScreenshot,
-        failedScreenshot, recoveredScreenshot });
+        resourceReadyScreenshot, failedScreenshot, recoveredScreenshot });
       await context.close();
     }
     fs.writeFileSync(path.join(output, 'evidence.json'), JSON.stringify({

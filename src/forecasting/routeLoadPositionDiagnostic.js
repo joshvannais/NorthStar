@@ -25,10 +25,11 @@ function exact(value, keys) {
 function dense(value, max) {
   if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype ||
       value.length > max || Reflect.ownKeys(value).length !== value.length + 1) return false;
-  return value.every((_, index) => {
+  for (let index = 0; index < value.length; index += 1) {
     const descriptor = Object.getOwnPropertyDescriptor(value, index);
-    return descriptor?.enumerable && Object.hasOwn(descriptor, 'value');
-  });
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) return false;
+  }
+  return true;
 }
 function instant(value) {
   return typeof value === 'string' && INSTANT.test(value) &&
@@ -100,6 +101,8 @@ function summarizeRouteLoadPosition(input) {
     try { result = travel.calculate(inputs, record.currency); }
     catch (_) { invalid(); }
     if (!Array.isArray(result.trips) || result.trips.length !== inputs.trips.length) invalid();
+    // Unknown monetary costs do not erase measured distance; missing haul legs do.
+    if (result.hauling?.complete !== true) unresolved = true;
     for (let i = 0; i < result.trips.length; i += 1) {
       const line = inputs.trips[i], calculated = result.trips[i];
       if (!Number.isSafeInteger(calculated.tripLegs) ||

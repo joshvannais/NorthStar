@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('node:crypto');
 const { fixture } = require('../helpers/m24-travel-input');
+const { haul } = require('../helpers/m24-travel-operations-input');
 const { VERSION, MAX_RECORDS, summarizeRouteLoadPosition: summarize } =
   require('../../src/forecasting/routeLoadPositionDiagnostic');
 const ORG = crypto.randomUUID();
@@ -45,6 +46,12 @@ test('incomplete coverage, straight-line or unknown distance withholds footprint
     expect(summarize(input)).toMatchObject({ state: 'unavailable',
       declaredVehicleMiles: null, vehicleLegs: null }); }
 });
+test('missing M24 hauling legs withhold all route totals even when distance is known', () => {
+  const input = sample();
+  input.records[0].inputs.hauls = [haul()];
+  expect(summarize(input)).toMatchObject({ state: 'unavailable',
+    declaredVehicleMiles: null, tripLegs: null, vehicleLegs: null });
+});
 test('rejects duplicate or cross-tenant plans, coerced pins and oversize inputs', () => {
   for (const change of [
     input => { input.records.push({ ...input.records[0] }); },
@@ -64,4 +71,13 @@ test('nested accessors cannot run in the M24 calculator', () => {
   });
   expect(() => summarize(input)).toThrow('Route load position details are invalid.');
   expect(called).toBe(false);
+});
+test('sparse nested array with an extra property is rejected with a coded error', () => {
+  const input = sample(), trips = new Array(1);
+  trips.extra = 'looks dense by own-key count';
+  input.records[0].inputs.trips = trips;
+  try { summarize(input); throw new Error('Expected rejection'); }
+  catch (error) {
+    expect(error.code).toBe('M26_ROUTE_LOAD_POSITION_INVALID');
+  }
 });

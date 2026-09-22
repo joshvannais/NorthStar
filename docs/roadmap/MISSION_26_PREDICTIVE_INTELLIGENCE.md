@@ -101,6 +101,8 @@ Part 5B also has a [declared role-time position diagnostic](../architecture/MISS
 
 Part 5B's [guarded declared-availability source](../architecture/MISSION_26_PART5B_DECLARED_AVAILABILITY_SOURCE.md) now reads current tenant roster, Business Profile hours, Mission 22 declared availability, and bounded approved scheduled-assignment intervals under existing scheduling access checks. Unapproved, unassigned and bounded schedule evidence withhold the source snapshot. It does not prove job-specific qualification, complete commitments or constrained capacity, and it is not mounted to a forecast. Final Part 5B acceptance remains open.
 
+Part 5B's [company operating-window position](../architecture/MISSION_26_PART5B_OPERATING_WINDOWS.md) reuses Mission 22 time-zone rules to calculate bounded business-open minutes, including overnight and daylight-saving conditions. It is an unmounted descriptive calendar prerequisite, not worker availability or a capacity forecast.
+
 ## Part 6 — four revenue and financial-boundary slices
 
 | Slice | Scope |

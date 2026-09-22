@@ -4,6 +4,8 @@ Objective: turn current authorized NorthStar facts and tenant-private Mission 25
 
 Mission 26 is the contractor-facing predictive operating layer. It does not replace the separate investor forecast artifact, Mission 32's manual On-the-Fly Calculator, or Mission 33's private NorthStar platform analytics. Mission 20 retains business-profile and operating-policy authority; Mission 22 retains scheduling and dispatch; Mission 23 retains actual execution; Mission 24 retains estimates and customer-facing price; Mission 25 retains outcome learning; Mission 27 retains native invoices, payments and collections; Mission 28 retains automation and any authority to apply an advisory action.
 
+The founder's [implementation-versus-live-validation clarification](../architecture/MISSION_26_IMPLEMENTATION_VS_LIVE_VALIDATION.md) keeps Mission 26 work moving with guarded synthetic evidence while public Retell calling and commercial legal review remain later gates. It does not waive any implementation acceptance check or permit a paid numerical forecast without complete, authorized, evaluated real history. The ephemeral homepage Web Call is not a retained demand-history source.
+
 ## Frozen implementation structure — 12 parts and 51 slices
 
 The part and slice counts are frozen before Mission 26 implementation begins. A later change requires a documented authority or acceptance reason, the affected gates and an updated total before implementation proceeds.

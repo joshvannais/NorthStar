@@ -53,6 +53,9 @@ function fixture(options = {}) {
         rows: [{ workforce_profile_id: workerId, ordinal: 0, interval_kind: 'available',
           starts_at: start, ends_at: end }],
       };
+      if (sql.includes('FROM public.canonical_schedule_assignments assignment')) return {
+        rows: options.schedules || [],
+      };
       throw new Error(`Unexpected query: ${sql}`);
     },
     release() { released = true; },
@@ -68,12 +71,14 @@ test('reads guarded M22 availability without claiming capacity or qualification'
   expect(result.basis.members).toHaveLength(1);
   expect(result.basis.members[0].availability.revision).toBe(2);
   expect(result.basis.members[0].availability.intervals).toHaveLength(1);
+  expect(result.basis.approvedScheduledAssignments).toEqual([]);
   expect(result.sourceAuthenticated).toBe(true);
   expect(result.temporalCutoffVerified).toBe(false);
   expect(result.basis.observedAt).toBe('2026-09-22T02:00:00.100001Z');
   expect(result.basis.snapshotId).toBe('100:100:');
   expect(result.roleQualificationVerified).toBe(false);
   expect(result.commitmentsCovered).toBe(false);
+  expect(result.approvedScheduleIntervalsRead).toBe(true);
   expect(result.forecastIssued).toBe(false);
   expect(result.sourceSnapshotDigest).toMatch(/^[0-9a-f]{64}$/);
   expect(Object.isFrozen(result.basis.members[0].availability.intervals)).toBe(true);
@@ -81,8 +86,46 @@ test('reads guarded M22 availability without claiming capacity or qualification'
   expect(source.calls.findIndex(call => call.sql.includes('pg_current_snapshot()'))).toBeGreaterThan(
     source.calls.findIndex(call => call.sql.startsWith('SELECT id FROM public.organizations')));
   expect(source.calls.some(call => call.sql.includes("profile.organization_id = $1"))).toBe(true);
+  expect(source.calls.some(call => call.sql.includes('($2::uuid IS NULL OR assignment.id <> $2::uuid)'))).toBe(true);
   expect(source.calls.at(-1).sql).toBe('COMMIT');
   expect(source.released).toBe(true);
+});
+
+const scheduled = overrides => ({ id: authSessionId, revision: 2,
+  canonical_digest: 'c'.repeat(64), scheduled_start: start, scheduled_end: end,
+  approved: true, profile_ids: [workerId], targets_truncated: false,
+  ...overrides });
+
+test('includes approved scheduled worker intervals from the same transaction', async () => {
+  const source = fixture({ schedules: [scheduled()] });
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
+  expect(result.state).toBe('source_snapshot');
+  expect(result.basis.approvedScheduledAssignments).toEqual([{
+    assignmentId: authSessionId, revision: 2, digest: 'c'.repeat(64),
+    scheduledStart: start, scheduledEnd: end, approved: true, profileIds: [workerId],
+  }]);
+  expect(Object.isFrozen(result.basis.approvedScheduledAssignments[0].profileIds)).toBe(true);
+  expect(source.calls.find(call => call.sql.includes('FROM public.canonical_schedule_assignments assignment'))
+    .params[1]).toBeNull();
+  expect(result.commitmentsCovered).toBe(false);
+  expect(result.forecastIssued).toBe(false);
+});
+
+test.each([
+  [scheduled({ approved: false })],
+  [scheduled({ profile_ids: [] })],
+  [scheduled({ profile_ids: [actorUserId] })],
+])('unapproved or unresolved worker assignment withholds the source', async schedule => {
+  const source = fixture({ schedules: [schedule] });
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
+  expect(result).toEqual({ state: 'unavailable', reason: 'schedule_commitment_unresolved',
+    forecastIssued: false });
+});
+
+test('bounded schedule evidence is unavailable, never silently partial', async () => {
+  const source = fixture({ schedules: Array.from({ length: 1001 }, () => scheduled()) });
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
+  expect(result.reason).toBe('schedule_evidence_bounded');
 });
 
 test('missing declared availability withholds the source snapshot', async () => {

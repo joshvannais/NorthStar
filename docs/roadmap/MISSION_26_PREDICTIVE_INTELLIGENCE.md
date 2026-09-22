@@ -140,6 +140,11 @@ open.
 | D | Overhead and financed-asset cash-commitment forecasts from exact owner-recorded schedules and allocation policy; no assumption that every job pays a monthly installment. |
 | E | Operating-cost, forecast profit and margin ranges with monthly KPI cards, graphs, explanations, paid/demo recovery and independent Part 7 acceptance. |
 
+Part 7A's [planned labor-cost prerequisite](../architecture/MISSION_26_PART7A_LABOR_COST_POSITION.md)
+reuses Mission 24 labor-plan arithmetic under bounded claimed evidence. It
+does not authenticate an as-of source, verify capacity, apply Mission 25
+calibration or issue a paid forecast. Final Part 7A acceptance remains open.
+
 ## Part 8 — four resource-risk slices
 
 | Slice | Scope |

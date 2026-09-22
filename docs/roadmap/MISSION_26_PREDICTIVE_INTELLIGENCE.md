@@ -145,6 +145,12 @@ reuses Mission 24 labor-plan arithmetic under bounded claimed evidence. It
 does not authenticate an as-of source, verify capacity, apply Mission 25
 calibration or issue a paid forecast. Final Part 7A acceptance remains open.
 
+Part 7B's [planned material-line cost prerequisite](../architecture/MISSION_26_PART7B_MATERIAL_COST_POSITION.md)
+reuses Mission 24 material-plan quantities, waste and source-aware price and
+availability records. It is unmounted claimed-input arithmetic, not verified
+inventory, supplier availability, a complete purchasing cost or a forecast.
+Final Part 7B acceptance remains open.
+
 ## Part 8 — four resource-risk slices
 
 | Slice | Scope |

@@ -99,6 +99,8 @@ Part 5B's [dimension-scoped capacity prerequisite](../architecture/MISSION_26_PA
 
 Part 5B also has a [declared role-time position diagnostic](../architecture/MISSION_26_PART5B_ROLE_TIME_POSITION.md). It calculates bounded overlap-free qualified person-minutes from caller-supplied working, availability, absence and commitment intervals but has no authenticated workforce/scheduling reader, travel/asset constraint proof or future forecast authority. Final Part 5B acceptance remains open.
 
+Part 5B's [guarded declared-availability source](../architecture/MISSION_26_PART5B_DECLARED_AVAILABILITY_SOURCE.md) now reads current tenant roster, Business Profile hours and Mission 22 declared-availability evidence under the existing scheduling access checks. It does not prove job-specific qualification, approved commitments or constrained capacity, and it is not mounted to a forecast. Final Part 5B acceptance remains open.
+
 ## Part 6 — four revenue and financial-boundary slices
 
 | Slice | Scope |

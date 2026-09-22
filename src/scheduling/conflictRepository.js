@@ -808,6 +808,11 @@ module.exports = {
   evaluateInTransaction,
   candidateEvidence,
   attachSkillsAndAvailability,
+  // Internal read-only source helpers for M26. These retain M22's actor and
+  // Business Profile authority; exporting them grants no route or mutation.
+  lockOrganization,
+  requireCurrentActor,
+  currentBusinessProfile,
   evaluateScheduleConflicts,
   replaceAvailability,
 };

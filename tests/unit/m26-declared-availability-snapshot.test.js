@@ -42,7 +42,9 @@ function fixture(options = {}) {
           profile_updated_at: '2026-09-21T12:00:00.000Z',
           membership_updated_at: '2026-09-21T12:00:00.000Z' }] };
       }
-      if (sql.includes('FROM public.workforce_profile_skills relation')) return { rows: [] };
+      if (sql.includes('FROM public.workforce_profile_skills relation')) {
+        return { rows: sql.includes('skill.skill_key') ? (options.skills || []) : [] };
+      }
       if (sql.includes('FROM public.canonical_workforce_availability_authorities')) return {
         rowCount: options.noAvailability ? 0 : 1, rows:
         options.noAvailability ? [] : [{ workforce_profile_id: workerId, id: authSessionId,
@@ -77,6 +79,8 @@ test('reads guarded M22 availability without claiming capacity or qualification'
   expect(result.basis.observedAt).toBe('2026-09-22T02:00:00.100001Z');
   expect(result.basis.snapshotId).toBe('100:100:');
   expect(result.roleQualificationVerified).toBe(false);
+  expect(result.assignedSkillRecordsRead).toBe(true);
+  expect(result.basis.members[0].assignedSkills).toEqual([]);
   expect(result.commitmentsCovered).toBe(false);
   expect(result.approvedScheduleIntervalsRead).toBe(true);
   expect(result.forecastIssued).toBe(false);
@@ -89,6 +93,33 @@ test('reads guarded M22 availability without claiming capacity or qualification'
   expect(source.calls.some(call => call.sql.includes('($2::uuid IS NULL OR assignment.id <> $2::uuid)'))).toBe(true);
   expect(source.calls.at(-1).sql).toBe('COMMIT');
   expect(source.released).toBe(true);
+});
+
+test('retains bounded M22 skill keys as association evidence only', async () => {
+  const source = fixture({ skills: [{ profile_id: workerId,
+    skill_id: authSessionId, skill_key: 'tree-climber', service_id: 'tree-removal',
+    assigned_at: '2026-09-20T00:00:00.000Z',
+    skill_updated_at: '2026-09-21T00:00:00.000Z' }] });
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
+  expect(result.basis.members[0].assignedSkills).toEqual([{
+    skillId: authSessionId, skillKey: 'tree-climber', serviceId: 'tree-removal',
+    assignedAt: '2026-09-20T00:00:00.000Z',
+    skillUpdatedAt: '2026-09-21T00:00:00.000Z',
+  }]);
+  expect(result.roleQualificationVerified).toBe(false);
+  expect(result.forecastIssued).toBe(false);
+  expect(Object.isFrozen(result.basis.members[0].assignedSkills)).toBe(true);
+  expect(source.calls.some(call => call.sql.includes('skill.skill_key'))).toBe(true);
+});
+
+test('truncated skill associations cannot become a complete snapshot', async () => {
+  const source = fixture({ skills: Array.from({ length: 4097 }, () => ({
+    profile_id: workerId, skill_id: authSessionId, skill_key: 'tree-climber',
+    service_id: null, assigned_at: start, skill_updated_at: start,
+  })) });
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
+  expect(result).toEqual({ state: 'unavailable', reason: 'workforce_evidence_bounded',
+    forecastIssued: false });
 });
 
 const scheduled = overrides => ({ id: authSessionId, revision: 2,

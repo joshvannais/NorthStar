@@ -197,6 +197,8 @@ Part 8D has an [interim paid/demo Resource outlook availability state](../archit
 | D | Sensitivity, reverse-sensitivity and binding-constraint analysis that returns unavailable when the requested target is unsupported or impossible. |
 | E | Paid and isolated-demo risk-range UI, explanation, recovery and independent Part 9 acceptance. |
 
+Part 9A has an [unmounted deterministic baseline reproducibility prerequisite](../architecture/MISSION_26_PART9A_DETERMINISTIC_BASELINE.md) over the existing Part 4A Retell-only arithmetic candidate. It does not authenticate a caller's source snapshot, issue a paid forecast, or close final Part 9A acceptance.
+
 ## Part 10 — four Forecast Command Center slices
 
 | Slice | Scope |

@@ -78,6 +78,24 @@ test('rejects duplicate or unbounded horizons, automatic action and hidden keys'
   expect(() => normalize(hidden)).toThrow();
 });
 
+test('rejects forged array prototypes that could bypass target or horizon checks', () => {
+  const targetBypass = candidate();
+  targetBypass.settings.targets = [{ not: 'a target' }];
+  Object.setPrototypeOf(targetBypass.settings.targets,
+    Object.assign(Object.create(Array.prototype), { every() { return true; } }));
+  expect(() => normalize(targetBypass)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_SETTINGS_INVALID' }));
+
+  const horizonBypass = candidate();
+  Object.setPrototypeOf(horizonBypass.settings.horizons,
+    Object.assign(Object.create(Array.prototype), {
+      map() { return [{ grain: 'year', periods: 999 }]; },
+      [Symbol.iterator]: function* () { yield { grain: 'month', periods: 3 }; },
+    }));
+  expect(() => normalize(horizonBypass)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_SETTINGS_INVALID' }));
+});
+
 test('owner preference cannot label an interval calibrated or authenticate a source', () => {
   const value = candidate();
   value.settings.scenarioDisplay = 'calibrated_when_eligible';

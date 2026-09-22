@@ -14,24 +14,37 @@ function invalid() {
   error.code = 'M26_FORECAST_SETTINGS_INVALID';
   throw error;
 }
-function exact(value, keys) {
+function record(value, keys) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      Object.getPrototypeOf(value) !== Object.prototype) return false;
+      Object.getPrototypeOf(value) !== Object.prototype) return null;
   const own = Reflect.ownKeys(value);
-  return own.length === keys.length && own.every(key => {
-    if (typeof key !== 'string' || !keys.includes(key)) return false;
+  if (own.length !== keys.length) return null;
+  const captured = {};
+  for (const key of own) {
+    if (typeof key !== 'string' || !keys.includes(key)) return null;
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor.enumerable && Object.hasOwn(descriptor, 'value');
-  });
-}
-function dense(values, max) {
-  if (!Array.isArray(values) || values.length > max ||
-      Reflect.ownKeys(values).length !== values.length + 1) return false;
-  for (let index = 0; index < values.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(values, index);
-    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return false;
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return null;
+    captured[key] = descriptor.value;
   }
-  return true;
+  return captured;
+}
+function captureDense(values, max) {
+  if (!Array.isArray(values) || Object.getPrototypeOf(values) !== Array.prototype) return null;
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(values, 'length');
+  if (!lengthDescriptor || !Object.hasOwn(lengthDescriptor, 'value') ||
+      !Number.isInteger(lengthDescriptor.value) || lengthDescriptor.value < 0 ||
+      lengthDescriptor.value > max) return null;
+  const length = lengthDescriptor.value;
+  const own = Reflect.ownKeys(values);
+  if (own.length !== length + 1 || own.some(key => key !== 'length' &&
+      (typeof key !== 'string' || !/^(?:0|[1-9][0-9]*)$/.test(key) || Number(key) >= length))) return null;
+  const captured = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(values, index);
+    if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) return null;
+    captured.push(descriptor.value);
+  }
+  return captured;
 }
 function instant(value) {
   return typeof value === 'string' && INSTANT.test(value) &&
@@ -57,48 +70,47 @@ function defaultForecastSettings(organizationId) {
         actorUserId: null, supersedesDigest: null }, settings }) });
 }
 function normalizeForecastSettings(input) {
-  if (!exact(input, ['version', 'organizationId', 'revision', 'effectiveAt',
-    'source', 'settings']) || input.version !== VERSION ||
-    typeof input.organizationId !== 'string' || !UUID.test(input.organizationId) ||
-    !Number.isInteger(input.revision) || input.revision < 1 || input.revision > 1000000000 ||
-    !instant(input.effectiveAt) ||
-    !exact(input.source, ['kind', 'actorUserId', 'supersedesDigest']) ||
-    input.source.kind !== 'owner_reviewed' ||
-    typeof input.source.actorUserId !== 'string' || !UUID.test(input.source.actorUserId) ||
-    !(input.source.supersedesDigest === null ||
-      (typeof input.source.supersedesDigest === 'string' && DIGEST.test(input.source.supersedesDigest))) ||
-    (input.revision === 1 ? input.source.supersedesDigest !== null :
-      input.source.supersedesDigest === null)) invalid();
-  const settings = input.settings;
-  if (!exact(settings, ['enabled', 'targets', 'horizons', 'scenarioDisplay',
-    'comparisonDisplay', 'alertDelivery', 'actionPolicy']) ||
-    typeof settings.enabled !== 'boolean' || !dense(settings.targets, 24) ||
-    !settings.targets.every(value => typeof value === 'string' && value.length <= 80 &&
-      TOKEN.test(value)) || new Set(settings.targets).size !== settings.targets.length ||
-    !dense(settings.horizons, 12) ||
+  const root = record(input, ['version', 'organizationId', 'revision', 'effectiveAt',
+    'source', 'settings']);
+  const source = root && record(root.source, ['kind', 'actorUserId', 'supersedesDigest']);
+  const settings = root && record(root.settings, ['enabled', 'targets', 'horizons',
+    'scenarioDisplay', 'comparisonDisplay', 'alertDelivery', 'actionPolicy']);
+  const targets = settings && captureDense(settings.targets, 24);
+  const rawHorizons = settings && captureDense(settings.horizons, 12);
+  if (!root || root.version !== VERSION ||
+    typeof root.organizationId !== 'string' || !UUID.test(root.organizationId) ||
+    !Number.isInteger(root.revision) || root.revision < 1 || root.revision > 1000000000 ||
+    !instant(root.effectiveAt) || !source || source.kind !== 'owner_reviewed' ||
+    typeof source.actorUserId !== 'string' || !UUID.test(source.actorUserId) ||
+    !(source.supersedesDigest === null ||
+      (typeof source.supersedesDigest === 'string' && DIGEST.test(source.supersedesDigest))) ||
+    (root.revision === 1 ? source.supersedesDigest !== null : source.supersedesDigest === null) ||
+    !settings || typeof settings.enabled !== 'boolean' || !targets ||
+    !targets.every(value => typeof value === 'string' && value.length <= 80 && TOKEN.test(value)) ||
+    new Set(targets).size !== targets.length || !rawHorizons ||
     !['withhold', 'deterministic_when_eligible', 'calibrated_when_eligible']
       .includes(settings.scenarioDisplay) ||
     !['none', 'prior', 'actual', 'prior_and_actual'].includes(settings.comparisonDisplay) ||
     !['off', 'in_app_review_only'].includes(settings.alertDelivery) ||
     settings.actionPolicy !== 'review_required') invalid();
+  const horizons = rawHorizons.map(horizon => record(horizon, ['grain', 'periods']));
   const horizonKeys = new Set();
-  for (const horizon of settings.horizons) {
-    if (!exact(horizon, ['grain', 'periods']) || !GRAINS.has(horizon.grain) ||
+  for (const horizon of horizons) {
+    if (!horizon || !GRAINS.has(horizon.grain) ||
       !Number.isInteger(horizon.periods) || horizon.periods < 1 || horizon.periods > 100 ||
       horizonKeys.has(horizon.grain)) invalid();
     horizonKeys.add(horizon.grain);
   }
-  if (settings.enabled && (settings.targets.length === 0 || settings.horizons.length === 0)) invalid();
-  if (!settings.enabled && (settings.targets.length > 0 || settings.horizons.length > 0 ||
+  if (settings.enabled && (targets.length === 0 || horizons.length === 0)) invalid();
+  if (!settings.enabled && (targets.length > 0 || horizons.length > 0 ||
       settings.scenarioDisplay !== 'withhold' || settings.comparisonDisplay !== 'none' ||
       settings.alertDelivery !== 'off')) invalid();
-  const normalized = { version: VERSION, organizationId: input.organizationId.toLowerCase(),
-    revision: input.revision, effectiveAt: input.effectiveAt,
-    source: { kind: input.source.kind,
-      actorUserId: input.source.actorUserId.toLowerCase(),
-      supersedesDigest: input.source.supersedesDigest },
-    settings: { enabled: settings.enabled, targets: [...settings.targets].sort(),
-      horizons: settings.horizons.map(item => ({ ...item }))
+  const normalized = { version: VERSION, organizationId: root.organizationId.toLowerCase(),
+    revision: root.revision, effectiveAt: root.effectiveAt,
+    source: { kind: source.kind, actorUserId: source.actorUserId.toLowerCase(),
+      supersedesDigest: source.supersedesDigest },
+    settings: { enabled: settings.enabled, targets: [...targets].sort(),
+      horizons: horizons.map(item => ({ ...item }))
         .sort((left, right) => left.grain.localeCompare(right.grain)),
       scenarioDisplay: settings.scenarioDisplay,
       comparisonDisplay: settings.comparisonDisplay,

@@ -725,6 +725,17 @@
       : 'Current plans do not confirm stock, equipment availability or travel capacity.';
   }
 
+  function renderRangeOutlook() {
+    // A deterministic what-if is not a calibrated range. No evaluated range
+    // run is mounted for either a paid tenant or the fictional demo.
+    byId('commandCenterRangeState').textContent = 'Ranges unavailable';
+    byId('commandCenterRangeExplanation').textContent = mode === 'demo'
+      ? 'This demo uses fictional results. No tested forecast range has been issued for this demo workspace.'
+      : 'NorthStar needs verified past results and tested forecasts before it can show a reliable range.';
+    byId('commandCenterRangeBoundary').textContent =
+      'What-if scenarios show changed assumptions, not the odds that a result will happen.';
+  }
+
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -738,6 +749,7 @@
     renderCoachAndStatus(graphs);
     renderDemandOutlook();
     renderResourceOutlook();
+    renderRangeOutlook();
     renderCta();
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
     setStatus('', 'ready');
@@ -788,6 +800,9 @@
       byId('commandCenterResourceState').textContent = 'Workspace unavailable';
       byId('commandCenterResourceExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
       byId('commandCenterResourceBoundary').textContent = 'No resource forecast is shown while workspace data is unavailable.';
+      byId('commandCenterRangeState').textContent = 'Workspace unavailable';
+      byId('commandCenterRangeExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
+      byId('commandCenterRangeBoundary').textContent = 'No forecast range is shown while workspace data is unavailable.';
       renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');
       if (expected) throw new Error('Command Center authoritative refresh failed; the visible scheduling overview is stale and unavailable.');

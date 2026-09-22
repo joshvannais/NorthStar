@@ -1,0 +1,7 @@
+# Mission 26 Part 9E — interim forecast-range availability
+
+The shared paid/demo Command Center adds a compact Forecast ranges panel beneath Demand and Resource outlooks. It says ranges are unavailable. Paid wording explains that verified past results and tested forecasts are needed before showing a reliable range; demo wording explicitly calls its results fictional. The panel distinguishes what-if scenarios from measured odds. When workspace loading fails, it replaces the state and copy with a refresh message and no stale range; successful refresh returns to the unavailable state.
+
+This is an **interim availability view**, not the Part 9E calibrated risk-range UI or final Part 9 acceptance. Parts 9A, 9C and 9D have unmounted caller-supplied prerequisites; 9B documents the missing source, saved-run, quantile-policy and held-out evaluation gates. There is no authenticated range run, provider, probability, risk score or calibrated number to render. A future paid range UI must consume a guarded issued run with current tenant permission and calibrated evidence. The demo must use isolated synthetic inputs and must not imply a provider or customer confirmed anything.
+
+Chrome and Playwright WebKit each passed four paid/demo desktop/mobile fixture cases, including unavailable, failed load and recovery. Rendered paid desktop and demo mobile panels were inspected for legible plain-language wording and responsive layout. These synthetic checks do not prove live provider, private-production behavior, physical Safari, CI or founder visual approval.

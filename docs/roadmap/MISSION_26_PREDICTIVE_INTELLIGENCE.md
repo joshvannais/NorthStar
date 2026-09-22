@@ -164,6 +164,12 @@ released source records inspected; a new source write authority requires
 founder review where existing future authority does not explicitly cover it.
 No numerical cash-commitment forecast or final Part 7D acceptance is claimed.
 
+Part 7E's [operating profit integration gate](../architecture/MISSION_26_PART7E_OPERATING_PROFIT_INTEGRATION_GATE.md)
+requires a source-authenticated adopted composition, compatible revenue and
+overhead evidence, exact calendar attribution and preserved overlap before a
+monthly number or chart can issue. The current A–D prerequisites do not meet
+those conditions. Part 7 acceptance and its paid/demo visual journey remain open.
+
 ## Part 8 — four resource-risk slices
 
 | Slice | Scope |

@@ -157,6 +157,13 @@ unmounted consistency diagnostic. It does not independently recalculate fuel,
 maintenance, onsite use, transport or complete operating cost. Source
 authentication and final Part 7C acceptance remain open.
 
+Part 7D's [overhead and financed-asset cash source gate](../architecture/MISSION_26_PART7D_OVERHEAD_CASH_SOURCE_GATE.md)
+distinguishes Mission 24 job allocation from dated company expense and debt
+obligations. No complete owner-recorded obligation schedule exists in the
+released source records inspected; a new source write authority requires
+founder review where existing future authority does not explicitly cover it.
+No numerical cash-commitment forecast or final Part 7D acceptance is claimed.
+
 ## Part 8 — four resource-risk slices
 
 | Slice | Scope |

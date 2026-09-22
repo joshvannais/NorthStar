@@ -77,6 +77,8 @@ test('reads guarded M22 availability without claiming capacity or qualification'
   expect(result.basis.observedAt).toBe('2026-09-22T02:00:00.100001Z');
   expect(result.basis.snapshotId).toBe('100:100:');
   expect(result.roleQualificationVerified).toBe(false);
+  expect(result.reviewedWorkProfilesRead).toBe(true);
+  expect(result.basis.members[0].reviewedWorkProfile).toBeNull();
   expect(result.commitmentsCovered).toBe(false);
   expect(result.approvedScheduleIntervalsRead).toBe(true);
   expect(result.forecastIssued).toBe(false);
@@ -89,6 +91,57 @@ test('reads guarded M22 availability without claiming capacity or qualification'
   expect(source.calls.some(call => call.sql.includes('($2::uuid IS NULL OR assignment.id <> $2::uuid)'))).toBe(true);
   expect(source.calls.at(-1).sql).toBe('COMMIT');
   expect(source.released).toBe(true);
+});
+
+test('preserves approved certification evidence without claiming job qualification', async () => {
+  const source = fixture({ roster: [{ profile_id: workerId,
+    operational_role: 'technician', home_location_id: 'headquarters',
+    profile_updated_at: '2026-09-21T12:00:00.000Z',
+    membership_updated_at: '2026-09-21T12:00:00.000Z',
+    work_profile_event_id: authSessionId, work_profile_revision: 2,
+    work_profile_status: 'approved', work_profile_recorded_at: '2026-09-21T13:00:00.000Z',
+    verified_certification_ids: ['cert-a'],
+    work_profile_certifications: [{ id: 'cert-a', expiresOn: '2026-12-31' }],
+  }] });
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
+  expect(result.basis.members[0].reviewedWorkProfile).toEqual({
+    eventId: authSessionId, revision: 2, reviewStatus: 'approved',
+    recordedAt: '2026-09-21T13:00:00.000Z',
+    approvalRecordedCertifications: [{ id: 'cert-a', expiresOn: '2026-12-31' }],
+  });
+  expect(result.roleQualificationVerified).toBe(false);
+  expect(result.forecastIssued).toBe(false);
+  expect(Object.isFrozen(result.basis.members[0].reviewedWorkProfile.approvalRecordedCertifications)).toBe(true);
+  expect(source.calls.some(call => call.sql.includes('FROM public.canonical_work_profile_events event'))).toBe(true);
+});
+
+test('a revoked profile cannot retain reviewed certification authority', async () => {
+  const source = fixture({ roster: [{ profile_id: workerId,
+    operational_role: 'technician', home_location_id: 'headquarters',
+    profile_updated_at: start, membership_updated_at: start,
+    work_profile_event_id: authSessionId, work_profile_revision: 3,
+    work_profile_status: 'revoked', work_profile_recorded_at: start,
+    verified_certification_ids: [],
+    work_profile_certifications: [{ id: 'cert-a', expiresOn: null }],
+  }] });
+  const result = await readDeclaredAvailabilitySnapshot(source.pool, input());
+  expect(result.basis.members[0].reviewedWorkProfile.reviewStatus).toBe('revoked');
+  expect(result.basis.members[0].reviewedWorkProfile.approvalRecordedCertifications).toEqual([]);
+  expect(result.roleQualificationVerified).toBe(false);
+});
+
+test('inconsistent reviewed-certification evidence fails closed', async () => {
+  const source = fixture({ roster: [{ profile_id: workerId,
+    operational_role: 'technician', home_location_id: 'headquarters',
+    profile_updated_at: start, membership_updated_at: start,
+    work_profile_event_id: authSessionId, work_profile_revision: 2,
+    work_profile_status: 'approved', work_profile_recorded_at: start,
+    verified_certification_ids: ['missing'],
+    work_profile_certifications: [{ id: 'cert-a', expiresOn: null }],
+  }] });
+  await expect(readDeclaredAvailabilitySnapshot(source.pool, input())).rejects.toMatchObject({
+    code: 'CANONICAL_PERSISTENCE_UNAVAILABLE', status: 503 });
+  expect(source.calls.at(-1).sql).toBe('ROLLBACK');
 });
 
 const scheduled = overrides => ({ id: authSessionId, revision: 2,

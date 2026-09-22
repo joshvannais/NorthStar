@@ -99,7 +99,13 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
     const roster = await client.query(
       `SELECT profile.id AS profile_id, profile.operational_role,
               profile.home_location_id, profile.updated_at AS profile_updated_at,
-              membership.updated_at AS membership_updated_at
+              membership.updated_at AS membership_updated_at,
+              reviewed.id AS work_profile_event_id,
+              reviewed.revision AS work_profile_revision,
+              reviewed.status AS work_profile_status,
+              reviewed.created_at AS work_profile_recorded_at,
+              reviewed.verified_certification_ids,
+              reviewed.document->'certifications' AS work_profile_certifications
          FROM public.workforce_profiles profile
          JOIN public.organization_memberships membership
            ON membership.organization_id = profile.organization_id
@@ -107,6 +113,14 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
          JOIN public.users account
            ON account.organization_id = membership.organization_id
           AND account.id = membership.user_id
+         LEFT JOIN LATERAL (
+           SELECT event.id, event.revision, event.status, event.created_at,
+                  event.verified_certification_ids, event.document
+             FROM public.canonical_work_profile_events event
+            WHERE event.organization_id = profile.organization_id
+              AND event.profile_id = profile.id AND event.stream = 'profile'
+            ORDER BY event.revision DESC LIMIT 1
+         ) reviewed ON TRUE
         WHERE profile.organization_id = $1 AND membership.status = 'active'
           AND account.status = 'active'
         ORDER BY profile.id
@@ -127,6 +141,36 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
     const members = roster.rows.map((row, index) => {
       const attached = candidate.members[index];
       const availability = attached.availability;
+      let reviewedWorkProfile = null;
+      if (row.work_profile_event_id) {
+        const ids = row.verified_certification_ids;
+        const certificates = row.work_profile_certifications;
+        if (!Number.isSafeInteger(Number(row.work_profile_revision)) ||
+            Number(row.work_profile_revision) < 1 ||
+            !['pending', 'approved', 'rejected', 'revoked'].includes(row.work_profile_status) ||
+            !Array.isArray(ids) || !Array.isArray(certificates)) {
+          throw error('CANONICAL_PERSISTENCE_UNAVAILABLE', 'Canonical PostgreSQL persistence is unavailable.', 503);
+        }
+        const byId = new Map(certificates.map(cert => [cert?.id, cert]));
+        if (certificates.some(cert => !cert || typeof cert.id !== 'string' ||
+            !cert.id || (cert.expiresOn !== null &&
+              (typeof cert.expiresOn !== 'string' ||
+                !/^\d{4}-\d{2}-\d{2}$/.test(cert.expiresOn)))) ||
+            byId.size !== certificates.length || new Set(ids).size !== ids.length || ids.some(id =>
+          typeof id !== 'string' || !byId.has(id)) ||
+          (row.work_profile_status !== 'approved' && ids.length !== 0)) {
+          throw error('CANONICAL_PERSISTENCE_UNAVAILABLE', 'Canonical PostgreSQL persistence is unavailable.', 503);
+        }
+        reviewedWorkProfile = {
+          eventId: row.work_profile_event_id,
+          revision: Number(row.work_profile_revision),
+          reviewStatus: row.work_profile_status,
+          recordedAt: new Date(row.work_profile_recorded_at).toISOString(),
+          approvalRecordedCertifications: ids.map(id => ({
+            id, expiresOn: byId.get(id).expiresOn,
+          })),
+        };
+      }
       return {
         profileId: row.profile_id,
         operationalRole: row.operational_role,
@@ -135,6 +179,7 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
         membershipUpdatedAt: new Date(row.membership_updated_at).toISOString(),
         serviceIds: attached.serviceIds,
         availability,
+        reviewedWorkProfile,
       };
     });
     if (members.some(member => !member.availability ||
@@ -172,6 +217,7 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
     return Object.freeze({ state: 'source_snapshot', sourceSnapshotDigest: sha256(basis),
       basis, sourceAuthenticated: true, temporalCutoffVerified: false,
       roleQualificationVerified: false,
+      reviewedWorkProfilesRead: true,
       approvedScheduleIntervalsRead: true, commitmentsCovered: false,
       resourceConstraintsChecked: false,
       forecastIssued: false });

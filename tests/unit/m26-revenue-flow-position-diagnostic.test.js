@@ -77,7 +77,10 @@ test('a booking without a visible reviewed price withholds only booked value', (
 
 test('an approval recorded after booking cannot be retroactively counted', () => {
   const result = summarizeRevenueFlowPosition(input([record({
-    approval: approval({ recordedAt: '2026-10-05T00:00:00.000Z' }) })]));
+    approval: approval({ recordedAt: '2026-10-05T00:00:00.000Z' }),
+    booking: booking({ effectivePrice: { ...booking().effectivePrice,
+      recordedAt: '2026-10-05T00:00:00.000Z' } }),
+  })]));
   expect(result.bookedWorkValue.reason).toBe('unresolved_price_at_booking');
 });
 
@@ -111,6 +114,16 @@ test('malformed, repeated, later, or over-bound records fail closed', () => {
   expect(() => summarizeRevenueFlowPosition(input([record({
     booking: booking({ effectivePrice: undefined }) })])))
     .toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));
+  expect(() => summarizeRevenueFlowPosition(input([record({ booking: booking({
+    effectivePrice: { ...booking().effectivePrice, price: '999.00' },
+  }) })]))).toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));
+  const disguisedId = { toString: () => estimateA };
+  expect(() => summarizeRevenueFlowPosition(input([record({
+    estimateId: disguisedId,
+  })]))).toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));
+  expect(() => summarizeRevenueFlowPosition(input([], {
+    currency: { toString: () => 'USD' },
+  }))).toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));
   expect(() => summarizeRevenueFlowPosition(input([], { window: {
     startsAt: window.startsAt, endsAt: '2026-10-09T00:00:00.000Z',
   } }))).toThrow(expect.objectContaining({ code: 'M26_REVENUE_FLOW_INVALID' }));

@@ -8,6 +8,8 @@ const DIGEST = /^[0-9a-f]{64}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const MONEY = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?$/;
 const MAX_RECORDS = 256;
+const uuid = value => typeof value === 'string' && UUID.test(value);
+const currency = value => typeof value === 'string' && /^[A-Z]{3}$/.test(value);
 
 function invalid() {
   const error = new Error('Revenue flow position details are invalid.');
@@ -50,11 +52,11 @@ function position(state, reason, centsValue, count) {
 function summarizeRevenueFlowPosition(input) {
   if (!exact(input, ['version', 'organizationId', 'asOf', 'window', 'currency',
     'sourceSnapshotDigest', 'coverage', 'records']) || input.version !== VERSION ||
-      !UUID.test(input.organizationId) || !instant(input.asOf) ||
+      !uuid(input.organizationId) || !instant(input.asOf) ||
       !exact(input.window, ['startsAt', 'endsAt']) ||
       !instant(input.window.startsAt) || !instant(input.window.endsAt) ||
       input.window.startsAt >= input.window.endsAt || input.window.endsAt > input.asOf ||
-      !/^[A-Z]{3}$/.test(input.currency) ||
+      !currency(input.currency) ||
       typeof input.sourceSnapshotDigest !== 'string' || !DIGEST.test(input.sourceSnapshotDigest) ||
       !exact(input.coverage, ['state', 'recordedThrough', 'hasMore']) ||
       !['complete', 'incomplete', 'revoked'].includes(input.coverage.state) ||
@@ -67,7 +69,7 @@ function summarizeRevenueFlowPosition(input) {
   let approvalProblem = null, bookingProblem = null;
   for (const record of input.records) {
     if (!exact(record, ['estimateId', 'organizationId', 'approvalState', 'approval',
-      'bookingState', 'booking']) || !UUID.test(record.estimateId) ||
+      'bookingState', 'booking']) || !uuid(record.estimateId) ||
         record.organizationId !== input.organizationId || identities.has(record.estimateId) ||
         !['approved', 'unapproved', 'unknown'].includes(record.approvalState) ||
         !['booked', 'not_booked', 'unknown'].includes(record.bookingState) ||
@@ -76,29 +78,34 @@ function summarizeRevenueFlowPosition(input) {
     identities.add(record.estimateId);
     const approval = record.approval;
     if (approval !== null && (!exact(approval, ['decisionId', 'at', 'recordedAt',
-      'price', 'currency']) || !UUID.test(approval.decisionId) ||
+      'price', 'currency']) || !uuid(approval.decisionId) ||
       !instant(approval.at) || !instant(approval.recordedAt) ||
       approval.at > approval.recordedAt || approval.recordedAt > input.asOf ||
       typeof approval.price !== 'string' || !MONEY.test(approval.price) ||
-      !/^[A-Z]{3}$/.test(approval.currency))) invalid();
+      !currency(approval.currency))) invalid();
     if (approval && approvalIds.has(approval.decisionId)) invalid();
     if (approval) approvalIds.add(approval.decisionId);
     const booking = record.booking;
     if (booking !== null && (!exact(booking, ['bookingId', 'at', 'recordedAt',
-      'priceDecisionId', 'effectivePrice', 'linkState']) || !UUID.test(booking.bookingId) ||
+      'priceDecisionId', 'effectivePrice', 'linkState']) || !uuid(booking.bookingId) ||
       !instant(booking.at) || !instant(booking.recordedAt) ||
       booking.at > booking.recordedAt || booking.recordedAt > input.asOf ||
-      !(booking.priceDecisionId === null || UUID.test(booking.priceDecisionId)) ||
+      !(booking.priceDecisionId === null || uuid(booking.priceDecisionId)) ||
       !['reviewed', 'unresolved'].includes(booking.linkState))) invalid();
     if (booking && bookingIds.has(booking.bookingId)) invalid();
     if (booking) bookingIds.add(booking.bookingId);
     const effective = booking?.effectivePrice;
     if (booking && effective !== null &&
         (!exact(effective, ['decisionId', 'approvedAt', 'recordedAt', 'price', 'currency']) ||
-          !UUID.test(effective.decisionId) || !instant(effective.approvedAt) ||
+          !uuid(effective.decisionId) || !instant(effective.approvedAt) ||
           !instant(effective.recordedAt) || effective.approvedAt > effective.recordedAt ||
           effective.recordedAt > input.asOf || typeof effective.price !== 'string' ||
-          !MONEY.test(effective.price) || !/^[A-Z]{3}$/.test(effective.currency))) invalid();
+          !MONEY.test(effective.price) || !currency(effective.currency))) invalid();
+    if (approval && effective && approval.decisionId === effective.decisionId &&
+        (approval.at !== effective.approvedAt ||
+         approval.recordedAt !== effective.recordedAt ||
+         cents(approval.price) !== cents(effective.price) ||
+         approval.currency !== effective.currency)) invalid();
 
     if (record.approvalState === 'unknown') approvalProblem ||= 'unresolved_approval';
     if (approval && approval.at >= input.window.startsAt &&

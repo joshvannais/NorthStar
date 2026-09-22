@@ -151,6 +151,12 @@ availability records. It is unmounted claimed-input arithmetic, not verified
 inventory, supplier availability, a complete purchasing cost or a forecast.
 Final Part 7B acceptance remains open.
 
+Part 7C's [equipment and travel cost boundary](../architecture/MISSION_26_PART7C_EQUIPMENT_TRAVEL_BOUNDARY.md)
+preserves Mission 24's v3 composition and overlap decisions in a bounded
+unmounted consistency diagnostic. It does not independently recalculate fuel,
+maintenance, onsite use, transport or complete operating cost. Source
+authentication and final Part 7C acceptance remain open.
+
 ## Part 8 — four resource-risk slices
 
 | Slice | Scope |

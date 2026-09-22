@@ -75,6 +75,22 @@ test('cannot claim current with mismatched source or algorithm pins', () => {
   expect(() => project(mislabeled)).toThrow();
 });
 
+test('a different algorithm key is a replacement, while one key/version cannot mutate', () => {
+  const differentKey = input();
+  differentKey.algorithm = { status: 'replaced',
+    current: { ...run.algorithm, key: 'seasonal' } };
+  expect(project(differentKey)).toMatchObject({ state: 'stale',
+    reasons: ['algorithm_replaced'] });
+  const mutatedDefinition = input();
+  mutatedDefinition.algorithm = { status: 'replaced',
+    current: { ...run.algorithm, definitionDigest: '2'.repeat(64) } };
+  expect(() => project(mutatedDefinition)).toThrow();
+  const mutatedImplementation = input();
+  mutatedImplementation.algorithm = { status: 'replaced',
+    current: { ...run.algorithm, implementationDigest: '3'.repeat(64) } };
+  expect(() => project(mutatedImplementation)).toThrow();
+});
+
 test('rejects malformed or fabricated status records and run references', () => {
   const wrongReceipt = input();
   wrongReceipt.source.capturedDigest = '9'.repeat(64);

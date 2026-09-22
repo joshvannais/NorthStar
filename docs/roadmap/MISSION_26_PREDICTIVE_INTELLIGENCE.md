@@ -103,6 +103,8 @@ Part 5B's [guarded declared-availability source](../architecture/MISSION_26_PART
 
 Part 5B's [company operating-window position](../architecture/MISSION_26_PART5B_OPERATING_WINDOWS.md) reuses Mission 22 time-zone rules to calculate bounded business-open minutes, including overnight and daylight-saving conditions. It is an unmounted descriptive calendar prerequisite, not worker availability or a capacity forecast.
 
+Part 5B's [guarded operating-window bridge](../architecture/MISSION_26_PART5B_GUARDED_OPERATING_WINDOWS.md) binds that calculation to the current Mission 22-guarded Business Profile snapshot. The source is authenticated as a current read, but the exact historical cutoff, worker availability, qualifications and constrained-capacity gates remain open.
+
 ## Part 6 — four revenue and financial-boundary slices
 
 | Slice | Scope |

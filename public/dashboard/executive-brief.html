@@ -198,6 +198,7 @@
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
       gap: 12px;
     }
+    #ebRevenue { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
     .eb-stat {
       text-align: center;
@@ -227,6 +228,18 @@
     .eb-stat-value.positive { color: var(--eb-success); }
     .eb-stat-value.warning { color: var(--eb-warning); }
     .eb-stat-value.neutral { color: var(--eb-accent); }
+    .eb-stat-value.unavailable {
+      color: var(--eb-text-secondary);
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .eb-revenue-note {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--eb-text-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
 
     .eb-insight-text {
       font-size: 14px;
@@ -461,9 +474,9 @@
             <div id="ebPriority">Loading...</div>
           </div>
 
-          <!-- 3. Revenue Snapshot -->
+          <!-- 3. Estimate and revenue status -->
           <div class="eb-card">
-            <div class="eb-card-title">Revenue Snapshot</div>
+            <div class="eb-card-title">Estimate &amp; Revenue Status</div>
             <div class="eb-stat-grid" id="ebRevenue">Loading...</div>
           </div>
 
@@ -548,26 +561,15 @@
             var summaryEl = document.getElementById('ebSummary');
             var parts = [];
             if (exec) {
-              var totalRev = exec.revenue ? exec.revenue.total || 0 : 0;
-              var outstanding = exec.revenue ? exec.revenue.outstanding || 0 : 0;
-              var forecast = exec.revenue ? exec.revenue.forecast || 0 : 0;
+              var originalPriceGuidance = exec.revenue ? Number(exec.revenue.total) : NaN;
               var pipe = exec.pipeline || {};
               var deals = pipe.activeDeals || 0;
-              var pipeVal = pipe.totalValue || pipe.pipelineValue || 0;
-              var weightedVal = pipe.weightedValue || pipe.weightedPipelineValue || 0;
 
               if (deals > 0) {
-                parts.push('Polaris™ identified <strong>' + fmtNumber(deals) + '</strong> active ' + (deals === 1 ? 'opportunity' : 'opportunities') + ' with a combined pipeline value of <strong>' + fmtCurrency(pipeVal) + '</strong>.');
-                parts.push('Based on current stage probabilities, the weighted pipeline is <strong>' + fmtCurrency(weightedVal) + '</strong>.');
-                if (pipe.averageOpportunityValue > 0 || pipe.avgDealValue > 0) {
-                  parts.push('The average opportunity value is <strong>' + fmtCurrency(pipe.averageOpportunityValue || pipe.avgDealValue) + '</strong>.');
-                }
+                parts.push('Polaris™ has <strong>' + fmtNumber(deals) + '</strong> ' + (deals === 1 ? 'record' : 'records') + ' in this summary.');
               }
-              if (outstanding > 0) {
-                parts.push('<strong>' + fmtCurrency(outstanding) + '</strong> in outstanding revenue requires attention.');
-              }
-              if (forecast > 0) {
-                parts.push('Projected revenue of <strong>' + fmtCurrency(forecast) + '</strong> over the next period.');
+              if (Number.isFinite(originalPriceGuidance) && originalPriceGuidance > 0) {
+                parts.push('Original estimate guidance totals <strong>' + fmtCurrency(originalPriceGuidance) + '</strong>. This is not approved or earned revenue.');
               }
             }
             if (parts.length === 0) {
@@ -587,14 +589,12 @@
                     '<div class="eb-priority-title">' + (top.title || top.action || 'Action Required') + '</div>' +
                     '<div class="eb-priority-meta">' +
                       getPriorityBadge(priority) +
-                      '<span>Confidence: ' + (top.confidence || 50) + '%</span>' +
-                      '<span>Impact: ' + (top.businessImpact || top.impact || 'Revenue') + '</span>' +
                     '</div>' +
                     '<div class="eb-priority-explanation">' + (top.explanation || top.reason || 'Review the latest intelligence for details.') + '</div>' +
                   '</div>' +
                 '</div>';
-            } else if (exec && exec.companyHealth !== undefined) {
-              var health = exec.companyHealth || 50;
+            } else if (exec && Number.isFinite(exec.companyHealth)) {
+              var health = exec.companyHealth;
               var healthLabel = health >= 80 ? 'Excellent' : health >= 60 ? 'Good' : health >= 40 ? 'Fair' : 'Needs Attention';
               priorityEl.innerHTML =
                 '<div class="eb-priority-card">' +
@@ -608,34 +608,17 @@
               priorityEl.innerHTML = '<div class="eb-empty">Generate Polaris™ intelligence by starting a call or uploading a transcript to see prioritized recommendations.</div>';
             }
 
-            // ── 3. Revenue Snapshot ──
+            // ── 3. Estimate and revenue status ──
             var revenueEl = document.getElementById('ebRevenue');
-            if (exec && exec.revenue) {
-              var totalRevenue = exec.revenue.total || 0;
-              var outstandingRev = exec.revenue.outstanding || 0;
-              var forecastRev = exec.revenue.forecast || 0;
-              var collectionRate = exec.revenue.collectionRate;
-              if (!collectionRate || collectionRate === '0%' || collectionRate === 0) {
-                collectionRate = totalRevenue > 0 ? '0%' : 'N/A';
-              }
-              var hasInvoices = totalRevenue > 0 || outstandingRev > 0;
-              var collLabel = hasInvoices ? (collectionRate === 'N/A' ? 'Not Available' : collectionRate) : 'No Billing History';
-              var forecastLabel = forecastRev > 0 && exec.pipeline && (exec.pipeline.weightedValue || exec.pipeline.weightedPipelineValue) > 0 ? 'Weighted Forecast' : 'Forecast';
-              revenueEl.innerHTML =
-                '<div class="eb-stat"><div class="eb-stat-value neutral">' + fmtCurrency(totalRevenue) + '</div><div class="eb-stat-label">Total Revenue</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value warning">' + fmtCurrency(outstandingRev) + '</div><div class="eb-stat-label">Outstanding</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value positive">' + fmtCurrency(forecastRev) + '</div><div class="eb-stat-label">' + forecastLabel + '</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value">' + collLabel + '</div><div class="eb-stat-label">Collection Rate</div></div>';
-            } else if (dashboard && dashboard.summary) {
-              var dkpis = dashboard.summary;
-              revenueEl.innerHTML =
-                '<div class="eb-stat"><div class="eb-stat-value neutral">' + fmtCurrency(dkpis.totalRevenue || 0) + '</div><div class="eb-stat-label">Total Revenue</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value warning">' + fmtCurrency(dkpis.outstandingRevenue || 0) + '</div><div class="eb-stat-label">Outstanding</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value">' + (dkpis.pendingEstimates || 0) + '</div><div class="eb-stat-label">Pending Est.</div></div>' +
-                '<div class="eb-stat"><div class="eb-stat-value">' + (dkpis.activeDeals || 0) + '</div><div class="eb-stat-label">Active Deals</div></div>';
-            } else {
-              revenueEl.innerHTML = '<div class="eb-empty">Revenue data will appear once Polaris™ processes customer interactions.</div>';
-            }
+            var guidance = exec.revenue ? Number(exec.revenue.total) : NaN;
+            var hasGuidance = Number.isFinite(guidance) && guidance > 0;
+            var guidanceText = hasGuidance ? fmtCurrency(guidance) : 'Not available';
+            revenueEl.innerHTML =
+              '<div class="eb-stat"><div class="eb-stat-value ' + (hasGuidance ? 'neutral' : 'unavailable') + '">' + guidanceText + '</div><div class="eb-stat-label">Original Estimate Guidance</div></div>' +
+              '<div class="eb-stat"><div class="eb-stat-value unavailable">Not available</div><div class="eb-stat-label">Approved Price</div></div>' +
+              '<div class="eb-stat"><div class="eb-stat-value unavailable">Not available</div><div class="eb-stat-label">Booked Work</div></div>' +
+              '<div class="eb-stat"><div class="eb-stat-value unavailable">Not available</div><div class="eb-stat-label">Cash Received</div></div>' +
+              '<p class="eb-revenue-note">This summary does not yet have verified approval, booking, payment, or forecast history. Original estimate guidance is not revenue.</p>';
 
             // ── 4. Operational Snapshot ──
             var opsEl = document.getElementById('ebOperational');
@@ -726,15 +709,13 @@
               var top = exec.recommendations[0];
               var actionTitle = top.title || top.action || 'Review Executive Brief';
               var actionDesc = top.explanation || top.reason || 'Polaris™ has identified an action that requires your attention.';
-              var actionImpact = top.businessImpact || 'Business Impact';
-              var actionConfidence = top.confidence || 85;
               actionEl.innerHTML =
                 '<a href="/dashboard/polaris" class="eb-action-card">' +
                   '<div class="eb-action-icon">&#9733;</div>' +
                   '<div class="eb-action-body">' +
                     '<div class="eb-action-title">' + actionTitle + '</div>' +
                     '<div class="eb-action-meta">' + actionDesc + '</div>' +
-                    '<div class="eb-action-meta" style="margin-top:4px;font-size:11px;color:var(--eb-text-muted);">Confidence: ' + actionConfidence + '% &middot; ' + actionImpact + '</div>' +
+                    '<div class="eb-action-meta" style="margin-top:4px;font-size:11px;color:var(--eb-text-muted);">Review the recommendation in Polaris.</div>' +
                   '</div>' +
                 '</a>';
             } else {

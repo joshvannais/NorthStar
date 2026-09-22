@@ -14,7 +14,7 @@
   <script src="/js/auth-session.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
-  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m26-resource-state-20260922">
+  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m26-range-state-20260922">
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
   <link rel="stylesheet" href="/css/scheduling-approval.css?v=command-center-clarity-20260915">
@@ -176,6 +176,18 @@
             <p id="commandCenterResourceExplanation">Resource forecast status will appear after the workspace loads.</p>
             <p class="command-center-demand-boundary" id="commandCenterResourceBoundary">Current records do not confirm future stock or equipment availability.</p>
           </section>
+
+          <section class="demo-panel command-center-range-outlook" aria-labelledby="commandCenterRangeTitle">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Forecast ranges</p>
+                <h2 id="commandCenterRangeTitle">What could change</h2>
+              </div>
+              <span class="command-center-demand-state" id="commandCenterRangeState">Waiting for workspace</span>
+            </div>
+            <p id="commandCenterRangeExplanation">Range status will appear after the workspace loads.</p>
+            <p class="command-center-demand-boundary" id="commandCenterRangeBoundary">What-if scenarios are assumptions, not measured odds.</p>
+          </section>
           </div>
 
           <section class="demo-bottom-grid" aria-label="Guidance and workspace context">
@@ -236,7 +248,7 @@
   <script src="/js/scheduling-time-contract.js"></script>
   <script src="/js/display-projection.js"></script>
   <script src="/js/scheduling-approval-ui.js"></script>
-  <script src="/js/command-center-page.js?v=m26-resource-state-20260922"></script>
+  <script src="/js/command-center-page.js?v=m26-range-state-20260922"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

@@ -99,6 +99,16 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
     expect(empty.snapshot).toMatchObject({ eventCount: 0,
       purposeKey: 'forecast_approved_price_flow',
       targetKey: 'revenue.approved_price_flow' });
+    const owner = fixture.actors.owner;
+    const coverageSql =
+      'SELECT public.canonical_forecast_price_period_anchor_read($1,$2,$3,$4,$5) value';
+    const anchor = (await fixture.runtimePool.query(coverageSql,
+      [fixture.org, owner.actorUserId, owner.actorAccessRole,
+        owner.authSessionId, empty.snapshot.id])).rows[0].value;
+    expect(anchor).toMatchObject({ state: 'source_period_anchor',
+      scope: 'northstar_m24_approved_price_decisions',
+      coverageStartsAt: empty.snapshot.asOf, firstSnapshotId: empty.snapshot.id,
+      wholeBusinessCoverageVerified: false, forecastIssued: false });
     expect(await currentness(fixture.actors.owner, empty.snapshot.id))
       .toMatchObject({ state: 'current', capturedEventCount: 0,
         currentEventCount: 0, forecastIssued: false });
@@ -144,6 +154,13 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
       amendmentCount: 0, withdrawalCount: 0 });
     const replay = await capture(fixture.actors.owner, requestKey);
     expect(replay).toEqual({ snapshot: empty.snapshot, replayed: true });
+    const stillFirst = (await fixture.runtimePool.query(coverageSql,
+      [fixture.org, owner.actorUserId, owner.actorAccessRole,
+        owner.authSessionId, withdrawn.snapshot.id])).rows[0].value;
+    expect(stillFirst.coverageStartsAt).toBe(empty.snapshot.asOf);
+    await expect(fixture.ownerPool.query(
+      'UPDATE canonical_forecast_price_period_anchors SET created_at=created_at WHERE organization_id=$1',
+      [fixture.org])).rejects.toMatchObject({ code: '23514' });
     expect(first.snapshot.events).toHaveLength(1);
     await expect(fixture.ownerPool.query(
       'UPDATE canonical_forecast_price_event_snapshots SET purpose_key=purpose_key WHERE id=$1',
@@ -159,12 +176,17 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
     const savedKey = key();
     const saved = await capture(fixture.actors.owner, savedKey);
     const readSql = 'SELECT public.canonical_forecast_price_event_snapshot_read($1,$2,$3,$4,$5) value';
+    const coverageSql =
+      'SELECT public.canonical_forecast_price_period_anchor_read($1,$2,$3,$4,$5) value';
     const owner = fixture.actors.owner;
     const read = await fixture.runtimePool.query(readSql,
       [fixture.org, owner.actorUserId, owner.actorAccessRole, owner.authSessionId, saved.snapshot.id]);
     expect(read.rows[0].value.sourceSnapshotDigest).toBe(saved.snapshot.sourceSnapshotDigest);
     const member = fixture.actors.member;
     await expect(fixture.runtimePool.query(readSql,
+      [fixture.org, member.actorUserId, null, member.authSessionId, saved.snapshot.id]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(coverageSql,
       [fixture.org, member.actorUserId, null, member.authSessionId, saved.snapshot.id]))
       .rejects.toMatchObject({ code: '42501' });
     await fixture.ownerPool.query(
@@ -186,7 +208,13 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
       [fixture.otherOrg, other.actorUserId, other.actorAccessRole,
         other.authSessionId, saved.snapshot.id]);
     expect(otherRead.rows[0].value).toBeNull();
+    const otherCoverage = await fixture.runtimePool.query(coverageSql,
+      [fixture.otherOrg, other.actorUserId, other.actorAccessRole,
+        other.authSessionId, saved.snapshot.id]);
+    expect(otherCoverage.rows[0].value).toBeNull();
     await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_price_event_snapshots'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_price_period_anchors'))
       .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.runtimePool.query(
       'SELECT public.canonical_forecast_price_decision_events($1,NOW())', [fixture.org]))
@@ -221,8 +249,22 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
       currentnessVerified: true, historicalOnly: true,
       forecastIssued: false, earnedRevenueMeasured: false,
       collectedCashMeasured: false,
-      position: { state: 'descriptive_only' } });
+      position: { state: 'descriptive_only' },
+      periodCoverage: { state: 'unavailable', reason: 'period_before_source_anchor',
+        wholeBusinessCoverageVerified: false } });
     expect(current.position.amount).toMatch(/^\d+\.\d{2}$/);
+    const anchor = (await fixture.runtimePool.query(
+      'SELECT public.canonical_forecast_price_period_anchor_read($1,$2,$3,$4,$5) value',
+      [fixture.org, fixture.actors.owner.actorUserId,
+        fixture.actors.owner.actorAccessRole, fixture.actors.owner.authSessionId,
+        saved.snapshot.id])).rows[0].value;
+    const covered = await readGuardedApprovedPriceFlow({ ...request,
+      window: { startsAt: anchor.coverageStartsAt,
+        endsAt: saved.snapshot.asOf } });
+    expect(covered.periodCoverage).toMatchObject({
+      state: 'provisional_northstar_ledger_period',
+      reason: 'source_commit_order_unverified', complete: false,
+      wholeBusinessCoverageVerified: false });
 
     const estimateId = await estimate();
     await decision(estimateId, 'approve', 1);
@@ -264,7 +306,10 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
     expect(current.status).toBe(200);
     expect(current.body.data).toMatchObject({ state: 'current_historical_source_only',
       forecastIssued: false, historicalOnly: true,
-      position: { state: 'descriptive_only' } });
+      position: { state: 'descriptive_only' },
+      periodCoverage: { state: 'unavailable',
+        reason: 'period_before_source_anchor',
+        wholeBusinessCoverageVerified: false } });
     const other = await request(fixture.app).get(path)
       .set('Cookie', fixture.actors.otherOwner.session.headers.Cookie).query(query);
     expect(other.status).toBe(200);

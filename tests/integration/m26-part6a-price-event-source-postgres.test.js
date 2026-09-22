@@ -30,6 +30,22 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
     } finally { client.release(); }
   }
 
+  async function currentness(actor, snapshotId) {
+    const client = await fixture.runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const result = await client.query(
+        'SELECT public.canonical_forecast_price_event_currentness_read($1,$2,$3,$4,$5) value',
+        [actor.organizationId, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, snapshotId]);
+      await client.query('COMMIT');
+      return result.rows[0].value;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally { client.release(); }
+  }
+
   async function estimate() {
     const operation = key(), graph = key(), customer = key(), opportunity = key();
     const estimateId = key(), fingerprint = hash(key());
@@ -80,22 +96,37 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
     expect(empty.snapshot).toMatchObject({ eventCount: 0,
       purposeKey: 'forecast_approved_price_flow',
       targetKey: 'revenue.approved_price_flow' });
+    expect(await currentness(fixture.actors.owner, empty.snapshot.id))
+      .toMatchObject({ state: 'current', capturedEventCount: 0,
+        currentEventCount: 0, forecastIssued: false });
     const estimateId = await estimate();
     const firstId = await decision(estimateId, 'approve', 1);
     const first = await capture();
     expect(first.snapshot.events).toEqual([expect.objectContaining({
       estimateId, decisionId: firstId, revision: 1, action: 'approve',
       priceBeforeTax: '500.00', currency: 'USD' })]);
+    expect(await currentness(fixture.actors.owner, empty.snapshot.id))
+      .toMatchObject({ state: 'stale', capturedEventCount: 0,
+        currentEventCount: 1 });
     const secondId = await decision(estimateId, 'approve', 2, firstId, '650.00');
     const second = await capture();
     expect(second.snapshot.events.map(event => event.decisionId)).toEqual([firstId, secondId]);
     expect(second.snapshot.events.map(event => event.priceBeforeTax)).toEqual(['500.00', '650.00']);
+    expect(await currentness(fixture.actors.owner, first.snapshot.id))
+      .toMatchObject({ state: 'stale', capturedEventCount: 1,
+        currentEventCount: 2 });
     const withdrawalId = await decision(estimateId, 'withdraw', 3, secondId);
     const withdrawn = await capture();
     expect(withdrawn.snapshot.events.map(event => event.decisionId))
       .toEqual([firstId, secondId, withdrawalId]);
     expect(withdrawn.snapshot.events[2].priceBeforeTax).toBeNull();
     expect(withdrawn.snapshot.sourceSnapshotDigest).not.toBe(second.snapshot.sourceSnapshotDigest);
+    const latest = await currentness(fixture.actors.owner, withdrawn.snapshot.id);
+    expect(latest).toMatchObject({ state: 'current', capturedEventCount: 3,
+      currentEventCount: 3, forecastIssued: false });
+    expect(latest.capturedEventsDigest).toBe(latest.currentEventsDigest);
+    expect(await currentness(fixture.actors.owner, second.snapshot.id))
+      .toMatchObject({ state: 'stale', currentEventCount: 3 });
     const authorized = await readPriceDecisionLineage({ pool: fixture.runtimePool,
       actor: fixture.actors.owner, snapshotId: withdrawn.snapshot.id });
     expect(authorized).toMatchObject({ state: 'historical_source_only',
@@ -156,6 +187,13 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
       .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.runtimePool.query(
       'SELECT public.canonical_forecast_price_decision_events($1,NOW())', [fixture.org]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(
+      'SELECT public.canonical_forecast_price_event_currentness_read($1,$2,$3,$4,$5)',
+      [fixture.org, owner.actorUserId, owner.actorAccessRole,
+        owner.authSessionId, saved.snapshot.id]))
+      .rejects.toMatchObject({ code: '25001' });
+    await expect(currentness({ ...member, actorAccessRole: null }, saved.snapshot.id))
       .rejects.toMatchObject({ code: '42501' });
     await fixture.ownerPool.query("UPDATE subscriptions SET status='past_due' WHERE organization_id=$1", [fixture.org]);
     try {

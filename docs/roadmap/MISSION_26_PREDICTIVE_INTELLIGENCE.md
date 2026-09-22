@@ -258,6 +258,8 @@ The first Part 6A source extension is a [guarded approved-price decision event r
 
 The follow-on [price-decision lineage adapter](../architecture/MISSION_26_PART6A_PRICE_LINEAGE.md) derives first approval and later decision status from that receipt through an internal guarded read. It remains historical source evidence, not a current or future forecast; final Part 6A and Part 12A acceptance remain open.
 
+The [price-event currentness comparison](../architecture/MISSION_26_PART6A_PRICE_CURRENTNESS.md) can distinguish an unchanged historical receipt from one superseded by later Mission 24 decisions under current tenant and account authority. It does not yet invalidate a saved forecast run because no such run is mounted.
+
 ## Non-negotiable evidence boundaries
 
 - A forecast carries its as-of source snapshot, algorithm version, evidence coverage and uncertainty. It is never displayed as a known future fact.

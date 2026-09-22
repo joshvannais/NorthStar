@@ -102,3 +102,17 @@ test('tampered supplied output digest and cross-tenant run are rejected', () => 
   expect(() => project(input([run(0, '9'), other]))).toThrow(expect.objectContaining({
     code: 'M26_FORECAST_DRILLDOWN_INVALID' }));
 });
+
+test('a changed run between timeline and drilldown reads cannot swap explanation evidence', () => {
+  const first = run(0, '9');
+  const replacement = run(0, '9');
+  replacement.output.evidenceCoverage.missing = 99;
+  replacement.outputDigest = sha256(replacement.output);
+  let reads = 0;
+  const changingRuns = new Proxy([first], { get(target, key, receiver) {
+    if (key === '0') return reads++ === 0 ? first : replacement;
+    return Reflect.get(target, key, receiver);
+  } });
+  expect(() => project(input(changingRuns))).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_DRILLDOWN_INVALID' }));
+});

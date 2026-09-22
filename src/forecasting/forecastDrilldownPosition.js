@@ -65,7 +65,9 @@ function projectForecastDrilldown(input) {
       change: null, error: null };
     const current = outputs.get(period.current.runId);
     const prior = period.prior?.runId ? outputs.get(period.prior.runId) : null;
-    if (!current || (period.prior?.runId && !prior)) invalid();
+    if (!current || sha256(current) !== period.current.outputDigest ||
+        (period.prior?.runId && (!prior ||
+          sha256(prior) !== period.prior.outputDigest))) invalid();
     const currentValue = period.current.value;
     const priorValue = period.prior?.value;
     const change = currentValue?.kind === 'point' && priorValue?.kind === 'point' ?

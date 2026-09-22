@@ -1,0 +1,9 @@
+# Mission 26 Part 5B — company operating-window position
+
+Status: bounded, pure, unmounted calendar prerequisite. No worker-hours, available-role-hours, capacity forecast, assignment, route, migration or user-facing value is produced.
+
+`summarizeOperatingWindows` takes a claimed Business Profile hours object, its time zone, a source-snapshot digest and a UTC horizon of at most 31 days. Horizons before year 0101 are rejected because the reused calendar helper does not support those years; they cannot become a known zero. It reuses Mission 22's `hoursForDate` and wall-time resolution policy rather than creating a second daylight-saving rule. It includes a previous local date so overnight hours that cross into the horizon are not lost, clips intervals to the horizon, unions overlap, and counts distinct company operating minutes. A known closed calendar yields zero; missing or ambiguous hours withhold the total. Nonexistent or repeated local times are unavailable unless Mission 22 can resolve them uniquely. A valid fall-back window counts the repeated hour.
+
+This is **company operating time**, not time a specific worker is scheduled, qualified, willing, present or available. A business being open for eight hours does not create eight worker-hours. The function cannot authenticate its own caller-supplied source digest. The guarded workforce snapshot, role-specific evidence, leave, approved commitments, travel, shared resources, exact cutoff and evaluation gates must be reconciled separately before any `capacity.available_role_hours.v1` result could be issued. The result remains descriptive, `sourceAuthenticated:false`, `workerAvailabilityVerified:false` and `forecastIssued:false`.
+
+Focused tests cover lunch, overnight hours, known closure versus missing hours, spring and fall daylight-saving boundaries, malformed input, and frozen output. They are not source, database, provider, device, paid/demo, or forecast-accuracy evidence.

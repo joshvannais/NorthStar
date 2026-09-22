@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { readPriceDecisionLineage } = require('../../src/forecasting/priceDecisionLineage');
+const { readGuardedApprovedPriceFlow } =
+  require('../../src/forecasting/guardedApprovedPriceFlow');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -204,5 +206,34 @@ realPostgres('Mission 26 guarded approved-price event source', () => {
     } finally {
       await fixture.ownerPool.query("UPDATE subscriptions SET status='active' WHERE organization_id=$1", [fixture.org]);
     }
+  }, 120000);
+
+  test('binds a descriptive position to one guarded current source snapshot', async () => {
+    const saved = await capture();
+    const request = { pool: fixture.runtimePool, actor: fixture.actors.owner,
+      snapshotId: saved.snapshot.id,
+      window: { startsAt: '2020-01-01T00:00:00.000000Z',
+        endsAt: saved.snapshot.asOf }, currency: 'USD' };
+    const current = await readGuardedApprovedPriceFlow(request);
+    expect(current).toMatchObject({ state: 'current_historical_source_only',
+      snapshotId: saved.snapshot.id, sourceReadAuthorized: true,
+      currentnessVerified: true, historicalOnly: true,
+      forecastIssued: false, earnedRevenueMeasured: false,
+      collectedCashMeasured: false,
+      position: { state: 'descriptive_only' } });
+    expect(current.position.amount).toMatch(/^\d+\.\d{2}$/);
+
+    const estimateId = await estimate();
+    await decision(estimateId, 'approve', 1);
+    expect(await readGuardedApprovedPriceFlow(request))
+      .toEqual({ state: 'unavailable', reason: 'source_changed',
+        forecastIssued: false });
+    expect(await readGuardedApprovedPriceFlow({ ...request,
+      actor: fixture.actors.otherOwner }))
+      .toMatchObject({ state: 'unavailable' });
+    expect(await readGuardedApprovedPriceFlow({ ...request,
+      actor: fixture.actors.member }))
+      .toEqual({ state: 'unavailable', reason: 'invalid_source_request',
+        forecastIssued: false });
   }, 120000);
 });

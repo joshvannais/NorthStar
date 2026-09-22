@@ -124,6 +124,37 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
       await client.query('COMMIT');
       return unavailable('workforce_evidence_bounded');
     }
+    // Read the M22-owned skill associations in the same MVCC snapshot. A skill
+    // assignment describes company records; it does not prove certification
+    // or job-specific qualification.
+    const skillRecords = await client.query(
+      `SELECT relation.profile_id, skill.id AS skill_id, skill.skill_key,
+              skill.service_id, relation.created_at AS assigned_at,
+              skill.updated_at AS skill_updated_at
+         FROM public.workforce_profile_skills relation
+         JOIN public.workforce_skills skill
+           ON skill.organization_id = relation.organization_id
+          AND skill.id = relation.skill_id
+        WHERE relation.organization_id = $1
+          AND relation.profile_id = ANY($2::uuid[])
+        ORDER BY relation.profile_id, skill.id
+        LIMIT ${scheduling.MAXIMUM_CANDIDATE_SKILLS + 1}`,
+      [input.organizationId, roster.rows.map(row => row.profile_id)]
+    );
+    if (skillRecords.rows.length > scheduling.MAXIMUM_CANDIDATE_SKILLS) {
+      await client.query('COMMIT');
+      return unavailable('workforce_evidence_bounded');
+    }
+    const skillsByProfile = new Map();
+    for (const row of skillRecords.rows) {
+      if (!skillsByProfile.has(row.profile_id)) skillsByProfile.set(row.profile_id, []);
+      skillsByProfile.get(row.profile_id).push({
+        skillId: row.skill_id, skillKey: row.skill_key,
+        serviceId: row.service_id,
+        assignedAt: new Date(row.assigned_at).toISOString(),
+        skillUpdatedAt: new Date(row.skill_updated_at).toISOString(),
+      });
+    }
     const members = roster.rows.map((row, index) => {
       const attached = candidate.members[index];
       const availability = attached.availability;
@@ -134,6 +165,7 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
         profileUpdatedAt: new Date(row.profile_updated_at).toISOString(),
         membershipUpdatedAt: new Date(row.membership_updated_at).toISOString(),
         serviceIds: attached.serviceIds,
+        assignedSkills: skillsByProfile.get(row.profile_id) || [],
         availability,
       };
     });
@@ -172,6 +204,7 @@ async function readDeclaredAvailabilitySnapshot(pool, input) {
     return Object.freeze({ state: 'source_snapshot', sourceSnapshotDigest: sha256(basis),
       basis, sourceAuthenticated: true, temporalCutoffVerified: false,
       roleQualificationVerified: false,
+      assignedSkillRecordsRead: true,
       approvedScheduleIntervalsRead: true, commitmentsCovered: false,
       resourceConstraintsChecked: false,
       forecastIssued: false });

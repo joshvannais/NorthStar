@@ -203,6 +203,8 @@ Part 9B's [calibrated-range boundary](../architecture/MISSION_26_PART9B_CALIBRAT
 
 Part 9C has an [unmounted named open-pipeline scenario prerequisite](../architecture/MISSION_26_PART9C_NAMED_SCENARIO_CANDIDATE.md). It attributes per-estimate adverse/base/favorable assumption weights and reuses Part 6B arithmetic; claimed provenance and source coverage are not authenticated, no forecast is issued, and final Part 9C acceptance remains open.
 
+Part 9D has a [bounded open-pipeline sensitivity prerequisite](../architecture/MISSION_26_PART9D_PIPELINE_SENSITIVITY_CANDIDATE.md). It reuses Part 6B arithmetic for one declared base-weight change and reverse minimum target, returning unavailable for incomplete coverage or an impossible target. Other constraint classes and final Part 9D acceptance remain open.
+
 ## Part 10 — four Forecast Command Center slices
 
 | Slice | Scope |

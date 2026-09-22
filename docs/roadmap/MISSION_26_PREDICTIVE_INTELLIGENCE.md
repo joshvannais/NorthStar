@@ -91,6 +91,8 @@ Part 4D has an interim Command Center availability state in the shared paid/demo
 | C | Bottleneck, backlog, overtime, contractor and hiring-need advisories that never create a schedule, assignment or employment action. |
 | D | Paid and isolated-demo capacity UI, explanation, recovery and independent Part 5 acceptance. |
 
+Part 5A's [approved workload position boundary](../architecture/MISSION_26_PART5A_WORKLOAD_POSITION_BOUNDARY.md) has a bounded unmounted descriptive candidate. It separates scheduled and unscheduled remaining approved person-minutes and withholds totals for unresolved source or work status. It is neither an authenticated Mission 22/23 backlog reader nor a future workload or capacity forecast; final Part 5A acceptance remains open.
+
 ## Part 6 — four revenue and financial-boundary slices
 
 | Slice | Scope |

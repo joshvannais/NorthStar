@@ -19,6 +19,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
   let issuedVersionId;
   let estimateRoute;
   let matchingApprovalId;
+  let firstReviewId;
   beforeAll(async () => { f = await createEstimateReviewFixture(); }, 120000);
   afterAll(async () => { if (f) await f.cleanup(); }, 120000);
 
@@ -163,6 +164,39 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
       replayed: false, historicalCoverageVerified: false,
       bookedWorkVerified: false, forecastIssued: false });
+    firstReviewId = firstReview.id;
+    const currentnessParams = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, firstReviewId];
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value).toMatchObject({
+      state: 'review_evidence_current_at_read', reviewId: firstReviewId,
+      reviewCurrentAtRead: true, firstActualBookingKnown: false,
+      bookedWorkVerified: false, historicalCoverageVerified: false,
+      forecastIssued: false });
+    const changedAssignment = await f.ownerPool.connect();
+    try {
+      await changedAssignment.query('BEGIN');
+      await changedAssignment.query(
+        'ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
+      await changedAssignment.query(
+        'UPDATE canonical_schedule_assignments SET last_human_approval_id=NULL WHERE organization_id=$1 AND appointment_id=$2',
+        [f.org, appointment]);
+      expect((await changedAssignment.query(
+        'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+        currentnessParams)).rows[0].value).toMatchObject({
+        state: 'review_schedule_stale_or_unavailable',
+        reviewCurrentAtRead: false, bookedWorkVerified: false });
+    } finally {
+      await changedAssignment.query('ROLLBACK');
+      changedAssignment.release();
+    }
+    const other = f.actors.otherOwner;
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [other.organizationId, other.actorUserId, other.actorAccessRole,
+        other.authSessionId, firstReviewId])).rows[0].value)
+      .toMatchObject({ state: 'review_unavailable', reviewCurrentAtRead: false });
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
       reviewParams)).rows[0].value).toMatchObject({ id: firstReview.id,
@@ -179,6 +213,11 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .toMatchObject({ state: 'prior_commercial_review_exists',
         bookedWorkVerified: false, forecastIssued: false });
     const member = f.actors.member;
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [f.org, member.actorUserId, member.actorAccessRole,
+        member.authSessionId, firstReviewId]))
+      .rejects.toMatchObject({ code: '42501' });
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
       [f.org, member.actorUserId, member.actorAccessRole, member.authSessionId,
@@ -213,6 +252,11 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         .rows[0].value;
       expect(guarded).toMatchObject({ state: 'later_accepted_response_unreviewed',
         bookedWorkVerified: false, forecastIssued: false });
+      const stale = (await laterAcceptance.query(
+        'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+        currentnessParams)).rows[0].value;
+      expect(stale).toMatchObject({ state: 'later_accepted_response_unreviewed',
+        reviewCurrentAtRead: false, bookedWorkVerified: false });
     } finally {
       await laterAcceptance.query('ROLLBACK');
       laterAcceptance.release();
@@ -223,6 +267,11 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(links.status).toBe(200);
     const revoked = await post(`/customer-estimate-links/${link.body.data.link.id}/revoke`, {});
     expect(revoked.status).toBe(201);
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value).toMatchObject({
+      state: 'review_lineage_stale_or_unavailable',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
       [...reviewParams.slice(0, 6), 'm26-revoked-booking-review-key-001'])).rows[0].value)
@@ -408,6 +457,12 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       observedApprovalCount: 2, laterApprovalCount: 1,
       firstActualBookingKnown: false, bookingStatusVerified: false,
       sourceComplete: false, forecastIssued: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [f.org, actor.actorUserId, actor.actorAccessRole,
+        actor.authSessionId, firstReviewId])).rows[0].value).toMatchObject({
+      state: 'review_lineage_stale_or_unavailable',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
   }, 120000);
 
   test('customer acceptance waits on the tenant fence and rollback leaves no phantom event', async () => {

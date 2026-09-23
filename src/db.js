@@ -1484,6 +1484,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_booking_status_position(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_booking_status_position(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_commercial_booking_reviews') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_commercial_booking_reviews FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_commercial_review_sequence FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_commercial_booking_review_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_review_first_booking(uuid,uuid,text,uuid,uuid,text,text) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_commercial_review_currentness(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_commercial_review_currentness(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_receipts FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_anchors FROM %I', runtime_role);
@@ -2469,6 +2478,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        (to_regprocedure('public.canonical_forecast_booking_status_position(uuid,uuid,text,uuid,uuid)') IS NULL OR
          has_function_privilege($1,'public.canonical_forecast_booking_status_position(uuid,uuid,text,uuid,uuid)','EXECUTE')
        ) AS booking_status_position_guarded,
+       (to_regclass('public.canonical_forecast_commercial_booking_reviews') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_commercial_booking_reviews','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_sequence_privilege($1,'public.canonical_forecast_commercial_review_sequence','USAGE,SELECT,UPDATE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_commercial_booking_review_immutable()','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_review_first_booking(uuid,uuid,text,uuid,uuid,text,text)','EXECUTE')
+       )) AS commercial_booking_reviews_private,
+       (to_regprocedure('public.canonical_forecast_commercial_review_currentness(uuid,uuid,text,uuid,uuid)') IS NULL OR
+         has_function_privilege($1,'public.canonical_forecast_commercial_review_currentness(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       ) AS commercial_review_currentness_guarded,
        (to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -3011,6 +3029,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('157_canonical_forecast_acceptance_booking_
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('158_canonical_forecast_booked_price_candidate.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('159_canonical_forecast_booking_status_position.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('159_canonical_forecast_commercial_booking_review.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('160_canonical_forecast_commercial_review_currentness.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

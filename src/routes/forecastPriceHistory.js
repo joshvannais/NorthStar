@@ -18,9 +18,11 @@ function errorReply(res, error) {
   return res.status(status).json({ success: false, error: {
     category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
       error?.code === '54000' ? 'FORECAST_SOURCE_CAPACITY' :
+        error?.code === '55P03' ? 'FORECAST_SOURCE_BUSY' :
         status === 409 ? 'FORECAST_SOURCE_CHANGED' : 'FORECAST_SOURCE_UNAVAILABLE',
     message: status === 403 ? 'Forecast history access is restricted.' :
       error?.code === '54000' ? 'There is too much history to capture safely.' :
+        error?.code === '55P03' ? 'Forecast history is busy. Try again shortly.' :
         status === 409 ? 'Forecast history changed. Refresh and try again.' :
         'Forecast history is temporarily unavailable.',
   } });

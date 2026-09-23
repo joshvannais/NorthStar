@@ -206,5 +206,7 @@ test('ordered receipt route fails closed on a poisoned source and reports a busy
     const retry = await request(busy.app).post('/history/ordered-snapshots')
       .set('Idempotency-Key', KEY).send({});
     expect(retry.status).toBe(409);
+    expect(retry.body.error).toMatchObject({ category: 'FORECAST_SOURCE_BUSY',
+      message: 'Forecast history is busy. Try again shortly.' });
     expect(JSON.stringify(retry.body)).not.toContain('internal lock detail');
   });

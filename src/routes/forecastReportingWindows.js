@@ -6,9 +6,30 @@ const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
 const { getActiveBusinessProfile } = require('../services/organizationAuthority');
+const { adaptBusinessProfile } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 
 const GRAINS = new Set(['day', 'week', 'month', 'quarter', 'year']);
+
+function validRequestDate(value, grain) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  if (year < 2000 || year > 2100) return false;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0, 0, 0, 0);
+  if (date.toISOString().slice(0, 10) !== value ||
+      (grain === 'week' && date.getUTCDay() !== 1) ||
+      (['month', 'quarter', 'year'].includes(grain) && day !== 1) ||
+      (grain === 'quarter' && (month - 1) % 3 !== 0) ||
+      (grain === 'year' && month !== 1)) return false;
+  if (grain === 'day') date.setUTCDate(date.getUTCDate() + 1);
+  else if (grain === 'week') date.setUTCDate(date.getUTCDate() + 7);
+  else if (grain === 'month') date.setUTCMonth(date.getUTCMonth() + 1);
+  else if (grain === 'quarter') date.setUTCMonth(date.getUTCMonth() + 3);
+  else date.setUTCFullYear(date.getUTCFullYear() + 1);
+  return date.getUTCFullYear() <= 2100;
+}
 
 function createForecastReportingWindowsRouter(options = {}) {
   const router = express.Router();
@@ -29,7 +50,8 @@ function createForecastReportingWindowsRouter(options = {}) {
           !keys.includes('grain') ||
           typeof req.query.localStartDate !== 'string' ||
           typeof req.query.grain !== 'string' ||
-          !GRAINS.has(req.query.grain)) {
+          !GRAINS.has(req.query.grain) ||
+          !validRequestDate(req.query.localStartDate, req.query.grain)) {
         return res.status(400).json({ success: false, error: {
           category: 'FORECAST_REQUEST_INVALID',
           message: 'The reporting window request is invalid.' } });
@@ -39,7 +61,10 @@ function createForecastReportingWindowsRouter(options = {}) {
           req.tenantContext.organizationId);
         if (profile.organizationId !== req.tenantContext.organizationId ||
             !Number.isSafeInteger(profile.versionNumber) ||
-            profile.versionNumber < 1) throw new Error('Invalid business profile authority');
+            profile.versionNumber < 1 ||
+            profile.versionLabel !== `org-profile-v${profile.versionNumber}` ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              profile.profileHash) throw new Error('Invalid business profile authority');
         const window = deriveReportingWindow({
           organizationId: profile.organizationId,
           businessProfileId: profile.id,
@@ -59,11 +84,9 @@ function createForecastReportingWindowsRouter(options = {}) {
           forecastIssued: false,
         } });
       } catch (error) {
-        const invalid = error?.code === 'M26_REPORTING_WINDOW_INVALID';
-        return res.status(invalid ? 400 : 503).json({ success: false, error: {
-          category: invalid ? 'FORECAST_REQUEST_INVALID' : 'FORECAST_WINDOW_UNAVAILABLE',
-          message: invalid ? 'The reporting window request is invalid.' :
-            'The reporting window is unavailable until the business profile can be verified.',
+        return res.status(503).json({ success: false, error: {
+          category: 'FORECAST_WINDOW_UNAVAILABLE',
+          message: 'The reporting window is unavailable until the business profile can be verified.',
         } });
       }
     });

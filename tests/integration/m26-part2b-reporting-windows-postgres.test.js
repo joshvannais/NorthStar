@@ -73,11 +73,36 @@ realPostgres('Mission 26 Part 2B guarded current Business Profile windows', () =
         { localStartDate: '2026-11-01', grain: 'month', areaScope: 'profile_area' },
         { localStartDate: '2026-11-01', grain: ['month', 'year'] },
         { localStartDate: '2026-11-02', grain: 'month' },
+        { localStartDate: '2100-12-01', grain: 'month' },
       ]) {
         const result = await request(fixture.app).get(endpoint).query(query)
           .set('Cookie', cookie);
         expect(result.status).toBe(400);
         expect(result.body.error.category).toBe('FORECAST_REQUEST_INVALID');
       }
+    }, 120000);
+
+  test('corrupt current profile is unavailable source evidence, not a bad owner request',
+    async () => {
+      await fixture.ownerPool.query(
+        'UPDATE canonical_business_profiles SET normalized_profile_hash=$2 WHERE organization_id=$1 AND is_active=TRUE',
+        [fixture.org, 'c'.repeat(64)]);
+      const mismatched = await request(fixture.app).get(endpoint)
+        .query({ localStartDate: '2026-11-01', grain: 'month' })
+        .set('Cookie', fixture.actors.owner.session.headers.Cookie);
+      expect(mismatched.status).toBe(503);
+      expect(mismatched.body.error.category).toBe('FORECAST_WINDOW_UNAVAILABLE');
+      await fixture.ownerPool.query(
+        'UPDATE canonical_business_profiles SET normalized_profile_hash=$2 WHERE organization_id=$1 AND is_active=TRUE',
+        [fixture.org, fixture.profiles[fixture.org].hash]);
+      await fixture.ownerPool.query(
+        "UPDATE canonical_business_profiles SET raw_profile='[]'::jsonb WHERE organization_id=$1 AND is_active=TRUE",
+        [fixture.org]);
+      const result = await request(fixture.app).get(endpoint)
+        .query({ localStartDate: '2026-11-01', grain: 'month' })
+        .set('Cookie', fixture.actors.owner.session.headers.Cookie);
+      expect(result.status).toBe(503);
+      expect(result.body.error.category).toBe('FORECAST_WINDOW_UNAVAILABLE');
+      expect(JSON.stringify(result.body)).not.toContain('[]');
     }, 120000);
 });

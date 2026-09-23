@@ -1,0 +1,9 @@
+# Mission 26 Part 6A: approved-price source-order reproduction
+
+This test-only slice records a source-order boundary for future approved-price period coverage. It does not change production capture, authorize a forecast, or close Part 6A acceptance.
+
+`tests/integration/m26-part6a-price-source-order-postgres.test.js` uses a disposable PostgreSQL fixture and actual concurrent transactions. It demonstrates that a serializable capture can exclude an approval committed before its wall-clock `asOf` value when its MVCC snapshot was established earlier. The existing fresh currentness read then reports the receipt as stale and withholds a forecast. Consequently, a timestamp by itself cannot certify that every approval before that time was captured.
+
+The test also demonstrates that taking a table `SHARE` lock *inside* a serializable procedure after an approval writer is already in flight does not refresh the procedure's snapshot. A read-committed procedure that waits for the same writer and then reads does see the committed row. The latter is a diagnostic result, not a selected production design: a table-wide lock can delay approval writes across organizations and needs explicit bounded-lock, deadlock, throughput, authorization, and tenant-isolation review before use.
+
+Acceptance of complete approved-price period coverage still requires an independently reviewed source-order fence and a missing-data gate. Historical or partially covered periods must remain unavailable for live forecasting. These tests use synthetic records only and do not establish private-production or provider coverage.

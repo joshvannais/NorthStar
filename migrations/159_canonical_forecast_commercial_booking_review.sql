@@ -1,6 +1,10 @@
 -- Mission 26 Part 6A: an owner/admin may explicitly review a first booking.
 -- This post-installation attestation is not proof of historical completeness,
 -- an off-platform booking, earned revenue, cash, or a forecast.
+CREATE INDEX canonical_forecast_commercial_booking_orders_tenant_kind_order_idx
+ ON public.canonical_forecast_commercial_booking_orders(
+  organization_id,source_kind,source_order);
+
 CREATE SEQUENCE public.canonical_forecast_commercial_review_sequence AS BIGINT;
 
 CREATE TABLE public.canonical_forecast_commercial_booking_reviews (
@@ -54,7 +58,8 @@ SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE pair JSONB; price JSONB; position JSONB; assignment RECORD;
  existing public.canonical_forecast_commercial_booking_reviews%ROWTYPE;
  inserted public.canonical_forecast_commercial_booking_reviews%ROWTYPE;
- key_hash TEXT; request_hash TEXT;
+ key_hash TEXT; request_hash TEXT; pinned_order BIGINT;
+ acceptance RECORD; observed_count INT:=0;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
   reason_value IS NULL OR length(btrim(reason_value)) NOT BETWEEN 10 AND 1000 OR
@@ -88,25 +93,40 @@ BEGIN
  -- A customer can accept a newer issued scope after the paired schedule
  -- approval. The pair reader intentionally proves only earlier acceptance;
  -- the human review must also reject a competing later accepted response.
- IF EXISTS(
-  SELECT 1 FROM public.canonical_forecast_commercial_booking_orders later
+ SELECT source_order INTO pinned_order
+  FROM public.canonical_forecast_commercial_booking_orders
+  WHERE organization_id=org
+   AND delivery_event_id=(pair->>'acceptanceId')::uuid;
+ IF pinned_order IS NULL THEN
+  RETURN jsonb_build_object('state','acceptance_order_unavailable',
+   'replayed',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
+ -- This indexed scan is bounded. A tenant with more than 1,000 later
+ -- accepted responses gets an unavailable verdict, never a false current one.
+ FOR acceptance IN
+  SELECT estimate.opportunity_id
+  FROM public.canonical_forecast_commercial_booking_orders later
   JOIN public.canonical_customer_estimate_delivery_events event
    ON event.organization_id=later.organization_id
     AND event.id=later.delivery_event_id AND event.kind='accepted'
   JOIN public.canonical_estimates estimate
    ON estimate.organization_id=event.organization_id
     AND estimate.id=event.estimate_id
-  JOIN public.canonical_forecast_commercial_booking_orders pinned
-   ON pinned.organization_id=later.organization_id
-    AND pinned.delivery_event_id=(pair->>'acceptanceId')::uuid
   WHERE later.organization_id=org
    AND later.source_kind='customer_estimate_acceptance'
-   AND later.source_order>pinned.source_order
-   AND estimate.opportunity_id=(pair->>'opportunityId')::uuid
- ) THEN
-  RETURN jsonb_build_object('state','later_accepted_response_unreviewed',
-   'replayed',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
- END IF;
+   AND later.source_order>pinned_order
+  ORDER BY later.source_order LIMIT 1001
+ LOOP
+  observed_count:=observed_count+1;
+  IF observed_count>1000 THEN
+   RETURN jsonb_build_object('state','acceptance_history_exceeds_bound',
+    'replayed',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+  END IF;
+  IF acceptance.opportunity_id=(pair->>'opportunityId')::uuid THEN
+   RETURN jsonb_build_object('state','later_accepted_response_unreviewed',
+    'replayed',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+  END IF;
+ END LOOP;
  price:=public.canonical_forecast_booked_price_candidate(
   org,actor,role_value,session_value,approval_value);
  position:=public.canonical_forecast_booking_status_position(

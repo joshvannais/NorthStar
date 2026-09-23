@@ -6,6 +6,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE reviewed public.canonical_forecast_commercial_booking_reviews%ROWTYPE;
  pair JSONB; price JSONB; position JSONB; assignment RECORD;
+ pinned_order BIGINT; acceptance RECORD; observed_count INT:=0;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'Read committed required for booking review currentness'
@@ -46,25 +47,37 @@ BEGIN
   RETURN jsonb_build_object('state','review_lineage_stale_or_unavailable',
    'reviewCurrentAtRead',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
  END IF;
- IF EXISTS(
-  SELECT 1 FROM public.canonical_forecast_commercial_booking_orders later
+ SELECT source_order INTO pinned_order
+  FROM public.canonical_forecast_commercial_booking_orders
+  WHERE organization_id=org AND delivery_event_id=reviewed.acceptance_id;
+ IF pinned_order IS NULL THEN
+  RETURN jsonb_build_object('state','acceptance_order_unavailable',
+   'reviewCurrentAtRead',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
+ FOR acceptance IN
+  SELECT estimate.opportunity_id
+  FROM public.canonical_forecast_commercial_booking_orders later
   JOIN public.canonical_customer_estimate_delivery_events event
    ON event.organization_id=later.organization_id
     AND event.id=later.delivery_event_id AND event.kind='accepted'
   JOIN public.canonical_estimates estimate
    ON estimate.organization_id=event.organization_id
     AND estimate.id=event.estimate_id
-  JOIN public.canonical_forecast_commercial_booking_orders pinned
-   ON pinned.organization_id=later.organization_id
-    AND pinned.delivery_event_id=reviewed.acceptance_id
   WHERE later.organization_id=org
    AND later.source_kind='customer_estimate_acceptance'
-   AND later.source_order>pinned.source_order
-   AND estimate.opportunity_id=reviewed.opportunity_id
- ) THEN
-  RETURN jsonb_build_object('state','later_accepted_response_unreviewed',
-   'reviewCurrentAtRead',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
- END IF;
+   AND later.source_order>pinned_order
+  ORDER BY later.source_order LIMIT 1001
+ LOOP
+  observed_count:=observed_count+1;
+  IF observed_count>1000 THEN
+   RETURN jsonb_build_object('state','acceptance_history_exceeds_bound',
+    'reviewCurrentAtRead',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+  END IF;
+  IF acceptance.opportunity_id=reviewed.opportunity_id THEN
+   RETURN jsonb_build_object('state','later_accepted_response_unreviewed',
+    'reviewCurrentAtRead',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+  END IF;
+ END LOOP;
  -- Price read adds the M24 decision lock after the commercial source lock.
  price:=public.canonical_forecast_booked_price_candidate(
   org,actor,role_value,session_value,reviewed.approval_id);

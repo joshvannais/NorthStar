@@ -23,8 +23,10 @@ read time. It returns no booked-work amount and leaves first actual booking,
 historical coverage, booked-work verification and forecasting false.
 Migration 161 adds an explicit cancellation review write and this reader
 returns `booking_cancelled` for that row. It does not cancel Mission 22
-scheduling. Correction review writes, paid/demo HTTP mounting, complete
-source periods, off-platform activity, release and live validation remain
+scheduling. Migration 162 adds a correction review write; a newer review
+supersedes the old one. Complete changed-source correction proof, the full
+paid/demo frontend journey, complete source periods, off-platform activity,
+release and live validation remain
 open. A current read is not a durable saved-run currentness guarantee.
 
 Four mounted fictional-tenant integration cases pass with migration 160

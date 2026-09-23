@@ -1,6 +1,6 @@
 # Mission 26 Part 6A — commercial status review contract
 
-Status: isolated, unreleased first-review and cancellation candidates. No booked-work baseline.
+Status: isolated, unreleased first-review, correction and cancellation candidates. No booked-work baseline.
 
 An accepted issued estimate and a Mission 22 scheduling approval for the same
 opportunity are evidence of two separate decisions. Neither event says that
@@ -31,18 +31,20 @@ Mission 24 decision, customer revocation, or Mission 22 scheduling change
 may make the stored review stale. Migration 160 adds a guarded currentness
 reader, but this candidate never returns booked-work value. Migration 161
 adds a separate explicit human cancellation of an earlier review; it does
-not cancel the Mission 22 appointment. Correction, off-platform bookings
-and off-platform cancellations are not established by these migrations.
+not cancel the Mission 22 appointment. Migration 162 adds a separate
+append-only human correction. Off-platform bookings and cancellations are
+not established by these migrations.
 
 Four mounted fictional-tenant tests pass. The first-review path, identical
 replay, changed replay rejection, duplicate first-review rejection, member
 denial, invalid-CSRF denial, private table, immutable review, post-revocation unavailable state,
 later accepted response rejection for the same issued version, and synthetic cancelled/completed assignment
-guards are covered. The SQL function is not yet mounted in a paid/demo HTTP journey.
+guards are covered. The first review is mounted in a paid internal HTTP route;
+the full paid/demo frontend journey remains open.
 The later-acceptance guard uses an indexed, 1,001-row bounded scan; larger
 histories return unavailable rather than a false current claim.
 No result labels the amount booked work, earned revenue, collected cash,
 whole-business revenue, or a statistically qualified future forecast. A
-currentness reader HTTP mounting, correction path, full synthetic
-journey, independent exact-head audit, release verification and real
+changed-source correction proof, full synthetic frontend journey,
+release verification and real
 source-period coverage remain separate open gates.

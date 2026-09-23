@@ -109,6 +109,22 @@ function createForecastBookingReviewsRouter(options = {}) {
         [req.params.reviewId, body.reason, key, req.get('X-CSRF-Token')], true);
     });
 
+  router.post('/:reviewId/correct', auth, requirePermission('forecast', 'update'), throttle,
+    async (req, res) => {
+      const body = req.body;
+      const key = req.get('Idempotency-Key');
+      if (!UUID.test(req.params.reviewId || '') || !body || Array.isArray(body) ||
+          Object.keys(body).sort().join(',') !== 'approvalId,reason' ||
+          typeof body.approvalId !== 'string' || !UUID.test(body.approvalId) ||
+          typeof body.reason !== 'string' || body.reason.trim().length < 10 ||
+          body.reason.trim().length > 1000 || Buffer.byteLength(body.reason) > 4000 ||
+          !KEY.test(key || '')) return invalid(res);
+      return query(req, res,
+        'SELECT public.canonical_forecast_correct_booking_review($1,$2,$3,$4,$5,$6,$7,$8,$9) value',
+        [req.params.reviewId, body.approvalId, body.reason, key,
+          req.get('X-CSRF-Token')], true);
+    });
+
   router.get('/:reviewId/currentness', auth, requirePermission('forecast', 'read'), throttle,
     async (req, res) => {
       if (!UUID.test(req.params.reviewId || '')) return invalid(res);

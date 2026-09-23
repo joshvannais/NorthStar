@@ -20,7 +20,7 @@ CREATE TABLE public.canonical_forecast_commercial_booking_reviews (
  approved_decision_digest TEXT NOT NULL CHECK(approved_decision_digest ~ '^[a-f0-9]{64}$'),
  reviewed_price_before_tax TEXT NOT NULL CHECK(reviewed_price_before_tax ~ '^(0|[1-9][0-9]{0,11})\.[0-9]{2}$'),
  currency TEXT NOT NULL CHECK(currency ~ '^[A-Z]{3}$'),
- action TEXT NOT NULL CHECK(action IN ('first_booking_reviewed','booking_cancelled')),
+ action TEXT NOT NULL CHECK(action IN ('first_booking_reviewed','booking_corrected','booking_cancelled')),
  previous_review_id UUID,
  reason TEXT NOT NULL CHECK(length(btrim(reason)) BETWEEN 10 AND 1000 AND octet_length(reason)<=4000),
  actor_user_id UUID NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE public.canonical_forecast_commercial_booking_reviews (
  UNIQUE(organization_id,actor_user_id,request_key_hash),
  UNIQUE(organization_id,id),
  CHECK((action='first_booking_reviewed' AND previous_review_id IS NULL)
-    OR (action='booking_cancelled' AND previous_review_id IS NOT NULL)),
+    OR (action IN ('booking_corrected','booking_cancelled') AND previous_review_id IS NOT NULL)),
  FOREIGN KEY(organization_id,appointment_id)
   REFERENCES public.canonical_appointments(organization_id,id) ON DELETE RESTRICT,
  FOREIGN KEY(organization_id,approval_id)

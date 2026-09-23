@@ -1496,6 +1496,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_cancel_booking_review(uuid,uuid,text,uuid,uuid,text,text,text)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_cancel_booking_review(uuid,uuid,text,uuid,uuid,text,text,text) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_correct_booking_review(uuid,uuid,text,uuid,uuid,uuid,text,text,text)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_correct_booking_review(uuid,uuid,text,uuid,uuid,uuid,text,text,text) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_receipts FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_anchors FROM %I', runtime_role);
@@ -2493,6 +2496,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        (to_regprocedure('public.canonical_forecast_cancel_booking_review(uuid,uuid,text,uuid,uuid,text,text,text)') IS NULL OR
          has_function_privilege($1,'public.canonical_forecast_cancel_booking_review(uuid,uuid,text,uuid,uuid,text,text,text)','EXECUTE')
        ) AS commercial_booking_cancellation_guarded,
+       (to_regprocedure('public.canonical_forecast_correct_booking_review(uuid,uuid,text,uuid,uuid,uuid,text,text,text)') IS NULL OR
+         has_function_privilege($1,'public.canonical_forecast_correct_booking_review(uuid,uuid,text,uuid,uuid,uuid,text,text,text)','EXECUTE')
+       ) AS commercial_booking_correction_guarded,
        (to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -3037,6 +3043,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('159_canonical_forecast_booking_status_posi
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('159_canonical_forecast_commercial_booking_review.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('160_canonical_forecast_commercial_review_currentness.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('161_canonical_forecast_commercial_booking_cancellation.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('162_canonical_forecast_commercial_booking_correction.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

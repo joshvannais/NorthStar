@@ -14,6 +14,7 @@ Mission 22 scheduling or Mission 24 estimates.
 
 The mounted fictional-tenant suite exercises the positive first-review and
 cancellation writes, replay, currentness, invalid-CSRF denial and member
-denial through HTTP. Correction handling, a plain-language frontend
+denial through HTTP. Migration 162 adds a guarded correction route;
+changed-source positive correction remains unproven. A plain-language frontend
 journey, first actual booking, complete periods, release and live validation
 remain open. The wider Mission 22 regression suite remains ungreen.

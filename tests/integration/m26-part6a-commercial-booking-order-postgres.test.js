@@ -199,6 +199,58 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       reviewCurrentAtRead: true, firstActualBookingKnown: false,
       bookedWorkVerified: false, historicalCoverageVerified: false,
       forecastIssued: false });
+    const initialReviewId = firstReviewId;
+    const correctionReason = 'Owner corrected the synthetic booking review after checking the scope.';
+    const corrected = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-001')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(corrected.status).toBe(201);
+    expect(corrected.body.data).toMatchObject({ state: 'booking_corrected',
+      previousReviewId: initialReviewId, replayed: false,
+      bookedWorkVerified: false, forecastIssued: false });
+    firstReviewId = corrected.body.data.reviewId;
+    currentnessParams[4] = firstReviewId;
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [...currentnessParams.slice(0, 4), initialReviewId])).rows[0].value)
+      .toMatchObject({ state: 'later_review_exists', reviewCurrentAtRead: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value)
+      .toMatchObject({ state: 'review_evidence_current_at_read',
+        reviewCurrentAtRead: true, bookedWorkVerified: false });
+    const correctionReplay = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-001')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(correctionReplay.status).toBe(200);
+    expect(correctionReplay.body.data).toMatchObject({ reviewId: firstReviewId,
+      replayed: true, bookedWorkVerified: false });
+    const changedCorrection = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-001')
+      .send({ approvalId: matchingApprovalId,
+        reason: 'Different reason cannot reuse the same correction request.' });
+    expect(changedCorrection.status).toBe(409);
+    expect(changedCorrection.body.error.category).toBe('FORECAST_REVIEW_REQUEST_REUSED');
+    const staleCorrection = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-002')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(staleCorrection.status).toBe(200);
+    expect(staleCorrection.body.data).toMatchObject({
+      state: 'prior_review_stale_or_cancelled', bookedWorkVerified: false });
+    const badCorrectionCsrf = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/correct`)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-003')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(badCorrectionCsrf.status).toBe(403);
     const changedAssignment = await f.ownerPool.connect();
     try {
       await changedAssignment.query('BEGIN');
@@ -224,7 +276,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .toMatchObject({ state: 'review_unavailable', reviewCurrentAtRead: false });
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
-      reviewParams)).rows[0].value).toMatchObject({ id: firstReviewId,
+      reviewParams)).rows[0].value).toMatchObject({ id: initialReviewId,
       replayed: true, bookedWorkVerified: false });
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',

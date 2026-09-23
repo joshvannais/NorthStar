@@ -7,11 +7,14 @@ read uses the existing owner/admin forecast permission and guarded tenant-scoped
 ordered-receipt function. It accepts exactly one UTC calendar month. The server
 passes the private readback directly to the pure month evaluator and returns
 only a minimized diagnostic; source events, prices, customer information,
-private order and digest nonce never enter the HTTP response.
+private order and digest nonce never enter the HTTP response. The public
+receipt digest and capture timestamp identify the evidence used.
 
 The response reports whether candidate window checks passed and how many
-supplied decision events fell in that month. Even after a guarded read, the
-candidate does not verify continuous calendar coverage, an empty business
+supplied decision events fell in that month by trigger-order timestamp. A
+current guarded receipt can establish only the bounded NorthStar ordered UTC
+window as it stood at receipt capture. Even after that read, the candidate
+does not verify company-local business calendar coverage, an empty business
 period, booked work or a future price flow. Its `sourceMonthVerified`,
 `calendarPeriodVerified`, `eligibleForForecast` and `forecastIssued` fields
 remain false. Pre-anchor, unclosed, stale and malformed source windows stay

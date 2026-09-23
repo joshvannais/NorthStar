@@ -137,6 +137,26 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       actor.authSessionId, matchingApprovalId,
       'Human reviewed the synthetic accepted work and scheduled appointment.',
       'm26-first-booking-review-key-001'];
+    // Exercise both M22 terminal statuses without changing the shared
+    // fixture: an owner-only synthetic transaction rolls the state back.
+    for (const terminalStatus of ['cancelled', 'completed']) {
+      const synthetic = await f.ownerPool.connect();
+      try {
+        await synthetic.query('BEGIN');
+        await synthetic.query('ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
+        await synthetic.query(
+          'UPDATE canonical_schedule_assignments SET appointment_status=$3 WHERE organization_id=$1 AND appointment_id=$2',
+          [f.org, appointment, terminalStatus]);
+        const guarded = (await synthetic.query(
+          'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+          reviewParams)).rows[0].value;
+        expect(guarded).toMatchObject({ state: 'current_booking_evidence_unavailable',
+          bookedWorkVerified: false, forecastIssued: false });
+      } finally {
+        await synthetic.query('ROLLBACK');
+        synthetic.release();
+      }
+    }
     const firstReview = (await f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
       reviewParams)).rows[0].value;
@@ -167,11 +187,41 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     await expect(f.ownerPool.query(
       'DELETE FROM canonical_forecast_commercial_booking_reviews WHERE organization_id=$1',
       [f.org])).rejects.toMatchObject({ code: '23514' });
+    const laterLink = await post('/customer-estimate-links', {
+      versionId: issuedVersionId, expiresInDays: 14,
+      confirmed: true, confirmationVersion: 'customer-estimate-delivery-v1',
+    });
+    expect(laterLink.status).toBe(201);
+    const laterAcceptance = await f.ownerPool.connect();
+    try {
+      await laterAcceptance.query('BEGIN');
+      await laterAcceptance.query(
+        `INSERT INTO canonical_customer_estimate_delivery_events(
+           organization_id,estimate_id,version_id,link_id,kind,body,actor_user_id,
+           request_key_hash,request_digest,digest)
+         SELECT organization_id,estimate_id,version_id,id,'accepted',
+                $2::jsonb,NULL,$3,$4,$5
+           FROM canonical_customer_estimate_delivery_links WHERE id=$1`,
+        [laterLink.body.data.link.id,
+          JSON.stringify({ customerName: 'Later synthetic customer', confirmed: true,
+            confirmationVersion: 'customer-estimate-accept-v1' }),
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex')]);
+      const guarded = (await laterAcceptance.query(
+        'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+        [...reviewParams.slice(0, 6), 'm26-newer-scope-review-key-001']))
+        .rows[0].value;
+      expect(guarded).toMatchObject({ state: 'newer_accepted_scope_unreviewed',
+        bookedWorkVerified: false, forecastIssued: false });
+    } finally {
+      await laterAcceptance.query('ROLLBACK');
+      laterAcceptance.release();
+    }
 
     await f.createExecution({ approvedScheduling: true, stopAfterScheduling: true });
     const links = await get('/customer-estimate-links');
     expect(links.status).toBe(200);
-    const revoked = await post(`/customer-estimate-links/${links.body.data.links[0].id}/revoke`, {});
+    const revoked = await post(`/customer-estimate-links/${link.body.data.link.id}/revoke`, {});
     expect(revoked.status).toBe(201);
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',

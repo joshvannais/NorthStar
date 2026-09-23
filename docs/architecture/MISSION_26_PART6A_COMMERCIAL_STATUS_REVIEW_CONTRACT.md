@@ -11,9 +11,11 @@ unverified.
 The source must be an explicit owner/admin review, scoped to one tenant,
 appointment, accepted issued estimate version and scheduling approval. A review
 records the reviewer, reason, and immutable source references. Migration 159
-implements only the first human booking review. It requires the current
-accepted version, latest approved price, latest observed human scheduling
-approval and current scheduled assignment. An idempotency key replays an
+implements only the first human booking review. It requires one earlier
+accepted version with no competing later same-opportunity acceptance, the
+latest approved price, latest observed human scheduling approval and a
+current scheduled assignment whose appointment is neither cancelled nor
+completed. An idempotency key replays an
 identical request; altered replay fails. A second first-booking review for
 the appointment is refused. The table and sequence remain private to the
 application runtime, and stored reviews cannot be edited or deleted. A review
@@ -32,8 +34,9 @@ established by migration 159.
 
 Four mounted fictional-tenant tests pass. The first-review path, identical
 replay, changed replay rejection, duplicate first-review rejection, member
-denial, private table, immutable review and post-revocation unavailable state
-are covered. The SQL function is not yet mounted in a paid/demo HTTP journey.
+denial, private table, immutable review, post-revocation unavailable state,
+later accepted scope rejection, and synthetic cancelled/completed assignment
+guards are covered. The SQL function is not yet mounted in a paid/demo HTTP journey.
 No result labels the amount booked work, earned revenue, collected cash,
 whole-business revenue, or a statistically qualified future forecast. A
 guarded currentness reader, correction/cancellation path, full synthetic

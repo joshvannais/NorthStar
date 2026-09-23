@@ -85,6 +85,28 @@ BEGIN
   RETURN jsonb_build_object('state','lineage_unavailable','replayed',FALSE,
    'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
  END IF;
+ -- A customer can accept a newer issued scope after the paired schedule
+ -- approval. The pair reader intentionally proves only earlier acceptance;
+ -- the human review must also reject a competing later accepted scope.
+ IF EXISTS(
+  SELECT 1 FROM public.canonical_forecast_commercial_booking_orders later
+  JOIN public.canonical_customer_estimate_delivery_events event
+   ON event.organization_id=later.organization_id
+    AND event.id=later.delivery_event_id AND event.kind='accepted'
+  JOIN public.canonical_estimates estimate
+   ON estimate.organization_id=event.organization_id
+    AND estimate.id=event.estimate_id
+  JOIN public.canonical_forecast_commercial_booking_orders pinned
+   ON pinned.organization_id=later.organization_id
+    AND pinned.delivery_event_id=(pair->>'acceptanceId')::uuid
+  WHERE later.organization_id=org
+   AND later.source_kind='customer_estimate_acceptance'
+   AND later.source_order>pinned.source_order
+   AND estimate.opportunity_id=(pair->>'opportunityId')::uuid
+ ) THEN
+  RETURN jsonb_build_object('state','newer_accepted_scope_unreviewed',
+   'replayed',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
  price:=public.canonical_forecast_booked_price_candidate(
   org,actor,role_value,session_value,approval_value);
  position:=public.canonical_forecast_booking_status_position(
@@ -96,8 +118,11 @@ BEGIN
   position->>'state'<>'observed_schedule_position' OR
   position->>'latestObservedApprovalId'<>approval_value::text OR
   position->>'latestScheduleState'<>'scheduled' OR
+  position->>'latestAppointmentStatus' NOT IN ('preferred','scheduled') OR
   assignment.last_human_approval_id IS DISTINCT FROM approval_value OR
-  assignment.schedule_state<>'scheduled' THEN
+  assignment.schedule_state<>'scheduled' OR
+  assignment.appointment_status IS DISTINCT FROM
+   position->>'latestAppointmentStatus' THEN
   RETURN jsonb_build_object('state','current_booking_evidence_unavailable',
    'replayed',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
  END IF;

@@ -6,8 +6,12 @@ const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
 const { readGuardedApprovedPriceFlow } = require('../forecasting/guardedApprovedPriceFlow');
-const { calendarMonth, assessOrderedPriceMonthCandidate } =
+const { calendarMonth, assessOrderedPriceMonthCandidate,
+  assessOrderedPriceReportingMonthCandidate } =
   require('../forecasting/orderedPriceMonthCandidate');
+const { getActiveBusinessProfile } = require('../services/organizationAuthority');
+const { adaptBusinessProfile } = require('../services/businessProfileAdapter');
+const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
@@ -42,6 +46,14 @@ function exactKeys(value, keys) {
     Object.keys(value).every(key => keys.includes(key));
 }
 
+function validLocalMonth(value) {
+  if (typeof value !== 'string' ||
+      !/^(20[0-9]{2}|2100)-(0[1-9]|1[0-2])-01$/.test(value) ||
+      value === '2100-12-01') return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function createForecastPriceHistoryRouter(options = {}) {
   const router = express.Router();
   const poolProvider = options.poolProvider || (() => db.getPool());
@@ -57,6 +69,67 @@ function createForecastPriceHistoryRouter(options = {}) {
     res.vary('Cookie');
     next();
   });
+
+  async function guardedMonthCandidate(req, res, buildWindow, currency) {
+    let client;
+    try {
+      client = await poolProvider().connect();
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const identity = actor(req);
+      const basis = await buildWindow(client, identity);
+      const response = await client.query(
+        'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
+        [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+          identity.authSessionId, req.params.snapshotId]);
+      const value = response.rows[0]?.value;
+      if (value === null) {
+        await client.query('COMMIT');
+        return res.status(404).json({ success: false, error: {
+          category: 'FORECAST_SOURCE_UNAVAILABLE',
+          message: 'Forecast history is unavailable.',
+        } });
+      }
+      if (!value?.snapshot || value.snapshot.organizationId !== identity.organizationId ||
+          value.snapshot.id !== req.params.snapshotId) {
+        throw new Error('Invalid guarded ordered-price month source');
+      }
+      const candidate = basis.reportingWindow ?
+        assessOrderedPriceReportingMonthCandidate(value, basis.reportingWindow,
+          currency) : assessOrderedPriceMonthCandidate(value, basis.window, currency);
+      await client.query('COMMIT');
+      return res.json({ success: true, data: {
+        state: candidate.state, reason: candidate.reason,
+        snapshotId: req.params.snapshotId,
+        sourceCapturedAt: candidate.capturedAt ?? null,
+        sourceSnapshotDigest: candidate.sourceSnapshotDigest ?? null,
+        preAnchorContextDigest: candidate.preAnchorContextDigest ?? null,
+        window: basis.window,
+        ...(basis.reportingWindow ? {
+          profileBasis: 'current_active_profile_at_read',
+          historicalCalendarVerified: false,
+          observationCoverageVerified: false,
+        } : {}),
+        inputOrderTimestampDecisionCount: candidate.inputOrderTimestampDecisionCount ?? null,
+        inputCurrency: candidate.inputCurrency ?? currency,
+        inputFirstApprovalCount: candidate.inputFirstApprovalCount ?? null,
+        inputFirstApprovalAmount: candidate.inputFirstApprovalAmount ?? null,
+        candidateWindowChecksPassed: candidate.candidateWindowChecksPassed,
+        // The guarded read holds the tenant source-order lock until COMMIT.
+        // This proves only a bounded NorthStar order-time UTC window as it
+        // stood at this receipt capture, never business-wide month coverage.
+        sourceOrderUtcWindowObservedAsOfCapture:
+          candidate.candidateWindowChecksPassed === true,
+        sourceMonthVerified: false,
+        sourceAuthenticated: candidate.candidateWindowChecksPassed === true,
+        calendarPeriodVerified: false,
+        eligibleForForecast: false, wholeBusinessCoverageVerified: false,
+        forecastIssued: false,
+      } });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      return errorReply(res, error);
+    } finally { if (client) client.release(); }
+  }
 
   router.post('/snapshots', auth, requirePermission('forecast', 'update'), captureThrottle,
     async (req, res) => {
@@ -228,57 +301,40 @@ function createForecastPriceHistoryRouter(options = {}) {
           category: 'FORECAST_REQUEST_INVALID', message: 'The calendar month is invalid.',
         } });
       }
-      let client;
-      try {
-        client = await poolProvider().connect();
-        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
-        const identity = actor(req);
-        const response = await client.query(
-          'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
-          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
-            identity.authSessionId, req.params.snapshotId]);
-        const value = response.rows[0]?.value;
-        if (value === null) {
-          await client.query('COMMIT');
-          return res.status(404).json({ success: false, error: {
-            category: 'FORECAST_SOURCE_UNAVAILABLE',
-            message: 'Forecast history is unavailable.',
-          } });
-        }
-        if (!value?.snapshot || value.snapshot.organizationId !== identity.organizationId ||
-            value.snapshot.id !== req.params.snapshotId) {
-          throw new Error('Invalid guarded ordered-price month source');
-        }
-        const candidate = assessOrderedPriceMonthCandidate(value, window,
-          withCurrency ? req.query.currency : null);
-        await client.query('COMMIT');
-        return res.json({ success: true, data: {
-          state: candidate.state, reason: candidate.reason,
-          snapshotId: req.params.snapshotId,
-          sourceCapturedAt: candidate.capturedAt ?? null,
-          sourceSnapshotDigest: candidate.sourceSnapshotDigest ?? null,
-          preAnchorContextDigest: candidate.preAnchorContextDigest ?? null,
-          window,
-          inputOrderTimestampDecisionCount: candidate.inputOrderTimestampDecisionCount ?? null,
-          inputCurrency: candidate.inputCurrency ?? (withCurrency ? req.query.currency : null),
-          inputFirstApprovalCount: candidate.inputFirstApprovalCount ?? null,
-          inputFirstApprovalAmount: candidate.inputFirstApprovalAmount ?? null,
-          candidateWindowChecksPassed: candidate.candidateWindowChecksPassed,
-          // The guarded read holds the tenant source-order lock until COMMIT.
-          // This proves only a bounded NorthStar order-time UTC window as it
-          // stood at this receipt capture, never business-wide month coverage.
-          sourceOrderUtcWindowObservedAsOfCapture:
-            candidate.candidateWindowChecksPassed === true,
-          sourceMonthVerified: false,
-          sourceAuthenticated: candidate.candidateWindowChecksPassed === true,
-          calendarPeriodVerified: false,
-          eligibleForForecast: false, wholeBusinessCoverageVerified: false,
-          forecastIssued: false,
+      return guardedMonthCandidate(req, res, async () => ({ window,
+        reportingWindow: null }), withCurrency ? req.query.currency : null);
+    });
+
+  router.get('/ordered-snapshots/:snapshotId/profile-month-candidate', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      const withCurrency = exactKeys(req.query, ['localStartDate', 'currency']);
+      if (!UUID.test(req.params.snapshotId) ||
+          !(withCurrency || exactKeys(req.query, ['localStartDate'])) ||
+          !validLocalMonth(req.query.localStartDate) ||
+          (withCurrency && (typeof req.query.currency !== 'string' ||
+            !/^[A-Z]{3}$/.test(req.query.currency)))) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The history request is invalid.',
         } });
-      } catch (error) {
-        if (client) await client.query('ROLLBACK').catch(() => {});
-        return errorReply(res, error);
-      } finally { if (client) client.release(); }
+      }
+      return guardedMonthCandidate(req, res, async (client, identity) => {
+        const profile = await getActiveBusinessProfile(client, identity.organizationId);
+        if (profile.organizationId !== identity.organizationId ||
+            !Number.isSafeInteger(profile.versionNumber) || profile.versionNumber < 1 ||
+            profile.versionLabel !== `org-profile-v${profile.versionNumber}` ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              profile.profileHash) throw new Error('Invalid active Business Profile');
+        const reportingWindow = deriveReportingWindow({
+          organizationId: identity.organizationId,
+          businessProfileId: profile.id,
+          businessProfileVersion: profile.versionNumber,
+          businessProfileHash: profile.profileHash,
+          rawProfile: profile.rawProfile,
+          grain: 'month', localStartDate: req.query.localStartDate,
+          serviceKey: null, areaScope: 'tenant_all',
+        });
+        return { window: reportingWindow, reportingWindow };
+      }, withCurrency ? req.query.currency : null);
     });
 
   router.get('/snapshots/:snapshotId/approved-flow', auth,

@@ -6,6 +6,7 @@
 // whole-business revenue.
 
 const VERSION = 'm26-ordered-price-month-candidate-v1';
+const { validateReportingWindow } = require('./timeSeriesWindows');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
@@ -60,7 +61,25 @@ function unavailable(reason) {
 }
 
 function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCurrency = null) {
-  const window = calendarMonth(requestedWindow);
+  return assessOrderedPriceWindowCandidate(readback, calendarMonth(requestedWindow),
+    requestedCurrency);
+}
+
+function assessOrderedPriceReportingMonthCandidate(readback, reportingWindow,
+  requestedCurrency = null) {
+  try { validateReportingWindow(reportingWindow); } catch { invalid(); }
+  if (reportingWindow.grain !== 'month' || reportingWindow.serviceKey !== null ||
+      reportingWindow.areaScope !== 'tenant_all') invalid();
+  const micros = value => value.replace(/\.([0-9]{3})Z$/,
+    (_whole, fraction) => `.${fraction}000Z`);
+  return assessOrderedPriceWindowCandidate(readback,
+    { startsAt: micros(reportingWindow.startsAt),
+      endsAt: micros(reportingWindow.endsAt) }, requestedCurrency,
+    reportingWindow.organizationId);
+}
+
+function assessOrderedPriceWindowCandidate(readback, window, requestedCurrency,
+  expectedOrganizationId = null) {
   if (requestedCurrency !== null &&
       (typeof requestedCurrency !== 'string' || !/^[A-Z]{3}$/.test(requestedCurrency))) invalid();
   const source = own(readback, ['snapshot', 'preAnchorPredecessors',
@@ -95,6 +114,10 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
       !Array.isArray(snapshot.events) || snapshot.events.length !== snapshot.eventCount ||
       source.coverageStartsAt > snapshot.capturedAt) {
     return unavailable('invalid_guarded_source');
+  }
+  if (expectedOrganizationId !== null &&
+      snapshot.organizationId !== expectedOrganizationId) {
+    return unavailable('organization_mismatch');
   }
   if (source.state !== 'current') return unavailable('source_changed');
   if (window.startsAt < source.coverageStartsAt) {
@@ -228,4 +251,5 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
     forecastIssued: false });
 }
 
-module.exports = { VERSION, calendarMonth, assessOrderedPriceMonthCandidate };
+module.exports = { VERSION, calendarMonth, assessOrderedPriceMonthCandidate,
+  assessOrderedPriceReportingMonthCandidate };

@@ -32,7 +32,7 @@ function source(events = [event()]) {
   };
 }
 
-test('a complete ordered NorthStar month remains a non-forecast candidate', () => {
+test('a synthetic ordered NorthStar month remains a non-forecast candidate', () => {
   const result = assessOrderedPriceMonthCandidate(source(), month);
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
     scope: 'northstar_m24_approved_price_decisions',

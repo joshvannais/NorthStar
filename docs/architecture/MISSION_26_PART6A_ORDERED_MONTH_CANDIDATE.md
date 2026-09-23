@@ -5,7 +5,7 @@ Status: unmounted, unauthenticated calculation candidate. Part 6A remains open.
 The pure evaluator accepts one ordered-price readback-shaped input and an exact UTC
 calendar month. It returns an unavailable result unless the month begins after
 the first source-order fence, ends no later than the receipt capture, and the
-source is still current. It checks event count, immutable receipt identity,
+source is still current. It checks event count, receipt identifier and digest shape,
 event shape, duplicate decisions and nondecreasing source-observation times.
 A source clock reversal, an event outside the anchor-to-capture interval, a
 partial month or an unclosed month fails closed.

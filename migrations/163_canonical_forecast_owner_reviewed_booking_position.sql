@@ -35,6 +35,7 @@ BEGIN
   'commercialStatus','owner_reviewed_booking',
   'reviewedPriceBeforeTax',reviewed.reviewed_price_before_tax,
   'currency',reviewed.currency,'ownerAttestationCurrentAtRead',TRUE,
+  'reviewCurrentAtRead',TRUE,
   'bookedWorkVerified',FALSE,'historicalCoverageVerified',FALSE,
   'earnedRevenueMeasured',FALSE,'collectedCashMeasured',FALSE,
   'forecastIssued',FALSE);

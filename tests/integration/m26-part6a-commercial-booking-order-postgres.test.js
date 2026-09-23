@@ -203,6 +203,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       commercialStatus: 'owner_reviewed_booking',
       reviewedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
       currency: storedPrice.currency, ownerAttestationCurrentAtRead: true,
+      reviewCurrentAtRead: true,
       historicalCoverageVerified: false, bookedWorkVerified: false,
       earnedRevenueMeasured: false, collectedCashMeasured: false,
       forecastIssued: false });
@@ -235,12 +236,14 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(correctedPosition.body.data).toMatchObject({
       state: 'owner_reviewed_booking_candidate',
       reviewedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
-      currency: storedPrice.currency, bookedWorkVerified: false });
+      currency: storedPrice.currency, reviewCurrentAtRead: true,
+      bookedWorkVerified: false });
     const supersededPosition = await request(f.app)
       .get(`${bookingRoute}/${initialReviewId}/position`)
       .set(actor.session.headers);
     expect(supersededPosition.body.data).toMatchObject({
-      state: 'owner_reviewed_position_unavailable', bookedWorkVerified: false });
+      state: 'owner_reviewed_position_unavailable',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
     expect(supersededPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
@@ -423,7 +426,8 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .set(actor.session.headers);
     expect(cancelledPosition.status).toBe(200);
     expect(cancelledPosition.body.data).toMatchObject({
-      state: 'owner_reviewed_position_unavailable', bookedWorkVerified: false });
+      state: 'owner_reviewed_position_unavailable',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
     expect(cancelledPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',

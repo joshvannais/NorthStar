@@ -5,11 +5,37 @@ const db = require('../db');
 const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
-const { getActiveBusinessProfile } = require('../services/organizationAuthority');
+const { getActiveBusinessProfile, getBusinessProfileById } =
+  require('../services/organizationAuthority');
 const { adaptBusinessProfile } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 
 const GRAINS = new Set(['day', 'week', 'month', 'quarter', 'year']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const DIGEST = /^[0-9a-f]{64}$/;
+const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
+
+function exact(value, keys) {
+  return value && typeof value === 'object' && !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype &&
+    Object.keys(value).length === keys.length &&
+    Object.keys(value).every(key => keys.includes(key));
+}
+
+function attestationError(res, error) {
+  const status = error?.code === '42501' ? 403 :
+    error?.code === '22023' ? 400 :
+      ['40001', '55P03', '23505'].includes(error?.code) ? 409 : 503;
+  return res.status(status).json({ success: false, error: {
+    category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
+      status === 400 ? 'FORECAST_REQUEST_INVALID' :
+        status === 409 ? 'FORECAST_CALENDAR_CHANGED' : 'FORECAST_CALENDAR_UNAVAILABLE',
+    message: status === 403 ? 'Forecast calendar access is restricted.' :
+      status === 400 ? 'The forecast calendar request is invalid.' :
+        status === 409 ? 'Forecast calendar evidence changed. Refresh and try again.' :
+          'Forecast calendar evidence is temporarily unavailable.',
+  } });
+}
 
 function validRequestDate(value, grain) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -37,6 +63,8 @@ function createForecastReportingWindowsRouter(options = {}) {
   const auth = options.auth || requireOnboardedInternal;
   const throttle = options.throttle || rateLimit('internal-api', req =>
     `forecast-reporting-windows:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
+  const captureThrottle = options.captureThrottle || rateLimit('forecast-source-capture', req =>
+    `forecast-profile-month:${req.tenantContext.organizationId}`);
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
     res.set('Referrer-Policy', 'no-referrer');
@@ -89,6 +117,104 @@ function createForecastReportingWindowsRouter(options = {}) {
           message: 'The reporting window is unavailable until the business profile can be verified.',
         } });
       }
+    });
+
+  router.get('/month-attestations', auth, requirePermission('forecast', 'read'),
+    throttle, async (req, res) => {
+      if (!exact(req.query, ['localStartDate']) ||
+          !validRequestDate(req.query.localStartDate, 'month')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast calendar request is invalid.',
+        } });
+      }
+      try {
+        const result = await pool().query(
+          'SELECT public.canonical_forecast_profile_month_attestation_read($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.query.localStartDate]);
+        const value = result.rows[0]?.value ?? null;
+        if (value !== null && (value.localStartDate !== req.query.localStartDate ||
+            !UUID.test(value.id || '') || !DIGEST.test(value.digest || '') ||
+            typeof value.profilePinVerified !== 'boolean')) {
+          throw new Error('Invalid guarded calendar receipt');
+        }
+        return res.json({ success: true, data: {
+          attestation: value, ownerConfirmedHistoricalProfile:
+            value?.action === 'confirm', profilePinVerified:
+            value?.profilePinVerified === true,
+          historicalCalendarVerified: false,
+          observationCoverageVerified: false, forecastIssued: false,
+        } });
+      } catch (error) { return attestationError(res, error); }
+    });
+
+  router.post('/month-attestations', auth, requirePermission('forecast', 'update'),
+    captureThrottle, async (req, res) => {
+      const body = req.body;
+      const key = req.get('Idempotency-Key');
+      if (!exact(body, ['localStartDate', 'action', 'businessProfileId',
+        'businessProfileHash', 'expectedRevision', 'expectedDigest', 'reason',
+        'confirmed', 'confirmationVersion']) ||
+          !validRequestDate(body.localStartDate, 'month') ||
+          !['confirm', 'revoke'].includes(body.action) ||
+          !UUID.test(body.businessProfileId || '') ||
+          !DIGEST.test(body.businessProfileHash || '') ||
+          !Number.isInteger(body.expectedRevision) ||
+          body.expectedRevision < 0 || body.expectedRevision >= 1000 ||
+          (body.expectedRevision === 0 ? body.expectedDigest !== null :
+            !DIGEST.test(body.expectedDigest || '')) ||
+          typeof body.reason !== 'string' || !body.reason.trim() ||
+          body.reason.length > 1000 || body.confirmed !== true ||
+          body.confirmationVersion !== 'forecast-calendar-review-v1' ||
+          !KEY.test(key || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast calendar request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const result = await client.query(
+          'SELECT public.canonical_forecast_profile_month_attestation_capture($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.get('X-CSRF-Token'), key,
+            body.localStartDate, body.action, body.businessProfileId,
+            body.businessProfileHash, body.expectedRevision, body.expectedDigest,
+            body.reason, body.confirmed, body.confirmationVersion]);
+        const receipt = result.rows[0]?.value;
+        if (!receipt || !UUID.test(receipt.id || '') ||
+            !DIGEST.test(receipt.digest || '') ||
+            !Number.isInteger(receipt.revision) ||
+            receipt.action !== body.action || typeof receipt.replayed !== 'boolean' ||
+            typeof receipt.profilePinVerified !== 'boolean') {
+          throw new Error('Invalid guarded calendar receipt');
+        }
+        if (receipt.action === 'confirm' && !receipt.replayed &&
+            !receipt.profilePinVerified) throw new Error('Business Profile pin is unavailable');
+        if (receipt.action === 'confirm' && !receipt.replayed) {
+          const profile = await getBusinessProfileById(client,
+            req.tenantContext.organizationId, body.businessProfileId);
+          if (profile.versionNumber < 1 ||
+              profile.profileHash !== body.businessProfileHash ||
+              adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+                body.businessProfileHash) {
+            throw new Error('Business Profile pin is unavailable');
+          }
+        }
+        await client.query('COMMIT');
+        if (receipt.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(receipt.replayed ? 200 : 201).json({ success: true,
+          data: { ...receipt, ownerConfirmedHistoricalProfile:
+            receipt.action === 'confirm',
+          historicalCalendarVerified: false,
+          observationCoverageVerified: false, forecastIssued: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
     });
   return router;
 }

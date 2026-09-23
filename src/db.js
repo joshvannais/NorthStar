@@ -2902,6 +2902,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('145_canonical_forecast_price_period_covera
 // The source-order trigger installation touches the active M24 decision table.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('146_canonical_forecast_price_decision_order.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('147_canonical_forecast_price_ordered_receipts.sql');
+// The additive lineage helper and guarded read replacement have no table
+// rewrite; bound their entire startup transaction and advisory wait as well.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('149_canonical_forecast_price_preanchor_lineage.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

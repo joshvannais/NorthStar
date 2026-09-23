@@ -21,6 +21,7 @@ const { createRetellWebhookBoundaryRouter } = require('./routes/retellWebhookBou
 const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/canonicalPolaris');
 const { createLearningRouter } = require('./routes/learning');
 const { createForecastPriceHistoryRouter } = require('./routes/forecastPriceHistory');
+const { createForecastFeaturesRouter } = require('./routes/forecastFeatures');
 const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
 const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
@@ -287,6 +288,7 @@ app.use('/api/v1/today', createTodayRouter());
 app.use('/api/v1/operational-overview', createOperationalOverviewRouter());
 app.use('/api/v1/learning', createLearningRouter());
 app.use('/api/v1/forecast/price-history', createForecastPriceHistoryRouter());
+app.use('/api/v1/forecast/features', createForecastFeaturesRouter());
 app.use('/api/v1/forecast/settings', require('./routes/forecastSettings').createForecastSettingsRouter());
 app.use('/api/v1', simulationsRoutes);
 app.use('/api/public', createCustomerEstimateDeliveryRouter());

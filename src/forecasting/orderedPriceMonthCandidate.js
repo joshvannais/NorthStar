@@ -74,10 +74,12 @@ function assessOrderedPriceReportingMonthCandidate(readback, reportingWindow,
     (_whole, fraction) => `.${fraction}000Z`);
   return assessOrderedPriceWindowCandidate(readback,
     { startsAt: micros(reportingWindow.startsAt),
-      endsAt: micros(reportingWindow.endsAt) }, requestedCurrency);
+      endsAt: micros(reportingWindow.endsAt) }, requestedCurrency,
+    reportingWindow.organizationId);
 }
 
-function assessOrderedPriceWindowCandidate(readback, window, requestedCurrency) {
+function assessOrderedPriceWindowCandidate(readback, window, requestedCurrency,
+  expectedOrganizationId = null) {
   if (requestedCurrency !== null &&
       (typeof requestedCurrency !== 'string' || !/^[A-Z]{3}$/.test(requestedCurrency))) invalid();
   const source = own(readback, ['snapshot', 'preAnchorPredecessors',
@@ -112,6 +114,10 @@ function assessOrderedPriceWindowCandidate(readback, window, requestedCurrency) 
       !Array.isArray(snapshot.events) || snapshot.events.length !== snapshot.eventCount ||
       source.coverageStartsAt > snapshot.capturedAt) {
     return unavailable('invalid_guarded_source');
+  }
+  if (expectedOrganizationId !== null &&
+      snapshot.organizationId !== expectedOrganizationId) {
+    return unavailable('organization_mismatch');
   }
   if (source.state !== 'current') return unavailable('source_changed');
   if (window.startsAt < source.coverageStartsAt) {

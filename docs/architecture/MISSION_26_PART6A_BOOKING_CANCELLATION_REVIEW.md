@@ -2,7 +2,8 @@
 
 Status: local, isolated and unreleased. Full Part 6A remains open.
 
-Migration 161 lets a paid owner or admin explicitly cancel an earlier human
+Migration 161 lets a paid owner or admin with current write/CSRF authority
+explicitly cancel an earlier human
 commercial booking review for the same tenant. The append-only row records
 the prior review, reviewer, reason and immutable estimate, acceptance, price
 and appointment references. A tenant commercial source lock orders this
@@ -21,7 +22,7 @@ must be able to withdraw their prior commercial review.
 
 Four mounted fictional-tenant integration cases pass with this migration,
 including cancellation, replay, changed replay rejection, stale second
-attempt, member denial, cross-tenant unknown, and currentness after the
+attempt, invalid-CSRF denial, member denial, cross-tenant unknown, and currentness after the
 append. Correction review, paid/demo HTTP mounting, first actual booking,
 complete source periods, cross-source simultaneous contention, release and
 live-data validation remain open. The wider Mission 22 suite is not green.

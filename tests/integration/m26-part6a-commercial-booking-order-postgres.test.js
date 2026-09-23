@@ -137,7 +137,11 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     const reviewParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, matchingApprovalId,
       'Human reviewed the synthetic accepted work and scheduled appointment.',
-      'm26-first-booking-review-key-001'];
+      'm26-first-booking-review-key-001', actor.csrfToken];
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...reviewParams.slice(0, 7), 'invalid-csrf-token']))
+      .rejects.toMatchObject({ code: '42501' });
     // Exercise both M22 terminal statuses without changing the shared
     // fixture: an owner-only synthetic transaction rolls the state back.
     for (const terminalStatus of ['cancelled', 'completed']) {
@@ -149,7 +153,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
           'UPDATE canonical_schedule_assignments SET appointment_status=$3 WHERE organization_id=$1 AND appointment_id=$2',
           [f.org, appointment, terminalStatus]);
         const guarded = (await synthetic.query(
-          'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+          'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
           reviewParams)).rows[0].value;
         expect(guarded).toMatchObject({ state: 'current_booking_evidence_unavailable',
           bookedWorkVerified: false, forecastIssued: false });
@@ -159,7 +163,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       }
     }
     const firstReview = (await f.runtimePool.query(
-      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
       reviewParams)).rows[0].value;
     expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
       replayed: false, historicalCoverageVerified: false,
@@ -198,18 +202,18 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         other.authSessionId, firstReviewId])).rows[0].value)
       .toMatchObject({ state: 'review_unavailable', reviewCurrentAtRead: false });
     expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
       reviewParams)).rows[0].value).toMatchObject({ id: firstReview.id,
       replayed: true, bookedWorkVerified: false });
     await expect(f.runtimePool.query(
-      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
       [...reviewParams.slice(0, 5), 'A changed review reason cannot reuse the same key.',
-        reviewParams[6]])).rejects.toMatchObject({ code: '23505' });
+        reviewParams[6], actor.csrfToken])).rejects.toMatchObject({ code: '23505' });
     await expect(f.runtimePool.query('SELECT * FROM canonical_forecast_commercial_booking_reviews'))
       .rejects.toMatchObject({ code: '42501' });
     expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
-      [...reviewParams.slice(0, 6), 'm26-first-booking-review-key-002'])).rows[0].value)
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...reviewParams.slice(0, 6), 'm26-first-booking-review-key-002', actor.csrfToken])).rows[0].value)
       .toMatchObject({ state: 'prior_commercial_review_exists',
         bookedWorkVerified: false, forecastIssued: false });
     const member = f.actors.member;
@@ -219,9 +223,10 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         member.authSessionId, firstReviewId]))
       .rejects.toMatchObject({ code: '42501' });
     await expect(f.runtimePool.query(
-      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
       [f.org, member.actorUserId, member.actorAccessRole, member.authSessionId,
-        matchingApprovalId, reviewParams[5], 'm26-member-booking-review-key-001']))
+        matchingApprovalId, reviewParams[5], 'm26-member-booking-review-key-001',
+        member.csrfToken]))
       .rejects.toMatchObject({ code: '42501' });
     await expect(f.ownerPool.query(
       'DELETE FROM canonical_forecast_commercial_booking_reviews WHERE organization_id=$1',
@@ -247,8 +252,8 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
           crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
           crypto.randomBytes(32).toString('hex')]);
       const guarded = (await laterAcceptance.query(
-        'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
-        [...reviewParams.slice(0, 6), 'm26-newer-scope-review-key-001']))
+        'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+        [...reviewParams.slice(0, 6), 'm26-newer-scope-review-key-001', actor.csrfToken]))
         .rows[0].value;
       expect(guarded).toMatchObject({ state: 'later_accepted_response_unreviewed',
         bookedWorkVerified: false, forecastIssued: false });
@@ -275,38 +280,42 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     const cancelParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, firstReviewId,
       'The synthetic customer cancelled the reviewed work before service.',
-      'm26-cancel-booking-review-key-001'];
+      'm26-cancel-booking-review-key-001', actor.csrfToken];
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...cancelParams.slice(0, 7), 'invalid-csrf-token']))
+      .rejects.toMatchObject({ code: '42501' });
     const cancellation = (await f.runtimePool.query(
-      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       cancelParams)).rows[0].value;
     expect(cancellation).toMatchObject({ state: 'booking_cancelled',
       previousReviewId: firstReviewId, replayed: false,
       schedulingNeedsReview: true, bookedWorkVerified: false,
       forecastIssued: false });
     await expect(f.runtimePool.query(
-      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       [f.org, member.actorUserId, member.actorAccessRole,
         member.authSessionId, firstReviewId, cancelParams[5],
-        'm26-member-booking-cancel-key-001']))
+        'm26-member-booking-cancel-key-001', member.csrfToken]))
       .rejects.toMatchObject({ code: '42501' });
     expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       [other.organizationId, other.actorUserId, other.actorAccessRole,
         other.authSessionId, firstReviewId, cancelParams[5],
-        'm26-other-tenant-cancel-key-001'])).rows[0].value)
+        'm26-other-tenant-cancel-key-001', other.csrfToken])).rows[0].value)
       .toMatchObject({ state: 'prior_review_unavailable',
         bookedWorkVerified: false });
     expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       cancelParams)).rows[0].value).toMatchObject({
       id: cancellation.id, replayed: true, bookedWorkVerified: false });
     await expect(f.runtimePool.query(
-      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       [...cancelParams.slice(0, 5), 'Changed cancellation reason cannot reuse key.',
-        cancelParams[6]])).rejects.toMatchObject({ code: '23505' });
+        cancelParams[6], actor.csrfToken])).rejects.toMatchObject({ code: '23505' });
     expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
-      [...cancelParams.slice(0, 6), 'm26-cancel-booking-review-key-002']))
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...cancelParams.slice(0, 6), 'm26-cancel-booking-review-key-002', actor.csrfToken]))
       .rows[0].value).toMatchObject({ state: 'prior_review_stale_or_cancelled',
         bookedWorkVerified: false });
     expect((await f.runtimePool.query(
@@ -320,8 +329,8 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         previousReviewId: firstReviewId, reviewCurrentAtRead: false,
         bookedWorkVerified: false });
     expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
-      [...reviewParams.slice(0, 6), 'm26-revoked-booking-review-key-001'])).rows[0].value)
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...reviewParams.slice(0, 6), 'm26-revoked-booking-review-key-001', actor.csrfToken])).rows[0].value)
       .toMatchObject({ state: 'lineage_unavailable',
         bookedWorkVerified: false, forecastIssued: false });
 

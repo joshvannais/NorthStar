@@ -8,7 +8,8 @@ the customer booked the exact work on that appointment. The existing guarded
 lineage, price and scheduling readers deliberately leave that commercial fact
 unverified.
 
-The source must be an explicit owner/admin review, scoped to one tenant,
+The source must be an explicit owner/admin review with current write/CSRF
+authority, scoped to one tenant,
 appointment, accepted issued estimate version and scheduling approval. A review
 records the reviewer, reason, and immutable source references. Migration 159
 implements only the first human booking review. It requires one earlier
@@ -35,7 +36,7 @@ and off-platform cancellations are not established by these migrations.
 
 Four mounted fictional-tenant tests pass. The first-review path, identical
 replay, changed replay rejection, duplicate first-review rejection, member
-denial, private table, immutable review, post-revocation unavailable state,
+denial, invalid-CSRF denial, private table, immutable review, post-revocation unavailable state,
 later accepted response rejection for the same issued version, and synthetic cancelled/completed assignment
 guards are covered. The SQL function is not yet mounted in a paid/demo HTTP journey.
 The later-acceptance guard uses an indexed, 1,001-row bounded scan; larger

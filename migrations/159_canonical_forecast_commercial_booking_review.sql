@@ -61,7 +61,7 @@ CREATE TRIGGER canonical_forecast_commercial_booking_review_immutable
 
 CREATE FUNCTION public.canonical_forecast_review_first_booking(
  org UUID,actor UUID,role_value TEXT,session_value UUID,approval_value UUID,
- reason_value TEXT,key_value TEXT)
+ reason_value TEXT,key_value TEXT,csrf TEXT)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE pair JSONB; price JSONB; position JSONB; assignment RECORD;
@@ -76,8 +76,12 @@ BEGIN
   key_value !~ '^[A-Za-z0-9._:-]{16,128}$' THEN
   RAISE EXCEPTION 'First booking review input invalid' USING ERRCODE='22023';
  END IF;
- -- The pair authenticates the paid owner/admin/session and holds the shared
- -- commercial lock. All following checks and the insert occur under it.
+ -- A commercial review is an immutable write. Verify current paid owner/admin
+ -- session and CSRF write proof before even considering idempotent replay.
+ PERFORM public.canonical_forecast_booking_ordered_access(
+  org,actor,role_value,session_value,csrf,TRUE);
+ -- The pair holds the shared commercial lock. All following checks and the
+ -- insert occur under it.
  pair:=public.canonical_forecast_acceptance_booking_pair(
   org,actor,role_value,session_value,approval_value);
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
@@ -180,8 +184,8 @@ REVOKE ALL ON SEQUENCE public.canonical_forecast_commercial_review_sequence FROM
 REVOKE ALL ON TABLE public.canonical_forecast_commercial_booking_reviews FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_commercial_booking_review_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_review_first_booking(
- UUID,UUID,TEXT,UUID,UUID,TEXT,TEXT) FROM PUBLIC;
+ UUID,UUID,TEXT,UUID,UUID,TEXT,TEXT,TEXT) FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_review_first_booking(
-  UUID,UUID,TEXT,UUID,UUID,TEXT,TEXT) TO northstar_app_runtime;
+  UUID,UUID,TEXT,UUID,UUID,TEXT,TEXT,TEXT) TO northstar_app_runtime;
 END IF;END $$;

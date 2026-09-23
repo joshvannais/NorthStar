@@ -55,6 +55,45 @@ test('an empty NorthStar month never becomes a whole-business zero', () => {
     eligibleForForecast: false });
 });
 
+test('first-approval input amount uses decision time and excludes amendments and withdrawals', () => {
+  const approval = event();
+  const amendmentId = '55555555-5555-4555-8555-555555555555';
+  const withdrawalId = '66666666-6666-4666-8666-666666666666';
+  const amendment = { ...approval, decisionId: amendmentId, revision: 2,
+    previousId: DECISION, priceBeforeTax: '900.00',
+    recordedAt: '2026-11-16T11:59:00.000000Z',
+    sourceObservedAt: '2026-11-16T12:00:00.000000Z' };
+  const withdrawal = { ...amendment, decisionId: withdrawalId, revision: 3,
+    previousId: amendmentId, action: 'withdraw', priceBeforeTax: null,
+    recordedAt: '2026-11-17T11:59:00.000000Z',
+    sourceObservedAt: '2026-11-17T12:00:00.000000Z' };
+  const result = assessOrderedPriceMonthCandidate(
+    source([approval, amendment, withdrawal]), month, 'USD');
+  expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
+    inputDecisionCount: 3, inputCurrency: 'USD',
+    inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
+    sourceMonthVerified: false, eligibleForForecast: false });
+
+  const late = { ...approval,
+    recordedAt: '2026-11-30T23:59:00.000000Z',
+    sourceObservedAt: '2026-12-01T00:00:00.000000Z' };
+  const lateResult = assessOrderedPriceMonthCandidate(source([late]), month, 'USD');
+  expect(lateResult).toMatchObject({ inputDecisionCount: 0,
+    inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
+    sourceMonthVerified: false });
+});
+
+test('mixed first-approval currency and broken revision lineage remain unavailable', () => {
+  const euro = { ...event(), currency: 'EUR' };
+  expect(assessOrderedPriceMonthCandidate(source([euro]), month, 'USD'))
+    .toMatchObject({ state: 'unavailable', reason: 'currency_mismatch',
+      inputFirstApprovalAmount: null, eligibleForForecast: false });
+  const broken = { ...event(), action: 'withdraw', priceBeforeTax: null,
+    previousId: DECISION };
+  expect(assessOrderedPriceMonthCandidate(source([broken]), month, 'USD'))
+    .toMatchObject({ state: 'unavailable', reason: 'source_revision_conflict' });
+});
+
 test('pre-anchor, unclosed and stale months remain unavailable', () => {
   const before = source();
   before.coverageStartsAt = '2026-11-02T00:00:00.000000Z';

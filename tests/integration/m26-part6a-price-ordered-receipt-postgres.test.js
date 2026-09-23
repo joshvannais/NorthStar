@@ -315,6 +315,12 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       expect(diagnostic.body.data.inputDecisionCount).toBeNull();
       expect(diagnostic.body.data).not.toHaveProperty('events');
       expectNoGlobalOrder(diagnostic.body);
+      const priced = await request(fixture.app).get(monthPath)
+        .set('Cookie', owner.session.headers.Cookie)
+        .query({ ...month, currency: 'USD' });
+      expect(priced.body.data).toMatchObject({ state: 'unavailable',
+        inputFirstApprovalAmount: null, sourceMonthVerified: false,
+        eligibleForForecast: false });
       expect((await request(fixture.app).get(monthPath)
         .set('Cookie', fixture.actors.member.session.headers.Cookie)
         .query(month)).status).toBe(403);

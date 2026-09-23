@@ -54,12 +54,15 @@ function unavailable(reason) {
   return Object.freeze({ version: VERSION, state: 'unavailable', reason,
     candidateWindowChecksPassed: false, sourceMonthVerified: false,
     sourceAuthenticated: false,
+    inputFirstApprovalAmount: null, inputFirstApprovalCount: null,
     eligibleForForecast: false,
     wholeBusinessCoverageVerified: false, forecastIssued: false });
 }
 
-function assessOrderedPriceMonthCandidate(readback, requestedWindow) {
+function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCurrency = null) {
   const window = calendarMonth(requestedWindow);
+  if (requestedCurrency !== null &&
+      (typeof requestedCurrency !== 'string' || !/^[A-Z]{3}$/.test(requestedCurrency))) invalid();
   const source = own(readback, ['snapshot', 'coverageStartsAt', 'firstReceiptId',
     'state', 'sourceOrderCurrent', 'calendarPeriodVerified',
     'eligibleForForecast', 'wholeBusinessCoverageVerified', 'forecastIssued']);
@@ -97,7 +100,11 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow) {
 
   let previous = source.coverageStartsAt;
   let count = 0;
+  let firstApprovalCount = 0;
+  let firstApprovalCents = 0n;
+  let currencyConflict = false;
   const decisionIds = new Set();
+  const latestByEstimate = new Map();
   for (const raw of snapshot.events) {
     const event = own(raw, ['estimateId', 'decisionId', 'revision', 'previousId',
       'action', 'priceBeforeTax', 'currency', 'recordedAt', 'sourceObservedAt',
@@ -123,10 +130,34 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow) {
       return unavailable('source_clock_order_conflict');
     }
     decisionIds.add(event.decisionId);
+    const prior = latestByEstimate.get(event.estimateId);
+    if ((event.revision === 1 &&
+        (event.previousId !== null || event.action !== 'approve')) ||
+        (event.revision > 1 && event.previousId === null) ||
+        (prior && (event.revision !== prior.revision + 1 ||
+          event.previousId !== prior.decisionId || event.currency !== prior.currency))) {
+      return unavailable('source_revision_conflict');
+    }
+    latestByEstimate.set(event.estimateId, { revision: event.revision,
+      decisionId: event.decisionId, currency: event.currency });
     previous = event.sourceObservedAt;
     if (event.sourceObservedAt >= window.startsAt &&
         event.sourceObservedAt < window.endsAt) count += 1;
+    // Commercial event-time is the Mission 24 decision time. The private
+    // source order only proves this decision entered NorthStar after the fence.
+    if (requestedCurrency !== null && event.revision === 1 &&
+        event.recordedAt >= window.startsAt && event.recordedAt < window.endsAt) {
+      if (event.currency !== requestedCurrency) currencyConflict = true;
+      else {
+        const [whole, fraction] = event.priceBeforeTax.split('.');
+        firstApprovalCents += BigInt(whole) * 100n + BigInt(fraction);
+        firstApprovalCount += 1;
+      }
+    }
   }
+
+  if (currencyConflict) return unavailable('currency_mismatch');
+  if (firstApprovalCents > 99999999999999n) return unavailable('source_amount_capacity');
 
   return Object.freeze({ version: VERSION,
     state: 'candidate_window_checks_passed', reason: null,
@@ -138,6 +169,10 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow) {
     window: Object.freeze({ ...window }),
     scope: 'northstar_m24_approved_price_decisions',
     inputDecisionCount: count,
+    inputCurrency: requestedCurrency,
+    inputFirstApprovalCount: requestedCurrency === null ? null : firstApprovalCount,
+    inputFirstApprovalAmount: requestedCurrency === null || firstApprovalCount === 0 ? null :
+      `${firstApprovalCents / 100n}.${String(firstApprovalCents % 100n).padStart(2, '0')}`,
     candidateWindowChecksPassed: true,
     sourceMonthVerified: false,
     sourceAuthenticated: false,

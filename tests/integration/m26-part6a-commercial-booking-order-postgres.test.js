@@ -133,11 +133,51 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       'SELECT id FROM canonical_schedule_human_approvals WHERE organization_id=$1 AND appointment_id=$2 ORDER BY approved_at DESC LIMIT 1',
       [f.org, appointment])).rows[0].id;
 
+    const reviewParams = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, matchingApprovalId,
+      'Human reviewed the synthetic accepted work and scheduled appointment.',
+      'm26-first-booking-review-key-001'];
+    const firstReview = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      reviewParams)).rows[0].value;
+    expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
+      replayed: false, historicalCoverageVerified: false,
+      bookedWorkVerified: false, forecastIssued: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      reviewParams)).rows[0].value).toMatchObject({ id: firstReview.id,
+      replayed: true, bookedWorkVerified: false });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      [...reviewParams.slice(0, 5), 'A changed review reason cannot reuse the same key.',
+        reviewParams[6]])).rejects.toMatchObject({ code: '23505' });
+    await expect(f.runtimePool.query('SELECT * FROM canonical_forecast_commercial_booking_reviews'))
+      .rejects.toMatchObject({ code: '42501' });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      [...reviewParams.slice(0, 6), 'm26-first-booking-review-key-002'])).rows[0].value)
+      .toMatchObject({ state: 'prior_commercial_review_exists',
+        bookedWorkVerified: false, forecastIssued: false });
+    const member = f.actors.member;
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      [f.org, member.actorUserId, member.actorAccessRole, member.authSessionId,
+        matchingApprovalId, reviewParams[5], 'm26-member-booking-review-key-001']))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.ownerPool.query(
+      'DELETE FROM canonical_forecast_commercial_booking_reviews WHERE organization_id=$1',
+      [f.org])).rejects.toMatchObject({ code: '23514' });
+
     await f.createExecution({ approvedScheduling: true, stopAfterScheduling: true });
     const links = await get('/customer-estimate-links');
     expect(links.status).toBe(200);
     const revoked = await post(`/customer-estimate-links/${links.body.data.links[0].id}/revoke`, {});
     expect(revoked.status).toBe(201);
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
+      [...reviewParams.slice(0, 6), 'm26-revoked-booking-review-key-001'])).rows[0].value)
+      .toMatchObject({ state: 'lineage_unavailable',
+        bookedWorkVerified: false, forecastIssued: false });
 
     const ordered = (await f.ownerPool.query(
       `SELECT source_kind,approval_id,delivery_event_id,source_order

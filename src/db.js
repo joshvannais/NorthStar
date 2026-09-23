@@ -3010,6 +3010,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('156_canonical_forecast_commercial_booking_
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('157_canonical_forecast_acceptance_booking_pair.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('158_canonical_forecast_booked_price_candidate.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('159_canonical_forecast_booking_status_position.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('159_canonical_forecast_commercial_booking_review.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

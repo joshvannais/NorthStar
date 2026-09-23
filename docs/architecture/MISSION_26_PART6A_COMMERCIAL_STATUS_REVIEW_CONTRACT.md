@@ -1,0 +1,41 @@
+# Mission 26 Part 6A — commercial status review contract
+
+Status: isolated, unreleased first-review write candidate. No booked-work baseline.
+
+An accepted issued estimate and a Mission 22 scheduling approval for the same
+opportunity are evidence of two separate decisions. Neither event says that
+the customer booked the exact work on that appointment. The existing guarded
+lineage, price and scheduling readers deliberately leave that commercial fact
+unverified.
+
+The source must be an explicit owner/admin review, scoped to one tenant,
+appointment, accepted issued estimate version and scheduling approval. A review
+records the reviewer, reason, and immutable source references. Migration 159
+implements only the first human booking review. It requires the current
+accepted version, latest approved price, latest observed human scheduling
+approval and current scheduled assignment. An idempotency key replays an
+identical request; altered replay fails. A second first-booking review for
+the appointment is refused. The table and sequence remain private to the
+application runtime, and stored reviews cannot be edited or deleted. A review
+does not imply that the historic period before the source-order anchors is
+complete.
+
+At review time, the server re-reads the current accepted-estimate lineage,
+approved price, and appointment status under the existing source locks. It
+rejects ambiguous accepted links, a revoked link, a changed price decision,
+an unrelated or stale scheduling approval, and a second first review. A later
+Mission 24 decision, customer revocation, or Mission 22 scheduling change
+may make the stored review stale. A guarded currentness reader is not yet
+implemented, so this candidate never returns booked-work value. Correction,
+cancellation, off-platform bookings and off-platform cancellations are not
+established by migration 159.
+
+Four mounted fictional-tenant tests pass. The first-review path, identical
+replay, changed replay rejection, duplicate first-review rejection, member
+denial, private table, immutable review and post-revocation unavailable state
+are covered. The SQL function is not yet mounted in a paid/demo HTTP journey.
+No result labels the amount booked work, earned revenue, collected cash,
+whole-business revenue, or a statistically qualified future forecast. A
+guarded currentness reader, correction/cancellation path, full synthetic
+journey, independent exact-head audit, release verification and real
+source-period coverage remain separate open gates.

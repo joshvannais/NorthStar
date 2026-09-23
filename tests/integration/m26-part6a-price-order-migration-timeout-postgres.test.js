@@ -74,4 +74,49 @@ realPostgres('Mission 26 price-order migration recovery', () => {
       await migrationPool.end();
     }
   }, 120000);
+
+  test('migration 149 bounds the startup advisory wait and retries once after release', async () => {
+    const migration = '149_canonical_forecast_price_preanchor_lineage.sql';
+    expect(reviewedMigrationTimeoutValues(migration,
+      { lock_timeout: '0', statement_timeout: '0' }))
+      .toEqual({ lockTimeout: '5000ms', statementTimeout: '20000ms' });
+    expect(reviewedMigrationTimeoutValues(migration,
+      { lock_timeout: '200', statement_timeout: '1000' }))
+      .toEqual({ lockTimeout: '200ms', statementTimeout: '1000ms' });
+
+    // Recreate the pre-149 pending state only in this disposable database.
+    // The first retry must time out before DDL and leave the row absent.
+    await fixture.ownerPool.query(
+      'DROP FUNCTION public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb)');
+    await fixture.ownerPool.query(
+      'DELETE FROM public._migrations WHERE filename=$1', [migration]);
+    const migrationPool = new Pool({
+      connectionString: fixture.ownerPool.options.connectionString,
+      options: '-c lock_timeout=200ms -c statement_timeout=1000ms', max: 1,
+    });
+    const holder = await fixture.ownerPool.connect();
+    try {
+      await holder.query('SELECT pg_advisory_lock($1::bigint)',
+        ['5643944089238424905']);
+      const started = Date.now();
+      await expect(fixture.db.runMigrations({ pool: migrationPool,
+        runtimePool: fixture.runtimePool })).rejects.toThrow(/lock timeout/);
+      expect(Date.now() - started).toBeLessThan(3000);
+      expect((await fixture.ownerPool.query(
+        'SELECT count(*)::integer AS n FROM public._migrations WHERE filename=$1',
+        [migration])).rows[0].n).toBe(0);
+      await holder.query('SELECT pg_advisory_unlock($1::bigint)',
+        ['5643944089238424905']);
+      await expect(fixture.db.runMigrations({ pool: migrationPool,
+        runtimePool: fixture.runtimePool })).resolves.toBe(true);
+      expect((await fixture.ownerPool.query(
+        'SELECT count(*)::integer AS n FROM public._migrations WHERE filename=$1',
+        [migration])).rows[0].n).toBe(1);
+    } finally {
+      await holder.query('SELECT pg_advisory_unlock($1::bigint)',
+        ['5643944089238424905']).catch(() => {});
+      holder.release();
+      await migrationPool.end();
+    }
+  }, 120000);
 });

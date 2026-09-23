@@ -30,6 +30,11 @@ BEGIN
   RETURN jsonb_build_object('state','later_review_exists',
    'reviewCurrentAtRead',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
  END IF;
+ IF reviewed.action='booking_cancelled' THEN
+  RETURN jsonb_build_object('state','booking_cancelled',
+   'reviewId',reviewed.id,'previousReviewId',reviewed.previous_review_id,
+   'reviewCurrentAtRead',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
  -- The pair takes this tenant commercial lock again and authenticates the
  -- immutable accepted version and scheduling approval. Missing/ambiguous
  -- source evidence never becomes zero booked work.

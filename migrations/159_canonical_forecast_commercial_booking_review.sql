@@ -20,7 +20,8 @@ CREATE TABLE public.canonical_forecast_commercial_booking_reviews (
  approved_decision_digest TEXT NOT NULL CHECK(approved_decision_digest ~ '^[a-f0-9]{64}$'),
  reviewed_price_before_tax TEXT NOT NULL CHECK(reviewed_price_before_tax ~ '^(0|[1-9][0-9]{0,11})\.[0-9]{2}$'),
  currency TEXT NOT NULL CHECK(currency ~ '^[A-Z]{3}$'),
- action TEXT NOT NULL CHECK(action='first_booking_reviewed'),
+ action TEXT NOT NULL CHECK(action IN ('first_booking_reviewed','booking_cancelled')),
+ previous_review_id UUID,
  reason TEXT NOT NULL CHECK(length(btrim(reason)) BETWEEN 10 AND 1000 AND octet_length(reason)<=4000),
  actor_user_id UUID NOT NULL,
  auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id),
@@ -30,7 +31,9 @@ CREATE TABLE public.canonical_forecast_commercial_booking_reviews (
  reviewed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
  UNIQUE(organization_id,appointment_id,review_order),
  UNIQUE(organization_id,actor_user_id,request_key_hash),
- UNIQUE(organization_id,appointment_id,action),
+ UNIQUE(organization_id,id),
+ CHECK((action='first_booking_reviewed' AND previous_review_id IS NULL)
+    OR (action='booking_cancelled' AND previous_review_id IS NOT NULL)),
  FOREIGN KEY(organization_id,appointment_id)
   REFERENCES public.canonical_appointments(organization_id,id) ON DELETE RESTRICT,
  FOREIGN KEY(organization_id,approval_id)
@@ -38,10 +41,16 @@ CREATE TABLE public.canonical_forecast_commercial_booking_reviews (
  FOREIGN KEY(organization_id,estimate_id,issued_version_id)
   REFERENCES public.canonical_customer_estimate_versions(organization_id,estimate_id,id) ON DELETE RESTRICT,
  FOREIGN KEY(organization_id,actor_user_id)
-  REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT
+  REFERENCES public.organization_memberships(organization_id,user_id) ON DELETE RESTRICT,
+ FOREIGN KEY(organization_id,previous_review_id)
+  REFERENCES public.canonical_forecast_commercial_booking_reviews(organization_id,id)
+  ON DELETE RESTRICT
 );
 CREATE INDEX canonical_forecast_commercial_booking_reviews_tenant_appointment
  ON public.canonical_forecast_commercial_booking_reviews(organization_id,appointment_id,review_order DESC);
+CREATE UNIQUE INDEX canonical_forecast_first_booking_review_per_appointment
+ ON public.canonical_forecast_commercial_booking_reviews(organization_id,appointment_id)
+ WHERE action='first_booking_reviewed';
 
 CREATE FUNCTION public.canonical_forecast_commercial_booking_review_immutable()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$

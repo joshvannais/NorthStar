@@ -272,6 +272,53 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       currentnessParams)).rows[0].value).toMatchObject({
       state: 'review_lineage_stale_or_unavailable',
       reviewCurrentAtRead: false, bookedWorkVerified: false });
+    const cancelParams = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, firstReviewId,
+      'The synthetic customer cancelled the reviewed work before service.',
+      'm26-cancel-booking-review-key-001'];
+    const cancellation = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      cancelParams)).rows[0].value;
+    expect(cancellation).toMatchObject({ state: 'booking_cancelled',
+      previousReviewId: firstReviewId, replayed: false,
+      schedulingNeedsReview: true, bookedWorkVerified: false,
+      forecastIssued: false });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      [f.org, member.actorUserId, member.actorAccessRole,
+        member.authSessionId, firstReviewId, cancelParams[5],
+        'm26-member-booking-cancel-key-001']))
+      .rejects.toMatchObject({ code: '42501' });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      [other.organizationId, other.actorUserId, other.actorAccessRole,
+        other.authSessionId, firstReviewId, cancelParams[5],
+        'm26-other-tenant-cancel-key-001'])).rows[0].value)
+      .toMatchObject({ state: 'prior_review_unavailable',
+        bookedWorkVerified: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      cancelParams)).rows[0].value).toMatchObject({
+      id: cancellation.id, replayed: true, bookedWorkVerified: false });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      [...cancelParams.slice(0, 5), 'Changed cancellation reason cannot reuse key.',
+        cancelParams[6]])).rejects.toMatchObject({ code: '23505' });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7) value',
+      [...cancelParams.slice(0, 6), 'm26-cancel-booking-review-key-002']))
+      .rows[0].value).toMatchObject({ state: 'prior_review_stale_or_cancelled',
+        bookedWorkVerified: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value).toMatchObject({
+      state: 'later_review_exists', reviewCurrentAtRead: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [...currentnessParams.slice(0, 4), cancellation.id])).rows[0].value)
+      .toMatchObject({ state: 'booking_cancelled',
+        previousReviewId: firstReviewId, reviewCurrentAtRead: false,
+        bookedWorkVerified: false });
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
       [...reviewParams.slice(0, 6), 'm26-revoked-booking-review-key-001'])).rows[0].value)
@@ -457,12 +504,6 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       observedApprovalCount: 2, laterApprovalCount: 1,
       firstActualBookingKnown: false, bookingStatusVerified: false,
       sourceComplete: false, forecastIssued: false });
-    expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
-      [f.org, actor.actorUserId, actor.actorAccessRole,
-        actor.authSessionId, firstReviewId])).rows[0].value).toMatchObject({
-      state: 'review_lineage_stale_or_unavailable',
-      reviewCurrentAtRead: false, bookedWorkVerified: false });
   }, 120000);
 
   test('customer acceptance waits on the tenant fence and rollback leaves no phantom event', async () => {

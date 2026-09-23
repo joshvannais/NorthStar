@@ -1,6 +1,6 @@
 # Mission 26 Part 6A — commercial status review contract
 
-Status: isolated, unreleased first-review write candidate. No booked-work baseline.
+Status: isolated, unreleased first-review and cancellation candidates. No booked-work baseline.
 
 An accepted issued estimate and a Mission 22 scheduling approval for the same
 opportunity are evidence of two separate decisions. Neither event says that
@@ -28,9 +28,10 @@ rejects ambiguous accepted links, a revoked link, a changed price decision,
 an unrelated or stale scheduling approval, and a second first review. A later
 Mission 24 decision, customer revocation, or Mission 22 scheduling change
 may make the stored review stale. Migration 160 adds a guarded currentness
-reader, but this candidate never returns booked-work value. Correction,
-cancellation, off-platform bookings and off-platform cancellations are not
-established by migration 159.
+reader, but this candidate never returns booked-work value. Migration 161
+adds a separate explicit human cancellation of an earlier review; it does
+not cancel the Mission 22 appointment. Correction, off-platform bookings
+and off-platform cancellations are not established by these migrations.
 
 Four mounted fictional-tenant tests pass. The first-review path, identical
 replay, changed replay rejection, duplicate first-review rejection, member
@@ -41,6 +42,6 @@ The later-acceptance guard uses an indexed, 1,001-row bounded scan; larger
 histories return unavailable rather than a false current claim.
 No result labels the amount booked work, earned revenue, collected cash,
 whole-business revenue, or a statistically qualified future forecast. A
-currentness reader HTTP mounting, correction/cancellation path, full synthetic
+currentness reader HTTP mounting, correction path, full synthetic
 journey, independent exact-head audit, release verification and real
 source-period coverage remain separate open gates.

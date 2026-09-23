@@ -21,7 +21,9 @@ projection remains future scale work.
 The positive state means only that these **recorded** inputs still agree at
 read time. It returns no booked-work amount and leaves first actual booking,
 historical coverage, booked-work verification and forecasting false.
-Correction/cancellation review writes, paid/demo HTTP mounting, complete
+Migration 161 adds an explicit cancellation review write and this reader
+returns `booking_cancelled` for that row. It does not cancel Mission 22
+scheduling. Correction review writes, paid/demo HTTP mounting, complete
 source periods, off-platform activity, release and live validation remain
 open. A current read is not a durable saved-run currentness guarantee.
 

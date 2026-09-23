@@ -1463,6 +1463,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_order_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_order_insert() FROM %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_booking_approval_orders') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_approval_orders FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_booking_approval_order_sequence FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_approval_order_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_approval_order_insert() FROM %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_ordered_receipts') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_ordered_receipts FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_ordered_anchors FROM %I', runtime_role);
@@ -2421,6 +2427,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_decision_order_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_decision_order_insert()','EXECUTE')
        )) AS price_decision_order_private,
+       (to_regclass('public.canonical_forecast_booking_approval_orders') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_booking_approval_orders','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_sequence_privilege($1,'public.canonical_forecast_booking_approval_order_sequence','USAGE,SELECT,UPDATE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_booking_approval_order_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_booking_approval_order_insert()','EXECUTE')
+       )) AS booking_approval_order_private,
        (to_regclass('public.canonical_forecast_price_ordered_receipts') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_forecast_price_ordered_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_ordered_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -2839,6 +2851,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.price_period_anchor_table_withheld ||
       !runtimePrivileges.price_period_anchor_entry_guarded ||
       !runtimePrivileges.price_decision_order_private ||
+      !runtimePrivileges.booking_approval_order_private ||
       !runtimePrivileges.price_ordered_receipt_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
@@ -2914,6 +2927,11 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('147_canonical_forecast_price_ordered_recei
 // The additive lineage helper and guarded read replacement have no table
 // rewrite; bound their entire startup transaction and advisory wait as well.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('149_canonical_forecast_price_preanchor_lineage.sql');
+// Installing an additive trigger touches the active Mission 22 approval table.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('152_canonical_forecast_booking_approval_order.sql');
+// The deferred approval validator's privilege correction changes an active
+// trigger function; keep the migration transaction and lock wait bounded.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('153_schedule_deferred_approval_validator_owner.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

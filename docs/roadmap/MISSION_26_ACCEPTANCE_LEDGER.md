@@ -12,7 +12,7 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 | 1B | [Output contract](../architecture/MISSION_26_PART1B_FORECAST_OUTPUT_CONTRACT.md) | **Scoped** — canonical internal shape accepted; no mounted output implied. |
 | 1C | [Governance architecture](../architecture/MISSION_26_PART1C_FORECAST_GOVERNANCE.md) | **Scoped** — architecture accepted; runtime enforcement belongs to later slices. |
 | 2A | [Bounded M24 as-of receipt](../architecture/MISSION_26_PART2A_AS_OF_SNAPSHOTS.md) | **Open — partial**: one source exists; complete source coverage and historical cutoff proof for the target remain open. |
-| 2B | [Reporting-window contract](../architecture/MISSION_26_PART2B_TIME_SERIES_WINDOWS.md) | **Open — partial**: internal normalization exists; mounted comparable observation windows remain unproven. |
+| 2B | [Reporting-window contract](../architecture/MISSION_26_PART2B_TIME_SERIES_WINDOWS.md), [guarded current-profile candidate](../architecture/MISSION_26_PART2B_GUARDED_PROFILE_WINDOWS.md) | **Open — partial**: an unreleased paid current-profile window candidate exists; historical/as-of profile validity and mounted comparable source observations remain unproven. |
 | 2C | [Feature-definition contract](../architecture/MISSION_26_PART2C_FEATURE_DEFINITIONS.md), [guarded approved-estimate stock candidate](../architecture/MISSION_26_PART2C_GUARDED_APPROVED_ESTIMATE_STOCK.md) | **Open — partial**: one isolated mounted Mission 24 stock candidate exists; the full set of source-backed features, broader pipeline semantics, release and full-slice acceptance remain open. |
 | 2D | [Current M24 lineage](../architecture/MISSION_26_PART2D_LINEAGE_RECOVERY.md) | **Open — partial**: bounded one-source read exists; cross-source correction/retention and saved-run propagation remain open. |
 | 3A | [Target and outcome catalog](../architecture/MISSION_26_PART3A_TARGET_OUTCOMES.md) | **Scoped** — eligibility catalog accepted; actual source eligibility is separately gated. |
@@ -66,6 +66,12 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 | --- | --- | --- | --- | --- | --- | --- |
 | [Settings status view](../architecture/MISSION_26_PART11A_SETTINGS_STATUS_UI.md) | Bounded implementation and rendered checks passed; release pending | No | No | Code head `b55e3571` passed with no P0–P3; final documentation head review pending | No | No |
 | [Reviewed-off Settings action](../architecture/MISSION_26_PART11A_REVIEWED_OFF_UI.md) | Bounded implementation and rendered checks passed; release pending | No | No | Corrected code head `83b6c7b1` passed with no P0–P3; final documentation head review pending | No | No |
+
+### Part 2B candidate gate separation
+
+| Candidate | Bounded prerequisite | Full slice | Deployed | Independent exact-head audit | Mission-final accepted | Live-data validated |
+| --- | --- | --- | --- | --- | --- | --- |
+| [Guarded current-profile window](../architecture/MISSION_26_PART2B_GUARDED_PROFILE_WINDOWS.md) | Bounded implementation and mounted paid-route checks passed; release pending | No | No | Corrected code head `55d5722d` passed with no P0–P3; final documentation head review pending | No | No |
 
 ## Minimum integrated path from this baseline
 

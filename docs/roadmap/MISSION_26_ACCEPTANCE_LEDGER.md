@@ -74,15 +74,15 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 | [Guarded current-profile window](../architecture/MISSION_26_PART2B_GUARDED_PROFILE_WINDOWS.md) | Bounded implementation and mounted paid-route checks passed; release pending | No | No | Corrected code head `55d5722d` passed with no P0–P3; final documentation head review pending | No | No |
 | [Current-profile local-month price position](../architecture/MISSION_26_PART6A_PROFILE_LOCAL_MONTH_POSITION.md) | Bounded implementation and mounted paid-route checks passed; release pending | No | No | Corrected code head `a4515eaa` passed with no P0–P3; final documentation-head review pending | No | No |
 | [Reviewed Business Profile month claim](../architecture/MISSION_26_PART2B_REVIEWED_PROFILE_MONTH.md) | Bounded implementation and mounted fictional-tenant checks passed; draft [PR #369](https://github.com/joshvannais/NorthStar/pull/369) | No | No | Exact head `b7ce4cdc` passed with no P0–P3 | No | No |
-| [Reviewed historical month window](../architecture/MISSION_26_PART2B_REVIEWED_MONTH_WINDOW.md) | Bounded implementation and mounted fictional-tenant checks passed; release pending | No | No | Code head `631e6d83` passed with no P0–P3; final documentation-head review pending | No | No |
-| [Reviewed-profile price-month composition](../architecture/MISSION_26_PART6A_REVIEWED_PROFILE_PRICE_MONTH.md) | Guarded composition tested only for pre-anchor unavailable state; positive closed post-anchor month remains untested and release pending | No | No | Corrected code head `0b3cb9a3` passed with no P0–P3; final documentation-head review pending | No | No |
+| [Reviewed historical month window](../architecture/MISSION_26_PART2B_REVIEWED_MONTH_WINDOW.md) | Bounded implementation and mounted fictional-tenant checks passed; release pending | No | No | Code head `631e6d83` and final documentation head `6577d4a4` independently reviewed with no P0–P3 | No | No |
+| [Reviewed-profile price-month composition](../architecture/MISSION_26_PART6A_REVIEWED_PROFILE_PRICE_MONTH.md) | Guarded composition tested only for pre-anchor unavailable state; positive closed post-anchor month remains untested and release pending | No | No | Corrected code head `0b3cb9a3` and final documentation head `d4541d94` independently reviewed with no P0–P3 | No | No |
 
 ### Part 6A candidate gate separation
 
 | Candidate | Bounded prerequisite | Full slice | Deployed | Independent exact-head audit | Mission-final accepted | Live-data validated |
 | --- | --- | --- | --- | --- | --- | --- |
 | [Current-profile local-month price position](../architecture/MISSION_26_PART6A_PROFILE_LOCAL_MONTH_POSITION.md) | Bounded implementation and mounted paid-route checks passed; release pending | No | No | Corrected code head `a4515eaa` passed with no P0–P3; final documentation-head review pending | No | No |
-| [Reviewed-profile price-month composition](../architecture/MISSION_26_PART6A_REVIEWED_PROFILE_PRICE_MONTH.md) | Guarded composition tested only for pre-anchor unavailable state; positive closed post-anchor month remains untested and release pending | No | No | Corrected code head `0b3cb9a3` passed with no P0–P3; final documentation-head review pending | No | No |
+| [Reviewed-profile price-month composition](../architecture/MISSION_26_PART6A_REVIEWED_PROFILE_PRICE_MONTH.md) | Guarded composition tested only for pre-anchor unavailable state; positive closed post-anchor month remains untested and release pending | No | No | Corrected code head `0b3cb9a3` and final documentation head `d4541d94` independently reviewed with no P0–P3 | No | No |
 
 ## Minimum integrated path from this baseline
 

@@ -51,7 +51,8 @@ function calendarMonth(window) {
 
 function unavailable(reason) {
   return Object.freeze({ version: VERSION, state: 'unavailable', reason,
-    sourceMonthStructurallyCovered: false, sourceAuthenticated: false,
+    candidateWindowChecksPassed: false, sourceMonthVerified: false,
+    sourceAuthenticated: false,
     eligibleForForecast: false,
     wholeBusinessCoverageVerified: false, forecastIssued: false });
 }
@@ -127,7 +128,7 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow) {
   }
 
   return Object.freeze({ version: VERSION,
-    state: 'candidate_northstar_ledger_month', reason: null,
+    state: 'candidate_window_checks_passed', reason: null,
     organizationId: snapshot.organizationId,
     sourceSnapshotId: snapshot.id,
     sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
@@ -135,8 +136,9 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow) {
     capturedAt: snapshot.capturedAt,
     window: Object.freeze({ ...window }),
     scope: 'northstar_m24_approved_price_decisions',
-    sourceObservedDecisionCount: count,
-    sourceMonthStructurallyCovered: true,
+    inputDecisionCount: count,
+    candidateWindowChecksPassed: true,
+    sourceMonthVerified: false,
     sourceAuthenticated: false,
     calendarPeriodVerified: false,
     eligibleForForecast: false,

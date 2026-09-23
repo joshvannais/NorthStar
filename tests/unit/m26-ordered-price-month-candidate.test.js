@@ -34,9 +34,10 @@ function source(events = [event()]) {
 
 test('a complete ordered NorthStar month remains a non-forecast candidate', () => {
   const result = assessOrderedPriceMonthCandidate(source(), month);
-  expect(result).toMatchObject({ state: 'candidate_northstar_ledger_month',
+  expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
     scope: 'northstar_m24_approved_price_decisions',
-    sourceObservedDecisionCount: 1, sourceMonthStructurallyCovered: true,
+    inputDecisionCount: 1, candidateWindowChecksPassed: true,
+    sourceMonthVerified: false,
     sourceAuthenticated: false, calendarPeriodVerified: false,
     eligibleForForecast: false,
     wholeBusinessCoverageVerified: false, forecastIssued: false });
@@ -47,8 +48,10 @@ test('a complete ordered NorthStar month remains a non-forecast candidate', () =
 
 test('an empty NorthStar month never becomes a whole-business zero', () => {
   const result = assessOrderedPriceMonthCandidate(source([]), month);
-  expect(result).toMatchObject({ state: 'candidate_northstar_ledger_month',
-    sourceObservedDecisionCount: 0, wholeBusinessCoverageVerified: false,
+  expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
+    inputDecisionCount: 0, candidateWindowChecksPassed: true,
+    sourceMonthVerified: false, calendarPeriodVerified: false,
+    wholeBusinessCoverageVerified: false,
     eligibleForForecast: false });
 });
 

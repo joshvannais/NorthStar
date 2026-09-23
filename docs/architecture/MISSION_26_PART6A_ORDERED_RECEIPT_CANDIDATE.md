@@ -11,6 +11,15 @@ through its high-water mark. A fresh read checks whether a later decision has
 made the receipt stale. Rolled-back sequence gaps are allowed and never counted
 as missing approvals.
 
+The underlying order sequence is global and remains private. Tenant-visible
+receipts include only that tenant's ordered events, with no raw order numbers
+or gap counts. The public digest covers the private order pins with a random
+per-receipt nonce retained only in the private table, preventing small-gap
+guessing from the digest. A two-tenant interleaving test checks the returned
+shape and tenant filtering. This corrects the first exact-head audit's
+cross-tenant activity-metadata finding; the correction still needs its own
+independent exact-head audit.
+
 The capture requires a fresh READ COMMITTED statement after acquiring the
 tenant lock. A busy decision writer causes an explicit retryable failure rather
 than a falsely complete receipt. The existing timestamp-based v1 receipt and

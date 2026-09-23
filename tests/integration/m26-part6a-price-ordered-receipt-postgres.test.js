@@ -37,34 +37,56 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
     return result.rows[0].value;
   }
 
-  async function createEstimate() {
+  async function privateReceipt(receiptId) {
+    const result = await fixture.ownerPool.query(
+      `SELECT coverage_start_order,high_water_order,digest_nonce
+         FROM canonical_forecast_price_ordered_receipts WHERE id=$1`,
+      [receiptId]);
+    return result.rows[0];
+  }
+
+  async function privateDecisionOrder(decisionId) {
+    const result = await fixture.ownerPool.query(
+      'SELECT source_order FROM canonical_forecast_price_decision_orders WHERE decision_id=$1',
+      [decisionId]);
+    return Number(result.rows[0].source_order);
+  }
+
+  function expectNoGlobalOrder(value) {
+    const serialized = JSON.stringify(value);
+    expect(serialized).not.toMatch(
+      /"(?:sourceOrder|coverageStartOrder|highWaterOrder|currentHighWaterOrder|digestNonce)"/);
+  }
+
+  async function createEstimate(organizationId = fixture.org) {
     const operation = id(), graph = id(), customer = id();
     const opportunity = id(), estimate = id(), fingerprint = hash(id());
     await fixture.ownerPool.query(
       `INSERT INTO canonical_operations(id,organization_id,graph_id,idempotency_key_hash,
          payload_fingerprint,state,lease_owner,lease_expires_at,result_status,result_body,completed_at)
        VALUES($1,$2,$3,$4,$4,'completed',$1,NOW()+INTERVAL '1 hour',200,'{}',NOW())`,
-      [operation, fixture.org, graph, fingerprint]);
+      [operation, organizationId, graph, fingerprint]);
     await fixture.ownerPool.query(
       'INSERT INTO canonical_customers(id,organization_id,operation_id,graph_id,name) VALUES($1,$2,$3,$4,$5)',
-      [customer, fixture.org, operation, graph, 'Synthetic customer']);
+      [customer, organizationId, operation, graph, 'Synthetic customer']);
     await fixture.ownerPool.query(
       `INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,
          customer_id,status,service_type,job_scope)
        VALUES($1,$2,$3,$4,$5,'qualified','Plumbing','{}')`,
-      [opportunity, fixture.org, operation, graph, customer]);
+      [opportunity, organizationId, operation, graph, customer]);
     await fixture.ownerPool.query(
       `INSERT INTO canonical_estimates(id,organization_id,operation_id,graph_id,
          opportunity_id,calculation_version,normalized_input_fingerprint,
          business_profile_version,business_profile_hash,currency,customer_price,
          line_items,calculation_output,snapshot_digest)
        VALUES($1,$2,$3,$4,$5,'fixture-v1',$6,'org-profile-v1',$6,'USD',500,'[]','{}',$6)`,
-      [estimate, fixture.org, operation, graph, opportunity, fingerprint]);
+      [estimate, organizationId, operation, graph, opportunity, fingerprint]);
     return estimate;
   }
 
-  async function decide(estimate, client = fixture.ownerPool) {
-    const actor = fixture.actors.owner, decision = id();
+  async function decide(estimate, client = fixture.ownerPool,
+    actor = fixture.actors.owner) {
+    const decision = id();
     await client.query(
       `INSERT INTO canonical_estimate_decisions(
          id,organization_id,estimate_id,revision,previous_id,action,actor_user_id,
@@ -74,7 +96,7 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
        VALUES($1,$2,$3,1,NULL,'approve',$4,$4,$5,'Synthetic owner','{}',
          'Synthetic scope','500.00','USD','Synthetic approval',
          'estimate-quote-preparation-v1',$6,$7,$8)`,
-      [decision, fixture.org, estimate, actor.actorUserId,
+      [decision, actor.organizationId, estimate, actor.actorUserId,
         actor.authSessionId, hash(id()), hash(id()), hash(id())]);
     return decision;
   }
@@ -87,8 +109,10 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       const first = await capture(fixture.actors.owner, firstKey);
       expect(first.replayed).toBe(false);
       expect(first.snapshot).toMatchObject({ eventCount: 0,
-        coverageStartOrder: first.snapshot.highWaterOrder,
         wholeBusinessCoverageVerified: false, forecastIssued: false });
+      const firstPrivate = await privateReceipt(first.snapshot.id);
+      expect(firstPrivate.coverage_start_order).toBe(firstPrivate.high_water_order);
+      expectNoGlobalOrder(first);
       expect(first.snapshot.events).toEqual([]);
       expect((await read(first.snapshot.id)).state).toBe('current');
 
@@ -99,8 +123,9 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       expect(second.snapshot.events.map(event => event.decisionId)).toEqual([decision]);
       expect(second.snapshot.events.map(event => event.decisionId))
         .not.toContain(priorDecision);
-      expect(second.snapshot.events[0].sourceOrder)
-        .toBeGreaterThan(first.snapshot.highWaterOrder);
+      expect(await privateDecisionOrder(decision)).toBeGreaterThan(
+        Number(firstPrivate.high_water_order));
+      expectNoGlobalOrder(second);
       expect((await read(second.snapshot.id))).toMatchObject({ state: 'current',
         sourceOrderCurrent: true, calendarPeriodVerified: false,
         eligibleForForecast: false, wholeBusinessCoverageVerified: false,
@@ -141,7 +166,8 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       const next = await capture();
       const capturedDecision = next.snapshot.events.find(event => event.decisionId === decision);
       expect(capturedDecision).toBeDefined();
-      expect(capturedDecision.sourceOrder).toBeGreaterThan(first.snapshot.highWaterOrder);
+      expect(await privateDecisionOrder(decision)).toBeGreaterThan(
+        Number((await privateReceipt(first.snapshot.id)).high_water_order));
       expect(new Date(capturedDecision.sourceObservedAt).getTime())
         .toBeGreaterThanOrEqual(new Date(first.snapshot.capturedAt).getTime());
       expect((await read(next.snapshot.id)).state).toBe('current');
@@ -165,7 +191,8 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
     const next = await capture();
     const capturedDecision = next.snapshot.events.find(event => event.decisionId === committed);
     expect(capturedDecision).toBeDefined();
-    expect(capturedDecision.sourceOrder).toBeGreaterThan(first.snapshot.highWaterOrder + 1);
+    expect(await privateDecisionOrder(committed)).toBeGreaterThan(
+      Number((await privateReceipt(first.snapshot.id)).high_water_order) + 1);
     expect((await read(next.snapshot.id)).sourceOrderCurrent).toBe(true);
   }, 120000);
 
@@ -202,7 +229,8 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       const next = await capture();
       const event = next.snapshot.events.find(value => value.decisionId === decision);
       expect(event).toBeDefined();
-      expect(event.sourceOrder).toBeGreaterThan(first.snapshot.highWaterOrder);
+      expect(await privateDecisionOrder(decision)).toBeGreaterThan(
+        Number((await privateReceipt(first.snapshot.id)).high_water_order));
       expect(new Date(event.recordedAt).getTime())
         .toBeLessThan(new Date(first.snapshot.capturedAt).getTime());
       expect(new Date(event.sourceObservedAt).getTime())
@@ -213,5 +241,23 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       captureClient.release();
       writer.release();
     }
+  }, 120000);
+
+  test('interleaved tenant decisions do not expose global sequence or digest nonce', async () => {
+    const ownBefore = await capture();
+    const otherEstimate = await createEstimate(fixture.otherOrg);
+    const otherDecision = await decide(otherEstimate, fixture.ownerPool,
+      fixture.actors.otherOwner);
+    const ownEstimate = await createEstimate();
+    const ownDecision = await decide(ownEstimate);
+    expect(await privateDecisionOrder(ownDecision)).toBeGreaterThan(
+      (await privateDecisionOrder(otherDecision)));
+    const ownAfter = await capture();
+    expectNoGlobalOrder(ownBefore);
+    expectNoGlobalOrder(ownAfter);
+    expectNoGlobalOrder(await read(ownAfter.snapshot.id));
+    expect(ownAfter.snapshot.events.map(event => event.decisionId)).toContain(ownDecision);
+    expect(ownAfter.snapshot.events.map(event => event.decisionId)).not.toContain(otherDecision);
+    expect((await privateReceipt(ownAfter.snapshot.id)).digest_nonce).toBeDefined();
   }, 120000);
 });

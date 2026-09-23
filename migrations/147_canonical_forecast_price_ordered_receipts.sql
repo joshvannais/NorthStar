@@ -10,6 +10,7 @@ CREATE TABLE public.canonical_forecast_price_ordered_receipts (
  high_water_order BIGINT NOT NULL CHECK(high_water_order>=coverage_start_order),
  decision_events JSONB NOT NULL CHECK(jsonb_typeof(decision_events)='array' AND
    jsonb_array_length(decision_events)<=1000 AND octet_length(decision_events::text)<=262144),
+ digest_nonce UUID NOT NULL,
  snapshot_digest CHAR(64) NOT NULL CHECK(snapshot_digest~'^[0-9a-f]{64}$'),
  actor_user_id UUID NOT NULL,
  membership_id UUID NOT NULL,
@@ -25,6 +26,7 @@ CREATE TABLE public.canonical_forecast_price_ordered_receipts (
  CHECK(rtrim(snapshot_digest)=public.canonical_completion_digest(jsonb_build_object(
   'version','m26-price-ordered-source-v1','organizationId',organization_id,
   'coverageStartOrder',coverage_start_order,'highWaterOrder',high_water_order,
+  'digestNonce',digest_nonce,
   'capturedAt',public.canonical_forecast_utc_instant(captured_at),
   'events',decision_events)))
 );
@@ -54,7 +56,7 @@ CREATE FUNCTION public.canonical_forecast_price_ordered_events(
  org UUID,start_order BIGINT,end_order BIGINT)
 RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT COALESCE(jsonb_agg(jsonb_build_object(
-  'sourceOrder',event.source_order,'estimateId',event.estimate_id,
+  'estimateId',event.estimate_id,
   'decisionId',event.id,'revision',event.revision,'previousId',event.previous_id,
   'action',event.action,'priceBeforeTax',event.price_before_tax,
   'currency',event.currency,
@@ -78,8 +80,6 @@ CREATE FUNCTION public.canonical_forecast_price_ordered_projection(
 RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT jsonb_build_object('id',value.id,'version','m26-price-ordered-source-v1',
   'organizationId',value.organization_id,
-  'coverageStartOrder',value.coverage_start_order,
-  'highWaterOrder',value.high_water_order,
   'capturedAt',public.canonical_forecast_utc_instant(value.captured_at),
   'events',value.decision_events,'eventCount',jsonb_array_length(value.decision_events),
   'sourceSnapshotDigest',rtrim(value.snapshot_digest),
@@ -94,7 +94,7 @@ DECLARE authority JSONB;old public.canonical_forecast_price_ordered_receipts%ROW
  inserted public.canonical_forecast_price_ordered_receipts%ROWTYPE;
  anchor public.canonical_forecast_price_ordered_anchors%ROWTYPE;
  key_hash TEXT;first_order BIGINT;last_order BIGINT;events JSONB;
- captured TIMESTAMPTZ;digest_value TEXT;
+ captured TIMESTAMPTZ;digest_value TEXT;nonce UUID;
 BEGIN
  -- A serializable snapshot established before the tenant fence would omit a
  -- writer that commits during lock acquisition. Require fresh statement
@@ -141,16 +141,18 @@ BEGIN
   RAISE EXCEPTION 'Forecast price-order cohort exceeds bounded source size'
    USING ERRCODE='54000';END IF;
  captured:=clock_timestamp();
+ nonce:=gen_random_uuid();
  digest_value:=public.canonical_completion_digest(jsonb_build_object(
   'version','m26-price-ordered-source-v1','organizationId',org,
   'coverageStartOrder',first_order,'highWaterOrder',last_order,
+  'digestNonce',nonce,
   'capturedAt',public.canonical_forecast_utc_instant(captured),
   'events',events));
  INSERT INTO public.canonical_forecast_price_ordered_receipts(
   organization_id,coverage_start_order,high_water_order,decision_events,
-  snapshot_digest,actor_user_id,membership_id,auth_session_id,
+  digest_nonce,snapshot_digest,actor_user_id,membership_id,auth_session_id,
   request_key_hash,captured_at)
- VALUES(org,first_order,last_order,events,digest_value,actor,
+ VALUES(org,first_order,last_order,events,nonce,digest_value,actor,
   (authority->>'membershipId')::uuid,session_value,key_hash,captured)
  RETURNING * INTO inserted;
  IF anchor.organization_id IS NULL THEN
@@ -205,7 +207,6 @@ BEGIN
   'coverageStartsAt',public.canonical_forecast_utc_instant(anchor.coverage_starts_at),
   'firstReceiptId',anchor.first_receipt_id,
   'state',CASE WHEN last_order=selected.high_water_order THEN 'current' ELSE 'stale' END,
-  'currentHighWaterOrder',last_order,
   'sourceOrderCurrent',last_order=selected.high_water_order,
   'calendarPeriodVerified',FALSE,'eligibleForForecast',FALSE,
   'wholeBusinessCoverageVerified',FALSE,'forecastIssued',FALSE);

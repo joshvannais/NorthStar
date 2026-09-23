@@ -39,13 +39,13 @@ realPostgres('Mission 26 approved-price source ordering', () => {
     return estimate;
   }
 
-  async function waitForLockWait(client) {
+  async function waitForLockWait(client, blockerPid) {
     const deadline = Date.now() + 3000;
     while (Date.now() < deadline) {
       const row = (await fixture.ownerPool.query(
-        'SELECT cardinality(pg_blocking_pids($1)) > 0 AS blocked',
+        'SELECT pg_blocking_pids($1) AS blockers',
         [client.processID])).rows[0];
-      if (row.blocked) return;
+      if (row.blockers.includes(blockerPid)) return;
       await new Promise(resolve => setTimeout(resolve, 10));
     }
     throw new Error('Expected approval-source lock wait was not observed');
@@ -144,12 +144,29 @@ realPostgres('Mission 26 approved-price source ordering', () => {
         'CALL public.test_forecast_price_lock_then_capture($1,$2,$3,$4,$5,$6,NULL)',
         [fixture.org, actor.actorUserId, actor.actorAccessRole,
           actor.authSessionId, actor.csrfToken, uuid()]);
-      await waitForLockWait(capture);
+      await waitForLockWait(capture, writer.processID);
       await writer.query('COMMIT');
       const result = await pending;
       await capture.query('COMMIT');
-      expect(result.rows[0].result.snapshot.events.map(event => event.decisionId))
-        .not.toContain(decisionId);
+      const snapshot = result.rows[0].result.snapshot;
+      const recordedAt = (await fixture.ownerPool.query(
+        'SELECT created_at FROM canonical_estimate_decisions WHERE id=$1',
+        [decisionId])).rows[0].created_at;
+      expect(new Date(snapshot.asOf).getTime()).toBeGreaterThanOrEqual(recordedAt.getTime());
+      expect(snapshot.events.map(event => event.decisionId)).not.toContain(decisionId);
+
+      const fresh = await fixture.runtimePool.connect();
+      try {
+        await fresh.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        const currentness = (await fresh.query(
+          'SELECT public.canonical_forecast_price_event_currentness_read($1,$2,$3,$4,$5) value',
+          [fixture.org, actor.actorUserId, actor.actorAccessRole,
+            actor.authSessionId, snapshot.id])).rows[0].value;
+        await fresh.query('COMMIT');
+        expect(currentness).toMatchObject({ state: 'stale', forecastIssued: false });
+        expect(currentness.capturedEventCount).toBe(snapshot.events.length);
+        expect(currentness.currentEventCount).toBe(snapshot.events.length + 1);
+      } finally { fresh.release(); }
     } finally {
       await writer.query('ROLLBACK').catch(() => {});
       await capture.query('ROLLBACK').catch(() => {});
@@ -196,7 +213,7 @@ realPostgres('Mission 26 approved-price source ordering', () => {
       const pending = capture.query(
         'CALL public.test_forecast_price_read_committed_fence($1,NULL)',
         [fixture.org]);
-      await waitForLockWait(capture);
+      await waitForLockWait(capture, writer.processID);
       await writer.query('COMMIT');
       const result = await pending;
       await capture.query('COMMIT');

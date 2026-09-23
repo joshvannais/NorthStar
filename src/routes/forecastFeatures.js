@@ -43,6 +43,8 @@ function createForecastFeaturesRouter(options = {}) {
       try {
         client = await poolProvider().connect();
         await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
         const org = req.tenantContext.organizationId;
         const result = await client.query(
           'SELECT public.canonical_forecast_estimate_decision_snapshot_capture($1,$2,$3,$4,$5,$6) value',
@@ -77,10 +79,15 @@ function createForecastFeaturesRouter(options = {}) {
           ['40001', '40P01', '55P03', '54000', '23505'].includes(error?.code) ? 409 : 503;
         return res.status(status).json({ success: false, error: {
           category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
-            status === 409 ? 'FORECAST_SOURCE_CHANGED' : 'FORECAST_SOURCE_UNAVAILABLE',
+            error?.code === '54000' ? 'FORECAST_SOURCE_CAPACITY' :
+              ['55P03', '57014'].includes(error?.code) ? 'FORECAST_SOURCE_BUSY' :
+                status === 409 ? 'FORECAST_SOURCE_CHANGED' : 'FORECAST_SOURCE_UNAVAILABLE',
           message: status === 403 ? 'Forecast source access is restricted.' :
-            status === 409 ? 'Forecast source changed. Refresh and try again.' :
-              'Forecast source is temporarily unavailable.',
+            error?.code === '54000' ? 'There is too much history to capture safely.' :
+              ['55P03', '57014'].includes(error?.code) ?
+                'Forecast source is busy. Try again shortly.' :
+                status === 409 ? 'Forecast source changed. Refresh and try again.' :
+                  'Forecast source is temporarily unavailable.',
         } });
       } finally { if (client) client.release(); }
     });

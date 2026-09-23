@@ -277,6 +277,81 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(otherTenantMonth.body.data).not.toHaveProperty('observedBeforeTax');
     expect((await request(f.app).get(observedMonthRoute)
       .set(f.actors.member.session.headers)).status).toBe(403);
+    const sourceMonthRoute = `${bookingRoute}/booked-work/months/${confirmationMonth}/source`;
+    const missingAnchor = await request(f.app).get(sourceMonthRoute)
+      .set(actor.session.headers);
+    expect(missingAnchor.body.data).toMatchObject({
+      state: 'booked_work_source_month_unavailable',
+      reason: 'source_anchor_missing', sourceMonthCoverageVerified: false,
+      completePeriodVerified: false, forecastIssued: false });
+    expect(missingAnchor.body.data).not.toHaveProperty('currentConfirmedBeforeTax');
+    const anchorRoute = `${bookingRoute}/booked-work/source-anchor`;
+    const anchorBody = { reason: 'Begin observing future synthetic booked confirmations.',
+      confirmed: true, confirmationVersion: 'booked-work-source-anchor-v1' };
+    const anchorKey = 'm26-booked-source-anchor-key-001';
+    expect((await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', anchorKey).send(anchorBody)).status).toBe(403);
+    expect((await request(f.app).post(anchorRoute)
+      .set(f.actors.member.session.headers).set('Idempotency-Key', anchorKey)
+      .send(anchorBody)).status).toBe(403);
+    const anchored = await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('Idempotency-Key', anchorKey)
+      .send(anchorBody);
+    expect(anchored.status).toBe(201);
+    expect(anchored.body.data).toMatchObject({
+      state: 'booked_work_source_anchored', replayed: false,
+      completePeriodVerified: false, forecastIssued: false });
+    expect((await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('Idempotency-Key', anchorKey)
+      .send(anchorBody)).body.data).toMatchObject({
+      anchorId: anchored.body.data.anchorId, replayed: true });
+    expect((await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('Idempotency-Key', anchorKey)
+      .send({ ...anchorBody, reason: 'A changed anchor reason cannot reuse this key.' }))
+      .status).toBe(409);
+    const incompleteCurrentMonth = await request(f.app).get(sourceMonthRoute)
+      .set(actor.session.headers);
+    expect(incompleteCurrentMonth.body.data).toMatchObject({
+      state: 'booked_work_source_month_unavailable',
+      reason: 'month_before_source_anchor', sourceMonthCoverageVerified: false });
+    expect(incompleteCurrentMonth.body.data).not.toHaveProperty('currentConfirmedBeforeTax');
+    await expect(f.runtimePool.query(
+      'SELECT * FROM canonical_forecast_booked_work_anchors'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.ownerPool.query(
+      'DELETE FROM canonical_forecast_booked_work_anchors WHERE organization_id=$1',
+      [f.org])).rejects.toMatchObject({ code: '23514' });
+    // Test only: roll back shifted source dates to exercise a closed future
+    // month without manufacturing durable historical coverage evidence.
+    const syntheticClosedMonth = await f.ownerPool.connect();
+    try {
+      await syntheticClosedMonth.query('BEGIN');
+      await syntheticClosedMonth.query(
+        'ALTER TABLE canonical_forecast_booked_work_anchors DISABLE TRIGGER USER');
+      await syntheticClosedMonth.query(
+        'ALTER TABLE canonical_forecast_booked_work_confirmations DISABLE TRIGGER USER');
+      await syntheticClosedMonth.query(
+        `UPDATE canonical_forecast_booked_work_anchors
+            SET captured_at='2024-12-01T00:00:00Z'
+          WHERE organization_id=$1`, [f.org]);
+      await syntheticClosedMonth.query(
+        `UPDATE canonical_forecast_booked_work_confirmations
+            SET confirmed_at='2025-01-15T00:00:00Z'
+          WHERE organization_id=$1 AND id=$2`, [f.org, confirmationId]);
+      const closed = (await syntheticClosedMonth.query(
+        'SELECT public.canonical_forecast_booked_work_source_month($1,$2,$3,$4,$5) value',
+        [f.org, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, '2025-01'])).rows[0].value;
+      expect(closed).toMatchObject({
+        state: 'northstar_confirmation_source_month_current',
+        currentConfirmedBeforeTax: storedPrice.reviewed_price_before_tax,
+        sourceMonthCoverageVerified: true, completePeriodVerified: false,
+        wholeBusinessCoverageVerified: false, forecastIssued: false });
+    } finally {
+      await syntheticClosedMonth.query('ROLLBACK');
+      syntheticClosedMonth.release();
+    }
     const otherTenantConfirmation = await request(f.app).get(confirmationReadRoute)
       .set(f.actors.otherOwner.session.headers);
     expect(otherTenantConfirmation.status).toBe(200);

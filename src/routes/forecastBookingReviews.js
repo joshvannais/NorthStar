@@ -263,6 +263,100 @@ function createForecastBookingReviewsRouter(options = {}) {
       } finally { if (client) client.release(); }
     });
 
+  router.post('/booked-work/source-anchor', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      const body = req.body;
+      const key = req.get('Idempotency-Key');
+      if (!body || Array.isArray(body) ||
+          Object.keys(body).sort().join(',') !== 'confirmationVersion,confirmed,reason' ||
+          body.confirmed !== true ||
+          body.confirmationVersion !== 'booked-work-source-anchor-v1' ||
+          typeof body.reason !== 'string' || body.reason.trim().length < 10 ||
+          body.reason.trim().length > 1000 || Buffer.byteLength(body.reason) > 4000 ||
+          !KEY.test(key || '')) return invalid(res);
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_capture_booked_work_anchor($1,$2,$3,$4,$5,$6,$7,$8,$9) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.get('X-CSRF-Token'),
+            key, body.reason, true, body.confirmationVersion])).rows[0]?.value;
+        if (!value || !['booked_work_source_anchored',
+          'booked_work_source_already_anchored'].includes(value.state) ||
+          !UUID.test(value.anchorId || '') ||
+          typeof value.coverageStartsAt !== 'string' ||
+          !/^\d{4}-\d{2}-\d{2}T/.test(value.coverageStartsAt) ||
+          value.completePeriodVerified !== false || value.forecastIssued !== false) {
+          throw new Error('Invalid guarded booked-work source anchor');
+        }
+        await client.query('COMMIT');
+        if (value.replayed === true) res.set('Idempotency-Replayed', 'true');
+        return res.status(value.state === 'booked_work_source_anchored' &&
+          value.replayed === false ? 201 : 200).json({ success: true, data: {
+          state: value.state, anchorId: value.anchorId,
+          coverageStartsAt: value.coverageStartsAt,
+          replayed: value.replayed === true,
+          completePeriodVerified: false, forecastIssued: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return failure(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/booked-work/months/:month/source', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(req.params.month || '') ||
+          req.params.month.startsWith('0000')) return invalid(res);
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_booked_work_source_month($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.month])).rows[0]?.value;
+        const current = value?.state === 'northstar_confirmation_source_month_current';
+        if (!value || value.forecastIssued !== false ||
+            value.completePeriodVerified !== false || value.month !== req.params.month ||
+            (current && (value.sourceMonthCoverageVerified !== true ||
+              value.wholeBusinessCoverageVerified !== false ||
+              value.earnedRevenueMeasured !== false ||
+              value.collectedCashMeasured !== false ||
+              !UUID.test(value.anchorId || '') || value.timeZone !== 'UTC' ||
+              !Number.isInteger(value.confirmedJobCount) ||
+              value.confirmedJobCount < 1 || value.confirmedJobCount > 100 ||
+              !/^(0|[1-9][0-9]{0,14})\.[0-9]{2}$/.test(value.currentConfirmedBeforeTax || '') ||
+              !/^[A-Z]{3}$/.test(value.currency || ''))) ||
+            (!current && (value.state !== 'booked_work_source_month_unavailable' ||
+              value.sourceMonthCoverageVerified !== false ||
+              typeof value.reason !== 'string' ||
+              value.currentConfirmedBeforeTax !== undefined))) {
+          throw new Error('Invalid guarded booked-work source month');
+        }
+        await client.query('COMMIT');
+        return res.status(200).json({ success: true, data: current ? {
+          state: value.state, month: value.month, timeZone: 'UTC',
+          anchorId: value.anchorId, coverageStartsAt: value.coverageStartsAt,
+          confirmedJobCount: value.confirmedJobCount,
+          currentConfirmedBeforeTax: value.currentConfirmedBeforeTax,
+          currency: value.currency, sourceMonthCoverageVerified: true,
+          completePeriodVerified: false, wholeBusinessCoverageVerified: false,
+          earnedRevenueMeasured: false, collectedCashMeasured: false,
+          forecastIssued: false,
+        } : {
+          state: value.state, reason: value.reason, month: value.month,
+          sourceMonthCoverageVerified: false,
+          completePeriodVerified: false, forecastIssued: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return failure(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   router.get('/:reviewId/currentness', auth, requirePermission('forecast', 'read'), throttle,
     async (req, res) => {
       if (!UUID.test(req.params.reviewId || '')) return invalid(res);

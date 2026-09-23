@@ -146,4 +146,4 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow) {
     forecastIssued: false });
 }
 
-module.exports = { VERSION, assessOrderedPriceMonthCandidate };
+module.exports = { VERSION, calendarMonth, assessOrderedPriceMonthCandidate };

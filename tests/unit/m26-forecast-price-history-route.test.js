@@ -210,3 +210,64 @@ test('ordered receipt route fails closed on a poisoned source and reports a busy
       message: 'Forecast history is busy. Try again shortly.' });
     expect(JSON.stringify(retry.body)).not.toContain('internal lock detail');
   });
+
+test('ordered month route reads server-guarded evidence but exposes only unverified diagnostic',
+  async () => {
+    const orderedRead = {
+      snapshot: { id: SNAPSHOT, version: 'm26-price-ordered-source-v1',
+        organizationId: ORG, capturedAt: '2026-12-02T00:00:00.000000Z',
+        scope: 'northstar_m24_approved_price_decisions',
+        sourceSnapshotDigest: DIGEST, eventCount: 0, events: [],
+        wholeBusinessCoverageVerified: false, forecastIssued: false,
+        digestNonce: SESSION, highWaterOrder: 997 },
+      state: 'current', sourceOrderCurrent: true,
+      coverageStartsAt: '2026-10-01T00:00:00.000000Z',
+      firstReceiptId: SNAPSHOT, calendarPeriodVerified: false,
+      eligibleForForecast: false, wholeBusinessCoverageVerified: false,
+      forecastIssued: false,
+    };
+    // The readback-shaped fixture omits private fields that the SQL projection
+    // itself never returns; a poisoned shape must fail closed.
+    const poisoned = application({ orderedRead });
+    const path = `/history/ordered-snapshots/${SNAPSHOT}/month-candidate`;
+    const month = { startsAt: '2026-11-01T00:00:00.000000Z',
+      endsAt: '2026-12-01T00:00:00.000000Z' };
+    const rejected = await request(poisoned.app).get(path).query(month);
+    expect(rejected.status).toBe(200);
+    expect(rejected.body.data).toMatchObject({ state: 'unavailable',
+      reason: 'invalid_guarded_source', sourceMonthVerified: false,
+      eligibleForForecast: false, forecastIssued: false });
+    expect(JSON.stringify(rejected.body)).not.toMatch(/digestNonce|highWaterOrder/);
+
+    delete orderedRead.snapshot.digestNonce;
+    delete orderedRead.snapshot.highWaterOrder;
+    const { app, client, pool } = application({ orderedRead });
+    const response = await request(app).get(path).query(month);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ state: 'candidate_window_checks_passed',
+      inputDecisionCount: 0, candidateWindowChecksPassed: true,
+      sourceMonthVerified: false, sourceAuthenticated: false,
+      calendarPeriodVerified: false, eligibleForForecast: false,
+      wholeBusinessCoverageVerified: false, forecastIssued: false });
+    expect(JSON.stringify(response.body)).not.toMatch(/events|digestNonce|sourceOrder|highWaterOrder/);
+    expect(client.query.mock.calls.map(call => call[0])).toEqual([
+      'BEGIN ISOLATION LEVEL READ COMMITTED',
+      'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
+      'COMMIT',
+    ]);
+    expect(client.query.mock.calls[1][1]).toEqual([ORG, USER, 'owner', SESSION, SNAPSHOT]);
+    expect((await request(app).get(path).query({ ...month, organizationId: ORG })).status)
+      .toBe(400);
+    expect((await request(app).get(path).query({ startsAt: '2026-11-02T00:00:00.000000Z',
+      endsAt: month.endsAt })).status).toBe(400);
+    expect(pool.connect).toHaveBeenCalledTimes(1);
+    const member = application({ role: 'member', orderedRead });
+    expect((await request(member.app).get(path).query(month)).status).toBe(403);
+    expect(member.pool.connect).not.toHaveBeenCalled();
+    const stale = application({ orderedRead: { ...orderedRead,
+      state: 'stale', sourceOrderCurrent: false } });
+    const changed = await request(stale.app).get(path).query(month);
+    expect(changed.body.data).toMatchObject({ state: 'unavailable',
+      reason: 'source_changed', inputDecisionCount: null,
+      candidateWindowChecksPassed: false, eligibleForForecast: false });
+  });

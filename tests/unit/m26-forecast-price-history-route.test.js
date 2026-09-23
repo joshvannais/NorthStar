@@ -15,7 +15,8 @@ const SNAPSHOT = '44444444-4444-4444-8444-444444444444';
 const DIGEST = 'a'.repeat(64);
 const KEY = 'm26-price-history-request-1';
 
-function application({ role = 'owner', source, readPosition } = {}) {
+function application({ role = 'owner', source, readPosition,
+  orderedSource, orderedRead } = {}) {
   const app = express();
   app.use(express.json());
   const auth = (req, _res, next) => {
@@ -27,6 +28,27 @@ function application({ role = 'owner', source, readPosition } = {}) {
     next();
   };
   const client = { query: jest.fn(async sql => {
+    if (sql.includes('ordered_capture')) {
+      if (orderedSource instanceof Error) throw orderedSource;
+      return { rows: [{ value: orderedSource || { snapshot: {
+        id: SNAPSHOT, version: 'm26-price-ordered-source-v1', organizationId: ORG,
+        capturedAt: '2026-09-22T22:00:00.000000Z',
+        scope: 'northstar_m24_approved_price_decisions',
+        sourceSnapshotDigest: DIGEST, eventCount: 0, events: [],
+        wholeBusinessCoverageVerified: false, forecastIssued: false,
+      }, replayed: false } }] };
+    }
+    if (sql.includes('ordered_read')) return { rows: [{ value: orderedRead || {
+      snapshot: { id: SNAPSHOT, version: 'm26-price-ordered-source-v1',
+        organizationId: ORG, capturedAt: '2026-09-22T22:00:00.000000Z',
+        scope: 'northstar_m24_approved_price_decisions',
+        sourceSnapshotDigest: DIGEST, eventCount: 0, events: [] },
+      state: 'current', sourceOrderCurrent: true,
+      coverageStartsAt: '2026-09-22T22:00:00.000000Z',
+      firstReceiptId: SNAPSHOT, calendarPeriodVerified: false,
+      eligibleForForecast: false, wholeBusinessCoverageVerified: false,
+      forecastIssued: false, currentHighWaterOrder: 997,
+    } }] };
     if (sql.includes('snapshot_capture')) return { rows: [{ value: source || {
       snapshot: { id: SNAPSHOT, organizationId: ORG,
         asOf: '2026-09-22T22:00:00.000000Z', sourceSnapshotDigest: DIGEST,
@@ -135,3 +157,56 @@ test('historical read passes only server identity and returns unavailable withou
       organizationId: USER })).status).toBe(400);
   expect(readPosition).toHaveBeenCalledTimes(1);
 });
+
+test('ordered receipt route emits only safe metadata and uses fresh read-committed transactions',
+  async () => {
+    const { app, client } = application({ orderedSource: { snapshot: {
+      id: SNAPSHOT, version: 'm26-price-ordered-source-v1', organizationId: ORG,
+      capturedAt: '2026-09-22T22:00:00.000000Z',
+      scope: 'northstar_m24_approved_price_decisions',
+      sourceSnapshotDigest: DIGEST, eventCount: 1,
+      events: [{ decisionId: USER, sourceOrder: 997 }],
+      highWaterOrder: 997, digestNonce: SESSION,
+      wholeBusinessCoverageVerified: false, forecastIssued: false,
+    }, replayed: false } });
+    const captured = await request(app).post('/history/ordered-snapshots')
+      .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'server-validated-token')
+      .send({});
+    expect(captured.status).toBe(201);
+    expect(captured.body.data).toMatchObject({ state: 'source_order_receipt_only',
+      eventCount: 1, calendarPeriodVerified: false, forecastIssued: false });
+    expect(JSON.stringify(captured.body)).not.toMatch(/sourceOrder|highWaterOrder|digestNonce/);
+    expect(client.query.mock.calls.map(call => call[0])).toEqual([
+      'BEGIN ISOLATION LEVEL READ COMMITTED',
+      'SELECT public.canonical_forecast_price_ordered_capture($1,$2,$3,$4,$5,$6) value',
+      'COMMIT',
+    ]);
+    const readback = await request(app).get(`/history/ordered-snapshots/${SNAPSHOT}`);
+    expect(readback.status).toBe(200);
+    expect(readback.body.data).toMatchObject({ state: 'current',
+      sourceOrderCurrent: true, eligibleForForecast: false, forecastIssued: false });
+    expect(JSON.stringify(readback.body)).not.toMatch(/highWaterOrder|digestNonce/);
+  });
+
+test('ordered receipt route fails closed on a poisoned source and reports a busy fence',
+  async () => {
+    const poisoned = application({ orderedSource: { snapshot: {
+      id: SNAPSHOT, organizationId: USER, sourceSnapshotDigest: DIGEST,
+      events: [{ privatePrice: 'do-not-leak' }], eventCount: 1,
+    }, replayed: false } });
+    const response = await request(poisoned.app).post('/history/ordered-snapshots')
+      .set('Idempotency-Key', KEY).send({});
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(response.body)).not.toContain('do-not-leak');
+    expect(poisoned.client.query.mock.calls.at(-1)[0]).toBe('ROLLBACK');
+
+    const busyError = new Error('internal lock detail');
+    busyError.code = '55P03';
+    const busy = application({ orderedSource: busyError });
+    const retry = await request(busy.app).post('/history/ordered-snapshots')
+      .set('Idempotency-Key', KEY).send({});
+    expect(retry.status).toBe(409);
+    expect(retry.body.error).toMatchObject({ category: 'FORECAST_SOURCE_BUSY',
+      message: 'Forecast history is busy. Try again shortly.' });
+    expect(JSON.stringify(retry.body)).not.toContain('internal lock detail');
+  });

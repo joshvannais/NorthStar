@@ -19,5 +19,7 @@ unavailable. No customer-visible forecast or commercial decision is issued.
 
 Focused route tests cover minimized output, invalid requests, denied roles and
 poisoned shapes. Mounted disposable-PostgreSQL tests cover current paid access,
-pre-anchor unavailability, tenant hiding and source privacy. This does not
+pre-anchor unavailability, tenant hiding and source privacy. A post-anchor,
+closed-month candidate has only a mocked route test because the first real
+coverage anchor is current and no complete later month has closed. This does not
 release the stacked migrations or close the original Part 6A scope.

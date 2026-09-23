@@ -75,7 +75,33 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
   }
 
   test('paid route uses guarded M24 snapshot, masks later changes and withholds private rows', async () => {
-    const first = await capture();
+    const capturePath = '/api/v1/forecast/features/approved-estimate-stock/snapshots';
+    const owner = fixture.actors.owner;
+    const requestKey = id();
+    expect((await request(fixture.app).post(capturePath)
+      .set('Idempotency-Key', id()).send({})).status).toBe(401);
+    expect((await request(fixture.app).post(capturePath)
+      .set(fixture.actors.member.session.headers)
+      .set('Idempotency-Key', id()).send({})).status).toBe(403);
+    expect((await request(fixture.app).post(capturePath)
+      .set('Cookie', owner.session.headers.Cookie)
+      .set('Idempotency-Key', id()).send({})).status).toBe(403);
+    expect((await request(fixture.app).post(capturePath)
+      .set(owner.session.headers).set('Idempotency-Key', id())
+      .send({ organizationId: fixture.org })).status).toBe(400);
+    const firstCapture = await request(fixture.app).post(capturePath)
+      .set(owner.session.headers).set('Idempotency-Key', requestKey).send({});
+    expect(firstCapture.status).toBe(201);
+    expect(firstCapture.body.data).toMatchObject({
+      state: 'historical_source_only', sourceCount: 0,
+      sourceAuthenticated: true, forecastIssued: false, replayed: false });
+    expect(firstCapture.body.data).not.toHaveProperty('sources');
+    const replay = await request(fixture.app).post(capturePath)
+      .set(owner.session.headers).set('Idempotency-Key', requestKey).send({});
+    expect(replay.status).toBe(200);
+    expect(replay.body.data).toMatchObject({ replayed: true,
+      snapshotId: firstCapture.body.data.snapshotId });
+    const first = { id: firstCapture.body.data.snapshotId };
     const path = snapshot =>
       `/api/v1/forecast/features/approved-estimate-stock/${snapshot.id}`;
     const ownerCookie = fixture.actors.owner.session.headers.Cookie;

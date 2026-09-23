@@ -9,10 +9,12 @@ const { readGuardedApprovedPriceFlow } = require('../forecasting/guardedApproved
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const instant = value => typeof value === 'string' && INSTANT.test(value);
 
 function errorReply(res, error) {
   const status = error?.code === '42501' ? 403 :
-    ['40001', '40P01', '54000'].includes(error?.code) ? 409 : 503;
+    ['40001', '40P01', '55P03', '54000'].includes(error?.code) ? 409 : 503;
   return res.status(status).json({ success: false, error: {
     category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
       error?.code === '54000' ? 'FORECAST_SOURCE_CAPACITY' :
@@ -83,6 +85,119 @@ function createForecastPriceHistoryRouter(options = {}) {
           replayed: captured.replayed === true, forecastIssued: false,
           bookedWorkMeasured: false, earnedRevenueMeasured: false,
           collectedCashMeasured: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/ordered-snapshots', auth, requirePermission('forecast', 'update'),
+    captureThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.body, []) || !KEY.test(key || '')) return res.status(400).json({
+        success: false, error: { category: 'FORECAST_REQUEST_INVALID',
+          message: 'The history request is invalid.' },
+      });
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const identity = actor(req);
+        const response = await client.query(
+          'SELECT public.canonical_forecast_price_ordered_capture($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.get('X-CSRF-Token'), key]);
+        const captured = response.rows[0]?.value;
+        const snapshot = captured?.snapshot;
+        if (!snapshot || (captured.replayed !== true && captured.replayed !== false) ||
+            snapshot.version !== 'm26-price-ordered-source-v1' ||
+            snapshot.scope !== 'northstar_m24_approved_price_decisions' ||
+            snapshot.organizationId !== identity.organizationId ||
+            !UUID.test(snapshot.id || '') || snapshot.forecastIssued !== false ||
+            snapshot.wholeBusinessCoverageVerified !== false ||
+            !instant(snapshot.capturedAt) ||
+            !Number.isSafeInteger(snapshot.eventCount) ||
+            snapshot.eventCount < 0 || snapshot.eventCount > 1000 ||
+            !Array.isArray(snapshot.events) ||
+            snapshot.events.length !== snapshot.eventCount ||
+            typeof snapshot.sourceSnapshotDigest !== 'string' ||
+            !/^[0-9a-f]{64}$/.test(snapshot.sourceSnapshotDigest)) {
+          throw new Error('Invalid guarded ordered-price receipt');
+        }
+        await client.query('COMMIT');
+        if (captured.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(captured.replayed ? 200 : 201).json({ success: true, data: {
+          state: 'source_order_receipt_only', snapshotId: snapshot.id,
+          capturedAt: snapshot.capturedAt,
+          sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
+          eventCount: snapshot.eventCount,
+          replayed: captured.replayed === true, forecastIssued: false,
+          calendarPeriodVerified: false, wholeBusinessCoverageVerified: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/ordered-snapshots/:snapshotId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.snapshotId) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The history request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const identity = actor(req);
+        const response = await client.query(
+          'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.params.snapshotId]);
+        const value = response.rows[0]?.value;
+        if (value === null) {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Forecast history is unavailable.',
+          } });
+        }
+        const snapshot = value?.snapshot;
+        if (!snapshot || snapshot.version !== 'm26-price-ordered-source-v1' ||
+            snapshot.scope !== 'northstar_m24_approved_price_decisions' ||
+            snapshot.organizationId !== identity.organizationId ||
+            snapshot.id !== req.params.snapshotId ||
+            !['current', 'stale'].includes(value.state) ||
+            value.sourceOrderCurrent !== (value.state === 'current') ||
+            value.calendarPeriodVerified !== false ||
+            value.eligibleForForecast !== false ||
+            value.wholeBusinessCoverageVerified !== false ||
+            value.forecastIssued !== false ||
+            !UUID.test(value.firstReceiptId || '') ||
+            !instant(value.coverageStartsAt) ||
+            !instant(snapshot.capturedAt) ||
+            !Number.isSafeInteger(snapshot.eventCount) ||
+            snapshot.eventCount < 0 || snapshot.eventCount > 1000 ||
+            !Array.isArray(snapshot.events) ||
+            snapshot.events.length !== snapshot.eventCount ||
+            typeof snapshot.sourceSnapshotDigest !== 'string' ||
+            !/^[0-9a-f]{64}$/.test(snapshot.sourceSnapshotDigest)) {
+          throw new Error('Invalid guarded ordered-price readback');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: value.state, snapshotId: snapshot.id,
+          sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
+          capturedAt: snapshot.capturedAt,
+          coverageStartsAt: value.coverageStartsAt,
+          firstReceiptId: value.firstReceiptId,
+          eventCount: snapshot.eventCount,
+          sourceOrderCurrent: value.sourceOrderCurrent,
+          calendarPeriodVerified: false, eligibleForForecast: false,
+          wholeBusinessCoverageVerified: false, forecastIssued: false,
         } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});

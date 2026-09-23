@@ -6,16 +6,18 @@ The guarded ordered-price month route can optionally accept an exact currency.
 It then calculates a **provisional input first-approval amount** from Mission
 24 revision-one approvals whose recorded decision time falls in the requested
 UTC calendar month. Amendments and withdrawals do not become additional first
-approvals. The source-order timestamp establishes when NorthStar observed the
-decision after the first fence; it is not silently substituted for the
+approvals. The source-order trigger timestamp establishes when the decision
+entered NorthStar's private order after the first fence; it is not silently substituted for the
 commercial decision time. Broken revision links, mixed first-approval
 currencies and excessive amounts return unavailable.
 
-`inputObservedDecisionCount` counts receipt events by `sourceObservedAt`,
+`inputOrderTimestampDecisionCount` counts receipt events by `sourceObservedAt`,
 whereas `inputFirstApprovalAmount` attributes first approvals by Mission 24
-`recordedAt`. A late-observed decision can therefore produce an observed count
+`recordedAt`. A later-ordered decision can therefore produce an order-timestamp count
 of zero and a provisional first-approval amount in the same requested month.
-Neither diagnostic establishes source coverage for that month.
+The trigger timestamp can precede transaction commit or reader visibility;
+the count does not state when a decision was durably known. Neither diagnostic
+establishes source coverage for that month.
 
 An empty supplied month returns no amount, rather than a dollar zero. A
 nonempty amount is still only arithmetic over the supplied guarded receipt:

@@ -36,7 +36,7 @@ test('a synthetic ordered NorthStar month remains a non-forecast candidate', () 
   const result = assessOrderedPriceMonthCandidate(source(), month);
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
     scope: 'northstar_m24_approved_price_decisions',
-    inputObservedDecisionCount: 1, candidateWindowChecksPassed: true,
+    inputOrderTimestampDecisionCount: 1, candidateWindowChecksPassed: true,
     sourceMonthVerified: false,
     sourceAuthenticated: false, calendarPeriodVerified: false,
     eligibleForForecast: false,
@@ -49,10 +49,20 @@ test('a synthetic ordered NorthStar month remains a non-forecast candidate', () 
 test('an empty NorthStar month never becomes a whole-business zero', () => {
   const result = assessOrderedPriceMonthCandidate(source([]), month);
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
-    inputObservedDecisionCount: 0, candidateWindowChecksPassed: true,
+    inputOrderTimestampDecisionCount: 0, candidateWindowChecksPassed: true,
     sourceMonthVerified: false, calendarPeriodVerified: false,
     wholeBusinessCoverageVerified: false,
     eligibleForForecast: false });
+});
+
+test('a boundary trigger timestamp is only a diagnostic, not commit visibility proof', () => {
+  const boundary = { ...event('2026-11-30T23:59:59.999999Z'),
+    recordedAt: '2026-11-30T23:59:00.000000Z' };
+  const result = assessOrderedPriceMonthCandidate(source([boundary]), month);
+  expect(result).toMatchObject({ inputOrderTimestampDecisionCount: 1,
+    sourceMonthVerified: false, calendarPeriodVerified: false,
+    eligibleForForecast: false });
+  expect(result).not.toHaveProperty('commitAt');
 });
 
 test('first-approval input amount uses decision time and excludes amendments and withdrawals', () => {
@@ -70,7 +80,7 @@ test('first-approval input amount uses decision time and excludes amendments and
   const result = assessOrderedPriceMonthCandidate(
     source([approval, amendment, withdrawal]), month, 'USD');
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
-    inputObservedDecisionCount: 3, inputCurrency: 'USD',
+    inputOrderTimestampDecisionCount: 3, inputCurrency: 'USD',
     inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
     sourceMonthVerified: false, eligibleForForecast: false });
 
@@ -78,7 +88,7 @@ test('first-approval input amount uses decision time and excludes amendments and
     recordedAt: '2026-11-30T23:59:00.000000Z',
     sourceObservedAt: '2026-12-01T00:00:00.000000Z' };
   const lateResult = assessOrderedPriceMonthCandidate(source([late]), month, 'USD');
-  expect(lateResult).toMatchObject({ inputObservedDecisionCount: 0,
+  expect(lateResult).toMatchObject({ inputOrderTimestampDecisionCount: 0,
     inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
     sourceMonthVerified: false });
 });

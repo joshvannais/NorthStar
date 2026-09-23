@@ -65,7 +65,7 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 | Candidate | Bounded prerequisite | Full slice | Deployed | Independent exact-head audit | Mission-final accepted | Live-data validated |
 | --- | --- | --- | --- | --- | --- | --- |
 | [Settings status view](../architecture/MISSION_26_PART11A_SETTINGS_STATUS_UI.md) | Bounded implementation and rendered checks passed; release pending | No | No | Code head `b55e3571` passed with no P0–P3; final documentation head review pending | No | No |
-| [Reviewed-off Settings action](../architecture/MISSION_26_PART11A_REVIEWED_OFF_UI.md) | Bounded implementation and rendered checks passed; release and exact-head audit pending | No | No | Pending | No | No |
+| [Reviewed-off Settings action](../architecture/MISSION_26_PART11A_REVIEWED_OFF_UI.md) | Bounded implementation and rendered checks passed; release pending | No | No | Corrected code head `83b6c7b1` passed with no P0–P3; final documentation head review pending | No | No |
 
 ## Minimum integrated path from this baseline
 

@@ -1,6 +1,6 @@
 # Mission 26 Part 11A: reviewed off preference in Settings
 
-Status: isolated, unreleased bounded user-flow candidate. Full Part 11A remains open.
+Status: isolated, unreleased bounded user-flow candidate. Corrected code head `83b6c7b1` passed independent read-only review with no P0–P3 findings; final documentation-head review remains pending. Full Part 11A remains open.
 
 The paid Settings page can now record an explicit off preference through the existing guarded `/api/v1/forecast/settings` POST. It starts from the current revision and digest, uses the account session's CSRF handling and a request-specific idempotency key, and sends only the disabled profile already accepted by the Part 11A store. The backend remains the authority for current tenant, role, session, idempotency and exact revision. The action is separate from the page's general Save Changes control. A default-off state can become a reviewed-off state; later enabled preferences, if supported, can be turned off through the same path. Nothing here enables forecasting, verifies source coverage, changes customer output or erases history.
 

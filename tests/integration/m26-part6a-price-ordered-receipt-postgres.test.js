@@ -312,7 +312,7 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
         reason: 'period_before_ordered_anchor', sourceMonthVerified: false,
         calendarPeriodVerified: false, eligibleForForecast: false,
         wholeBusinessCoverageVerified: false, forecastIssued: false });
-      expect(diagnostic.body.data.inputDecisionCount).toBeNull();
+      expect(diagnostic.body.data.inputObservedDecisionCount).toBeNull();
       expect(diagnostic.body.data).not.toHaveProperty('events');
       expectNoGlobalOrder(diagnostic.body);
       const priced = await request(fixture.app).get(monthPath)

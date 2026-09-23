@@ -36,7 +36,7 @@ test('a synthetic ordered NorthStar month remains a non-forecast candidate', () 
   const result = assessOrderedPriceMonthCandidate(source(), month);
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
     scope: 'northstar_m24_approved_price_decisions',
-    inputDecisionCount: 1, candidateWindowChecksPassed: true,
+    inputObservedDecisionCount: 1, candidateWindowChecksPassed: true,
     sourceMonthVerified: false,
     sourceAuthenticated: false, calendarPeriodVerified: false,
     eligibleForForecast: false,
@@ -49,7 +49,7 @@ test('a synthetic ordered NorthStar month remains a non-forecast candidate', () 
 test('an empty NorthStar month never becomes a whole-business zero', () => {
   const result = assessOrderedPriceMonthCandidate(source([]), month);
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
-    inputDecisionCount: 0, candidateWindowChecksPassed: true,
+    inputObservedDecisionCount: 0, candidateWindowChecksPassed: true,
     sourceMonthVerified: false, calendarPeriodVerified: false,
     wholeBusinessCoverageVerified: false,
     eligibleForForecast: false });
@@ -70,7 +70,7 @@ test('first-approval input amount uses decision time and excludes amendments and
   const result = assessOrderedPriceMonthCandidate(
     source([approval, amendment, withdrawal]), month, 'USD');
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
-    inputDecisionCount: 3, inputCurrency: 'USD',
+    inputObservedDecisionCount: 3, inputCurrency: 'USD',
     inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
     sourceMonthVerified: false, eligibleForForecast: false });
 
@@ -78,7 +78,7 @@ test('first-approval input amount uses decision time and excludes amendments and
     recordedAt: '2026-11-30T23:59:00.000000Z',
     sourceObservedAt: '2026-12-01T00:00:00.000000Z' };
   const lateResult = assessOrderedPriceMonthCandidate(source([late]), month, 'USD');
-  expect(lateResult).toMatchObject({ inputDecisionCount: 0,
+  expect(lateResult).toMatchObject({ inputObservedDecisionCount: 0,
     inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
     sourceMonthVerified: false });
 });

@@ -1,5 +1,5 @@
--- Mission 26 Part 6A: explicit owner/admin re-review of the same work after
--- accepted scope, reviewed price or human scheduling evidence changes.
+-- Mission 26 Part 6A: explicit owner/admin re-review of the same recorded
+-- work. Changed accepted scope/price/schedule correction remains unproven.
 -- This is a new commercial attestation, never an edit to Mission 22 or 24.
 CREATE FUNCTION public.canonical_forecast_correct_booking_review(
  org UUID,actor UUID,role_value TEXT,session_value UUID,prior_value UUID,

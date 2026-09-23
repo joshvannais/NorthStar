@@ -16,9 +16,10 @@ reads the old and new review currentness. It also checks identical replay,
 changed-key conflict, stale prior rejection, invalid-CSRF denial, and later
 explicit cancellation of the corrected review. Four focused tests pass. This
 does not revise the Mission 22 appointment or Mission 24 estimate, and no
-booked-work amount or forecast is returned. A correction can record an
-updated human review when source evidence changes, but the focused test
-uses the same approval with a corrected review reason; a positive changed
-scope/price/schedule correction remains unproven. Full paid/demo frontend
+booked-work amount or forecast is returned. The proven path uses the same
+approval with a corrected human review reason. Changed accepted scope and
+price cannot currently pass the underlying lineage and price guards; a
+positive changed-schedule correction is unproven. Those source-change
+corrections remain separate open implementation work. Full paid/demo frontend
 journey, historical source coverage, release and live-data validation remain
 open; the wider Mission 22 suite is not green.

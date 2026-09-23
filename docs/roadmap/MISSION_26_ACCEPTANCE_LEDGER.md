@@ -71,7 +71,7 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 
 | Candidate | Bounded prerequisite | Full slice | Deployed | Independent exact-head audit | Mission-final accepted | Live-data validated |
 | --- | --- | --- | --- | --- | --- | --- |
-| [Guarded current-profile window](../architecture/MISSION_26_PART2B_GUARDED_PROFILE_WINDOWS.md) | Bounded implementation and mounted paid-route checks passed; release and audit pending | No | No | Pending | No | No |
+| [Guarded current-profile window](../architecture/MISSION_26_PART2B_GUARDED_PROFILE_WINDOWS.md) | Bounded implementation and mounted paid-route checks passed; release pending | No | No | Corrected code head `55d5722d` passed with no P0–P3; final documentation head review pending | No | No |
 
 ## Minimum integrated path from this baseline
 

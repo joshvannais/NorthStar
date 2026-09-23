@@ -1,6 +1,6 @@
 # Mission 26 Part 2B: guarded current Business Profile windows
 
-Status: isolated, unreleased bounded integration candidate. Full Part 2B remains open.
+Status: isolated, unreleased bounded integration candidate. Corrected code head `55d5722d` passed independent read-only review with no P0–P3 findings; final documentation-head review remains pending. Full Part 2B remains open.
 
 The paid `GET /api/v1/forecast/reporting-windows` route derives a local reporting window from the current active Business Profile after account, tenant and forecast-read authorization. It reuses the released `timeSeriesWindows` domain projection and the existing canonical Business Profile reader, and recomputes the normalized profile hash before trusting the read. The response pins the profile ID, version and hash, local dates, IANA time zone, UTC boundaries, elapsed minutes and known or unknown business open minutes. Only an explicit tenant-wide scope is supported; the route does not accept an unverified service or geographic filter. Raw profile data is never returned.
 

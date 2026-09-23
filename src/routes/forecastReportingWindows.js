@@ -149,6 +149,67 @@ function createForecastReportingWindowsRouter(options = {}) {
       } catch (error) { return attestationError(res, error); }
     });
 
+  router.get('/reviewed-month-window', auth, requirePermission('forecast', 'read'),
+    throttle, async (req, res) => {
+      if (!exact(req.query, ['localStartDate']) ||
+          !validRequestDate(req.query.localStartDate, 'month')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The reporting window request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+        const result = await client.query(
+          'SELECT public.canonical_forecast_profile_month_attestation_read($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.query.localStartDate]);
+        const claim = result.rows[0]?.value ?? null;
+        if (claim !== null && (claim.localStartDate !== req.query.localStartDate ||
+            !UUID.test(claim.id || '') || !DIGEST.test(claim.digest || '') ||
+            typeof claim.profilePinVerified !== 'boolean')) {
+          throw new Error('Invalid guarded calendar receipt');
+        }
+        const base = { historicalCalendarVerified: false,
+          observationCoverageVerified: false, sourceEligibilityVerified: false,
+          forecastIssued: false };
+        if (!claim || claim.action !== 'confirm' || !claim.profilePinVerified) {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: { ...base, window: null,
+            ownerConfirmedHistoricalProfile: claim?.action === 'confirm',
+            profilePinVerified: false,
+            unavailableReason: !claim ? 'no_reviewed_claim' :
+              claim.action === 'revoke' ? 'claim_revoked' : 'profile_changed' } });
+        }
+        const profile = await getBusinessProfileById(client,
+          req.tenantContext.organizationId, claim.businessProfileId);
+        if (profile.versionNumber !== claim.businessProfileVersion ||
+            profile.profileHash !== claim.businessProfileHash ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              claim.businessProfileHash) throw new Error('Business Profile pin is unavailable');
+        const window = deriveReportingWindow({
+          organizationId: profile.organizationId,
+          businessProfileId: profile.id,
+          businessProfileVersion: profile.versionNumber,
+          businessProfileHash: profile.profileHash,
+          rawProfile: profile.rawProfile, grain: 'month',
+          localStartDate: req.query.localStartDate,
+          serviceKey: null, areaScope: 'tenant_all',
+        });
+        await client.query('COMMIT');
+        return res.json({ success: true, data: { ...base, window,
+          profileBasis: 'owner_reviewed_month_claim',
+          attestation: { id: claim.id, revision: claim.revision,
+            digest: claim.digest, recordedAt: claim.recordedAt },
+          ownerConfirmedHistoricalProfile: true, profilePinVerified: true } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   router.post('/month-attestations', auth, requirePermission('forecast', 'update'),
     captureThrottle, async (req, res) => {
       const body = req.body;

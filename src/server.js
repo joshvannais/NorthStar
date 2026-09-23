@@ -287,6 +287,7 @@ app.use('/api/v1/today', createTodayRouter());
 app.use('/api/v1/operational-overview', createOperationalOverviewRouter());
 app.use('/api/v1/learning', createLearningRouter());
 app.use('/api/v1/forecast/price-history', createForecastPriceHistoryRouter());
+app.use('/api/v1/forecast/settings', require('./routes/forecastSettings').createForecastSettingsRouter());
 app.use('/api/v1', simulationsRoutes);
 app.use('/api/public', createCustomerEstimateDeliveryRouter());
 app.use('/api/v1/canonical', createCanonicalRouter({

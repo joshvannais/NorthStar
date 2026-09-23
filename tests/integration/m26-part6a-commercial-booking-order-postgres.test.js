@@ -207,6 +207,65 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       historicalCoverageVerified: false, bookedWorkVerified: false,
       earnedRevenueMeasured: false, collectedCashMeasured: false,
       forecastIssued: false });
+    const confirmBody = {
+      reason: 'Owner confirms the synthetic accepted and scheduled job is booked.',
+      confirmed: true, confirmationVersion: 'owner-booked-work-confirm-v1',
+    };
+    const confirmRoute = `${bookingRoute}/${firstReviewId}/confirm-booked`;
+    const confirmKey = 'm26-confirm-booked-work-key-001';
+    const wrongCsrfConfirmation = await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', confirmKey).send(confirmBody);
+    expect(wrongCsrfConfirmation.status).toBe(403);
+    const memberConfirmation = await request(f.app).post(confirmRoute)
+      .set(f.actors.member.session.headers).set('Idempotency-Key', confirmKey)
+      .send(confirmBody);
+    expect(memberConfirmation.status).toBe(403);
+    const confirmed = await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('Idempotency-Key', confirmKey)
+      .send(confirmBody);
+    expect(confirmed.status).toBe(201);
+    expect(confirmed.body.data).toMatchObject({
+      state: 'booking_confirmation_recorded', reviewId: firstReviewId,
+      replayed: false, currentnessUnknown: true,
+      bookedWorkVerified: false, forecastIssued: false });
+    expect(confirmed.body.data).not.toHaveProperty('priceBeforeTax');
+    const confirmationId = confirmed.body.data.confirmationId;
+    const confirmationReadRoute = `${bookingRoute}/confirmations/${confirmationId}/currentness`;
+    const currentConfirmation = await request(f.app).get(confirmationReadRoute)
+      .set(actor.session.headers);
+    expect(currentConfirmation.status).toBe(200);
+    expect(currentConfirmation.body.data).toMatchObject({
+      state: 'owner_confirmed_booked_work_current',
+      commercialStatus: 'owner_confirmed_booked',
+      authority: 'paid_owner_or_admin_confirmation',
+      priceBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, bookedWorkVerified: true,
+      historicalCoverageVerified: false, wholeBusinessCoverageVerified: false,
+      earnedRevenueMeasured: false, collectedCashMeasured: false,
+      forecastIssued: false });
+    const otherTenantConfirmation = await request(f.app).get(confirmationReadRoute)
+      .set(f.actors.otherOwner.session.headers);
+    expect(otherTenantConfirmation.status).toBe(200);
+    expect(otherTenantConfirmation.body.data).toMatchObject({
+      state: 'booking_confirmation_unavailable', bookedWorkVerified: false });
+    expect(otherTenantConfirmation.body.data).not.toHaveProperty('priceBeforeTax');
+    expect((await request(f.app).get(confirmationReadRoute)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    await expect(f.runtimePool.query(
+      'SELECT * FROM canonical_forecast_booked_work_confirmations'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.ownerPool.query(
+      'DELETE FROM canonical_forecast_booked_work_confirmations WHERE organization_id=$1',
+      [f.org])).rejects.toMatchObject({ code: '23514' });
+    expect((await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('Idempotency-Key', confirmKey)
+      .send(confirmBody)).body.data).toMatchObject({
+      confirmationId, replayed: true, currentnessUnknown: true });
+    expect((await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('Idempotency-Key', confirmKey)
+      .send({ ...confirmBody, reason: 'A different booking reason cannot reuse this key.' }))
+      .status).toBe(409);
     const currentnessParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, firstReviewId];
     expect((await f.runtimePool.query(
@@ -245,6 +304,11 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       state: 'owner_reviewed_position_unavailable',
       reviewCurrentAtRead: false, bookedWorkVerified: false });
     expect(supersededPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
+    const supersededConfirmation = await request(f.app).get(confirmationReadRoute)
+      .set(actor.session.headers);
+    expect(supersededConfirmation.body.data).toMatchObject({
+      state: 'booking_confirmation_stale_or_unavailable', bookedWorkVerified: false });
+    expect(supersededConfirmation.body.data).not.toHaveProperty('priceBeforeTax');
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
       [...currentnessParams.slice(0, 4), initialReviewId])).rows[0].value)

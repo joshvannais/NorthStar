@@ -93,6 +93,60 @@ function createForecastBookingReviewsRouter(options = {}) {
     } finally { if (client) client.release(); }
   }
 
+  async function confirmationQuery(req, res, sql, params, write) {
+    let client;
+    try {
+      client = await poolProvider().connect();
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const identity = [req.tenantContext.organizationId, req.tenantContext.userId,
+        req.userRole, req.authSession.id];
+      const value = (await client.query(sql, [...identity, ...params])).rows[0]?.value;
+      const current = value?.state === 'owner_confirmed_booked_work_current';
+      if (!value || value.forecastIssued !== false || typeof value.state !== 'string' ||
+          (current && (write || value.bookedWorkVerified !== true ||
+            value.commercialStatus !== 'owner_confirmed_booked' ||
+            value.authority !== 'paid_owner_or_admin_confirmation' ||
+            value.historicalCoverageVerified !== false ||
+            value.wholeBusinessCoverageVerified !== false ||
+            value.earnedRevenueMeasured !== false ||
+            value.collectedCashMeasured !== false ||
+            !UUID.test(value.confirmationId || '') ||
+            !UUID.test(value.reviewId || '') ||
+            !UUID.test(value.appointmentId || '') ||
+            !/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(value.priceBeforeTax || '') ||
+            !/^[A-Z]{3}$/.test(value.currency || ''))) ||
+          (!current && value.bookedWorkVerified !== false &&
+            value.state !== 'booking_confirmation_recorded') ||
+          (write && value.state === 'booking_confirmation_recorded' &&
+            (!UUID.test(value.id || '') || !UUID.test(value.reviewId || '') ||
+              value.currentnessUnknown !== true))) {
+        throw new Error('Invalid guarded booked-work confirmation result');
+      }
+      await client.query('COMMIT');
+      if (write && value.replayed === true) res.set('Idempotency-Replayed', 'true');
+      return res.status(write && value.replayed === false && value.id ? 201 : 200)
+        .json({ success: true, data: current ? {
+          state: value.state, confirmationId: value.confirmationId,
+          reviewId: value.reviewId, appointmentId: value.appointmentId,
+          commercialStatus: value.commercialStatus,
+          priceBeforeTax: value.priceBeforeTax, currency: value.currency,
+          authority: value.authority, bookedWorkVerified: true,
+          historicalCoverageVerified: false, wholeBusinessCoverageVerified: false,
+          earnedRevenueMeasured: false, collectedCashMeasured: false,
+          forecastIssued: false,
+        } : {
+          state: value.state, confirmationId: value.id || null,
+          reviewId: value.reviewId || null,
+          replayed: value.replayed === true,
+          currentnessUnknown: value.currentnessUnknown === true,
+          bookedWorkVerified: false, forecastIssued: false,
+        } });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      return failure(res, error);
+    } finally { if (client) client.release(); }
+  }
+
   router.post('/first', auth, requirePermission('forecast', 'update'), throttle,
     async (req, res) => {
       const body = req.body;
@@ -136,6 +190,31 @@ function createForecastBookingReviewsRouter(options = {}) {
         'SELECT public.canonical_forecast_correct_booking_review($1,$2,$3,$4,$5,$6,$7,$8,$9) value',
         [req.params.reviewId, body.approvalId, body.reason, key,
           req.get('X-CSRF-Token')], true);
+    });
+
+  router.post('/:reviewId/confirm-booked', auth, requirePermission('forecast', 'update'), throttle,
+    async (req, res) => {
+      const body = req.body;
+      const key = req.get('Idempotency-Key');
+      if (!UUID.test(req.params.reviewId || '') || !body || Array.isArray(body) ||
+          Object.keys(body).sort().join(',') !== 'confirmationVersion,confirmed,reason' ||
+          body.confirmed !== true ||
+          body.confirmationVersion !== 'owner-booked-work-confirm-v1' ||
+          typeof body.reason !== 'string' || body.reason.trim().length < 10 ||
+          body.reason.trim().length > 1000 || Buffer.byteLength(body.reason) > 4000 ||
+          !KEY.test(key || '')) return invalid(res);
+      return confirmationQuery(req, res,
+        'SELECT public.canonical_forecast_confirm_booked_work($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+        [req.params.reviewId, req.get('X-CSRF-Token'), key, body.reason,
+          true, body.confirmationVersion], true);
+    });
+
+  router.get('/confirmations/:confirmationId/currentness', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.confirmationId || '')) return invalid(res);
+      return confirmationQuery(req, res,
+        'SELECT public.canonical_forecast_booked_work_confirmation_currentness($1,$2,$3,$4,$5) value',
+        [req.params.confirmationId], false);
     });
 
   router.get('/:reviewId/currentness', auth, requirePermission('forecast', 'read'), throttle,

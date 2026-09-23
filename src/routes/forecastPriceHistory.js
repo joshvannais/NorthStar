@@ -255,13 +255,21 @@ function createForecastPriceHistoryRouter(options = {}) {
         return res.json({ success: true, data: {
           state: candidate.state, reason: candidate.reason,
           snapshotId: req.params.snapshotId,
+          sourceCapturedAt: candidate.capturedAt ?? null,
+          sourceSnapshotDigest: candidate.sourceSnapshotDigest ?? null,
           window,
           inputOrderTimestampDecisionCount: candidate.inputOrderTimestampDecisionCount ?? null,
           inputCurrency: candidate.inputCurrency ?? (withCurrency ? req.query.currency : null),
           inputFirstApprovalCount: candidate.inputFirstApprovalCount ?? null,
           inputFirstApprovalAmount: candidate.inputFirstApprovalAmount ?? null,
           candidateWindowChecksPassed: candidate.candidateWindowChecksPassed,
-          sourceMonthVerified: false, sourceAuthenticated: false,
+          // The guarded read holds the tenant source-order lock until COMMIT.
+          // This proves only a bounded NorthStar order-time UTC window as it
+          // stood at this receipt capture, never business-wide month coverage.
+          sourceOrderUtcWindowObservedAsOfCapture:
+            candidate.candidateWindowChecksPassed === true,
+          sourceMonthVerified: false,
+          sourceAuthenticated: candidate.candidateWindowChecksPassed === true,
           calendarPeriodVerified: false,
           eligibleForForecast: false, wholeBusinessCoverageVerified: false,
           forecastIssued: false,

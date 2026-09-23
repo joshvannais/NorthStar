@@ -134,6 +134,9 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
     if ((event.revision === 1 &&
         (event.previousId !== null || event.action !== 'approve')) ||
         (event.revision > 1 && event.previousId === null) ||
+        // A post-anchor amendment may refer to a pre-anchor decision that
+        // this bounded receipt deliberately omitted. Do not certify lineage.
+        (!prior && event.revision > 1) ||
         (prior && (event.revision !== prior.revision + 1 ||
           event.previousId !== prior.decisionId || event.currency !== prior.currency))) {
       return unavailable('source_revision_conflict');

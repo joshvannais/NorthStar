@@ -103,6 +103,11 @@ test('mixed first-approval currency and broken revision lineage remain unavailab
     previousId: DECISION };
   expect(assessOrderedPriceMonthCandidate(source([broken]), month, 'USD'))
     .toMatchObject({ state: 'unavailable', reason: 'source_revision_conflict' });
+  const preAnchorAmendment = { ...event(), revision: 2,
+    previousId: SNAPSHOT, decisionId: ESTIMATE };
+  expect(assessOrderedPriceMonthCandidate(source([preAnchorAmendment]), month, 'USD'))
+    .toMatchObject({ state: 'unavailable', reason: 'source_revision_conflict',
+      sourceMonthVerified: false, eligibleForForecast: false });
 });
 
 test('pre-anchor, unclosed and stale months remain unavailable', () => {

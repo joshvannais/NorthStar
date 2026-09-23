@@ -14,6 +14,7 @@ const { adaptBusinessProfile } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const instant = value => typeof value === 'string' && INSTANT.test(value);
@@ -93,6 +94,21 @@ function createForecastPriceHistoryRouter(options = {}) {
           value.snapshot.id !== req.params.snapshotId) {
         throw new Error('Invalid guarded ordered-price month source');
       }
+      if (basis.unavailableReason) {
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: 'unavailable', reason: basis.unavailableReason,
+          snapshotId: req.params.snapshotId, window: null,
+          profileBasis: 'owner_reviewed_month_claim',
+          ownerConfirmedHistoricalProfile: false,
+          profilePinVerified: false,
+          historicalCalendarVerified: false,
+          observationCoverageVerified: false,
+          sourceAuthenticated: false, sourceMonthVerified: false,
+          calendarPeriodVerified: false, eligibleForForecast: false,
+          wholeBusinessCoverageVerified: false, forecastIssued: false,
+        } });
+      }
       const candidate = basis.reportingWindow ?
         assessOrderedPriceReportingMonthCandidate(value, basis.reportingWindow,
           currency) : assessOrderedPriceMonthCandidate(value, basis.window, currency);
@@ -105,9 +121,14 @@ function createForecastPriceHistoryRouter(options = {}) {
         preAnchorContextDigest: candidate.preAnchorContextDigest ?? null,
         window: basis.window,
         ...(basis.reportingWindow ? {
-          profileBasis: 'current_active_profile_at_read',
+          profileBasis: basis.profileBasis || 'current_active_profile_at_read',
           historicalCalendarVerified: false,
           observationCoverageVerified: false,
+          ...(basis.attestation ? {
+            ownerConfirmedHistoricalProfile: true,
+            profilePinVerified: true,
+            attestation: basis.attestation,
+          } : {}),
         } : {}),
         inputOrderTimestampDecisionCount: candidate.inputOrderTimestampDecisionCount ?? null,
         inputCurrency: candidate.inputCurrency ?? currency,
@@ -334,6 +355,61 @@ function createForecastPriceHistoryRouter(options = {}) {
           serviceKey: null, areaScope: 'tenant_all',
         });
         return { window: reportingWindow, reportingWindow };
+      }, withCurrency ? req.query.currency : null);
+    });
+
+  router.get('/ordered-snapshots/:snapshotId/reviewed-profile-month-candidate', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      const withCurrency = exactKeys(req.query, ['localStartDate', 'currency']);
+      if (!UUID.test(req.params.snapshotId) ||
+          !(withCurrency || exactKeys(req.query, ['localStartDate'])) ||
+          !validLocalMonth(req.query.localStartDate) ||
+          (withCurrency && (typeof req.query.currency !== 'string' ||
+            !/^[A-Z]{3}$/.test(req.query.currency)))) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The history request is invalid.',
+        } });
+      }
+      return guardedMonthCandidate(req, res, async (client, identity) => {
+        const response = await client.query(
+          'SELECT public.canonical_forecast_profile_month_guarded_source($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.query.localStartDate]);
+        const source = response.rows[0]?.value;
+        if (!source || typeof source.state !== 'string')
+          throw new Error('Invalid reviewed calendar source');
+        if (source.state !== 'owner_claim_only') {
+          if (!['no_reviewed_claim', 'claim_revoked', 'profile_changed']
+            .includes(source.state)) throw new Error('Invalid reviewed calendar state');
+          return { unavailableReason: source.state };
+        }
+        if (!UUID.test(source.attestationId || '') ||
+            !DIGEST.test(source.attestationDigest || '') ||
+            !UUID.test(source.businessProfileId || '') ||
+            !DIGEST.test(source.businessProfileHash || '') ||
+            !Number.isSafeInteger(source.businessProfileVersion) ||
+            source.businessProfileVersion < 1 ||
+            source.businessProfileLabel !==
+              `org-profile-v${source.businessProfileVersion}` ||
+            adaptBusinessProfile(source.rawProfile,
+              source.businessProfileLabel).hash !== source.businessProfileHash) {
+          throw new Error('Invalid reviewed calendar pin');
+        }
+        const reportingWindow = deriveReportingWindow({
+          organizationId: identity.organizationId,
+          businessProfileId: source.businessProfileId,
+          businessProfileVersion: source.businessProfileVersion,
+          businessProfileHash: source.businessProfileHash,
+          rawProfile: source.rawProfile,
+          grain: 'month', localStartDate: req.query.localStartDate,
+          serviceKey: null, areaScope: 'tenant_all',
+        });
+        return { window: reportingWindow, reportingWindow,
+          profileBasis: 'owner_reviewed_month_claim',
+          attestation: { id: source.attestationId,
+            revision: source.attestationRevision,
+            digest: source.attestationDigest,
+            recordedAt: source.attestationRecordedAt } };
       }, withCurrency ? req.query.currency : null);
     });
 

@@ -37,10 +37,10 @@ This is a founder-requested **proposed** implementation breakdown of **nine part
 
 | Slice | Required result |
 | --- | --- |
-| 2A | Guarded reference to the exact current Mission 24 approved quote/price, scope, currency, customer, revision, provenance, and applicable exact-version customer acceptance; approval, issuance, or sharing alone does not establish acceptance. |
+| 2A | Where the obligation derives from a Mission 24 quote, guarded reference to its exact current approved price, scope, currency, customer, revision, provenance, and applicable exact-version customer acceptance; approval, issuance, or sharing alone does not establish acceptance. |
 | 2B | Guarded Mission 23 completion, milestone, actual, and change-order evidence where billing terms call for it; distinguish customer additions, corrections, rework, and unapproved work. |
 | 2C | Owner-readable billable-work preview that reconciles agreed scope, completed or milestone work, deposits, allowances, prior invoices, credits, and missing conditions without silently creating a debt. |
-| 2D | Explicit authorized human review of the billable obligation: exact-version customer acceptance where applicable, or a separately evidenced alternative basis such as authorized completed time-and-material work under applicable terms. If neither basis is established, invoice issuance is blocked. Duplicate, concurrent, cross-tenant, stale, incomplete, or conflicting handoffs fail closed. |
+| 2D | Explicit authorized human review of the billable obligation: exact-version customer acceptance where applicable, or a separately evidenced alternative basis such as authorized completed time-and-material work with pinned applicable terms and rates. If neither basis is established, invoice issuance is blocked. Duplicate, concurrent, cross-tenant, stale, incomplete, or conflicting handoffs fail closed. |
 
 ## Part 3 — native invoice lifecycle (5 slices)
 

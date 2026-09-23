@@ -75,7 +75,33 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
   }
 
   test('paid route uses guarded M24 snapshot, masks later changes and withholds private rows', async () => {
-    const first = await capture();
+    const capturePath = '/api/v1/forecast/features/approved-estimate-stock/snapshots';
+    const owner = fixture.actors.owner;
+    const requestKey = id();
+    expect((await request(fixture.app).post(capturePath)
+      .set('Idempotency-Key', id()).send({})).status).toBe(401);
+    expect((await request(fixture.app).post(capturePath)
+      .set(fixture.actors.member.session.headers)
+      .set('Idempotency-Key', id()).send({})).status).toBe(403);
+    expect((await request(fixture.app).post(capturePath)
+      .set('Cookie', owner.session.headers.Cookie)
+      .set('Idempotency-Key', id()).send({})).status).toBe(403);
+    expect((await request(fixture.app).post(capturePath)
+      .set(owner.session.headers).set('Idempotency-Key', id())
+      .send({ organizationId: fixture.org })).status).toBe(400);
+    const firstCapture = await request(fixture.app).post(capturePath)
+      .set(owner.session.headers).set('Idempotency-Key', requestKey).send({});
+    expect(firstCapture.status).toBe(201);
+    expect(firstCapture.body.data).toMatchObject({
+      state: 'historical_source_only', sourceCount: 0,
+      sourceAuthenticated: true, forecastIssued: false, replayed: false });
+    expect(firstCapture.body.data).not.toHaveProperty('sources');
+    const replay = await request(fixture.app).post(capturePath)
+      .set(owner.session.headers).set('Idempotency-Key', requestKey).send({});
+    expect(replay.status).toBe(200);
+    expect(replay.body.data).toMatchObject({ replayed: true,
+      snapshotId: firstCapture.body.data.snapshotId });
+    const first = { id: firstCapture.body.data.snapshotId };
     const path = snapshot =>
       `/api/v1/forecast/features/approved-estimate-stock/${snapshot.id}`;
     const ownerCookie = fixture.actors.owner.session.headers.Cookie;
@@ -111,5 +137,33 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
     expect((await request(fixture.app).get(path(withdrawn))
       .set('Cookie', ownerCookie)).body.data)
       .toMatchObject({ state: 'known', amount: '0' });
+  }, 120000);
+
+  test('capture releases a contested source lock and can retry the same key', async () => {
+    const owner = fixture.actors.otherOwner;
+    const key = id();
+    const path = '/api/v1/forecast/features/approved-estimate-stock/snapshots';
+    const lockId = `${owner.organizationId}:forecast-snapshot:${owner.actorUserId}:${hash(key)}`;
+    const holder = await fixture.ownerPool.connect();
+    try {
+      await holder.query('SELECT pg_advisory_lock(hashtextextended($1,0))', [lockId]);
+      const busy = await request(fixture.app).post(path)
+        .set(owner.session.headers).set('Idempotency-Key', key).send({});
+      expect(busy.status).toBe(409);
+      expect(busy.body.error).toMatchObject({ category: 'FORECAST_SOURCE_BUSY',
+        message: 'Forecast source is busy. Try again shortly.' });
+      const prior = await fixture.ownerPool.query(
+        'SELECT id FROM canonical_forecast_source_snapshots WHERE organization_id=$1 AND actor_user_id=$2 AND request_key_hash=$3',
+        [owner.organizationId, owner.actorUserId, hash(key)]);
+      expect(prior.rows).toHaveLength(0);
+    } finally {
+      await holder.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [lockId]);
+      holder.release();
+    }
+    const retry = await request(fixture.app).post(path)
+      .set(owner.session.headers).set('Idempotency-Key', key).send({});
+    expect(retry.status).toBe(201);
+    expect(retry.body.data).toMatchObject({ replayed: false,
+      sourceAuthenticated: true, forecastIssued: false });
   }, 120000);
 });

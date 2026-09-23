@@ -244,6 +244,39 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       historicalCoverageVerified: false, wholeBusinessCoverageVerified: false,
       earnedRevenueMeasured: false, collectedCashMeasured: false,
       forecastIssued: false });
+    const confirmationMonth = (await f.ownerPool.query(
+      `SELECT to_char(confirmed_at AT TIME ZONE 'UTC','YYYY-MM') AS month
+         FROM canonical_forecast_booked_work_confirmations
+        WHERE organization_id=$1 AND id=$2`, [f.org, confirmationId])).rows[0].month;
+    const observedMonthRoute = `${bookingRoute}/booked-work/months/${confirmationMonth}/observed`;
+    const observedMonth = await request(f.app).get(observedMonthRoute)
+      .set(actor.session.headers);
+    expect(observedMonth.status).toBe(200);
+    expect(observedMonth.body.data).toMatchObject({
+      state: 'observed_owner_confirmed_jobs', month: confirmationMonth,
+      timeZone: 'UTC', confirmedJobCount: 1,
+      observedBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, includedJobConfirmationsVerified: true,
+      completePeriodVerified: false, wholeBusinessCoverageVerified: false,
+      earnedRevenueMeasured: false, collectedCashMeasured: false,
+      forecastIssued: false });
+    const noHistoryMonth = await request(f.app)
+      .get(`${bookingRoute}/booked-work/months/1999-01/observed`)
+      .set(actor.session.headers);
+    expect(noHistoryMonth.body.data).toMatchObject({
+      state: 'booked_work_month_unavailable', reason: 'no_confirmed_jobs',
+      completePeriodVerified: false, forecastIssued: false });
+    expect(noHistoryMonth.body.data).not.toHaveProperty('observedBeforeTax');
+    expect((await request(f.app)
+      .get(`${bookingRoute}/booked-work/months/0000-01/observed`)
+      .set(actor.session.headers)).status).toBe(400);
+    const otherTenantMonth = await request(f.app).get(observedMonthRoute)
+      .set(f.actors.otherOwner.session.headers);
+    expect(otherTenantMonth.body.data).toMatchObject({
+      state: 'booked_work_month_unavailable', reason: 'no_confirmed_jobs' });
+    expect(otherTenantMonth.body.data).not.toHaveProperty('observedBeforeTax');
+    expect((await request(f.app).get(observedMonthRoute)
+      .set(f.actors.member.session.headers)).status).toBe(403);
     const otherTenantConfirmation = await request(f.app).get(confirmationReadRoute)
       .set(f.actors.otherOwner.session.headers);
     expect(otherTenantConfirmation.status).toBe(200);
@@ -309,6 +342,13 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(supersededConfirmation.body.data).toMatchObject({
       state: 'booking_confirmation_stale_or_unavailable', bookedWorkVerified: false });
     expect(supersededConfirmation.body.data).not.toHaveProperty('priceBeforeTax');
+    const changedMonth = await request(f.app).get(observedMonthRoute)
+      .set(actor.session.headers);
+    expect(changedMonth.body.data).toMatchObject({
+      state: 'booked_work_month_unavailable',
+      reason: 'confirmation_changed_or_unavailable',
+      completePeriodVerified: false, forecastIssued: false });
+    expect(changedMonth.body.data).not.toHaveProperty('observedBeforeTax');
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
       [...currentnessParams.slice(0, 4), initialReviewId])).rows[0].value)

@@ -217,6 +217,52 @@ function createForecastBookingReviewsRouter(options = {}) {
         [req.params.confirmationId], false);
     });
 
+  router.get('/booked-work/months/:month/observed', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(req.params.month || '') ||
+          req.params.month.startsWith('0000')) return invalid(res);
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_booked_work_month_observed($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.month])).rows[0]?.value;
+        const observed = value?.state === 'observed_owner_confirmed_jobs';
+        if (!value || value.forecastIssued !== false ||
+            value.completePeriodVerified !== false || value.month !== req.params.month ||
+            (observed && (value.includedJobConfirmationsVerified !== true ||
+              value.wholeBusinessCoverageVerified !== false ||
+              value.earnedRevenueMeasured !== false ||
+              value.collectedCashMeasured !== false ||
+              value.timeZone !== 'UTC' || !Number.isInteger(value.confirmedJobCount) ||
+              value.confirmedJobCount < 1 || value.confirmedJobCount > 100 ||
+              !/^(0|[1-9][0-9]{0,14})\.[0-9]{2}$/.test(value.observedBeforeTax || '') ||
+              !/^[A-Z]{3}$/.test(value.currency || ''))) ||
+            (!observed && (value.state !== 'booked_work_month_unavailable' ||
+              typeof value.reason !== 'string' ||
+              value.observedBeforeTax !== undefined))) {
+          throw new Error('Invalid guarded observed booked-work month result');
+        }
+        await client.query('COMMIT');
+        return res.status(200).json({ success: true, data: observed ? {
+          state: value.state, month: value.month, timeZone: 'UTC',
+          confirmedJobCount: value.confirmedJobCount,
+          observedBeforeTax: value.observedBeforeTax, currency: value.currency,
+          includedJobConfirmationsVerified: true, completePeriodVerified: false,
+          wholeBusinessCoverageVerified: false, earnedRevenueMeasured: false,
+          collectedCashMeasured: false, forecastIssued: false,
+        } : {
+          state: value.state, month: value.month, reason: value.reason,
+          completePeriodVerified: false, forecastIssued: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return failure(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   router.get('/:reviewId/currentness', auth, requirePermission('forecast', 'read'), throttle,
     async (req, res) => {
       if (!UUID.test(req.params.reviewId || '')) return invalid(res);

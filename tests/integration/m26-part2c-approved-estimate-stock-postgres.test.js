@@ -140,7 +140,7 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
   }, 120000);
 
   test('capture releases a contested source lock and can retry the same key', async () => {
-    const owner = fixture.actors.owner;
+    const owner = fixture.actors.otherOwner;
     const key = id();
     const path = '/api/v1/forecast/features/approved-estimate-stock/snapshots';
     const lockId = `${owner.organizationId}:forecast-snapshot:${owner.actorUserId}:${hash(key)}`;
@@ -160,18 +160,10 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
       await holder.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [lockId]);
       holder.release();
     }
-    const client = await fixture.runtimePool.connect();
-    try {
-      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      const retry = await client.query(
-        'SELECT public.canonical_forecast_estimate_decision_snapshot_capture($1,$2,$3,$4,$5,$6) value',
-        [owner.organizationId, owner.actorUserId, owner.actorAccessRole,
-          owner.authSessionId, owner.csrfToken, key]);
-      expect(retry.rows[0].value).toMatchObject({ replayed: false });
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw error;
-    } finally { client.release(); }
+    const retry = await request(fixture.app).post(path)
+      .set(owner.session.headers).set('Idempotency-Key', key).send({});
+    expect(retry.status).toBe(201);
+    expect(retry.body.data).toMatchObject({ replayed: false,
+      sourceAuthenticated: true, forecastIssued: false });
   }, 120000);
 });

@@ -211,7 +211,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7) value',
         [...reviewParams.slice(0, 6), 'm26-newer-scope-review-key-001']))
         .rows[0].value;
-      expect(guarded).toMatchObject({ state: 'newer_accepted_scope_unreviewed',
+      expect(guarded).toMatchObject({ state: 'later_accepted_response_unreviewed',
         bookedWorkVerified: false, forecastIssued: false });
     } finally {
       await laterAcceptance.query('ROLLBACK');

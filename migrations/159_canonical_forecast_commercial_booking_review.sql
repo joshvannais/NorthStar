@@ -87,7 +87,7 @@ BEGIN
  END IF;
  -- A customer can accept a newer issued scope after the paired schedule
  -- approval. The pair reader intentionally proves only earlier acceptance;
- -- the human review must also reject a competing later accepted scope.
+ -- the human review must also reject a competing later accepted response.
  IF EXISTS(
   SELECT 1 FROM public.canonical_forecast_commercial_booking_orders later
   JOIN public.canonical_customer_estimate_delivery_events event
@@ -104,7 +104,7 @@ BEGIN
    AND later.source_order>pinned.source_order
    AND estimate.opportunity_id=(pair->>'opportunityId')::uuid
  ) THEN
-  RETURN jsonb_build_object('state','newer_accepted_scope_unreviewed',
+  RETURN jsonb_build_object('state','later_accepted_response_unreviewed',
    'replayed',FALSE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
  END IF;
  price:=public.canonical_forecast_booked_price_candidate(

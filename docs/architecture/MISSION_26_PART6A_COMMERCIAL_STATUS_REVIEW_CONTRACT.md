@@ -35,7 +35,7 @@ established by migration 159.
 Four mounted fictional-tenant tests pass. The first-review path, identical
 replay, changed replay rejection, duplicate first-review rejection, member
 denial, private table, immutable review, post-revocation unavailable state,
-later accepted scope rejection, and synthetic cancelled/completed assignment
+later accepted response rejection for the same issued version, and synthetic cancelled/completed assignment
 guards are covered. The SQL function is not yet mounted in a paid/demo HTTP journey.
 No result labels the amount booked work, earned revenue, collected cash,
 whole-business revenue, or a statistically qualified future forecast. A

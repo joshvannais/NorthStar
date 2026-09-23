@@ -56,8 +56,8 @@
         show('Forecast planning is off',
           'This is the cautious system default. No owner preference has been recorded and no forecast has been issued.');
       } else if (value.revision > 0 && value.source.kind === 'owner_reviewed') {
-        show('Forecast planning is off by owner preference',
-          'An authorized person recorded this preference. It does not erase historical source data or issue a forecast.');
+        show('Forecast planning is off by saved workspace preference',
+          'An authorized owner or administrator recorded this preference. It does not erase historical source data or issue a forecast.');
       } else {
         throw new Error('Forecast settings lineage invalid');
       }

@@ -22,7 +22,7 @@ async function main() {
       { name: 'default', revision: 0, kind: 'system_default', status: 200,
         expected: 'Forecast planning is off' },
       { name: 'owner-off', revision: 1, kind: 'owner_reviewed', status: 200,
-        expected: 'Forecast planning is off by owner preference' },
+        expected: 'Forecast planning is off by saved workspace preference' },
       { name: 'restricted', revision: 0, kind: 'system_default', status: 403,
         expected: 'Access restricted' },
       { name: 'unavailable', revision: 0, kind: 'system_default', status: 503,

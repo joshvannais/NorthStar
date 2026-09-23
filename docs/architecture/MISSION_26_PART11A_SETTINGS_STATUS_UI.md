@@ -2,7 +2,7 @@
 
 Status: isolated, unreleased bounded presentation candidate. Full Part 11A remains open.
 
-The paid Settings page reads the guarded current forecast-settings record through the existing `/api/v1/forecast/settings` route. It displays a cautious system default, a recorded owner-reviewed off preference, restricted access, or an unavailable state. It never treats a preference as source coverage, an enabled algorithm, or an issued forecast. A response that contradicts this candidate's `forecastIssued: false` and `sourceEligibilityVerified: false` contract is withheld. The panel is read-only and does not join the page's general Save Changes form.
+The paid Settings page reads the guarded current forecast-settings record through the existing `/api/v1/forecast/settings` route. It displays a cautious system default, a recorded owner/admin-reviewed off preference, restricted access, or an unavailable state. It never treats a preference as source coverage, an enabled algorithm, or an issued forecast. A response that contradicts this candidate's `forecastIssued: false` and `sourceEligibilityVerified: false` contract is withheld. The panel is read-only and does not join the page's general Save Changes form.
 
 The same Settings page runs in the account-free demo. DemoRuntime is detected before any paid forecast request; the panel shows a clearly fictional off state and hides refresh. It does not write a preference or call the paid forecast API. This is a status preview, not a full demo forecasting journey.
 

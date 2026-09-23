@@ -162,14 +162,16 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         synthetic.release();
       }
     }
-    const firstReview = (await f.runtimePool.query(
-      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
-      reviewParams)).rows[0].value;
-    expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
-      replayed: false, historicalCoverageVerified: false,
-      bookedWorkVerified: false, forecastIssued: false });
-    firstReviewId = firstReview.id;
     const bookingRoute = '/api/v1/forecast/booking-reviews';
+    const firstWrite = await request(f.app).post(`${bookingRoute}/first`)
+      .set(actor.session.headers).set('Idempotency-Key', reviewParams[6])
+      .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
+    expect(firstWrite.status).toBe(201);
+    const firstReview = firstWrite.body.data;
+    expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
+      replayed: false,
+      bookedWorkVerified: false, forecastIssued: false });
+    firstReviewId = firstReview.reviewId;
     const firstReplay = await request(f.app).post(`${bookingRoute}/first`)
       .set(actor.session.headers).set('Idempotency-Key', reviewParams[6])
       .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
@@ -222,7 +224,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .toMatchObject({ state: 'review_unavailable', reviewCurrentAtRead: false });
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
-      reviewParams)).rows[0].value).toMatchObject({ id: firstReview.id,
+      reviewParams)).rows[0].value).toMatchObject({ id: firstReviewId,
       replayed: true, bookedWorkVerified: false });
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
@@ -304,9 +306,12 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       [...cancelParams.slice(0, 7), 'invalid-csrf-token']))
       .rejects.toMatchObject({ code: '42501' });
-    const cancellation = (await f.runtimePool.query(
-      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
-      cancelParams)).rows[0].value;
+    const cancelWrite = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/cancel`)
+      .set(actor.session.headers).set('Idempotency-Key', cancelParams[6])
+      .send({ reason: cancelParams[5] });
+    expect(cancelWrite.status).toBe(201);
+    const cancellation = cancelWrite.body.data;
     expect(cancellation).toMatchObject({ state: 'booking_cancelled',
       previousReviewId: firstReviewId, replayed: false,
       schedulingNeedsReview: true, bookedWorkVerified: false,
@@ -317,7 +322,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .send({ reason: cancelParams[5] });
     expect(cancelReplay.status).toBe(200);
     expect(cancelReplay.body.data).toMatchObject({ state: 'booking_cancelled',
-      reviewId: cancellation.id, replayed: true,
+      reviewId: cancellation.reviewId, replayed: true,
       schedulingNeedsReview: true, bookedWorkVerified: false });
     const memberCancel = await request(f.app)
       .post(`${bookingRoute}/${firstReviewId}/cancel`)
@@ -326,7 +331,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .send({ reason: cancelParams[5] });
     expect(memberCancel.status).toBe(403);
     const cancelledRead = await request(f.app)
-      .get(`${bookingRoute}/${cancellation.id}/currentness`)
+      .get(`${bookingRoute}/${cancellation.reviewId}/currentness`)
       .set(actor.session.headers);
     expect(cancelledRead.status).toBe(200);
     expect(cancelledRead.body.data).toMatchObject({ state: 'booking_cancelled',
@@ -347,7 +352,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       cancelParams)).rows[0].value).toMatchObject({
-      id: cancellation.id, replayed: true, bookedWorkVerified: false });
+      id: cancellation.reviewId, replayed: true, bookedWorkVerified: false });
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       [...cancelParams.slice(0, 5), 'Changed cancellation reason cannot reuse key.',
@@ -363,7 +368,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       state: 'later_review_exists', reviewCurrentAtRead: false });
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
-      [...currentnessParams.slice(0, 4), cancellation.id])).rows[0].value)
+      [...currentnessParams.slice(0, 4), cancellation.reviewId])).rows[0].value)
       .toMatchObject({ state: 'booking_cancelled',
         previousReviewId: firstReviewId, reviewCurrentAtRead: false,
         bookedWorkVerified: false });

@@ -12,10 +12,8 @@ at read time and whether scheduling needs review. Every response says booked
 work is unverified and no forecast was issued. The route does not change
 Mission 22 scheduling or Mission 24 estimates.
 
-The mounted fictional-tenant suite exercises replay, currentness,
-cancellation, invalid-CSRF denial and member denial through HTTP. It does
-not prove a new first-review HTTP write or first cancellation HTTP write,
-because the same fixture establishes those rows directly in SQL. Those
-positive HTTP writes, correction handling, a plain-language frontend
+The mounted fictional-tenant suite exercises the positive first-review and
+cancellation writes, replay, currentness, invalid-CSRF denial and member
+denial through HTTP. Correction handling, a plain-language frontend
 journey, first actual booking, complete periods, release and live validation
 remain open. The wider Mission 22 regression suite remains ungreen.

@@ -190,6 +190,22 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(httpCurrent.body.data).toMatchObject({
       state: 'review_evidence_current_at_read', reviewCurrentAtRead: true,
       bookedWorkVerified: false, forecastIssued: false });
+    const storedPrice = (await f.ownerPool.query(
+      `SELECT reviewed_price_before_tax,currency
+         FROM canonical_forecast_commercial_booking_reviews
+        WHERE organization_id=$1 AND id=$2`, [f.org, firstReviewId])).rows[0];
+    const firstPosition = await request(f.app)
+      .get(`${bookingRoute}/${firstReviewId}/position`)
+      .set(actor.session.headers);
+    expect(firstPosition.status).toBe(200);
+    expect(firstPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_booking_candidate',
+      commercialStatus: 'owner_reviewed_booking',
+      reviewedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, ownerAttestationCurrentAtRead: true,
+      historicalCoverageVerified: false, bookedWorkVerified: false,
+      earnedRevenueMeasured: false, collectedCashMeasured: false,
+      forecastIssued: false });
     const currentnessParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, firstReviewId];
     expect((await f.runtimePool.query(
@@ -212,6 +228,20 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       bookedWorkVerified: false, forecastIssued: false });
     firstReviewId = corrected.body.data.reviewId;
     currentnessParams[4] = firstReviewId;
+    const correctedPosition = await request(f.app)
+      .get(`${bookingRoute}/${firstReviewId}/position`)
+      .set(actor.session.headers);
+    expect(correctedPosition.status).toBe(200);
+    expect(correctedPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_booking_candidate',
+      reviewedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, bookedWorkVerified: false });
+    const supersededPosition = await request(f.app)
+      .get(`${bookingRoute}/${initialReviewId}/position`)
+      .set(actor.session.headers);
+    expect(supersededPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_position_unavailable', bookedWorkVerified: false });
+    expect(supersededPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
       [...currentnessParams.slice(0, 4), initialReviewId])).rows[0].value)
@@ -388,6 +418,13 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(cancelledRead.status).toBe(200);
     expect(cancelledRead.body.data).toMatchObject({ state: 'booking_cancelled',
       reviewCurrentAtRead: false, bookedWorkVerified: false });
+    const cancelledPosition = await request(f.app)
+      .get(`${bookingRoute}/${cancellation.reviewId}/position`)
+      .set(actor.session.headers);
+    expect(cancelledPosition.status).toBe(200);
+    expect(cancelledPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_position_unavailable', bookedWorkVerified: false });
+    expect(cancelledPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       [f.org, member.actorUserId, member.actorAccessRole,

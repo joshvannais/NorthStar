@@ -63,6 +63,14 @@ function createForecastBookingReviewsRouter(options = {}) {
           value.bookedWorkVerified !== false || typeof value.state !== 'string') {
         throw new Error('Invalid guarded commercial review result');
       }
+      const position = value.state === 'owner_reviewed_booking_candidate';
+      if (position && (value.ownerAttestationCurrentAtRead !== true ||
+          value.commercialStatus !== 'owner_reviewed_booking' ||
+          !/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(value.reviewedPriceBeforeTax || '') ||
+          !/^[A-Z]{3}$/.test(value.currency || '') ||
+          !UUID.test(value.reviewId || ''))) {
+        throw new Error('Invalid guarded owner-reviewed price position');
+      }
       await client.query('COMMIT');
       if (write && value.replayed === true) res.set('Idempotency-Replayed', 'true');
       return res.status(write && value.replayed === false && value.id ? 201 : 200)
@@ -72,6 +80,11 @@ function createForecastBookingReviewsRouter(options = {}) {
           replayed: value.replayed === true,
           reviewCurrentAtRead: value.reviewCurrentAtRead === true,
           schedulingNeedsReview: value.schedulingNeedsReview === true,
+          ...(position ? { commercialStatus: value.commercialStatus,
+            reviewedPriceBeforeTax: value.reviewedPriceBeforeTax,
+            currency: value.currency, ownerAttestationCurrentAtRead: true,
+            historicalCoverageVerified: false,
+            earnedRevenueMeasured: false, collectedCashMeasured: false } : {}),
           bookedWorkVerified: false, forecastIssued: false,
         } });
     } catch (error) {
@@ -130,6 +143,13 @@ function createForecastBookingReviewsRouter(options = {}) {
       if (!UUID.test(req.params.reviewId || '')) return invalid(res);
       return query(req, res,
         'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+        [req.params.reviewId], false);
+    });
+  router.get('/:reviewId/position', auth, requirePermission('forecast', 'read'), throttle,
+    async (req, res) => {
+      if (!UUID.test(req.params.reviewId || '')) return invalid(res);
+      return query(req, res,
+        'SELECT public.canonical_forecast_owner_reviewed_booking_position($1,$2,$3,$4,$5) value',
         [req.params.reviewId], false);
     });
   return router;

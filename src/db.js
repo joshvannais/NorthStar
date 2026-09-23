@@ -1451,6 +1451,18 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_period_anchors') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_period_anchors FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_period_anchor_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_period_anchor_capture() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_period_anchor_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_decision_orders') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_decision_orders FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_price_decision_order_sequence FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_order_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_order_insert() FROM %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -2369,6 +2381,19 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        )) AS price_event_snapshot_helpers_withheld,
        (to_regprocedure('public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
          has_function_privilege($1,'public.canonical_forecast_price_event_currentness_read(uuid,uuid,text,uuid,uuid)','EXECUTE')) AS price_event_currentness_read_allowed,
+       (to_regclass('public.canonical_forecast_price_period_anchors') IS NULL OR
+         NOT has_table_privilege($1,'public.canonical_forecast_price_period_anchors','SELECT,INSERT,UPDATE,DELETE')) AS price_period_anchor_table_withheld,
+       (to_regclass('public.canonical_forecast_price_period_anchors') IS NULL OR (
+         has_function_privilege($1,'public.canonical_forecast_price_period_anchor_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_period_anchor_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_period_anchor_capture()','EXECUTE')
+       )) AS price_period_anchor_entry_guarded,
+       (to_regclass('public.canonical_forecast_price_decision_orders') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_price_decision_orders','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_sequence_privilege($1,'public.canonical_forecast_price_decision_order_sequence','USAGE,SELECT,UPDATE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_decision_order_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_decision_order_insert()','EXECUTE')
+       )) AS price_decision_order_private,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -2773,6 +2798,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||
       !runtimePrivileges.price_event_currentness_read_allowed ||
+      !runtimePrivileges.price_period_anchor_table_withheld ||
+      !runtimePrivileges.price_period_anchor_entry_guarded ||
+      !runtimePrivileges.price_decision_order_private ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||
@@ -2840,6 +2868,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('141_canonical_forecast_retell_scan_inputs.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('142_canonical_forecast_retell_review_time.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('143_canonical_forecast_price_event_snapshots.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('144_canonical_forecast_price_event_currentness.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('145_canonical_forecast_price_period_coverage.sql');
+// The source-order trigger installation touches the active M24 decision table.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('146_canonical_forecast_price_decision_order.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

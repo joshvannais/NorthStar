@@ -301,4 +301,110 @@ realPostgres('Mission 26 approved-price source ordering', () => {
       fence.release(); prior.release(); later.release(); other.release();
     }
   }, 120000);
+
+  test('a tenant source-order fence excludes a later backdated decision without blocking another tenant', async () => {
+    const priorEstimate = await createEstimate();
+    const laterEstimate = await createEstimate();
+    const otherEstimate = await createEstimate(fixture.otherOrg);
+    const actor = fixture.actors.owner;
+    const otherActor = fixture.actors.otherOwner;
+    const priorId = uuid(), laterId = uuid(), otherId = uuid();
+    const prior = await fixture.ownerPool.connect();
+    const fence = await fixture.ownerPool.connect();
+    const later = await fixture.ownerPool.connect();
+    const other = await fixture.ownerPool.connect();
+    try {
+      await prior.query('BEGIN');
+      await insertSyntheticDecision(prior, fixture.org, priorEstimate, actor, priorId);
+
+      await fence.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const pendingFence = fence.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended(
+          'm26:price-decision-order:'||$1::text,0))`, [fixture.org]);
+      await waitForLockWait(fence, prior.processID);
+      await prior.query('COMMIT');
+      await pendingFence;
+
+      await later.query('BEGIN');
+      const pendingLater = insertSyntheticDecision(
+        later, fixture.org, laterEstimate, actor, laterId);
+      await waitForLockWait(later, fence.processID);
+
+      const captured = (await fence.query(
+        `SELECT max(source_order) AS high_water,
+           array_agg(decision_id ORDER BY source_order) AS ids
+         FROM public.canonical_forecast_price_decision_orders
+         WHERE organization_id=$1`, [fixture.org])).rows[0];
+      expect(captured.ids).toContain(priorId);
+      expect(captured.ids).not.toContain(laterId);
+      const cutoff = (await fence.query('SELECT clock_timestamp() AS cutoff')).rows[0].cutoff;
+
+      await other.query('BEGIN');
+      await other.query("SET LOCAL lock_timeout='2s'");
+      await insertSyntheticDecision(other, fixture.otherOrg, otherEstimate, otherActor, otherId);
+      await other.query('COMMIT');
+
+      await fence.query('COMMIT');
+      await pendingLater;
+      await later.query('COMMIT');
+      const laterRecord = (await fixture.ownerPool.query(
+        `SELECT decision.created_at, ordered.source_order
+         FROM public.canonical_estimate_decisions decision
+         JOIN public.canonical_forecast_price_decision_orders ordered
+           ON ordered.organization_id=decision.organization_id
+          AND ordered.decision_id=decision.id
+         WHERE decision.id=$1`, [laterId])).rows[0];
+      // The Mission 24 timestamp was minted before the trigger's lock wait.
+      // Only the transaction-scoped source order preserves capture membership.
+      expect(laterRecord.created_at.getTime()).toBeLessThanOrEqual(cutoff.getTime());
+      expect(BigInt(laterRecord.source_order)).toBeGreaterThan(BigInt(captured.high_water));
+      const atFence = (await fixture.ownerPool.query(
+        `SELECT array_agg(decision_id ORDER BY source_order) AS ids
+         FROM public.canonical_forecast_price_decision_orders
+         WHERE organization_id=$1 AND source_order<=$2`,
+        [fixture.org, captured.high_water])).rows[0].ids;
+      expect(atFence).toContain(priorId);
+      expect(atFence).not.toContain(laterId);
+      expect(atFence).not.toContain(otherId);
+    } finally {
+      await prior.query('ROLLBACK').catch(() => {});
+      await fence.query('ROLLBACK').catch(() => {});
+      await later.query('ROLLBACK').catch(() => {});
+      await other.query('ROLLBACK').catch(() => {});
+      prior.release(); fence.release(); later.release(); other.release();
+    }
+  }, 120000);
+
+  test('the source-order sidecar is private and immutable', async () => {
+    const actor = fixture.actors.owner;
+    const estimate = await createEstimate();
+    const decisionId = uuid();
+    await insertSyntheticDecision(fixture.ownerPool, fixture.org, estimate, actor, decisionId);
+    const row = (await fixture.ownerPool.query(
+      `SELECT source_order FROM public.canonical_forecast_price_decision_orders
+       WHERE organization_id=$1 AND decision_id=$2`, [fixture.org, decisionId])).rows[0];
+    expect(row).toBeTruthy();
+    const permissions = (await fixture.ownerPool.query(
+      `SELECT has_table_privilege($1,
+          'public.canonical_forecast_price_decision_orders',
+          'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS table_access,
+        has_sequence_privilege($1,
+          'public.canonical_forecast_price_decision_order_sequence',
+          'USAGE,SELECT,UPDATE') AS sequence_access`,
+      [fixture.roles.runtime])).rows[0];
+    expect(permissions).toEqual({ table_access: false, sequence_access: false });
+    await expect(fixture.ownerPool.query(
+      `UPDATE public.canonical_forecast_price_decision_orders
+       SET source_order=source_order+1 WHERE organization_id=$1 AND decision_id=$2`,
+      [fixture.org, decisionId])).rejects.toMatchObject({ code: '23514' });
+    await expect(fixture.ownerPool.query(
+      `DELETE FROM public.canonical_forecast_price_decision_orders
+       WHERE organization_id=$1 AND decision_id=$2`,
+      [fixture.org, decisionId])).rejects.toMatchObject({ code: '23514' });
+    expect((await fixture.ownerPool.query(
+      `SELECT count(*)::integer AS count
+       FROM public.canonical_forecast_price_decision_orders
+       WHERE organization_id=$1 AND decision_id=$2`,
+      [fixture.org, decisionId])).rows[0].count).toBe(1);
+  }, 120000);
 });

@@ -260,6 +260,8 @@ The follow-on [price-decision lineage adapter](../architecture/MISSION_26_PART6A
 
 The [mounted private price-history review](../architecture/MISSION_26_PART6A_MOUNTED_PRICE_HISTORY.md) exposes a guarded, current-source historical position to paid owners/admins without event rows or a forecast claim. Booked-work linkage, future method, immutable run, demo journey and final acceptance remain open.
 
+The [approved-price period coverage anchor](../architecture/MISSION_26_PART6A_PRICE_PERIOD_COVERAGE.md) starts a source-owned provisional observation boundary only from a new guarded capture. Earlier windows remain unverified even when their observed event sum is zero. Because capture and concurrent decisions do not yet share a commit-order fence, later windows also remain provisional rather than source-complete. This covers only canonical NorthStar price decisions, not off-platform business or a sufficient forecast sample; future method and Part 6A acceptance remain open.
+
 The [price-event currentness comparison](../architecture/MISSION_26_PART6A_PRICE_CURRENTNESS.md) can distinguish an unchanged historical receipt from one superseded by later Mission 24 decisions under current tenant and account authority. It does not yet invalidate a saved forecast run because no such run is mounted.
 
 ## Non-negotiable evidence boundaries

@@ -19,7 +19,7 @@ This is a founder-requested **proposed** implementation breakdown of **nine part
 ## Existing authority and non-duplication
 
 - Mission 20 owns company identity, Business Profile, operating policy, and any authorized invoice branding, tax, fee, and payment-term settings. Mission 27 must read the applicable version, preserve its source, and expose an unresolved setting when authority is missing. It must not invent tax or legal treatment.
-- Mission 23 owns field execution, actuals, completion, and discovered conditions. Completion is a potential handoff, never an automatic invoice. Mission 24 owns estimates, human price decisions, and customer-safe quote output. Mission 27 references accepted commercial revisions without rewriting them.
+- Mission 23 owns field execution, actuals, completion, and discovered conditions. Completion is a potential handoff, never an automatic invoice. Mission 24 owns estimates, human price decisions, customer-safe quote output, and separately recorded exact-version customer acceptance. Mission 27 references the applicable accepted commercial evidence without rewriting it. Owner approval, estimate issuance, sharing, and customer acceptance are distinct events.
 - Mission 25 may consume exact native financial outcomes after Mission 27 releases them. Its already accepted external financial import remains separate evidence and does not become a native invoice or payment. Mission 26 may consume guarded invoice, receivable, and cash evidence only when its own source, coverage, and calibration gates pass.
 - Mission 28 owns approved sending, reminders, and automated collection communications. Mission 29 owns cross-workflow governance and permission thresholds. Mission 31 demonstrates an isolated fictional end-to-end journey; Mission 32 may hand over a human-approved commercial result. None of these missions may bypass Mission 27's financial decisions.
 - NorthStar's own SaaS subscription billing is separate from a contractor's customer invoices and payments. Reuse of an existing provider integration does not grant contractor payment-processing authority.
@@ -37,10 +37,10 @@ This is a founder-requested **proposed** implementation breakdown of **nine part
 
 | Slice | Required result |
 | --- | --- |
-| 2A | Guarded reference to the exact current Mission 24 approved quote/price, scope, currency, customer, revision, and provenance; changed or withdrawn commercial authority blocks stale handoff. |
+| 2A | Guarded reference to the exact current Mission 24 approved quote/price, scope, currency, customer, revision, provenance, and applicable exact-version customer acceptance; approval, issuance, or sharing alone does not establish acceptance. |
 | 2B | Guarded Mission 23 completion, milestone, actual, and change-order evidence where billing terms call for it; distinguish customer additions, corrections, rework, and unapproved work. |
 | 2C | Owner-readable billable-work preview that reconciles agreed scope, completed or milestone work, deposits, allowances, prior invoices, credits, and missing conditions without silently creating a debt. |
-| 2D | Explicit authorized human acceptance of one exact handoff basis; duplicate, concurrent, cross-tenant, stale, incomplete, or conflicting handoffs fail closed. |
+| 2D | Explicit authorized human review of the billable obligation: exact-version customer acceptance where applicable, or a separately evidenced alternative basis such as authorized completed time-and-material work under applicable terms. If neither basis is established, invoice issuance is blocked. Duplicate, concurrent, cross-tenant, stale, incomplete, or conflicting handoffs fail closed. |
 
 ## Part 3 — native invoice lifecycle (5 slices)
 
@@ -49,7 +49,7 @@ This is a founder-requested **proposed** implementation breakdown of **nine part
 | 3A | Tenant-private invoice draft with exact source pins, line items, currency, arithmetic version, issuer/customer identity, and recoverable validation errors. |
 | 3B | Deterministic subtotal, authorized tax/fees/discounts, deposits, prior billings, and balance arithmetic with explicit units, rounding, inclusive/exclusive treatment, and duplicate-charge protection. |
 | 3C | Human draft review, revision, and approval with immutable prior versions and an inspectable before/after explanation; no AI or job completion silently approves a bill. |
-| 3D | Atomic issue event, unique tenant-scoped number, issue/due timestamps, immutable issued snapshot, and exact idempotent replay; issuance is distinct from sending or charging. |
+| 3D | Atomic issue event only after the current Part 2 billable-obligation basis is proven, with a unique tenant-scoped number, issue/due timestamps, immutable issued snapshot, and exact idempotent replay; issuance is distinct from sending or charging. |
 | 3E | Post-issue correction path by explicit void, credit, or replacement linkage according to approved policy, preserving the original and its delivery/payment history. |
 
 ## Part 4 — customer-safe composition and presentation (4 slices)

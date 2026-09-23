@@ -290,6 +290,8 @@ app.use('/api/v1/learning', createLearningRouter());
 app.use('/api/v1/forecast/price-history', createForecastPriceHistoryRouter());
 app.use('/api/v1/forecast/features', createForecastFeaturesRouter());
 app.use('/api/v1/forecast/settings', require('./routes/forecastSettings').createForecastSettingsRouter());
+app.use('/api/v1/forecast/reporting-windows',
+  require('./routes/forecastReportingWindows').createForecastReportingWindowsRouter());
 app.use('/api/v1', simulationsRoutes);
 app.use('/api/public', createCustomerEstimateDeliveryRouter());
 app.use('/api/v1/canonical', createCanonicalRouter({

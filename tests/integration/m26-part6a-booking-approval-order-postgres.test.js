@@ -6,10 +6,24 @@ const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
 realPostgres('Mission 26 Part 6A booking approval source order', () => {
   let fixture;
-  beforeAll(async () => { fixture = await createDatabaseFixture(); }, 120000);
+  beforeAll(async () => { fixture = await createDatabaseFixture({ operationalSchedule: true }); }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
   test('real Mission 22 human approvals receive ordered private sidecars', async () => {
+    const validator = (await fixture.ownerPool.query(`
+      SELECT procedure.prosecdef AS owner_authority,
+             has_function_privilege($1,
+               'public.canonical_schedule_validate_human_approval_completion()',
+               'EXECUTE') AS runtime_can_invoke_validator,
+             has_function_privilege($1,
+               'public.canonical_schedule_part4_approval_request_digest(uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,text,text)',
+               'EXECUTE') AS runtime_can_invoke_digest
+        FROM pg_proc procedure
+       WHERE procedure.oid =
+         'public.canonical_schedule_validate_human_approval_completion()'::regprocedure`,
+    [fixture.roles.runtime])).rows[0];
+    expect(validator).toEqual({ owner_authority: true,
+      runtime_can_invoke_validator: false, runtime_can_invoke_digest: false });
     const first = await fixture.createExecution({ approvedScheduling: true,
       stopAfterScheduling: true });
     const second = await fixture.createExecution({ approvedScheduling: true,

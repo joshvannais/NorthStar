@@ -53,7 +53,7 @@ function calendarMonth(window) {
 function unavailable(reason) {
   return Object.freeze({ version: VERSION, state: 'unavailable', reason,
     candidateWindowChecksPassed: false, sourceMonthVerified: false,
-    sourceAuthenticated: false,
+    sourceAuthenticated: false, calendarPeriodVerified: false,
     inputFirstApprovalAmount: null, inputFirstApprovalCount: null,
     eligibleForForecast: false,
     wholeBusinessCoverageVerified: false, forecastIssued: false });

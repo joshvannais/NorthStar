@@ -214,7 +214,8 @@ function createForecastPriceHistoryRouter(options = {}) {
       const withCurrency = exactKeys(req.query, ['startsAt', 'endsAt', 'currency']);
       if (!UUID.test(req.params.snapshotId) ||
           !(withCurrency || exactKeys(req.query, ['startsAt', 'endsAt'])) ||
-          (withCurrency && !/^[A-Z]{3}$/.test(req.query.currency || ''))) {
+          (withCurrency && (typeof req.query.currency !== 'string' ||
+            !/^[A-Z]{3}$/.test(req.query.currency)))) {
         return res.status(400).json({ success: false, error: {
           category: 'FORECAST_REQUEST_INVALID', message: 'The history request is invalid.',
         } });

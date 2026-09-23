@@ -87,7 +87,8 @@ test('mixed first-approval currency and broken revision lineage remain unavailab
   const euro = { ...event(), currency: 'EUR' };
   expect(assessOrderedPriceMonthCandidate(source([euro]), month, 'USD'))
     .toMatchObject({ state: 'unavailable', reason: 'currency_mismatch',
-      inputFirstApprovalAmount: null, eligibleForForecast: false });
+      inputFirstApprovalAmount: null, calendarPeriodVerified: false,
+      eligibleForForecast: false });
   const broken = { ...event(), action: 'withdraw', priceBeforeTax: null,
     previousId: DECISION };
   expect(assessOrderedPriceMonthCandidate(source([broken]), month, 'USD'))

@@ -256,6 +256,8 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
       eligibleForForecast: false });
     expect((await request(app).get(path).query({ ...month, currency: 'usd' })).status)
       .toBe(400);
+    expect((await request(app).get(path).query(month).query('currency[]=USD')).status)
+      .toBe(400);
     expect(JSON.stringify(response.body)).not.toMatch(/events|digestNonce|sourceOrder|highWaterOrder/);
     expect(client.query.mock.calls.slice(0, 3).map(call => call[0])).toEqual([
       'BEGIN ISOLATION LEVEL READ COMMITTED',

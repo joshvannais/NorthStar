@@ -64,7 +64,7 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 
 | Candidate | Bounded prerequisite | Full slice | Deployed | Independent exact-head audit | Mission-final accepted | Live-data validated |
 | --- | --- | --- | --- | --- | --- | --- |
-| [Settings status view](../architecture/MISSION_26_PART11A_SETTINGS_STATUS_UI.md) | Implementation and focused rendered checks complete; audit pending | No | No | Pending | No | No |
+| [Settings status view](../architecture/MISSION_26_PART11A_SETTINGS_STATUS_UI.md) | Bounded implementation and rendered checks passed; release pending | No | No | Code head `b55e3571` passed with no P0–P3; final documentation head review pending | No | No |
 
 ## Minimum integrated path from this baseline
 

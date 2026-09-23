@@ -1,6 +1,6 @@
 # Mission 26 Part 11A: forecast preference status in Settings
 
-Status: isolated, unreleased bounded presentation candidate. Full Part 11A remains open.
+Status: isolated, unreleased bounded presentation candidate. The corrected code head `b55e3571` passed independent read-only review with no P0–P3 findings; final documentation-head review remains pending. Full Part 11A remains open.
 
 The paid Settings page reads the guarded current forecast-settings record through the existing `/api/v1/forecast/settings` route. It displays a cautious system default, a recorded owner/admin-reviewed off preference, restricted access, or an unavailable state. It never treats a preference as source coverage, an enabled algorithm, or an issued forecast. A response that contradicts this candidate's `forecastIssued: false` and `sourceEligibilityVerified: false` contract is withheld. The panel is read-only and does not join the page's general Save Changes form.
 

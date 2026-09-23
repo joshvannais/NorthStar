@@ -168,7 +168,7 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
     capturedAt: snapshot.capturedAt,
     window: Object.freeze({ ...window }),
     scope: 'northstar_m24_approved_price_decisions',
-    inputDecisionCount: count,
+    inputObservedDecisionCount: count,
     inputCurrency: requestedCurrency,
     inputFirstApprovalCount: requestedCurrency === null ? null : firstApprovalCount,
     inputFirstApprovalAmount: requestedCurrency === null || firstApprovalCount === 0 ? null :

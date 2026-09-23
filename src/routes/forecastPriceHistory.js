@@ -256,7 +256,7 @@ function createForecastPriceHistoryRouter(options = {}) {
           state: candidate.state, reason: candidate.reason,
           snapshotId: req.params.snapshotId,
           window,
-          inputDecisionCount: candidate.inputDecisionCount ?? null,
+          inputObservedDecisionCount: candidate.inputObservedDecisionCount ?? null,
           inputCurrency: candidate.inputCurrency ?? (withCurrency ? req.query.currency : null),
           inputFirstApprovalCount: candidate.inputFirstApprovalCount ?? null,
           inputFirstApprovalAmount: candidate.inputFirstApprovalAmount ?? null,

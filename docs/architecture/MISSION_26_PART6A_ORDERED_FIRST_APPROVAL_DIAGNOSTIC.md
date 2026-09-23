@@ -11,6 +11,12 @@ decision after the first fence; it is not silently substituted for the
 commercial decision time. Broken revision links, mixed first-approval
 currencies and excessive amounts return unavailable.
 
+`inputObservedDecisionCount` counts receipt events by `sourceObservedAt`,
+whereas `inputFirstApprovalAmount` attributes first approvals by Mission 24
+`recordedAt`. A late-observed decision can therefore produce an observed count
+of zero and a provisional first-approval amount in the same requested month.
+Neither diagnostic establishes source coverage for that month.
+
 An empty supplied month returns no amount, rather than a dollar zero. A
 nonempty amount is still only arithmetic over the supplied guarded receipt:
 `sourceMonthVerified`, `calendarPeriodVerified`, `eligibleForForecast` and

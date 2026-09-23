@@ -10,8 +10,11 @@ event shape, duplicate decisions and nondecreasing source-observation times.
 A source clock reversal, an event outside the anchor-to-capture interval, a
 partial month or an unclosed month fails closed.
 
-A candidate whose window checks pass counts only the supplied Mission 24
-decision events assigned to that month. It does not prove continuous source
+A candidate whose window checks pass reports `inputObservedDecisionCount`,
+counting supplied Mission 24 events whose `sourceObservedAt` falls in the
+requested month. A separate provisional first-approval amount, when requested,
+uses Mission 24 `recordedAt` for commercial decision-time attribution. Those
+two fields can therefore differ for late-observed decisions. Neither proves continuous source
 coverage, including when the supplied event array is empty. This is **not** an approved-price amount, booked
 work, earned revenue, collected cash or whole-business zero. The evaluator
 does not authenticate its input and remains unmounted; every result retains

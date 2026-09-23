@@ -245,7 +245,7 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
     const response = await request(app).get(path).query(month);
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ state: 'candidate_window_checks_passed',
-      inputDecisionCount: 0, candidateWindowChecksPassed: true,
+      inputObservedDecisionCount: 0, candidateWindowChecksPassed: true,
       sourceMonthVerified: false, sourceAuthenticated: false,
       calendarPeriodVerified: false, eligibleForForecast: false,
       wholeBusinessCoverageVerified: false, forecastIssued: false });
@@ -277,6 +277,6 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
       state: 'stale', sourceOrderCurrent: false } });
     const changed = await request(stale.app).get(path).query(month);
     expect(changed.body.data).toMatchObject({ state: 'unavailable',
-      reason: 'source_changed', inputDecisionCount: null,
+      reason: 'source_changed', inputObservedDecisionCount: null,
       candidateWindowChecksPassed: false, eligibleForForecast: false });
   });

@@ -17,7 +17,17 @@ effective and visible at booking, matching currency, complete source window,
 and currentness checks remain unimplemented. No price is inferred from the
 sidecar; missing linkage and pre-anchor history must remain unavailable.
 
-The candidate is local and unreleased. Its mounted PostgreSQL test uses the
-normal Mission 22 human preview/approval workflow, checks order and runtime
-privacy, and cannot run where the disposable PostgreSQL admin connection is
-unavailable. It does not constitute full Part 6A acceptance or a forecast.
+Migration 153 corrects the deferred Mission 22 approval validator's execution
+authority. That existing validator runs at commit, after the trusted approval
+function returns, and could not call its deliberately private digest helper
+under the ordinary runtime role. The forward-only correction makes that
+read-only trigger function `SECURITY DEFINER`; its fixed search path and direct
+runtime `EXECUTE` revocation remain. The same normal approval failure was
+reproduced without migration 152 before this correction.
+
+The candidate is local and unreleased. Its mounted disposable PostgreSQL test
+uses the normal Mission 22 human preview/approval workflow and verifies order,
+runtime privacy, and the validator privilege boundary. A wider Mission 22
+regression suite has unrelated pre-existing failures in this test environment;
+record its exact result rather than treating it as a full suite pass. This
+candidate does not constitute full Part 6A acceptance or a forecast.

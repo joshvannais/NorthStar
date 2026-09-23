@@ -2941,6 +2941,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('151_canonical_forecast_profile_month_attes
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('152_canonical_forecast_profile_month_guarded_source.sql');
 // Installing an additive trigger touches the active Mission 22 approval table.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('153_canonical_forecast_booking_approval_order.sql');
+// The deferred approval validator's privilege correction changes an active
+// trigger function; keep the migration transaction and lock wait bounded.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('154_schedule_deferred_approval_validator_owner.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

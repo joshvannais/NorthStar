@@ -245,12 +245,21 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
     const response = await request(app).get(path).query(month);
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ state: 'candidate_window_checks_passed',
-      inputDecisionCount: 0, candidateWindowChecksPassed: true,
+      inputOrderTimestampDecisionCount: 0, candidateWindowChecksPassed: true,
       sourceMonthVerified: false, sourceAuthenticated: false,
       calendarPeriodVerified: false, eligibleForForecast: false,
       wholeBusinessCoverageVerified: false, forecastIssued: false });
+    const priced = await request(app).get(path).query({ ...month, currency: 'USD' });
+    expect(priced.body.data).toMatchObject({ state: 'candidate_window_checks_passed',
+      inputCurrency: 'USD', inputFirstApprovalCount: 0,
+      inputFirstApprovalAmount: null, sourceMonthVerified: false,
+      eligibleForForecast: false });
+    expect((await request(app).get(path).query({ ...month, currency: 'usd' })).status)
+      .toBe(400);
+    expect((await request(app).get(path).query(month).query('currency[]=USD')).status)
+      .toBe(400);
     expect(JSON.stringify(response.body)).not.toMatch(/events|digestNonce|sourceOrder|highWaterOrder/);
-    expect(client.query.mock.calls.map(call => call[0])).toEqual([
+    expect(client.query.mock.calls.slice(0, 3).map(call => call[0])).toEqual([
       'BEGIN ISOLATION LEVEL READ COMMITTED',
       'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
       'COMMIT',
@@ -260,7 +269,7 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
       .toBe(400);
     expect((await request(app).get(path).query({ startsAt: '2026-11-02T00:00:00.000000Z',
       endsAt: month.endsAt })).status).toBe(400);
-    expect(pool.connect).toHaveBeenCalledTimes(1);
+    expect(pool.connect).toHaveBeenCalledTimes(2);
     const member = application({ role: 'member', orderedRead });
     expect((await request(member.app).get(path).query(month)).status).toBe(403);
     expect(member.pool.connect).not.toHaveBeenCalled();
@@ -268,6 +277,6 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
       state: 'stale', sourceOrderCurrent: false } });
     const changed = await request(stale.app).get(path).query(month);
     expect(changed.body.data).toMatchObject({ state: 'unavailable',
-      reason: 'source_changed', inputDecisionCount: null,
+      reason: 'source_changed', inputOrderTimestampDecisionCount: null,
       candidateWindowChecksPassed: false, eligibleForForecast: false });
   });

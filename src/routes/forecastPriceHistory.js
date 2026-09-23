@@ -211,8 +211,11 @@ function createForecastPriceHistoryRouter(options = {}) {
 
   router.get('/ordered-snapshots/:snapshotId/month-candidate', auth,
     requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      const withCurrency = exactKeys(req.query, ['startsAt', 'endsAt', 'currency']);
       if (!UUID.test(req.params.snapshotId) ||
-          !exactKeys(req.query, ['startsAt', 'endsAt'])) {
+          !(withCurrency || exactKeys(req.query, ['startsAt', 'endsAt'])) ||
+          (withCurrency && (typeof req.query.currency !== 'string' ||
+            !/^[A-Z]{3}$/.test(req.query.currency)))) {
         return res.status(400).json({ success: false, error: {
           category: 'FORECAST_REQUEST_INVALID', message: 'The history request is invalid.',
         } });
@@ -246,13 +249,17 @@ function createForecastPriceHistoryRouter(options = {}) {
             value.snapshot.id !== req.params.snapshotId) {
           throw new Error('Invalid guarded ordered-price month source');
         }
-        const candidate = assessOrderedPriceMonthCandidate(value, window);
+        const candidate = assessOrderedPriceMonthCandidate(value, window,
+          withCurrency ? req.query.currency : null);
         await client.query('COMMIT');
         return res.json({ success: true, data: {
           state: candidate.state, reason: candidate.reason,
           snapshotId: req.params.snapshotId,
           window,
-          inputDecisionCount: candidate.inputDecisionCount ?? null,
+          inputOrderTimestampDecisionCount: candidate.inputOrderTimestampDecisionCount ?? null,
+          inputCurrency: candidate.inputCurrency ?? (withCurrency ? req.query.currency : null),
+          inputFirstApprovalCount: candidate.inputFirstApprovalCount ?? null,
+          inputFirstApprovalAmount: candidate.inputFirstApprovalAmount ?? null,
           candidateWindowChecksPassed: candidate.candidateWindowChecksPassed,
           sourceMonthVerified: false, sourceAuthenticated: false,
           calendarPeriodVerified: false,

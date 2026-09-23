@@ -49,7 +49,7 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 | 10B | [KPI coherence gate](../architecture/MISSION_26_PART10B_MONTHLY_KPI_GATE.md) | **Open — partial**: rules for six cards; authenticated same-run monthly cards/graphs absent. |
 | 10C | [Drilldown prerequisite](../architecture/MISSION_26_PART10C_DRILLDOWN_POSITION.md) | **Open — partial**: supplied-input explanation; mounted source/provenance/error drilldown absent. |
 | 10D | [Alert/export gate](../architecture/MISSION_26_PART10D_ALERT_EXPORT_GATE.md) | **Open — partial**: policy boundary; current owner alert/export and complete Command Center journey absent. |
-| 11A | [Settings contract](../architecture/MISSION_26_PART11A_FORECAST_SETTINGS_CONTRACT.md), [disabled settings store candidate](../architecture/MISSION_26_PART11A_DISABLED_SETTINGS_STORE.md) | **Open — partial**: disabled-default shape and an unreleased guarded revision-store candidate; enabled target/algorithm/source validation, owner-facing paid/demo UI and full acceptance absent. |
+| 11A | [Settings contract](../architecture/MISSION_26_PART11A_FORECAST_SETTINGS_CONTRACT.md), [disabled settings store candidate](../architecture/MISSION_26_PART11A_DISABLED_SETTINGS_STORE.md), [read-only paid/demo status candidate](../architecture/MISSION_26_PART11A_SETTINGS_STATUS_UI.md) | **Open — partial**: guarded disabled-default history and a read-only status view are unreleased candidates; enabled target/algorithm/source validation, editable owner workflow and full paid/demo acceptance remain open. |
 | 11B | [Run receipt prerequisite](../architecture/MISSION_26_PART11B_FORECAST_RUN_RECEIPT.md) | **Open — partial**: pure identity contract; authenticated immutable saved-run issue/read/rerun absent. |
 | 11C | [Currentness prerequisite](../architecture/MISSION_26_PART11C_RUN_CURRENTNESS_PREREQUISITE.md) | **Open — partial**: supplied status logic; mounted source correction/revocation propagation absent. |
 | 11D | [Reviewed handoff gate](../architecture/MISSION_26_PART11D_REVIEWED_HANDOFF_GATE.md) | **Open — partial**: authority map; mounted review-only handoff and receiving-workflow proof absent. |
@@ -59,6 +59,12 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 | 12D | [Frozen visual/accessibility scope](MISSION_26_PREDICTIVE_INTELLIGENCE.md#part-12--six-mission-acceptance-slices) | **Open — no completion evidence**: five-layout-per-page, keyboard, responsive, theme and wording review needed. |
 | 12E | [Frozen independent audit scope](MISSION_26_PREDICTIVE_INTELLIGENCE.md#part-12--six-mission-acceptance-slices) | **Open — no completion evidence**: exact-head mission-wide audit needed. |
 | 12F | [Frozen release scope](MISSION_26_PREDICTIVE_INTELLIGENCE.md#part-12--six-mission-acceptance-slices) | **Open — no completion evidence**: merge, automatic deployment, health, founder visual verdict and final acceptance needed. |
+
+### Part 11A candidate gate separation
+
+| Candidate | Bounded prerequisite | Full slice | Deployed | Independent exact-head audit | Mission-final accepted | Live-data validated |
+| --- | --- | --- | --- | --- | --- | --- |
+| [Settings status view](../architecture/MISSION_26_PART11A_SETTINGS_STATUS_UI.md) | Implementation and focused rendered checks complete; audit pending | No | No | Pending | No | No |
 
 ## Minimum integrated path from this baseline
 

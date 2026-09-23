@@ -49,7 +49,7 @@ async function main() {
               var status = ${scenario.status} === 503 && window.forecastStatusCalls++ > 0 ? 200 : ${scenario.status};
               return Promise.resolve({ status: status, ok: status === 200,
                 json: function () { return Promise.resolve({ success: true, data: {
-                  settings: { revision: ${scenario.revision}, source: { kind: '${scenario.kind}' }, settings: { enabled: false } },
+                  settings: { revision: ${scenario.revision}, digest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', source: { kind: '${scenario.kind}' }, settings: { enabled: false } },
                   forecastIssued: ${scenario.invalid ? 'true' : 'false'}, sourceEligibilityVerified: false,
                 } }); } });
             }

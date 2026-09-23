@@ -146,6 +146,8 @@
         <p class="description">See the current forecast preference recorded for this workspace. A preference does not issue a forecast or confirm that its sources are ready.</p>
         <p id="forecastSettingsStatus" role="status" aria-live="polite">Checking forecast status…</p>
         <p id="forecastSettingsDetail" class="description">No forecast value is shown while the source check is pending.</p>
+        <p class="description" id="forecastSettingsReviewHint" hidden>Record an explicit workspace preference to keep forecast planning off. This does not delete any history or affect other settings.</p>
+        <button class="btn btn-secondary btn-sm" id="recordForecastsOff" type="button" hidden>Keep forecasting off</button>
         <button class="btn btn-secondary btn-sm" id="refreshForecastSettings" type="button">Refresh forecast status</button>
       </section>
 
@@ -602,7 +604,7 @@
   <script src="/js/command-center-contract.js?v=demo-nav-11-20260915"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script src="/js/knowledge-management.js"></script>
-  <script src="/js/forecast-settings-status.js?v=m26-part11a-status-20260923"></script>
+  <script src="/js/forecast-settings-status.js?v=m26-part11a-reviewed-off-20260923"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>

@@ -285,17 +285,17 @@ realPostgres('Mission 26 approved-price source ordering', () => {
       await fence.query('COMMIT');
       await pendingLater;
       await later.query('COMMIT');
-      const laterRecordedAt = (await fixture.ownerPool.query(
-        'SELECT created_at FROM canonical_estimate_decisions WHERE id=$1',
-        [laterId])).rows[0].created_at;
-      expect(laterRecordedAt.getTime()).toBeLessThanOrEqual(cutoff.getTime());
+      const pastEvents = (await fixture.ownerPool.query(
+        'SELECT public.canonical_forecast_price_decision_events($1,$2) AS events',
+        [fixture.org, cutoff])).rows[0].events;
+      expect(pastEvents.map(event => event.decisionId)).toContain(laterId);
       const current = (await fixture.ownerPool.query(
         'SELECT public.canonical_forecast_price_decision_events($1,clock_timestamp()) AS events',
         [fixture.org])).rows[0].events;
       expect(current.map(event => event.decisionId)).toContain(laterId);
     } finally {
-      await fence.query('ROLLBACK').catch(() => {});
       await prior.query('ROLLBACK').catch(() => {});
+      await fence.query('ROLLBACK').catch(() => {});
       await later.query('ROLLBACK').catch(() => {});
       await other.query('ROLLBACK').catch(() => {});
       fence.release(); prior.release(); later.release(); other.release();

@@ -169,6 +169,25 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       replayed: false, historicalCoverageVerified: false,
       bookedWorkVerified: false, forecastIssued: false });
     firstReviewId = firstReview.id;
+    const bookingRoute = '/api/v1/forecast/booking-reviews';
+    const firstReplay = await request(f.app).post(`${bookingRoute}/first`)
+      .set(actor.session.headers).set('Idempotency-Key', reviewParams[6])
+      .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
+    expect(firstReplay.status).toBe(200);
+    expect(firstReplay.body.data).toMatchObject({ state: 'first_booking_reviewed',
+      reviewId: firstReviewId, replayed: true, bookedWorkVerified: false });
+    const deniedWrite = await request(f.app).post(`${bookingRoute}/first`)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', reviewParams[6])
+      .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
+    expect(deniedWrite.status).toBe(403);
+    const httpCurrent = await request(f.app)
+      .get(`${bookingRoute}/${firstReviewId}/currentness`)
+      .set(actor.session.headers);
+    expect(httpCurrent.status).toBe(200);
+    expect(httpCurrent.body.data).toMatchObject({
+      state: 'review_evidence_current_at_read', reviewCurrentAtRead: true,
+      bookedWorkVerified: false, forecastIssued: false });
     const currentnessParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, firstReviewId];
     expect((await f.runtimePool.query(
@@ -292,6 +311,26 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       previousReviewId: firstReviewId, replayed: false,
       schedulingNeedsReview: true, bookedWorkVerified: false,
       forecastIssued: false });
+    const cancelReplay = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/cancel`)
+      .set(actor.session.headers).set('Idempotency-Key', cancelParams[6])
+      .send({ reason: cancelParams[5] });
+    expect(cancelReplay.status).toBe(200);
+    expect(cancelReplay.body.data).toMatchObject({ state: 'booking_cancelled',
+      reviewId: cancellation.id, replayed: true,
+      schedulingNeedsReview: true, bookedWorkVerified: false });
+    const memberCancel = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/cancel`)
+      .set(f.actors.member.session.headers)
+      .set('Idempotency-Key', 'm26-member-http-cancel-key-001')
+      .send({ reason: cancelParams[5] });
+    expect(memberCancel.status).toBe(403);
+    const cancelledRead = await request(f.app)
+      .get(`${bookingRoute}/${cancellation.id}/currentness`)
+      .set(actor.session.headers);
+    expect(cancelledRead.status).toBe(200);
+    expect(cancelledRead.body.data).toMatchObject({ state: 'booking_cancelled',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
       [f.org, member.actorUserId, member.actorAccessRole,

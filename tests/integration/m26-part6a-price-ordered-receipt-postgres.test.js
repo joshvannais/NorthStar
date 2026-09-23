@@ -302,6 +302,25 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
         eligibleForForecast: false, wholeBusinessCoverageVerified: false,
         forecastIssued: false });
       expectNoGlobalOrder(current.body);
+      const monthPath = `${readPath}/month-candidate`;
+      const month = { startsAt: '2026-09-01T00:00:00.000000Z',
+        endsAt: '2026-10-01T00:00:00.000000Z' };
+      const diagnostic = await request(fixture.app).get(monthPath)
+        .set('Cookie', owner.session.headers.Cookie).query(month);
+      expect(diagnostic.status).toBe(200);
+      expect(diagnostic.body.data).toMatchObject({ state: 'unavailable',
+        reason: 'period_before_ordered_anchor', sourceMonthVerified: false,
+        calendarPeriodVerified: false, eligibleForForecast: false,
+        wholeBusinessCoverageVerified: false, forecastIssued: false });
+      expect(diagnostic.body.data.inputDecisionCount).toBeNull();
+      expect(diagnostic.body.data).not.toHaveProperty('events');
+      expectNoGlobalOrder(diagnostic.body);
+      expect((await request(fixture.app).get(monthPath)
+        .set('Cookie', fixture.actors.member.session.headers.Cookie)
+        .query(month)).status).toBe(403);
+      expect((await request(fixture.app).get(monthPath)
+        .set('Cookie', fixture.actors.otherOwner.session.headers.Cookie)
+        .query(month)).status).toBe(404);
       expect((await request(fixture.app).get(readPath)
         .set('Cookie', fixture.actors.otherOwner.session.headers.Cookie)).status)
         .toBe(404);

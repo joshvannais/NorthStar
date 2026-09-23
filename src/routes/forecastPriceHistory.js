@@ -6,6 +6,8 @@ const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
 const { readGuardedApprovedPriceFlow } = require('../forecasting/guardedApprovedPriceFlow');
+const { calendarMonth, assessOrderedPriceMonthCandidate } =
+  require('../forecasting/orderedPriceMonthCandidate');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
@@ -200,6 +202,62 @@ function createForecastPriceHistoryRouter(options = {}) {
           sourceOrderCurrent: value.sourceOrderCurrent,
           calendarPeriodVerified: false, eligibleForForecast: false,
           wholeBusinessCoverageVerified: false, forecastIssued: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/ordered-snapshots/:snapshotId/month-candidate', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.snapshotId) ||
+          !exactKeys(req.query, ['startsAt', 'endsAt'])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The history request is invalid.',
+        } });
+      }
+      let window;
+      try {
+        window = calendarMonth({ startsAt: req.query.startsAt, endsAt: req.query.endsAt });
+      } catch {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The calendar month is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const identity = actor(req);
+        const response = await client.query(
+          'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.params.snapshotId]);
+        const value = response.rows[0]?.value;
+        if (value === null) {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Forecast history is unavailable.',
+          } });
+        }
+        if (!value?.snapshot || value.snapshot.organizationId !== identity.organizationId ||
+            value.snapshot.id !== req.params.snapshotId) {
+          throw new Error('Invalid guarded ordered-price month source');
+        }
+        const candidate = assessOrderedPriceMonthCandidate(value, window);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: candidate.state, reason: candidate.reason,
+          snapshotId: req.params.snapshotId,
+          window,
+          inputDecisionCount: candidate.inputDecisionCount ?? null,
+          candidateWindowChecksPassed: candidate.candidateWindowChecksPassed,
+          sourceMonthVerified: false, sourceAuthenticated: false,
+          calendarPeriodVerified: false,
+          eligibleForForecast: false, wholeBusinessCoverageVerified: false,
+          forecastIssued: false,
         } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});

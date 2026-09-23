@@ -236,6 +236,9 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
     expect(rejected.status).toBe(200);
     expect(rejected.body.data).toMatchObject({ state: 'unavailable',
       reason: 'invalid_guarded_source', sourceMonthVerified: false,
+      sourceCapturedAt: null, sourceSnapshotDigest: null,
+      sourceOrderUtcWindowObservedAsOfCapture: false,
+      sourceAuthenticated: false,
       eligibleForForecast: false, forecastIssued: false });
     expect(JSON.stringify(rejected.body)).not.toMatch(/digestNonce|highWaterOrder/);
 
@@ -246,7 +249,10 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({ state: 'candidate_window_checks_passed',
       inputOrderTimestampDecisionCount: 0, candidateWindowChecksPassed: true,
-      sourceMonthVerified: false, sourceAuthenticated: false,
+      sourceCapturedAt: '2026-12-02T00:00:00.000000Z',
+      sourceSnapshotDigest: DIGEST,
+      sourceOrderUtcWindowObservedAsOfCapture: true,
+      sourceMonthVerified: false, sourceAuthenticated: true,
       calendarPeriodVerified: false, eligibleForForecast: false,
       wholeBusinessCoverageVerified: false, forecastIssued: false });
     const priced = await request(app).get(path).query({ ...month, currency: 'USD' });
@@ -258,7 +264,7 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
       .toBe(400);
     expect((await request(app).get(path).query(month).query('currency[]=USD')).status)
       .toBe(400);
-    expect(JSON.stringify(response.body)).not.toMatch(/events|digestNonce|sourceOrder|highWaterOrder/);
+    expect(JSON.stringify(response.body)).not.toMatch(/"events":|"digestNonce":|"sourceOrder":|"highWaterOrder":/);
     expect(client.query.mock.calls.slice(0, 3).map(call => call[0])).toEqual([
       'BEGIN ISOLATION LEVEL READ COMMITTED',
       'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
@@ -278,5 +284,8 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
     const changed = await request(stale.app).get(path).query(month);
     expect(changed.body.data).toMatchObject({ state: 'unavailable',
       reason: 'source_changed', inputOrderTimestampDecisionCount: null,
+      sourceCapturedAt: null, sourceSnapshotDigest: null,
+      sourceOrderUtcWindowObservedAsOfCapture: false,
+      sourceAuthenticated: false,
       candidateWindowChecksPassed: false, eligibleForForecast: false });
   });

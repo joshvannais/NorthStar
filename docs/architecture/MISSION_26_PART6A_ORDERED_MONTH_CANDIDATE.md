@@ -18,8 +18,10 @@ two fields can therefore differ for later-ordered decisions. Neither proves cont
 coverage, including when the supplied event array is empty. This is **not** an approved-price amount, booked
 work, earned revenue, collected cash or whole-business zero. The evaluator
 does not authenticate direct inputs; the mounted paid route separately guards
-and reads its private receipt. Every result retains
-`sourceAuthenticated: false`, `sourceMonthVerified: false`,
+and reads its private receipt. Direct pure-function results retain
+`sourceAuthenticated: false`; the guarded route may attest to its current
+bounded receipt as described in the source-window proof. Both retain
+`sourceMonthVerified: false`,
 `calendarPeriodVerified: false`,
 `eligibleForForecast: false` and `forecastIssued: false`. The count is a
 synthetic diagnostic for later guarded integration and evaluation.

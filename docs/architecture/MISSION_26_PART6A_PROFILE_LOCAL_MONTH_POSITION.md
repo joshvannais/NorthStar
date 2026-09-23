@@ -1,6 +1,6 @@
 # Mission 26 Parts 6A and 2B: current-profile local-month price position
 
-Status: isolated, unreleased bounded integration candidate. Neither frozen slice is complete.
+Status: isolated, unreleased bounded integration candidate. Corrected code head `a4515eaa` passed independent read-only review with no P0–P3 findings; final documentation-head review remains pending. Neither frozen slice is complete.
 
 The paid owner/admin `GET /api/v1/forecast/price-history/ordered-snapshots/:snapshotId/profile-month-candidate?localStartDate=YYYY-MM-01&currency=USD` route combines the existing ordered Mission 24 approved-price receipt with a company-local monthly window derived from the active Business Profile. Currency is optional. Account, tenant and forecast-read gates precede the read. The route recomputes the profile normalization hash and pins the profile ID, version, hash, IANA time zone, local dates and derived UTC bounds in the returned window. It exposes no raw profile, event list or private source-order identifiers. Both source reads occur inside one guarded transaction; the receipt's tenant source-order lock is held until commit.
 

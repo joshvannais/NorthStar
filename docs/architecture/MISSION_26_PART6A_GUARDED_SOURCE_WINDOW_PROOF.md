@@ -15,10 +15,9 @@ decisions were durably visible at the end of the requested month: sidecar
 timestamps are assigned before transaction commit.
 
 An amendment to an estimate whose earlier decision predates the first order
-fence has incomplete lineage in this receipt and fails closed. A future
-authorized lineage-context adapter must resolve that earlier decision without
-retroactively claiming the earlier period was observed. Until then, such a
-receipt cannot support the positive window proof.
+fence requires the [source-owned immediate predecessor context](MISSION_26_PART6A_PREANCHOR_LINEAGE_CONTEXT.md).
+It fails closed when that context is absent or inconsistent. The earlier
+decision is never counted as an observed event or earlier period coverage.
 
 A later price decision makes an earlier receipt stale on guarded read. A
 backdated first approval may change decision-time attribution in a later

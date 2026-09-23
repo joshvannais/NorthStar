@@ -257,6 +257,7 @@ function createForecastPriceHistoryRouter(options = {}) {
           snapshotId: req.params.snapshotId,
           sourceCapturedAt: candidate.capturedAt ?? null,
           sourceSnapshotDigest: candidate.sourceSnapshotDigest ?? null,
+          preAnchorContextDigest: candidate.preAnchorContextDigest ?? null,
           window,
           inputOrderTimestampDecisionCount: candidate.inputOrderTimestampDecisionCount ?? null,
           inputCurrency: candidate.inputCurrency ?? (withCurrency ? req.query.currency : null),

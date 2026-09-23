@@ -63,7 +63,8 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
   const window = calendarMonth(requestedWindow);
   if (requestedCurrency !== null &&
       (typeof requestedCurrency !== 'string' || !/^[A-Z]{3}$/.test(requestedCurrency))) invalid();
-  const source = own(readback, ['snapshot', 'coverageStartsAt', 'firstReceiptId',
+  const source = own(readback, ['snapshot', 'preAnchorPredecessors',
+    'preAnchorContextDigest', 'coverageStartsAt', 'firstReceiptId',
     'state', 'sourceOrderCurrent', 'calendarPeriodVerified',
     'eligibleForForecast', 'wholeBusinessCoverageVerified', 'forecastIssued']);
   if (!source || !['current', 'stale'].includes(source.state) ||
@@ -72,7 +73,12 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
       source.eligibleForForecast !== false ||
       source.wholeBusinessCoverageVerified !== false ||
       source.forecastIssued !== false || !UUID.test(source.firstReceiptId || '') ||
-      !instant(source.coverageStartsAt)) return unavailable('invalid_guarded_source');
+      !instant(source.coverageStartsAt) ||
+      !DIGEST.test(source.preAnchorContextDigest || '') ||
+      !Array.isArray(source.preAnchorPredecessors) ||
+      source.preAnchorPredecessors.length > 256 ||
+      Reflect.ownKeys(source.preAnchorPredecessors).length !==
+        source.preAnchorPredecessors.length + 1) return unavailable('invalid_guarded_source');
 
   const snapshot = own(source.snapshot, ['id', 'version', 'organizationId',
     'capturedAt', 'events', 'eventCount', 'sourceSnapshotDigest', 'scope',
@@ -96,6 +102,29 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
   }
   if (window.endsAt > snapshot.capturedAt) {
     return unavailable('period_not_yet_closed');
+  }
+
+  const predecessors = new Map();
+  for (const raw of source.preAnchorPredecessors) {
+    const context = own(raw, ['estimateId', 'decisionId', 'revision',
+      'action', 'priceBeforeTax', 'currency', 'recordedAt', 'digest']);
+    if (!context || !UUID.test(context.estimateId || '') ||
+        !UUID.test(context.decisionId || '') ||
+        !Number.isSafeInteger(context.revision) ||
+        context.revision < 1 || context.revision >= 10000 ||
+        !['approve', 'withdraw'].includes(context.action) ||
+        (context.action === 'approve' ?
+          typeof context.priceBeforeTax !== 'string' ||
+            !/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(context.priceBeforeTax) :
+          context.priceBeforeTax !== null) ||
+        typeof context.currency !== 'string' ||
+        !/^[A-Z]{3}$/.test(context.currency) ||
+        !instant(context.recordedAt) ||
+        !DIGEST.test(context.digest || '') ||
+        predecessors.has(context.estimateId)) {
+      return unavailable('source_revision_conflict');
+    }
+    predecessors.set(context.estimateId, context);
   }
 
   let previous = source.coverageStartsAt;
@@ -130,12 +159,23 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
       return unavailable('source_clock_order_conflict');
     }
     decisionIds.add(event.decisionId);
-    const prior = latestByEstimate.get(event.estimateId);
+    let prior = latestByEstimate.get(event.estimateId);
+    if (!prior && event.revision > 1) {
+      const context = predecessors.get(event.estimateId);
+      if (!context || context.decisionId !== event.previousId ||
+          context.revision !== event.revision - 1 ||
+          context.currency !== event.currency ||
+          context.recordedAt > event.recordedAt ||
+          decisionIds.has(context.decisionId)) {
+        return unavailable('source_revision_conflict');
+      }
+      predecessors.delete(event.estimateId);
+      prior = { decisionId: context.decisionId,
+        revision: context.revision, currency: context.currency };
+    }
     if ((event.revision === 1 &&
         (event.previousId !== null || event.action !== 'approve')) ||
         (event.revision > 1 && event.previousId === null) ||
-        // A post-anchor amendment may refer to a pre-anchor decision that
-        // this bounded receipt deliberately omitted. Do not certify lineage.
         (!prior && event.revision > 1) ||
         (prior && (event.revision !== prior.revision + 1 ||
           event.previousId !== prior.decisionId || event.currency !== prior.currency))) {
@@ -159,6 +199,8 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
     }
   }
 
+  if (predecessors.size !== 0) return unavailable('source_revision_conflict');
+
   if (currencyConflict) return unavailable('currency_mismatch');
   if (firstApprovalCents > 99999999999999n) return unavailable('source_amount_capacity');
 
@@ -167,6 +209,7 @@ function assessOrderedPriceMonthCandidate(readback, requestedWindow, requestedCu
     organizationId: snapshot.organizationId,
     sourceSnapshotId: snapshot.id,
     sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
+    preAnchorContextDigest: source.preAnchorContextDigest,
     coverageStartsAt: source.coverageStartsAt,
     capturedAt: snapshot.capturedAt,
     window: Object.freeze({ ...window }),

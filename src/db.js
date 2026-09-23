@@ -1471,6 +1471,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_ordered_projection(public.canonical_forecast_price_ordered_receipts) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_ordered_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_ordered_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        IF pg_catalog.to_regprocedure('public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb)') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb) FROM %I', runtime_role);
+        END IF;
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_settings_revisions') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_settings_revisions FROM %I', runtime_role);
@@ -2417,6 +2420,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_ordered_projection(public.canonical_forecast_price_ordered_receipts)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_ordered_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_ordered_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND (to_regprocedure('public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb)') IS NULL
+           OR NOT has_function_privilege($1,'public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb)','EXECUTE'))
        )) AS price_ordered_receipt_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
@@ -2897,6 +2902,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('145_canonical_forecast_price_period_covera
 // The source-order trigger installation touches the active M24 decision table.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('146_canonical_forecast_price_decision_order.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('147_canonical_forecast_price_ordered_receipts.sql');
+// The additive lineage helper and guarded read replacement have no table
+// rewrite; bound their entire startup transaction and advisory wait as well.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('149_canonical_forecast_price_preanchor_lineage.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

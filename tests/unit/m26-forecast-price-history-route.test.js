@@ -46,6 +46,7 @@ function application({ role = 'owner', source, readPosition,
       state: 'current', sourceOrderCurrent: true,
       coverageStartsAt: '2026-09-22T22:00:00.000000Z',
       firstReceiptId: SNAPSHOT, calendarPeriodVerified: false,
+      preAnchorPredecessors: [], preAnchorContextDigest: DIGEST,
       eligibleForForecast: false, wholeBusinessCoverageVerified: false,
       forecastIssued: false, currentHighWaterOrder: 997,
     } }] };
@@ -223,6 +224,7 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
       state: 'current', sourceOrderCurrent: true,
       coverageStartsAt: '2026-10-01T00:00:00.000000Z',
       firstReceiptId: SNAPSHOT, calendarPeriodVerified: false,
+      preAnchorPredecessors: [], preAnchorContextDigest: DIGEST,
       eligibleForForecast: false, wholeBusinessCoverageVerified: false,
       forecastIssued: false,
     };
@@ -237,6 +239,7 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
     expect(rejected.body.data).toMatchObject({ state: 'unavailable',
       reason: 'invalid_guarded_source', sourceMonthVerified: false,
       sourceCapturedAt: null, sourceSnapshotDigest: null,
+      preAnchorContextDigest: null,
       sourceOrderUtcWindowObservedAsOfCapture: false,
       sourceAuthenticated: false,
       eligibleForForecast: false, forecastIssued: false });
@@ -251,6 +254,7 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
       inputOrderTimestampDecisionCount: 0, candidateWindowChecksPassed: true,
       sourceCapturedAt: '2026-12-02T00:00:00.000000Z',
       sourceSnapshotDigest: DIGEST,
+      preAnchorContextDigest: DIGEST,
       sourceOrderUtcWindowObservedAsOfCapture: true,
       sourceMonthVerified: false, sourceAuthenticated: true,
       calendarPeriodVerified: false, eligibleForForecast: false,
@@ -285,6 +289,7 @@ test('ordered month route reads server-guarded evidence but exposes only unverif
     expect(changed.body.data).toMatchObject({ state: 'unavailable',
       reason: 'source_changed', inputOrderTimestampDecisionCount: null,
       sourceCapturedAt: null, sourceSnapshotDigest: null,
+      preAnchorContextDigest: null,
       sourceOrderUtcWindowObservedAsOfCapture: false,
       sourceAuthenticated: false,
       candidateWindowChecksPassed: false, eligibleForForecast: false });

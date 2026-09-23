@@ -372,6 +372,36 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       expect(priced.body.data).toMatchObject({ state: 'unavailable',
         inputFirstApprovalAmount: null, sourceMonthVerified: false,
         eligibleForForecast: false });
+      const profileMonthPath = `${readPath}/profile-month-candidate`;
+      const localMonth = { localStartDate: '2026-09-01', currency: 'USD' };
+      const profileMonth = await request(fixture.app).get(profileMonthPath)
+        .set('Cookie', owner.session.headers.Cookie).query(localMonth);
+      expect(profileMonth.status).toBe(200);
+      expect(profileMonth.body.data).toMatchObject({ state: 'unavailable',
+        reason: 'period_before_ordered_anchor',
+        profileBasis: 'current_active_profile_at_read',
+        historicalCalendarVerified: false, observationCoverageVerified: false,
+        candidateWindowChecksPassed: false, sourceMonthVerified: false,
+        calendarPeriodVerified: false, eligibleForForecast: false,
+        wholeBusinessCoverageVerified: false, forecastIssued: false,
+        window: { organizationId: fixture.org, grain: 'month',
+          localStartDate: '2026-09-01', serviceKey: null,
+          areaScope: 'tenant_all' } });
+      expect(profileMonth.body.data.window.businessProfileHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(profileMonth.body.data).not.toHaveProperty('events');
+      expectNoGlobalOrder(profileMonth.body);
+      expect((await request(fixture.app).get(profileMonthPath)
+        .set('Cookie', owner.session.headers.Cookie)
+        .query({ localStartDate: '2026-09-02' })).status).toBe(400);
+      expect((await request(fixture.app).get(profileMonthPath)
+        .set('Cookie', owner.session.headers.Cookie)
+        .query({ ...localMonth, organizationId: fixture.org })).status).toBe(400);
+      expect((await request(fixture.app).get(profileMonthPath)
+        .set('Cookie', fixture.actors.member.session.headers.Cookie)
+        .query(localMonth)).status).toBe(403);
+      expect((await request(fixture.app).get(profileMonthPath)
+        .set('Cookie', fixture.actors.otherOwner.session.headers.Cookie)
+        .query(localMonth)).status).toBe(404);
       expect((await request(fixture.app).get(monthPath)
         .set('Cookie', fixture.actors.member.session.headers.Cookie)
         .query(month)).status).toBe(403);

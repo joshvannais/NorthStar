@@ -1,7 +1,8 @@
 'use strict';
 
-const { assessOrderedPriceMonthCandidate } =
+const { assessOrderedPriceMonthCandidate, assessOrderedPriceReportingMonthCandidate } =
   require('../../src/forecasting/orderedPriceMonthCandidate');
+const { deriveReportingWindow } = require('../../src/forecasting/timeSeriesWindows');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const SNAPSHOT = '22222222-2222-4222-8222-222222222222';
@@ -164,4 +165,37 @@ test('a partial or non-canonical calendar window is rejected', () => {
   expect(() => assessOrderedPriceMonthCandidate(source(), {
     startsAt: month.startsAt, endsAt: month.endsAt, discount: 1,
   })).toThrow('Approved-price calendar window is invalid.');
+});
+
+test('a current-profile local month attributes a late UTC event to its local month without certifying history', () => {
+  const window = deriveReportingWindow({ organizationId: ORG,
+    businessProfileId: SNAPSHOT, businessProfileVersion: 1,
+    businessProfileHash: DIGEST,
+    rawProfile: { company: { timeZone: 'America/New_York' } },
+    grain: 'month', localStartDate: '2026-11-01',
+    serviceKey: null, areaScope: 'tenant_all' });
+  expect(window.startsAt).toBe('2026-11-01T04:00:00.000Z');
+  expect(window.endsAt).toBe('2026-12-01T05:00:00.000Z');
+  const late = { ...event('2026-12-01T04:30:00.000000Z'),
+    recordedAt: '2026-12-01T04:29:00.000000Z' };
+  const result = assessOrderedPriceReportingMonthCandidate(source([late]), window, 'USD');
+  expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
+    inputOrderTimestampDecisionCount: 1, inputFirstApprovalCount: 1,
+    inputFirstApprovalAmount: '500.00',
+    window: { startsAt: '2026-11-01T04:00:00.000000Z',
+      endsAt: '2026-12-01T05:00:00.000000Z' },
+    sourceMonthVerified: false, sourceAuthenticated: false,
+    calendarPeriodVerified: false, eligibleForForecast: false,
+    forecastIssued: false });
+  const before = { ...event('2026-11-01T03:30:00.000000Z'),
+    recordedAt: '2026-11-01T03:29:00.000000Z' };
+  expect(assessOrderedPriceReportingMonthCandidate(source([before]), window, 'USD'))
+    .toMatchObject({ inputOrderTimestampDecisionCount: 0,
+      inputFirstApprovalCount: 0, inputFirstApprovalAmount: null });
+  expect(() => assessOrderedPriceReportingMonthCandidate(source([late]),
+    { ...window, startsAt: month.startsAt }, 'USD')).toThrow(
+    'Approved-price calendar window is invalid.');
+  expect(() => assessOrderedPriceReportingMonthCandidate(source([late]),
+    { ...window, serviceKey: 'plumbing' }, 'USD')).toThrow(
+    'Approved-price calendar window is invalid.');
 });

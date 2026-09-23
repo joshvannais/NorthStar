@@ -18,7 +18,7 @@ realPostgres('Mission 26 Parts 6A/2B reviewed local price-month candidate', () =
   beforeAll(async () => { fixture = await createDatabaseFixture(); }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
-  test('guarded price source and reviewed profile claim join without promoting a forecast',
+  test('guarded pre-anchor price receipt and reviewed profile claim remain unavailable',
     async () => {
       const owner = fixture.actors.owner;
       const captured = await request(fixture.app).post(root)

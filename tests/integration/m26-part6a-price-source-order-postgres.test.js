@@ -13,30 +13,44 @@ realPostgres('Mission 26 approved-price source ordering', () => {
   beforeAll(async () => { fixture = await createDatabaseFixture(); }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
-  async function createEstimate() {
+  async function createEstimate(organizationId = fixture.org) {
     const operation = uuid(), graph = uuid(), customer = uuid();
     const opportunity = uuid(), estimate = uuid(), fingerprint = hash(uuid());
     await fixture.ownerPool.query(
       `INSERT INTO canonical_operations(id,organization_id,graph_id,idempotency_key_hash,
          payload_fingerprint,state,lease_owner,lease_expires_at,result_status,result_body,completed_at)
        VALUES($1,$2,$3,$4,$4,'completed',$1,NOW()+INTERVAL '1 hour',200,'{}',NOW())`,
-      [operation, fixture.org, graph, fingerprint]);
+      [operation, organizationId, graph, fingerprint]);
     await fixture.ownerPool.query(
       'INSERT INTO canonical_customers(id,organization_id,operation_id,graph_id,name) VALUES($1,$2,$3,$4,$5)',
-      [customer, fixture.org, operation, graph, 'Synthetic customer']);
+      [customer, organizationId, operation, graph, 'Synthetic customer']);
     await fixture.ownerPool.query(
       `INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,
          customer_id,status,service_type,job_scope)
        VALUES($1,$2,$3,$4,$5,'qualified','Plumbing','{}')`,
-      [opportunity, fixture.org, operation, graph, customer]);
+      [opportunity, organizationId, operation, graph, customer]);
     await fixture.ownerPool.query(
       `INSERT INTO canonical_estimates(id,organization_id,operation_id,graph_id,
          opportunity_id,calculation_version,normalized_input_fingerprint,
          business_profile_version,business_profile_hash,currency,customer_price,
          line_items,calculation_output,snapshot_digest)
        VALUES($1,$2,$3,$4,$5,'fixture-v1',$6,'org-profile-v1',$6,'USD',500,'[]','{}',$6)`,
-      [estimate, fixture.org, operation, graph, opportunity, fingerprint]);
+      [estimate, organizationId, operation, graph, opportunity, fingerprint]);
     return estimate;
+  }
+
+  async function insertSyntheticDecision(client, organizationId, estimate, actor, decisionId) {
+    return client.query(
+      `INSERT INTO canonical_estimate_decisions(
+         id,organization_id,estimate_id,revision,previous_id,action,actor_user_id,
+         membership_id,auth_session_id,actor_name,source_pins,scope_summary,
+         price_before_tax,currency,reason,confirmation_version,request_key_hash,
+         request_digest,digest)
+       VALUES($1,$2,$3,1,NULL,'approve',$4,$4,$5,'Synthetic owner','{}',
+         'Synthetic scope','500.00','USD','Synthetic approval',
+         'estimate-quote-preparation-v1',$6,$7,$8)`,
+      [decisionId, organizationId, estimate, actor.actorUserId,
+        actor.authSessionId, hash(uuid()), hash(uuid()), hash(uuid())]);
   }
 
   async function waitForLockWait(client, blockerPid) {
@@ -223,6 +237,68 @@ realPostgres('Mission 26 approved-price source ordering', () => {
       await capture.query('ROLLBACK').catch(() => {});
       writer.release();
       capture.release();
+    }
+  }, 120000);
+
+  test('a parent-row fence waits for prior same-tenant inserts and blocks later ones only for that tenant', async () => {
+    const estimate = await createEstimate();
+    const laterEstimate = await createEstimate();
+    const otherEstimate = await createEstimate(fixture.otherOrg);
+    const actor = fixture.actors.owner;
+    const otherActor = fixture.actors.otherOwner;
+    const priorId = uuid(), laterId = uuid(), otherId = uuid();
+    const prior = await fixture.ownerPool.connect();
+    const fence = await fixture.ownerPool.connect();
+    const later = await fixture.ownerPool.connect();
+    const other = await fixture.ownerPool.connect();
+    try {
+      await prior.query('BEGIN');
+      await insertSyntheticDecision(prior, fixture.org, estimate, actor, priorId);
+
+      await fence.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const pendingFence = fence.query(
+        'SELECT id FROM public.organizations WHERE id=$1 FOR UPDATE', [fixture.org]);
+      await waitForLockWait(fence, prior.processID);
+      await prior.query('COMMIT');
+      await pendingFence;
+
+      await later.query('BEGIN');
+      const pendingLater = insertSyntheticDecision(
+        later, fixture.org, laterEstimate, actor, laterId);
+      await waitForLockWait(later, fence.processID);
+
+      const cutoff = (await fence.query('SELECT clock_timestamp() AS cutoff')).rows[0].cutoff;
+      const events = (await fence.query(
+        'SELECT public.canonical_forecast_price_decision_events($1,$2) AS events',
+        [fixture.org, cutoff])).rows[0].events;
+      const priorRecordedAt = (await fence.query(
+        'SELECT created_at FROM canonical_estimate_decisions WHERE id=$1',
+        [priorId])).rows[0].created_at;
+      expect(cutoff.getTime()).toBeGreaterThanOrEqual(priorRecordedAt.getTime());
+      expect(events.map(event => event.decisionId)).toContain(priorId);
+      expect(events.map(event => event.decisionId)).not.toContain(laterId);
+
+      await other.query('BEGIN');
+      await other.query("SET LOCAL lock_timeout='2s'");
+      await insertSyntheticDecision(other, fixture.otherOrg, otherEstimate, otherActor, otherId);
+      await other.query('COMMIT');
+      await fence.query('COMMIT');
+      await pendingLater;
+      await later.query('COMMIT');
+      const laterRecordedAt = (await fixture.ownerPool.query(
+        'SELECT created_at FROM canonical_estimate_decisions WHERE id=$1',
+        [laterId])).rows[0].created_at;
+      expect(laterRecordedAt.getTime()).toBeLessThanOrEqual(cutoff.getTime());
+      const current = (await fixture.ownerPool.query(
+        'SELECT public.canonical_forecast_price_decision_events($1,clock_timestamp()) AS events',
+        [fixture.org])).rows[0].events;
+      expect(current.map(event => event.decisionId)).toContain(laterId);
+    } finally {
+      await fence.query('ROLLBACK').catch(() => {});
+      await prior.query('ROLLBACK').catch(() => {});
+      await later.query('ROLLBACK').catch(() => {});
+      await other.query('ROLLBACK').catch(() => {});
+      fence.release(); prior.release(); later.release(); other.release();
     }
   }, 120000);
 });

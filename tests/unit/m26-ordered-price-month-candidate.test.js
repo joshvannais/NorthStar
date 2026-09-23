@@ -26,6 +26,7 @@ function source(events = [event()]) {
       scope: 'northstar_m24_approved_price_decisions',
       wholeBusinessCoverageVerified: false, forecastIssued: false },
     coverageStartsAt: '2026-10-01T00:00:00.000000Z',
+    preAnchorPredecessors: [], preAnchorContextDigest: DIGEST,
     firstReceiptId: SNAPSHOT, state: 'current', sourceOrderCurrent: true,
     calendarPeriodVerified: false, eligibleForForecast: false,
     wholeBusinessCoverageVerified: false, forecastIssued: false,
@@ -108,6 +109,19 @@ test('mixed first-approval currency and broken revision lineage remain unavailab
   expect(assessOrderedPriceMonthCandidate(source([preAnchorAmendment]), month, 'USD'))
     .toMatchObject({ state: 'unavailable', reason: 'source_revision_conflict',
       sourceMonthVerified: false, eligibleForForecast: false });
+  const supported = source([preAnchorAmendment]);
+  supported.preAnchorPredecessors = [{ estimateId: ESTIMATE,
+    decisionId: SNAPSHOT, revision: 1, action: 'approve',
+    priceBeforeTax: '400.00', currency: 'USD',
+    recordedAt: '2026-10-01T12:00:00.000000Z', digest: DIGEST }];
+  expect(assessOrderedPriceMonthCandidate(supported, month, 'USD'))
+    .toMatchObject({ state: 'candidate_window_checks_passed',
+      inputOrderTimestampDecisionCount: 1,
+      inputFirstApprovalAmount: null, preAnchorContextDigest: DIGEST,
+      sourceMonthVerified: false, eligibleForForecast: false });
+  supported.preAnchorPredecessors[0].decisionId = DECISION;
+  expect(assessOrderedPriceMonthCandidate(supported, month, 'USD'))
+    .toMatchObject({ state: 'unavailable', reason: 'source_revision_conflict' });
 });
 
 test('pre-anchor, unclosed and stale months remain unavailable', () => {

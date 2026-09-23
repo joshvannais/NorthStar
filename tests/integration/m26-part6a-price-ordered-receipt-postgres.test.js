@@ -10,6 +10,7 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 
 realPostgres('Mission 26 source-ordered approved-price receipt', () => {
   let fixture;
+  let preAnchorEstimate, preAnchorDecision;
   beforeAll(async () => { fixture = await createDatabaseFixture(); }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
@@ -102,10 +103,29 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
     return decision;
   }
 
+  async function amend(estimate, previousDecision) {
+    const decision = id();
+    const actor = fixture.actors.owner;
+    await fixture.ownerPool.query(
+      `INSERT INTO canonical_estimate_decisions(
+         id,organization_id,estimate_id,revision,previous_id,action,actor_user_id,
+         membership_id,auth_session_id,actor_name,source_pins,scope_summary,
+         price_before_tax,currency,reason,confirmation_version,request_key_hash,
+         request_digest,digest)
+       VALUES($1,$2,$3,2,$4,'approve',$5,$5,$6,'Synthetic owner','{}',
+         'Synthetic amended scope','650.00','USD','Synthetic amendment',
+         'estimate-quote-preparation-v1',$7,$8,$9)`,
+      [decision, actor.organizationId, estimate, previousDecision,
+        actor.actorUserId, actor.authSessionId, hash(id()), hash(id()), hash(id())]);
+    return decision;
+  }
+
   test('first fence excludes prior decisions; later fence pins ordered work and replay is immutable',
     async () => {
       const priorEstimate = await createEstimate();
       const priorDecision = await decide(priorEstimate);
+      preAnchorEstimate = await createEstimate();
+      preAnchorDecision = await decide(preAnchorEstimate);
       const firstKey = id();
       const first = await capture(fixture.actors.owner, firstKey);
       expect(first.replayed).toBe(false);
@@ -135,6 +155,37 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
       expect(replay.replayed).toBe(true);
       expect(replay.snapshot).toEqual(first.snapshot);
       expect((await read(replay.snapshot.id)).state).toBe('stale');
+    }, 120000);
+
+  test('guarded read pins only the immediate pre-anchor predecessor of a later amendment',
+    async () => {
+      const estimate = preAnchorEstimate;
+      const predecessor = preAnchorDecision;
+      const amendment = await amend(estimate, predecessor);
+      const captured = await capture();
+      expect(captured.snapshot.events.map(event => event.decisionId)).toContain(amendment);
+      expect(captured.snapshot.events.map(event => event.decisionId)).not.toContain(predecessor);
+      const guarded = await read(captured.snapshot.id);
+      expect(guarded).toMatchObject({ state: 'current', sourceOrderCurrent: true,
+        calendarPeriodVerified: false, eligibleForForecast: false,
+        forecastIssued: false });
+      expect(guarded.preAnchorPredecessors).toEqual([expect.objectContaining({
+        estimateId: estimate, decisionId: predecessor, revision: 1,
+        action: 'approve', priceBeforeTax: '500.00', currency: 'USD' })]);
+      expect(guarded.preAnchorContextDigest).toMatch(/^[0-9a-f]{64}$/);
+      expectNoGlobalOrder(guarded);
+      const publicRead = await request(fixture.app)
+        .get(`/api/v1/forecast/price-history/ordered-snapshots/${captured.snapshot.id}`)
+        .set('Cookie', fixture.actors.owner.session.headers.Cookie);
+      expect(publicRead.status).toBe(200);
+      expect(publicRead.body.data).not.toHaveProperty('preAnchorPredecessors');
+      expect(JSON.stringify(publicRead.body)).not.toContain(predecessor);
+      expect(await read(captured.snapshot.id, fixture.actors.otherOwner)).toBeNull();
+      await expect(read(captured.snapshot.id, fixture.actors.member))
+        .rejects.toMatchObject({ code: '42501' });
+      await expect(fixture.runtimePool.query(
+        'SELECT public.canonical_forecast_price_preanchor_context($1,$2,$3)',
+        [fixture.org, 0, '[]'])).rejects.toMatchObject({ code: '42501' });
     }, 120000);
 
   test('owner scope, tenant fence and immutable private source are enforced', async () => {

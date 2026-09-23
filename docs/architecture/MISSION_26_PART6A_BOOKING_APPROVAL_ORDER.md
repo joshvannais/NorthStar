@@ -28,6 +28,6 @@ reproduced without migration 152 before this correction.
 The candidate is local and unreleased. Its mounted disposable PostgreSQL test
 uses the normal Mission 22 human preview/approval workflow and verifies order,
 runtime privacy, and the validator privilege boundary. A wider Mission 22
-regression suite has unrelated pre-existing failures in this test environment;
-record its exact result rather than treating it as a full suite pass. This
+regression suite still has six failures in this disposable test environment;
+its exact result is not a full suite pass. This
 candidate does not constitute full Part 6A acceptance or a forecast.

@@ -198,4 +198,9 @@ test('a current-profile local month attributes a late UTC event to its local mon
   expect(() => assessOrderedPriceReportingMonthCandidate(source([late]),
     { ...window, serviceKey: 'plumbing' }, 'USD')).toThrow(
     'Approved-price calendar window is invalid.');
+  expect(assessOrderedPriceReportingMonthCandidate(source([late]),
+    { ...window, organizationId: '99999999-9999-4999-8999-999999999999' }, 'USD'))
+    .toMatchObject({ state: 'unavailable', reason: 'organization_mismatch',
+      candidateWindowChecksPassed: false, sourceAuthenticated: false,
+      eligibleForForecast: false });
 });

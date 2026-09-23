@@ -23,11 +23,18 @@ function failure(res, error) {
   return res.status(status).json({ success: false, error: {
     category: status === 403 ? 'FORECAST_REVIEW_RESTRICTED' :
       status === 400 ? 'FORECAST_REVIEW_REQUEST_INVALID' :
-        status === 409 ? 'FORECAST_REVIEW_CHANGED' : 'FORECAST_REVIEW_UNAVAILABLE',
+        error?.code === '23505' ? 'FORECAST_REVIEW_REQUEST_REUSED' :
+          error?.code === '55P03' || error?.code === '40P01' ?
+            'FORECAST_REVIEW_BUSY' :
+            status === 409 ? 'FORECAST_REVIEW_CHANGED' : 'FORECAST_REVIEW_UNAVAILABLE',
     message: status === 403 ? 'You cannot make this review.' :
       status === 400 ? 'Check the review details and try again.' :
-        status === 409 ? 'The review changed. Refresh and try again.' :
-          'The review is temporarily unavailable.',
+        error?.code === '23505' ?
+          'This request was already used with different details. Start a new request.' :
+          error?.code === '55P03' || error?.code === '40P01' ?
+            'The review is busy. Try again shortly.' :
+            status === 409 ? 'The review changed. Refresh and try again.' :
+              'The review is temporarily unavailable.',
   } });
 }
 

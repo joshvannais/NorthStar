@@ -83,7 +83,7 @@ Baseline: released main `f9e5e0435ae79c11a8cb743d72d55bf539a298d1`, 2026-09-23 U
 | --- | --- | --- | --- | --- | --- | --- |
 | [Current-profile local-month price position](../architecture/MISSION_26_PART6A_PROFILE_LOCAL_MONTH_POSITION.md) | Bounded implementation and mounted paid-route checks passed; release pending | No | No | Corrected code head `a4515eaa` passed with no P0–P3; final documentation-head review pending | No | No |
 | [Reviewed-profile price-month composition](../architecture/MISSION_26_PART6A_REVIEWED_PROFILE_PRICE_MONTH.md) | Guarded composition tested only for pre-anchor unavailable state; positive closed post-anchor month remains untested and release pending | No | No | Corrected code head `0b3cb9a3` and final documentation head `d4541d94` independently reviewed with no P0–P3 | No | No |
-| [Booking approval source order](../architecture/MISSION_26_PART6A_BOOKING_APPROVAL_ORDER.md) | Local additive Mission 22 human-approval sidecar only; mounted PostgreSQL test unavailable without a disposable admin connection | No | No | Static code head `4876aef9` independently reviewed with no P0–P3; mounted behavior and final documentation-head review remain open | No | No |
+| [Booking approval source order](../architecture/MISSION_26_PART6A_BOOKING_APPROVAL_ORDER.md) | Local additive Mission 22 human-approval sidecar only; mounted PostgreSQL test unavailable without a disposable admin connection | No | No | Static code head `4876aef9` independently reviewed with no P0–P3; mounted behavior remains unverified | No | No |
 
 ## Minimum integrated path from this baseline
 

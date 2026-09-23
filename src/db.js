@@ -2869,6 +2869,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('142_canonical_forecast_retell_review_time.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('143_canonical_forecast_price_event_snapshots.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('144_canonical_forecast_price_event_currentness.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('145_canonical_forecast_price_period_coverage.sql');
+// The source-order trigger installation touches the active M24 decision table.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('146_canonical_forecast_price_decision_order.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

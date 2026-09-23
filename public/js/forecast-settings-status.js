@@ -132,9 +132,12 @@
       }
       if (response.status === 409) {
         hideAction();
-        pending = null;
-        show('Preference changed',
-          'Another change was recorded. Refresh the current preference before deciding again.');
+        var conflict = await response.json().catch(function () { return null; });
+        var busy = conflict && conflict.error &&
+          conflict.error.category === 'FORECAST_SETTINGS_BUSY';
+        show(busy ? 'Preference is busy' : 'Preference needs review',
+          busy ? 'Another save is in progress. Refresh to check the current preference before trying again.' :
+            'NorthStar could not confirm this request. Refresh the current preference before deciding again.');
         return;
       }
       if (!response.ok) throw new Error('Forecast settings save unavailable');

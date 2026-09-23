@@ -17,7 +17,7 @@ async function main() {
   const browser = await runtime.browserType.launch({ headless: true,
     executablePath: runtime.executablePath });
   try {
-    for (const scenario of ['saved', 'stale', 'ambiguous']) for (const viewport of [
+    for (const scenario of ['saved', 'stale', 'busy', 'ambiguous', 'uncommitted']) for (const viewport of [
       { name: 'desktop', width: 1280, height: 800 },
       { name: 'mobile', width: 390, height: 844 },
     ]) {
@@ -33,6 +33,7 @@ async function main() {
             window.showToast = function () {};
             window.forecastCalls = [];
             window.forecastRevision = 0;
+            window.forecastPostAttempts = 0;
             window.NorthStarAccountSession = { fetch: function (url, options) {
               if (url !== '/api/v1/forecast/settings') return Promise.reject(new Error('Other settings unavailable in isolated view'));
               var method = options && options.method || 'GET';
@@ -45,12 +46,21 @@ async function main() {
                 json: function () { return Promise.resolve({ success: true, data: {
                   settings: item(), forecastIssued: false, sourceEligibilityVerified: false } }); } });
               var request = JSON.parse(options.body);
+              window.forecastPostAttempts += 1;
               if (request.expectedRevision !== 0 || request.expectedDigest !== null ||
                   request.settings.enabled !== false || request.settings.actionPolicy !== 'review_required')
                 return Promise.reject(new Error('Unexpected reviewed-off body'));
               if ('${scenario}' === 'stale') {
                 window.forecastRevision = 1;
-                return Promise.resolve({ status: 409, ok: false });
+                return Promise.resolve({ status: 409, ok: false, json: function () { return Promise.resolve({
+                  error: { category: 'FORECAST_SETTINGS_CHANGED' } }); } });
+              }
+              if ('${scenario}' === 'busy' && window.forecastPostAttempts === 1) {
+                return Promise.resolve({ status: 409, ok: false, json: function () { return Promise.resolve({
+                  error: { category: 'FORECAST_SETTINGS_BUSY' } }); } });
+              }
+              if ('${scenario}' === 'uncommitted' && window.forecastPostAttempts === 1) {
+                return Promise.reject(new Error('Lost response before commit'));
               }
               window.forecastRevision = 1;
               if ('${scenario}' === 'ambiguous') return Promise.reject(new Error('Lost response after commit'));
@@ -77,23 +87,45 @@ async function main() {
       });
       await page.goto(origin + '/dashboard/settings');
       await page.getByRole('button', { name: 'Keep forecasting off' }).waitFor({ state: 'visible' });
-      await page.getByRole('button', { name: 'Keep forecasting off' }).click();
+      if (scenario === 'saved') {
+        await page.evaluate(() => {
+          const button = document.getElementById('recordForecastsOff');
+          button.click(); button.click();
+        });
+      } else {
+        await page.getByRole('button', { name: 'Keep forecasting off' }).click();
+      }
       if (scenario === 'saved') {
         await page.locator('#forecastSettingsStatus').getByText(
           'Forecast planning is off by saved workspace preference', { exact: true }).waitFor();
       } else {
         await page.locator('#forecastSettingsStatus').getByText(
-          scenario === 'stale' ? 'Preference changed' : 'Save result unconfirmed',
+          scenario === 'stale' ? 'Preference needs review' :
+            scenario === 'busy' ? 'Preference is busy' : 'Save result unconfirmed',
           { exact: true }).waitFor();
+        await page.locator('#forecast-settings').screenshot({ path: path.join(output,
+          `${scenario}-${viewport.name}-before-refresh.png`) });
         await page.getByRole('button', { name: 'Refresh forecast status' }).click();
         await page.locator('#forecastSettingsStatus').getByText(
-          'Forecast planning is off by saved workspace preference', { exact: true }).waitFor();
+          ['busy', 'uncommitted'].includes(scenario) ? 'Forecast planning is off' :
+            'Forecast planning is off by saved workspace preference', { exact: true }).waitFor();
+        if (['busy', 'uncommitted'].includes(scenario)) {
+          await page.getByRole('button', { name: 'Keep forecasting off' }).waitFor({ state: 'visible' });
+          await page.getByRole('button', { name: 'Keep forecasting off' }).click();
+          await page.locator('#forecastSettingsStatus').getByText(
+            'Forecast planning is off by saved workspace preference', { exact: true }).waitFor();
+        }
       }
       assert.equal(await page.locator('#recordForecastsOff').isHidden(), true);
       const calls = await page.evaluate(() => window.forecastCalls);
-      assert.equal(calls.filter(call => call.method === 'POST').length, 1);
-      assert.match(calls.find(call => call.method === 'POST').key,
+      const posts = calls.filter(call => call.method === 'POST');
+      assert.equal(posts.length, ['busy', 'uncommitted'].includes(scenario) ? 2 : 1);
+      assert.match(posts[0].key,
         /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
+      if (posts.length === 2) {
+        assert.equal(posts[1].key, posts[0].key);
+        assert.equal(posts[1].body, posts[0].body);
+      }
       assert.deepEqual(errors, []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       await page.locator('#forecast-settings').screenshot({ path: path.join(output,

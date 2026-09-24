@@ -841,12 +841,35 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(manifest.body.data.origins.map(item => item.currentStatus))
         .toEqual(['paired', 'paired']);
       expect(JSON.stringify(manifest.body.data)).not.toContain('1400.00');
+      const measurement = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(measurement.status).toBe(200);
+      expect(measurement.body.data).toMatchObject({
+        state: 'evaluation_descriptive_only', originCount: 2,
+        comparisonCount: 2, statusCounts: { paired: 2 },
+        currentStatusCounts: { paired: 2 },
+        descriptiveErrorAvailable: false,
+        sampleSufficiency: { state: 'unavailable' },
+        calibration: { state: 'unavailable' },
+        drift: { state: 'unavailable' },
+        realAccuracyAvailable: false, realForecastEligible: false });
+      expect(JSON.stringify(measurement.body.data)).not.toContain('1400.00');
+      expect(measurement.body.data).not.toHaveProperty('digest');
       const foreignManifest = await request(f.app)
         .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/manifest`)
         .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
       expect(foreignManifest.status).toBe(200);
       expect(foreignManifest.body.data).toMatchObject({
         state: 'evaluation_manifest_unavailable', reason: 'evaluation_not_found' });
+      const foreignMeasurement = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
+      expect(foreignMeasurement.status).toBe(200);
+      expect(foreignMeasurement.body.data).toMatchObject({
+        state: 'evaluation_measurement_unavailable',
+        reason: 'source_evidence_unavailable', realAccuracyAvailable: false });
+      expect(foreignMeasurement.body.data).not.toHaveProperty('statusCounts');
       const deniedEvaluation = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(f.actors.member.session.headers)
@@ -972,6 +995,14 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         originCount: 2, pairedCount: 0 });
       expect(staleManifest.body.data.origins.map(item => item.currentStatus))
         .toEqual(['stale', 'stale']);
+      const staleMeasurement = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(staleMeasurement.status).toBe(200);
+      expect(staleMeasurement.body.data).toMatchObject({
+        state: 'evaluation_descriptive_only',
+        statusCounts: { paired: 2 }, currentStatusCounts: { stale: 2 },
+        descriptiveErrorAvailable: false, realAccuracyAvailable: false });
       const oldKeyAfterSourceChange = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(owner().session.headers)
@@ -1043,6 +1074,11 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           .set('Cookie', owner().session.headers.Cookie);
         expect([401, 403]).toContain(lostAccess.status);
         expect(lostAccess.body.data?.origins).toBeUndefined();
+        const lostMeasurement = await request(f.app)
+          .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect([401, 403]).toContain(lostMeasurement.status);
+        expect(lostMeasurement.body.data?.statusCounts).toBeUndefined();
       } finally {
         await f.ownerPool.query(
           "UPDATE organization_memberships SET status='active' WHERE organization_id=$1 AND user_id=$2",

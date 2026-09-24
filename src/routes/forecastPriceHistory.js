@@ -17,6 +17,7 @@ const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAda
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 const { normalizeForecastOutput } = require('../forecasting/outputContract');
 const { buildRollingBacktest } = require('../forecasting/rollingBacktest');
+const { measureGuardedSavedBacktest } = require('../forecasting/evaluationGates');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -1150,6 +1151,61 @@ function createForecastPriceHistoryRouter(options = {}) {
         }
         await client.query('COMMIT');
         return res.json({ success: true, data: manifest });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/saved-price-flow-evaluations/:evaluationId/measurement', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.evaluationId || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The evaluation measurement request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const source = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_private_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (source?.state === 'evaluation_measurement_unavailable') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'evaluation_measurement_unavailable',
+            reason: source.reason, realAccuracyAvailable: false,
+          } });
+        }
+        if (source?.state !== 'evaluation_measurement_source_verified' ||
+            source.evaluationId !== req.params.evaluationId) {
+          throw new Error('Invalid guarded evaluation measurement source');
+        }
+        const result = measureGuardedSavedBacktest(source.result);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: 'evaluation_descriptive_only',
+          evaluationId: source.evaluationId, revision: source.revision,
+          originCount: result.originCount,
+          comparisonCount: result.comparisonCount,
+          statusCounts: result.statusCounts,
+          currentStatusCounts: source.manifest.origins.reduce((counts, item) => {
+            counts[item.currentStatus] = (counts[item.currentStatus] || 0) + 1;
+            return counts;
+          }, {}),
+          descriptiveErrorAvailable: false,
+          sampleSufficiency: result.sampleSufficiency,
+          calibration: result.calibration, drift: result.drift,
+          realAccuracyAvailable: false, realForecastEligible: false,
+        } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

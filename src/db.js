@@ -1605,6 +1605,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_evaluation_manifest(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_evaluation_manifest(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_evaluation_private_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_evaluation_private_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -3211,6 +3214,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('175_canonical_forecast_price_flow_actual_r
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('176_canonical_forecast_price_flow_profile_witness.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('177_canonical_forecast_price_flow_evaluation_revisions.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('178_canonical_forecast_price_flow_evaluation_manifest.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('179_canonical_forecast_guarded_evaluation_measurement.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

@@ -172,36 +172,33 @@ function createForecastBookingReviewsRouter(options = {}) {
           'SELECT public.canonical_forecast_booking_review_candidates($1,$2,$3,$4) value',
           [req.tenantContext.organizationId, req.tenantContext.userId,
             req.userRole, req.authSession.id])).rows[0]?.value;
-        const observed = value?.state === 'booking_review_candidates_observed';
         const candidates = value?.candidates;
-        if (!value || value.forecastIssued !== false ||
-            (observed && (value.bookedWorkVerified !== false ||
-              value.completePeriodVerified !== false ||
-              value.writeRechecksCurrentness !== true ||
-              !Array.isArray(candidates) || candidates.length > 100 ||
-              value.candidateCount !== candidates.length || candidates.some(item =>
-                !UUID.test(item.appointmentId || '') ||
-                !UUID.test(item.approvalId || '') ||
-                !UUID.test(item.opportunityId || '') ||
-                !/^\d{4}-\d{2}-\d{2}T/.test(item.scheduledStart || '') ||
-                !/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(item.reviewedPriceBeforeTax || '') ||
-                !/^[A-Z]{3}$/.test(item.currency || '')))) ||
-            (!observed && (value.state !== 'booking_review_candidates_unavailable' ||
-              value.reason !== 'recent_approval_bound_exceeded'))) {
+        if (!value || value.state !== 'booking_review_candidates_observed' ||
+            value.forecastIssued !== false || value.bookedWorkVerified !== false ||
+            value.completePeriodVerified !== false ||
+            value.writeRechecksCurrentness !== true ||
+            value.recentWindowOnly !== true || value.recentApprovalWindowLimit !== 100 ||
+            !Array.isArray(candidates) || candidates.length > 100 ||
+            value.candidateCount !== candidates.length || candidates.some(item =>
+              !UUID.test(item.appointmentId || '') ||
+              !UUID.test(item.approvalId || '') ||
+              !UUID.test(item.opportunityId || '') ||
+              !/^\d{4}-\d{2}-\d{2}T/.test(item.scheduledStart || '') ||
+              !/^(0|[1-9][0-9]{0,11})\.[0-9]{2}$/.test(item.reviewedPriceBeforeTax || '') ||
+              !/^[A-Z]{3}$/.test(item.currency || ''))) {
           throw new Error('Invalid guarded booking review candidates');
         }
         await client.query('COMMIT');
-        return res.status(200).json({ success: true, data: observed ? {
+        return res.status(200).json({ success: true, data: {
           state: value.state, candidates: candidates.map(item => ({
             appointmentId: item.appointmentId, approvalId: item.approvalId,
             opportunityId: item.opportunityId, scheduledStart: item.scheduledStart,
             reviewedPriceBeforeTax: item.reviewedPriceBeforeTax,
             currency: item.currency,
           })), candidateCount: candidates.length,
+          recentWindowOnly: true, recentApprovalWindowLimit: 100,
           writeRechecksCurrentness: true, bookedWorkVerified: false,
           completePeriodVerified: false, forecastIssued: false,
-        } : {
-          state: value.state, reason: value.reason, forecastIssued: false,
         } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});

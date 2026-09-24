@@ -5,7 +5,6 @@ CREATE FUNCTION public.canonical_forecast_booking_review_candidates(
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE item RECORD;price JSONB;items JSONB:='[]'::jsonb;
- seen INTEGER:=0;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'Read committed required for booking candidates' USING ERRCODE='25001';
@@ -17,23 +16,24 @@ BEGIN
   RAISE EXCEPTION 'Commercial booking source is busy' USING ERRCODE='55P03';
  END IF;
  FOR item IN
-  SELECT source.approval_id,source.appointment_id,
+  WITH recent AS MATERIALIZED (
+   SELECT source.organization_id,source.approval_id,source.appointment_id,
+    source.source_order
+   FROM public.canonical_forecast_booking_approval_orders source
+   WHERE source.organization_id=org
+   ORDER BY source.source_order DESC LIMIT 100
+  )
+  SELECT recent.approval_id,recent.appointment_id,
    assignment.scheduled_start,assignment.opportunity_id
-  FROM public.canonical_forecast_booking_approval_orders source
+  FROM recent
   JOIN public.canonical_schedule_assignments assignment
-   ON assignment.organization_id=source.organization_id
-    AND assignment.appointment_id=source.appointment_id
-    AND assignment.last_human_approval_id=source.approval_id
-  WHERE source.organization_id=org
-   AND assignment.schedule_state='scheduled'
+   ON assignment.organization_id=recent.organization_id
+    AND assignment.appointment_id=recent.appointment_id
+    AND assignment.last_human_approval_id=recent.approval_id
+  WHERE assignment.schedule_state='scheduled'
    AND assignment.appointment_status IN ('preferred','scheduled')
-  ORDER BY source.source_order DESC LIMIT 101
+  ORDER BY recent.source_order DESC
  LOOP
-  seen:=seen+1;
-  IF seen>100 THEN
-   RETURN jsonb_build_object('state','booking_review_candidates_unavailable',
-    'reason','recent_approval_bound_exceeded','forecastIssued',FALSE);
-  END IF;
   IF EXISTS(SELECT 1 FROM public.canonical_forecast_commercial_booking_reviews review
     WHERE review.organization_id=org AND review.appointment_id=item.appointment_id) THEN
    CONTINUE;
@@ -53,6 +53,7 @@ BEGIN
  END LOOP;
  RETURN jsonb_build_object('state','booking_review_candidates_observed',
   'candidates',items,'candidateCount',jsonb_array_length(items),
+  'recentApprovalWindowLimit',100,'recentWindowOnly',TRUE,
   'writeRechecksCurrentness',TRUE,'bookedWorkVerified',FALSE,
   'completePeriodVerified',FALSE,'forecastIssued',FALSE);
 END $$;

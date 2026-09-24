@@ -168,13 +168,15 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(beforeReviewCandidates.status).toBe(200);
     expect(beforeReviewCandidates.body.data).toMatchObject({
       state: 'booking_review_candidates_observed', candidateCount: 1,
+      recentWindowOnly: true, recentApprovalWindowLimit: 100,
       writeRechecksCurrentness: true, bookedWorkVerified: false,
       completePeriodVerified: false, forecastIssued: false });
     expect(beforeReviewCandidates.body.data.candidates[0]).toMatchObject({
       approvalId: matchingApprovalId, appointmentId: appointment });
     expect((await request(f.app).get(`${bookingRoute}/candidates`)
       .set(f.actors.otherOwner.session.headers)).body.data).toMatchObject({
-      state: 'booking_review_candidates_observed', candidateCount: 0 });
+      state: 'booking_review_candidates_observed', candidateCount: 0,
+      recentWindowOnly: true, recentApprovalWindowLimit: 100 });
     expect((await request(f.app).get(`${bookingRoute}/candidates`)
       .set(f.actors.member.session.headers)).status).toBe(403);
     const firstWrite = await request(f.app).post(`${bookingRoute}/first`)

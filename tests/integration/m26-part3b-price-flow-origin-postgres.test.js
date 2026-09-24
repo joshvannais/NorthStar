@@ -24,6 +24,24 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
     return response.body.data.snapshotId;
   }
 
+  async function capturePriceThroughGuardedSource() {
+    // Same production SQL source capture after the test-only HTTP capture
+    // allowance is exhausted; this does not bypass source authorization.
+    const client = await f.runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const result = await client.query(
+        'SELECT public.canonical_forecast_price_ordered_capture($1,$2,$3,$4,$5,$6) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, key()]);
+      await client.query('COMMIT');
+      return result.rows[0].value.snapshot.id;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally { client.release(); }
+  }
+
   async function approve(estimate) {
     const route = `/api/v1/canonical/estimates/${estimate}`;
     const review = await request(f.app).get(`${route}/review`)
@@ -271,5 +289,107 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         state: 'price_flow_actual_unavailable',
         reason: 'event_commit_boundary_unverified', amount: null,
         outcomeFinalized: false });
+      try {
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_decision_commit_observations
+          DISABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+        await f.ownerPool.query(`UPDATE
+          canonical_forecast_price_decision_commit_observations
+          SET observed_at=$2 WHERE decision_id=$1`, [decisionId, witnessAt]);
+      } finally {
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_decision_commit_observations
+          ENABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+      }
+      const actualKey = key();
+      const deniedActual = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
+        .set(f.actors.member.session.headers)
+        .set('Idempotency-Key', key())
+        .send({ sourceReceiptId: postHorizonReceiptId });
+      expect(deniedActual.status).toBe(403);
+      const savedActual = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
+        .set(owner().session.headers).set('Idempotency-Key', actualKey)
+        .send({ sourceReceiptId: postHorizonReceiptId });
+      expect(savedActual.status).toBe(201);
+      expect(savedActual.body.data).toMatchObject({
+        state: 'price_flow_actual_recorded', revision: 1,
+        actualState: 'known', amount: null, firstApprovalCount: null,
+        selectedSourceFinalizedAtCapture: true,
+        wholeBusinessCoverageVerified: false,
+        realForecastEligible: false });
+      const actualReplay = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
+        .set(owner().session.headers).set('Idempotency-Key', actualKey)
+        .send({ sourceReceiptId: postHorizonReceiptId });
+      expect(actualReplay.status).toBe(200);
+      expect(actualReplay.body.data).toMatchObject({
+        receiptId: savedActual.body.data.receiptId,
+        revision: 1, replayed: true,
+        amount: null, firstApprovalCount: null });
+      const latest = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${runId}/actual-receipts/latest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(latest.status).toBe(200);
+      expect(latest.body.data).toMatchObject({
+        state: 'price_flow_actual_finalized', revision: 1,
+        amount: null, firstApprovalCount: null, outcomeFinalized: true,
+        wholeBusinessCoverageVerified: false,
+        realForecastEligible: false });
+      const internalSaved = await f.ownerPool.query(
+        'SELECT public.canonical_forecast_price_flow_actual_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, runId]);
+      expect(internalSaved.rows[0].value).toMatchObject({
+        state: 'price_flow_actual_finalized', amount: 1400,
+        firstApprovalCount: 1, outcomeFinalized: true });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_actual_receipts'))
+        .rejects.toMatchObject({ code: '42501' });
+      const estimate = f.estimateGraphs[0].ids.estimate;
+      const route = `/api/v1/canonical/estimates/${estimate}`;
+      const current = await request(f.app).get(`${route}/review`)
+        .set(owner().session.headers);
+      expect(current.status).toBe(200);
+      const withdrawal = await request(f.app).post(`${route}/decisions`)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({ action: 'withdraw',
+          expectedRevision: current.body.data.decisions.current.revision,
+          expectedDigest: current.body.data.decisions.current.digest,
+          sourcePins: current.body.data.pins, scopeSummary: null,
+          priceBeforeTax: null, currency: current.body.data.currency,
+          reason: 'Fictional owner withdrawal.', confirmed: true,
+          confirmationVersion: 'estimate-quote-preparation-v1' });
+      expect(withdrawal.status).toBe(201);
+      const stale = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${runId}/actual-receipts/latest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(stale.status).toBe(200);
+      expect(stale.body.data).toMatchObject({
+        state: 'price_flow_actual_unavailable', reason: 'source_changed',
+        amount: null, outcomeFinalized: false });
+      const correctedSource = await capturePriceThroughGuardedSource();
+      const correction = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({ sourceReceiptId: correctedSource });
+      expect(correction.status).toBe(201);
+      expect(correction.body.data).toMatchObject({
+        state: 'price_flow_actual_recorded', revision: 2,
+        actualState: 'revoked', amount: null,
+        previousId: savedActual.body.data.receiptId });
+      const revised = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${runId}/actual-receipts/latest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(revised.status).toBe(200);
+      expect(revised.body.data).toMatchObject({
+        state: 'price_flow_actual_revoked', revision: 2,
+        amount: null, outcomeFinalized: false });
+      const history = await f.ownerPool.query(
+        `SELECT revision,state,amount FROM canonical_forecast_price_flow_actual_receipts
+         WHERE run_id=$1 ORDER BY revision`, [runId]);
+      expect(history.rows.map(row => row.state)).toEqual(['known', 'revoked']);
+      expect(history.rows[0].amount).toBe('1400.00');
     }, 120000);
 });

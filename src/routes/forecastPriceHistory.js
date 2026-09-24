@@ -81,6 +81,8 @@ function createForecastPriceHistoryRouter(options = {}) {
     `forecast-price-history:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
   const captureThrottle = options.captureThrottle || rateLimit('forecast-source-capture', req =>
     `forecast-price-history:${req.tenantContext.organizationId}`);
+  const actualThrottle = options.actualThrottle || rateLimit('forecast-actual-capture', req =>
+    `forecast-price-history:${req.tenantContext.organizationId}`);
   const readPosition = options.readPosition || readGuardedApprovedPriceFlow;
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
@@ -806,6 +808,85 @@ function createForecastPriceHistoryRouter(options = {}) {
         return res.json({ success: true, data: {
           ...value, amount: null, firstApprovalCount: null,
           outcomeFinalized: false, realForecastEligible: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/saved-price-flow-origins/:runId/actual-receipts',
+    auth, requirePermission('forecast', 'update'), actualThrottle,
+    async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!UUID.test(req.params.runId) ||
+          !exactKeys(req.body, ['sourceReceiptId']) ||
+          !UUID.test(req.body.sourceReceiptId || '') ||
+          !KEY.test(key || '') || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_capture_price_flow_actual($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), key, req.params.runId,
+            req.body.sourceReceiptId])).rows[0]?.value;
+        if (!value || !['price_flow_actual_recorded',
+          'price_flow_actual_pending',
+          'price_flow_actual_unavailable'].includes(value.state)) {
+          throw new Error('Invalid saved price-flow actual');
+        }
+        await client.query('COMMIT');
+        return res.status(value.state === 'price_flow_actual_recorded' &&
+          !value.replayed ? 201 : 200).json({ success: true,
+          data: { ...value, amount: null, firstApprovalCount: null,
+            realForecastEligible: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/saved-price-flow-origins/:runId/actual-receipts/latest',
+    auth, requirePermission('forecast', 'read'), throttle,
+    async (req, res) => {
+      if (!UUID.test(req.params.runId) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_actual_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.runId])).rows[0]?.value;
+        if (!value || !['price_flow_actual_finalized',
+          'price_flow_actual_revoked',
+          'price_flow_actual_unavailable'].includes(value.state)) {
+          throw new Error('Invalid price-flow actual read');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          ...value, amount: null, firstApprovalCount: null,
+          realForecastEligible: false,
         } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});

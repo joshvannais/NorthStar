@@ -230,7 +230,7 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
           pairedCount: 60 }, reference: { pairedCount: 30 },
           later: { pairedCount: 30 },
           sampleSufficiency: { state: 'unavailable',
-            reason: 'unsaved_and_off_platform_coverage_unverified' },
+            reason: 'source_snapshot_concentration' },
           drift: { state: 'descriptive_only',
             empiricalDriftVerdictAvailable: false },
           realAccuracyAvailable: false, realForecastEligible: false },

@@ -2,7 +2,8 @@
 
 // Fixed, non-promoting selected-M24 UTC-day evaluation policy. A complete
 // registered run inventory is not proof that every business source was seen.
-const VERSION = 'm26-selected-m24-complete-window-v1';
+const VERSION = 'm26-selected-m24-complete-window-v2';
+const REVIEW_POLICY = 'm26-selected-m24-daily-source-review-v1';
 const DAY = 86400000;
 const DECIMAL = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,6})?$/;
 
@@ -66,6 +67,23 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
     !contextChanged && eligibleRows.length === 60 &&
     measurement.comparisonCount === 60;
   const everyOutcomePaired = pairedByHalf[0] === 30 && pairedByHalf[1] === 30;
+  const distinctDailySources = measurement.originCount === 60;
+  let maximumLag = 0;
+  let lagProven = true;
+  for (const item of backtest.comparisons) {
+    if (item.status !== 'paired') continue;
+    const horizonEnd = Date.parse(item.horizon.endsAt);
+    const cutoff = Date.parse(item.outcomeCutoff);
+    if (!Number.isFinite(horizonEnd) || !Number.isFinite(cutoff) ||
+        cutoff < horizonEnd) {
+      lagProven = false;
+      break;
+    }
+    maximumLag = Math.max(maximumLag, cutoff - horizonEnd);
+  }
+  const sourceLagWithinWindow = lagProven && maximumLag <= 60 * DAY;
+  const reviewedSample = completeRegisteredWindow && everyOutcomePaired &&
+    distinctDailySources && sourceLagWithinWindow;
   let drift = { state: 'unavailable', reason:
     completeRegisteredWindow && everyOutcomePaired ?
       'empirical_reference_policy_unavailable' :
@@ -84,7 +102,15 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
     duplicateDays > 0 ? 'duplicate_daily_origins' :
       contextChanged ? 'source_context_changed' :
         !everyOutcomePaired ? 'finalized_outcomes_incomplete' :
-          'unsaved_and_off_platform_coverage_unverified';
+          !distinctDailySources ? 'source_snapshot_concentration' :
+            !sourceLagWithinWindow ? 'source_observation_lag_unverified' :
+              null;
+  if (reviewedSample && drift.state === 'descriptive_only') {
+    drift = { ...drift, reviewedRule: 'any_later_absolute_error_increase',
+      reviewAction: drift.direction === 'higher_error' ?
+        'human_review_required' : 'no_change_required',
+      empiricalDriftVerdictAvailable: false };
+  }
   return Object.freeze({
     version: VERSION, scope: 'northstar_m24_registered_saved_origins_only',
     applicability: Object.freeze({ state: 'supported_source_only',
@@ -109,11 +135,20 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
       observedSavedOriginDays: referenceDays, pairedCount: pairedByHalf[0] }),
     later: Object.freeze({ expectedUtcDays: 30,
       observedSavedOriginDays: laterDays, pairedCount: pairedByHalf[1] }),
-    observationLag: Object.freeze({ state: 'unavailable',
-      reason: 'actual_commit_lag_not_pinned_for_population' }),
+    observationLag: Object.freeze(sourceLagWithinWindow && everyOutcomePaired ?
+      { state: 'descriptive_only', policyMaxUtcDays: 60,
+        maximumObservedUtcDays: Math.ceil(maximumLag / DAY),
+        actualCommitLagVerified: false } :
+      { state: 'unavailable', reason: 'source_observation_lag_unverified' }),
     intervalCoverage: Object.freeze({ state: 'not_applicable',
       reason: 'point_only_target', calibratedIntervalCount: 0 }),
-    sampleSufficiency: Object.freeze({ state: 'unavailable', reason }),
+    sampleSufficiency: Object.freeze(reviewedSample ?
+      { state: 'supported_source_descriptive_only',
+        policyVersion: REVIEW_POLICY,
+        sourceIndependentDailyOrigins: 60,
+        realAccuracyAvailable: false } :
+      { state: 'unavailable', reason,
+        policyVersion: REVIEW_POLICY }),
     calibration: Object.freeze({ state: 'unavailable',
       reason: 'point_only_no_nominal_interval' }),
     drift: Object.freeze(drift),

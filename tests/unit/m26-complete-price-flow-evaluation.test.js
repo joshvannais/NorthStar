@@ -12,6 +12,7 @@ function fixture(count) {
     forecastRunId: `run-${index}`,
     horizon: { startsAt: iso(start + index * day),
       endsAt: iso(start + (index + 1) * day) },
+    outcomeCutoff: iso(start + (index + 2) * day),
     status: 'paired',
   }));
   const window = {
@@ -69,8 +70,29 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
     expect(result.drift).toMatchObject({ state: 'descriptive_only',
       direction: 'higher_error', empiricalDriftVerdictAvailable: false });
     expect(result.sampleSufficiency).toMatchObject({ state: 'unavailable',
-      reason: 'unsaved_and_off_platform_coverage_unverified' });
+      reason: 'source_snapshot_concentration' });
     expect(result.realAccuracyAvailable).toBe(false);
+  });
+
+  test('reviewed daily-source policy flags a later error increase without promoting accuracy', () => {
+    const complete = fixture(60);
+    complete.measurement.originCount = 60;
+    const result = assess(complete);
+    expect(result.sampleSufficiency).toMatchObject({
+      state: 'supported_source_descriptive_only',
+      sourceIndependentDailyOrigins: 60, realAccuracyAvailable: false });
+    expect(result.observationLag).toMatchObject({
+      state: 'descriptive_only', maximumObservedUtcDays: 1,
+      actualCommitLagVerified: false });
+    expect(result.drift).toMatchObject({ state: 'descriptive_only',
+      direction: 'higher_error', reviewAction: 'human_review_required',
+      empiricalDriftVerdictAvailable: false });
+    expect(result.realAccuracyAvailable).toBe(false);
+    const late = fixture(60);
+    late.measurement.originCount = 60;
+    late.backtest.comparisons[0].outcomeCutoff = iso(start + 63 * day);
+    expect(assess(late).sampleSufficiency.reason)
+      .toBe('source_observation_lag_unverified');
   });
 
   test('duplicate daily origin and changed context refuse window completeness', () => {

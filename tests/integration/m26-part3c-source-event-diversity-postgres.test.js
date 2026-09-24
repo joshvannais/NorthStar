@@ -75,6 +75,7 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
       }
       const runIds = [];
       const receiptIds = [];
+      const decisionIds = [];
       const sourceTriggers = [
         ['canonical_estimate_decisions',
           'canonical_estimate_decision_immutable'],
@@ -104,11 +105,17 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
           const eventAt = new Date(start.getTime() + (index - 2) * day +
             10 * 3600000);
           const decisionId = approval.body.data.receipt.id;
+          decisionIds.push(decisionId);
           await f.ownerPool.query(`UPDATE canonical_estimate_decisions
             SET created_at=$2 WHERE id=$1`, [decisionId, eventAt]);
           await f.ownerPool.query(`UPDATE canonical_forecast_price_decision_orders
             SET ordered_at=$2::timestamptz + interval '123 microseconds'
             WHERE decision_id=$1`, [decisionId, eventAt]);
+          const observed = await f.runtimePool.query(
+            'SELECT public.canonical_forecast_observe_price_decision_commit($1,$2,$3,$4,$5,$6) value',
+            [...args, owner.csrfToken, decisionId]);
+          expect(observed.rows[0].value.state).toBe(
+            'price_decision_commit_observed');
           // Call the same mounted source-owned capture function directly so
           // the one-minute HTTP rate limit does not invalidate this synthetic
           // sixty-event stress fixture.
@@ -155,6 +162,8 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
           'canonical_forecast_profile_effective_activations_immutable'],
         ['canonical_forecast_price_flow_profile_witnesses',
           'canonical_forecast_price_flow_profile_witness_immutable'],
+        ['canonical_forecast_price_decision_commit_observations',
+          'canonical_forecast_price_decision_commit_immutable'],
       ];
       try {
         for (const [table, trigger] of mutable) {
@@ -173,6 +182,13 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
           const savedAt = new Date(horizon.getTime() - 10 * 3600000);
           const proofAt = new Date(horizon.getTime() - 9 * 3600000);
           const witnessAt = new Date(horizon.getTime() - 8 * 3600000);
+          const sourceEventAt = new Date(horizon.getTime() - 2 * day +
+            10 * 3600000);
+          await f.ownerPool.query(`
+            UPDATE canonical_forecast_price_decision_commit_observations
+            SET observed_at=$2 WHERE decision_id=$1`,
+          [decisionIds[index],
+            new Date(sourceEventAt.getTime() + 3600000)]);
           const changedSource = await f.ownerPool.query(`
             UPDATE canonical_forecast_price_ordered_receipts value
             SET captured_at=$2,
@@ -256,5 +272,37 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
         numericalErrorAvailable: false,
       });
       expect(JSON.stringify(paid.body.data)).not.toContain('1400.00');
+      const postHorizon = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_ordered_capture($1,$2,$3,$4,$5,$6) value',
+        [...args, owner.csrfToken, key()]);
+      expect(postHorizon.rows[0].value.snapshot.eventCount).toBe(60);
+      for (const runId of runIds) {
+        const actual = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_capture_price_flow_actual($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [...args, owner.csrfToken, key(), runId,
+            postHorizon.rows[0].value.snapshot.id]);
+        expect(actual.rows[0].value).toMatchObject({
+          state: 'price_flow_actual_recorded', actualState: 'known',
+          selectedSourceFinalizedAtCapture: true });
+      }
+      const paired = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluation-window`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(paired.status).toBe(200);
+      expect(paired.body.data).toMatchObject({
+        state: 'evaluation_window_descriptive_only',
+        policy: { denominator: { pairedCount: 60 },
+          sampleSufficiency: {
+            state: 'supported_source_descriptive_only',
+            distinctSourceEventDays: 60,
+            realAccuracyAvailable: false },
+          drift: { state: 'descriptive_only',
+            direction: 'higher_error',
+            reviewAction: 'human_review_required',
+            empiricalDriftVerdictAvailable: false },
+          realAccuracyAvailable: false, realForecastEligible: false },
+        numericalErrorAvailable: false,
+      });
+      expect(JSON.stringify(paired.body.data)).not.toContain('1400.00');
     }, 600000);
 });

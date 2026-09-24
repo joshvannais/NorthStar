@@ -42,7 +42,7 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
       window.origins.length !== window.storedOriginCount ||
       window.matchingContextCount + window.excludedContextCount !==
         window.storedOriginCount ||
-      measurement.originCount !== eligibleRows.length) invalid();
+      measurement.comparisonCount !== eligibleRows.length) invalid();
   const dayCounts = Array(60).fill(0);
   const pairedByHalf = [0, 0];
   const seenRuns = new Set();
@@ -64,7 +64,7 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
   const contextChanged = window.excludedContextCount > 0;
   const completeRegisteredWindow = missingDays === 0 && duplicateDays === 0 &&
     !contextChanged && eligibleRows.length === 60 &&
-    measurement.originCount === 60;
+    measurement.comparisonCount === 60;
   const everyOutcomePaired = pairedByHalf[0] === 30 && pairedByHalf[1] === 30;
   let drift = { state: 'unavailable', reason:
     completeRegisteredWindow && everyOutcomePaired ?

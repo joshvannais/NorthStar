@@ -30,7 +30,8 @@ function fixture(count) {
       areaScope: 'tenant_all' }, comparisons,
   };
   const measurement = { backtestDigest: backtest.digest,
-    originCount: count, statusCounts: { paired: count } };
+    originCount: 1, comparisonCount: count,
+    statusCounts: { paired: count } };
   const reference = { descriptiveError: { state: 'descriptive_only',
     meanAbsolute: '999999999999999.000001' } };
   const later = { descriptiveError: { state: 'descriptive_only',
@@ -80,7 +81,7 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
       eligibility: 'matching_context' });
     duplicated.window.storedOriginCount = 61;
     duplicated.window.matchingContextCount = 61;
-    duplicated.measurement.originCount = 61;
+    duplicated.measurement.comparisonCount = 61;
     duplicated.measurement.statusCounts.paired = 61;
     expect(assess(duplicated).sampleSufficiency.reason)
       .toBe('duplicate_daily_origins');

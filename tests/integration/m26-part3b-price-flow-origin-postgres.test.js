@@ -425,6 +425,80 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .post(`${root}/saved-price-flow-origins/${secondRunId}/profile-witness`)
         .set(owner().session.headers).send({ profileAnchorId });
       expect(secondWitness.status).toBe(200);
+      // A second installed deterministic definition uses the exact verified
+      // pre-horizon source/horizon, but its saved point remains private and
+      // cannot be promoted by this origin write. Dates above are test-shifted.
+      const zeroKey = key();
+      const zeroRoute = `${root}/saved-price-flow-origins/${runId}/zero-baseline`;
+      const zero = await request(f.app).post(zeroRoute)
+        .set(owner().session.headers).set('Idempotency-Key', zeroKey)
+        .send({});
+      expect(zero.status).toBe(201);
+      expect(zero.body.data).toMatchObject({ state: 'saved_price_flow_origin',
+        output: null, outputDigest: null, receiptDigest: null,
+        preHorizonCommitVerified: false, realForecastEligible: false,
+        forecastValueAvailable: false, replayed: false });
+      const zeroRunId = zero.body.data.runId;
+      const zeroStored = await f.ownerPool.query(
+        'SELECT output,source_receipt_id,horizon_start,horizon_end FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+        [zeroRunId]);
+      expect(zeroStored.rows[0].output).toMatchObject({
+        calculationVersion: 'm26_price_flow_zero_baseline_v1',
+        value: { kind: 'point', amount: '0.00' } });
+      expect(zeroStored.rows[0].source_receipt_id).toBe(snapshotId);
+      // The shared capture throttle is already spent by the prior source
+      // receipts. Check idempotency through the same guarded runtime SQL.
+      const zeroReplay = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_price_flow_zero_baseline($1,$2,$3,$4,$5,$6,$7) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, zeroKey, runId]);
+      expect(zeroReplay.rows[0].value).toMatchObject({
+        runId: zeroRunId, replayed: true });
+      const zeroMember = await request(f.app).post(zeroRoute)
+        .set(f.actors.member.session.headers).set('Idempotency-Key', key())
+        .send({});
+      expect(zeroMember.status).toBe(403);
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_algorithms'))
+        .rejects.toMatchObject({ code: '42501' });
+      const zeroActivation = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${zeroRunId}/activate`)
+        .set(owner().session.headers).send({});
+      expect(zeroActivation.body.data).toMatchObject({
+        state: 'price_flow_origin_activated', preHorizonCommitVerified: true });
+      const zeroWitness = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${zeroRunId}/profile-witness`)
+        .set(owner().session.headers).send({ profileAnchorId });
+      expect(zeroWitness.body.data).toMatchObject({
+        state: 'profile_witness_recorded', runId: zeroRunId });
+      const zeroPair = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_pair_source_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, zeroRunId]);
+      expect(zeroPair.rows[0].value).toMatchObject({
+        state: 'pair_source_verified', runId: zeroRunId });
+      const zeroRead = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${zeroRunId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(zeroRead.status).toBe(200);
+      expect(zeroRead.body.data).toMatchObject({ runId: zeroRunId,
+        output: null, outputDigest: null, receiptDigest: null,
+        originProofDigest: null, forecastValueAvailable: false });
+      const absentZero = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${key()}/zero-baseline`)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({});
+      expect(absentZero.status).toBe(200);
+      expect(absentZero.body.data).toMatchObject({
+        state: 'price_flow_origin_unavailable',
+        reason: 'base_origin_unavailable', forecastIssued: false });
+      const foreignZero = await request(f.app).post(zeroRoute)
+        .set(f.actors.otherOwner.session.headers)
+        .set('Idempotency-Key', key()).send({});
+      expect(foreignZero.status).toBe(200);
+      expect(foreignZero.body.data).toMatchObject({
+        state: 'price_flow_origin_unavailable',
+        reason: 'base_origin_unavailable', forecastIssued: false });
       const prematurePair = await request(f.app)
         .get(`${root}/saved-price-flow-rolling-pairs`)
         .set('Cookie', owner().session.headers.Cookie)

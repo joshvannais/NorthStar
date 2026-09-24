@@ -1323,7 +1323,19 @@ function createForecastPriceHistoryRouter(options = {}) {
             realAccuracyAvailable: false, realForecastEligible: false,
           } });
         }
-        const policy = assessCompletePriceFlowEvaluation(window, backtest,
+        const diversity = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (!diversity || !Number.isInteger(diversity.distinctSourceEventCount) ||
+            diversity.distinctSourceEventCount < 0 ||
+            diversity.distinctSourceEventCount > 60) {
+          throw new Error('Invalid guarded source-event diversity');
+        }
+        const policy = assessCompletePriceFlowEvaluation({ ...window,
+          sourceEventDiversityVerified:
+            diversity.sourceEventDiversityVerified === true,
+          distinctSourceEventCount: diversity.distinctSourceEventCount }, backtest,
           measurement, referenceMeasurement, laterMeasurement);
         await client.query('COMMIT');
         return res.json({ success: true, data: {

@@ -3223,6 +3223,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('178_canonical_forecast_price_flow_evaluati
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('179_canonical_forecast_guarded_evaluation_measurement.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('180_canonical_forecast_price_flow_evaluation_population.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('181_canonical_forecast_price_flow_complete_window.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('182_canonical_forecast_price_flow_event_diversity.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

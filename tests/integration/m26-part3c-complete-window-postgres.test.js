@@ -207,6 +207,14 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
       });
       expect(JSON.stringify(response.body.data)).not.toContain('amount');
       expect(response.body.data).not.toHaveProperty('digest');
+      const diversity = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4) value',
+        args);
+      expect(diversity.rows[0].value).toMatchObject({
+        state: 'source_event_diversity_observed',
+        sourceEventDiversityVerified: false,
+        distinctSourceEventCount: 0,
+      });
       const postHorizonSource = await request(f.app)
         .post(`${root}/ordered-snapshots`)
         .set(owner.session.headers).set('Idempotency-Key', key()).send({});

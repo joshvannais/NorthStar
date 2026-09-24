@@ -74,20 +74,31 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
     expect(result.realAccuracyAvailable).toBe(false);
   });
 
-  test('reviewed daily-source policy flags a later error increase without promoting accuracy', () => {
+  test('distinct capture times alone cannot qualify source-event diversity', () => {
     const complete = fixture(60);
     complete.measurement.originCount = 60;
     const result = assess(complete);
     expect(result.sampleSufficiency).toMatchObject({
-      state: 'supported_source_descriptive_only',
-      sourceIndependentDailyOrigins: 60, realAccuracyAvailable: false });
+      state: 'unavailable', reason: 'source_event_diversity_unverified' });
     expect(result.observationLag).toMatchObject({
       state: 'descriptive_only', maximumObservedUtcDays: 1,
       actualCommitLagVerified: false });
     expect(result.drift).toMatchObject({ state: 'descriptive_only',
-      direction: 'higher_error', reviewAction: 'human_review_required',
+      direction: 'higher_error',
       empiricalDriftVerdictAvailable: false });
+    expect(result.drift).not.toHaveProperty('reviewAction');
     expect(result.realAccuracyAvailable).toBe(false);
+    const sourceProven = fixture(60);
+    sourceProven.measurement.originCount = 60;
+    sourceProven.window.sourceEventDiversityVerified = true;
+    sourceProven.window.distinctSourceEventCount = 60;
+    const reviewed = assess(sourceProven);
+    expect(reviewed.sampleSufficiency).toMatchObject({
+      state: 'supported_source_descriptive_only',
+      distinctSourceEventDays: 60, realAccuracyAvailable: false });
+    expect(reviewed.drift).toMatchObject({
+      reviewAction: 'human_review_required',
+      empiricalDriftVerdictAvailable: false });
     const late = fixture(60);
     late.measurement.originCount = 60;
     late.backtest.comparisons[0].outcomeCutoff = iso(start + 63 * day);

@@ -3,7 +3,7 @@
 // Fixed, non-promoting selected-M24 UTC-day evaluation policy. A complete
 // registered run inventory is not proof that every business source was seen.
 const VERSION = 'm26-selected-m24-complete-window-v2';
-const REVIEW_POLICY = 'm26-selected-m24-daily-source-review-v1';
+const REVIEW_POLICY = 'm26-selected-m24-daily-source-review-v2';
 const DAY = 86400000;
 const DECIMAL = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,6})?$/;
 
@@ -67,7 +67,12 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
     !contextChanged && eligibleRows.length === 60 &&
     measurement.comparisonCount === 60;
   const everyOutcomePaired = pairedByHalf[0] === 30 && pairedByHalf[1] === 30;
-  const distinctDailySources = measurement.originCount === 60;
+  // asOf distinguishes capture times, not source-event states. Repeated
+  // captures of unchanged M24 decisions cannot establish independence.
+  const distinctCaptureInstants = measurement.originCount === 60;
+  const sourceEventDiversityVerified =
+    window.sourceEventDiversityVerified === true &&
+    window.distinctSourceEventCount === 60;
   let maximumLag = 0;
   let lagProven = true;
   for (const item of backtest.comparisons) {
@@ -83,7 +88,8 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
   }
   const sourceLagWithinWindow = lagProven && maximumLag <= 60 * DAY;
   const reviewedSample = completeRegisteredWindow && everyOutcomePaired &&
-    distinctDailySources && sourceLagWithinWindow;
+    distinctCaptureInstants && sourceEventDiversityVerified &&
+    sourceLagWithinWindow;
   let drift = { state: 'unavailable', reason:
     completeRegisteredWindow && everyOutcomePaired ?
       'empirical_reference_policy_unavailable' :
@@ -102,9 +108,9 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
     duplicateDays > 0 ? 'duplicate_daily_origins' :
       contextChanged ? 'source_context_changed' :
         !everyOutcomePaired ? 'finalized_outcomes_incomplete' :
-          !distinctDailySources ? 'source_snapshot_concentration' :
+          !distinctCaptureInstants ? 'source_snapshot_concentration' :
             !sourceLagWithinWindow ? 'source_observation_lag_unverified' :
-              null;
+              'source_event_diversity_unverified';
   if (reviewedSample && drift.state === 'descriptive_only') {
     drift = { ...drift, reviewedRule: 'any_later_absolute_error_increase',
       reviewAction: drift.direction === 'higher_error' ?
@@ -145,7 +151,7 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
     sampleSufficiency: Object.freeze(reviewedSample ?
       { state: 'supported_source_descriptive_only',
         policyVersion: REVIEW_POLICY,
-        sourceIndependentDailyOrigins: 60,
+        distinctSourceEventDays: 60,
         realAccuracyAvailable: false } :
       { state: 'unavailable', reason,
         policyVersion: REVIEW_POLICY }),

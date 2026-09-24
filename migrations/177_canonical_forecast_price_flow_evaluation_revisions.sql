@@ -45,6 +45,42 @@ CREATE TRIGGER canonical_forecast_price_flow_evaluations_immutable
  ON public.canonical_forecast_price_flow_evaluations
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
 
+-- Look up an already committed request before consulting mutable current
+-- source state. The transaction-level pair lock also serializes fresh writes.
+CREATE FUNCTION public.canonical_forecast_price_flow_evaluation_replay(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,
+ key_value TEXT,run_a UUID,run_b UUID)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE first_run UUID; second_run UUID; saved public.canonical_forecast_price_flow_evaluations%ROWTYPE;
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed' OR
+  key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR
+  run_a IS NULL OR run_b IS NULL OR run_a=run_b THEN
+  RAISE EXCEPTION 'Price-flow evaluation request invalid' USING ERRCODE='22023';
+ END IF;
+ PERFORM public.canonical_forecast_booking_ordered_access(
+  org,actor,role_value,session_value,csrf,TRUE);
+ first_run:=LEAST(run_a,run_b);
+ second_run:=GREATEST(run_a,run_b);
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+  'm26:price-flow-evaluation:'||org::text||':'||first_run::text||':'||
+   second_run::text,0)) THEN
+  RAISE EXCEPTION 'Price-flow evaluation busy' USING ERRCODE='55P03';
+ END IF;
+ SELECT * INTO saved FROM public.canonical_forecast_price_flow_evaluations
+  WHERE organization_id=org AND actor_user_id=actor
+   AND request_key_hash=encode(sha256(convert_to(key_value,'UTF8')),'hex');
+ IF saved.id IS NULL THEN
+  RETURN jsonb_build_object('state','price_flow_evaluation_new');
+ END IF;
+ IF saved.first_run_id<>first_run OR saved.second_run_id<>second_run THEN
+  RAISE EXCEPTION 'Price-flow evaluation replay changed' USING ERRCODE='23505';
+ END IF;
+ RETURN jsonb_build_object('state','price_flow_evaluation_saved',
+  'evaluationId',saved.id,'revision',saved.revision,'replayed',TRUE);
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_capture_price_flow_evaluation(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,
  key_value TEXT,run_a UUID,run_b UUID,result_value JSONB)
@@ -52,12 +88,14 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE first_run UUID; second_run UUID;
  prior public.canonical_forecast_price_flow_evaluations%ROWTYPE;
- old public.canonical_forecast_price_flow_evaluations%ROWTYPE;
  inserted public.canonical_forecast_price_flow_evaluations%ROWTYPE;
- comparison_ids UUID[]; requested TEXT; result_hash TEXT; key_hash TEXT;
+ comparison_ids UUID[]; requested TEXT; result_hash TEXT; key_hash TEXT; replay JSONB;
  pair_a JSONB; pair_b JSONB; actual_a JSONB; actual_b JSONB;
  item JSONB; linked JSONB; linked_actual JSONB; profile_check JSONB;
 BEGIN
+ replay:=public.canonical_forecast_price_flow_evaluation_replay(
+  org,actor,role_value,session_value,csrf,key_value,run_a,run_b);
+ IF replay->>'state'='price_flow_evaluation_saved' THEN RETURN replay; END IF;
  IF current_setting('transaction_isolation')<>'read committed' OR
   key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR
   run_a IS NULL OR run_b IS NULL OR run_a=run_b OR
@@ -70,8 +108,6 @@ BEGIN
   (result_value->>'originCount')::integer<>2 THEN
   RAISE EXCEPTION 'Price-flow evaluation request invalid' USING ERRCODE='22023';
  END IF;
- PERFORM public.canonical_forecast_booking_ordered_access(
-  org,actor,role_value,session_value,csrf,TRUE);
  first_run:=LEAST(run_a,run_b);
  second_run:=GREATEST(run_a,run_b);
  comparison_ids:=ARRAY[
@@ -152,29 +188,10 @@ BEGIN
  result_hash:=public.canonical_completion_digest(result_value);
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  requested:=encode(sha256(convert_to(jsonb_build_object(
-  'firstRunId',first_run,'secondRunId',second_run,
-  'resultDigest',result_hash)::text,'UTF8')),'hex');
- IF NOT pg_try_advisory_xact_lock(hashtextextended(
-  'm26:price-flow-evaluation:'||org::text||':'||first_run::text||':'||
-   second_run::text,0)) THEN
-  RAISE EXCEPTION 'Price-flow evaluation busy' USING ERRCODE='55P03';
- END IF;
- SELECT * INTO old FROM public.canonical_forecast_price_flow_evaluations
-  WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
- IF FOUND THEN
-  IF old.request_digest<>requested THEN
-   RAISE EXCEPTION 'Price-flow evaluation replay changed' USING ERRCODE='23505';
-  END IF;
-  RETURN jsonb_build_object('state','price_flow_evaluation_saved',
-   'evaluationId',old.id,'revision',old.revision,'replayed',TRUE);
- END IF;
+  'firstRunId',first_run,'secondRunId',second_run)::text,'UTF8')),'hex');
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_evaluations
   WHERE organization_id=org AND first_run_id=first_run
    AND second_run_id=second_run ORDER BY revision DESC LIMIT 1;
- IF prior.id IS NOT NULL AND prior.result_digest=result_hash THEN
-  RETURN jsonb_build_object('state','price_flow_evaluation_saved',
-   'evaluationId',prior.id,'revision',prior.revision,'replayed',TRUE);
- END IF;
  INSERT INTO public.canonical_forecast_price_flow_evaluations(
   organization_id,first_run_id,second_run_id,revision,previous_id,
   result,result_digest,captured_at,actor_user_id,auth_session_id,
@@ -188,11 +205,15 @@ BEGIN
 END $$;
 
 REVOKE ALL ON TABLE public.canonical_forecast_price_flow_evaluations FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_evaluation_replay(
+ UUID,UUID,TEXT,UUID,TEXT,TEXT,UUID,UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_capture_price_flow_evaluation(
  UUID,UUID,TEXT,UUID,TEXT,TEXT,UUID,UUID,JSONB) FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  REVOKE ALL ON TABLE public.canonical_forecast_price_flow_evaluations
   FROM northstar_app_runtime;
+ GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_evaluation_replay(
+  UUID,UUID,TEXT,UUID,TEXT,TEXT,UUID,UUID) TO northstar_app_runtime;
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_evaluation(
   UUID,UUID,TEXT,UUID,TEXT,TEXT,UUID,UUID,JSONB) TO northstar_app_runtime;
 END IF; END $$;

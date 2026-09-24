@@ -962,6 +962,24 @@ function createForecastPriceHistoryRouter(options = {}) {
         await client.query("SET LOCAL statement_timeout = '10000ms'");
         await client.query("SET LOCAL lock_timeout = '2000ms'");
         const identity = actor(req);
+        if (saveEvaluation) {
+          const replay = (await client.query(
+            'SELECT public.canonical_forecast_price_flow_evaluation_replay($1,$2,$3,$4,$5,$6,$7,$8) value',
+            [identity.organizationId, identity.actorUserId,
+              identity.actorAccessRole, identity.authSessionId,
+              req.get('X-CSRF-Token'), req.get('Idempotency-Key'),
+              req.query.firstRunId, req.query.secondRunId])).rows[0]?.value;
+          if (replay?.state === 'price_flow_evaluation_saved') {
+            await client.query('COMMIT');
+            return res.json({ success: true, data: {
+              ...replay, accuracyAvailable: false,
+              forecastValueAvailable: false, realForecastEligible: false,
+            } });
+          }
+          if (replay?.state !== 'price_flow_evaluation_new') {
+            throw new Error('Invalid price-flow evaluation replay state');
+          }
+        }
         const runs = [];
         const outcomes = [];
         for (const runId of [req.query.firstRunId, req.query.secondRunId]) {

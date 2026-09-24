@@ -15,8 +15,8 @@ const utc = value => new Date(value).toISOString();
 realPostgres('Mission 26 Part 3C registered M24 population', () => {
   let f;
   beforeAll(async () => { f = await createEstimateReviewFixture({
-    operationalSchedule: true }); }, 120000);
-  afterAll(async () => { if (f) await f.cleanup(); }, 120000);
+    operationalSchedule: true }); }, 300000);
+  afterAll(async () => { if (f) await f.cleanup(); }, 300000);
 
   test('guarded paid window counts sixty source-owned saved origins but withholds sufficiency without outcomes',
     async () => {
@@ -110,6 +110,10 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
           'canonical_forecast_profile_effective_activations_immutable'],
         ['canonical_forecast_price_flow_profile_witnesses',
           'canonical_forecast_price_flow_profile_witness_immutable'],
+        ['canonical_forecast_price_ordered_anchors',
+          'canonical_forecast_price_ordered_anchors_immutable'],
+        ['canonical_forecast_price_anchor_activations',
+          'canonical_forecast_price_anchor_activations_immutable'],
       ];
       try {
         for (const [table, trigger] of mutable) {
@@ -136,6 +140,12 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
         await f.ownerPool.query(`UPDATE canonical_forecast_profile_effective_activations
           SET observed_at=$2 WHERE anchor_id=$1`,
         [profileAnchorId, new Date(profileCaptured.getTime() + 3600000)]);
+        await f.ownerPool.query(`UPDATE canonical_forecast_price_ordered_anchors
+          SET coverage_starts_at=$2 WHERE organization_id=$1`,
+        [f.org, profileCaptured]);
+        await f.ownerPool.query(`UPDATE canonical_forecast_price_anchor_activations
+          SET observed_at=$2 WHERE organization_id=$1`,
+        [f.org, new Date(profileCaptured.getTime() + 3600000)]);
         for (let index = 0; index < 60; index += 1) {
           const horizon = new Date(start.getTime() + index * day);
           const horizonEnd = new Date(horizon.getTime() + day);
@@ -197,5 +207,35 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
       });
       expect(JSON.stringify(response.body.data)).not.toContain('amount');
       expect(response.body.data).not.toHaveProperty('digest');
-    }, 120000);
+      const postHorizonSource = await request(f.app)
+        .post(`${root}/ordered-snapshots`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({});
+      expect(postHorizonSource.status).toBe(201);
+      for (const runId of runIds) {
+        const actual = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_capture_price_flow_actual($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [...args, owner.csrfToken, key(), runId,
+            postHorizonSource.body.data.snapshotId]);
+        expect(actual.rows[0].value).toMatchObject({
+          state: 'price_flow_actual_recorded', actualState: 'known',
+          selectedSourceFinalizedAtCapture: true });
+      }
+      const paired = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluation-window`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(paired.status).toBe(200);
+      expect(paired.body.data).toMatchObject({
+        state: 'evaluation_window_descriptive_only',
+        policy: { denominator: { registeredWindowComplete: true,
+          pairedCount: 60 }, reference: { pairedCount: 30 },
+          later: { pairedCount: 30 },
+          sampleSufficiency: { state: 'unavailable',
+            reason: 'unsaved_and_off_platform_coverage_unverified' },
+          drift: { state: 'descriptive_only',
+            empiricalDriftVerdictAvailable: false },
+          realAccuracyAvailable: false, realForecastEligible: false },
+        numericalErrorAvailable: false,
+      });
+      expect(JSON.stringify(paired.body.data)).not.toContain('amount');
+    }, 300000);
 });

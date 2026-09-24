@@ -1566,6 +1566,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_anchor_activate(uuid,uuid,text,uuid,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_saved_origins') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_saved_origins FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_origin_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_origin_activations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_origin_activations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_origin_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -3139,6 +3149,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('167_canonical_forecast_booked_work_source_
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('168_canonical_forecast_booking_review_candidates.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('169_canonical_forecast_profile_effective_source.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('170_canonical_forecast_price_anchor_activation.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('171_canonical_forecast_price_flow_saved_origin.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('172_canonical_forecast_price_flow_origin_activation.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

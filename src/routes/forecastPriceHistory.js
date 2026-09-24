@@ -15,6 +15,8 @@ const { getActiveBusinessProfile, getBusinessProfileById } =
   require('../services/organizationAuthority');
 const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
+const { normalizeForecastOutput } = require('../forecasting/outputContract');
+const { sha256 } = require('../services/businessProfileAdapter');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -33,14 +35,17 @@ function calendarAuthority(rawProfile) {
 }
 
 function errorReply(res, error) {
-  const status = error?.code === '42501' ? 403 :
-    ['40001', '40P01', '55P03', '54000'].includes(error?.code) ? 409 : 503;
+  const status = error?.code === '22023' ? 400 :
+    error?.code === '42501' ? 403 :
+      ['40001', '40P01', '55P03', '54000', '23505'].includes(error?.code) ? 409 : 503;
   return res.status(status).json({ success: false, error: {
-    category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
+    category: status === 400 ? 'FORECAST_REQUEST_INVALID' :
+      status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
       error?.code === '54000' ? 'FORECAST_SOURCE_CAPACITY' :
         error?.code === '55P03' ? 'FORECAST_SOURCE_BUSY' :
         status === 409 ? 'FORECAST_SOURCE_CHANGED' : 'FORECAST_SOURCE_UNAVAILABLE',
-    message: status === 403 ? 'Forecast history access is restricted.' :
+    message: status === 400 ? 'The forecast source request is invalid.' :
+      status === 403 ? 'Forecast history access is restricted.' :
       error?.code === '54000' ? 'There is too much history to capture safely.' :
         error?.code === '55P03' ? 'Forecast history is busy. Try again shortly.' :
         status === 409 ? 'Forecast history changed. Refresh and try again.' :
@@ -597,6 +602,140 @@ function createForecastPriceHistoryRouter(options = {}) {
           currency: req.query.currency });
         return res.json({ success: true, data });
       } catch (error) { return errorReply(res, error); }
+    });
+
+  // Supported M24-source synthetic price-flow origin. The saved point is a
+  // deterministic carry-forward, not a calibrated or whole-business forecast.
+  router.post('/saved-price-flow-origins', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.body, ['sourceReceiptId', 'currency',
+        'horizonStartsAt', 'horizonEndsAt']) ||
+          !UUID.test(req.body.sourceReceiptId || '') ||
+          !/^[A-Z]{3}$/.test(req.body.currency || '') ||
+          !instant(req.body.horizonStartsAt) ||
+          !instant(req.body.horizonEndsAt) || !KEY.test(key || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const captured = (await client.query(
+          'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), key, req.body.sourceReceiptId,
+            req.body.currency, req.body.horizonStartsAt,
+            req.body.horizonEndsAt])).rows[0]?.value;
+        if (captured?.state === 'price_flow_origin_unavailable') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: captured });
+        }
+        if (captured?.state !== 'saved_price_flow_origin' ||
+            !UUID.test(captured.runId || '') ||
+            captured.preHorizonCommitVerified !== false) {
+          throw new Error('Invalid saved price-flow origin');
+        }
+        const output = normalizeForecastOutput(captured.output);
+        if (output.organizationId !== identity.organizationId ||
+            output.target.key !== 'revenue.approved_price_flow' ||
+            output.applicability.limits.join('|') !==
+              'northstar_m24_only|uncalibrated_carry_forward') {
+          throw new Error('Invalid supported price-flow output');
+        }
+        await client.query('COMMIT');
+        if (captured.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(captured.replayed ? 200 : 201).json({ success: true,
+          data: { state: 'saved_price_flow_origin', runId: captured.runId,
+            output, outputDigest: sha256(output),
+            receiptDigest: captured.receiptDigest,
+            preHorizonCommitVerified: false,
+            realForecastEligible: false, replayed: captured.replayed } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/saved-price-flow-origins/:runId/activate', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.runId) || !exactKeys(req.body, []) ||
+          !exactKeys(req.query, [])) return res.status(400).json({
+        success: false, error: { category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast origin request is invalid.' },
+      });
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const identity = actor(req);
+        const proof = (await client.query(
+          'SELECT public.canonical_forecast_activate_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.params.runId])).rows[0]?.value;
+        if (!proof || !['price_flow_origin_activated',
+          'price_flow_origin_unavailable'].includes(proof.state)) {
+          throw new Error('Invalid price-flow origin proof');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: proof });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/saved-price-flow-origins/:runId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.runId) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast origin request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const identity = actor(req);
+        const saved = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_origin_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.runId])).rows[0]?.value;
+        if (saved?.state === 'price_flow_origin_unavailable') {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'The saved forecast origin is unavailable.',
+          } });
+        }
+        if (saved?.state !== 'saved_price_flow_origin' ||
+            saved.runId !== req.params.runId ||
+            !DIGEST.test(saved.receiptDigest || '')) {
+          throw new Error('Invalid saved price-flow origin');
+        }
+        const output = normalizeForecastOutput(saved.output);
+        if (output.organizationId !== identity.organizationId ||
+            output.target.key !== 'revenue.approved_price_flow') {
+          throw new Error('Invalid supported price-flow output');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: { ...saved, output,
+          outputDigest: sha256(output) } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
     });
 
   return router;

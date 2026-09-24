@@ -966,6 +966,14 @@ function createForecastPriceHistoryRouter(options = {}) {
           const source = (await client.query(
             'SELECT public.canonical_forecast_price_flow_pair_source_read($1,$2,$3,$4,$5) value',
             args)).rows[0]?.value;
+          if (source?.state === 'pair_source_unavailable') {
+            await client.query('COMMIT');
+            return res.json({ success: true, data: {
+              state: 'rolling_pairs_unavailable',
+              reason: 'source_evidence_unavailable',
+              evaluationSaved: false, realForecastEligible: false,
+            } });
+          }
           if (source?.state !== 'pair_source_verified' ||
               source.runId !== runId ||
               !UUID.test(source.profileAnchorId || '') ||

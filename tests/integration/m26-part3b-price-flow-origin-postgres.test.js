@@ -534,6 +534,11 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .get(`${root}/saved-price-flow-rolling-pairs`)
         .set('Cookie', f.actors.otherOwner.session.headers.Cookie)
         .query({ firstRunId: runId, secondRunId });
+      expect(foreignPair.status).toBe(200);
+      expect(foreignPair.body.data).toMatchObject({
+        state: 'rolling_pairs_unavailable',
+        reason: 'source_evidence_unavailable',
+        evaluationSaved: false });
       expect(foreignPair.body.data?.comparisons).toBeUndefined();
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_actual_receipts'))

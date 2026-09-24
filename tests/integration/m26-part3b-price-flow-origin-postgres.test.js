@@ -860,6 +860,18 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         sampleSufficiency: { state: 'unavailable' },
         calibration: { state: 'unavailable' },
         drift: { state: 'unavailable' },
+        policy: {
+          scope: 'selected_northstar_m24_saved_price_flow_only',
+          denominator: {
+            pairedFraction: { numerator: 2, denominator: 2 },
+            boundedSavedOriginInventoryVerified: true,
+          },
+          intervalCoverage: { state: 'not_applicable',
+            reason: 'point_only_target' },
+          sampleSufficiency: { state: 'unavailable',
+            reason: 'unsaved_origin_and_empirical_independence_unverified' },
+          realAccuracyAvailable: false,
+        },
         realAccuracyAvailable: false, realForecastEligible: false });
       expect(JSON.stringify(measurement.body.data)).not.toContain('1400.00');
       expect(measurement.body.data).not.toHaveProperty('digest');
@@ -904,6 +916,9 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         storedOriginCount: 3, matchingContextCount: 3,
         omittedMatchingCount: 1,
         unsavedOriginCoverageVerified: false });
+      expect(incompletePopulation.body.data.policy.sampleSufficiency)
+        .toMatchObject({ state: 'unavailable',
+          reason: 'selected_origin_population_incomplete' });
       const deniedEvaluation = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(f.actors.member.session.headers)

@@ -18,6 +18,7 @@ const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 const { normalizeForecastOutput } = require('../forecasting/outputContract');
 const { buildRollingBacktest } = require('../forecasting/rollingBacktest');
 const { measureGuardedSavedBacktest } = require('../forecasting/evaluationGates');
+const { assessSelectedPriceFlowEvaluation } = require('../forecasting/selectedPriceFlowEvaluationPolicy');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -1200,6 +1201,8 @@ function createForecastPriceHistoryRouter(options = {}) {
           throw new Error('Invalid guarded evaluation population');
         }
         const result = measureGuardedSavedBacktest(source.result);
+        const policy = assessSelectedPriceFlowEvaluation(
+          source.result, result, population);
         await client.query('COMMIT');
         return res.json({ success: true, data: {
           state: 'evaluation_descriptive_only',
@@ -1221,6 +1224,7 @@ function createForecastPriceHistoryRouter(options = {}) {
             counts[item.currentStatus] = (counts[item.currentStatus] || 0) + 1;
             return counts;
           }, {}),
+          policy,
           descriptiveErrorAvailable: false,
           sampleSufficiency: result.sampleSufficiency,
           calibration: result.calibration, drift: result.drift,

@@ -35,15 +35,22 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
   if (!Number.isFinite(startsAt) || endsAt - startsAt !== 60 * DAY) invalid();
   const eligibleRows = window.origins.filter(item =>
     item.eligibility === 'matching_context');
+  const eligibleRunIds = new Set(eligibleRows.map(item => item.runId));
   if (eligibleRows.length !== backtest.comparisons.length ||
-      eligibleRows.length !== window.matchingContextCount) invalid();
+      eligibleRows.length !== eligibleRunIds.size ||
+      eligibleRows.length !== window.matchingContextCount ||
+      window.origins.length !== window.storedOriginCount ||
+      window.matchingContextCount + window.excludedContextCount !==
+        window.storedOriginCount ||
+      measurement.originCount !== eligibleRows.length) invalid();
   const dayCounts = Array(60).fill(0);
   const pairedByHalf = [0, 0];
   const seenRuns = new Set();
   for (const item of backtest.comparisons) {
     const day = (Date.parse(item.horizon.startsAt) - startsAt) / DAY;
     if (!Number.isInteger(day) || day < 0 || day >= 60 ||
-        seenRuns.has(item.forecastRunId)) invalid();
+        seenRuns.has(item.forecastRunId) ||
+        !eligibleRunIds.has(item.forecastRunId)) invalid();
     seenRuns.add(item.forecastRunId);
     dayCounts[day] += 1;
     if (item.status === 'paired') pairedByHalf[day < 30 ? 0 : 1] += 1;
@@ -52,6 +59,8 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
   const laterDays = dayCounts.slice(30).filter(count => count > 0).length;
   const duplicateDays = dayCounts.filter(count => count > 1).length;
   const missingDays = dayCounts.filter(count => count === 0).length;
+  if (measurement.statusCounts?.paired !==
+      pairedByHalf[0] + pairedByHalf[1]) invalid();
   const contextChanged = window.excludedContextCount > 0;
   const completeRegisteredWindow = missingDays === 0 && duplicateDays === 0 &&
     !contextChanged && eligibleRows.length === 60 &&

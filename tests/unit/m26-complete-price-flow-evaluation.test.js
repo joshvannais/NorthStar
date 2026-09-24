@@ -92,4 +92,15 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
     expect(assess(changed).sampleSufficiency.reason)
       .toBe('source_context_changed');
   });
+
+  test('refuses a comparison or paired count outside the guarded population', () => {
+    const changedRun = fixture(2);
+    changedRun.backtest.comparisons[1].forecastRunId = 'unlisted-run';
+    expect(() => assess(changedRun)).toThrow(
+      'Guarded price-flow evaluation window is invalid.');
+    const changedCount = fixture(2);
+    changedCount.measurement.statusCounts.paired = 1;
+    expect(() => assess(changedCount)).toThrow(
+      'Guarded price-flow evaluation window is invalid.');
+  });
 });

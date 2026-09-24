@@ -1189,6 +1189,16 @@ function createForecastPriceHistoryRouter(options = {}) {
             source.evaluationId !== req.params.evaluationId) {
           throw new Error('Invalid guarded evaluation measurement source');
         }
+        const population = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_population($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (!population || !['bounded_saved_origin_inventory_verified',
+          'evaluation_selection_incomplete',
+          'evaluation_population_unavailable'].includes(population.state)) {
+          throw new Error('Invalid guarded evaluation population');
+        }
         const result = measureGuardedSavedBacktest(source.result);
         await client.query('COMMIT');
         return res.json({ success: true, data: {
@@ -1197,6 +1207,16 @@ function createForecastPriceHistoryRouter(options = {}) {
           originCount: result.originCount,
           comparisonCount: result.comparisonCount,
           statusCounts: result.statusCounts,
+          savedOriginPopulation: {
+            state: population.state, scope: population.scope || null,
+            reason: population.reason || null,
+            storedOriginCount: population.storedOriginCount ?? null,
+            matchingContextCount: population.matchingContextCount ?? null,
+            excludedContextCount: population.excludedContextCount ?? null,
+            omittedMatchingCount: population.omittedMatchingCount ?? null,
+            unsavedOriginCoverageVerified: false,
+            wholeBusinessCoverageVerified: false,
+          },
           currentStatusCounts: source.manifest.origins.reduce((counts, item) => {
             counts[item.currentStatus] = (counts[item.currentStatus] || 0) + 1;
             return counts;

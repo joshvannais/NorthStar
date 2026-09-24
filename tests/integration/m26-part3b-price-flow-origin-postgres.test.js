@@ -849,6 +849,13 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         state: 'evaluation_descriptive_only', originCount: 2,
         comparisonCount: 2, statusCounts: { paired: 2 },
         currentStatusCounts: { paired: 2 },
+        savedOriginPopulation: {
+          state: 'bounded_saved_origin_inventory_verified',
+          storedOriginCount: 2, matchingContextCount: 2,
+          omittedMatchingCount: 0,
+          unsavedOriginCoverageVerified: false,
+          wholeBusinessCoverageVerified: false,
+        },
         descriptiveErrorAvailable: false,
         sampleSufficiency: { state: 'unavailable' },
         calibration: { state: 'unavailable' },
@@ -870,6 +877,33 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         state: 'evaluation_measurement_unavailable',
         reason: 'source_evidence_unavailable', realAccuracyAvailable: false });
       expect(foreignMeasurement.body.data).not.toHaveProperty('statusCounts');
+      // Owner-SQL fictional fixture: a third stored same-context candidate in
+      // the selected capture span must make the two-origin selection incomplete.
+      await f.ownerPool.query(`
+        INSERT INTO canonical_forecast_price_flow_saved_origins (
+          organization_id,id,saved_at,horizon_start,horizon_end,
+          source_receipt_id,output,receipt_digest,actor_user_id,
+          auth_session_id,request_key_hash,request_digest)
+        SELECT b.organization_id,gen_random_uuid(),
+          a.saved_at+(b.saved_at-a.saved_at)/2,b.horizon_start,b.horizon_end,
+          b.source_receipt_id,b.output,b.receipt_digest,b.actor_user_id,
+          b.auth_session_id,
+          encode(sha256(convert_to(gen_random_uuid()::text,'UTF8')),'hex'),
+          b.request_digest
+        FROM canonical_forecast_price_flow_saved_origins a
+        JOIN canonical_forecast_price_flow_saved_origins b
+          ON b.organization_id=a.organization_id
+        WHERE a.organization_id=$1 AND a.id=$2 AND b.id=$3
+      `, [f.org, runId, secondRunId]);
+      const incompletePopulation = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(incompletePopulation.status).toBe(200);
+      expect(incompletePopulation.body.data.savedOriginPopulation).toMatchObject({
+        state: 'evaluation_selection_incomplete',
+        storedOriginCount: 3, matchingContextCount: 3,
+        omittedMatchingCount: 1,
+        unsavedOriginCoverageVerified: false });
       const deniedEvaluation = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(f.actors.member.session.headers)

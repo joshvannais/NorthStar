@@ -237,5 +237,78 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
         numericalErrorAvailable: false,
       });
       expect(JSON.stringify(paired.body.data)).not.toContain('amount');
+      const estimateId = f.estimateGraphs[0].ids.estimate;
+      const review = await request(f.app)
+        .get(`/api/v1/canonical/estimates/${estimateId}/review`)
+        .set(owner.session.headers);
+      expect(review.status).toBe(200);
+      const approval = await request(f.app)
+        .post(`/api/v1/canonical/estimates/${estimateId}/decisions`)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ action: 'approve', expectedRevision: 0,
+          expectedDigest: 'none', sourcePins: review.body.data.pins,
+          scopeSummary: 'Fictional later-window price-flow work.',
+          priceBeforeTax: '1400.00', currency: review.body.data.currency,
+          reason: 'Fictional owner price review.', confirmed: true,
+          confirmationVersion: 'estimate-quote-preparation-v1' });
+      expect(approval.status).toBe(201);
+      const decisionId = approval.body.data.receipt.id;
+      const observed = await request(f.app)
+        .post(`${root}/decision-commit-observations`)
+        .set(owner.session.headers).send({ decisionId });
+      expect(observed.status).toBe(200);
+      const eventAt = new Date(start.getTime() + 45 * day + 12 * 3600000);
+      const decisionTriggers = [
+        ['canonical_estimate_decisions', 'canonical_estimate_decision_immutable'],
+        ['canonical_forecast_price_decision_orders',
+          'canonical_forecast_price_decision_order_immutable'],
+        ['canonical_forecast_price_decision_commit_observations',
+          'canonical_forecast_price_decision_commit_immutable'],
+      ];
+      try {
+        for (const [table, trigger] of decisionTriggers) {
+          await f.ownerPool.query(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`);
+        }
+        // Disposable fixture only: place the genuine M24 approval and its
+        // commit witness in the later 30-day half before source capture.
+        await f.ownerPool.query(`UPDATE canonical_estimate_decisions
+          SET created_at=$2 WHERE id=$1`, [decisionId, eventAt]);
+        await f.ownerPool.query(`UPDATE canonical_forecast_price_decision_orders
+          SET ordered_at=$2 WHERE decision_id=$1`, [decisionId, eventAt]);
+        await f.ownerPool.query(`UPDATE canonical_forecast_price_decision_commit_observations
+          SET observed_at=$2 WHERE decision_id=$1`,
+        [decisionId, new Date(eventAt.getTime() + 3600000)]);
+      } finally {
+        for (const [table, trigger] of decisionTriggers.reverse()) {
+          await f.ownerPool.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
+        }
+      }
+      const changedSource = await request(f.app)
+        .post(`${root}/ordered-snapshots`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({});
+      expect(changedSource.status).toBe(201);
+      for (const runId of runIds) {
+        const revision = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_capture_price_flow_actual($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [...args, owner.csrfToken, key(), runId,
+            changedSource.body.data.snapshotId]);
+        expect(revision.rows[0].value).toMatchObject({
+          state: 'price_flow_actual_recorded', actualState: 'known',
+          revision: 2 });
+      }
+      const changed = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluation-window`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(changed.status).toBe(200);
+      expect(changed.body.data).toMatchObject({
+        state: 'evaluation_window_descriptive_only',
+        policy: { denominator: { registeredWindowComplete: true,
+          pairedCount: 60 }, reference: { pairedCount: 30 },
+          later: { pairedCount: 30 }, drift: { state: 'descriptive_only',
+            direction: 'higher_error', empiricalDriftVerdictAvailable: false },
+          sampleSufficiency: { state: 'unavailable' },
+          realAccuracyAvailable: false, realForecastEligible: false },
+        numericalErrorAvailable: false });
+      expect(JSON.stringify(changed.body.data)).not.toContain('1400.00');
     }, 300000);
 });

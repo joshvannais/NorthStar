@@ -105,10 +105,8 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(origin.status).toBe(201);
       expect(origin.body.data).toMatchObject({
         state: 'saved_price_flow_origin', preHorizonCommitVerified: false,
-        realForecastEligible: false,
-        output: { target: { key: 'revenue.approved_price_flow' },
-          value: { kind: 'point', amount: '1400.00' },
-          confidence: { state: 'unavailable' } },
+        realForecastEligible: false, forecastValueAvailable: false,
+        output: null,
       });
       const runId = origin.body.data.runId;
       const proof = await request(f.app)
@@ -125,8 +123,12 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(read.body.data).toMatchObject({
         runId, preHorizonCommitVerified: true,
         outputDigest: origin.body.data.outputDigest,
-        output: { value: { amount: '1400.00' } },
+        forecastValueAvailable: false, output: null,
       });
+      const stored = await f.ownerPool.query(
+        'SELECT output FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+        [runId]);
+      expect(stored.rows[0].output.value.amount).toBe('1400.00');
       const replay = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/activate`)
         .set(owner().session.headers).send({});

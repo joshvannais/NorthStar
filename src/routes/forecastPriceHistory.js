@@ -655,10 +655,11 @@ function createForecastPriceHistoryRouter(options = {}) {
         if (captured.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(captured.replayed ? 200 : 201).json({ success: true,
           data: { state: 'saved_price_flow_origin', runId: captured.runId,
-            output, outputDigest: sha256(output),
+            output: null, outputDigest: sha256(output),
             receiptDigest: captured.receiptDigest,
             preHorizonCommitVerified: false,
-            realForecastEligible: false, replayed: captured.replayed } });
+            realForecastEligible: false, forecastValueAvailable: false,
+            replayed: captured.replayed } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);
@@ -730,8 +731,8 @@ function createForecastPriceHistoryRouter(options = {}) {
           throw new Error('Invalid supported price-flow output');
         }
         await client.query('COMMIT');
-        return res.json({ success: true, data: { ...saved, output,
-          outputDigest: sha256(output) } });
+        return res.json({ success: true, data: { ...saved, output: null,
+          outputDigest: sha256(output), forecastValueAvailable: false } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

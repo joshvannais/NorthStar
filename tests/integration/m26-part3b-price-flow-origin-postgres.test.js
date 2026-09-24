@@ -540,6 +540,45 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         reason: 'source_evidence_unavailable',
         evaluationSaved: false });
       expect(foreignPair.body.data?.comparisons).toBeUndefined();
+      const evaluationKey = key();
+      const savedEvaluation = await request(f.app)
+        .post(`${root}/saved-price-flow-rolling-pairs`)
+        .set(owner().session.headers)
+        .set('Idempotency-Key', evaluationKey)
+        .query({ firstRunId: runId, secondRunId }).send({});
+      expect(savedEvaluation.status).toBe(201);
+      expect(savedEvaluation.body.data).toMatchObject({
+        state: 'price_flow_evaluation_saved', revision: 1,
+        replayed: false, accuracyAvailable: false,
+        forecastValueAvailable: false, realForecastEligible: false });
+      const savedReplay = await request(f.app)
+        .post(`${root}/saved-price-flow-rolling-pairs`)
+        .set(owner().session.headers)
+        .set('Idempotency-Key', evaluationKey)
+        .query({ firstRunId: runId, secondRunId }).send({});
+      expect(savedReplay.status).toBe(200);
+      expect(savedReplay.body.data).toMatchObject({
+        evaluationId: savedEvaluation.body.data.evaluationId,
+        revision: 1, replayed: true });
+      expect(JSON.stringify(savedEvaluation.body.data)).not.toContain('1400.00');
+      expect(savedEvaluation.body.data).not.toHaveProperty('resultDigest');
+      const deniedEvaluation = await request(f.app)
+        .post(`${root}/saved-price-flow-rolling-pairs`)
+        .set(f.actors.member.session.headers)
+        .set('Idempotency-Key', key())
+        .query({ firstRunId: runId, secondRunId }).send({});
+      expect(deniedEvaluation.status).toBe(403);
+      const foreignEvaluation = await request(f.app)
+        .post(`${root}/saved-price-flow-rolling-pairs`)
+        .set(f.actors.otherOwner.session.headers)
+        .set('Idempotency-Key', key())
+        .query({ firstRunId: runId, secondRunId }).send({});
+      expect(foreignEvaluation.status).toBe(200);
+      expect(foreignEvaluation.body.data).toMatchObject({
+        state: 'rolling_pairs_unavailable', evaluationSaved: false });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_evaluations'))
+        .rejects.toMatchObject({ code: '42501' });
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_actual_receipts'))
         .rejects.toMatchObject({ code: '42501' });
@@ -600,6 +639,24 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(revisedPairs.body.data.comparisons.map(item => item.status))
         .toEqual(['outcome_unavailable', 'outcome_unavailable']);
       expect(JSON.stringify(revisedPairs.body.data)).not.toContain('1400.00');
+      const revisedEvaluation = await request(f.app)
+        .post(`${root}/saved-price-flow-rolling-pairs`)
+        .set(owner().session.headers)
+        .set('Idempotency-Key', key())
+        .query({ firstRunId: runId, secondRunId }).send({});
+      expect(revisedEvaluation.status).toBe(201);
+      expect(revisedEvaluation.body.data).toMatchObject({
+        state: 'price_flow_evaluation_saved', revision: 2,
+        previousId: savedEvaluation.body.data.evaluationId,
+        accuracyAvailable: false, realForecastEligible: false });
+      const evaluationHistory = await f.ownerPool.query(`
+        SELECT revision,previous_id,result FROM canonical_forecast_price_flow_evaluations
+        WHERE organization_id=$1 ORDER BY revision`, [f.org]);
+      expect(evaluationHistory.rows).toHaveLength(2);
+      expect(evaluationHistory.rows[0].result.comparisons.map(item => item.status))
+        .toEqual(['paired', 'paired']);
+      expect(evaluationHistory.rows[1].result.comparisons.map(item => item.status))
+        .toEqual(['outcome_unavailable', 'outcome_unavailable']);
       const history = await f.ownerPool.query(
         `SELECT revision,state,amount FROM canonical_forecast_price_flow_actual_receipts
          WHERE run_id=$1 ORDER BY revision`, [runId]);

@@ -84,6 +84,9 @@ function createForecastPriceHistoryRouter(options = {}) {
     `forecast-price-history:${req.tenantContext.organizationId}`);
   const actualThrottle = options.actualThrottle || rateLimit('forecast-actual-capture', req =>
     `forecast-price-history:${req.tenantContext.organizationId}`);
+  const evaluationThrottle = options.evaluationThrottle ||
+    rateLimit('forecast-evaluation-capture', req =>
+      `forecast-price-history:${req.tenantContext.organizationId}`);
   const readPosition = options.readPosition || readGuardedApprovedPriceFlow;
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
@@ -940,12 +943,13 @@ function createForecastPriceHistoryRouter(options = {}) {
   // Read-only supported-source pairing. The owning SQL functions authenticate
   // each saved run, profile witness and latest actual before the pure
   // comparator sees them. No paid numerical prediction or actual is returned.
-  router.get('/saved-price-flow-rolling-pairs', auth,
-    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+  const rollingPairHandler = async (req, res, saveEvaluation) => {
       if (!exactKeys(req.query, ['firstRunId', 'secondRunId']) ||
           !UUID.test(req.query.firstRunId || '') ||
           !UUID.test(req.query.secondRunId || '') ||
-          req.query.firstRunId === req.query.secondRunId) {
+          req.query.firstRunId === req.query.secondRunId ||
+          (saveEvaluation && (!exactKeys(req.body, []) ||
+            !KEY.test(req.get('Idempotency-Key') || '')))) {
         return res.status(400).json({ success: false, error: {
           category: 'FORECAST_REQUEST_INVALID',
           message: 'The rolling comparison request is invalid.',
@@ -1055,6 +1059,25 @@ function createForecastPriceHistoryRouter(options = {}) {
         }
         const result = buildRollingBacktest({
           version: 'm26-rolling-backtest-v1', runs, outcomes });
+        if (saveEvaluation) {
+          const value = (await client.query(
+            'SELECT public.canonical_forecast_capture_price_flow_evaluation($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) value',
+            [identity.organizationId, identity.actorUserId,
+              identity.actorAccessRole, identity.authSessionId,
+              req.get('X-CSRF-Token'), req.get('Idempotency-Key'),
+              req.query.firstRunId, req.query.secondRunId,
+              JSON.stringify(result)])).rows[0]?.value;
+          if (!value || !['price_flow_evaluation_saved',
+            'price_flow_evaluation_unavailable'].includes(value.state)) {
+            throw new Error('Invalid saved price-flow evaluation');
+          }
+          await client.query('COMMIT');
+          return res.status(value.state === 'price_flow_evaluation_saved' &&
+            !value.replayed ? 201 : 200).json({ success: true, data: {
+              ...value, accuracyAvailable: false,
+              forecastValueAvailable: false, realForecastEligible: false,
+            } });
+        }
         await client.query('COMMIT');
         return res.json({ success: true, data: {
           state: 'rolling_pairs_candidate',
@@ -1071,7 +1094,13 @@ function createForecastPriceHistoryRouter(options = {}) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);
       } finally { if (client) client.release(); }
-    });
+    };
+  router.get('/saved-price-flow-rolling-pairs', auth,
+    requirePermission('forecast', 'read'), throttle,
+    (req, res) => rollingPairHandler(req, res, false));
+  router.post('/saved-price-flow-rolling-pairs', auth,
+    requirePermission('forecast', 'update'), evaluationThrottle,
+    (req, res) => rollingPairHandler(req, res, true));
 
   return router;
 }

@@ -3175,6 +3175,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('173_canonical_forecast_price_decision_comm
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('174_canonical_forecast_price_flow_actual_candidate.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('175_canonical_forecast_price_flow_actual_receipts.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('176_canonical_forecast_price_flow_profile_witness.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('177_canonical_forecast_price_flow_evaluation_revisions.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

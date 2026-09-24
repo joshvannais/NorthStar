@@ -1120,6 +1120,39 @@ function createForecastPriceHistoryRouter(options = {}) {
     requirePermission('forecast', 'update'), evaluationThrottle,
     (req, res) => rollingPairHandler(req, res, true));
 
+  router.get('/saved-price-flow-evaluations/:evaluationId/manifest', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.evaluationId || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The evaluation manifest request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const manifest = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_manifest($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (!manifest || !['evaluation_manifest_available',
+          'evaluation_manifest_unavailable'].includes(manifest.state)) {
+          throw new Error('Invalid guarded evaluation manifest');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: manifest });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   return router;
 }
 

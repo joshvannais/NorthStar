@@ -457,6 +457,21 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .set('Idempotency-Key', key())
         .send({ sourceReceiptId: postHorizonReceiptId });
       expect(deniedActual.status).toBe(403);
+      const missingEvaluation = await request(f.app)
+        .post(`${root}/saved-price-flow-rolling-pairs`)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .query({ firstRunId: runId, secondRunId }).send({});
+      expect(missingEvaluation.status).toBe(201);
+      expect(missingEvaluation.body.data).toMatchObject({
+        state: 'price_flow_evaluation_saved', revision: 1 });
+      const missingManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(missingManifest.status).toBe(200);
+      expect(missingManifest.body.data).toMatchObject({
+        originCount: 2, pairedCount: 0, accuracyAvailable: false });
+      expect(missingManifest.body.data.origins.map(item => item.currentStatus))
+        .toEqual(['missing', 'missing']);
       const savedActual = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
         .set(owner().session.headers).set('Idempotency-Key', actualKey)
@@ -500,6 +515,14 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(pairedActual.rows[0].value).toMatchObject({
         state: 'pair_actual_known', amount: '1400.00',
         receiptId: savedActual.body.data.receiptId });
+      const partialManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(partialManifest.status).toBe(200);
+      expect(partialManifest.body.data).toMatchObject({
+        originCount: 2, pairedCount: 0 });
+      expect(partialManifest.body.data.origins.map(item => item.currentStatus))
+        .toEqual(['late_outcome', 'missing']);
       const secondActual = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${secondRunId}/actual-receipts`)
         .set(owner().session.headers).set('Idempotency-Key', key())
@@ -508,6 +531,12 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         state: 'price_flow_actual_recorded', actualState: 'known',
         amount: null, firstApprovalCount: null });
       expect(secondActual.status).toBe(201);
+      const lateManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(lateManifest.status).toBe(200);
+      expect(lateManifest.body.data.origins.map(item => item.currentStatus))
+        .toEqual(['late_outcome', 'late_outcome']);
       const secondPairedActual = await f.runtimePool.query(
         'SELECT public.canonical_forecast_price_flow_pair_actual_read($1,$2,$3,$4,$5) value',
         [f.org, owner().actorUserId, owner().actorAccessRole,
@@ -548,7 +577,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .query({ firstRunId: runId, secondRunId }).send({});
       expect(savedEvaluation.status).toBe(201);
       expect(savedEvaluation.body.data).toMatchObject({
-        state: 'price_flow_evaluation_saved', revision: 1,
+        state: 'price_flow_evaluation_saved', revision: 2,
         replayed: false, accuracyAvailable: false,
         forecastValueAvailable: false, realForecastEligible: false });
       const savedReplay = await request(f.app)
@@ -559,7 +588,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(savedReplay.status).toBe(200);
       expect(savedReplay.body.data).toMatchObject({
         evaluationId: savedEvaluation.body.data.evaluationId,
-        revision: 1, replayed: true });
+        revision: 2, replayed: true });
       const secondEvaluationKey = key();
       const sameResultNewKey = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
@@ -568,10 +597,27 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .query({ firstRunId: runId, secondRunId }).send({});
       expect(sameResultNewKey.status).toBe(201);
       expect(sameResultNewKey.body.data).toMatchObject({
-        state: 'price_flow_evaluation_saved', revision: 2,
+        state: 'price_flow_evaluation_saved', revision: 3,
         previousId: savedEvaluation.body.data.evaluationId, replayed: false });
       expect(JSON.stringify(savedEvaluation.body.data)).not.toContain('1400.00');
       expect(savedEvaluation.body.data).not.toHaveProperty('resultDigest');
+      const manifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(manifest.status).toBe(200);
+      expect(manifest.body.data).toMatchObject({
+        state: 'evaluation_manifest_available', revision: 2,
+        originCount: 2, pairedCount: 2, accuracyAvailable: false,
+        realForecastEligible: false });
+      expect(manifest.body.data.origins.map(item => item.currentStatus))
+        .toEqual(['paired', 'paired']);
+      expect(JSON.stringify(manifest.body.data)).not.toContain('1400.00');
+      const foreignManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
+      expect(foreignManifest.status).toBe(200);
+      expect(foreignManifest.body.data).toMatchObject({
+        state: 'evaluation_manifest_unavailable', reason: 'evaluation_not_found' });
       const deniedEvaluation = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(f.actors.member.session.headers)
@@ -649,6 +695,15 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(revisedPairs.body.data.comparisons.map(item => item.status))
         .toEqual(['outcome_unavailable', 'outcome_unavailable']);
       expect(JSON.stringify(revisedPairs.body.data)).not.toContain('1400.00');
+      const staleManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(staleManifest.status).toBe(200);
+      expect(staleManifest.body.data).toMatchObject({
+        state: 'evaluation_manifest_available', revision: 2,
+        originCount: 2, pairedCount: 0 });
+      expect(staleManifest.body.data.origins.map(item => item.currentStatus))
+        .toEqual(['stale', 'stale']);
       const oldKeyAfterSourceChange = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(owner().session.headers)
@@ -657,7 +712,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(oldKeyAfterSourceChange.status).toBe(200);
       expect(oldKeyAfterSourceChange.body.data).toMatchObject({
         evaluationId: sameResultNewKey.body.data.evaluationId,
-        revision: 2, replayed: true });
+        revision: 3, replayed: true });
       const revisedEvaluation = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(owner().session.headers)
@@ -665,19 +720,58 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .query({ firstRunId: runId, secondRunId }).send({});
       expect(revisedEvaluation.status).toBe(201);
       expect(revisedEvaluation.body.data).toMatchObject({
-        state: 'price_flow_evaluation_saved', revision: 3,
+        state: 'price_flow_evaluation_saved', revision: 4,
         previousId: sameResultNewKey.body.data.evaluationId,
         accuracyAvailable: false, realForecastEligible: false });
       const evaluationHistory = await f.ownerPool.query(`
         SELECT revision,previous_id,result FROM canonical_forecast_price_flow_evaluations
         WHERE organization_id=$1 ORDER BY revision`, [f.org]);
-      expect(evaluationHistory.rows).toHaveLength(3);
+      expect(evaluationHistory.rows).toHaveLength(4);
       expect(evaluationHistory.rows[0].result.comparisons.map(item => item.status))
-        .toEqual(['paired', 'paired']);
+        .toEqual(['outcome_unavailable', 'outcome_unavailable']);
       expect(evaluationHistory.rows[1].result.comparisons.map(item => item.status))
         .toEqual(['paired', 'paired']);
       expect(evaluationHistory.rows[2].result.comparisons.map(item => item.status))
+        .toEqual(['paired', 'paired']);
+      expect(evaluationHistory.rows[3].result.comparisons.map(item => item.status))
         .toEqual(['outcome_unavailable', 'outcome_unavailable']);
+      const firstReader = await f.runtimePool.connect();
+      const contendingReader = await f.runtimePool.connect();
+      const replayArgs = [f.org, owner().actorUserId,
+        owner().actorAccessRole, owner().authSessionId,
+        owner().csrfToken, key(), runId, secondRunId];
+      try {
+        await firstReader.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const held = await firstReader.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_replay($1,$2,$3,$4,$5,$6,$7,$8) value',
+          replayArgs);
+        expect(held.rows[0].value).toMatchObject({
+          state: 'price_flow_evaluation_new' });
+        await contendingReader.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await expect(contendingReader.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_replay($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [...replayArgs.slice(0, 5), key(), ...replayArgs.slice(6)]))
+          .rejects.toMatchObject({ code: '55P03' });
+      } finally {
+        await contendingReader.query('ROLLBACK').catch(() => {});
+        await firstReader.query('ROLLBACK').catch(() => {});
+        firstReader.release();
+        contendingReader.release();
+      }
+      await f.ownerPool.query(
+        "UPDATE organization_memberships SET status='suspended' WHERE organization_id=$1 AND user_id=$2",
+        [f.org, owner().actorUserId]);
+      try {
+        const lostAccess = await request(f.app)
+          .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/manifest`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect([401, 403]).toContain(lostAccess.status);
+        expect(lostAccess.body.data?.origins).toBeUndefined();
+      } finally {
+        await f.ownerPool.query(
+          "UPDATE organization_memberships SET status='active' WHERE organization_id=$1 AND user_id=$2",
+          [f.org, owner().actorUserId]);
+      }
       const history = await f.ownerPool.query(
         `SELECT revision,state,amount FROM canonical_forecast_price_flow_actual_receipts
          WHERE run_id=$1 ORDER BY revision`, [runId]);

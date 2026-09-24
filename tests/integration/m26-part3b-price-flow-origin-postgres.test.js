@@ -4,9 +4,11 @@ const crypto = require('node:crypto');
 const request = require('supertest');
 const { createEstimateReviewFixture } =
   require('../helpers/m24-estimate-review-fixture');
+const { sha256 } = require('../../src/services/businessProfileAdapter');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const root = '/api/v1/forecast/price-history';
+const profileRoot = '/api/v1/forecast/reporting-windows/effective-anchors';
 const key = () => crypto.randomUUID();
 const utc = day => `${day.toISOString().slice(0, 10)}T00:00:00.000000Z`;
 
@@ -119,7 +121,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       tomorrow.setUTCHours(0, 0, 0, 0);
       tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
       const priorStart = new Date(tomorrow);
-      priorStart.setUTCDate(priorStart.getUTCDate() - 2);
+      priorStart.setUTCDate(priorStart.getUTCDate() - 3);
       await shiftSourceDatesForFictionalDay(decisionId, priorStart);
       const snapshotId = await capturePrice();
       const horizonStartsAt = utc(tomorrow);
@@ -145,6 +147,86 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(proof.body.data).toMatchObject({
         state: 'price_flow_origin_activated', preHorizonCommitVerified: true,
         realForecastEligible: false });
+      const profile = await request(f.app).post(profileRoot)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({ reason: 'Prospective fictional UTC-day profile basis.',
+          confirmed: true });
+      expect(profile.status).toBe(201);
+      const profileAnchorId = profile.body.data.anchorId;
+      const profileActivation = await request(f.app)
+        .post(`${profileRoot}/${profileAnchorId}/activate`)
+        .set(owner().session.headers).send({});
+      expect(profileActivation.status).toBe(200);
+      const profileWitness = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/profile-witness`)
+        .set(owner().session.headers)
+        .send({ profileAnchorId });
+      expect(profileWitness.status).toBe(200);
+      expect(profileWitness.body.data).toMatchObject({
+        state: 'profile_witness_recorded', runId, profileAnchorId,
+        replayed: false, realForecastEligible: false });
+      const witnessReplay = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/profile-witness`)
+        .set(owner().session.headers)
+        .send({ profileAnchorId });
+      expect(witnessReplay.status).toBe(200);
+      expect(witnessReplay.body.data).toMatchObject({
+        state: 'profile_witness_recorded', replayed: true,
+        proofDigest: profileWitness.body.data.proofDigest });
+      const guardedWitness = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_profile_witness_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, runId]);
+      expect(guardedWitness.rows[0].value).toMatchObject({
+        state: 'profile_witness_recorded', runId, profileAnchorId,
+        proofDigest: profileWitness.body.data.proofDigest });
+      const pairSource = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_pair_source_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, runId]);
+      expect(pairSource.rows[0].value).toMatchObject({
+        state: 'pair_source_verified', runId, profileAnchorId,
+        profileProofDigest: profileWitness.body.data.proofDigest });
+      expect(sha256(pairSource.rows[0].value.output))
+        .toBe(origin.body.data.outputDigest);
+      const deniedWitness = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/profile-witness`)
+        .set(f.actors.member.session.headers)
+        .send({ profileAnchorId });
+      expect(deniedWitness.status).toBe(403);
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_profile_witnesses'))
+        .rejects.toMatchObject({ code: '42501' });
+      // A competing same-horizon saved origin is sufficient to prove the
+      // mounted reader refuses an open profile period. It is not the two
+      // distinct elapsed rolling windows required for Slice 3B acceptance.
+      const secondSnapshotId = await capturePriceThroughGuardedSource();
+      const secondOrigin = await request(f.app)
+        .post(`${root}/saved-price-flow-origins`)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({ sourceReceiptId: secondSnapshotId, currency: 'USD',
+          horizonStartsAt, horizonEndsAt: utc(horizonEnd) });
+      expect(secondOrigin.body.data).toMatchObject({
+        state: 'saved_price_flow_origin' });
+      expect(secondOrigin.status).toBe(201);
+      const secondRunId = secondOrigin.body.data.runId;
+      const secondProof = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${secondRunId}/activate`)
+        .set(owner().session.headers).send({});
+      expect(secondProof.status).toBe(200);
+      const secondWitness = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${secondRunId}/profile-witness`)
+        .set(owner().session.headers).send({ profileAnchorId });
+      expect(secondWitness.status).toBe(200);
+      const prematurePair = await request(f.app)
+        .get(`${root}/saved-price-flow-rolling-pairs`)
+        .set('Cookie', owner().session.headers.Cookie)
+        .query({ firstRunId: runId, secondRunId });
+      expect(prematurePair.status).toBe(200);
+      expect(prematurePair.body.data).toMatchObject({
+        state: 'rolling_pairs_unavailable',
+        reason: 'profile_period_unverified',
+        evaluationSaved: false, realForecastEligible: false });
       const read = await request(f.app)
         .get(`${root}/saved-price-flow-origins/${runId}`)
         .set('Cookie', owner().session.headers.Cookie);
@@ -165,7 +247,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       const stored = await f.ownerPool.query(
         'SELECT output FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
         [runId]);
-      expect(stored.rows[0].output.value.amount).toBe('1400.00');
+      expect(stored.rows[0].output.value.amount).toBe('0.00');
       const replay = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/activate`)
         .set(owner().session.headers).send({});
@@ -202,6 +284,12 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           'canonical_forecast_price_flow_activation_immutable'],
         ['canonical_forecast_price_decision_commit_observations',
           'canonical_forecast_price_decision_commit_immutable'],
+        ['canonical_forecast_profile_effective_anchors',
+          'canonical_forecast_profile_effective_anchors_immutable'],
+        ['canonical_forecast_profile_effective_activations',
+          'canonical_forecast_profile_effective_activations_immutable'],
+        ['canonical_forecast_price_flow_profile_witnesses',
+          'canonical_forecast_price_flow_profile_witness_immutable'],
       ];
       try {
         for (const [table, trigger] of triggers) {
@@ -248,12 +336,73 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await f.ownerPool.query(`
           UPDATE canonical_forecast_price_decision_commit_observations
           SET observed_at=$2 WHERE decision_id=$1`, [decisionId, witnessAt]);
+        const secondCaptureAt = new Date(fictionalStart.getTime() + 14 * 3600000);
+        const secondSavedAt = new Date(fictionalStart.getTime() + 15 * 3600000);
+        const secondProofAt = new Date(fictionalStart.getTime() + 16 * 3600000);
+        const secondWitnessAt = new Date(fictionalStart.getTime() + 17 * 3600000);
+        const secondReceipt = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_ordered_receipts value
+          SET captured_at=$2,
+          snapshot_digest=public.canonical_completion_digest(
+            jsonb_build_object('version','m26-price-ordered-source-v1',
+              'organizationId',value.organization_id,
+              'coverageStartOrder',value.coverage_start_order,
+              'highWaterOrder',value.high_water_order,
+              'digestNonce',value.digest_nonce,
+              'capturedAt',public.canonical_forecast_utc_instant($2::timestamptz),
+              'events',value.decision_events))
+          WHERE id=$1 RETURNING rtrim(snapshot_digest) digest`,
+        [secondSnapshotId, secondCaptureAt]);
+        const secondOutput = { ...stored.rows[0].output,
+          asOf: secondCaptureAt.toISOString(),
+          horizon: { startsAt: fictionalEnd.toISOString(),
+            endsAt: new Date(fictionalEnd.getTime() + 86400000).toISOString(),
+            grain: 'day' },
+          value: { kind: 'point', amount: '0.00' },
+          sourceSnapshotDigest: secondReceipt.rows[0].digest };
+        const changedSecond = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_saved_origins
+          SET saved_at=$2,horizon_start=$3,horizon_end=$4,
+            output=$5::jsonb,
+            receipt_digest=public.canonical_completion_digest($5::jsonb)
+          WHERE id=$1 RETURNING receipt_digest`,
+        [secondRunId, secondSavedAt, fictionalEnd,
+          new Date(fictionalEnd.getTime() + 86400000),
+          JSON.stringify(secondOutput)]);
+        const secondProofValue = { ...secondProof.body.data,
+          savedReceiptDigest: changedSecond.rows[0].receipt_digest,
+          captureCommitObservedAt: secondProofAt.toISOString(),
+          horizonStartsAt: fictionalEnd.toISOString() };
+        delete secondProofValue.proofDigest;
+        delete secondProofValue.replayed;
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_origin_activations
+          SET observed_at=$2,proof=$3::jsonb,
+            proof_digest=public.canonical_completion_digest($3::jsonb)
+          WHERE run_id=$1`,
+        [secondRunId, secondProofAt, JSON.stringify(secondProofValue)]);
+        const profileBefore = new Date(fictionalStart.getTime() - 12 * 3600000);
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_profile_effective_anchors
+          SET captured_at=$2 WHERE id=$1`, [profileAnchorId, profileBefore]);
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_profile_effective_activations
+          SET observed_at=$2 WHERE anchor_id=$1`,
+        [profileAnchorId, new Date(profileBefore.getTime() + 3600000)]);
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_profile_witnesses
+          SET observed_at=$2 WHERE run_id=$1`,
+        [runId, new Date(profileBefore.getTime() + 2 * 3600000)]);
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_profile_witnesses
+          SET observed_at=$2 WHERE run_id=$1`,
+        [secondRunId, secondWitnessAt]);
       } finally {
         for (const [table, trigger] of triggers.reverse()) {
           await f.ownerPool.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
         }
       }
-      const postHorizonReceiptId = await capturePrice();
+      const postHorizonReceiptId = await capturePriceThroughGuardedSource();
       const actual = await request(f.app)
         .get(`${root}/saved-price-flow-origins/${runId}/actual-candidates/${postHorizonReceiptId}`)
         .set('Cookie', owner().session.headers.Cookie);
@@ -344,6 +493,48 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(internalSaved.rows[0].value).toMatchObject({
         state: 'price_flow_actual_finalized', amount: 1400,
         firstApprovalCount: 1, outcomeFinalized: true });
+      const pairedActual = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_pair_actual_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, runId]);
+      expect(pairedActual.rows[0].value).toMatchObject({
+        state: 'pair_actual_known', amount: '1400.00',
+        receiptId: savedActual.body.data.receiptId });
+      const secondActual = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${secondRunId}/actual-receipts`)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({ sourceReceiptId: postHorizonReceiptId });
+      expect(secondActual.body.data).toMatchObject({
+        state: 'price_flow_actual_recorded', actualState: 'known',
+        amount: null, firstApprovalCount: null });
+      expect(secondActual.status).toBe(201);
+      const secondPairedActual = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_pair_actual_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, secondRunId]);
+      expect(secondPairedActual.rows[0].value).toMatchObject({
+        state: 'pair_actual_known', amount: '0.00',
+        receiptId: secondActual.body.data.receiptId });
+      const paired = await request(f.app)
+        .get(`${root}/saved-price-flow-rolling-pairs`)
+        .set('Cookie', owner().session.headers.Cookie)
+        .query({ firstRunId: runId, secondRunId });
+      expect(paired.status).toBe(200);
+      expect(paired.body.data).toMatchObject({
+        state: 'rolling_pairs_candidate', originCount: 2,
+        evaluationSaved: false, accuracyAvailable: false,
+        realForecastEligible: false });
+      expect(paired.body.data.comparisons).toHaveLength(2);
+      expect(paired.body.data.comparisons.map(item => item.status))
+        .toEqual(['paired', 'paired']);
+      expect(JSON.stringify(paired.body.data)).not.toContain('1400.00');
+      expect(paired.body.data).not.toHaveProperty('digest');
+      expect(paired.body.data.comparisons[0]).not.toHaveProperty('digest');
+      const foreignPair = await request(f.app)
+        .get(`${root}/saved-price-flow-rolling-pairs`)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie)
+        .query({ firstRunId: runId, secondRunId });
+      expect(foreignPair.body.data?.comparisons).toBeUndefined();
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_actual_receipts'))
         .rejects.toMatchObject({ code: '42501' });
@@ -386,6 +577,24 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(revised.body.data).toMatchObject({
         state: 'price_flow_actual_revoked', revision: 2,
         amount: null, outcomeFinalized: false });
+      const revokedPair = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_pair_actual_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, runId]);
+      expect(revokedPair.rows[0].value).toMatchObject({
+        state: 'pair_actual_revoked', amount: null,
+        reason: 'source_revoked', receiptId: correction.body.data.receiptId });
+      const revisedPairs = await request(f.app)
+        .get(`${root}/saved-price-flow-rolling-pairs`)
+        .set('Cookie', owner().session.headers.Cookie)
+        .query({ firstRunId: runId, secondRunId });
+      expect(revisedPairs.status).toBe(200);
+      expect(revisedPairs.body.data).toMatchObject({
+        state: 'rolling_pairs_candidate', evaluationSaved: false,
+        accuracyAvailable: false, realForecastEligible: false });
+      expect(revisedPairs.body.data.comparisons.map(item => item.status))
+        .toEqual(['outcome_unavailable', 'outcome_unavailable']);
+      expect(JSON.stringify(revisedPairs.body.data)).not.toContain('1400.00');
       const history = await f.ownerPool.query(
         `SELECT revision,state,amount FROM canonical_forecast_price_flow_actual_receipts
          WHERE run_id=$1 ORDER BY revision`, [runId]);

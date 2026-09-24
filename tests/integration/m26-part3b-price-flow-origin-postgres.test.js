@@ -660,6 +660,14 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(stale.body.data).toMatchObject({
         state: 'price_flow_actual_unavailable', reason: 'source_changed',
         amount: null, outcomeFinalized: false });
+      const unverifiedManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(unverifiedManifest.status).toBe(200);
+      expect(unverifiedManifest.body.data.origins.map(item => item.currentStatus))
+        .toEqual(['stale', 'stale']);
+      expect(unverifiedManifest.body.data.origins.map(item => item.reason))
+        .toEqual(['actual_source_changed', 'actual_source_changed']);
       const correctedSource = await capturePriceThroughGuardedSource();
       const correction = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
@@ -684,6 +692,12 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(revokedPair.rows[0].value).toMatchObject({
         state: 'pair_actual_revoked', amount: null,
         reason: 'source_revoked', receiptId: correction.body.data.receiptId });
+      const revokedManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(revokedManifest.status).toBe(200);
+      expect(revokedManifest.body.data.origins.map(item => item.currentStatus))
+        .toEqual(['revoked', 'stale']);
       const revisedPairs = await request(f.app)
         .get(`${root}/saved-price-flow-rolling-pairs`)
         .set('Cookie', owner().session.headers.Cookie)

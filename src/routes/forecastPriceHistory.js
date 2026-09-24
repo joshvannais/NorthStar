@@ -17,7 +17,6 @@ const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAda
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 const { normalizeForecastOutput } = require('../forecasting/outputContract');
 const { buildRollingBacktest } = require('../forecasting/rollingBacktest');
-const { sha256 } = require('../services/businessProfileAdapter');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;

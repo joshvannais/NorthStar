@@ -57,8 +57,11 @@ BEGIN
    IF profile_state->>'state'<>'profile_effective_window_verified' THEN
     current_state:='excluded'; reason_value:='profile_period_unavailable';
    ELSIF item->>'outcomeReceiptId' IS NULL AND
-    actual_state->>'state' IN ('pair_actual_known','pair_actual_revoked') THEN
+    actual_state->>'state'='pair_actual_known' THEN
     current_state:='late_outcome'; reason_value:='later_actual_available';
+   ELSIF item->>'outcomeReceiptId' IS NULL AND
+    actual_state->>'state'='pair_actual_revoked' THEN
+    current_state:='revoked'; reason_value:='actual_revoked';
    ELSIF item->>'outcomeReceiptId' IS DISTINCT FROM
     actual_state->>'receiptId' THEN
     current_state:='stale'; reason_value:='actual_revision_changed';
@@ -68,8 +71,17 @@ BEGIN
     paired_count:=paired_count+1;
    ELSIF item->>'status'='window_normalization_required' THEN
     current_state:='excluded'; reason_value:='window_normalization_required';
+   ELSIF actual_state->>'state'='pair_actual_unavailable' AND
+    actual_state->>'reason'='no_saved_actual' THEN
+    current_state:='missing'; reason_value:='actual_not_recorded';
+   ELSIF actual_state->>'state'='pair_actual_unavailable' AND
+    actual_state->>'reason'='source_changed' THEN
+    current_state:='stale'; reason_value:='actual_source_changed';
+   ELSIF actual_state->>'state'='pair_actual_unavailable' AND
+    actual_state->>'reason'='actual_commit_unverified' THEN
+    current_state:='excluded'; reason_value:='actual_commit_unverified';
    ELSIF actual_state->>'state'='pair_actual_unavailable' THEN
-    current_state:='missing'; reason_value:='actual_not_finalized';
+    current_state:='excluded'; reason_value:='actual_evidence_unavailable';
    ELSE
     current_state:='excluded';
     reason_value:=COALESCE(item->>'reason','source_evidence_unavailable');

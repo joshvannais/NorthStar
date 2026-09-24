@@ -1576,6 +1576,13 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_origin_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_decision_commit_observations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_decision_commit_observations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_observe_price_decision_commit(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_actual_candidate(uuid,uuid,text,uuid,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_actual_candidate(uuid,uuid,text,uuid,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -3151,6 +3158,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('169_canonical_forecast_profile_effective_s
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('170_canonical_forecast_price_anchor_activation.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('171_canonical_forecast_price_flow_saved_origin.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('172_canonical_forecast_price_flow_origin_activation.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('173_canonical_forecast_price_decision_commit_observation.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('174_canonical_forecast_price_flow_actual_candidate.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

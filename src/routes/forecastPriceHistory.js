@@ -92,7 +92,7 @@ function createForecastPriceHistoryRouter(options = {}) {
   // A separate transaction must observe the first ordered receipt committed
   // before its prospective source coverage can be used for a local period.
   router.post('/ordered-anchor/activate', auth,
-    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
       if (!exactKeys(req.body, [])) return res.status(400).json({
         success: false, error: { category: 'FORECAST_REQUEST_INVALID',
           message: 'The price source request is invalid.' },
@@ -733,6 +733,80 @@ function createForecastPriceHistoryRouter(options = {}) {
         await client.query('COMMIT');
         return res.json({ success: true, data: { ...saved, output: null,
           outputDigest: sha256(output), forecastValueAvailable: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  // This records when a separate transaction first saw an M24 price decision
+  // committed. It is source evidence, not an actual-outcome or forecast claim.
+  router.post('/decision-commit-observations', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      if (!exactKeys(req.body, ['decisionId']) ||
+          !UUID.test(req.body.decisionId || '') || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_observe_price_decision_commit($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.body.decisionId])).rows[0]?.value;
+        if (!value || !['price_decision_commit_observed',
+          'price_decision_commit_unavailable'].includes(value.state)) {
+          throw new Error('Invalid price decision commit observation');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/saved-price-flow-origins/:runId/actual-candidates/:receiptId',
+    auth, requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.runId) ||
+          !UUID.test(req.params.receiptId) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_actual_candidate($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.runId, req.params.receiptId])).rows[0]?.value;
+        if (!value || !['price_flow_actual_candidate',
+          'price_flow_actual_pending',
+          'price_flow_actual_unavailable'].includes(value.state)) {
+          throw new Error('Invalid price-flow actual candidate');
+        }
+        await client.query('COMMIT');
+        // No unfinalized numerical target result is delivered as an accuracy
+        // or forecast claim through the paid route.
+        return res.json({ success: true, data: {
+          ...value, amount: null, firstApprovalCount: null,
+          outcomeFinalized: false, realForecastEligible: false,
+        } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

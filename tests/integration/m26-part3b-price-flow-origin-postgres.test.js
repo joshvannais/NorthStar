@@ -80,12 +80,23 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
 
   test('paid M24 writer feeds an immutable uncalibrated saved point with causal origin proof',
     async () => {
-      await capturePrice();
+      const anchorReceiptId = await capturePrice();
       const activation = await request(f.app)
         .post(`${root}/ordered-anchor/activate`)
         .set(owner().session.headers).send({});
       expect(activation.status).toBe(200);
       const decisionId = await approve(f.estimateGraphs[0].ids.estimate);
+      const observed = await request(f.app)
+        .post(`${root}/decision-commit-observations`)
+        .set(owner().session.headers).send({ decisionId });
+      expect(observed.status).toBe(200);
+      expect(observed.body.data).toMatchObject({
+        state: 'price_decision_commit_observed', decisionId,
+        sourceFinalized: false, replayed: false });
+      const denied = await request(f.app)
+        .post(`${root}/decision-commit-observations`)
+        .set(f.actors.member.session.headers).send({ decisionId });
+      expect(denied.status).toBe(403);
       const tomorrow = new Date();
       tomorrow.setUTCHours(0, 0, 0, 0);
       tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -125,6 +136,14 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         outputDigest: origin.body.data.outputDigest,
         forecastValueAvailable: false, output: null,
       });
+      const pendingActual = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${runId}/actual-candidates/${snapshotId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(pendingActual.status).toBe(200);
+      expect(pendingActual.body.data).toMatchObject({
+        state: 'price_flow_actual_pending', reason: 'horizon_open',
+        amount: null, firstApprovalCount: null,
+        outcomeFinalized: false, realForecastEligible: false });
       const stored = await f.ownerPool.query(
         'SELECT output FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
         [runId]);
@@ -142,5 +161,115 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_origin_activations'))
         .rejects.toMatchObject({ code: '42501' });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_decision_commit_observations'))
+        .rejects.toMatchObject({ code: '42501' });
+
+      // Disposable fixture only: move the already-proven production writer
+      // and its immutable receipts to a coherent past UTC window so the
+      // post-horizon calculation can execute today. This cannot prove real
+      // elapsed history or causal past commits.
+      const fictionalStart = new Date(priorStart);
+      const fictionalEnd = new Date(fictionalStart.getTime() + 86400000);
+      const captureAt = new Date(fictionalStart.getTime() - 12 * 3600000);
+      const savedAt = new Date(fictionalStart.getTime() - 10 * 3600000);
+      const proofAt = new Date(fictionalStart.getTime() - 9 * 3600000);
+      const witnessAt = new Date(fictionalStart.getTime() + 13 * 3600000);
+      const triggers = [
+        ['canonical_forecast_price_ordered_receipts',
+          'canonical_forecast_price_ordered_receipts_immutable'],
+        ['canonical_forecast_price_flow_saved_origins',
+          'canonical_forecast_price_flow_origins_immutable'],
+        ['canonical_forecast_price_flow_origin_activations',
+          'canonical_forecast_price_flow_activation_immutable'],
+        ['canonical_forecast_price_decision_commit_observations',
+          'canonical_forecast_price_decision_commit_immutable'],
+      ];
+      try {
+        for (const [table, trigger] of triggers) {
+          await f.ownerPool.query(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`);
+        }
+        const receipt = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_ordered_receipts value
+          SET captured_at=$2,
+          snapshot_digest=public.canonical_completion_digest(
+            jsonb_build_object('version','m26-price-ordered-source-v1',
+              'organizationId',value.organization_id,
+              'coverageStartOrder',value.coverage_start_order,
+              'highWaterOrder',value.high_water_order,
+              'digestNonce',value.digest_nonce,
+              'capturedAt',public.canonical_forecast_utc_instant($2::timestamptz),
+              'events',value.decision_events))
+          WHERE id=$1 RETURNING rtrim(snapshot_digest) digest`,
+        [anchorReceiptId, captureAt]);
+        const output = { ...stored.rows[0].output,
+          asOf: captureAt.toISOString(),
+          horizon: { startsAt: fictionalStart.toISOString(),
+            endsAt: fictionalEnd.toISOString(), grain: 'day' },
+          value: { kind: 'point', amount: '0.00' },
+          sourceSnapshotDigest: receipt.rows[0].digest };
+        const changed = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_saved_origins
+          SET source_receipt_id=$2,saved_at=$3,horizon_start=$4,horizon_end=$5,
+            output=$6::jsonb,
+            receipt_digest=public.canonical_completion_digest($6::jsonb)
+          WHERE id=$1 RETURNING receipt_digest`,
+        [runId, anchorReceiptId, savedAt, fictionalStart, fictionalEnd,
+          JSON.stringify(output)]);
+        const proofValue = { ...proof.body.data,
+          savedReceiptDigest: changed.rows[0].receipt_digest,
+          captureCommitObservedAt: proofAt.toISOString(),
+          horizonStartsAt: fictionalStart.toISOString() };
+        delete proofValue.proofDigest;
+        delete proofValue.replayed;
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_origin_activations
+          SET observed_at=$2,proof=$3::jsonb,
+            proof_digest=public.canonical_completion_digest($3::jsonb)
+          WHERE run_id=$1`, [runId, proofAt, JSON.stringify(proofValue)]);
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_decision_commit_observations
+          SET observed_at=$2 WHERE decision_id=$1`, [decisionId, witnessAt]);
+      } finally {
+        for (const [table, trigger] of triggers.reverse()) {
+          await f.ownerPool.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
+        }
+      }
+      const postHorizonReceiptId = await capturePrice();
+      const actual = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${runId}/actual-candidates/${postHorizonReceiptId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(actual.status).toBe(200);
+      expect(actual.body.data).toMatchObject({
+        state: 'price_flow_actual_candidate', amount: null,
+        firstApprovalCount: null, selectedSourceFinalizedAtCapture: true,
+        outcomeFinalized: false });
+      const internalActual = await f.ownerPool.query(
+        'SELECT public.canonical_forecast_price_flow_actual_candidate($1,$2,$3,$4,$5,$6) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, runId, postHorizonReceiptId]);
+      expect(internalActual.rows[0].value).toMatchObject({
+        state: 'price_flow_actual_candidate', amount: '1400.00',
+        firstApprovalCount: 1, outcomeFinalized: false });
+      try {
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_decision_commit_observations
+          DISABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+        await f.ownerPool.query(`UPDATE
+          canonical_forecast_price_decision_commit_observations
+          SET observed_at=$2 WHERE decision_id=$1`, [decisionId, new Date()]);
+      } finally {
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_decision_commit_observations
+          ENABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+      }
+      const lateWitness = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${runId}/actual-candidates/${postHorizonReceiptId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(lateWitness.status).toBe(200);
+      expect(lateWitness.body.data).toMatchObject({
+        state: 'price_flow_actual_unavailable',
+        reason: 'event_commit_boundary_unverified', amount: null,
+        outcomeFinalized: false });
     }, 120000);
 });

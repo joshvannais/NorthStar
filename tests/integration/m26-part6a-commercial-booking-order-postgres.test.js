@@ -163,10 +163,27 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       }
     }
     const bookingRoute = '/api/v1/forecast/booking-reviews';
+    const beforeReviewCandidates = await request(f.app)
+      .get(`${bookingRoute}/candidates`).set(actor.session.headers);
+    expect(beforeReviewCandidates.status).toBe(200);
+    expect(beforeReviewCandidates.body.data).toMatchObject({
+      state: 'booking_review_candidates_observed', candidateCount: 1,
+      writeRechecksCurrentness: true, bookedWorkVerified: false,
+      completePeriodVerified: false, forecastIssued: false });
+    expect(beforeReviewCandidates.body.data.candidates[0]).toMatchObject({
+      approvalId: matchingApprovalId, appointmentId: appointment });
+    expect((await request(f.app).get(`${bookingRoute}/candidates`)
+      .set(f.actors.otherOwner.session.headers)).body.data).toMatchObject({
+      state: 'booking_review_candidates_observed', candidateCount: 0 });
+    expect((await request(f.app).get(`${bookingRoute}/candidates`)
+      .set(f.actors.member.session.headers)).status).toBe(403);
     const firstWrite = await request(f.app).post(`${bookingRoute}/first`)
       .set(actor.session.headers).set('Idempotency-Key', reviewParams[6])
       .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
     expect(firstWrite.status).toBe(201);
+    expect((await request(f.app).get(`${bookingRoute}/candidates`)
+      .set(actor.session.headers)).body.data).toMatchObject({
+      state: 'booking_review_candidates_observed', candidateCount: 0 });
     const firstReview = firstWrite.body.data;
     expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
       replayed: false,

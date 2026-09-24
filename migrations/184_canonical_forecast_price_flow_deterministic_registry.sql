@@ -28,7 +28,7 @@ DECLARE base public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  registry public.canonical_forecast_price_flow_algorithms%ROWTYPE;
  source_state JSONB; current_source JSONB; zero_output JSONB;
  key_hash TEXT; request_hash TEXT; saved TIMESTAMPTZ;
- installed_digest TEXT;
+ installed_digest TEXT; base_digest TEXT; base_registry TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
   key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR
@@ -61,6 +61,16 @@ BEGIN
   registry.implementation_digest<>installed_digest THEN
   RETURN jsonb_build_object('state','price_flow_origin_unavailable',
    'reason','algorithm_registration_unverified','forecastIssued',FALSE);
+ END IF;
+ SELECT implementation_digest INTO base_registry
+  FROM public.canonical_forecast_price_flow_algorithms
+  WHERE algorithm_version='m26_price_flow_carry_forward_v1';
+ base_digest:=encode(sha256(convert_to(pg_get_functiondef(
+  'public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz)'::regprocedure),
+  'UTF8')),'hex');
+ IF base_registry IS DISTINCT FROM base_digest THEN
+  RETURN jsonb_build_object('state','price_flow_origin_unavailable',
+   'reason','base_algorithm_registration_unverified','forecastIssued',FALSE);
  END IF;
  SELECT * INTO base FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=base_run_value;
@@ -119,9 +129,43 @@ VALUES
    'public.canonical_forecast_capture_price_flow_zero_baseline(uuid,uuid,text,uuid,text,text,uuid)'::regprocedure),
    'UTF8')),'hex'));
 
+-- The existing carry-forward writer predates this registry. Enforce its
+-- installed identity at the immutable origin table's insert boundary so it
+-- cannot continue emitting same-version runs after an implementation swap.
+CREATE FUNCTION public.canonical_forecast_price_flow_registered_insert()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE expected TEXT; installed TEXT; function_identity REGPROCEDURE;
+BEGIN
+ IF NEW.output->>'calculationVersion'='m26_price_flow_carry_forward_v1' THEN
+  function_identity:=
+   'public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz)'::regprocedure;
+ ELSIF NEW.output->>'calculationVersion'='m26_price_flow_zero_baseline_v1' THEN
+  function_identity:=
+   'public.canonical_forecast_capture_price_flow_zero_baseline(uuid,uuid,text,uuid,text,text,uuid)'::regprocedure;
+ ELSE
+  RAISE EXCEPTION 'Price-flow algorithm not registered' USING ERRCODE='23514';
+ END IF;
+ SELECT implementation_digest INTO expected
+  FROM public.canonical_forecast_price_flow_algorithms
+  WHERE algorithm_version=NEW.output->>'calculationVersion';
+ installed:=encode(sha256(convert_to(pg_get_functiondef(function_identity),
+  'UTF8')),'hex');
+ IF expected IS DISTINCT FROM installed THEN
+  RAISE EXCEPTION 'Price-flow algorithm implementation changed'
+   USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER canonical_forecast_price_flow_registered_insert
+ BEFORE INSERT ON public.canonical_forecast_price_flow_saved_origins
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_forecast_price_flow_registered_insert();
+
 REVOKE ALL ON TABLE public.canonical_forecast_price_flow_algorithms FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_capture_price_flow_zero_baseline(
  UUID,UUID,TEXT,UUID,TEXT,TEXT,UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_registered_insert()
+ FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  REVOKE ALL ON TABLE public.canonical_forecast_price_flow_algorithms
   FROM northstar_app_runtime;

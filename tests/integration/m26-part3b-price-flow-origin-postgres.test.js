@@ -484,6 +484,43 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(zeroRead.body.data).toMatchObject({ runId: zeroRunId,
         output: null, outputDigest: null, receiptDigest: null,
         originProofDigest: null, forecastValueAvailable: false });
+      // Disposable owner-only fault injection: a mismatched installed
+      // carry-forward registration must block both another base capture and
+      // a candidate cloned from the previously valid immutable base.
+      const registered = await f.ownerPool.query(
+        `SELECT implementation_digest FROM canonical_forecast_price_flow_algorithms
+         WHERE algorithm_version='m26_price_flow_carry_forward_v1'`);
+      await f.ownerPool.query(
+        'ALTER TABLE canonical_forecast_price_flow_algorithms DISABLE TRIGGER canonical_forecast_price_flow_algorithms_immutable');
+      try {
+        await f.ownerPool.query(
+          `UPDATE canonical_forecast_price_flow_algorithms
+           SET implementation_digest=$1
+           WHERE algorithm_version='m26_price_flow_carry_forward_v1'`,
+          ['0'.repeat(64)]);
+        const mismatched = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_capture_price_flow_zero_baseline($1,$2,$3,$4,$5,$6,$7) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key(), runId]);
+        expect(mismatched.rows[0].value).toMatchObject({
+          state: 'price_flow_origin_unavailable',
+          reason: 'base_algorithm_registration_unverified',
+          forecastIssued: false });
+        await expect(f.runtimePool.query(
+          'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key(), snapshotId,
+            'USD', horizonStartsAt, utc(horizonEnd)]))
+          .rejects.toMatchObject({ code: '23514' });
+      } finally {
+        await f.ownerPool.query(
+          `UPDATE canonical_forecast_price_flow_algorithms
+           SET implementation_digest=$1
+           WHERE algorithm_version='m26_price_flow_carry_forward_v1'`,
+          [registered.rows[0].implementation_digest]);
+        await f.ownerPool.query(
+          'ALTER TABLE canonical_forecast_price_flow_algorithms ENABLE TRIGGER canonical_forecast_price_flow_algorithms_immutable');
+      }
       const absentZero = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${key()}/zero-baseline`)
         .set(owner().session.headers).set('Idempotency-Key', key())

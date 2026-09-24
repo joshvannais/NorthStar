@@ -207,13 +207,25 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
       });
       expect(JSON.stringify(response.body.data)).not.toContain('amount');
       expect(response.body.data).not.toHaveProperty('digest');
-      const diversity = await f.runtimePool.query(
-        'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4) value',
+      const sourceWindow = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_complete_window($1,$2,$3,$4) value',
         args);
+      const diversity = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4,$5,$6::jsonb) value',
+        [...args, sourceWindow.rows[0].value.anchorRunId,
+          JSON.stringify(sourceWindow.rows[0].value.origins)]);
       expect(diversity.rows[0].value).toMatchObject({
         state: 'source_event_diversity_observed',
         sourceEventDiversityVerified: false,
         distinctSourceEventCount: 0,
+      });
+      const changedAnchor = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4,$5,$6::jsonb) value',
+        [...args, crypto.randomUUID(),
+          JSON.stringify(sourceWindow.rows[0].value.origins)]);
+      expect(changedAnchor.rows[0].value).toMatchObject({
+        state: 'source_event_diversity_unavailable',
+        sourceEventDiversityVerified: false,
       });
       const postHorizonSource = await request(f.app)
         .post(`${root}/ordered-snapshots`)
@@ -282,7 +294,8 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
         await f.ownerPool.query(`UPDATE canonical_estimate_decisions
           SET created_at=$2 WHERE id=$1`, [decisionId, eventAt]);
         await f.ownerPool.query(`UPDATE canonical_forecast_price_decision_orders
-          SET ordered_at=$2 WHERE decision_id=$1`, [decisionId, eventAt]);
+          SET ordered_at=$2::timestamptz + interval '123 microseconds'
+          WHERE decision_id=$1`, [decisionId, eventAt]);
         await f.ownerPool.query(`UPDATE canonical_forecast_price_decision_commit_observations
           SET observed_at=$2 WHERE decision_id=$1`,
         [decisionId, new Date(eventAt.getTime() + 3600000)]);
@@ -318,5 +331,81 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
           realAccuracyAvailable: false, realForecastEligible: false },
         numericalErrorAvailable: false });
       expect(JSON.stringify(changed.body.data)).not.toContain('1400.00');
+      // Disposable owner-only chronology fixture: bind one of the saved
+      // origins to the genuine M24 source receipt containing the day-45
+      // approval, including its nonzero microsecond source order. The prior
+      // 60 unchanged snapshots must not count as 60 source event days.
+      const reboundCapture = new Date(start.getTime() + 46 * day +
+        13 * 3600000);
+      const reboundRunId = runIds[47];
+      const reboundTriggers = [
+        ['canonical_forecast_price_ordered_receipts',
+          'canonical_forecast_price_ordered_receipts_immutable'],
+        ['canonical_forecast_price_flow_saved_origins',
+          'canonical_forecast_price_flow_origins_immutable'],
+        ['canonical_forecast_price_flow_origin_activations',
+          'canonical_forecast_price_flow_activation_immutable'],
+      ];
+      try {
+        for (const [table, trigger] of reboundTriggers) {
+          await f.ownerPool.query(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`);
+        }
+        const reboundSource = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_ordered_receipts value
+          SET captured_at=$2,
+            snapshot_digest=public.canonical_completion_digest(
+              jsonb_build_object('version','m26-price-ordered-source-v1',
+                'organizationId',value.organization_id,
+                'coverageStartOrder',value.coverage_start_order,
+                'highWaterOrder',value.high_water_order,
+                'digestNonce',value.digest_nonce,
+                'capturedAt',public.canonical_forecast_utc_instant($2::timestamptz),
+                'events',value.decision_events))
+          WHERE id=$1 RETURNING rtrim(snapshot_digest) digest`,
+        [changedSource.body.data.snapshotId, reboundCapture]);
+        const currentRun = await f.ownerPool.query(`
+          SELECT output FROM canonical_forecast_price_flow_saved_origins
+          WHERE organization_id=$1 AND id=$2`, [f.org, reboundRunId]);
+        const output = { ...currentRun.rows[0].output,
+          asOf: utc(reboundCapture),
+          sourceSnapshotDigest: reboundSource.rows[0].digest,
+          value: { kind: 'point', amount: '1400.00' },
+          evidenceCoverage: { included: 1, excluded: 0, missing: 0,
+            stale: 0, conflicting: 0 } };
+        const rebound = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_saved_origins
+          SET source_receipt_id=$3,output=$4::jsonb,
+            receipt_digest=public.canonical_completion_digest($4::jsonb)
+          WHERE organization_id=$1 AND id=$2 RETURNING receipt_digest`,
+        [f.org, reboundRunId, changedSource.body.data.snapshotId,
+          JSON.stringify(output)]);
+        const currentProof = await f.ownerPool.query(`
+          SELECT proof FROM canonical_forecast_price_flow_origin_activations
+          WHERE organization_id=$1 AND run_id=$2`, [f.org, reboundRunId]);
+        const proof = { ...currentProof.rows[0].proof,
+          savedReceiptDigest: rebound.rows[0].receipt_digest };
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_origin_activations
+          SET proof=$3::jsonb,
+            proof_digest=public.canonical_completion_digest($3::jsonb)
+          WHERE organization_id=$1 AND run_id=$2`,
+        [f.org, reboundRunId, JSON.stringify(proof)]);
+      } finally {
+        for (const [table, trigger] of reboundTriggers.reverse()) {
+          await f.ownerPool.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
+        }
+      }
+      const reboundWindow = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_complete_window($1,$2,$3,$4) value',
+        args);
+      const reboundDiversity = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4,$5,$6::jsonb) value',
+        [...args, reboundWindow.rows[0].value.anchorRunId,
+          JSON.stringify(reboundWindow.rows[0].value.origins)]);
+      expect(reboundDiversity.rows[0].value).toMatchObject({
+        state: 'source_event_diversity_observed',
+        sourceEventDiversityVerified: false,
+        distinctSourceEventCount: 1,
+      });
     }, 300000);
 });

@@ -1614,6 +1614,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_complete_window(uuid,uuid,text,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_complete_window(uuid,uuid,text,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_event_diversity(uuid,uuid,text,uuid,uuid,jsonb)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_event_diversity(uuid,uuid,text,uuid,uuid,jsonb) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);

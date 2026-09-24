@@ -1324,9 +1324,10 @@ function createForecastPriceHistoryRouter(options = {}) {
           } });
         }
         const diversity = (await client.query(
-          'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4) value',
+          'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4,$5,$6::jsonb) value',
           [identity.organizationId, identity.actorUserId,
-            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+            identity.actorAccessRole, identity.authSessionId,
+            window.anchorRunId, JSON.stringify(window.origins)])).rows[0]?.value;
         if (!diversity || !Number.isInteger(diversity.distinctSourceEventCount) ||
             diversity.distinctSourceEventCount < 0 ||
             diversity.distinctSourceEventCount > 60) {

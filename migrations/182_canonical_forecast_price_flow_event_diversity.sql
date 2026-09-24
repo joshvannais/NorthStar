@@ -4,7 +4,8 @@
 -- before the saved origin; the origin's later activation observes that commit
 -- before its horizon. Source event timestamps do not prove calendar day-end.
 CREATE FUNCTION public.canonical_forecast_price_flow_event_diversity(
- org UUID,actor UUID,role_value TEXT,session_value UUID)
+ org UUID,actor UUID,role_value TEXT,session_value UUID,
+ expected_anchor UUID,expected_origins JSONB)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE window_value JSONB; item JSONB;
@@ -19,11 +20,14 @@ BEGIN
   RAISE EXCEPTION 'Read committed required for price-flow event diversity'
    USING ERRCODE='25001';
  END IF;
- -- The guarded inventory takes the same tenant access and booking lock as
- -- the paid evaluation reader. No caller-selected run list is accepted.
+ -- Re-read the guarded inventory, then bind the entire ordered run list to
+ -- the caller's first inventory. Midnight may change the anchor between
+ -- READ COMMITTED statements even without a writer.
  window_value:=public.canonical_forecast_price_flow_complete_window(
   org,actor,role_value,session_value);
- IF window_value->>'state'<>'complete_saved_origin_window_observed' THEN
+ IF window_value->>'state'<>'complete_saved_origin_window_observed' OR
+    window_value->>'anchorRunId' IS DISTINCT FROM expected_anchor::text OR
+    window_value->'origins' IS DISTINCT FROM expected_origins THEN
   RETURN jsonb_build_object('state','source_event_diversity_unavailable',
    'sourceEventDiversityVerified',FALSE,'distinctSourceEventCount',0);
  END IF;
@@ -65,8 +69,7 @@ BEGIN
    WHERE event->>'action'='approve' AND event->>'revision'='1'
     AND decision.action='approve' AND decision.revision=1
     AND event->>'digest'=decision.digest
-    AND date_trunc('milliseconds',source.ordered_at)=
-      (event->>'sourceObservedAt')::timestamptz
+    AND source.ordered_at=(event->>'sourceObservedAt')::timestamptz
     AND source.ordered_at>=prior_start AND source.ordered_at<prior_end
     AND pg_xact_status(source.xmin::text::xid8)='committed'
   ) THEN
@@ -83,8 +86,8 @@ BEGIN
 END $$;
 
 REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_event_diversity(
- UUID,UUID,TEXT,UUID) FROM PUBLIC;
+ UUID,UUID,TEXT,UUID,UUID,JSONB) FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_event_diversity(
-  UUID,UUID,TEXT,UUID) TO northstar_app_runtime;
+  UUID,UUID,TEXT,UUID,UUID,JSONB) TO northstar_app_runtime;
 END IF; END $$;

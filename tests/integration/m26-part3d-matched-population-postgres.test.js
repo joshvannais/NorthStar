@@ -39,6 +39,24 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missing.release();
       }
 
+      const missingFixed = await f.ownerPool.connect();
+      try {
+        await missingFixed.query('BEGIN');
+        await missingFixed.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_matched_population_at_anchor(
+            uuid,uuid,text,uuid,uuid)
+          RENAME TO canonical_forecast_price_flow_fixed_population_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(missingFixed,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await missingFixed.query('ROLLBACK');
+      } catch (error) {
+        await missingFixed.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingFixed.release();
+      }
+
       const missingSelectedOrigin = await f.ownerPool.connect();
       try {
         await missingSelectedOrigin.query('BEGIN');
@@ -631,6 +649,81 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_challenge_ready',
         researchOnly: true, forecastServingEnabled: false });
       expect(challenged.body.data.reviewToken).toMatch(/^[a-f0-9]{64}$/);
+      const fixedReview = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_matched_population_at_anchor($1,$2,$3,$4,$5) value',
+        [...args, runIds[59]]);
+      expect(fixedReview.rows[0].value).toMatchObject({
+        state: 'matched_population_observed', anchorRunId: runIds[59],
+        completeRegisteredPopulation: true });
+      for (const table of [
+        'canonical_forecast_price_ordered_receipts',
+        'canonical_forecast_price_decision_orders',
+        'canonical_forecast_price_decision_commit_observations',
+      ]) await f.ownerPool.query(`VACUUM FREEZE ${table}`);
+      const frozenFixedReview = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_matched_population_at_anchor($1,$2,$3,$4,$5) value',
+        [...args, runIds[59]]);
+      expect(frozenFixedReview.rows[0].value).toMatchObject({
+        anchorRunId: runIds[59], completeRegisteredPopulation: true,
+        distinctSourceEventDays: 60 });
+      const savedCommitWitness = (await f.ownerPool.query(`
+        SELECT observed_at,actor_user_id,auth_session_id
+        FROM canonical_forecast_price_decision_commit_observations
+        WHERE organization_id=$1 AND decision_id=$2`,
+      [f.org, decisionIds[0]])).rows[0];
+      const firstReceipt = (await f.ownerPool.query(`
+        SELECT captured_at FROM canonical_forecast_price_ordered_receipts
+        WHERE organization_id=$1 AND id=$2`,
+      [f.org, receiptIds[0]])).rows[0];
+      await f.ownerPool.query(`ALTER TABLE
+        canonical_forecast_price_decision_commit_observations
+        DISABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+      try {
+        await f.ownerPool.query(`UPDATE
+          canonical_forecast_price_decision_commit_observations
+          SET observed_at=$3::timestamptz + interval '1 second'
+          WHERE organization_id=$1 AND decision_id=$2`,
+        [f.org, decisionIds[0], firstReceipt.captured_at]);
+        const staleCommitWitness = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population_at_anchor($1,$2,$3,$4,$5) value',
+          [...args, runIds[59]]);
+        expect(staleCommitWitness.rows[0].value).toMatchObject({
+          sourceEventDiversityVerified: false,
+          distinctSourceEventDays: 59 });
+        await f.ownerPool.query(`UPDATE
+          canonical_forecast_price_decision_commit_observations
+          SET observed_at=$3 WHERE organization_id=$1 AND decision_id=$2`,
+        [f.org, decisionIds[0], savedCommitWitness.observed_at]);
+        await f.ownerPool.query(`DELETE FROM
+          canonical_forecast_price_decision_commit_observations
+          WHERE organization_id=$1 AND decision_id=$2`,
+        [f.org, decisionIds[0]]);
+        const missingCommitWitness = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population_at_anchor($1,$2,$3,$4,$5) value',
+          [...args, runIds[59]]);
+        expect(missingCommitWitness.rows[0].value).toMatchObject({
+          sourceEventDiversityVerified: false,
+          distinctSourceEventDays: 59 });
+      } finally {
+        await f.ownerPool.query(`INSERT INTO
+          canonical_forecast_price_decision_commit_observations(
+            organization_id,decision_id,observed_at,actor_user_id,auth_session_id)
+          VALUES($1,$2,$3,$4,$5)
+          ON CONFLICT(organization_id,decision_id) DO UPDATE SET
+            observed_at=EXCLUDED.observed_at,
+            actor_user_id=EXCLUDED.actor_user_id,
+            auth_session_id=EXCLUDED.auth_session_id`,
+        [f.org, decisionIds[0], savedCommitWitness.observed_at,
+          savedCommitWitness.actor_user_id, savedCommitWitness.auth_session_id]);
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_decision_commit_observations
+          ENABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+      }
+      const restoredFixedReview = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_matched_population_at_anchor($1,$2,$3,$4,$5) value',
+        [...args, runIds[59]]);
+      expect(restoredFixedReview.rows[0].value.completeRegisteredPopulation)
+        .toBe(true);
       const forgedDirect = await f.runtimePool.query(
         'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
         [...args, owner.csrfToken, key(), 0, 'select_candidate',
@@ -1013,6 +1106,11 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(changedReview.body.data).toMatchObject({
         state: 'research_review_unavailable',
         humanResearchReviewAvailable: false, reviewToken: null });
+      const changedFixedReview = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_matched_population_at_anchor($1,$2,$3,$4,$5) value',
+        [...args, runIds[59]]);
+      expect(changedFixedReview.rows[0].value.completeRegisteredPopulation)
+        .toBe(false);
       const changedOrigin = await request(f.app).post(selectedOriginRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send(selectedOriginBody);

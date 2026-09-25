@@ -715,6 +715,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         selectionEventId: rolledBack.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false });
+      const retrospective = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+        [...args, owner.csrfToken, key(), runIds[59]]);
+      expect(retrospective.rows[0].value).toMatchObject({
+        state: 'research_selected_origin_unavailable',
+        reason: 'origin_window_not_eligible',
+        forecastServingEnabled: false });
       const denied = await request(f.app).post(selectionRoute)
         .set(f.actors.member.session.headers).set('Idempotency-Key', key())
         .send(selectionBody);

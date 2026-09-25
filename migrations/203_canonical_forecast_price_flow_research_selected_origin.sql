@@ -78,6 +78,12 @@ BEGIN
   RETURN jsonb_build_object('state','research_selected_origin_unavailable',
    'reason','base_origin_unavailable','forecastServingEnabled',FALSE);
  END IF;
+ -- Both selected definitions must be chosen before the future outcome can
+ -- become visible. The separate activation still proves capture commit.
+ IF clock_timestamp()>=base_row.horizon_start THEN
+  RETURN jsonb_build_object('state','research_selected_origin_unavailable',
+   'reason','origin_window_not_eligible','forecastServingEnabled',FALSE);
+ END IF;
  source_state:=public.canonical_forecast_price_flow_pair_source_read(
   org,actor,role_value,session_value,base_run_value);
  current_source:=public.canonical_forecast_price_ordered_read(

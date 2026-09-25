@@ -28,6 +28,44 @@ CREATE TRIGGER canonical_forecast_price_flow_research_selection_immutable
  ON public.canonical_forecast_price_flow_research_selections
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
 
+-- The challenge key is database-owned and never granted to app runtime.
+-- A direct function caller cannot replace a reviewed action with arbitrary
+-- token bytes, even if it can legitimately execute the writer function.
+CREATE TABLE public.canonical_forecast_price_flow_research_key (
+ singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK(singleton),
+ key_bytes BYTEA NOT NULL CHECK(length(key_bytes)=32)
+);
+INSERT INTO public.canonical_forecast_price_flow_research_key(singleton,key_bytes)
+ VALUES(TRUE,decode(replace(gen_random_uuid()::text,'-','')||
+  replace(gen_random_uuid()::text,'-',''),'hex'));
+CREATE TRIGGER canonical_forecast_price_flow_research_key_immutable
+ BEFORE UPDATE OR DELETE OR TRUNCATE
+ ON public.canonical_forecast_price_flow_research_key
+ FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
+
+-- RFC 2104 HMAC-SHA256 using PostgreSQL's built-in sha256(bytea); avoids a
+-- deployment extension dependency. The 32-byte key stays in the private table.
+CREATE FUNCTION public.canonical_forecast_price_flow_research_mac(
+ payload TEXT,secret BYTEA)
+RETURNS TEXT LANGUAGE plpgsql IMMUTABLE STRICT
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE inner_pad BYTEA:=decode(repeat('00',64),'hex');
+ outer_pad BYTEA:=decode(repeat('00',64),'hex');
+ index_value INTEGER; key_byte INTEGER;
+BEGIN
+ IF length(secret)<>32 THEN
+  RAISE EXCEPTION 'Research MAC key invalid' USING ERRCODE='22023';
+ END IF;
+ FOR index_value IN 0..63 LOOP
+  key_byte:=CASE WHEN index_value<32 THEN get_byte(secret,index_value)
+   ELSE 0 END;
+  inner_pad:=set_byte(inner_pad,index_value,key_byte # 54);
+  outer_pad:=set_byte(outer_pad,index_value,key_byte # 92);
+ END LOOP;
+ RETURN encode(sha256(outer_pad||
+  sha256(inner_pad||convert_to(payload,'UTF8'))),'hex');
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_price_flow_research_review(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -94,11 +132,57 @@ BEGIN
   'researchOnly',TRUE,'forecastServingEnabled',FALSE);
 END $$;
 
+CREATE FUNCTION public.canonical_forecast_price_flow_research_challenge(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,
+ expected_revision INTEGER,action_value TEXT,candidate_version TEXT,
+ reverses_value UUID,reason_value TEXT)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE reviewed JSONB; secret BYTEA; challenge TEXT;
+BEGIN
+ IF role_value NOT IN ('owner','admin') OR
+    expected_revision IS NULL OR expected_revision<0 OR
+    action_value NOT IN ('select_candidate','rollback') OR
+    candidate_version NOT IN ('m26_price_flow_zero_baseline_v1',
+      'm26_price_flow_carry_forward_v1') OR
+    reason_value IS NULL OR length(reason_value)<16 OR
+    length(reason_value)>1000 THEN
+  RAISE EXCEPTION 'Research challenge invalid' USING ERRCODE='22023';
+ END IF;
+ PERFORM public.canonical_forecast_booking_ordered_access(
+  org,actor,role_value,session_value,csrf,TRUE);
+ reviewed:=public.canonical_forecast_price_flow_research_review(
+  org,actor,role_value,session_value);
+ IF reviewed->>'state' IS DISTINCT FROM 'research_review_ready' OR
+    (reviewed->>'currentRevision')::integer<>expected_revision THEN
+  RETURN jsonb_build_object('state','research_challenge_unavailable',
+   'reason','review_source_changed','forecastServingEnabled',FALSE);
+ END IF;
+ SELECT key_bytes INTO secret
+  FROM public.canonical_forecast_price_flow_research_key WHERE singleton=TRUE;
+ IF secret IS NULL THEN
+  RAISE EXCEPTION 'Research challenge key unavailable'
+   USING ERRCODE='23514';
+ END IF;
+ challenge:=public.canonical_forecast_price_flow_research_mac(
+  jsonb_build_object(
+  'version','m26-selected-m24-research-challenge-v1',
+  'organizationId',org,'actorUserId',actor,'sessionId',session_value,
+  'expectedRevision',expected_revision,'action',action_value,
+  'candidateVersion',candidate_version,'reversesEventId',reverses_value,
+  'reason',reason_value,
+  'comparisonDigest',reviewed->>'comparisonDigest')::text,secret);
+ RETURN jsonb_build_object('state','research_challenge_ready',
+  'reviewToken',challenge,'currentRevision',expected_revision,
+  'researchOnly',TRUE,'forecastServingEnabled',FALSE);
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_price_flow_research_select(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,
  key_value TEXT,expected_revision INTEGER,action_value TEXT,
  candidate_version TEXT,reverses_value UUID,reason_value TEXT,
- review_token_value TEXT,reviewed_comparison_digest TEXT)
+ review_token_value TEXT,reviewed_comparison_digest TEXT,
+ confirmed_value BOOLEAN)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE prior public.canonical_forecast_price_flow_research_selections%ROWTYPE;
@@ -106,6 +190,7 @@ DECLARE prior public.canonical_forecast_price_flow_research_selections%ROWTYPE;
  review_value JSONB; key_hash TEXT; request_hash TEXT;
  selected_version TEXT; prior_version TEXT;
  saved public.canonical_forecast_price_flow_research_selections%ROWTYPE;
+ expected_challenge JSONB;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
     role_value NOT IN ('owner','admin') OR
@@ -115,7 +200,8 @@ BEGIN
     reason_value IS NULL OR length(reason_value)<16 OR
     length(reason_value)>1000 OR
     review_token_value IS NULL OR
-    review_token_value!~'^[a-f0-9]{64}$' THEN
+    review_token_value!~'^[a-f0-9]{64}$' OR
+    confirmed_value IS DISTINCT FROM TRUE THEN
   RAISE EXCEPTION 'Research selection request invalid' USING ERRCODE='22023';
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
@@ -183,6 +269,15 @@ BEGIN
   RETURN jsonb_build_object('state','research_selection_unavailable',
    'reason','review_source_changed','forecastServingEnabled',FALSE);
  END IF;
+ expected_challenge:=public.canonical_forecast_price_flow_research_challenge(
+  org,actor,role_value,session_value,csrf,expected_revision,action_value,
+  candidate_version,reverses_value,reason_value);
+ IF expected_challenge->>'state' IS DISTINCT FROM
+      'research_challenge_ready' OR
+    expected_challenge->>'reviewToken' IS DISTINCT FROM review_token_value THEN
+  RETURN jsonb_build_object('state','research_selection_unavailable',
+   'reason','review_challenge_invalid','forecastServingEnabled',FALSE);
+ END IF;
  INSERT INTO public.canonical_forecast_price_flow_research_selections(
   organization_id,revision,action,algorithm_version,
   previous_algorithm_version,reversed_event_id,comparison_digest,
@@ -199,16 +294,25 @@ END $$;
 
 REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_selections
  FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_key FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_mac(
+ TEXT,BYTEA) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_review(
  UUID,UUID,TEXT,UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_challenge(
+ UUID,UUID,TEXT,UUID,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_select(
- UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,TEXT) FROM PUBLIC;
+ UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,TEXT,BOOLEAN) FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_review(
   UUID,UUID,TEXT,UUID) TO northstar_app_runtime;
+ GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_challenge(
+  UUID,UUID,TEXT,UUID,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT) TO northstar_app_runtime;
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_select(
-  UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,TEXT)
+  UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,TEXT,BOOLEAN)
   TO northstar_app_runtime;
  REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_selections
+  FROM northstar_app_runtime;
+ REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_key
   FROM northstar_app_runtime;
 END IF; END $$;

@@ -637,6 +637,66 @@ function createForecastPriceHistoryRouter(options = {}) {
       } catch (error) { return errorReply(res, error); }
     });
 
+  // A fictional-data research run follows a still-current owner selection.
+  // This never activates paid numeric forecast serving.
+  router.post('/research-selected-origins', auth,
+    requirePermission('forecast', 'update'), algorithmOriginThrottle,
+    async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.body, ['baseRunId']) ||
+          !UUID.test(req.body.baseRunId || '') || !KEY.test(key || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The research origin request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const captured = (await client.query(
+          'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), key,
+            req.body.baseRunId])).rows[0]?.value;
+        if (captured?.state === 'research_selected_origin_unavailable') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: captured.state, reason: captured.reason,
+            researchOnly: true, forecastServingEnabled: false,
+            realForecastEligible: false, forecastValueAvailable: false } });
+        }
+        if (captured?.state !== 'research_selected_origin_saved' ||
+            !UUID.test(captured.runId || '') ||
+            !UUID.test(captured.baseRunId || '') ||
+            !['m26_price_flow_carry_forward_v1',
+              'm26_price_flow_zero_baseline_v1'].includes(
+              captured.algorithmVersion) ||
+            captured.researchOnly !== true ||
+            captured.forecastServingEnabled !== false) {
+          throw new Error('Invalid research-selected origin');
+        }
+        await client.query('COMMIT');
+        if (captured.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(captured.replayed ? 200 : 201).json({ success: true,
+          data: { state: captured.state, runId: captured.runId,
+            baseRunId: captured.baseRunId,
+            algorithmVersion: captured.algorithmVersion,
+            selectionEventId: captured.selectionEventId || null,
+            replayed: captured.replayed === true, researchOnly: true,
+            forecastServingEnabled: false, realForecastEligible: false,
+            forecastValueAvailable: false, output: null } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   // Supported M24-source synthetic price-flow origin. The saved point is a
   // deterministic carry-forward, not a calibrated or whole-business forecast.
   router.post('/saved-price-flow-origins', auth,

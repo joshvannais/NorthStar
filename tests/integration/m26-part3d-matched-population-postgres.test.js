@@ -11,6 +11,7 @@ const profileRoot = '/api/v1/forecast/reporting-windows/effective-anchors';
 const day = 86400000;
 const key = () => crypto.randomUUID();
 const utc = value => new Date(value).toISOString();
+const preciseUtc = value => utc(value).replace('Z', '000Z');
 
 realPostgres('Mission 26 Part 3D matched algorithm population', () => {
   let f;
@@ -622,6 +623,58 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_review_ready', currentRevision: 1,
         currentEventId: selected.body.data.eventId,
         currentAlgorithmVersion: 'm26_price_flow_zero_baseline_v1' });
+      const selectedOriginRoute = `${root}/research-selected-origins`;
+      const futureBase = await request(f.app)
+        .post(`${root}/saved-price-flow-origins`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({
+        sourceReceiptId: postHorizon.rows[0].value.snapshot.id,
+        currency: 'USD', horizonStartsAt: preciseUtc(future),
+        horizonEndsAt: preciseUtc(futureEnd) });
+      expect(futureBase.status).toBe(201);
+      const futureBaseId = futureBase.body.data.runId;
+      const futureActivated = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${futureBaseId}/activate`)
+        .set(owner.session.headers).send({});
+      expect(futureActivated.status).toBe(200);
+      expect(futureActivated.body.data.state)
+        .toBe('price_flow_origin_activated');
+      const futureProfile = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${futureBaseId}/profile-witness`)
+        .set(owner.session.headers).send({ profileAnchorId });
+      expect(futureProfile.status).toBe(200);
+      expect(futureProfile.body.data.state).toBe('profile_witness_recorded');
+      const selectedOriginKey = key();
+      const selectedOriginBody = { baseRunId: futureBaseId };
+      const selectedOrigin = await request(f.app).post(selectedOriginRoute)
+        .set(owner.session.headers).set('Idempotency-Key', selectedOriginKey)
+        .send(selectedOriginBody);
+      expect(selectedOrigin.status).toBe(201);
+      expect(selectedOrigin.body.data).toMatchObject({
+        state: 'research_selected_origin_saved',
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        selectionEventId: selected.body.data.eventId,
+        researchOnly: true, forecastServingEnabled: false,
+        realForecastEligible: false, forecastValueAvailable: false,
+        output: null });
+      const selectedOriginReplay = await request(f.app).post(selectedOriginRoute)
+        .set(owner.session.headers).set('Idempotency-Key', selectedOriginKey)
+        .send(selectedOriginBody);
+      expect(selectedOriginReplay.status).toBe(200);
+      expect(selectedOriginReplay.body.data).toMatchObject({
+        runId: selectedOrigin.body.data.runId, replayed: true });
+      const privateSelected = await f.ownerPool.query(`
+        SELECT o.output->>'calculationVersion' algorithm,
+          r.forecast_serving_enabled serving
+        FROM canonical_forecast_price_flow_research_selected_origins r
+        JOIN canonical_forecast_price_flow_saved_origins o
+          ON o.organization_id=r.organization_id AND o.id=r.selected_run_id
+        WHERE r.organization_id=$1 AND r.selected_run_id=$2`,
+      [f.org, selectedOrigin.body.data.runId]);
+      expect(privateSelected.rows[0]).toMatchObject({
+        algorithm: 'm26_price_flow_zero_baseline_v1', serving: false });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_research_selected_origins WHERE organization_id=$1',
+        [f.org])).rejects.toMatchObject({ code: '42501' });
       const rollbackRequest = { expectedRevision: 1, action: 'rollback',
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         reversesEventId: selected.body.data.eventId,
@@ -652,6 +705,15 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(rolledBack.body.data).toMatchObject({
         state: 'research_selection_recorded', revision: 2,
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
+        researchOnly: true, forecastServingEnabled: false });
+      const afterRollback = await request(f.app).post(selectedOriginRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send(selectedOriginBody);
+      expect(afterRollback.status).toBe(201);
+      expect(afterRollback.body.data).toMatchObject({
+        state: 'research_selected_origin_saved',
+        algorithmVersion: 'm26_price_flow_carry_forward_v1',
+        selectionEventId: rolledBack.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false });
       const denied = await request(f.app).post(selectionRoute)
         .set(f.actors.member.session.headers).set('Idempotency-Key', key())
@@ -685,6 +747,14 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(changedReview.body.data).toMatchObject({
         state: 'research_review_unavailable',
         humanResearchReviewAvailable: false, reviewToken: null });
+      const changedOrigin = await request(f.app).post(selectedOriginRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send(selectedOriginBody);
+      expect(changedOrigin.status).toBe(200);
+      expect(changedOrigin.body.data).toMatchObject({
+        state: 'research_selected_origin_unavailable',
+        reason: 'base_source_unavailable',
+        forecastServingEnabled: false });
       const staleAfterSourceChange = await request(f.app)
         .post(selectionRoute).set(owner.session.headers)
         .set('Idempotency-Key', key())

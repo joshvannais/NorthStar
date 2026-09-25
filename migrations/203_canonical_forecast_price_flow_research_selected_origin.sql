@@ -79,7 +79,8 @@ BEGIN
    'reason','base_origin_unavailable','forecastServingEnabled',FALSE);
  END IF;
  -- Both selected definitions must be chosen before the future outcome can
- -- become visible. The separate activation still proves capture commit.
+ -- become visible. The base run's separate activation proves its commit;
+ -- this new research selection remains unverified until separately observed.
  IF clock_timestamp()>=base_row.horizon_start THEN
   RETURN jsonb_build_object('state','research_selected_origin_unavailable',
    'reason','origin_window_not_eligible','forecastServingEnabled',FALSE);
@@ -129,12 +130,22 @@ BEGIN
     selected.source_receipt_id<>base_row.source_receipt_id THEN
   RAISE EXCEPTION 'Research selected origin mismatch' USING ERRCODE='23514';
  END IF;
+ IF clock_timestamp()>=base_row.horizon_start THEN
+  RAISE EXCEPTION 'Research selection crossed its future horizon'
+   USING ERRCODE='23514';
+ END IF;
  INSERT INTO public.canonical_forecast_price_flow_research_selected_origins(
   organization_id,base_run_id,selected_run_id,selection_event_id,
   algorithm_version,actor_user_id,auth_session_id,request_key_hash,
   request_digest)
  VALUES(org,base_run_value,chosen_run,choice.id,chosen_version,
   actor,session_value,key_hash,request_hash) RETURNING * INTO prior;
+ IF clock_timestamp()>=base_row.horizon_start THEN
+  -- Also catch a testable delayed insert (for example a trigger wait).
+  -- The transaction rolls back the sidecar and any newly inserted zero run.
+  RAISE EXCEPTION 'Research selection crossed its future horizon'
+   USING ERRCODE='23514';
+ END IF;
  RETURN jsonb_build_object('state','research_selected_origin_saved',
   'runId',prior.selected_run_id,'baseRunId',prior.base_run_id,
   'algorithmVersion',prior.algorithm_version,

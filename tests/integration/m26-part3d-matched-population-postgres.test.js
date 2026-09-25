@@ -722,6 +722,92 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selected_origin_unavailable',
         reason: 'origin_window_not_eligible',
         forecastServingEnabled: false });
+      // A separate fictional base lets a test-only insert delay cross its
+      // horizon without changing the valid selected/replayed base above.
+      const crossingBase = await request(f.app)
+        .post(`${root}/saved-price-flow-origins`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({
+          sourceReceiptId: postHorizon.rows[0].value.snapshot.id,
+          currency: 'USD', horizonStartsAt: preciseUtc(future),
+          horizonEndsAt: preciseUtc(futureEnd) });
+      expect(crossingBase.status).toBe(201);
+      const crossingBaseId = crossingBase.body.data.runId;
+      const crossingActivation = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${crossingBaseId}/activate`)
+        .set(owner.session.headers).send({});
+      expect(crossingActivation.body.data.state)
+        .toBe('price_flow_origin_activated');
+      const crossingProfile = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${crossingBaseId}/profile-witness`)
+        .set(owner.session.headers).send({ profileAnchorId });
+      expect(crossingProfile.body.data.state).toBe('profile_witness_recorded');
+      const nearHorizon = new Date(Date.now() + 10000);
+      const nearEnd = new Date(nearHorizon.getTime() + day);
+      try {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          DISABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_origin_activations
+          DISABLE TRIGGER canonical_forecast_price_flow_activation_immutable`);
+        const changed = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_saved_origins
+          SET horizon_start=$3,horizon_end=$4,
+            output=jsonb_set(output,'{horizon}',
+              jsonb_build_object('startsAt',$5::text,'endsAt',$6::text,
+                'grain','day')),
+            receipt_digest=public.canonical_completion_digest(
+              jsonb_set(output,'{horizon}',
+                jsonb_build_object('startsAt',$5::text,'endsAt',$6::text,
+                  'grain','day')))
+          WHERE organization_id=$1 AND id=$2 RETURNING receipt_digest`,
+        [f.org, crossingBaseId, nearHorizon, nearEnd,
+          utc(nearHorizon), utc(nearEnd)]);
+        const original = await f.ownerPool.query(`
+          SELECT proof FROM canonical_forecast_price_flow_origin_activations
+          WHERE organization_id=$1 AND run_id=$2`, [f.org, crossingBaseId]);
+        const proof = { ...original.rows[0].proof,
+          savedReceiptDigest: changed.rows[0].receipt_digest,
+          horizonStartsAt: utc(nearHorizon) };
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_origin_activations
+          SET proof=$3::jsonb,proof_digest=public.canonical_completion_digest($3::jsonb)
+          WHERE organization_id=$1 AND run_id=$2`,
+        [f.org, crossingBaseId, JSON.stringify(proof)]);
+      } finally {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_origin_activations
+          ENABLE TRIGGER canonical_forecast_price_flow_activation_immutable`);
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          ENABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+      }
+      await f.ownerPool.query(`CREATE FUNCTION m26_research_delay() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(12); RETURN NEW; END $$`);
+      await f.ownerPool.query(`CREATE TRIGGER m26_research_delay
+        BEFORE INSERT ON canonical_forecast_price_flow_research_selected_origins
+        FOR EACH ROW EXECUTE FUNCTION m26_research_delay()`);
+      try {
+        const beforeCrossing = await f.ownerPool.query(`
+          SELECT count(*)::integer n FROM canonical_forecast_price_flow_research_selected_origins
+          WHERE organization_id=$1 AND base_run_id=$2`,
+        [f.org, crossingBaseId]);
+        const crossingClient = await f.runtimePool.connect();
+        try {
+          await crossingClient.query('BEGIN');
+          await crossingClient.query("SET LOCAL statement_timeout='30000ms'");
+          await expect(crossingClient.query(
+            'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+            [...args, owner.csrfToken, key(), crossingBaseId]))
+            .rejects.toMatchObject({ code: '23514' });
+          await crossingClient.query('ROLLBACK');
+        } finally { crossingClient.release(); }
+        const afterCrossing = await f.ownerPool.query(`
+          SELECT count(*)::integer n FROM canonical_forecast_price_flow_research_selected_origins
+          WHERE organization_id=$1 AND base_run_id=$2`,
+        [f.org, crossingBaseId]);
+        expect(afterCrossing.rows[0].n).toBe(beforeCrossing.rows[0].n);
+      } finally {
+        await f.ownerPool.query(`DROP TRIGGER m26_research_delay
+          ON canonical_forecast_price_flow_research_selected_origins`);
+        await f.ownerPool.query('DROP FUNCTION m26_research_delay()');
+      }
       const denied = await request(f.app).post(selectionRoute)
         .set(f.actors.member.session.headers).set('Idempotency-Key', key())
         .send(selectionBody);

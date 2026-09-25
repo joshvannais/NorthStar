@@ -63,6 +63,7 @@ BEGIN
    RAISE EXCEPTION 'Research origin replay changed' USING ERRCODE='23505';
   END IF;
   RETURN jsonb_build_object('state','research_selected_origin_saved',
+   'selectionReceiptId',prior.id,
    'runId',prior.selected_run_id,'baseRunId',prior.base_run_id,
    'algorithmVersion',prior.algorithm_version,
    'selectionEventId',prior.selection_event_id,
@@ -162,6 +163,7 @@ BEGIN
    USING ERRCODE='23514';
  END IF;
  RETURN jsonb_build_object('state','research_selected_origin_saved',
+  'selectionReceiptId',prior.id,
   'runId',prior.selected_run_id,'baseRunId',prior.base_run_id,
   'algorithmVersion',prior.algorithm_version,
   'selectionEventId',prior.selection_event_id,

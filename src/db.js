@@ -1595,6 +1595,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_selected_origins FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_research_selected_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_activate_research_selected_price_flow_origin(uuid,uuid,text,uuid,text,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_selected_activations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_activate_research_selected_price_flow_origin(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_origin_activations') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_origin_activations FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
@@ -3302,6 +3306,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('185_canonical_forecast_price_flow_matched_
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('186_canonical_forecast_price_flow_matched_population.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('187_canonical_forecast_price_flow_research_selection.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('188_canonical_forecast_price_flow_research_selected_origin.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('189_canonical_forecast_price_flow_research_selection_activation.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

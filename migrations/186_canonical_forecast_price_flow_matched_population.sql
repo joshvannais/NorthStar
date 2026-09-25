@@ -35,6 +35,14 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,NULL,FALSE);
+ -- The saved-origin writers take this same tenant price fence before
+ -- inserting. Hold it across anchor, base, candidate and orphan scans so
+ -- the registered population cannot omit a concurrently committed origin.
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:price-decision-order:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast price-decision source is busy'
+   USING ERRCODE='55P03';
+ END IF;
  SELECT * INTO anchor FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND
    output->>'calculationVersion'='m26_price_flow_carry_forward_v1' AND

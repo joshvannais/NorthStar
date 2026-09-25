@@ -1009,6 +1009,22 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         realForecastEligible: false });
       expect(JSON.stringify(matchedPopulation.body.data))
         .not.toContain('1400.00');
+      const heldPriceFence = await f.runtimePool.connect();
+      try {
+        await heldPriceFence.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await heldPriceFence.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('m26:price-decision-order:'||$1::text,0))",
+          [f.org]);
+        const busyPopulation = await request(f.app)
+          .get(`${root}/algorithm-matched-population`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect(busyPopulation.status).toBe(409);
+        expect(busyPopulation.body.error.category).toBe(
+          'FORECAST_SOURCE_BUSY');
+      } finally {
+        await heldPriceFence.query('ROLLBACK').catch(() => {});
+        heldPriceFence.release();
+      }
       const partialManifest = await request(f.app)
         .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
         .set('Cookie', owner().session.headers.Cookie);

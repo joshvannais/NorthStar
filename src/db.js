@@ -1576,6 +1576,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_algorithms FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_zero_baseline(uuid,uuid,text,uuid,text,text,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_matched_algorithms(uuid,uuid,text,uuid,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_matched_algorithms(uuid,uuid,text,uuid,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_origin_activations') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_origin_activations FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
@@ -3253,6 +3259,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('181_canonical_forecast_price_flow_complete
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('182_canonical_forecast_price_flow_event_diversity.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('183_canonical_forecast_price_flow_actual_commit_observation.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('184_canonical_forecast_price_flow_deterministic_registry.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('185_canonical_forecast_price_flow_matched_algorithms.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('186_canonical_forecast_price_flow_matched_population.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

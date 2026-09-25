@@ -20,6 +20,8 @@ const { buildRollingBacktest } = require('../forecasting/rollingBacktest');
 const { measureEvaluation, measureGuardedSavedBacktest } = require('../forecasting/evaluationGates');
 const { assessSelectedPriceFlowEvaluation } = require('../forecasting/selectedPriceFlowEvaluationPolicy');
 const { assessCompletePriceFlowEvaluation } = require('../forecasting/completePriceFlowEvaluation');
+const { assessMatchedPriceFlowAlgorithms } =
+  require('../forecasting/matchedPriceFlowAlgorithmPolicy');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -746,6 +748,123 @@ function createForecastPriceHistoryRouter(options = {}) {
             output: null, outputDigest: null, receiptDigest: null,
             preHorizonCommitVerified: false, realForecastEligible: false,
             forecastValueAvailable: false, replayed: saved.replayed } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/algorithm-matched-population', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, [])) return res.status(400).json({
+        success: false, error: { category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm population request is invalid.' },
+      });
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const observed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (!observed || !['matched_population_unavailable',
+          'matched_population_observed'].includes(observed.state)) {
+          throw new Error('Invalid algorithm population');
+        }
+        await client.query('COMMIT');
+        if (observed.state === 'matched_population_unavailable') {
+          return res.json({ success: true, data: {
+            state: observed.state, reason: observed.reason,
+            promotionAvailable: false, realForecastEligible: false } });
+        }
+        const keys = ['expectedUtcDays', 'storedBaseCount',
+          'matchingBaseCount', 'excludedBaseCount', 'candidateMissingCount',
+          'candidateDuplicateCount', 'orphanCandidateCount',
+          'missingSavedOriginDays', 'duplicateSavedOriginDays',
+          'pairedCount', 'partialCount', 'missingActualCount',
+          'unavailableCount', 'distinctSourceEventDays'];
+        if (observed.scope !==
+            'northstar_m24_registered_saved_algorithms_only' ||
+            !keys.every(name => Number.isInteger(observed[name]) &&
+              observed[name] >= 0 && observed[name] <= 100)) {
+          throw new Error('Invalid algorithm population counts');
+        }
+        const policy = assessMatchedPriceFlowAlgorithms(observed);
+        return res.json({ success: true, data: {
+          state: observed.state, scope: observed.scope,
+          counts: Object.fromEntries(keys.map(name => [name, observed[name]])),
+          completeRegisteredPopulation:
+            observed.completeRegisteredPopulation === true,
+          comparisonState: policy.state,
+          comparisonReason: policy.reason || null,
+          direction: policy.direction || null,
+          referenceDirection: policy.referenceDirection || null,
+          laterDirection: policy.laterDirection || null,
+          candidateWorseDays: policy.candidateWorseDays ?? null,
+          sourceEventDiversityVerified:
+            policy.sourceEventDiversityVerified === true,
+          observationLag: policy.observationLag || {
+            state: 'unavailable',
+            reason: 'matched_population_incomplete' },
+          unsavedOriginCoverageVerified: false,
+          wholeBusinessCoverageVerified: false,
+          numericalErrorAvailable: false, promotionAvailable: false,
+          realForecastEligible: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/algorithm-matched-pairs', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, ['baseRunId', 'candidateRunId']) ||
+          !UUID.test(req.query.baseRunId || '') ||
+          !UUID.test(req.query.candidateRunId || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm comparison request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const result = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_matched_algorithms($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.query.baseRunId, req.query.candidateRunId])).rows[0]?.value;
+        if (!result || !['matched_algorithms_unavailable',
+          'matched_algorithms_observed'].includes(result.state)) {
+          throw new Error('Invalid algorithm comparison source');
+        }
+        await client.query('COMMIT');
+        if (result.state === 'matched_algorithms_unavailable') {
+          return res.json({ success: true, data: {
+            state: result.state, reason: result.reason, matched: false,
+            numericComparisonAvailable: false,
+            promotionAvailable: false, realForecastEligible: false } });
+        }
+        if (result.matched !== true ||
+            !['paired', 'partial', 'missing', 'revoked', 'unavailable']
+              .includes(result.actualPairStatus) ||
+            result.baseRunId !== req.query.baseRunId ||
+            result.candidateRunId !== req.query.candidateRunId) {
+          throw new Error('Invalid algorithm comparison pair');
+        }
+        return res.json({ success: true, data: {
+          state: result.state, matched: true,
+          actualPairStatus: result.actualPairStatus,
+          numericComparisonAvailable: false, promotionAvailable: false,
+          realForecastEligible: false } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

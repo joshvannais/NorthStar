@@ -131,7 +131,7 @@ BEGIN
   RAISE EXCEPTION 'Research selected origin mismatch' USING ERRCODE='23514';
  END IF;
  IF clock_timestamp()>=base_row.horizon_start THEN
-  RAISE EXCEPTION 'Research selection crossed its future horizon'
+  RAISE EXCEPTION 'Research selection crossed horizon before insert'
    USING ERRCODE='23514';
  END IF;
  INSERT INTO public.canonical_forecast_price_flow_research_selected_origins(
@@ -143,7 +143,7 @@ BEGIN
  IF clock_timestamp()>=base_row.horizon_start THEN
   -- Also catch a testable delayed insert (for example a trigger wait).
   -- The transaction rolls back the sidecar and any newly inserted zero run.
-  RAISE EXCEPTION 'Research selection crossed its future horizon'
+  RAISE EXCEPTION 'Research selection crossed horizon after insert'
    USING ERRCODE='23514';
  END IF;
  RETURN jsonb_build_object('state','research_selected_origin_saved',

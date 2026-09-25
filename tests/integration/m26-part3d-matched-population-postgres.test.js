@@ -741,7 +741,12 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         .post(`${root}/saved-price-flow-origins/${crossingBaseId}/profile-witness`)
         .set(owner.session.headers).send({ profileAnchorId });
       expect(crossingProfile.body.data.state).toBe('profile_witness_recorded');
-      const nearHorizon = new Date(Date.now() + 10000);
+      await f.ownerPool.query(`CREATE FUNCTION m26_research_delay() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(25); RETURN NEW; END $$`);
+      await f.ownerPool.query(`CREATE TRIGGER m26_research_delay
+        BEFORE INSERT ON canonical_forecast_price_flow_research_selected_origins
+        FOR EACH ROW EXECUTE FUNCTION m26_research_delay()`);
+      const nearHorizon = new Date(Date.now() + 20000);
       const nearEnd = new Date(nearHorizon.getTime() + day);
       try {
         await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
@@ -778,11 +783,6 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
           ENABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
       }
-      await f.ownerPool.query(`CREATE FUNCTION m26_research_delay() RETURNS trigger
-        LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(12); RETURN NEW; END $$`);
-      await f.ownerPool.query(`CREATE TRIGGER m26_research_delay
-        BEFORE INSERT ON canonical_forecast_price_flow_research_selected_origins
-        FOR EACH ROW EXECUTE FUNCTION m26_research_delay()`);
       try {
         const beforeCrossing = await f.ownerPool.query(`
           SELECT count(*)::integer n FROM canonical_forecast_price_flow_research_selected_origins
@@ -791,11 +791,12 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         const crossingClient = await f.runtimePool.connect();
         try {
           await crossingClient.query('BEGIN');
-          await crossingClient.query("SET LOCAL statement_timeout='30000ms'");
+          await crossingClient.query("SET LOCAL statement_timeout='45000ms'");
           await expect(crossingClient.query(
             'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
             [...args, owner.csrfToken, key(), crossingBaseId]))
-            .rejects.toMatchObject({ code: '23514' });
+            .rejects.toMatchObject({ code: '23514',
+              message: 'Research selection crossed horizon after insert' });
           await crossingClient.query('ROLLBACK');
         } finally { crossingClient.release(); }
         const afterCrossing = await f.ownerPool.query(`

@@ -10,13 +10,23 @@ const { calendarMonth, assessOrderedPriceMonthCandidate,
   assessOrderedPriceReportingMonthCandidate } =
   require('../forecasting/orderedPriceMonthCandidate');
 const { getActiveBusinessProfile } = require('../services/organizationAuthority');
-const { adaptBusinessProfile } = require('../services/businessProfileAdapter');
+const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const instant = value => typeof value === 'string' && INSTANT.test(value);
+
+function calendarAuthority(rawProfile) {
+  return {
+    hours: rawProfile && Object.prototype.hasOwnProperty.call(rawProfile, 'hours')
+      ? rawProfile.hours : null,
+    timeZone: rawProfile && rawProfile.company &&
+      Object.prototype.hasOwnProperty.call(rawProfile.company, 'timeZone')
+      ? rawProfile.company.timeZone : null,
+  };
+}
 
 function errorReply(res, error) {
   const status = error?.code === '42501' ? 403 :
@@ -324,7 +334,12 @@ function createForecastPriceHistoryRouter(options = {}) {
             !Number.isSafeInteger(profile.versionNumber) || profile.versionNumber < 1 ||
             profile.versionLabel !== `org-profile-v${profile.versionNumber}` ||
             adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
-              profile.profileHash) throw new Error('Invalid active Business Profile');
+              profile.profileHash ||
+            !profile.calendarAuthority ||
+            sha256(calendarAuthority(profile.rawProfile)) !==
+              sha256(profile.calendarAuthority)) {
+          throw new Error('Invalid active Business Profile');
+        }
         const reportingWindow = deriveReportingWindow({
           organizationId: identity.organizationId,
           businessProfileId: profile.id,

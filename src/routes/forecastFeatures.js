@@ -10,6 +10,8 @@ const { deriveApprovedEstimateStockFeature } =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const DIGEST = /^[0-9a-f]{64}$/;
 
 function exactKeys(value, keys) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
@@ -25,15 +27,16 @@ function actor(req) {
 
 function errorReply(res, error) {
   const status = error?.code === '42501' ? 403 :
-    ['40001', '40P01', '55P03', '54000'].includes(error?.code) ? 409 : 503;
+    ['40001', '40P01', '55P03', '54000', '23505'].includes(error?.code) ? 409 : 503;
   return res.status(status).json({ success: false, error: {
     category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
       error?.code === '54000' ? 'FORECAST_SOURCE_CAPACITY' :
-        error?.code === '55P03' ? 'FORECAST_SOURCE_BUSY' :
+        ['55P03', '57014'].includes(error?.code) ? 'FORECAST_SOURCE_BUSY' :
         status === 409 ? 'FORECAST_SOURCE_CHANGED' : 'FORECAST_SOURCE_UNAVAILABLE',
     message: status === 403 ? 'Forecast feature access is restricted.' :
-      error?.code === '54000' ? 'There is too much source history to capture safely.' :
-        error?.code === '55P03' ? 'Forecast sources are busy. Try again shortly.' :
+      error?.code === '54000' ? 'There is too much history to capture safely.' :
+        ['55P03', '57014'].includes(error?.code) ?
+          'Forecast source is busy. Try again shortly.' :
         status === 409 ? 'Forecast source changed. Refresh and try again.' :
           'Forecast feature history is temporarily unavailable.',
   } });
@@ -67,6 +70,8 @@ function createForecastFeaturesRouter(options = {}) {
       try {
         client = await poolProvider().connect();
         await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
         const identity = actor(req);
         const response = await client.query(
           'SELECT public.canonical_forecast_estimate_decision_snapshot_capture($1,$2,$3,$4,$5,$6) value',
@@ -80,9 +85,9 @@ function createForecastFeaturesRouter(options = {}) {
             snapshot.purposeKey !== 'forecast_pipeline' ||
             snapshot.targetKey !== 'pipeline.approved_estimates' ||
             !UUID.test(snapshot.id || '') ||
+            !INSTANT.test(snapshot.asOf || '') || snapshot.asOf !== snapshot.capturedAt ||
             !Number.isSafeInteger(snapshot.sourceCount) || snapshot.sourceCount < 0 ||
-            typeof snapshot.sourceSnapshotDigest !== 'string' ||
-            !/^[0-9a-f]{64}$/.test(snapshot.sourceSnapshotDigest)) {
+            snapshot.sourceCount > 1000 || !DIGEST.test(snapshot.sourceSnapshotDigest || '')) {
           throw new Error('Invalid guarded feature snapshot receipt');
         }
         await client.query('COMMIT');

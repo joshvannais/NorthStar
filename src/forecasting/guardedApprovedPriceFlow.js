@@ -92,13 +92,48 @@ async function readGuardedApprovedPriceFlow({ pool, actor, snapshotId,
       await client.query('COMMIT');
       return unavailable('source_currentness_invalid');
     }
+    if (currentness.state !== 'current') {
+      await client.query('COMMIT');
+      return unavailable('source_changed');
+    }
+    const anchorResult = await client.query(
+      'SELECT public.canonical_forecast_price_period_anchor_read($1,$2,$3,$4,$5) value',
+      params);
+    const anchor = anchorResult.rows[0]?.value;
+    if (!anchor || anchor.snapshotId !== snapshotId ||
+        anchor.sourceSnapshotDigest !== position.sourceSnapshotDigest ||
+        anchor.forecastIssued !== false ||
+        !['unavailable', 'source_period_anchor'].includes(anchor.state) ||
+        (anchor.state === 'unavailable' &&
+          anchor.reason !== 'period_before_source_anchor') ||
+        (anchor.state === 'source_period_anchor' &&
+          (anchor.scope !== 'northstar_m24_approved_price_decisions' ||
+           !instant(anchor.coverageStartsAt) ||
+           !uuid(anchor.firstSnapshotId) ||
+           anchor.wholeBusinessCoverageVerified !== false ||
+           anchor.coverageStartsAt > position.asOf))) {
+      await client.query('COMMIT');
+      return unavailable('source_coverage_invalid');
+    }
+    const periodCoverage = anchor.state === 'source_period_anchor' &&
+      window.startsAt >= anchor.coverageStartsAt ?
+      Object.freeze({ state: 'provisional_northstar_ledger_period',
+        reason: 'source_commit_order_unverified',
+        scope: 'northstar_m24_approved_price_decisions',
+        startsAt: anchor.coverageStartsAt, endsAt: position.asOf,
+        complete: false, eligibleForForecast: false,
+        wholeBusinessCoverageVerified: false }) :
+      Object.freeze({ state: 'unavailable',
+        reason: 'period_before_source_anchor',
+        scope: 'northstar_m24_approved_price_decisions',
+        complete: false, eligibleForForecast: false,
+        wholeBusinessCoverageVerified: false });
     await client.query('COMMIT');
-    if (currentness.state !== 'current') return unavailable('source_changed');
     return Object.freeze({ state: 'current_historical_source_only',
       organizationId: position.organizationId, snapshotId,
       asOf: position.asOf, currentnessCheckedAt: currentness.checkedAt,
       sourceSnapshotDigest: position.sourceSnapshotDigest,
-      position: position.position, sourceReadAuthorized: true,
+      position: position.position, periodCoverage, sourceReadAuthorized: true,
       currentnessVerified: true, historicalOnly: true,
       forecastIssued: false, earnedRevenueMeasured: false,
       collectedCashMeasured: false });

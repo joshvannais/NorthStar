@@ -13,7 +13,13 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
   beforeAll(async () => { fixture = await createDatabaseFixture(); }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
-  async function capture() {
+  async function capture(key = id(), actor = fixture.actors.owner) {
+    return request(fixture.app)
+      .post('/api/v1/forecast/features/approved-estimate-stock/snapshots')
+      .set(actor.session.headers).set('Idempotency-Key', key).send({});
+  }
+
+  async function captureDirect() {
     const actor = fixture.actors.owner;
     const client = await fixture.runtimePool.connect();
     try {
@@ -75,7 +81,23 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
   }
 
   test('paid route uses guarded M24 snapshot, masks later changes and withholds private rows', async () => {
-    const first = await capture();
+    const invalid = await request(fixture.app)
+      .post('/api/v1/forecast/features/approved-estimate-stock/snapshots')
+      .set(fixture.actors.owner.session.headers).send({});
+    expect(invalid.status).toBe(400);
+    expect((await capture(id(), fixture.actors.member)).status).toBe(403);
+    const firstKey = id();
+    const firstCapture = await capture(firstKey);
+    expect(firstCapture.status).toBe(201);
+    expect(firstCapture.body.data).toMatchObject({ state: 'historical_source_only',
+      sourceCount: 0, replayed: false, sourceAuthenticated: true,
+      forecastIssued: false });
+    expect(JSON.stringify(firstCapture.body)).not.toContain('sources');
+    const replay = await capture(firstKey);
+    expect(replay.status).toBe(200);
+    expect(replay.headers['idempotency-replayed']).toBe('true');
+    expect(replay.body.data.snapshotId).toBe(firstCapture.body.data.snapshotId);
+    const first = { id: firstCapture.body.data.snapshotId };
     const path = snapshot =>
       `/api/v1/forecast/features/approved-estimate-stock/${snapshot.id}`;
     const ownerCookie = fixture.actors.owner.session.headers.Cookie;
@@ -96,7 +118,9 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
       .set('Cookie', ownerCookie);
     expect(staleEmpty.body.data).toMatchObject({ state: 'stale',
       amount: null, reason: 'source_set_changed', forecastIssued: false });
-    const approved = await capture();
+    const approvedCapture = await capture();
+    expect(approvedCapture.status).toBe(201);
+    const approved = { id: approvedCapture.body.data.snapshotId };
     const active = await request(fixture.app).get(path(approved))
       .set('Cookie', ownerCookie);
     expect(active.body.data).toMatchObject({ state: 'known', amount: '1',
@@ -107,7 +131,7 @@ realPostgres('Mission 26 Part 2C guarded approved-estimate stock', () => {
     expect((await request(fixture.app).get(path(approved))
       .set('Cookie', ownerCookie)).body.data)
       .toMatchObject({ state: 'stale', amount: null });
-    const withdrawn = await capture();
+    const withdrawn = await captureDirect();
     expect((await request(fixture.app).get(path(withdrawn))
       .set('Cookie', ownerCookie)).body.data)
       .toMatchObject({ state: 'known', amount: '0' });

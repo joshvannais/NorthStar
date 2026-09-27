@@ -9,6 +9,35 @@ const { deriveApprovedEstimateStockFeature } =
   require('../forecasting/approvedEstimateStockFeature');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
+
+function exactKeys(value, keys) {
+  return value && typeof value === 'object' && !Array.isArray(value) &&
+    Object.keys(value).length === keys.length &&
+    Object.keys(value).every(key => keys.includes(key));
+}
+
+function actor(req) {
+  return { organizationId: req.tenantContext.organizationId,
+    actorUserId: req.tenantContext.userId, authSessionId: req.authSession.id,
+    actorAccessRole: req.userRole };
+}
+
+function errorReply(res, error) {
+  const status = error?.code === '42501' ? 403 :
+    ['40001', '40P01', '55P03', '54000'].includes(error?.code) ? 409 : 503;
+  return res.status(status).json({ success: false, error: {
+    category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
+      error?.code === '54000' ? 'FORECAST_SOURCE_CAPACITY' :
+        error?.code === '55P03' ? 'FORECAST_SOURCE_BUSY' :
+        status === 409 ? 'FORECAST_SOURCE_CHANGED' : 'FORECAST_SOURCE_UNAVAILABLE',
+    message: status === 403 ? 'Forecast feature access is restricted.' :
+      error?.code === '54000' ? 'There is too much source history to capture safely.' :
+        error?.code === '55P03' ? 'Forecast sources are busy. Try again shortly.' :
+        status === 409 ? 'Forecast source changed. Refresh and try again.' :
+          'Forecast feature history is temporarily unavailable.',
+  } });
+}
 
 function createForecastFeaturesRouter(options = {}) {
   const router = express.Router();
@@ -16,12 +45,59 @@ function createForecastFeaturesRouter(options = {}) {
   const auth = options.auth || requireOnboardedInternal;
   const throttle = options.throttle || rateLimit('internal-api', req =>
     `forecast-feature:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
+  const captureThrottle = options.captureThrottle || rateLimit('forecast-source-capture', req =>
+    `forecast-feature:${req.tenantContext.organizationId}`);
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
     res.set('Referrer-Policy', 'no-referrer');
     res.vary('Cookie');
     next();
   });
+
+  router.post('/approved-estimate-stock/snapshots', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.body, []) || !KEY.test(key || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The feature snapshot request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        const identity = actor(req);
+        const response = await client.query(
+          'SELECT public.canonical_forecast_estimate_decision_snapshot_capture($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.get('X-CSRF-Token'), key]);
+        const captured = response.rows[0]?.value;
+        const snapshot = captured?.snapshot;
+        if (!snapshot || (captured.replayed !== true && captured.replayed !== false) ||
+            snapshot.version !== 'm26-as-of-source-manifest-v1' ||
+            snapshot.organizationId !== identity.organizationId ||
+            snapshot.purposeKey !== 'forecast_pipeline' ||
+            snapshot.targetKey !== 'pipeline.approved_estimates' ||
+            !UUID.test(snapshot.id || '') ||
+            !Number.isSafeInteger(snapshot.sourceCount) || snapshot.sourceCount < 0 ||
+            typeof snapshot.sourceSnapshotDigest !== 'string' ||
+            !/^[0-9a-f]{64}$/.test(snapshot.sourceSnapshotDigest)) {
+          throw new Error('Invalid guarded feature snapshot receipt');
+        }
+        await client.query('COMMIT');
+        if (captured.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(captured.replayed ? 200 : 201).json({ success: true, data: {
+          state: 'historical_source_only', snapshotId: snapshot.id,
+          asOf: snapshot.asOf, sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
+          sourceCount: snapshot.sourceCount, replayed: captured.replayed === true,
+          sourceAuthenticated: true, forecastIssued: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
 
   router.get('/approved-estimate-stock/:snapshotId', auth,
     requirePermission('forecast', 'read'), throttle, async (req, res) => {
@@ -59,15 +135,7 @@ function createForecastFeaturesRouter(options = {}) {
         } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
-        const status = error?.code === '42501' ? 403 :
-          ['40001', '40P01', '55P03', '54000'].includes(error?.code) ? 409 : 503;
-        return res.status(status).json({ success: false, error: {
-          category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
-            status === 409 ? 'FORECAST_SOURCE_CHANGED' : 'FORECAST_SOURCE_UNAVAILABLE',
-          message: status === 403 ? 'Forecast feature access is restricted.' :
-            status === 409 ? 'Forecast source changed. Refresh and try again.' :
-              'Forecast feature history is temporarily unavailable.',
-        } });
+        return errorReply(res, error);
       } finally { if (client) client.release(); }
     });
 

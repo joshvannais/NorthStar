@@ -59,15 +59,15 @@ test('pre-anchor, unclosed and stale months remain unavailable', () => {
   const before = source();
   before.coverageStartsAt = '2026-11-02T00:00:00.000000Z';
   expect(assessOrderedPriceMonthCandidate(before, month)).toMatchObject({
-    state: 'unavailable', reason: 'period_before_ordered_anchor' });
+    state: 'unavailable', reason: 'period_before_ordered_anchor', calendarPeriodVerified: false });
   const unclosed = source();
   unclosed.snapshot.capturedAt = '2026-11-30T23:59:59.999999Z';
   expect(assessOrderedPriceMonthCandidate(unclosed, month)).toMatchObject({
-    state: 'unavailable', reason: 'period_not_yet_closed' });
+    state: 'unavailable', reason: 'period_not_yet_closed', calendarPeriodVerified: false });
   const stale = source();
   stale.state = 'stale'; stale.sourceOrderCurrent = false;
   expect(assessOrderedPriceMonthCandidate(stale, month)).toMatchObject({
-    state: 'unavailable', reason: 'source_changed' });
+    state: 'unavailable', reason: 'source_changed', calendarPeriodVerified: false });
 });
 
 test('out-of-order source clock or private global order input fails closed', () => {

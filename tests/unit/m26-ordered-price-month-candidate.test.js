@@ -36,7 +36,7 @@ test('a synthetic ordered NorthStar month remains a non-forecast candidate', () 
   const result = assessOrderedPriceMonthCandidate(source(), month);
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
     scope: 'northstar_m24_approved_price_decisions',
-    inputDecisionCount: 1, candidateWindowChecksPassed: true,
+    inputOrderTimestampDecisionCount: 1, candidateWindowChecksPassed: true,
     sourceMonthVerified: false,
     sourceAuthenticated: false, calendarPeriodVerified: false,
     eligibleForForecast: false,
@@ -49,10 +49,60 @@ test('a synthetic ordered NorthStar month remains a non-forecast candidate', () 
 test('an empty NorthStar month never becomes a whole-business zero', () => {
   const result = assessOrderedPriceMonthCandidate(source([]), month);
   expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
-    inputDecisionCount: 0, candidateWindowChecksPassed: true,
+    inputOrderTimestampDecisionCount: 0, candidateWindowChecksPassed: true,
     sourceMonthVerified: false, calendarPeriodVerified: false,
     wholeBusinessCoverageVerified: false,
     eligibleForForecast: false });
+});
+
+test('a boundary trigger timestamp is only a diagnostic, not commit visibility proof', () => {
+  const boundary = { ...event('2026-11-30T23:59:59.999999Z'),
+    recordedAt: '2026-11-30T23:59:00.000000Z' };
+  const result = assessOrderedPriceMonthCandidate(source([boundary]), month);
+  expect(result).toMatchObject({ inputOrderTimestampDecisionCount: 1,
+    sourceMonthVerified: false, calendarPeriodVerified: false,
+    eligibleForForecast: false });
+  expect(result).not.toHaveProperty('commitAt');
+});
+
+test('first-approval input amount uses decision time and excludes amendments and withdrawals', () => {
+  const approval = event();
+  const amendmentId = '55555555-5555-4555-8555-555555555555';
+  const withdrawalId = '66666666-6666-4666-8666-666666666666';
+  const amendment = { ...approval, decisionId: amendmentId, revision: 2,
+    previousId: DECISION, priceBeforeTax: '900.00',
+    recordedAt: '2026-11-16T11:59:00.000000Z',
+    sourceObservedAt: '2026-11-16T12:00:00.000000Z' };
+  const withdrawal = { ...amendment, decisionId: withdrawalId, revision: 3,
+    previousId: amendmentId, action: 'withdraw', priceBeforeTax: null,
+    recordedAt: '2026-11-17T11:59:00.000000Z',
+    sourceObservedAt: '2026-11-17T12:00:00.000000Z' };
+  const result = assessOrderedPriceMonthCandidate(
+    source([approval, amendment, withdrawal]), month, 'USD');
+  expect(result).toMatchObject({ state: 'candidate_window_checks_passed',
+    inputOrderTimestampDecisionCount: 3, inputCurrency: 'USD',
+    inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
+    sourceMonthVerified: false, eligibleForForecast: false });
+
+  const late = { ...approval,
+    recordedAt: '2026-11-30T23:59:00.000000Z',
+    sourceObservedAt: '2026-12-01T00:00:00.000000Z' };
+  const lateResult = assessOrderedPriceMonthCandidate(source([late]), month, 'USD');
+  expect(lateResult).toMatchObject({ inputOrderTimestampDecisionCount: 0,
+    inputFirstApprovalCount: 1, inputFirstApprovalAmount: '500.00',
+    sourceMonthVerified: false });
+});
+
+test('mixed first-approval currency and broken revision lineage remain unavailable', () => {
+  const euro = { ...event(), currency: 'EUR' };
+  expect(assessOrderedPriceMonthCandidate(source([euro]), month, 'USD'))
+    .toMatchObject({ state: 'unavailable', reason: 'currency_mismatch',
+      inputFirstApprovalAmount: null, calendarPeriodVerified: false,
+      eligibleForForecast: false });
+  const broken = { ...event(), action: 'withdraw', priceBeforeTax: null,
+    previousId: DECISION };
+  expect(assessOrderedPriceMonthCandidate(source([broken]), month, 'USD'))
+    .toMatchObject({ state: 'unavailable', reason: 'source_revision_conflict' });
 });
 
 test('pre-anchor, unclosed and stale months remain unavailable', () => {

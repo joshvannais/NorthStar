@@ -174,7 +174,8 @@ test('ordered receipt route emits only safe metadata and uses fresh read-committ
       .send({});
     expect(captured.status).toBe(201);
     expect(captured.body.data).toMatchObject({ state: 'source_order_receipt_only',
-      eventCount: 1, calendarPeriodVerified: false, forecastIssued: false });
+      eventCount: 1, calendarPeriodVerified: false,
+      eligibleForForecast: false, forecastIssued: false });
     expect(JSON.stringify(captured.body)).not.toMatch(/sourceOrder|highWaterOrder|digestNonce/);
     expect(client.query.mock.calls.map(call => call[0])).toEqual([
       'BEGIN ISOLATION LEVEL READ COMMITTED',

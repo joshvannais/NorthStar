@@ -134,7 +134,8 @@ function createForecastPriceHistoryRouter(options = {}) {
           capturedAt: snapshot.capturedAt,
           sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
           eventCount: snapshot.eventCount,
-          replayed: captured.replayed === true, forecastIssued: false,
+          replayed: captured.replayed === true, eligibleForForecast: false,
+          forecastIssued: false,
           calendarPeriodVerified: false, wholeBusinessCoverageVerified: false,
         } });
       } catch (error) {

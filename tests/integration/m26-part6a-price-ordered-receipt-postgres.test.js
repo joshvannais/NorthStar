@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -260,4 +261,55 @@ realPostgres('Mission 26 source-ordered approved-price receipt', () => {
     expect(ownAfter.snapshot.events.map(event => event.decisionId)).not.toContain(otherDecision);
     expect((await privateReceipt(ownAfter.snapshot.id)).digest_nonce).toBeDefined();
   }, 120000);
+
+  test('mounted paid route minimizes response and enforces owner, CSRF and tenant gates',
+    async () => {
+      const route = '/api/v1/forecast/price-history/ordered-snapshots';
+      const owner = fixture.actors.owner;
+      expect((await request(fixture.app).post(route)
+        .set('Idempotency-Key', id()).send({})).status).toBe(401);
+      expect((await request(fixture.app).post(route)
+        .set(fixture.actors.member.session.headers)
+        .set('Idempotency-Key', id()).send({})).status).toBe(403);
+      expect((await request(fixture.app).post(route)
+        .set('Cookie', owner.session.headers.Cookie)
+        .set('Idempotency-Key', id()).send({})).status).toBe(403);
+      expect((await request(fixture.app).post(route)
+        .set(owner.session.headers).set('Idempotency-Key', id())
+        .send({ organizationId: fixture.org })).status).toBe(400);
+
+      const requestKey = id();
+      const captured = await request(fixture.app).post(route)
+        .set(owner.session.headers).set('Idempotency-Key', requestKey).send({});
+      expect(captured.status).toBe(201);
+      expect(captured.body.data).toMatchObject({ state: 'source_order_receipt_only',
+        calendarPeriodVerified: false, wholeBusinessCoverageVerified: false,
+        forecastIssued: false });
+      expect(captured.body.data.events).toBeUndefined();
+      expectNoGlobalOrder(captured.body);
+      const replay = await request(fixture.app).post(route)
+        .set(owner.session.headers).set('Idempotency-Key', requestKey).send({});
+      expect(replay.status).toBe(200);
+      expect(replay.body.data).toMatchObject({ replayed: true,
+        snapshotId: captured.body.data.snapshotId });
+
+      const readPath = `${route}/${captured.body.data.snapshotId}`;
+      const current = await request(fixture.app).get(readPath)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(current.status).toBe(200);
+      expect(current.body.data).toMatchObject({ state: 'current',
+        sourceOrderCurrent: true, calendarPeriodVerified: false,
+        eligibleForForecast: false, wholeBusinessCoverageVerified: false,
+        forecastIssued: false });
+      expectNoGlobalOrder(current.body);
+      expect((await request(fixture.app).get(readPath)
+        .set('Cookie', fixture.actors.otherOwner.session.headers.Cookie)).status)
+        .toBe(404);
+      const estimate = await createEstimate();
+      await decide(estimate);
+      const stale = await request(fixture.app).get(readPath)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(stale.body.data).toMatchObject({ state: 'stale',
+        sourceOrderCurrent: false, eligibleForForecast: false });
+    }, 120000);
 });

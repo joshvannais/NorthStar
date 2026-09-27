@@ -6,10 +6,20 @@ const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
 const { getActiveBusinessProfile } = require('../services/organizationAuthority');
-const { adaptBusinessProfile } = require('../services/businessProfileAdapter');
+const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 
 const GRAINS = new Set(['day', 'week', 'month', 'quarter', 'year']);
+
+function calendarAuthority(rawProfile) {
+  return {
+    hours: rawProfile && Object.prototype.hasOwnProperty.call(rawProfile, 'hours')
+      ? rawProfile.hours : null,
+    timeZone: rawProfile && rawProfile.company &&
+      Object.prototype.hasOwnProperty.call(rawProfile.company, 'timeZone')
+      ? rawProfile.company.timeZone : null,
+  };
+}
 
 function validRequestDate(value, grain) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -64,7 +74,12 @@ function createForecastReportingWindowsRouter(options = {}) {
             profile.versionNumber < 1 ||
             profile.versionLabel !== `org-profile-v${profile.versionNumber}` ||
             adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
-              profile.profileHash) throw new Error('Invalid business profile authority');
+              profile.profileHash ||
+            !profile.calendarAuthority ||
+            sha256(calendarAuthority(profile.rawProfile)) !==
+              sha256(profile.calendarAuthority)) {
+          throw new Error('Invalid business profile authority');
+        }
         const window = deriveReportingWindow({
           organizationId: profile.organizationId,
           businessProfileId: profile.id,

@@ -42,6 +42,13 @@ realPostgres('Mission 26 Part 2B guarded current Business Profile windows', () =
       });
       expect(response.body.data.window.openMinutes).toBeGreaterThan(0);
       expect(JSON.stringify(response.body)).not.toContain('tenant@example.test');
+      const authority = await fixture.ownerPool.query(
+        `SELECT calendar_authority
+           FROM canonical_business_profiles
+          WHERE organization_id=$1 AND is_active=TRUE`, [fixture.org]);
+      expect(authority.rows[0].calendar_authority).toMatchObject({
+        timeZone: 'UTC', hours: expect.any(Object),
+      });
     }, 120000);
 
   test('other tenant sees only its own profile, while member and unauthenticated reads are denied',
@@ -84,6 +91,10 @@ realPostgres('Mission 26 Part 2B guarded current Business Profile windows', () =
 
   test('corrupt current profile is unavailable source evidence, not a bad owner request',
     async () => {
+      const original = await fixture.ownerPool.query(
+        `SELECT raw_profile
+           FROM canonical_business_profiles
+          WHERE organization_id=$1 AND is_active=TRUE`, [fixture.org]);
       await fixture.ownerPool.query(
         'UPDATE canonical_business_profiles SET normalized_profile_hash=$2 WHERE organization_id=$1 AND is_active=TRUE',
         [fixture.org, 'c'.repeat(64)]);
@@ -95,6 +106,27 @@ realPostgres('Mission 26 Part 2B guarded current Business Profile windows', () =
       await fixture.ownerPool.query(
         'UPDATE canonical_business_profiles SET normalized_profile_hash=$2 WHERE organization_id=$1 AND is_active=TRUE',
         [fixture.org, fixture.profiles[fixture.org].hash]);
+      await fixture.ownerPool.query(
+        `UPDATE canonical_business_profiles
+            SET raw_profile=jsonb_set(raw_profile,'{company,timeZone}','"America/Chicago"'::jsonb)
+          WHERE organization_id=$1 AND is_active=TRUE`, [fixture.org]);
+      const changedTimeZone = await request(fixture.app).get(endpoint)
+        .query({ localStartDate: '2026-11-01', grain: 'month' })
+        .set('Cookie', fixture.actors.owner.session.headers.Cookie);
+      expect(changedTimeZone.status).toBe(503);
+      expect(changedTimeZone.body.error.category).toBe('FORECAST_WINDOW_UNAVAILABLE');
+      await fixture.ownerPool.query(
+        'UPDATE canonical_business_profiles SET raw_profile=$2::jsonb WHERE organization_id=$1 AND is_active=TRUE',
+        [fixture.org, JSON.stringify(original.rows[0].raw_profile)]);
+      await fixture.ownerPool.query(
+        `UPDATE canonical_business_profiles
+            SET raw_profile=jsonb_set(raw_profile,'{hours,monday,close}','"16:00"'::jsonb)
+          WHERE organization_id=$1 AND is_active=TRUE`, [fixture.org]);
+      const changedHours = await request(fixture.app).get(endpoint)
+        .query({ localStartDate: '2026-11-01', grain: 'month' })
+        .set('Cookie', fixture.actors.owner.session.headers.Cookie);
+      expect(changedHours.status).toBe(503);
+      expect(changedHours.body.error.category).toBe('FORECAST_WINDOW_UNAVAILABLE');
       await fixture.ownerPool.query(
         "UPDATE canonical_business_profiles SET raw_profile='[]'::jsonb WHERE organization_id=$1 AND is_active=TRUE",
         [fixture.org]);

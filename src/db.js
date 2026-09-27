@@ -2899,6 +2899,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('147_canonical_forecast_price_ordered_recei
 // The additive lineage helper and guarded read replacement have no table
 // rewrite; bound their entire startup transaction and advisory wait as well.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('149_canonical_forecast_price_preanchor_lineage.sql');
+// The calendar-authority backfill takes a bounded lock on the append-only
+// Business Profile table and installs one insert trigger.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('150_canonical_business_profile_calendar_authority.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

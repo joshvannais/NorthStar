@@ -143,6 +143,7 @@ function projectProfile(row) {
     versionNumber: Number(row.version_number),
     versionLabel: row.version_label,
     profileHash: row.normalized_profile_hash,
+    calendarAuthority: Object.freeze(clone(row.calendar_authority)),
     rawProfile: clone(row.raw_profile),
     normalizedProfile: Object.freeze(clone(row.normalized_profile)),
     createdBy: row.created_by,
@@ -153,7 +154,8 @@ function projectProfile(row) {
 async function getActiveBusinessProfile(pool, organizationId) {
   const result = await requirePool(pool).query(
     `SELECT id, organization_id, version_number, version_label, raw_profile,
-            normalized_profile, normalized_profile_hash, created_by, created_at
+            normalized_profile, normalized_profile_hash, calendar_authority,
+            created_by, created_at
        FROM canonical_business_profiles
       WHERE organization_id = $1 AND is_active = TRUE`,
     [organizationId]
@@ -171,7 +173,8 @@ async function getActiveBusinessProfile(pool, organizationId) {
 async function getBusinessProfileById(pool, organizationId, profileId) {
   const result = await requirePool(pool).query(
     `SELECT id, organization_id, version_number, version_label, raw_profile,
-            normalized_profile, normalized_profile_hash, created_by, created_at
+            normalized_profile, normalized_profile_hash, calendar_authority,
+            created_by, created_at
        FROM canonical_business_profiles
       WHERE organization_id = $1 AND id = $2`,
     [organizationId, profileId]
@@ -202,7 +205,8 @@ async function putBusinessProfile(pool, input) {
     const preserveProfileReadiness = !writesProfileReadiness && input.preserveProfileReadiness !== false;
     const active = await client.query(
       `SELECT id, organization_id, version_number, version_label, raw_profile,
-              normalized_profile, normalized_profile_hash, created_by, created_at
+              normalized_profile, normalized_profile_hash, calendar_authority,
+              created_by, created_at
          FROM canonical_business_profiles
         WHERE organization_id = $1 AND is_active = TRUE`,
       [input.organizationId]
@@ -296,7 +300,8 @@ async function putBusinessProfile(pool, input) {
          normalized_profile, normalized_profile_hash, is_active, created_by)
        VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,TRUE,$7)
        RETURNING id, organization_id, version_number, version_label, raw_profile,
-                 normalized_profile, normalized_profile_hash, created_by, created_at`,
+                 normalized_profile, normalized_profile_hash, calendar_authority,
+                 created_by, created_at`,
       [input.organizationId, versionNumber, versionLabel, JSON.stringify(rawProfile),
         JSON.stringify(normalized), normalized.hash, input.userId || null]
     );

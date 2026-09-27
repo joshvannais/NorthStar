@@ -1463,6 +1463,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_order_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_order_insert() FROM %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_ordered_receipts') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_ordered_receipts FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_ordered_anchors FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_ordered_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_ordered_events(uuid,bigint,bigint) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_ordered_projection(public.canonical_forecast_price_ordered_receipts) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_ordered_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_ordered_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -2394,6 +2403,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_decision_order_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_decision_order_insert()','EXECUTE')
        )) AS price_decision_order_private,
+       (to_regclass('public.canonical_forecast_price_ordered_receipts') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_price_ordered_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_ordered_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_ordered_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_ordered_events(uuid,bigint,bigint)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_ordered_projection(public.canonical_forecast_price_ordered_receipts)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_ordered_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_ordered_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS price_ordered_receipt_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -2801,6 +2819,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.price_period_anchor_table_withheld ||
       !runtimePrivileges.price_period_anchor_entry_guarded ||
       !runtimePrivileges.price_decision_order_private ||
+      !runtimePrivileges.price_ordered_receipt_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||
@@ -2871,6 +2890,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('144_canonical_forecast_price_event_current
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('145_canonical_forecast_price_period_coverage.sql');
 // The source-order trigger installation touches the active M24 decision table.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('146_canonical_forecast_price_decision_order.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('147_canonical_forecast_price_ordered_receipts.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

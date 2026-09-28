@@ -2431,6 +2431,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_immutable()','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_capture(uuid,uuid,text,uuid,text,text,date,text,uuid,text,integer,text,text,boolean,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_read(uuid,uuid,text,uuid,date)','EXECUTE')
+         AND (to_regprocedure('public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)') IS NULL
+           OR has_function_privilege($1,'public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)','EXECUTE'))
        )) AS profile_month_attestation_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,

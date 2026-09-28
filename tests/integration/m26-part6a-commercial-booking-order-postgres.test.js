@@ -18,6 +18,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
   let f;
   let issuedVersionId;
   let estimateRoute;
+  let matchingApprovalId;
   beforeAll(async () => { f = await createEstimateReviewFixture(); }, 120000);
   afterAll(async () => { if (f) await f.cleanup(); }, 120000);
 
@@ -107,6 +108,31 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect((await accept()).status).toBe(201);
     expect((await accept()).status).toBe(200);
 
+    const appointment = f.estimateGraphs[0].ids.appointment;
+    const before = (await f.ownerPool.query(
+      'SELECT revision,rtrim(canonical_digest) AS digest,appointment_status FROM canonical_schedule_assignments WHERE organization_id=$1 AND appointment_id=$2',
+      [f.org, appointment])).rows[0];
+    const scheduledStart = '2029-06-12T13:00:00.000Z';
+    const scheduledEnd = '2029-06-12T14:00:00.000Z';
+    const preview = await request(f.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-previews`)
+      .set(actor.session.headers).send({ expectedRevision: Number(before.revision),
+        expectedDigest: before.digest, expectedTimeZone: 'UTC', action: 'schedule',
+        target: { kind: 'unassigned', id: null },
+        scheduledStart, scheduledEnd, appointmentStatus: before.appointment_status,
+        reason: 'Match synthetic accepted estimate to this appointment' });
+    if (preview.status !== 201) throw new Error('Matching preview failed: ' +
+      JSON.stringify({ body: preview.body, before }));
+    const approval = await request(f.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-approvals`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
+        acknowledgedWarningDigests: preview.body.data.warningDigests,
+        acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests,
+        reason: 'Match synthetic accepted estimate to this appointment' });
+    if (approval.status !== 200) throw new Error('Matching approval failed: ' + JSON.stringify(approval.body));
+    matchingApprovalId = (await f.ownerPool.query(
+      'SELECT id FROM canonical_schedule_human_approvals WHERE organization_id=$1 AND appointment_id=$2 ORDER BY approved_at DESC LIMIT 1',
+      [f.org, appointment])).rows[0].id;
+
     await f.createExecution({ approvedScheduling: true, stopAfterScheduling: true });
     const links = await get('/customer-estimate-links');
     expect(links.status).toBe(200);
@@ -118,18 +144,105 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
          FROM canonical_forecast_commercial_booking_orders
         WHERE organization_id=$1 ORDER BY source_order`, [f.org])).rows;
     expect(ordered.map(row => row.source_kind)).toEqual([
-      'customer_estimate_acceptance', 'schedule_approval', 'schedule_approval',
+      'customer_estimate_acceptance', 'schedule_approval', 'schedule_approval', 'schedule_approval',
       'customer_estimate_link_revocation',
     ]);
-    expect(new Set(ordered.map(row => row.source_order))).toHaveProperty('size', 4);
+    expect(new Set(ordered.map(row => row.source_order))).toHaveProperty('size', 5);
     expect(ordered[0].delivery_event_id).toBeTruthy();
     expect(ordered[1].approval_id).toBeTruthy();
-    expect(ordered[3].delivery_event_id).toBeTruthy();
+    expect(ordered[4].delivery_event_id).toBeTruthy();
     await expect(f.runtimePool.query('SELECT * FROM canonical_forecast_commercial_booking_orders'))
       .rejects.toMatchObject({ code: '42501' });
     await expect(f.ownerPool.query(
       'DELETE FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1', [f.org]))
       .rejects.toMatchObject({ code: '23514' });
+  }, 120000);
+
+  test('guarded reader links one earlier accepted issued version to the same immutable opportunity without claiming booked work', async () => {
+    const actor = f.actors.owner;
+    const params = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, matchingApprovalId];
+    const paired = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_acceptance_booking_pair($1,$2,$3,$4,$5) value',
+      params)).rows[0].value;
+    expect(paired).toMatchObject({ state: 'ordered_same_opportunity_candidate',
+      issuedVersionId, approvalId: matchingApprovalId, candidateOnly: true,
+      bookedWorkVerified: false, forecastIssued: false,
+      acceptancePrecedesApproval: true, decisionCurrentnessVerified: false,
+      linkRevokedBeforeApproval: false, linkRevokedAfterApproval: true });
+    expect(paired).not.toHaveProperty('acceptanceSourceOrder');
+    expect(paired).not.toHaveProperty('approvalSourceOrder');
+    expect(paired).not.toHaveProperty('decisionStillLatest');
+    const unrelatedApproval = (await f.ownerPool.query(
+      `SELECT source.approval_id FROM canonical_forecast_commercial_booking_orders source
+        WHERE source.organization_id=$1 AND source.source_kind='schedule_approval'
+          AND source.approval_id<>$2 ORDER BY source.source_order LIMIT 1`,
+      [f.org, matchingApprovalId])).rows[0].approval_id;
+    const unrelated = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_acceptance_booking_pair($1,$2,$3,$4,$5) value',
+      [...params.slice(0, 4), unrelatedApproval])).rows[0].value;
+    expect(unrelated).toMatchObject({ state: 'no_ordered_acceptance',
+      candidateOnly: true, bookedWorkVerified: false, forecastIssued: false });
+    const member = f.actors.member;
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_acceptance_booking_pair($1,$2,$3,$4,$5) value',
+      [f.org, member.actorUserId, member.actorAccessRole,
+        member.authSessionId, matchingApprovalId]))
+      .rejects.toMatchObject({ code: '42501' });
+    const other = f.actors.otherOwner;
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_acceptance_booking_pair($1,$2,$3,$4,$5) value',
+      [other.organizationId, other.actorUserId, other.actorAccessRole,
+        other.authSessionId, matchingApprovalId]))
+      .resolves.toMatchObject({ rows: [{ value: {
+        state: 'source_order_unavailable', candidateOnly: true,
+        bookedWorkVerified: false } }] });
+  }, 120000);
+
+  test('a later approval does not silently choose among two accepted links', async () => {
+    const actor = f.actors.owner;
+    const link = await request(f.app).post(estimateRoute + '/customer-estimate-links')
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ versionId: issuedVersionId, expiresInDays: 14,
+        confirmed: true, confirmationVersion: 'customer-estimate-delivery-v1' });
+    expect(link.status).toBe(201);
+    const token = decodeURIComponent(link.body.data.urlPath.split('/').pop());
+    const accepted = await request(f.app).post(`/api/public/customer-estimates/${token}/accept`)
+      .set({ Host: 'localhost', Origin: 'http://localhost' })
+      .set('Idempotency-Key', crypto.randomUUID())
+      .send({ customerName: 'Second Synthetic Customer', confirmed: true,
+        confirmationVersion: 'customer-estimate-accept-v1' });
+    expect(accepted.status).toBe(201);
+    const appointment = f.estimateGraphs[0].ids.appointment;
+    const before = (await f.ownerPool.query(
+      `SELECT revision,rtrim(canonical_digest) AS digest,appointment_status,
+         scheduled_start,scheduled_end FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`, [f.org, appointment])).rows[0];
+    const reason = 'Review multiple synthetic accepted estimate links';
+    const preview = await request(f.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-previews`)
+      .set(actor.session.headers).send({ expectedRevision: Number(before.revision),
+        expectedDigest: before.digest, expectedTimeZone: 'UTC', action: 'assign',
+        target: { kind: 'profile', id: f.actors.member.actorUserId },
+        scheduledStart: before.scheduled_start.toISOString(),
+        scheduledEnd: before.scheduled_end.toISOString(),
+        appointmentStatus: before.appointment_status, reason });
+    expect(preview.status).toBe(201);
+    const approval = await request(f.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-approvals`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
+        acknowledgedWarningDigests: preview.body.data.warningDigests,
+        acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests, reason });
+    expect(approval.status).toBe(200);
+    const latestApproval = (await f.ownerPool.query(
+      `SELECT id FROM canonical_schedule_human_approvals
+        WHERE organization_id=$1 AND appointment_id=$2 ORDER BY approved_at DESC LIMIT 1`,
+      [f.org, appointment])).rows[0].id;
+    const ambiguous = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_acceptance_booking_pair($1,$2,$3,$4,$5) value',
+      [f.org, actor.actorUserId, actor.actorAccessRole,
+        actor.authSessionId, latestApproval])).rows[0].value;
+    expect(ambiguous).toMatchObject({ state: 'ambiguous_accepted_responses',
+      candidateOnly: true, bookedWorkVerified: false, forecastIssued: false });
   }, 120000);
 
   test('customer acceptance waits on the tenant fence and rollback leaves no phantom event', async () => {
@@ -172,7 +285,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       const beforeRelease = (await f.ownerPool.query(
         'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
         [f.org])).rows[0].count;
-      expect(beforeRelease).toBe(4);
+      expect(beforeRelease).toBe(7);
     } finally {
       await held.query('ROLLBACK');
       held.release();
@@ -182,8 +295,8 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     const afterRelease = (await f.ownerPool.query(
       `SELECT source_kind FROM canonical_forecast_commercial_booking_orders
         WHERE organization_id=$1 ORDER BY source_order`, [f.org])).rows;
-    expect(afterRelease).toHaveLength(5);
-    expect(afterRelease.slice(4).filter(row => row.source_kind === 'customer_estimate_acceptance')).toHaveLength(1);
+    expect(afterRelease).toHaveLength(8);
+    expect(afterRelease.slice(7).filter(row => row.source_kind === 'customer_estimate_acceptance')).toHaveLength(1);
 
     const rollbackLink = await createLink();
     const transaction = await f.ownerPool.connect();
@@ -205,14 +318,14 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         crypto.randomBytes(32).toString('hex')]);
       expect((await transaction.query(
         'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
-        [f.org])).rows[0].count).toBe(6);
+        [f.org])).rows[0].count).toBe(9);
     } finally {
       await transaction.query('ROLLBACK');
       transaction.release();
     }
     expect((await f.ownerPool.query(
       'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
-      [f.org])).rows[0].count).toBe(5);
+      [f.org])).rows[0].count).toBe(8);
     expect((await accept(rollbackLink.token)).status).toBe(201);
     const finalOrder = (await f.ownerPool.query(
       `SELECT source_order FROM canonical_forecast_commercial_booking_orders

@@ -173,6 +173,43 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(paired).not.toHaveProperty('acceptanceSourceOrder');
     expect(paired).not.toHaveProperty('approvalSourceOrder');
     expect(paired).not.toHaveProperty('decisionStillLatest');
+    const pinnedDecision = (await f.ownerPool.query(
+      `SELECT d.price_before_tax,d.currency FROM canonical_customer_estimate_versions v
+        JOIN canonical_estimate_decisions d ON d.organization_id=v.organization_id
+         AND d.estimate_id=v.estimate_id AND d.id=v.decision_id
+       WHERE v.organization_id=$1 AND v.id=$2`, [f.org, issuedVersionId])).rows[0];
+    const price = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_booked_price_candidate($1,$2,$3,$4,$5) value',
+      params)).rows[0].value;
+    expect(price).toMatchObject({ state: 'reviewed_price_candidate',
+      approvedDecisionId: paired.approvedDecisionId,
+      priceBeforeTax: pinnedDecision.price_before_tax, currency: pinnedDecision.currency,
+      decisionMatchesLatestAtRead: true, linkRevokedAfterApproval: true,
+      candidateOnly: true, bookedWorkVerified: false,
+      savedRunCurrentnessVerified: false, forecastIssued: false });
+    // Synthetic source mutation for currentness regression: the real Mission 24
+    // decision table/insert trigger assigns its normal source order.
+    await f.ownerPool.query(
+      `INSERT INTO canonical_estimate_decisions(
+         organization_id,estimate_id,revision,previous_id,action,actor_user_id,
+         membership_id,auth_session_id,actor_name,source_pins,scope_summary,
+         price_before_tax,currency,reason,confirmation_version,request_key_hash,
+         request_digest,digest)
+       SELECT organization_id,estimate_id,revision+1,id,'withdraw',actor_user_id,
+         membership_id,auth_session_id,actor_name,source_pins,NULL,NULL,currency,
+         'Synthetic reviewed price withdrawal','estimate-quote-preparation-v1',
+         $2,$3,$4 FROM canonical_estimate_decisions
+       WHERE organization_id=$1 AND id=$5`,
+      [f.org, crypto.randomBytes(32).toString('hex'),
+        crypto.randomBytes(32).toString('hex'),
+        crypto.randomBytes(32).toString('hex'), paired.approvedDecisionId]);
+    const changedPrice = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_booked_price_candidate($1,$2,$3,$4,$5) value',
+      params)).rows[0].value;
+    expect(changedPrice).toMatchObject({ state: 'approved_price_changed_or_unavailable',
+      candidateOnly: true, bookedWorkVerified: false,
+      savedRunCurrentnessVerified: false, forecastIssued: false });
+    expect(changedPrice).not.toHaveProperty('priceBeforeTax');
     const unrelatedApproval = (await f.ownerPool.query(
       `SELECT source.approval_id FROM canonical_forecast_commercial_booking_orders source
         WHERE source.organization_id=$1 AND source.source_kind='schedule_approval'
@@ -183,9 +220,21 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       [...params.slice(0, 4), unrelatedApproval])).rows[0].value;
     expect(unrelated).toMatchObject({ state: 'no_ordered_acceptance',
       candidateOnly: true, bookedWorkVerified: false, forecastIssued: false });
+    const unrelatedPrice = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_booked_price_candidate($1,$2,$3,$4,$5) value',
+      [...params.slice(0, 4), unrelatedApproval])).rows[0].value;
+    expect(unrelatedPrice).toMatchObject({ state: 'lineage_unavailable',
+      lineageState: 'no_ordered_acceptance', candidateOnly: true,
+      bookedWorkVerified: false, forecastIssued: false });
+    expect(unrelatedPrice).not.toHaveProperty('priceBeforeTax');
     const member = f.actors.member;
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_acceptance_booking_pair($1,$2,$3,$4,$5) value',
+      [f.org, member.actorUserId, member.actorAccessRole,
+        member.authSessionId, matchingApprovalId]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_booked_price_candidate($1,$2,$3,$4,$5) value',
       [f.org, member.actorUserId, member.actorAccessRole,
         member.authSessionId, matchingApprovalId]))
       .rejects.toMatchObject({ code: '42501' });
@@ -524,6 +573,15 @@ realPostgres('Mission 26 Part 6A revoke-before-acceptance ordering', () => {
       issuedVersionId, approvalId, acceptancePrecedesApproval: true,
       linkRevokedBeforeAcceptance: false, linkRevokedBeforeApproval: true,
       candidateOnly: true, bookedWorkVerified: false, forecastIssued: false });
+    const priceBeforeRewrite = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_booked_price_candidate($1,$2,$3,$4,$5) value',
+      [f.org, actor.actorUserId, actor.actorAccessRole,
+        actor.authSessionId, approvalId])).rows[0].value;
+    expect(priceBeforeRewrite).toMatchObject({ state: 'response_revoked_before_approval',
+      lineageState: 'accepted_link_revoked_before_approval', candidateOnly: true,
+      bookedWorkVerified: false, savedRunCurrentnessVerified: false,
+      forecastIssued: false });
+    expect(priceBeforeRewrite).not.toHaveProperty('priceBeforeTax');
 
     const rewrite = await f.ownerPool.connect();
     try {
@@ -575,6 +633,15 @@ realPostgres('Mission 26 Part 6A revoke-before-acceptance ordering', () => {
       issuedVersionId, approvalId, acceptancePrecedesApproval: true,
       linkRevokedBeforeAcceptance: true, linkRevokedBeforeApproval: true,
       candidateOnly: true, bookedWorkVerified: false, forecastIssued: false });
+    const revokedPrice = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_booked_price_candidate($1,$2,$3,$4,$5) value',
+      [f.org, actor.actorUserId, actor.actorAccessRole,
+        actor.authSessionId, approvalId])).rows[0].value;
+    expect(revokedPrice).toMatchObject({ state: 'response_revoked_before_approval',
+      lineageState: 'accepted_link_revoked_before_approval', candidateOnly: true,
+      bookedWorkVerified: false, savedRunCurrentnessVerified: false,
+      forecastIssued: false });
+    expect(revokedPrice).not.toHaveProperty('priceBeforeTax');
     expect(paired).not.toHaveProperty('acceptanceSourceOrder');
     expect(paired).not.toHaveProperty('approvalSourceOrder');
   }, 120000);

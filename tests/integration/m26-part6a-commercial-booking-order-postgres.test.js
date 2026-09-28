@@ -187,6 +187,16 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       decisionMatchesLatestAtRead: true, linkRevokedAfterApproval: true,
       candidateOnly: true, bookedWorkVerified: false,
       savedRunCurrentnessVerified: false, forecastIssued: false });
+    const status = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_booking_status_position($1,$2,$3,$4,$5) value',
+      params)).rows[0].value;
+    expect(status).toMatchObject({ state: 'observed_schedule_position',
+      pairedApprovalId: matchingApprovalId, firstObservedApprovalId: matchingApprovalId,
+      latestObservedApprovalId: matchingApprovalId, firstObservedAction: 'schedule',
+      latestObservedAction: 'schedule', observedApprovalCount: 1,
+      laterApprovalCount: 0, firstActualBookingKnown: false,
+      bookingStatusVerified: false, sourceComplete: false, forecastIssued: false });
+    expect(status).not.toHaveProperty('sourceOrder');
     // Synthetic source mutation for currentness regression: the real Mission 24
     // decision table/insert trigger assigns its normal source order.
     await f.ownerPool.query(
@@ -235,6 +245,11 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .rejects.toMatchObject({ code: '42501' });
     await expect(f.runtimePool.query(
       'SELECT public.canonical_forecast_booked_price_candidate($1,$2,$3,$4,$5) value',
+      [f.org, member.actorUserId, member.actorAccessRole,
+        member.authSessionId, matchingApprovalId]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_booking_status_position($1,$2,$3,$4,$5) value',
       [f.org, member.actorUserId, member.actorAccessRole,
         member.authSessionId, matchingApprovalId]))
       .rejects.toMatchObject({ code: '42501' });
@@ -292,6 +307,17 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         actor.authSessionId, latestApproval])).rows[0].value;
     expect(ambiguous).toMatchObject({ state: 'ambiguous_accepted_responses',
       candidateOnly: true, bookedWorkVerified: false, forecastIssued: false });
+    const firstActorParams = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, matchingApprovalId];
+    const statusAfterCorrection = (await f.runtimePool.query(
+      'SELECT public.canonical_forecast_booking_status_position($1,$2,$3,$4,$5) value',
+      firstActorParams)).rows[0].value;
+    expect(statusAfterCorrection).toMatchObject({ state: 'observed_schedule_position',
+      pairedApprovalId: matchingApprovalId, firstObservedAction: 'schedule',
+      latestObservedApprovalId: latestApproval, latestObservedAction: 'assign',
+      observedApprovalCount: 2, laterApprovalCount: 1,
+      firstActualBookingKnown: false, bookingStatusVerified: false,
+      sourceComplete: false, forecastIssued: false });
   }, 120000);
 
   test('customer acceptance waits on the tenant fence and rollback leaves no phantom event', async () => {

@@ -1,6 +1,7 @@
 'use strict';
 
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { reviewedMigrationTimeoutValues } = require('../../src/db');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
@@ -10,6 +11,17 @@ realPostgres('Mission 26 Part 6A booking approval source order', () => {
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
   test('real Mission 22 human approvals receive ordered private sidecars', async () => {
+    for (const migration of [
+      '153_canonical_forecast_booking_approval_order.sql',
+      '154_schedule_deferred_approval_validator_owner.sql',
+    ]) {
+      expect(reviewedMigrationTimeoutValues(migration,
+        { lock_timeout: '0', statement_timeout: '0' }))
+        .toEqual({ lockTimeout: '5000ms', statementTimeout: '20000ms' });
+      expect(reviewedMigrationTimeoutValues(migration,
+        { lock_timeout: '200', statement_timeout: '1000' }))
+        .toEqual({ lockTimeout: '200ms', statementTimeout: '1000ms' });
+    }
     const validator = (await fixture.ownerPool.query(`
       SELECT procedure.prosecdef AS owner_authority,
              has_function_privilege($1,

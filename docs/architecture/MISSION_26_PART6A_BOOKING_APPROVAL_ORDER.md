@@ -1,6 +1,6 @@
 # Mission 26 Part 6A — booking approval source-order candidate
 
-Migration 152 adds an immutable, private sidecar to new Mission 22 human
+Migration 153 adds an immutable, private sidecar to new Mission 22 human
 schedule approvals. Its tenant-scoped transaction lock orders committed
 approvals without changing the Mission 22 approval, appointment, or assignment
 contracts. Rolled-back sequence gaps do not represent missing approvals.
@@ -17,15 +17,15 @@ effective and visible at booking, matching currency, complete source window,
 and currentness checks remain unimplemented. No price is inferred from the
 sidecar; missing linkage and pre-anchor history must remain unavailable.
 
-Migration 153 corrects the deferred Mission 22 approval validator's execution
+Migration 154 corrects the deferred Mission 22 approval validator's execution
 authority. That existing validator runs at commit, after the trusted approval
 function returns, and could not call its deliberately private digest helper
 under the ordinary runtime role. The forward-only correction makes that
 read-only trigger function `SECURITY DEFINER`; its fixed search path and direct
 runtime `EXECUTE` revocation remain. The same normal approval failure was
-reproduced without migration 152 before this correction.
+reproduced without migration 154 before this correction.
 
-The candidate is local and unreleased. Its mounted disposable PostgreSQL test
+The candidate remains bounded. Its mounted disposable PostgreSQL test
 uses the normal Mission 22 human preview/approval workflow and verifies order,
 runtime privacy, and the validator privilege boundary. A wider Mission 22
 regression suite still has six failures in this disposable test environment;

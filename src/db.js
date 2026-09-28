@@ -1475,6 +1475,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_commercial_booking_order_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_customer_estimate_order_insert() FROM %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_acceptance_booking_pair(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_acceptance_booking_pair(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_receipts FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_anchors FROM %I', runtime_role);
@@ -2451,6 +2454,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_commercial_booking_order_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_customer_estimate_order_insert()','EXECUTE')
        )) AS commercial_booking_order_private,
+       (to_regprocedure('public.canonical_forecast_acceptance_booking_pair(uuid,uuid,text,uuid,uuid)') IS NULL OR
+         has_function_privilege($1,'public.canonical_forecast_acceptance_booking_pair(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       ) AS acceptance_booking_pair_guarded,
        (to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -2889,6 +2895,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.price_decision_order_private ||
       !runtimePrivileges.booking_approval_order_private ||
       !runtimePrivileges.commercial_booking_order_private ||
+      !runtimePrivileges.acceptance_booking_pair_guarded ||
       !runtimePrivileges.booking_ordered_receipt_guarded ||
       !runtimePrivileges.price_ordered_receipt_guarded ||
       !runtimePrivileges.profile_month_attestation_guarded ||
@@ -2986,6 +2993,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('155_canonical_forecast_booking_ordered_rec
 // The additive shared-order triggers attach to active scheduling and customer
 // estimate response tables; bound the migration's lock and statement waits.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('156_canonical_forecast_commercial_booking_order.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('157_canonical_forecast_acceptance_booking_pair.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

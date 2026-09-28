@@ -31,10 +31,12 @@ link to the specific Mission 24 price decision effective and visible at that
 time; handle currency, pre-anchor appointments and completeness; and preserve
 currentness. No booked-work value, earned revenue, cash or forecast is issued.
 
-The three mounted fictional-tenant tests exercise first fence, post-fence
+The four mounted fictional-tenant tests exercise first fence, post-fence
 events, appointment-opportunity relinking after approval, replay, stale read,
 held source fence, tenant/role isolation, runtime privilege withholding and
-immutability. The focused existing Mission 22
+immutability. They also inject inherited runtime table and helper access,
+require startup to fail closed, and verify that only guarded capture/read
+entries are restored. The focused existing Mission 22
 approval-order test also passes
 with migration 155 installed. These tests do not prove a live historical
 calendar, off-platform bookings, positive price linkage, complete month, CI,

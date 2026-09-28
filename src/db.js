@@ -2023,7 +2023,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           NOT has_function_privilege($1,'public.canonical_schedule_part4_target_current(uuid,text,uuid)','EXECUTE'))
          AND (to_regclass('public.canonical_schedule_mutation_previews') IS NULL OR
           (NOT has_function_privilege($1,'public.canonical_schedule_guard_assignment()','EXECUTE')
-           AND NOT has_function_privilege($1,'public.canonical_schedule_create_for_appointment()','EXECUTE')))
+           AND NOT has_function_privilege($1,'public.canonical_schedule_create_for_appointment()','EXECUTE')
+           AND (to_regprocedure('public.canonical_schedule_validate_human_approval_completion()') IS NULL OR
+            NOT has_function_privilege($1,'public.canonical_schedule_validate_human_approval_completion()','EXECUTE'))))
          AS schedule_helpers_withheld,
        (to_regclass('public.canonical_field_executions') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_field_executions','SELECT')

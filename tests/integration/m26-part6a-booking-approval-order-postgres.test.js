@@ -66,4 +66,35 @@ realPostgres('Mission 26 Part 6A booking approval source order', () => {
       'DELETE FROM public.canonical_forecast_booking_approval_orders WHERE organization_id=$1',
       [fixture.org])).rejects.toMatchObject({ code: '23514' });
   }, 120000);
+
+  test('startup rejects inherited access to the owner-authority validator', async () => {
+    const startup = async () => {
+      const client = await fixture.ownerPool.connect();
+      try {
+        await client.query('BEGIN');
+        try {
+          await fixture.db.grantAndVerifyRuntimeAuthorityForTests(client,
+            { runtimeRole: fixture.roles.runtime });
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      } finally {
+        client.release();
+      }
+    };
+    const signature = 'canonical_schedule_validate_human_approval_completion()';
+    await fixture.ownerPool.query(`GRANT EXECUTE ON FUNCTION ${signature} TO PUBLIC`);
+    try {
+      await expect(startup()).rejects.toThrow(
+        'Runtime database role privilege verification failed');
+    } finally {
+      await fixture.ownerPool.query(`REVOKE ALL ON FUNCTION ${signature} FROM PUBLIC`);
+    }
+    await expect(startup()).resolves.toBeUndefined();
+    expect((await fixture.ownerPool.query(
+      'SELECT has_function_privilege($1,$2,\'EXECUTE\') AS permitted',
+      [fixture.roles.runtime, `public.${signature}`])).rows[0].permitted).toBe(false);
+  }, 180000);
 });

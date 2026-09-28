@@ -105,12 +105,13 @@ function createForecastPriceHistoryRouter(options = {}) {
         throw new Error('Invalid guarded ordered-price month source');
       }
       if (basis.unavailableReason) {
+        const reviewedClaimExists = basis.unavailableReason === 'profile_changed';
         await client.query('COMMIT');
         return res.json({ success: true, data: {
           state: 'unavailable', reason: basis.unavailableReason,
           snapshotId: req.params.snapshotId, window: null,
-          profileBasis: 'owner_reviewed_month_claim',
-          ownerConfirmedHistoricalProfile: false,
+          profileBasis: reviewedClaimExists ? 'owner_reviewed_month_claim' : null,
+          ownerConfirmedHistoricalProfile: reviewedClaimExists,
           profilePinVerified: false,
           historicalCalendarVerified: false,
           observationCoverageVerified: false,

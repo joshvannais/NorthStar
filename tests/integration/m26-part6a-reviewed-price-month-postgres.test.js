@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { reviewedMigrationTimeoutValues } = require('../../src/db');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const root = '/api/v1/forecast/price-history/ordered-snapshots';
@@ -20,6 +21,14 @@ realPostgres('Mission 26 Parts 6A/2B reviewed local price-month candidate', () =
 
   test('guarded pre-anchor price receipt and reviewed profile claim remain unavailable',
     async () => {
+      expect(reviewedMigrationTimeoutValues(
+        '152_canonical_forecast_profile_month_guarded_source.sql',
+        { lock_timeout: '0', statement_timeout: '0' }))
+        .toEqual({ lockTimeout: '5000ms', statementTimeout: '20000ms' });
+      expect(reviewedMigrationTimeoutValues(
+        '152_canonical_forecast_profile_month_guarded_source.sql',
+        { lock_timeout: '200', statement_timeout: '1000' }))
+        .toEqual({ lockTimeout: '200ms', statementTimeout: '1000ms' });
       const owner = fixture.actors.owner;
       const captured = await request(fixture.app).post(root)
         .set(owner.session.headers).set('Idempotency-Key', key()).send({});
@@ -31,6 +40,8 @@ realPostgres('Mission 26 Parts 6A/2B reviewed local price-month candidate', () =
       expect(missing.status).toBe(200);
       expect(missing.body.data).toMatchObject({ state: 'unavailable',
         reason: 'no_reviewed_claim', window: null,
+        profileBasis: null, ownerConfirmedHistoricalProfile: false,
+        profilePinVerified: false,
         sourceAuthenticated: false, historicalCalendarVerified: false,
         observationCoverageVerified: false, eligibleForForecast: false,
         forecastIssued: false });
@@ -93,7 +104,10 @@ realPostgres('Mission 26 Parts 6A/2B reviewed local price-month candidate', () =
         .set('Cookie', owner.session.headers.Cookie).query(query);
       expect(changed.status).toBe(200);
       expect(changed.body.data).toMatchObject({ state: 'unavailable',
-        reason: 'profile_changed', window: null, forecastIssued: false });
+        reason: 'profile_changed', window: null,
+        profileBasis: 'owner_reviewed_month_claim',
+        ownerConfirmedHistoricalProfile: true, profilePinVerified: false,
+        forecastIssued: false });
       const revoked = await request(fixture.app).post(
         '/api/v1/forecast/reporting-windows/month-attestations')
         .set(owner.session.headers).set('Idempotency-Key', key())
@@ -104,7 +118,9 @@ realPostgres('Mission 26 Parts 6A/2B reviewed local price-month candidate', () =
       const after = await request(fixture.app).get(path)
         .set('Cookie', owner.session.headers.Cookie).query(query);
       expect(after.body.data).toMatchObject({ state: 'unavailable',
-        reason: 'claim_revoked', window: null, forecastIssued: false });
+        reason: 'claim_revoked', window: null,
+        profileBasis: null, ownerConfirmedHistoricalProfile: false,
+        profilePinVerified: false, forecastIssued: false });
       expect((await request(fixture.app).get(path)
         .set('Cookie', fixture.actors.member.session.headers.Cookie)
         .query(query)).status).toBe(403);

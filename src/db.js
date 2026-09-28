@@ -2923,6 +2923,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('150_canonical_business_profile_calendar_au
 // The additive profile-month review table and guarded functions use the
 // bounded startup transaction so lock contention fails for a later retry.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('151_canonical_forecast_profile_month_attestations.sql');
+// The guarded reviewed-profile source takes the tenant-month advisory lock and
+// installs runtime grants; keep the complete startup transaction bounded.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('152_canonical_forecast_profile_month_guarded_source.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

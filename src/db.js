@@ -1469,6 +1469,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_approval_order_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_approval_order_insert() FROM %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_receipts FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_booking_ordered_anchors FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_ordered_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_ordered_events(uuid,bigint,bigint) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_ordered_projection(public.canonical_forecast_booking_ordered_receipts) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_booking_ordered_access(uuid,uuid,text,uuid,text,boolean) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_booking_ordered_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_booking_ordered_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_ordered_receipts') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_ordered_receipts FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_ordered_anchors FROM %I', runtime_role);
@@ -2429,6 +2439,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_booking_approval_order_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_booking_approval_order_insert()','EXECUTE')
        )) AS booking_approval_order_private,
+       (to_regclass('public.canonical_forecast_booking_ordered_receipts') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_booking_ordered_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_booking_ordered_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_booking_ordered_events(uuid,bigint,bigint)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_booking_ordered_projection(public.canonical_forecast_booking_ordered_receipts)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_booking_ordered_access(uuid,uuid,text,uuid,text,boolean)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_booking_ordered_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_booking_ordered_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS booking_ordered_receipt_guarded,
        (to_regclass('public.canonical_forecast_price_ordered_receipts') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_forecast_price_ordered_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_ordered_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -2856,6 +2876,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.price_period_anchor_entry_guarded ||
       !runtimePrivileges.price_decision_order_private ||
       !runtimePrivileges.booking_approval_order_private ||
+      !runtimePrivileges.booking_ordered_receipt_guarded ||
       !runtimePrivileges.price_ordered_receipt_guarded ||
       !runtimePrivileges.profile_month_attestation_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
@@ -2946,6 +2967,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('153_canonical_forecast_booking_approval_or
 // The deferred approval validator's privilege correction changes an active
 // trigger function; keep the migration transaction and lock wait bounded.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('154_schedule_deferred_approval_validator_owner.sql');
+// The guarded booking receipt installs append-only evidence and takes the
+// booking-approval source lock; bound startup migration and lock waits.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('155_canonical_forecast_booking_ordered_receipts.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

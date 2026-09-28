@@ -1,7 +1,12 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const request = require('supertest');
+const { Pool } = require('pg');
+const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
 const { createEstimateReviewFixture } = require('../helpers/m24-estimate-review-fixture');
 const commercial = require('../../src/estimating/commercialContract');
 const { fixture: commercialFixture, group } = require('../helpers/m24-commercial-input');
@@ -213,5 +218,71 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       `SELECT source_order FROM canonical_forecast_commercial_booking_orders
         WHERE organization_id=$1 ORDER BY source_order DESC LIMIT 1`, [f.org])).rows[0].source_order;
     expect(BigInt(finalOrder)).toBeGreaterThan(BigInt(lastOrder) + 1n);
+  }, 120000);
+});
+
+realPostgres('Mission 26 Part 6A commercial booking order migration boundary', () => {
+  let database;
+  let pool;
+  let migrationDirectory;
+
+  beforeAll(async () => {
+    database = await createSuiteDatabase('m26-p6a-commercial-migration');
+    pool = new Pool({ connectionString: database.connectionString, max: 4 });
+    migrationDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m26-commercial-pre156-'));
+    const source = path.resolve(__dirname, '../../migrations');
+    for (const name of fs.readdirSync(source)
+      .filter(name => /^\d+.*\.sql$/.test(name) && Number(name.slice(0, 3)) < 156)) {
+      fs.copyFileSync(path.join(source, name), path.join(migrationDirectory, name));
+    }
+    await require('../../src/db').runMigrations({ pool, migrationsDirectory: migrationDirectory });
+    fs.copyFileSync(
+      path.join(source, '156_canonical_forecast_commercial_booking_order.sql'),
+      path.join(migrationDirectory, '156_canonical_forecast_commercial_booking_order.sql')
+    );
+  }, 120000);
+
+  afterAll(async () => {
+    if (pool) await pool.end();
+    if (database) await database.cleanup();
+    if (migrationDirectory && path.dirname(migrationDirectory) === os.tmpdir() &&
+        path.basename(migrationDirectory).startsWith('northstar-m26-commercial-pre156-')) {
+      fs.rmSync(migrationDirectory, { recursive: true });
+    }
+  }, 120000);
+
+  test('waits for pre-migration approval writers before installing the replacement trigger body', async () => {
+    const blocker = await pool.connect();
+    let applying;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query(
+        'LOCK TABLE public.canonical_schedule_human_approvals IN ROW EXCLUSIVE MODE'
+      );
+      applying = require('../../src/db').runMigrations({ pool, migrationsDirectory: migrationDirectory });
+      const deadline = Date.now() + 4000;
+      let waiters = 0;
+      while (Date.now() < deadline) {
+        waiters = (await pool.query(
+          `SELECT count(*)::int AS count
+             FROM pg_locks
+            WHERE locktype='relation' AND NOT granted
+              AND relation='public.canonical_schedule_human_approvals'::regclass`
+        )).rows[0].count;
+        if (waiters >= 1) break;
+        await new Promise(resolve => setTimeout(resolve, 40));
+      }
+      expect(waiters).toBeGreaterThanOrEqual(1);
+      expect((await pool.query(
+        "SELECT to_regclass('public.canonical_forecast_commercial_booking_orders') AS relation"
+      )).rows).toEqual([{ relation: null }]);
+    } finally {
+      await blocker.query('ROLLBACK');
+      blocker.release();
+    }
+    expect(await applying).toBe(true);
+    expect((await pool.query(
+      "SELECT to_regclass('public.canonical_forecast_commercial_booking_orders')::text AS relation"
+    )).rows).toEqual([{ relation: 'canonical_forecast_commercial_booking_orders' }]);
   }, 120000);
 });

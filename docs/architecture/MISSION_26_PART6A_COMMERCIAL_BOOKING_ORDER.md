@@ -10,6 +10,11 @@ sidecar does not backfill approvals or responses that occurred before its
 installation. Existing Mission 22 approval receipts and Mission 24 issued
 estimate, delivery and response contracts retain their behavior.
 
+The migration takes a table lock before replacing the existing scheduling
+approval trigger function. Pre-migration approval writes finish first; later
+writes wait until the replacement body is committed, closing the installation
+boundary without rewriting existing approval rows.
+
 Customer acceptance belongs to one immutable issued estimate version. A
 subsequent link revocation is retained separately. The order records source
 identities and event kind; it does not copy names, contact details, documents,
@@ -38,6 +43,9 @@ and verifies there is no phantom sidecar event, even though its sequence value
 is consumed. This does not prove two different source writers contending
 simultaneously. The previously
 passing four guarded booking-receipt cases were rerun after migration 156 to
-check its additive effect. These focused fictional-tenant results do not prove
+check its additive effect. A separate upgrade-path case holds a simulated
+pre-migration approval-writer lock, verifies migration 156 waits before any new
+sidecar becomes visible, then releases the writer and verifies the migration
+commits. These focused fictional-tenant results do not prove
 cross-source positive price linkage, a historical observation period, wider
 Mission 22 suite success, CI, private production or full Part 6A acceptance.

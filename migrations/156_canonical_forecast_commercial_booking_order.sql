@@ -3,6 +3,12 @@
 -- Customer acceptance is evidence of a particular issued estimate version;
 -- it is not, by itself, proof of booked work or earned revenue.
 
+-- Fence approval writers before replacing their existing trigger function.
+-- The lock waits for pre-migration inserts to finish, then blocks new inserts
+-- until this transaction commits so no approval can cross the source boundary
+-- while still executing the old function body.
+LOCK TABLE public.canonical_schedule_human_approvals IN SHARE ROW EXCLUSIVE MODE;
+
 CREATE SEQUENCE public.canonical_forecast_commercial_booking_order_sequence AS BIGINT;
 
 CREATE TABLE public.canonical_forecast_commercial_booking_orders (

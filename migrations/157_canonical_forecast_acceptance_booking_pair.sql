@@ -7,7 +7,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE approval_order BIGINT; opportunity_value UUID; appointment_value UUID;
  candidate RECORD; candidate_count INT;
- revoked_before BOOLEAN; revoked_after BOOLEAN;
+ revoked_before_acceptance BOOLEAN; revoked_before BOOLEAN; revoked_after BOOLEAN;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'Read committed required for booking lineage' USING ERRCODE='25001';
@@ -92,7 +92,13 @@ BEGIN
     AND event.id=source.delivery_event_id
   WHERE source.organization_id=org AND source.source_kind='customer_estimate_link_revocation'
    AND event.link_id=candidate.link_id
-   AND source.source_order>candidate.acceptance_order
+   AND source.source_order<candidate.acceptance_order), EXISTS(
+  SELECT 1 FROM public.canonical_forecast_commercial_booking_orders source
+  JOIN public.canonical_customer_estimate_delivery_events event
+   ON event.organization_id=source.organization_id
+    AND event.id=source.delivery_event_id
+  WHERE source.organization_id=org AND source.source_kind='customer_estimate_link_revocation'
+   AND event.link_id=candidate.link_id
    AND source.source_order<approval_order), EXISTS(
   SELECT 1 FROM public.canonical_forecast_commercial_booking_orders source
   JOIN public.canonical_customer_estimate_delivery_events event
@@ -100,7 +106,22 @@ BEGIN
     AND event.id=source.delivery_event_id
   WHERE source.organization_id=org AND source.source_kind='customer_estimate_link_revocation'
    AND event.link_id=candidate.link_id AND source.source_order>approval_order)
- INTO revoked_before,revoked_after;
+ INTO revoked_before_acceptance,revoked_before,revoked_after;
+ IF revoked_before THEN
+  RETURN jsonb_build_object(
+   'state','accepted_link_revoked_before_approval',
+   'appointmentId',appointment_value,'approvalId',approval_value,
+   'opportunityId',opportunity_value,'acceptancePrecedesApproval',TRUE,
+   'acceptanceId',candidate.acceptance_id,
+   'estimateId',candidate.estimate_id,'issuedVersionId',candidate.version_id,
+   'approvedDecisionId',candidate.decision_id,
+   'approvedDecisionDigest',candidate.decision_digest,
+   'decisionCurrentnessVerified',FALSE,
+   'linkRevokedBeforeAcceptance',revoked_before_acceptance,
+   'linkRevokedBeforeApproval',TRUE,
+   'linkRevokedAfterApproval',revoked_after,
+   'candidateOnly',TRUE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
  RETURN jsonb_build_object(
   'state','ordered_same_opportunity_candidate',
   'appointmentId',appointment_value,'approvalId',approval_value,
@@ -110,6 +131,7 @@ BEGIN
   'approvedDecisionId',candidate.decision_id,
   'approvedDecisionDigest',candidate.decision_digest,
   'decisionCurrentnessVerified',FALSE,
+  'linkRevokedBeforeAcceptance',FALSE,
   'linkRevokedBeforeApproval',revoked_before,
   'linkRevokedAfterApproval',revoked_after,
   'candidateOnly',TRUE,'bookedWorkVerified',FALSE,'forecastIssued',FALSE);

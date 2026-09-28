@@ -4,7 +4,7 @@ Objective: give each NorthStar business a trustworthy, tenant-private path from 
 
 Mission 27 owns the native customer financial lifecycle: invoices, customer-facing balances, payment evidence, collections, credits, refunds, disputes, settlement reconciliation, receipts, and accounting handoff. It does not replace Mission 24 customer-price authority, Mission 23 field-execution authority, Mission 25 external-source learning, Mission 26 predictions, Mission 28 automation, or a licensed accounting or tax professional's policy.
 
-## Frozen implementation structure — 14 parts, 63 slices
+## Frozen implementation structure — 14 parts, 64 slices
 
 The fourteen-part structure and the slice order below are frozen before implementation begins. A later change requires a documented authority or acceptance reason, the affected gates, and an updated slice total before work continues. Work is serialized in this order unless the founder explicitly changes it.
 
@@ -18,7 +18,7 @@ The fourteen-part structure and the slice order below are frozen before implemen
 | 6 | Customer delivery, secure portal, documents, questions, and acknowledgements | 4 | Planned |
 | 7 | Payment-provider boundary, payment initiation, and credential isolation | 4 | Planned |
 | 8 | Provider events, payment success, settlement, and cash reconciliation | 5 | Planned |
-| 9 | Partial payments, deposits, credits, refunds, failures, disputes, and reversals | 5 | Planned |
+| 9 | Partial payments, deposits, credits, refunds, failures, disputes, and reversals | 6 | Planned |
 | 10 | Accounts-receivable aging and human-controlled collection workflow | 4 | Planned |
 | 11 | Accounting and tax handoff, export, acknowledgement, and reconciliation | 4 | Planned |
 | 12 | Financial reporting and exact downstream evidence for Missions 25, 26, and 33 | 4 | Planned |
@@ -164,8 +164,9 @@ Collected cash is recorded only from accepted payment evidence under a versioned
 | A | Multiple and concurrent payment attempts, partial and multi-invoice allocations, safe overpayment handling through an explicit unapplied-credit/refund-review path, and exact race reconciliation when settled money cannot be refused retroactively. |
 | B | Launch-matrix-approved deposit application with exact Mission 24 schedule lineage and no double counting in the final balance. Milestone/progress application remains unavailable until separately accepted Mission 23 source authority exists. |
 | C | Owner-reviewed credit note and refund request with amount bounds, reason, original payment/allocation lineage, idempotency, and provider acknowledgement. |
-| D | Failure, cancellation, returned/NSF offline payment, dispute deadline/fee and won/lost outcome, chargeback, reversal, refund settlement, bad-debt/write-off review, and reopened-balance projection as distinct append-only facts or explicit launch-matrix unsupported states. |
-| E | Concurrent payment/refund/dispute adversaries, correction and recovery, customer receipts, accounting compatibility, and independent Part 9 acceptance. |
+| D | When the launch matrix enables offline cash/check recording, capability-gated owner/administrator intake binds one append-only receipt to the exact tenant and one or more current issued invoices with exact allocation, amount, ISO currency, occurrence time, method, bounded evidence/reference, actor, idempotency key, duplicate detection, and immutable source digest. Review and explicit confirmation precede acceptance; corrections append a replacement, reversal, or return record. This human-attested evidence never claims provider authorization, capture, settlement, payout, or bank clearance. When disabled or incomplete, the operation and derived balance remain explicitly unavailable. |
+| E | Failure, cancellation, returned/NSF offline payment, dispute deadline/fee and won/lost outcome, chargeback, reversal, refund settlement, bad-debt/write-off review, and reopened-balance projection as distinct append-only facts or explicit launch-matrix unsupported states. |
+| F | Concurrent payment/refund/dispute/offline-receipt adversaries, correction and recovery, customer receipts, accounting compatibility, and independent Part 9 acceptance. |
 
 A refund request is not a completed refund. A provider dispute does not erase the original payment. Negative balances and credits remain separate from revenue or expense recognition.
 
@@ -231,7 +232,7 @@ Mission 27 cannot be called complete because a demo works, an API returns an inv
 
 | Verdict | Minimum evidence | What it does not prove |
 | --- | --- | --- |
-| Full local | All 63 slice rows close for code, focused mounted evidence, and independent clean exact-head audit | Production configuration, provider account, live money, or founder visual approval |
+| Full local | All 64 slice rows close for code, focused mounted evidence, and independent clean exact-head audit | Production configuration, provider account, live money, or founder visual approval |
 | Production deployed / provider disabled | Full local plus reviewed deployment, migrations, health, rendered paid/demo verification, and provider capability default-off | Provider sandbox or live payment acceptance |
 | Provider-sandbox accepted | Production-deployed code plus exact sandbox account/method/webhook/payment/refund/reconciliation evidence | Live merchant readiness, settlement, or customer money |
 | Live-payment accepted | Separately authorized controlled live canary proves configured account, method, webhook, settlement/payout, refund, and reconciliation | Provider-wide or jurisdiction-wide coverage beyond the frozen launch matrix |

@@ -2,7 +2,7 @@
 
 Canonical roadmap: [Mission 27 — Customer financial lifecycle](MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md).
 
-This ledger tracks all 63 frozen slices. A part is full only when every slice in that part has the required evidence and no unresolved P0-P2 finding. Missing evidence stays explicit; a part row, demo, sandbox run, or local test cannot substitute for a slice row. Natural provider timing, production deployment, live money, and the founder's visual verdict remain separate.
+This ledger tracks all 64 frozen slices. A part is full only when every slice in that part has the required evidence and no unresolved P0-P2 finding. Missing evidence stays explicit; a part row, demo, sandbox run, or local test cannot substitute for a slice row. Natural provider timing, production deployment, live money, and the founder's visual verdict remain separate.
 
 | Slice | Acceptance scope | Local implementation | Focused mounted evidence | Independent audit | Immutable head | Production deployment | Live/provider evidence | Founder visual verdict | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -44,8 +44,9 @@ This ledger tracks all 63 frozen slices. A part is full only when every slice in
 | 9A | Concurrent attempts, partial/multi-invoice allocation, overpayment recovery | No | No | No | — | No | No | No | Planned |
 | 9B | Launch-approved deposit application and milestone unsupported boundary | No | No | No | — | No | No | No | Planned |
 | 9C | Capability-gated credit note and refund request/acknowledgement | No | No | No | — | No | No | No | Planned |
-| 9D | Failures, NSF, disputes/outcomes/fees, reversal, write-off, reopened balance | No | No | No | — | No | No | No | Planned |
-| 9E | Concurrent adversaries, correction/recovery, receipts, accounting, Part 9 acceptance | No | No | No | — | No | No | No | Planned |
+| 9D | Capability-gated reviewed offline cash/check intake, exact allocation/evidence, idempotency, correction | No | No | No | — | No | N/A | No | Planned |
+| 9E | Failures, NSF, disputes/outcomes/fees, reversal, write-off, reopened balance | No | No | No | — | No | No | No | Planned |
+| 9F | Concurrent adversaries, correction/recovery, receipts, accounting, Part 9 acceptance | No | No | No | — | No | No | No | Planned |
 | 10A | Complete/incomplete current receivable population and aging | No | No | No | — | No | N/A | No | Planned |
 | 10B | Capability-gated human collection review and promise-to-pay | No | No | No | — | No | N/A | No | Planned |
 | 10C | Reviewed Mission 28 reminder handoff or ratified manual resend | No | No | No | — | No | No | No | Planned |

@@ -1481,6 +1481,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_month_attestation_capture(uuid,uuid,text,uuid,text,text,date,text,uuid,text,integer,text,text,boolean,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_month_attestation_read(uuid,uuid,text,uuid,date) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -2428,6 +2431,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_immutable()','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_capture(uuid,uuid,text,uuid,text,text,date,text,uuid,text,integer,text,text,boolean,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_read(uuid,uuid,text,uuid,date)','EXECUTE')
+         AND (to_regprocedure('public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)') IS NULL
+           OR has_function_privilege($1,'public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)','EXECUTE'))
        )) AS profile_month_attestation_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
@@ -2918,6 +2923,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('150_canonical_business_profile_calendar_au
 // The additive profile-month review table and guarded functions use the
 // bounded startup transaction so lock contention fails for a later retry.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('151_canonical_forecast_profile_month_attestations.sql');
+// The guarded reviewed-profile source takes the tenant-month advisory lock and
+// installs runtime grants; keep the complete startup transaction bounded.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('152_canonical_forecast_profile_month_guarded_source.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

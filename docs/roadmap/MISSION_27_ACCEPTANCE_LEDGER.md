@@ -9,7 +9,7 @@ This ledger tracks all 64 frozen slices. A part is full only when every slice in
 | 1A | Mission authority, exclusions, dependency map, terminology, exact-money rules, sequence | No | No | No | — | No | N/A | N/A | Planned |
 | 1B | Exact inventory, quarantine, and misleading-finance-surface suppression | No | No | No | — | No | N/A | No | Planned |
 | 1C | Threat model and action-capability/recent-auth/dual-control matrix | No | No | No | — | No | N/A | N/A | Planned |
-| 1D | Frozen first-supported-launch matrix, unsupported states, ledger, and release rules | No | No | No | — | No | N/A | N/A | Planned |
+| 1D | Frozen launch matrix including method-specific offline/check-clearance rules, unsupported states, ledger, and release rules | No | No | No | — | No | N/A | N/A | Planned |
 | 2A | Tenant-private billing identity and immutable document snapshots | No | No | No | — | No | No | No | Planned |
 | 2B | Reviewed billing contacts, addresses, references, and correction lineage | No | No | No | — | No | No | No | Planned |
 | 2C | Currency, exact money, numbering, reservation, issue, void, and recovery | No | No | No | — | No | No | No | Planned |
@@ -44,7 +44,7 @@ This ledger tracks all 64 frozen slices. A part is full only when every slice in
 | 9A | Concurrent attempts, partial/multi-invoice allocation, overpayment recovery | No | No | No | — | No | No | No | Planned |
 | 9B | Launch-approved deposit application and milestone unsupported boundary | No | No | No | — | No | No | No | Planned |
 | 9C | Capability-gated credit note and refund request/acknowledgement | No | No | No | — | No | No | No | Planned |
-| 9D | Capability-gated reviewed offline cash/check intake, exact allocation/evidence, idempotency, correction | No | No | No | — | No | N/A | No | Planned |
+| 9D | Reviewed offline cash/check intake, accepted-at/occurred-at, clearance states, allocation/evidence, idempotency, correction | No | No | No | — | No | No if enabled; documented N/A if disabled | No | Planned |
 | 9E | Failures, NSF, disputes/outcomes/fees, reversal, write-off, reopened balance | No | No | No | — | No | No | No | Planned |
 | 9F | Concurrent adversaries, correction/recovery, receipts, accounting, Part 9 acceptance | No | No | No | — | No | No | No | Planned |
 | 10A | Complete/incomplete current receivable population and aging | No | No | No | — | No | N/A | No | Planned |
@@ -56,17 +56,17 @@ This ledger tracks all 64 frozen slices. A part is full only when every slice in
 | 11C | Bidirectional matched/unmatched/conflicting/corrected reconciliation | No | No | No | — | No | No | No | Planned |
 | 11D | Tax/accounting boundary, holds, disconnect/regrant, UI, Part 11 acceptance | No | No | No | — | No | No | No | Planned |
 | 12A | Source-backed invoice/receivable facts with coverage indicators | No | No | No | — | No | N/A | No | Planned |
-| 12B | Source-backed authorization/capture/settlement/refund/dispute/fee facts | No | No | No | — | No | No | No | Planned |
+| 12B | Source-backed provider and offline receipt/clearance/return/correction facts with coverage | No | No | No | — | No | No if offline enabled | No | Planned |
 | 12C | Minimized Mission 25/26/33 readers and correction propagation | No | No | No | — | No | N/A | N/A | Planned |
 | 12D | Command Center reporting and legacy-fallback removal, Part 12 acceptance | No | No | No | — | No | N/A | No | Planned |
 | 13A | Full account health, capability drift, secret/webhook rotation, incident disablement | No | No | No | — | No | No | N/A | Planned |
 | 13B | Checkpoints, replay windows, retention/deletion/holds, cleanup/tombstones | No | No | No | — | No | No | N/A | Planned |
 | 13C | Migration/restart/failover/outage/queue/recovery/observability/runbooks | No | No | No | — | No | No | N/A | Planned |
 | 13D | Capacity, abuse, security, restore, Part 13 acceptance | No | No | No | — | No | No | N/A | Planned |
-| 14A | Complete paid-tenant production/provider-disabled journey with deterministic provider simulator | No | No | No | — | No | No | No | Planned |
+| 14A | Complete paid-tenant production/provider-disabled journey, including offline receipt path when enabled | No | No | No | — | No | No if offline enabled | No | Planned |
 | 14B | Complete resettable isolated fictional demo journey | No | No | No | — | No | N/A | No | Planned |
-| 14C | Integrated migration/replay/correction/refund/retention/delete/restore journey | No | No | No | — | No | No | N/A | Planned |
-| 14D | Integrated tenant/role/CSRF/link/webhook/account/PII/amount/abuse security | No | No | No | — | No | No | N/A | Planned |
+| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No | No | No | — | No | No if offline enabled | N/A | Planned |
+| 14D | Integrated tenant/role/CSRF/link/webhook/account/PII/amount/offline-evidence/abuse security | No | No | No | — | No | No if offline enabled | N/A | Planned |
 | 14E | Performance, observability, accessibility, responsive/theme/state visual matrix | No | No | No | — | No | N/A | No | Planned |
 | 14F | Independent exact-head authority/privacy/security/accounting/provider full audit | No | No | No | — | No | No | N/A | Planned |
 | 14G | Backup, reviewed merge, sole deploy, health, named verdict, ledger, founder verdict | No | No | No | — | No | No | No | Planned |

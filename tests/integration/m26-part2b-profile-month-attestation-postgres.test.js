@@ -66,7 +66,7 @@ realPostgres('Mission 26 Part 2B reviewed historical profile claim', () => {
         id: confirmed.body.data.id, revision: 1, action: 'confirm',
         businessProfileId: fixture.profiles[fixture.org].businessProfileId,
         businessProfileHash: fixture.profiles[fixture.org].hash,
-        evidenceKind: 'owner_confirmed_historical_profile_applicability',
+        evidenceKind: 'owner_reviewed_historical_profile_applicability',
         historicalCalendarVerified: false, observationCoverageVerified: false,
         forecastIssued: false });
       expect(read.body.data.profilePinVerified).toBe(true);
@@ -89,7 +89,8 @@ realPostgres('Mission 26 Part 2B reviewed historical profile claim', () => {
         .set('Cookie', owner.session.headers.Cookie)
         .query({ localStartDate: month });
       expect(after.body.data.attestation).toMatchObject({ revision: 2,
-        action: 'revoke' });
+        action: 'revoke',
+        evidenceKind: 'owner_reviewed_historical_profile_applicability' });
       expect(after.body.data.ownerConfirmedHistoricalProfile).toBe(false);
       expect((await fixture.ownerPool.query(
         'SELECT revision,action FROM canonical_forecast_profile_month_attestations WHERE organization_id=$1 ORDER BY revision',
@@ -162,6 +163,33 @@ realPostgres('Mission 26 Part 2B reviewed historical profile claim', () => {
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send(body({ businessProfileHash: 'c'.repeat(64) }));
       expect(attempted.status).toBe(503);
+      expect((await fixture.ownerPool.query(
+        'SELECT count(*)::integer AS count FROM canonical_forecast_profile_month_attestations WHERE organization_id=$1',
+        [fixture.org])).rows[0].count).toBe(0);
+    }, 120000);
+
+  test.each(['timeZone', 'hours'])(
+    'raw %s corruption before confirmation cannot be sealed into a profile pin',
+    async (field) => {
+      const owner = fixture.actors.owner;
+      if (field === 'timeZone') {
+        await fixture.ownerPool.query(
+          `UPDATE canonical_business_profiles
+              SET raw_profile=jsonb_set(raw_profile,'{company,timeZone}',
+                to_jsonb(CASE WHEN raw_profile#>>'{company,timeZone}'='UTC'
+                  THEN 'America/New_York' ELSE 'UTC' END))
+            WHERE organization_id=$1 AND is_active=TRUE`, [fixture.org]);
+      } else {
+        await fixture.ownerPool.query(
+          `UPDATE canonical_business_profiles
+              SET raw_profile=jsonb_set(raw_profile,'{hours}',
+                COALESCE(raw_profile->'hours','{}'::jsonb)||'{"calendarAuthorityTampered":true}'::jsonb)
+            WHERE organization_id=$1 AND is_active=TRUE`, [fixture.org]);
+      }
+      const attempted = await request(fixture.app).post(path)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send(body());
+      expect(attempted.status).toBe(409);
       expect((await fixture.ownerPool.query(
         'SELECT count(*)::integer AS count FROM canonical_forecast_profile_month_attestations WHERE organization_id=$1',
         [fixture.org])).rows[0].count).toBe(0);

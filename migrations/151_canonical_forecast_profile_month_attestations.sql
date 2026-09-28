@@ -121,6 +121,10 @@ BEGIN
       rtrim(current_row.business_profile_hash)<>profile_hash_value)) THEN
   RAISE EXCEPTION 'Business Profile changed' USING ERRCODE='40001';END IF;
  IF action_value='confirm' THEN
+  IF profile_row.calendar_authority IS DISTINCT FROM jsonb_build_object(
+       'hours',profile_row.raw_profile->'hours',
+       'timeZone',profile_row.raw_profile#>'{company,timeZone}') THEN
+   RAISE EXCEPTION 'Business Profile calendar authority changed' USING ERRCODE='40001';END IF;
   IF profile_row.raw_profile->'company'->>'timeZone' IS NULL OR
      NOT EXISTS(SELECT 1 FROM pg_timezone_names
        WHERE name=profile_row.raw_profile->'company'->>'timeZone') THEN
@@ -188,7 +192,7 @@ BEGIN
     public.canonical_completion_digest(profile_row.raw_profile)=rtrim(selected.raw_profile_digest),
   'localStartDate',selected.local_start_date,'recordedAt',
   public.canonical_forecast_utc_instant(selected.recorded_at),
-  'evidenceKind','owner_confirmed_historical_profile_applicability',
+  'evidenceKind','owner_reviewed_historical_profile_applicability',
   'historicalCalendarVerified',FALSE,'observationCoverageVerified',FALSE,
   'forecastIssued',FALSE);
 END $$;

@@ -2908,6 +2908,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('149_canonical_forecast_price_preanchor_lin
 // The calendar-authority backfill takes a bounded lock on the append-only
 // Business Profile table and installs one insert trigger.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('150_canonical_business_profile_calendar_authority.sql');
+// The additive profile-month review table and guarded functions use the
+// bounded startup transaction so lock contention fails for a later retry.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('151_canonical_forecast_profile_month_attestations.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

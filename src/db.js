@@ -2420,9 +2420,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_ordered_projection(public.canonical_forecast_price_ordered_receipts)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_ordered_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_ordered_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
-         AND (to_regprocedure('public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb)') IS NULL
+       AND (to_regprocedure('public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb)') IS NULL
            OR NOT has_function_privilege($1,'public.canonical_forecast_price_preanchor_context(uuid,bigint,jsonb)','EXECUTE'))
        )) AS price_ordered_receipt_guarded,
+       (to_regclass('public.canonical_forecast_profile_month_attestations') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_profile_month_attestations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_immutable()','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_capture(uuid,uuid,text,uuid,text,text,date,text,uuid,text,integer,text,text,boolean,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_profile_month_attestation_read(uuid,uuid,text,uuid,date)','EXECUTE')
+       )) AS profile_month_attestation_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -2831,6 +2837,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.price_period_anchor_entry_guarded ||
       !runtimePrivileges.price_decision_order_private ||
       !runtimePrivileges.price_ordered_receipt_guarded ||
+      !runtimePrivileges.profile_month_attestation_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||

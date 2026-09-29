@@ -440,10 +440,11 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         forecastValueAvailable: false, replayed: false });
       const zeroRunId = zero.body.data.runId;
       const zeroStored = await f.ownerPool.query(
-        'SELECT output,source_receipt_id,horizon_start,horizon_end FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+        'SELECT output,saved_at,source_receipt_id,horizon_start,horizon_end FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
         [zeroRunId]);
       expect(zeroStored.rows[0].output).toMatchObject({
         calculationVersion: 'm26_price_flow_zero_baseline_v1',
+        asOf: zeroStored.rows[0].saved_at.toISOString(),
         value: { kind: 'point', amount: '0.00' } });
       expect(zeroStored.rows[0].source_receipt_id).toBe(snapshotId);
       // The shared capture throttle is already spent by the prior source
@@ -701,8 +702,9 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           SET observed_at=$2,proof=$3::jsonb,
             proof_digest=public.canonical_completion_digest($3::jsonb)
           WHERE run_id=$1`, [runId, proofAt, JSON.stringify(proofValue)]);
+        const zeroSavedAt = new Date(savedAt.getTime() + 60000);
         const zeroShiftedOutput = { ...zeroStored.rows[0].output,
-          asOf: captureAt.toISOString(),
+          asOf: zeroSavedAt.toISOString(),
           horizon: { startsAt: fictionalStart.toISOString(),
             endsAt: fictionalEnd.toISOString(), grain: 'day' },
           sourceSnapshotDigest: receipt.rows[0].digest };
@@ -712,8 +714,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
             output=$6::jsonb,
             receipt_digest=public.canonical_completion_digest($6::jsonb)
           WHERE id=$1 RETURNING receipt_digest`,
-        [zeroRunId, anchorReceiptId,
-          new Date(savedAt.getTime() + 60000), fictionalStart, fictionalEnd,
+        [zeroRunId, anchorReceiptId, zeroSavedAt, fictionalStart, fictionalEnd,
           JSON.stringify(zeroShiftedOutput)]);
         const zeroProofValue = { ...zeroActivation.body.data,
           savedReceiptDigest: changedZero.rows[0].receipt_digest,

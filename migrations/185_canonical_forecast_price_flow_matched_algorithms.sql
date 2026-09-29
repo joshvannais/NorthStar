@@ -58,7 +58,6 @@ BEGIN
   base.horizon_end<>candidate.horizon_end OR
   base.output->'target'<>candidate.output->'target' OR
   base.output->'unit'<>candidate.output->'unit' OR
-  base.output->>'asOf' IS DISTINCT FROM candidate.output->>'asOf' OR
   base.output->>'sourceSnapshotDigest' IS DISTINCT FROM
     candidate.output->>'sourceSnapshotDigest' OR
   candidate.output->'value' IS DISTINCT FROM

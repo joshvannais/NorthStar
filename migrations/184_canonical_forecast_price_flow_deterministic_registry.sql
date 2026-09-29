@@ -96,6 +96,9 @@ BEGIN
    'reason','origin_window_not_eligible','forecastIssued',FALSE);
  END IF;
  zero_output:=jsonb_set(base.output,'{value,amount}','"0.00"'::jsonb);
+ zero_output:=jsonb_set(zero_output,'{asOf}',to_jsonb(
+  to_char(date_trunc('milliseconds',saved) AT TIME ZONE 'UTC',
+   'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')));
  zero_output:=jsonb_set(zero_output,'{calculationVersion}',
   '"m26_price_flow_zero_baseline_v1"'::jsonb);
  zero_output:=jsonb_set(zero_output,'{uncertainty,drivers}',

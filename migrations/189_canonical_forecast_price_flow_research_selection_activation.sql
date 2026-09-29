@@ -33,8 +33,9 @@ DECLARE chosen public.canonical_forecast_price_flow_research_selected_origins%RO
  base public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  selected public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  prior public.canonical_forecast_price_flow_research_selected_activations%ROWTYPE;
- source_state JSONB; current_source JSONB;
- chosen_xid XID8; selected_xid XID8; observed TIMESTAMPTZ; proof_value JSONB;
+ source_state JSONB; current_source JSONB; profile_state JSONB;
+ chosen_xid XID8; selected_xid XID8; current_xid XID8;
+ observed TIMESTAMPTZ; proof_value JSONB;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
     selection_value IS NULL THEN
@@ -42,6 +43,10 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:profile-effective-source:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast profile source busy' USING ERRCODE='55P03';
+ END IF;
  IF NOT pg_try_advisory_xact_lock(hashtextextended(
    'm26:price-decision-order:'||org::text,0)) THEN
   RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
@@ -82,8 +87,12 @@ BEGIN
  SELECT xmin::text::xid8 INTO selected_xid
   FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=chosen.selected_run_id;
- IF pg_xact_status(chosen_xid) IS DISTINCT FROM 'committed' OR
-    pg_xact_status(selected_xid) IS DISTINCT FROM 'committed' THEN
+ current_xid:=pg_current_xact_id_if_assigned();
+ -- READ COMMITTED exposes another transaction's row only after commit.
+ -- Refuse the sole exception without depending on retained transaction status:
+ -- either required record was written by this same, still-open transaction.
+ IF current_xid IS NOT NULL AND
+    (chosen_xid=current_xid OR selected_xid=current_xid) THEN
   RETURN jsonb_build_object('state','research_selected_origin_unavailable',
    'reason','selection_commit_not_observed',
    'preHorizonCommitVerified',FALSE,'forecastServingEnabled',FALSE);
@@ -99,6 +108,15 @@ BEGIN
    'forecastServingEnabled',FALSE);
  END IF;
  observed:=clock_timestamp();
+ profile_state:=public.canonical_forecast_profile_effective_window(
+  org,actor,role_value,session_value,
+  (source_state->>'profileAnchorId')::uuid,base.saved_at,observed);
+ IF profile_state->>'state' IS DISTINCT FROM
+    'profile_effective_window_verified' THEN
+  RETURN jsonb_build_object('state','research_selected_origin_unavailable',
+   'reason','base_profile_source_changed','preHorizonCommitVerified',FALSE,
+   'forecastServingEnabled',FALSE);
+ END IF;
  IF observed>=base.horizon_start OR chosen.captured_at>=base.horizon_start THEN
   RETURN jsonb_build_object('state','research_selected_origin_unavailable',
    'reason','selection_commit_not_observed_before_horizon',

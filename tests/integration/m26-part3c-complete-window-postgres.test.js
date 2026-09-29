@@ -18,6 +18,39 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
     operationalSchedule: true }); }, 300000);
   afterAll(async () => { if (f) await f.cleanup(); }, 300000);
 
+  test('startup refuses a missing Part 3C runtime entry and recovers after rollback',
+    async () => {
+      const client = await f.ownerPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_complete_window(uuid,uuid,text,uuid)
+          RENAME TO canonical_forecast_price_flow_complete_window_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(client,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await client.query('ROLLBACK');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      const recovery = await f.ownerPool.connect();
+      try {
+        await recovery.query('BEGIN');
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(recovery,
+          { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
+        await recovery.query('COMMIT');
+      } catch (error) {
+        await recovery.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        recovery.release();
+      }
+    }, 300000);
+
   test('guarded paid window counts sixty source-owned saved origins but withholds sufficiency without outcomes',
     async () => {
       const owner = f.actors.owner;

@@ -260,6 +260,47 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
         sourceEventDiversityVerified: true,
         distinctSourceEventCount: 60,
       });
+      // Durable commit-observation rows, rather than pg_xact_status(xmin),
+      // remain the eligibility authority after PostgreSQL can stop retaining
+      // transaction status for an old source row.
+      const removedWitness = await f.ownerPool.query(`
+        SELECT organization_id,decision_id,observed_at,actor_user_id,auth_session_id
+        FROM canonical_forecast_price_decision_commit_observations
+        WHERE organization_id=$1 AND decision_id=$2`,
+      [f.org, decisionIds[0]]);
+      expect(removedWitness.rowCount).toBe(1);
+      try {
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_decision_commit_observations
+          DISABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+        try {
+          await f.ownerPool.query(`DELETE FROM
+            canonical_forecast_price_decision_commit_observations
+            WHERE organization_id=$1 AND decision_id=$2`,
+          [f.org, decisionIds[0]]);
+        } finally {
+          await f.ownerPool.query(`ALTER TABLE
+            canonical_forecast_price_decision_commit_observations
+            ENABLE TRIGGER canonical_forecast_price_decision_commit_immutable`);
+        }
+        const withoutWitness = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4,$5,$6::jsonb) value',
+          [...args, window.rows[0].value.anchorRunId,
+            JSON.stringify(window.rows[0].value.origins)]);
+        expect(withoutWitness.rows[0].value).toMatchObject({
+          state: 'source_event_diversity_observed',
+          sourceEventDiversityVerified: false,
+          distinctSourceEventCount: 59,
+        });
+      } finally {
+        const row = removedWitness.rows[0];
+        await f.ownerPool.query(`INSERT INTO
+          canonical_forecast_price_decision_commit_observations(
+            organization_id,decision_id,observed_at,actor_user_id,auth_session_id)
+          VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+        [row.organization_id, row.decision_id, row.observed_at,
+          row.actor_user_id, row.auth_session_id]);
+      }
       const paid = await request(f.app)
         .get(`${root}/complete-price-flow-evaluation-window`)
         .set('Cookie', owner.session.headers.Cookie);

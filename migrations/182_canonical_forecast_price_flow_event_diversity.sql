@@ -49,7 +49,6 @@ BEGIN
      activation.proof->>'savedReceiptDigest' IS DISTINCT FROM
       saved.receipt_digest OR
      receipt.captured_at>saved.saved_at OR
-     pg_xact_status(receipt.xmin::text::xid8) IS DISTINCT FROM 'committed' OR
      saved.output->>'sourceSnapshotDigest' IS DISTINCT FROM
       rtrim(receipt.snapshot_digest) OR
      jsonb_typeof(receipt.decision_events)<>'array' OR
@@ -58,12 +57,17 @@ BEGIN
   END IF;
   -- A repeated snapshot of unchanged decisions cannot add another day.
   -- Require an immutable receipt event joined back to its source decision,
-  -- pinned to a source receipt known committed before the saved origin.
+  -- pinned to a source receipt known committed before the saved origin. The
+  -- durable activation and commit-observation rows remain valid after
+  -- PostgreSQL no longer retains pg_xact_status for the source row xmins.
   IF EXISTS(
    SELECT 1 FROM jsonb_array_elements(receipt.decision_events) event
    JOIN public.canonical_forecast_price_decision_orders source
     ON source.organization_id=org AND
        source.decision_id::text=event->>'decisionId'
+   JOIN public.canonical_forecast_price_decision_commit_observations witness
+    ON witness.organization_id=source.organization_id AND
+       witness.decision_id=source.decision_id
    JOIN public.canonical_estimate_decisions decision
     ON decision.organization_id=org AND decision.id=source.decision_id
    WHERE event->>'action'='approve' AND event->>'revision'='1'
@@ -71,7 +75,7 @@ BEGIN
     AND event->>'digest'=decision.digest
     AND source.ordered_at=(event->>'sourceObservedAt')::timestamptz
     AND source.ordered_at>=prior_start AND source.ordered_at<prior_end
-    AND pg_xact_status(source.xmin::text::xid8)='committed'
+    AND witness.observed_at<=receipt.captured_at
   ) THEN
    source_day:=(prior_start AT TIME ZONE 'UTC')::date;
    IF NOT source_day=ANY(source_days) THEN

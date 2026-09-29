@@ -967,13 +967,13 @@ function createForecastPriceHistoryRouter(options = {}) {
       } finally { if (client) client.release(); }
     });
 
-  router.get('/algorithm-promotion-review', auth,
+  router.get('/algorithm-experiment-review', auth,
     requirePermission('forecast', 'read'), throttle, async (req, res) => {
       if (!exactKeys(req.query, ['anchorRunId']) ||
           !UUID.test(req.query.anchorRunId || '')) {
         return res.status(400).json({ success: false, error: {
           category: 'FORECAST_REQUEST_INVALID',
-          message: 'The algorithm promotion review request is invalid.',
+          message: 'The internal algorithm review request is invalid.',
         } });
       }
       let client;
@@ -988,9 +988,9 @@ function createForecastPriceHistoryRouter(options = {}) {
           [identity.organizationId, identity.actorUserId,
             identity.actorAccessRole, identity.authSessionId,
             req.query.anchorRunId])).rows[0]?.value;
-        if (!reviewed || !['promotion_review_ready',
-          'promotion_review_unavailable'].includes(reviewed.state)) {
-          throw new Error('Invalid algorithm promotion review');
+        if (!reviewed || !['internal_experiment_review_ready',
+          'internal_experiment_review_unavailable'].includes(reviewed.state)) {
+          throw new Error('Invalid internal algorithm review');
         }
         await client.query('COMMIT');
         return res.json({ success: true, data: {
@@ -1000,8 +1000,10 @@ function createForecastPriceHistoryRouter(options = {}) {
           laterDirection: reviewed.laterDirection || null,
           candidateWorseDays: reviewed.candidateWorseDays ?? null,
           humanDecisionRequired: true,
-          supportedSourcePromotionReviewReady:
-            reviewed.state === 'promotion_review_ready',
+          internalExperimentReviewReady:
+            reviewed.state === 'internal_experiment_review_ready',
+          internalExperimentOnly: true,
+          productionPromotionEligible: false,
           numericalErrorAvailable: false,
           forecastServingEnabled: false, realForecastEligible: false,
           wholeBusinessCoverageVerified: false,
@@ -1061,6 +1063,8 @@ function createForecastPriceHistoryRouter(options = {}) {
           referenceDirection: value.referenceDirection || null,
           laterDirection: value.laterDirection || null,
           candidateWorseDays: value.candidateWorseDays ?? null,
+          internalExperimentOnly: true,
+          productionPromotionEligible: false,
           paidNumericServing: false, realForecastEligible: false,
         } });
       } catch (error) {
@@ -1111,6 +1115,8 @@ function createForecastPriceHistoryRouter(options = {}) {
             algorithmVersion: value.algorithmVersion || null,
             replayed: value.replayed === true,
             futureInternalExecution: value.state === 'active_algorithm_recorded',
+            internalExperimentOnly: true,
+            productionPromotionEligible: false,
             paidNumericServing: false, realForecastEligible: false } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
@@ -1150,6 +1156,8 @@ function createForecastPriceHistoryRouter(options = {}) {
           algorithmVersion: value.algorithmVersion || null,
           policyVersion: value.policyVersion || null,
           futureInternalExecution: value.state === 'active_algorithm_current',
+          internalExperimentOnly: true,
+          productionPromotionEligible: false,
           paidNumericServing: false, realForecastEligible: false,
         } });
       } catch (error) {

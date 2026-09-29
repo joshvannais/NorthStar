@@ -11,9 +11,10 @@ const { readReviewedRetellLeadReceipts } =
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
-const INSTANT = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/;
+const INSTANT =
+  /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(\d{6})Z$/;
 const DATABASE_INSTANT =
-  /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3,6}(?:Z|[+-]\d\d:\d\d)$/;
+  /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(\d{3,6})(Z|[+-]\d\d:\d\d)$/;
 const PURPOSE = 'forecast_demand_source';
 const TARGET = 'retell.inbound_calls';
 const SNAPSHOT_VERSION = 'm26-as-of-source-manifest-v1';
@@ -22,6 +23,10 @@ const CONSENT_BOUNDARY =
   'Company permission does not establish caller consent, provider coverage or retention.';
 const SNAPSHOT_BOUNDARY =
   'Retell call receipts are not distinct reviewed lead identities or complete provider coverage.';
+const REVIEW_BOUNDARY =
+  'Call dispositions are review evidence, not certified provider coverage or a lead forecast.';
+const REVIEWED_BOUNDARY =
+  'Reviewed identities only; no caller consent, retention, provider coverage or forecast is certified.';
 
 function exact(value, keys) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
@@ -66,9 +71,33 @@ function actor(req) {
     authSessionId: req.authSession.id };
 }
 
+function validCalendarInstant(value, expression) {
+  const match = typeof value === 'string' ? expression.exec(value) : null;
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1 ||
+      day > new Date(Date.UTC(year, month, 0)).getUTCDate() ||
+      hour > 23 || minute > 59 || second > 59) return false;
+  const zone = match[8];
+  if (zone && zone !== 'Z') {
+    const offset = /([+-])(\d\d):(\d\d)/.exec(zone);
+    if (!offset || Number(offset[2]) > 23 || Number(offset[3]) > 59) return false;
+  }
+  return Number.isFinite(Date.parse(value));
+}
+
 function validTimestamp(value) {
-  return typeof value === 'string' && DATABASE_INSTANT.test(value) &&
-    Number.isFinite(Date.parse(value));
+  return validCalendarInstant(value, DATABASE_INSTANT);
+}
+
+function validUtcInstant(value) {
+  return validCalendarInstant(value, INSTANT);
+}
+
+function utcMicros(value) {
+  if (!validUtcInstant(value)) return null;
+  const milliseconds = Date.parse(value.slice(0, 23) + 'Z');
+  return BigInt(milliseconds) * 1000n + BigInt(value.slice(23, 26));
 }
 
 function validConsentItem(item) {
@@ -121,15 +150,15 @@ function validSource(item) {
   return item && item.sourceKind === 'retell_call' &&
     UUID.test(item.sourceId || '') && item.revision === 1 &&
     DIGEST.test(item.digest || '') && item.state === 'active' &&
-    INSTANT.test(item.recordedAt || '') &&
-    (item.eventAt === null || INSTANT.test(item.eventAt || ''));
+    validUtcInstant(item.recordedAt) &&
+    (item.eventAt === null || validUtcInstant(item.eventAt));
 }
 
 function validCurrentSnapshot(value, organizationId, requireReadFlags) {
   return value && UUID.test(value.id || '') &&
     value.version === SNAPSHOT_VERSION && value.organizationId === organizationId &&
     value.purposeKey === PURPOSE && value.targetKey === TARGET &&
-    INSTANT.test(value.asOf || '') && INSTANT.test(value.capturedAt || '') &&
+    validUtcInstant(value.asOf) && validUtcInstant(value.capturedAt) &&
     value.asOf === value.capturedAt && UUID.test(value.sourceConsentId || '') &&
     DIGEST.test(value.sourceConsentDigest || '') &&
     value.identityBoundary === SNAPSHOT_BOUNDARY &&
@@ -309,13 +338,17 @@ function createForecastDemandSourcesRouter(options = {}) {
             return item.status === 'reviewed' ?
               (!['new_lead', 'repeat_lead', 'not_lead'].includes(item.disposition) ||
                item.reviewRevision < 1 || !DIGEST.test(item.reviewDigest || '') ||
+               !validUtcInstant(item.reviewedAt) ||
                (item.disposition === 'repeat_lead' ?
                  !UUID.test(item.anchorCallSourceId || '') : item.anchorCallSourceId !== null)) :
               item.disposition !== null || item.anchorCallSourceId !== null ||
+                item.reviewedAt !== null ||
                 (item.reviewDigest !== null && !DIGEST.test(item.reviewDigest || ''));
           })) return null;
           if (value.stale === false &&
-              (!Number.isSafeInteger(value.callCount) ||
+              (!DIGEST.test(value.sourceSnapshotDigest || '') ||
+               value.boundary !== REVIEW_BOUNDARY ||
+               !Number.isSafeInteger(value.callCount) ||
                !Number.isSafeInteger(value.reviewedCount) ||
                !Number.isSafeInteger(value.unresolvedCount) ||
                value.callCount !== value.calls.length ||
@@ -385,7 +418,7 @@ function createForecastDemandSourcesRouter(options = {}) {
     requirePermission('forecast', 'read'), throttle, async (req, res) => {
       if (!UUID.test(req.params.snapshotId || '') ||
           !exact(req.query, ['startsAt', 'endsAt']) ||
-          !INSTANT.test(req.query.startsAt || '') || !INSTANT.test(req.query.endsAt || '')) {
+          !validUtcInstant(req.query.startsAt) || !validUtcInstant(req.query.endsAt)) {
         return invalid(res);
       }
       try {
@@ -403,14 +436,34 @@ function createForecastDemandSourcesRouter(options = {}) {
           await client.query('ROLLBACK').catch(() => {});
           throw error;
         } finally { client.release(); }
+        const receiptIds = new Set();
         if (!value || !['unavailable', 'reviewed_source_only'].includes(value.state) ||
             (value.state === 'unavailable' &&
               (typeof value.reason !== 'string' || value.reason.length === 0)) ||
             (value.state === 'reviewed_source_only' &&
               (!DIGEST.test(value.sourceSnapshotDigest || '') ||
                !Array.isArray(value.leadReceipts) || value.leadReceipts.length > 1000 ||
-               !Number.isSafeInteger(value.callCount) ||
-               !Number.isSafeInteger(value.reviewedDistinctLeadCount)))) {
+               !Number.isSafeInteger(value.callCount) || value.callCount < 0 ||
+               !Number.isSafeInteger(value.reviewedDistinctLeadCount) ||
+               value.reviewedDistinctLeadCount < 0 ||
+               value.reviewedDistinctLeadCount > value.callCount ||
+               value.leadReceipts.length !== value.reviewedDistinctLeadCount ||
+               value.historicalCoverageCertified !== false ||
+               value.boundary !== REVIEWED_BOUNDARY ||
+               value.leadReceipts.some(receipt => {
+                 const first = utcMicros(receipt?.firstReceiptAt);
+                 const reviewed = utcMicros(receipt?.reviewedAt);
+                 if (!exact(receipt, ['organizationId', 'leadId', 'firstReceiptAt',
+                   'reviewedAt', 'sourceDigest', 'state']) ||
+                     receipt.organizationId !== req.tenantContext.organizationId ||
+                     !UUID.test(receipt.leadId || '') || receiptIds.has(receipt.leadId) ||
+                     first === null || reviewed === null || reviewed < first ||
+                     !DIGEST.test(receipt.sourceDigest || '') || receipt.state !== 'active') {
+                   return true;
+                 }
+                 receiptIds.add(receipt.leadId);
+                 return false;
+               })))) {
           throw new Error('Invalid guarded reviewed source result');
         }
         return res.json({ success: true, data: value.state === 'unavailable' ? {

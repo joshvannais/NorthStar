@@ -21,6 +21,10 @@ const CONSENT_BOUNDARY =
   'Company permission does not establish caller consent, provider coverage or retention.';
 const SNAPSHOT_BOUNDARY =
   'Retell call receipts are not distinct reviewed lead identities or complete provider coverage.';
+const REVIEW_BOUNDARY =
+  'Call dispositions are review evidence, not certified provider coverage or a lead forecast.';
+const REVIEWED_BOUNDARY =
+  'Reviewed identities only; no caller consent, retention, provider coverage or forecast is certified.';
 
 function consent(action = 'grant') {
   return { id: REVIEW, purposeKey: 'forecast_demand_source', revision: 1,
@@ -74,7 +78,8 @@ function application({ role = 'owner', consentRead, consentWrite, capture,
         sourceSnapshotDigest: DIGEST, callCount: 1, reviewedCount: 0,
         unresolvedCount: 1, calls: [{ callSourceId: CALL, status: 'unresolved',
           disposition: null, anchorCallSourceId: null, reviewRevision: 0,
-          reviewDigest: null, privateTranscript: 'must not leak' }] } }] };
+          reviewDigest: null, reviewedAt: null,
+          privateTranscript: 'must not leak' }], boundary: REVIEW_BOUNDARY } }] };
     if (sql.includes('review_mutate')) return { rows: [{ value:
       reviewWrite || { id: REVIEW, revision: 1, digest: DIGEST,
         replayed: false, status: 'recorded' } }] };
@@ -89,8 +94,9 @@ function application({ role = 'owner', consentRead, consentWrite, capture,
     readReviewed: readReviewed || jest.fn(async () => ({
       state: 'reviewed_source_only', sourceSnapshotDigest: DIGEST,
       callCount: 1, reviewedDistinctLeadCount: 1,
-      leadReceipts: [{ organizationId: ORG, leadId: CALL,
-        privateSourceDigest: 'must not leak' }], historicalCoverageCertified: false,
+      leadReceipts: [{ organizationId: ORG, leadId: CALL, firstReceiptAt: START,
+        reviewedAt: END, sourceDigest: DIGEST, state: 'active' }],
+      historicalCoverageCertified: false, boundary: REVIEWED_BOUNDARY,
     })) }));
   return { app, pool, client };
 }
@@ -225,7 +231,9 @@ test('reviewed window is explicit source-only evidence and strips lead identitie
   const readReviewed = jest.fn(async () => ({ state: 'reviewed_source_only',
     sourceSnapshotDigest: DIGEST, callCount: 2, reviewedDistinctLeadCount: 1,
     leadReceipts: [{ organizationId: ORG, leadId: CALL,
-      sourceDigest: DIGEST }], historicalCoverageCertified: false }));
+      firstReceiptAt: START, reviewedAt: END, sourceDigest: DIGEST,
+      state: 'active' }], historicalCoverageCertified: false,
+    boundary: REVIEWED_BOUNDARY }));
   const { app, client } = application({ readReviewed });
   const response = await request(app)
     .get(`/sources/retell/snapshots/${SNAPSHOT}/reviewed-source-window`)
@@ -291,6 +299,45 @@ test('wrong-tenant and malformed authority projections fail closed', async () =>
   total: 1, truncated: false } });
   expect((await request(malformedConsent.app)
     .get('/sources/retell/consent')).status).toBe(503);
+  const impossibleTime = application({ snapshotRead: snapshot({
+    asOf: '2026-99-99T12:01:00.000000Z',
+    capturedAt: '2026-99-99T12:01:00.000000Z', stale: false,
+    refreshRequired: false,
+  }) });
+  expect((await request(impossibleTime.app)
+    .get(`/sources/retell/snapshots/${SNAPSHOT}`)).status).toBe(503);
+  const malformedReviews = application({ reviews: { snapshotId: SNAPSHOT,
+    stale: false, sourceSnapshotDigest: 'bad', callCount: 1, reviewedCount: 0,
+    unresolvedCount: 1, calls: [{ callSourceId: CALL, status: 'unresolved',
+      disposition: null, anchorCallSourceId: null, reviewRevision: 0,
+      reviewDigest: null, reviewedAt: null }], boundary: REVIEW_BOUNDARY } });
+  expect((await request(malformedReviews.app)
+    .get(`/sources/retell/snapshots/${SNAPSHOT}/reviews`)).status).toBe(503);
+});
+
+test('reviewed source window rejects wrong-tenant and incoherent helper evidence', async () => {
+  const poisoned = application({ readReviewed: jest.fn(async () => ({
+    state: 'reviewed_source_only', sourceSnapshotDigest: DIGEST,
+    callCount: 1, reviewedDistinctLeadCount: 1,
+    leadReceipts: [{ organizationId: USER, leadId: CALL, firstReceiptAt: START,
+      reviewedAt: END, sourceDigest: DIGEST, state: 'active' }],
+    historicalCoverageCertified: false, boundary: REVIEWED_BOUNDARY,
+  })) });
+  const wrongTenant = await request(poisoned.app)
+    .get(`/sources/retell/snapshots/${SNAPSHOT}/reviewed-source-window`)
+    .query({ startsAt: START, endsAt: END });
+  expect(wrongTenant.status).toBe(503);
+  expect(JSON.stringify(wrongTenant.body)).not.toContain(USER);
+  const badCounts = application({ readReviewed: jest.fn(async () => ({
+    state: 'reviewed_source_only', sourceSnapshotDigest: DIGEST,
+    callCount: 0, reviewedDistinctLeadCount: 1,
+    leadReceipts: [{ organizationId: ORG, leadId: CALL, firstReceiptAt: START,
+      reviewedAt: END, sourceDigest: DIGEST, state: 'active' }],
+    historicalCoverageCertified: false, boundary: REVIEWED_BOUNDARY,
+  })) });
+  expect((await request(badCounts.app)
+    .get(`/sources/retell/snapshots/${SNAPSHOT}/reviewed-source-window`)
+    .query({ startsAt: START, endsAt: END })).status).toBe(503);
 });
 
 test('database timeout is typed busy, rolled back and never leaks details', async () => {

@@ -173,6 +173,37 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       completePeriodVerified: false, forecastIssued: false });
     expect(beforeReviewCandidates.body.data.candidates[0]).toMatchObject({
       approvalId: matchingApprovalId, appointmentId: appointment });
+    const candidateLaterLink = await post('/customer-estimate-links', {
+      versionId: issuedVersionId, expiresInDays: 14,
+      confirmed: true, confirmationVersion: 'customer-estimate-delivery-v1',
+    });
+    expect(candidateLaterLink.status).toBe(201);
+    const laterCandidateAcceptance = await f.ownerPool.connect();
+    try {
+      await laterCandidateAcceptance.query('BEGIN');
+      await laterCandidateAcceptance.query(
+        `INSERT INTO canonical_customer_estimate_delivery_events(
+           organization_id,estimate_id,version_id,link_id,kind,body,actor_user_id,
+           request_key_hash,request_digest,digest)
+         SELECT organization_id,estimate_id,version_id,id,'accepted',
+                $2::jsonb,NULL,$3,$4,$5
+           FROM canonical_customer_estimate_delivery_links WHERE id=$1`,
+        [candidateLaterLink.body.data.link.id,
+          JSON.stringify({ customerName: 'Later candidate customer', confirmed: true,
+            confirmationVersion: 'customer-estimate-accept-v1' }),
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex')]);
+      const superseded = (await laterCandidateAcceptance.query(
+        'SELECT public.canonical_forecast_booking_review_candidates($1,$2,$3,$4) value',
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]))
+        .rows[0].value;
+      expect(superseded).toMatchObject({
+        state: 'booking_review_candidates_observed', candidateCount: 0,
+        writeRechecksCurrentness: true, bookedWorkVerified: false });
+    } finally {
+      await laterCandidateAcceptance.query('ROLLBACK');
+      laterCandidateAcceptance.release();
+    }
     expect((await request(f.app).get(`${bookingRoute}/candidates`)
       .set(f.actors.otherOwner.session.headers)).body.data).toMatchObject({
       state: 'booking_review_candidates_observed', candidateCount: 0,

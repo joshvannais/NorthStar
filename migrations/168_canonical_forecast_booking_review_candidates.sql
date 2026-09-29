@@ -4,7 +4,8 @@ CREATE FUNCTION public.canonical_forecast_booking_review_candidates(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE item RECORD;price JSONB;items JSONB:='[]'::jsonb;
+DECLARE item RECORD;pair JSONB;price JSONB;items JSONB:='[]'::jsonb;
+ pinned_order BIGINT;later_count INTEGER;later_same_opportunity BOOLEAN;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'Read committed required for booking candidates' USING ERRCODE='25001';
@@ -36,6 +37,38 @@ BEGIN
  LOOP
   IF EXISTS(SELECT 1 FROM public.canonical_forecast_commercial_booking_reviews review
     WHERE review.organization_id=org AND review.appointment_id=item.appointment_id) THEN
+   CONTINUE;
+  END IF;
+  pair:=public.canonical_forecast_acceptance_booking_pair(
+   org,actor,role_value,session_value,item.approval_id);
+  IF pair->>'state'<>'ordered_same_opportunity_candidate' THEN
+   CONTINUE;
+  END IF;
+  SELECT source_order INTO pinned_order
+   FROM public.canonical_forecast_commercial_booking_orders
+   WHERE organization_id=org
+    AND delivery_event_id=(pair->>'acceptanceId')::uuid;
+  IF pinned_order IS NULL THEN
+   CONTINUE;
+  END IF;
+  SELECT count(*)::integer,
+   COALESCE(bool_or(observed.opportunity_id=item.opportunity_id),FALSE)
+   INTO later_count,later_same_opportunity
+  FROM (
+   SELECT estimate.opportunity_id
+   FROM public.canonical_forecast_commercial_booking_orders later
+   JOIN public.canonical_customer_estimate_delivery_events event
+    ON event.organization_id=later.organization_id
+     AND event.id=later.delivery_event_id AND event.kind='accepted'
+   JOIN public.canonical_estimates estimate
+    ON estimate.organization_id=event.organization_id
+     AND estimate.id=event.estimate_id
+   WHERE later.organization_id=org
+    AND later.source_kind='customer_estimate_acceptance'
+    AND later.source_order>pinned_order
+   ORDER BY later.source_order LIMIT 1001
+  ) observed;
+  IF later_count>1000 OR later_same_opportunity THEN
    CONTINUE;
   END IF;
   price:=public.canonical_forecast_booked_price_candidate(

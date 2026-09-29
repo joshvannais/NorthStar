@@ -156,6 +156,16 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         organizationId: f.org, userId: owner().actorUserId,
         expectedVersion: unsupportedProfile.versionLabel, profile: restoredRaw,
       });
+      const profile = await request(f.app).post(profileRoot)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({ reason: 'Prospective fictional UTC-day profile basis.',
+          confirmed: true });
+      expect(profile.status).toBe(201);
+      const profileAnchorId = profile.body.data.anchorId;
+      const profileActivation = await request(f.app)
+        .post(`${profileRoot}/${profileAnchorId}/activate`)
+        .set(owner().session.headers).send({});
+      expect(profileActivation.status).toBe(200);
 
       const firstOriginWriter = await f.runtimePool.connect();
       const secondOriginWriter = await f.runtimePool.connect();
@@ -209,16 +219,25 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(proof.body.data).toMatchObject({
         state: 'price_flow_origin_activated', preHorizonCommitVerified: true,
         realForecastEligible: false });
-      const profile = await request(f.app).post(profileRoot)
+      const lateProfile = await request(f.app).post(profileRoot)
         .set(owner().session.headers).set('Idempotency-Key', key())
-        .send({ reason: 'Prospective fictional UTC-day profile basis.',
+        .send({ reason: 'Post-origin profile must not rewrite causal context.',
           confirmed: true });
-      expect(profile.status).toBe(201);
-      const profileAnchorId = profile.body.data.anchorId;
-      const profileActivation = await request(f.app)
-        .post(`${profileRoot}/${profileAnchorId}/activate`)
+      expect(lateProfile.status).toBe(201);
+      const lateProfileActivation = await request(f.app)
+        .post(`${profileRoot}/${lateProfile.body.data.anchorId}/activate`)
         .set(owner().session.headers).send({});
-      expect(profileActivation.status).toBe(200);
+      expect(lateProfileActivation.status).toBe(200);
+      const lateProfileWitness = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${runId}/profile-witness`)
+        .set(owner().session.headers)
+        .send({ profileAnchorId: lateProfile.body.data.anchorId });
+      expect(lateProfileWitness.status).toBe(200);
+      expect(lateProfileWitness.body.data).toMatchObject({
+        state: 'profile_witness_unavailable',
+        reason: 'prospective_profile_unverified',
+        forecastValueAvailable: false, realForecastEligible: false,
+      });
       const profileWitness = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/profile-witness`)
         .set(owner().session.headers)

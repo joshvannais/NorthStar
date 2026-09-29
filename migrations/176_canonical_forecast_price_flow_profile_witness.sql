@@ -73,6 +73,8 @@ BEGIN
  SELECT * INTO activation FROM public.canonical_forecast_profile_effective_activations
   WHERE organization_id=org AND anchor_id=anchor_value;
  IF anchor_row.id IS NULL OR activation.anchor_id IS NULL OR
+  activation.observed_at>=saved.saved_at OR
+  anchor_row.captured_at>=saved.saved_at OR
   activation.observed_at>=saved.horizon_start OR
   anchor_row.captured_at>=saved.horizon_start THEN
   RETURN jsonb_build_object('state','profile_witness_unavailable',
@@ -162,6 +164,8 @@ BEGIN
  IF source_row.id IS NULL OR origin_proof.run_id IS NULL OR
   profile_proof.run_id IS NULL OR
   profile_anchor.id IS NULL OR profile_activation.anchor_id IS NULL OR
+  profile_anchor.captured_at>=saved.saved_at OR
+  profile_activation.observed_at>=saved.saved_at OR
   profile_anchor.captured_at>=saved.horizon_start OR
   profile_activation.observed_at>=saved.horizon_start OR
   origin_proof.observed_at>=saved.horizon_start OR

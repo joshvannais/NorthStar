@@ -5,7 +5,7 @@ CREATE TABLE public.canonical_forecast_price_flow_actual_commit_observations (
  organization_id UUID NOT NULL,
  receipt_id UUID NOT NULL,
  run_id UUID NOT NULL,
- observed_at TIMESTAMPTZ NOT NULL,
+ recorded_at TIMESTAMPTZ NOT NULL,
  actor_user_id UUID NOT NULL,
  auth_session_id UUID NOT NULL REFERENCES public.auth_sessions(id) ON DELETE RESTRICT,
  PRIMARY KEY(organization_id,receipt_id),
@@ -20,17 +20,38 @@ CREATE TABLE public.canonical_forecast_price_flow_actual_commit_observations (
 );
 CREATE INDEX canonical_forecast_price_flow_actual_commit_by_run
  ON public.canonical_forecast_price_flow_actual_commit_observations
- (organization_id,run_id,observed_at,receipt_id);
+ (organization_id,run_id,recorded_at,receipt_id);
 CREATE TRIGGER canonical_forecast_price_flow_actual_commit_immutable
  BEFORE UPDATE OR DELETE OR TRUNCATE
  ON public.canonical_forecast_price_flow_actual_commit_observations
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
 
+CREATE FUNCTION public.canonical_forecast_price_flow_actual_commit_marker()
+RETURNS TRIGGER LANGUAGE plpgsql
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ INSERT INTO public.canonical_forecast_price_flow_actual_commit_observations(
+  organization_id,receipt_id,run_id,recorded_at,actor_user_id,auth_session_id)
+ VALUES(NEW.organization_id,NEW.id,NEW.run_id,clock_timestamp(),
+  NEW.actor_user_id,NEW.auth_session_id);
+ RETURN NEW;
+END $$;
+
+-- Drain every pre-migration writer before installing the marker. A legacy
+-- application transaction that already touched the source table completes
+-- before the backfill snapshot; a later legacy insert waits and then fires
+-- the new trigger after this migration commits.
+LOCK TABLE public.canonical_forecast_price_flow_actual_receipts
+ IN ACCESS EXCLUSIVE MODE;
+CREATE TRIGGER canonical_forecast_price_flow_actual_commit_marker
+ AFTER INSERT ON public.canonical_forecast_price_flow_actual_receipts
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_forecast_price_flow_actual_commit_marker();
+
 -- Rows visible to this later migration transaction were committed before the
 -- migration snapshot. Backfill them once so older retained actuals do not
 -- depend on pg_xact_status retention.
 INSERT INTO public.canonical_forecast_price_flow_actual_commit_observations(
- organization_id,receipt_id,run_id,observed_at,actor_user_id,auth_session_id)
+ organization_id,receipt_id,run_id,recorded_at,actor_user_id,auth_session_id)
 SELECT organization_id,id,run_id,clock_timestamp(),actor_user_id,auth_session_id
 FROM public.canonical_forecast_price_flow_actual_receipts
 ON CONFLICT DO NOTHING;
@@ -42,7 +63,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE source public.canonical_forecast_price_flow_actual_receipts%ROWTYPE;
  prior public.canonical_forecast_price_flow_actual_commit_observations%ROWTYPE;
- source_xid XID8; current_xid XID8; observed TIMESTAMPTZ;
+ source_xid XID8; witness_xid XID8; current_xid XID8; recorded TIMESTAMPTZ;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
   receipt_value IS NULL THEN
@@ -66,9 +87,17 @@ BEGIN
   FROM public.canonical_forecast_price_flow_actual_commit_observations
   WHERE organization_id=org AND receipt_id=source.id;
  IF FOUND THEN
+  SELECT xmin::text::xid8 INTO witness_xid
+   FROM public.canonical_forecast_price_flow_actual_commit_observations
+   WHERE organization_id=org AND receipt_id=source.id;
+  current_xid:=pg_current_xact_id_if_assigned();
+  IF current_xid IS NOT NULL AND witness_xid=current_xid THEN
+   RETURN jsonb_build_object('state','price_flow_actual_commit_unavailable',
+    'reason','actual_commit_not_observed');
+  END IF;
   RETURN jsonb_build_object('state','price_flow_actual_commit_observed',
    'receiptId',source.id,'runId',source.run_id,'revision',source.revision,
-   'commitObservedAt',public.canonical_forecast_utc_instant(prior.observed_at),
+   'commitEvidenceRecordedAt',public.canonical_forecast_utc_instant(prior.recorded_at),
    'replayed',TRUE);
  END IF;
  SELECT xmin::text::xid8 INTO source_xid
@@ -82,10 +111,10 @@ BEGIN
   RETURN jsonb_build_object('state','price_flow_actual_commit_unavailable',
    'reason','actual_commit_not_observed');
  END IF;
- observed:=clock_timestamp();
+ recorded:=clock_timestamp();
  INSERT INTO public.canonical_forecast_price_flow_actual_commit_observations(
-  organization_id,receipt_id,run_id,observed_at,actor_user_id,auth_session_id)
- VALUES(org,source.id,source.run_id,observed,actor,session_value)
+  organization_id,receipt_id,run_id,recorded_at,actor_user_id,auth_session_id)
+ VALUES(org,source.id,source.run_id,recorded,actor,session_value)
  ON CONFLICT ON CONSTRAINT canonical_forecast_price_flow_actual_commit_observations_pkey
  DO NOTHING;
  SELECT * INTO prior
@@ -97,8 +126,8 @@ BEGIN
  END IF;
  RETURN jsonb_build_object('state','price_flow_actual_commit_observed',
   'receiptId',source.id,'runId',source.run_id,'revision',source.revision,
-  'commitObservedAt',public.canonical_forecast_utc_instant(prior.observed_at),
-  'replayed',prior.observed_at<>observed);
+  'commitEvidenceRecordedAt',public.canonical_forecast_utc_instant(prior.recorded_at),
+  'replayed',prior.recorded_at<>recorded);
 END $$;
 
 CREATE OR REPLACE FUNCTION public.canonical_forecast_price_flow_actual_read(
@@ -107,7 +136,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE latest public.canonical_forecast_price_flow_actual_receipts%ROWTYPE;
  witness public.canonical_forecast_price_flow_actual_commit_observations%ROWTYPE;
- source JSONB;
+ witness_xid XID8; current_xid XID8; source JSONB;
 BEGIN
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,NULL,FALSE);
@@ -122,6 +151,15 @@ BEGIN
   FROM public.canonical_forecast_price_flow_actual_commit_observations
   WHERE organization_id=org AND receipt_id=latest.id AND run_id=latest.run_id;
  IF NOT FOUND THEN
+  RETURN jsonb_build_object('state','price_flow_actual_unavailable',
+   'reason','actual_commit_unverified','receiptId',latest.id,
+   'revision',latest.revision,'outcomeFinalized',FALSE);
+ END IF;
+ SELECT xmin::text::xid8 INTO witness_xid
+  FROM public.canonical_forecast_price_flow_actual_commit_observations
+  WHERE organization_id=org AND receipt_id=latest.id;
+ current_xid:=pg_current_xact_id_if_assigned();
+ IF current_xid IS NOT NULL AND witness_xid=current_xid THEN
   RETURN jsonb_build_object('state','price_flow_actual_unavailable',
    'reason','actual_commit_unverified','receiptId',latest.id,
    'revision',latest.revision,'outcomeFinalized',FALSE);
@@ -142,7 +180,7 @@ BEGIN
   'sourceReceiptId',latest.source_receipt_id,
   'sourceSnapshotDigest',latest.source_snapshot_digest,
   'receiptDigest',latest.receipt_digest,
-  'commitObservedAt',public.canonical_forecast_utc_instant(witness.observed_at),
+  'commitEvidenceRecordedAt',public.canonical_forecast_utc_instant(witness.recorded_at),
   'observedThrough',public.canonical_forecast_utc_instant(latest.observed_through),
   'capturedAt',public.canonical_forecast_utc_instant(latest.captured_at),
   'amount',latest.amount,'firstApprovalCount',latest.first_approval_count,
@@ -155,9 +193,13 @@ REVOKE ALL ON TABLE public.canonical_forecast_price_flow_actual_commit_observati
  FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_observe_price_flow_actual_commit(
  UUID,UUID,TEXT,UUID,TEXT,UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_actual_commit_marker()
+ FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  REVOKE ALL ON TABLE public.canonical_forecast_price_flow_actual_commit_observations
   FROM northstar_app_runtime;
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_observe_price_flow_actual_commit(
   UUID,UUID,TEXT,UUID,TEXT,UUID) TO northstar_app_runtime;
+ REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_actual_commit_marker()
+  FROM northstar_app_runtime;
 END IF; END $$;

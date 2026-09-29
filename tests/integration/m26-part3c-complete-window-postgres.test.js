@@ -272,12 +272,15 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
         expect(actual.rows[0].value).toMatchObject({
           state: 'price_flow_actual_recorded', actualState: 'known',
           selectedSourceFinalizedAtCapture: true });
+        // Direct function capture emulates a still-serving pre-183 process:
+        // it does not call the observer, but the migration-installed source
+        // trigger supplies a durable marker after the legacy write commits.
         const beforeObservation = await f.runtimePool.query(
           'SELECT public.canonical_forecast_price_flow_actual_read($1,$2,$3,$4,$5) value',
           [...args, runId]);
         expect(beforeObservation.rows[0].value).toMatchObject({
-          state: 'price_flow_actual_unavailable',
-          reason: 'actual_commit_unverified',
+          state: 'price_flow_actual_finalized',
+          receiptId: actual.rows[0].value.receiptId,
         });
         const commitObservation = await f.runtimePool.query(
           'SELECT public.canonical_forecast_observe_price_flow_actual_commit($1,$2,$3,$4,$5,$6) value',
@@ -285,6 +288,7 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
         expect(commitObservation.rows[0].value).toMatchObject({
           state: 'price_flow_actual_commit_observed', runId,
           receiptId: actual.rows[0].value.receiptId,
+          replayed: true,
         });
       }
       const paired = await request(f.app)

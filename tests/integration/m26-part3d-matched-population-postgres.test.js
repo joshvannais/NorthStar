@@ -844,22 +844,47 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         heldActualWriter.release();
       }
       const promotionReviewRoute =
-        `${root}/algorithm-promotion-review?anchorRunId=${runIds[59]}`;
+        `${root}/algorithm-experiment-review?anchorRunId=${runIds[59]}`;
       const promotionReview = await request(f.app).get(promotionReviewRoute)
         .set('Cookie', owner.session.headers.Cookie);
       expect(promotionReview.status).toBe(200);
       expect(promotionReview.body.data).toMatchObject({
-        state: 'promotion_review_ready',
+        state: 'internal_experiment_review_ready',
         policyVersion: 'm26_selected_m24_promotion_policy_v1',
         referenceDirection: 'candidate_higher_error',
         laterDirection: 'candidate_higher_error',
-        supportedSourcePromotionReviewReady: true,
+        internalExperimentReviewReady: true,
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
         numericalErrorAvailable: false,
         forecastServingEnabled: false, realForecastEligible: false,
         wholeBusinessCoverageVerified: false });
       expect(promotionReview.body.data.candidateWorseDays).toBeGreaterThan(0);
       expect(JSON.stringify(promotionReview.body.data))
         .not.toMatch(/comparisonDigest|reviewDigest|"amount"|1400\.00/);
+      const legacyPromotionReview = await request(f.app)
+        .get(`${root}/algorithm-promotion-review?anchorRunId=${runIds[59]}`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(legacyPromotionReview.status).toBe(200);
+      expect(legacyPromotionReview.body.data).toMatchObject({
+        state: 'promotion_review_ready',
+        supportedSourcePromotionReviewReady: true,
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
+        forecastServingEnabled: false, realForecastEligible: false,
+      });
+      expect(legacyPromotionReview.body.data)
+        .not.toHaveProperty('internalExperimentReviewReady');
+      const databasePromotionReview = (await f.ownerPool.query(
+        `SELECT public.canonical_forecast_price_flow_promotion_review(
+          $1,$2,$3,$4,$5) value`,
+        [f.org, owner.actorUserId, owner.actorAccessRole,
+          owner.authSessionId, runIds[59]])).rows[0].value;
+      expect(databasePromotionReview).toMatchObject({
+        state: 'promotion_review_ready',
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
+      });
       const promotionDenied = await request(f.app).get(promotionReviewRoute)
         .set('Cookie', f.actors.member.session.headers.Cookie);
       expect(promotionDenied.status).toBe(403);
@@ -867,8 +892,10 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
       expect(foreignPromotion.status).toBe(200);
       expect(foreignPromotion.body.data).toMatchObject({
-        state: 'promotion_review_unavailable',
-        supportedSourcePromotionReviewReady: false });
+        state: 'internal_experiment_review_unavailable',
+        internalExperimentReviewReady: false,
+        internalExperimentOnly: true,
+        productionPromotionEligible: false });
       const activeChallengeRoute = `${root}/algorithm-active-challenges`;
       const activeSelectionRoute = `${root}/algorithm-active-selections`;
       const promoteRequest = { anchorRunId: runIds[59], expectedRevision: 0,
@@ -882,6 +909,8 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(activeChallenge.body.data).toMatchObject({
         state: 'active_challenge_ready',
         laterDirection: 'candidate_higher_error',
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
         paidNumericServing: false });
       expect(activeChallenge.body.data.reviewToken).toMatch(/^[a-f0-9]{64}$/);
       const deniedActive = await request(f.app).post(activeChallengeRoute)
@@ -925,6 +954,8 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(activeSelection.body.data).toMatchObject({
         state: 'active_algorithm_recorded', revision: 1,
         algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
         paidNumericServing: false, realForecastEligible: false });
       expect(concurrentActiveSelectionReplay.body.data).toMatchObject({
         eventId: activeSelection.body.data.eventId, replayed: true });
@@ -942,6 +973,8 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'active_algorithm_current',
         eventId: activeSelection.body.data.eventId, revision: 1,
         algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
         paidNumericServing: false });
       const foreignActive = await request(f.app).get(activeReadRoute)
         .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
@@ -1054,6 +1087,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(restoredRollbackActive.body.data).toMatchObject({
         state: 'active_algorithm_recorded', revision: 4,
         algorithmVersion: 'm26_price_flow_carry_forward_v1' });
+      const persistedInternalFlags = await f.ownerPool.query(
+        `SELECT bool_and(internal_experiment_only) internal_only,
+          bool_and(NOT paid_numeric_serving) serving_disabled
+         FROM canonical_forecast_price_flow_active_algorithms
+         WHERE organization_id=$1`, [f.org]);
+      expect(persistedInternalFlags.rows[0]).toMatchObject({
+        internal_only: true, serving_disabled: true });
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_active_algorithms'))
         .rejects.toMatchObject({ code: '42501' });

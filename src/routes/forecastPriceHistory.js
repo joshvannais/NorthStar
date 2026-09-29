@@ -95,6 +95,9 @@ function createForecastPriceHistoryRouter(options = {}) {
   const algorithmOriginThrottle = options.algorithmOriginThrottle ||
     rateLimit('forecast-algorithm-origin', req =>
       `forecast-price-history:${req.tenantContext.organizationId}`);
+  const activeOriginThrottle = options.activeOriginThrottle ||
+    rateLimit('forecast-active-origin', req =>
+      `forecast-price-history:${req.tenantContext.organizationId}`);
   const readPosition = options.readPosition || readGuardedApprovedPriceFlow;
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
@@ -637,6 +640,97 @@ function createForecastPriceHistoryRouter(options = {}) {
       } catch (error) { return errorReply(res, error); }
     });
 
+  // A future private origin follows the current reviewed active choice. Its
+  // numeric output remains unavailable to paid clients.
+  router.post('/algorithm-active-origins', auth,
+    requirePermission('forecast', 'update'), activeOriginThrottle,
+    async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.body, ['baseRunId']) ||
+          !UUID.test(req.body.baseRunId || '') || !KEY.test(key || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The active origin request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_capture_active_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), key, req.body.baseRunId])).rows[0]?.value;
+        if (!value || !['active_origin_saved',
+          'active_origin_unavailable'].includes(value.state)) {
+          throw new Error('Invalid active origin');
+        }
+        await client.query('COMMIT');
+        if (value.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(value.state === 'active_origin_saved' &&
+          value.replayed !== true ? 201 : 200).json({ success: true,
+          data: { state: value.state, reason: value.reason || null,
+            originReceiptId: value.originReceiptId || null,
+            runId: value.runId || null, baseRunId: value.baseRunId || null,
+            activeEventId: value.activeEventId || null,
+            algorithmVersion: value.algorithmVersion || null,
+            replayed: value.replayed === true,
+            preHorizonCommitVerified: false, paidNumericServing: false,
+            realForecastEligible: false, forecastValueAvailable: false,
+            output: null } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/algorithm-active-origins/:originReceiptId/activate', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.originReceiptId || '') ||
+          !exactKeys(req.body, []) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The active origin activation request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_activate_active_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.params.originReceiptId])).rows[0]?.value;
+        if (!value || !['active_origin_activated',
+          'active_origin_unavailable'].includes(value.state)) {
+          throw new Error('Invalid active origin activation');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: value.state, reason: value.reason || null,
+          originReceiptId: value.originReceiptId || null,
+          runId: value.runId || null,
+          activeEventId: value.activeEventId || null,
+          algorithmVersion: value.algorithmVersion || null,
+          preHorizonCommitVerified: value.state === 'active_origin_activated',
+          replayed: value.replayed === true, paidNumericServing: false,
+          realForecastEligible: false, forecastValueAvailable: false,
+          output: null } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   // A fictional-data research run follows a still-current owner selection.
   // This never activates paid numeric forecast serving.
   router.post('/research-selected-origins', auth,
@@ -867,6 +961,197 @@ function createForecastPriceHistoryRouter(options = {}) {
             output: null, outputDigest: null, receiptDigest: null,
             preHorizonCommitVerified: false, realForecastEligible: false,
             forecastValueAvailable: false, replayed: saved.replayed } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/algorithm-promotion-review', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, ['anchorRunId']) ||
+          !UUID.test(req.query.anchorRunId || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm promotion review request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const reviewed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_promotion_review($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.query.anchorRunId])).rows[0]?.value;
+        if (!reviewed || !['promotion_review_ready',
+          'promotion_review_unavailable'].includes(reviewed.state)) {
+          throw new Error('Invalid algorithm promotion review');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: reviewed.state, reason: reviewed.reason || null,
+          policyVersion: reviewed.policyVersion || null,
+          referenceDirection: reviewed.referenceDirection || null,
+          laterDirection: reviewed.laterDirection || null,
+          candidateWorseDays: reviewed.candidateWorseDays ?? null,
+          humanDecisionRequired: true,
+          supportedSourcePromotionReviewReady:
+            reviewed.state === 'promotion_review_ready',
+          numericalErrorAvailable: false,
+          forecastServingEnabled: false, realForecastEligible: false,
+          wholeBusinessCoverageVerified: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  const validActiveRequest = body =>
+    exactKeys(body, ['anchorRunId', 'expectedRevision', 'action',
+      'algorithmVersion', 'reversesEventId', 'reason']) &&
+    UUID.test(body.anchorRunId || '') &&
+    Number.isInteger(body.expectedRevision) && body.expectedRevision >= 0 &&
+    ['promote', 'rollback'].includes(body.action) &&
+    ['m26_price_flow_zero_baseline_v1',
+      'm26_price_flow_carry_forward_v1'].includes(body.algorithmVersion) &&
+    (body.reversesEventId === null || UUID.test(body.reversesEventId || '')) &&
+    typeof body.reason === 'string' && body.reason.length >= 16 &&
+    body.reason.length <= 1000;
+
+  router.post('/algorithm-active-challenges', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, []) || !validActiveRequest(req.body)) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The active algorithm challenge request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const body = req.body;
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_active_challenge($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), body.anchorRunId,
+            body.expectedRevision, body.action, body.algorithmVersion,
+            body.reversesEventId, body.reason])).rows[0]?.value;
+        if (!value || !['active_challenge_ready',
+          'active_challenge_unavailable'].includes(value.state)) {
+          throw new Error('Invalid active algorithm challenge');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: value.state, reason: value.reason || null,
+          reviewToken: value.state === 'active_challenge_ready' ?
+            value.reviewToken : null,
+          currentRevision: value.currentRevision ?? null,
+          policyVersion: value.policyVersion || null,
+          referenceDirection: value.referenceDirection || null,
+          laterDirection: value.laterDirection || null,
+          candidateWorseDays: value.candidateWorseDays ?? null,
+          paidNumericServing: false, realForecastEligible: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/algorithm-active-selections', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      const { reviewToken, confirmed, ...requestBody } = req.body || {};
+      if (!exactKeys(req.query, []) || !validActiveRequest(requestBody) ||
+          !exactKeys(req.body, ['anchorRunId', 'expectedRevision', 'action',
+            'algorithmVersion', 'reversesEventId', 'reason',
+            'reviewToken', 'confirmed']) ||
+          !DIGEST.test(reviewToken || '') || confirmed !== true ||
+          !KEY.test(req.get('Idempotency-Key') || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The active algorithm selection request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const body = req.body;
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_active_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.get('Idempotency-Key'),
+            body.anchorRunId, body.expectedRevision, body.action,
+            body.algorithmVersion, body.reversesEventId, body.reason,
+            body.reviewToken, body.confirmed])).rows[0]?.value;
+        if (!value || !['active_algorithm_recorded',
+          'active_algorithm_unavailable'].includes(value.state)) {
+          throw new Error('Invalid active algorithm selection');
+        }
+        await client.query('COMMIT');
+        return res.status(value.state === 'active_algorithm_recorded' &&
+          value.replayed !== true ? 201 : 200).json({ success: true,
+          data: { state: value.state, reason: value.reason || null,
+            eventId: value.eventId || null, revision: value.revision ?? null,
+            algorithmVersion: value.algorithmVersion || null,
+            replayed: value.replayed === true,
+            futureInternalExecution: value.state === 'active_algorithm_recorded',
+            paidNumericServing: false, realForecastEligible: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/algorithm-active-selections', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, ['contextRunId']) ||
+          !UUID.test(req.query.contextRunId || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The active algorithm read request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_active_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.query.contextRunId])).rows[0]?.value;
+        if (!value || !['active_algorithm_current',
+          'active_algorithm_unavailable'].includes(value.state)) {
+          throw new Error('Invalid active algorithm read');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: value.state, reason: value.reason || null,
+          eventId: value.eventId || null, revision: value.revision ?? null,
+          algorithmVersion: value.algorithmVersion || null,
+          policyVersion: value.policyVersion || null,
+          futureInternalExecution: value.state === 'active_algorithm_current',
+          paidNumericServing: false, realForecastEligible: false,
+        } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

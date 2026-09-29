@@ -216,16 +216,16 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
- IF NOT pg_try_advisory_xact_lock(hashtextextended(
-   'm26:price-decision-order:'||org::text,0)) THEN
-  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
- END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object(
   'anchorRunId',anchor_run_value,'expectedRevision',expected_revision,
   'action',action_value,'algorithmVersion',algorithm_value,
   'reversesEventId',reverses_value,'reason',reason_value,
   'reviewToken',review_token_value));
+ PERFORM set_config('lock_timeout','28000ms',TRUE);
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':'||actor::text||':supported-selection:'||key_hash,0));
+ PERFORM set_config('lock_timeout','2000ms',TRUE);
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_supported_selections
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF prior.id IS NOT NULL THEN
@@ -235,7 +235,12 @@ BEGIN
   RETURN jsonb_build_object('state','supported_selection_recorded',
    'eventId',prior.id,'revision',prior.revision,
    'algorithmVersion',prior.algorithm_version,'replayed',TRUE,
+   'internalExperimentOnly',TRUE,'productionPromotionEligible',FALSE,
    'paidNumericServing',FALSE,'realForecastEligible',FALSE);
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:price-decision-order:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
  END IF;
  SELECT * INTO anchor FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=anchor_run_value AND

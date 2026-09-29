@@ -229,6 +229,40 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
         missingActiveTables.release();
       }
 
+      const missingSupportedEntries = await f.ownerPool.connect();
+      try {
+        await missingSupportedEntries.query('BEGIN');
+        await missingSupportedEntries.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_supported_select(
+            uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean)
+          RENAME TO canonical_forecast_price_flow_supported_select_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingSupportedEntries, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow();
+        await missingSupportedEntries.query('ROLLBACK');
+        await missingSupportedEntries.query('BEGIN');
+        await missingSupportedEntries.query(`ALTER TABLE
+          canonical_forecast_price_flow_supported_origins
+          RENAME TO canonical_forecast_price_flow_supported_origins_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingSupportedEntries, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow();
+        await missingSupportedEntries.query('ROLLBACK');
+        await missingSupportedEntries.query('BEGIN');
+        await missingSupportedEntries.query(`ALTER TABLE
+          canonical_forecast_price_flow_method_registration
+          RENAME TO canonical_forecast_price_flow_method_registration_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingSupportedEntries, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow();
+        await missingSupportedEntries.query('ROLLBACK');
+      } catch (error) {
+        await missingSupportedEntries.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingSupportedEntries.release();
+      }
+
       const leaked = await f.ownerPool.connect();
       try {
         await leaked.query('BEGIN');
@@ -288,6 +322,17 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
           'Runtime database role privilege verification failed');
         await leaked.query(`REVOKE SELECT ON
           canonical_forecast_price_flow_active_origins FROM PUBLIC`);
+        for (const table of [
+          'canonical_forecast_price_flow_supported_selections',
+          'canonical_forecast_price_flow_supported_origins',
+          'canonical_forecast_price_flow_method_registration',
+        ]) {
+          await leaked.query(`GRANT SELECT ON ${table} TO PUBLIC`);
+          await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+            { runtimeRole: f.roles.runtime })).rejects.toThrow(
+            'Runtime database role privilege verification failed');
+          await leaked.query(`REVOKE SELECT ON ${table} FROM PUBLIC`);
+        }
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
           { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
         await leaked.query('ROLLBACK');
@@ -1010,23 +1055,47 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
           .set(f.actors.member.session.headers).send(supportedRequest);
         expect(deniedChoice.status).toBe(403);
         const supportedKey = key();
-        const selected = await request(f.app).post(supportedSelectionRoute)
-          .set(owner.session.headers).set('Idempotency-Key', supportedKey)
-          .send({ ...supportedRequest,
-            reviewToken: supportedChallenge.body.data.reviewToken,
-            confirmed: true });
+        const selectionKeyHash = crypto.createHash('sha256')
+          .update(supportedKey).digest('hex');
+        const heldSelectionKey = await f.ownerPool.connect();
+        let concurrentSelections;
+        try {
+          await heldSelectionKey.query('BEGIN');
+          await heldSelectionKey.query(
+            `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
+            [`${f.org}:${owner.actorUserId}:supported-selection:${selectionKeyHash}`]);
+          const pendingSelections = Promise.all([1, 2].map(() =>
+            request(f.app).post(supportedSelectionRoute)
+              .set(owner.session.headers).set('Idempotency-Key', supportedKey)
+              .send({ ...supportedRequest,
+                reviewToken: supportedChallenge.body.data.reviewToken,
+                confirmed: true })));
+          await new Promise(resolve => setTimeout(resolve, 900));
+          await heldSelectionKey.query('ROLLBACK');
+          concurrentSelections = await pendingSelections;
+        } finally {
+          await heldSelectionKey.query('ROLLBACK').catch(() => {});
+          heldSelectionKey.release();
+        }
+        expect(concurrentSelections.map(value => ({
+          status: value.status, replayed: value.body.data?.replayed,
+          eventId: value.body.data?.eventId, state: value.body.data?.state,
+          reason: value.body.data?.reason,
+        })).sort((left, right) => Number(left.replayed) - Number(right.replayed)))
+          .toEqual([
+            { status: 201, replayed: false, eventId: expect.any(String),
+              state: 'supported_selection_recorded', reason: null },
+            { status: 200, replayed: true, eventId: expect.any(String),
+              state: 'supported_selection_recorded', reason: null },
+          ]);
+        const selected = concurrentSelections.find(value => value.status === 201);
+        const replayed = concurrentSelections.find(value => value.status === 200);
         expect(selected.status).toBe(201);
         expect(selected.body.data).toMatchObject({
           state: 'supported_selection_recorded', revision: 1,
           algorithmVersion: 'm26_price_flow_zero_baseline_v1',
           internalExperimentOnly: true, productionPromotionEligible: false,
           paidNumericServing: false, realForecastEligible: false });
-        const replayed = await request(f.app).post(supportedSelectionRoute)
-          .set(owner.session.headers).set('Idempotency-Key', supportedKey)
-          .send({ ...supportedRequest,
-            reviewToken: supportedChallenge.body.data.reviewToken,
-            confirmed: true });
-        expect(replayed.status).toBe(200);
         expect(replayed.body.data.replayed).toBe(true);
         const current = await request(f.app)
           .get(`${supportedSelectionRoute}?contextRunId=${runIds[59]}`)
@@ -1055,11 +1124,108 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
           .post(`${root}/saved-price-flow-origins/${baseRunId}/profile-witness`)
           .set(owner.session.headers).send({ profileAnchorId });
         expect(baseProfile.body.data.state).toBe('profile_witness_recorded');
+
+        const changedProfileCapture = await f.ownerPool.connect();
+        try {
+          await changedProfileCapture.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+          await changedProfileCapture.query(`UPDATE canonical_business_profiles
+            SET raw_profile=raw_profile
+            WHERE organization_id=$1 AND is_active=TRUE`, [f.org]);
+          const rejected = await changedProfileCapture.query(
+            'SELECT public.canonical_forecast_capture_supported_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+            [...args, owner.csrfToken, key(), baseRunId]);
+          expect(rejected.rows[0].value).toMatchObject({
+            state: 'supported_origin_unavailable',
+            reason: 'base_profile_source_changed',
+            paidNumericServing: false });
+          await changedProfileCapture.query('ROLLBACK');
+        } catch (error) {
+          await changedProfileCapture.query('ROLLBACK').catch(() => {});
+          throw error;
+        } finally {
+          changedProfileCapture.release();
+        }
+        const heldProfileCapture = await f.ownerPool.connect();
+        try {
+          await heldProfileCapture.query('BEGIN');
+          await heldProfileCapture.query(
+            `SELECT pg_advisory_xact_lock(hashtextextended(
+              'm26:profile-effective-source:'||$1::text,0))`, [f.org]);
+          const busyCapture = await request(f.app)
+            .post(`${root}/algorithm-supported-origins`)
+            .set(owner.session.headers).set('Idempotency-Key', key())
+            .send({ baseRunId });
+          expect(busyCapture.status).toBe(409);
+          expect(busyCapture.body.error.category).toBe('FORECAST_SOURCE_BUSY');
+          await heldProfileCapture.query('ROLLBACK');
+        } catch (error) {
+          await heldProfileCapture.query('ROLLBACK').catch(() => {});
+          throw error;
+        } finally {
+          heldProfileCapture.release();
+        }
+
+        const pendingSupportedClient = await f.runtimePool.connect();
+        try {
+          await pendingSupportedClient.query('BEGIN');
+          const pendingSupported = await pendingSupportedClient.query(
+            'SELECT public.canonical_forecast_capture_supported_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+            [...args, owner.csrfToken, key(), baseRunId]);
+          expect(pendingSupported.rows[0].value.state)
+            .toBe('supported_origin_saved');
+          const premature = await pendingSupportedClient.query(
+            'SELECT public.canonical_forecast_activate_supported_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+            [...args, owner.csrfToken,
+              pendingSupported.rows[0].value.originReceiptId]);
+          expect(premature.rows[0].value).toMatchObject({
+            state: 'supported_origin_unavailable',
+            reason: 'origin_commit_not_observed',
+            preHorizonCommitVerified: false });
+          await pendingSupportedClient.query('SAVEPOINT released_supported_origin');
+          const subtransactionSupported = await pendingSupportedClient.query(
+            'SELECT public.canonical_forecast_capture_supported_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+            [...args, owner.csrfToken, key(), baseRunId]);
+          expect(subtransactionSupported.rows[0].value.state)
+            .toBe('supported_origin_saved');
+          await pendingSupportedClient.query('RELEASE SAVEPOINT released_supported_origin');
+          const subtransactionPremature = await pendingSupportedClient.query(
+            'SELECT public.canonical_forecast_activate_supported_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+            [...args, owner.csrfToken,
+              subtransactionSupported.rows[0].value.originReceiptId]);
+          expect(subtransactionPremature.rows[0].value).toMatchObject({
+            state: 'supported_origin_unavailable',
+            reason: 'origin_commit_not_observed',
+            preHorizonCommitVerified: false });
+          await pendingSupportedClient.query('ROLLBACK');
+        } finally {
+          pendingSupportedClient.release();
+        }
         const originKey = key();
-        const supportedOrigin = await request(f.app)
-          .post(`${root}/algorithm-supported-origins`)
-          .set(owner.session.headers).set('Idempotency-Key', originKey)
-          .send({ baseRunId });
+        const originKeyHash = crypto.createHash('sha256')
+          .update(originKey).digest('hex');
+        const heldOriginKey = await f.ownerPool.connect();
+        let concurrentOrigins;
+        try {
+          await heldOriginKey.query('BEGIN');
+          await heldOriginKey.query(
+            `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
+            [`${f.org}:${owner.actorUserId}:supported-origin:${originKeyHash}`]);
+          const pendingOrigins = Promise.all([1, 2].map(() =>
+            request(f.app).post(`${root}/algorithm-supported-origins`)
+              .set(owner.session.headers).set('Idempotency-Key', originKey)
+              .send({ baseRunId })));
+          await new Promise(resolve => setTimeout(resolve, 900));
+          await heldOriginKey.query('ROLLBACK');
+          concurrentOrigins = await pendingOrigins;
+        } finally {
+          await heldOriginKey.query('ROLLBACK').catch(() => {});
+          heldOriginKey.release();
+        }
+        expect(concurrentOrigins.map(value => value.status).sort())
+          .toEqual([200, 201]);
+        const supportedOrigin = concurrentOrigins.find(value => value.status === 201);
+        const replayedOrigin = concurrentOrigins.find(value => value.status === 200);
+        expect(replayedOrigin.body.data.replayed).toBe(true);
         expect(supportedOrigin.status).toBe(201);
         expect(supportedOrigin.body.data).toMatchObject({
           state: 'supported_origin_saved',
@@ -1068,6 +1234,50 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
           internalExperimentOnly: true, productionPromotionEligible: false,
           paidNumericServing: false, output: null });
         expect(supportedOrigin.body.data.runId).not.toBe(baseRunId);
+
+        const heldProfileActivation = await f.ownerPool.connect();
+        try {
+          await heldProfileActivation.query('BEGIN');
+          await heldProfileActivation.query(
+            `SELECT pg_advisory_xact_lock(hashtextextended(
+              'm26:profile-effective-source:'||$1::text,0))`, [f.org]);
+          const busyActivation = await request(f.app)
+            .post(`${root}/algorithm-supported-origins/${supportedOrigin.body.data.originReceiptId}/activate`)
+            .set(owner.session.headers).send({});
+          expect(busyActivation.status).toBe(409);
+          expect(busyActivation.body.error.category).toBe('FORECAST_SOURCE_BUSY');
+          await heldProfileActivation.query('ROLLBACK');
+        } catch (error) {
+          await heldProfileActivation.query('ROLLBACK').catch(() => {});
+          throw error;
+        } finally {
+          heldProfileActivation.release();
+        }
+        const changedProfileActivation = await f.ownerPool.connect();
+        try {
+          await changedProfileActivation.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+          await changedProfileActivation.query(`UPDATE canonical_business_profiles
+            SET raw_profile=raw_profile
+            WHERE organization_id=$1 AND is_active=TRUE`, [f.org]);
+          const rejected = await changedProfileActivation.query(
+            'SELECT public.canonical_forecast_activate_supported_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+            [...args, owner.csrfToken,
+              supportedOrigin.body.data.originReceiptId]);
+          expect(rejected.rows[0].value).toMatchObject({
+            state: 'supported_origin_unavailable',
+            reason: 'base_profile_source_changed',
+            preHorizonCommitVerified: false });
+          await changedProfileActivation.query('ROLLBACK');
+        } catch (error) {
+          await changedProfileActivation.query('ROLLBACK').catch(() => {});
+          throw error;
+        } finally {
+          changedProfileActivation.release();
+        }
+        await f.ownerPool.query(
+          'VACUUM (FREEZE) canonical_forecast_price_flow_supported_origins');
+        await f.ownerPool.query(
+          'VACUUM (FREEZE) canonical_forecast_price_flow_saved_origins');
         const supportedActivated = await request(f.app)
           .post(`${root}/algorithm-supported-origins/${supportedOrigin.body.data.originReceiptId}/activate`)
           .set(owner.session.headers).send({});

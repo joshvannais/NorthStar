@@ -51,17 +51,11 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
- IF NOT pg_try_advisory_xact_lock(hashtextextended(
-   'm26:profile-effective-source:'||org::text,0)) THEN
-  RAISE EXCEPTION 'Forecast profile source busy' USING ERRCODE='55P03';
- END IF;
- IF NOT pg_try_advisory_xact_lock(hashtextextended(
-   'm26:price-decision-order:'||org::text,0)) THEN
-  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
- END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object(
   'baseRunId',base_run_value));
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':'||actor::text||':research-selected-origin:'||key_hash,0));
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_research_selected_origins
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF prior.id IS NOT NULL THEN
@@ -74,6 +68,14 @@ BEGIN
    'selectionEventId',prior.selection_event_id,
    'replayed',TRUE,'researchOnly',TRUE,'forecastServingEnabled',FALSE,
    'preHorizonCommitVerified',FALSE);
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:profile-effective-source:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast profile source busy' USING ERRCODE='55P03';
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:price-decision-order:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
  END IF;
  SELECT * INTO base_row FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=base_run_value;

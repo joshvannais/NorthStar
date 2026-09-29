@@ -1566,6 +1566,45 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_anchor_activate(uuid,uuid,text,uuid,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_saved_origins') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_saved_origins FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_origin_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_profile_activation_order_lock() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_origin_activations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_origin_activations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_origin_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_decision_commit_observations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_decision_commit_observations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_observe_price_decision_commit(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_actual_candidate(uuid,uuid,text,uuid,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_actual_candidate(uuid,uuid,text,uuid,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_actual_receipts') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_actual_receipts FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_actual(uuid,uuid,text,uuid,text,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_actual_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_profile_witnesses') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_profile_witnesses FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_profile_observe(uuid,uuid,text,uuid,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_profile_witness_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_pair_source_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_pair_actual_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_pair_source_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_evaluations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_evaluations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_evaluation_replay(uuid,uuid,text,uuid,text,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_evaluation(uuid,uuid,text,uuid,text,text,uuid,uuid,jsonb) TO %I', runtime_role);
+      END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_evaluation_manifest(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_evaluation_manifest(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -2604,6 +2643,30 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND has_function_privilege($1,'public.canonical_forecast_price_anchor_activate(uuid,uuid,text,uuid,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid)','EXECUTE')
        )) AS price_anchor_activation_guarded,
+       (to_regclass('public.canonical_forecast_price_flow_saved_origins') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_price_flow_saved_origins','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_origin_activations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_decision_commit_observations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_actual_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_profile_witnesses','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_evaluations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_origin_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_profile_activation_order_lock()','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_origin_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_observe_price_decision_commit(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_actual_candidate(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_actual(uuid,uuid,text,uuid,text,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_actual_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_profile_observe(uuid,uuid,text,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_profile_witness_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_pair_source_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_pair_actual_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_evaluation_replay(uuid,uuid,text,uuid,text,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_evaluation(uuid,uuid,text,uuid,text,text,uuid,uuid,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_evaluation_manifest(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS price_flow_rolling_authority_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -3031,6 +3094,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.profile_effective_source_private ||
       !runtimePrivileges.profile_effective_source_entries_allowed ||
       !runtimePrivileges.price_anchor_activation_guarded ||
+      !runtimePrivileges.price_flow_rolling_authority_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||
@@ -3139,6 +3203,14 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('167_canonical_forecast_booked_work_source_
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('168_canonical_forecast_booking_review_candidates.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('169_canonical_forecast_profile_effective_source.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('170_canonical_forecast_price_anchor_activation.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('171_canonical_forecast_price_flow_saved_origin.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('172_canonical_forecast_price_flow_origin_activation.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('173_canonical_forecast_price_decision_commit_observation.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('174_canonical_forecast_price_flow_actual_candidate.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('175_canonical_forecast_price_flow_actual_receipts.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('176_canonical_forecast_price_flow_profile_witness.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('177_canonical_forecast_price_flow_evaluation_revisions.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('178_canonical_forecast_price_flow_evaluation_manifest.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

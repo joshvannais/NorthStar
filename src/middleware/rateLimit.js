@@ -70,6 +70,8 @@ function getLimitConfig(group, plan = 'starter') {
     // Creating an immutable forecast source receipt is costlier than reading
     // one. This is an availability limit, not financial or source authority.
     'forecast-source-capture': { default: 4, window: 60 * 60 * 1000 },
+    'forecast-actual-capture': { default: 4, window: 60 * 60 * 1000 },
+    'forecast-evaluation-capture': { default: 6, window: 60 * 60 * 1000 },
     'auth': { default: 5, window: 15 * 60 * 1000 }, // 5 attempts per 15 min
     'auth-total': { default: 20, window: 15 * 60 * 1000 } // 20 total per 15 min
   };
@@ -77,7 +79,9 @@ function getLimitConfig(group, plan = 'starter') {
   const config = configs[group];
   if (!config) return { limit: 100, window: 60000 };
 
-  if (group === 'auth' || group === 'auth-total' || group === 'forecast-source-capture') {
+  if (group === 'auth' || group === 'auth-total' ||
+      group === 'forecast-source-capture' || group === 'forecast-actual-capture' ||
+      group === 'forecast-evaluation-capture') {
     return { limit: config.default, window: config.window };
   }
 

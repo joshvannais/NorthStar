@@ -1028,6 +1028,56 @@ function createForecastPriceHistoryRouter(options = {}) {
     requirePermission('forecast', 'read'), throttle,
     algorithmReviewHandler(true));
 
+  // A fixed-cohort, source-owned local eligibility decision for the internal
+  // experiment. It can inform a human choice but cannot enable production
+  // promotion or a numerical paid forecast.
+  router.get('/algorithm-supported-experiment-review', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, ['anchorRunId']) ||
+          !UUID.test(req.query.anchorRunId || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The supported internal experiment request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_supported_experiment_review($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.query.anchorRunId])).rows[0]?.value;
+        if (!value || !['internal_experiment_support_ready',
+          'internal_experiment_support_unavailable'].includes(value.state)) {
+          throw new Error('Invalid supported internal experiment review');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: value.state, reason: value.reason || null,
+          policyVersion: value.policyVersion || null,
+          referenceDirection: value.referenceDirection || null,
+          laterDirection: value.laterDirection || null,
+          candidateWorseDays: value.candidateWorseDays ?? null,
+          internalExperimentSupported:
+            value.state === 'internal_experiment_support_ready',
+          internalExperimentOnly: true,
+          productionPromotionEligible: false,
+          humanDecisionRequired: true, paidNumericServing: false,
+          realForecastEligible: false, wholeBusinessCoverageVerified: false,
+          statisticalAlgorithmEligible: false,
+          numericalErrorAvailable: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   const validActiveRequest = body =>
     exactKeys(body, ['anchorRunId', 'expectedRevision', 'action',
       'algorithmVersion', 'reversesEventId', 'reason']) &&

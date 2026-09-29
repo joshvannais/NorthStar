@@ -9,7 +9,7 @@ observation predates the month's start and no profile source change occurred
 before its end. The guarded read derives the month from the pinned version,
 including its actual UTC boundaries and daylight-saving offset.
 
-Migration 185 adds a private ordered sidecar to Business Profile writes and
+Migration 169 adds a private ordered sidecar to Business Profile writes and
 append-only anchor/activation receipts. The capture, activation, pin, and
 window functions enforce current paid tenant and role authority; runtime has
 only guarded function access. The source lock orders profile writes against

@@ -6,9 +6,16 @@ const { putBusinessProfile } = require('../../src/services/organizationAuthority
 const { canonicalFenceProfile } = require('./m19-part3-business-profile');
 const { ingestLead } = require('../../src/services/canonicalGraphService');
 async function createEstimateReviewFixture(options = {}) {
-  const f = await createDatabaseFixture();
+  const f = await createDatabaseFixture(options.operationalSchedule ?
+    { operationalSchedule: true } : {});
   try {
     const profile = canonicalFenceProfile(); profile.company.timeZone = 'UTC';
+    if (options.operationalSchedule) {
+      profile.hours = Object.fromEntries(
+        ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+          .map(day => [day, { open: '00:00', close: '23:59', lunch: '',
+            emergency: false, afterHours: false, holiday: false }]));
+    }
     await putBusinessProfile(f.ownerPool, { organizationId:f.org,userId:f.actors.owner.actorUserId,expectedVersion:'org-profile-v1',profile });
     f.estimateGraphs = [];
     for (const incomplete of [false,true]) {

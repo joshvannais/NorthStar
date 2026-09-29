@@ -11,6 +11,7 @@ const profileRoot = '/api/v1/forecast/reporting-windows/effective-anchors';
 const day = 86400000;
 const key = () => crypto.randomUUID();
 const utc = value => new Date(value).toISOString();
+const preciseUtc = value => utc(value).replace('Z', '000Z');
 
 realPostgres('Mission 26 Part 3D matched algorithm population', () => {
   let f;
@@ -36,6 +37,24 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         throw error;
       } finally {
         missing.release();
+      }
+
+      const missingSelectedOrigin = await f.ownerPool.connect();
+      try {
+        await missingSelectedOrigin.query('BEGIN');
+        await missingSelectedOrigin.query(`ALTER FUNCTION
+          public.canonical_forecast_capture_research_selected_price_flow_origin(
+            uuid,uuid,text,uuid,text,text,uuid)
+          RENAME TO canonical_forecast_capture_research_selected_origin_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingSelectedOrigin, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingSelectedOrigin.query('ROLLBACK');
+      } catch (error) {
+        await missingSelectedOrigin.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingSelectedOrigin.release();
       }
 
       const leaked = await f.ownerPool.connect();
@@ -69,6 +88,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           'Runtime database role privilege verification failed');
         await leaked.query(`REVOKE EXECUTE ON FUNCTION
           canonical_forecast_price_flow_research_mac(text,bytea) FROM PUBLIC`);
+        await leaked.query(`GRANT SELECT ON
+          canonical_forecast_price_flow_research_selected_origins TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE SELECT ON
+          canonical_forecast_price_flow_research_selected_origins FROM PUBLIC`);
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
           { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
         await leaked.query('ROLLBACK');
@@ -622,6 +648,71 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_review_ready', currentRevision: 1,
         currentEventId: selected.body.data.eventId,
         currentAlgorithmVersion: 'm26_price_flow_zero_baseline_v1' });
+      const selectedOriginRoute = `${root}/research-selected-origins`;
+      const futureBase = await request(f.app)
+        .post(`${root}/saved-price-flow-origins`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({
+        sourceReceiptId: postHorizon.rows[0].value.snapshot.id,
+        currency: 'USD', horizonStartsAt: preciseUtc(future),
+        horizonEndsAt: preciseUtc(futureEnd) });
+      expect(futureBase.status).toBe(201);
+      const futureBaseId = futureBase.body.data.runId;
+      const futureActivated = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${futureBaseId}/activate`)
+        .set(owner.session.headers).send({});
+      expect(futureActivated.status).toBe(200);
+      expect(futureActivated.body.data.state)
+        .toBe('price_flow_origin_activated');
+      const futureProfile = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${futureBaseId}/profile-witness`)
+        .set(owner.session.headers).send({ profileAnchorId });
+      expect(futureProfile.status).toBe(200);
+      expect(futureProfile.body.data.state).toBe('profile_witness_recorded');
+      const selectedOriginBody = { baseRunId: futureBaseId };
+      await f.ownerPool.query(`CREATE FUNCTION m26_selected_origin_delay()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN PERFORM pg_sleep(2); RETURN NEW; END $$`);
+      await f.ownerPool.query(`CREATE TRIGGER m26_selected_origin_delay
+        BEFORE INSERT ON canonical_forecast_price_flow_research_selected_origins
+        FOR EACH ROW EXECUTE FUNCTION m26_selected_origin_delay()`);
+      const concurrentKey = key();
+      let concurrent;
+      try {
+        concurrent = await Promise.all([1, 2].map(() => request(f.app)
+          .post(selectedOriginRoute).set(owner.session.headers)
+          .set('Idempotency-Key', concurrentKey).send(selectedOriginBody)));
+      } finally {
+        await f.ownerPool.query(`DROP TRIGGER m26_selected_origin_delay
+          ON canonical_forecast_price_flow_research_selected_origins`);
+        await f.ownerPool.query('DROP FUNCTION m26_selected_origin_delay()');
+      }
+      expect(concurrent.map(value => value.status).sort()).toEqual([200, 201]);
+      const selectedOrigin = concurrent.find(value => value.status === 201);
+      const concurrentReplay = concurrent.find(value => value.status === 200);
+      expect(selectedOrigin.body.data).toMatchObject({
+        state: 'research_selected_origin_saved',
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        selectionEventId: selected.body.data.eventId,
+        researchOnly: true, forecastServingEnabled: false,
+        realForecastEligible: false, forecastValueAvailable: false,
+        output: null, replayed: false });
+      expect(concurrentReplay.headers['idempotency-replayed']).toBe('true');
+      expect(concurrentReplay.body.data).toMatchObject({
+        runId: selectedOrigin.body.data.runId, replayed: true });
+      expect(new Set(concurrent.map(value => value.body.data.runId)).size).toBe(1);
+      const privateSelected = await f.ownerPool.query(`
+        SELECT o.output->>'calculationVersion' algorithm,
+          r.forecast_serving_enabled serving
+        FROM canonical_forecast_price_flow_research_selected_origins r
+        JOIN canonical_forecast_price_flow_saved_origins o
+          ON o.organization_id=r.organization_id AND o.id=r.selected_run_id
+        WHERE r.organization_id=$1 AND r.selected_run_id=$2`,
+      [f.org, selectedOrigin.body.data.runId]);
+      expect(privateSelected.rows[0]).toMatchObject({
+        algorithm: 'm26_price_flow_zero_baseline_v1', serving: false });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_research_selected_origins WHERE organization_id=$1',
+        [f.org])).rejects.toMatchObject({ code: '42501' });
       const rollbackRequest = { expectedRevision: 1, action: 'rollback',
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         reversesEventId: selected.body.data.eventId,
@@ -653,6 +744,129 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selection_recorded', revision: 2,
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         researchOnly: true, forecastServingEnabled: false });
+      const afterRollback = await request(f.app).post(selectedOriginRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send(selectedOriginBody);
+      expect(afterRollback.status).toBe(201);
+      expect(afterRollback.body.data).toMatchObject({
+        state: 'research_selected_origin_saved',
+        algorithmVersion: 'm26_price_flow_carry_forward_v1',
+        selectionEventId: rolledBack.body.data.eventId,
+        researchOnly: true, forecastServingEnabled: false });
+      const changedProfile = await f.ownerPool.connect();
+      try {
+        await changedProfile.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await changedProfile.query(`UPDATE canonical_business_profiles
+          SET raw_profile=raw_profile
+          WHERE organization_id=$1 AND is_active=TRUE`, [f.org]);
+        const rejected = await changedProfile.query(
+          'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(rejected.rows[0].value).toMatchObject({
+          state: 'research_selected_origin_unavailable',
+          reason: 'base_profile_source_changed',
+          forecastServingEnabled: false });
+        await changedProfile.query('ROLLBACK');
+      } catch (error) {
+        await changedProfile.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        changedProfile.release();
+      }
+      const retrospective = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+        [...args, owner.csrfToken, key(), runIds[59]]);
+      expect(retrospective.rows[0].value).toMatchObject({
+        state: 'research_selected_origin_unavailable',
+        reason: 'origin_window_not_eligible',
+        forecastServingEnabled: false });
+      // A separate fictional base lets a test-only insert delay cross its
+      // horizon without changing the valid selected/replayed base above.
+      const crossingBase = await request(f.app)
+        .post(`${root}/saved-price-flow-origins`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({
+          sourceReceiptId: postHorizon.rows[0].value.snapshot.id,
+          currency: 'USD', horizonStartsAt: preciseUtc(future),
+          horizonEndsAt: preciseUtc(futureEnd) });
+      expect(crossingBase.status).toBe(201);
+      const crossingBaseId = crossingBase.body.data.runId;
+      const crossingActivation = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${crossingBaseId}/activate`)
+        .set(owner.session.headers).send({});
+      expect(crossingActivation.body.data.state)
+        .toBe('price_flow_origin_activated');
+      const crossingProfile = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${crossingBaseId}/profile-witness`)
+        .set(owner.session.headers).send({ profileAnchorId });
+      expect(crossingProfile.body.data.state).toBe('profile_witness_recorded');
+      await f.ownerPool.query(`CREATE FUNCTION m26_research_delay() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(25); RETURN NEW; END $$`);
+      await f.ownerPool.query(`CREATE TRIGGER m26_research_delay
+        BEFORE INSERT ON canonical_forecast_price_flow_research_selected_origins
+        FOR EACH ROW EXECUTE FUNCTION m26_research_delay()`);
+      const nearHorizon = new Date(Date.now() + 20000);
+      const nearEnd = new Date(nearHorizon.getTime() + day);
+      try {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          DISABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_origin_activations
+          DISABLE TRIGGER canonical_forecast_price_flow_activation_immutable`);
+        const changed = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_saved_origins
+          SET horizon_start=$3,horizon_end=$4,
+            output=jsonb_set(output,'{horizon}',
+              jsonb_build_object('startsAt',$5::text,'endsAt',$6::text,
+                'grain','day')),
+            receipt_digest=public.canonical_completion_digest(
+              jsonb_set(output,'{horizon}',
+                jsonb_build_object('startsAt',$5::text,'endsAt',$6::text,
+                  'grain','day')))
+          WHERE organization_id=$1 AND id=$2 RETURNING receipt_digest`,
+        [f.org, crossingBaseId, nearHorizon, nearEnd,
+          utc(nearHorizon), utc(nearEnd)]);
+        const original = await f.ownerPool.query(`
+          SELECT proof FROM canonical_forecast_price_flow_origin_activations
+          WHERE organization_id=$1 AND run_id=$2`, [f.org, crossingBaseId]);
+        const proof = { ...original.rows[0].proof,
+          savedReceiptDigest: changed.rows[0].receipt_digest,
+          horizonStartsAt: utc(nearHorizon) };
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_origin_activations
+          SET proof=$3::jsonb,proof_digest=public.canonical_completion_digest($3::jsonb)
+          WHERE organization_id=$1 AND run_id=$2`,
+        [f.org, crossingBaseId, JSON.stringify(proof)]);
+      } finally {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_origin_activations
+          ENABLE TRIGGER canonical_forecast_price_flow_activation_immutable`);
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          ENABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+      }
+      try {
+        const beforeCrossing = await f.ownerPool.query(`
+          SELECT count(*)::integer n FROM canonical_forecast_price_flow_research_selected_origins
+          WHERE organization_id=$1 AND base_run_id=$2`,
+        [f.org, crossingBaseId]);
+        const crossingClient = await f.runtimePool.connect();
+        try {
+          await crossingClient.query('BEGIN');
+          await crossingClient.query("SET LOCAL statement_timeout='45000ms'");
+          await expect(crossingClient.query(
+            'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+            [...args, owner.csrfToken, key(), crossingBaseId]))
+            .rejects.toMatchObject({ code: '23514',
+              message: 'Research selection crossed horizon after insert' });
+          await crossingClient.query('ROLLBACK');
+        } finally { crossingClient.release(); }
+        const afterCrossing = await f.ownerPool.query(`
+          SELECT count(*)::integer n FROM canonical_forecast_price_flow_research_selected_origins
+          WHERE organization_id=$1 AND base_run_id=$2`,
+        [f.org, crossingBaseId]);
+        expect(afterCrossing.rows[0].n).toBe(beforeCrossing.rows[0].n);
+      } finally {
+        await f.ownerPool.query(`DROP TRIGGER m26_research_delay
+          ON canonical_forecast_price_flow_research_selected_origins`);
+        await f.ownerPool.query('DROP FUNCTION m26_research_delay()');
+      }
       const denied = await request(f.app).post(selectionRoute)
         .set(f.actors.member.session.headers).set('Idempotency-Key', key())
         .send(selectionBody);
@@ -685,6 +899,14 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(changedReview.body.data).toMatchObject({
         state: 'research_review_unavailable',
         humanResearchReviewAvailable: false, reviewToken: null });
+      const changedOrigin = await request(f.app).post(selectedOriginRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send(selectedOriginBody);
+      expect(changedOrigin.status).toBe(200);
+      expect(changedOrigin.body.data).toMatchObject({
+        state: 'research_selected_origin_unavailable',
+        reason: 'base_source_unavailable',
+        forecastServingEnabled: false });
       const staleAfterSourceChange = await request(f.app)
         .post(selectionRoute).set(owner.session.headers)
         .set('Idempotency-Key', key())

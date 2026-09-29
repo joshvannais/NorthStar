@@ -103,6 +103,79 @@ realPostgres('Mission 26 Part 2B prospective profile source', () => {
     expect((await read(id, lastMonth(), fixture.actors.member)).status).toBe(403);
   }, 120000);
 
+  test('startup rejects inherited source authority and restores guarded entries',
+    async () => {
+      const startup = async () => {
+        const client = await fixture.ownerPool.connect();
+        try {
+          await client.query('BEGIN');
+          try {
+            await fixture.db.grantAndVerifyRuntimeAuthorityForTests(client,
+              { runtimeRole: fixture.roles.runtime });
+            await client.query('COMMIT');
+          } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+          }
+        } finally {
+          client.release();
+        }
+      };
+      const privileges = async () => (await fixture.ownerPool.query(
+        `SELECT
+          has_table_privilege($1,'canonical_forecast_profile_effective_anchors',
+            'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS anchor_table,
+          has_sequence_privilege($1,'canonical_forecast_profile_change_sequence',
+            'USAGE,SELECT,UPDATE') AS change_sequence,
+          has_function_privilege($1,
+            'canonical_forecast_profile_change_record()','EXECUTE') AS helper,
+          has_function_privilege($1,
+            'canonical_forecast_profile_effective_window(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz)',
+            'EXECUTE') AS window_entry,
+          has_function_privilege($1,
+            'canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid)',
+            'EXECUTE') AS price_entry`, [fixture.roles.runtime])).rows[0];
+
+      await fixture.ownerPool.query(
+        'GRANT SELECT ON TABLE canonical_forecast_profile_effective_anchors TO PUBLIC');
+      try {
+        await expect(startup()).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+      } finally {
+        await fixture.ownerPool.query(
+          'REVOKE ALL ON TABLE canonical_forecast_profile_effective_anchors FROM PUBLIC');
+      }
+
+      await fixture.ownerPool.query(
+        'GRANT USAGE ON SEQUENCE canonical_forecast_profile_change_sequence TO PUBLIC');
+      try {
+        await expect(startup()).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+      } finally {
+        await fixture.ownerPool.query(
+          'REVOKE ALL ON SEQUENCE canonical_forecast_profile_change_sequence FROM PUBLIC');
+      }
+
+      await fixture.ownerPool.query(
+        'GRANT EXECUTE ON FUNCTION canonical_forecast_profile_change_record() TO PUBLIC');
+      try {
+        await expect(startup()).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+      } finally {
+        await fixture.ownerPool.query(
+          'REVOKE ALL ON FUNCTION canonical_forecast_profile_change_record() FROM PUBLIC');
+      }
+
+      const runtimeRole = `"${fixture.roles.runtime.replace(/"/g, '""')}"`;
+      await fixture.ownerPool.query(
+        `REVOKE ALL ON FUNCTION canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid) FROM ${runtimeRole}`);
+      expect((await privileges()).price_entry).toBe(false);
+      await expect(startup()).resolves.toBeUndefined();
+      expect(await privileges()).toEqual({ anchor_table: false,
+        change_sequence: false, helper: false, window_entry: true,
+        price_entry: true });
+    }, 180000);
+
   test('missing active profile does not report a created anchor', async () => {
     await fixture.ownerPool.query(
       'UPDATE canonical_business_profiles SET is_active=FALSE, retired_at=clock_timestamp() WHERE organization_id=$1',

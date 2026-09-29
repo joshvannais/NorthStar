@@ -2585,6 +2585,25 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND (to_regprocedure('public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)') IS NULL
            OR has_function_privilege($1,'public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)','EXECUTE'))
        )) AS profile_month_attestation_guarded,
+       (to_regclass('public.canonical_forecast_profile_effective_anchors') IS NULL OR (
+         NOT has_sequence_privilege($1,'public.canonical_forecast_profile_change_sequence','USAGE,SELECT,UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_profile_change_events','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_profile_effective_anchors','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_profile_effective_activations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_profile_change_record()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_profile_effective_immutable()','EXECUTE')
+       )) AS profile_effective_source_private,
+       (to_regclass('public.canonical_forecast_profile_effective_anchors') IS NULL OR (
+         has_function_privilege($1,'public.canonical_forecast_profile_effective_anchor_capture(uuid,uuid,text,uuid,text,text,text,boolean)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_profile_effective_anchor_activate(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_profile_effective_window(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_profile_effective_anchor_pin(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS profile_effective_source_entries_allowed,
+       (to_regclass('public.canonical_forecast_price_anchor_activations') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_price_anchor_activations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,'public.canonical_forecast_price_anchor_activate(uuid,uuid,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid)','EXECUTE')
+       )) AS price_anchor_activation_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -3009,6 +3028,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.booking_ordered_receipt_guarded ||
       !runtimePrivileges.price_ordered_receipt_guarded ||
       !runtimePrivileges.profile_month_attestation_guarded ||
+      !runtimePrivileges.profile_effective_source_private ||
+      !runtimePrivileges.profile_effective_source_entries_allowed ||
+      !runtimePrivileges.price_anchor_activation_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||

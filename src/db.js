@@ -2946,6 +2946,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.acceptance_booking_pair_guarded ||
       !runtimePrivileges.booked_price_candidate_guarded ||
       !runtimePrivileges.booking_status_position_guarded ||
+      !runtimePrivileges.commercial_booking_reviews_private ||
+      !runtimePrivileges.commercial_review_currentness_guarded ||
+      !runtimePrivileges.commercial_booking_cancellation_guarded ||
+      !runtimePrivileges.commercial_booking_correction_guarded ||
+      !runtimePrivileges.owner_reviewed_booking_position_guarded ||
       !runtimePrivileges.booking_ordered_receipt_guarded ||
       !runtimePrivileges.price_ordered_receipt_guarded ||
       !runtimePrivileges.profile_month_attestation_guarded ||

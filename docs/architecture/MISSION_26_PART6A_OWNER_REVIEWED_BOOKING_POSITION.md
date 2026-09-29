@@ -20,7 +20,7 @@ recorded evidence is current. The position must not be summed into a
 whole-business monthly baseline without separate source coverage and booking
 authority.
 
-Four mounted fictional-tenant tests pass with a positive first-review price,
+The focused mounted fictional-tenant suite covers a positive first-review price,
 positive corrected-review price, and unavailable superseded/cancelled paths.
 Changed-scope and changed-price correction, source-period completeness,
 first-actual-booking authority, paid/demo frontend journey, release and live

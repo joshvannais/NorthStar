@@ -20,9 +20,10 @@ never returns a booked amount or forecast. Cancellation remains possible
 after the original source evidence becomes stale, since an owner or admin
 must be able to withdraw their prior commercial review.
 
-Four mounted fictional-tenant integration cases pass with this migration,
-including cancellation, replay, changed replay rejection, stale second
+The focused mounted fictional-tenant suite covers cancellation, replay,
+changed replay rejection, stale second
 attempt, invalid-CSRF denial, member denial, cross-tenant unknown, and currentness after the
-append. Correction review, paid/demo HTTP mounting, first actual booking,
+append. The same mounted route covers correction and the paid HTTP surface.
+First actual booking,
 complete source periods, cross-source simultaneous contention, release and
 live-data validation remain open. The wider Mission 22 suite is not green.

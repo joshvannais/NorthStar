@@ -14,7 +14,8 @@ Write/CSRF authority is required before idempotency replay or mutation.
 The mounted fictional-tenant test creates a correction through HTTP, then
 reads the old and new review currentness. It also checks identical replay,
 changed-key conflict, stale prior rejection, invalid-CSRF denial, and later
-explicit cancellation of the corrected review. Four focused tests pass. This
+explicit cancellation of the corrected review. The focused mounted suite
+covers these paths. This
 does not revise the Mission 22 appointment or Mission 24 estimate, and no
 booked-work amount or forecast is returned. The proven path uses the same
 approval with a corrected human review reason. Changed accepted scope and

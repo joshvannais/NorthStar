@@ -35,7 +35,7 @@ not cancel the Mission 22 appointment. Migration 163 adds a separate
 append-only human correction. Off-platform bookings and cancellations are
 not established by these migrations.
 
-Four mounted fictional-tenant tests pass. The first-review path, identical
+The focused mounted fictional-tenant suite covers the first-review path, identical
 replay, changed replay rejection, duplicate first-review rejection, member
 denial, invalid-CSRF denial, private table, immutable review, post-revocation unavailable state,
 later accepted response rejection for the same issued version, and synthetic cancelled/completed assignment

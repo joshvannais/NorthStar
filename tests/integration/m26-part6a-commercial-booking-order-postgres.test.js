@@ -490,6 +490,20 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .rejects.toMatchObject({ code: '23514' });
   }, 120000);
 
+  test('startup rejects inherited access to tenant-private commercial reviews', async () => {
+    await f.ownerPool.query(
+      'GRANT SELECT ON TABLE public.canonical_forecast_commercial_booking_reviews TO PUBLIC');
+    try {
+      await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
+        .rejects.toThrow(/commercial_booking_reviews_private/);
+    } finally {
+      await f.ownerPool.query(
+        'REVOKE SELECT ON TABLE public.canonical_forecast_commercial_booking_reviews FROM PUBLIC');
+    }
+    await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
+      .resolves.toBe(true);
+  }, 120000);
+
   test('guarded reader links one earlier accepted issued version to the same immutable opportunity without claiming booked work', async () => {
     const actor = f.actors.owner;
     const params = [f.org, actor.actorUserId, actor.actorAccessRole,

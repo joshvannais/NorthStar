@@ -3,7 +3,7 @@
 Status: isolated and unreleased. Full Part 6A remains open.
 
 Migration 161 adds a paid owner/admin, tenant-private read of the immutable
-first-booking review recorded by migration 159. It holds the tenant commercial
+first-booking review recorded by migration 160. It holds the tenant commercial
 source lock while comparing the review with the accepted issued version, any
 later same-opportunity customer acceptance or revocation, and the latest
 human scheduling approval. The reviewed price is rechecked under the Mission
@@ -24,17 +24,17 @@ historical coverage, booked-work verification and forecasting false.
 Migration 162 adds an explicit cancellation review write and this reader
 returns `booking_cancelled` for that row. It does not cancel Mission 22
 scheduling. Migration 163 adds a correction review write; a newer review
-supersedes the old one. Complete changed-source correction proof, the full
-paid/demo frontend journey, complete source periods, off-platform activity,
-release and live validation remain
-open. A current read is not a durable saved-run currentness guarantee.
+supersedes the old one. Complete source periods, off-platform activity,
+release and live validation remain open. A current read is not a durable
+saved-run currentness guarantee.
 
-Four mounted fictional-tenant integration cases pass with migration 160
-installed. They cover the initial current read, cross-tenant unknown and
+The focused mounted fictional-tenant suite covers the initial current read,
+cross-tenant unknown and
 member denial, a rollback-only synthetic later accepted response, a
 rollback-only synthetic assignment currentness change, and a later customer
-link revocation. The existing status-position case also observes a later
-approved assignment. The synthetic changes
+link revocation. It also verifies startup refusal and recovery when `PUBLIC`
+inherits tenant-private commercial-review table access. The existing
+status-position case observes a later approved assignment. The synthetic changes
 exercise fail-closed guards; they do not prove a complete real customer or
 cancelled-work journey. The >1,000-event bound and production-scale query plan
 are not exercised by these focused tests. The wider Mission 22 regression is

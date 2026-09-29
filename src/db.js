@@ -1574,6 +1574,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_algorithms') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_algorithms FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_registered_insert() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_zero_baseline(uuid,uuid,text,uuid,text,text,uuid) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_matched_algorithms(uuid,uuid,text,uuid,uuid,uuid)') IS NOT NULL THEN
@@ -2708,7 +2709,18 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND COALESCE(has_function_privilege($1,
            to_regprocedure('public.canonical_forecast_price_flow_event_diversity(uuid,uuid,text,uuid,uuid,jsonb)'),
            'EXECUTE'),FALSE)
-       )) AS price_flow_rolling_authority_guarded,
+        )) AS price_flow_rolling_authority_guarded,
+        (to_regclass('public.canonical_forecast_price_flow_algorithms') IS NULL OR (
+          NOT has_table_privilege($1,'public.canonical_forecast_price_flow_algorithms','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_registered_insert()','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_zero_baseline(uuid,uuid,text,uuid,text,text,uuid)','EXECUTE')
+          AND COALESCE(has_function_privilege($1,
+            to_regprocedure('public.canonical_forecast_price_flow_matched_algorithms(uuid,uuid,text,uuid,uuid,uuid)'),
+            'EXECUTE'),FALSE)
+          AND COALESCE(has_function_privilege($1,
+            to_regprocedure('public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid)'),
+            'EXECUTE'),FALSE)
+        )) AS price_flow_algorithm_authority_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -3135,8 +3147,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.profile_month_attestation_guarded ||
       !runtimePrivileges.profile_effective_source_private ||
       !runtimePrivileges.profile_effective_source_entries_allowed ||
-      !runtimePrivileges.price_anchor_activation_guarded ||
-      !runtimePrivileges.price_flow_rolling_authority_guarded ||
+       !runtimePrivileges.price_anchor_activation_guarded ||
+       !runtimePrivileges.price_flow_rolling_authority_guarded ||
+       !runtimePrivileges.price_flow_algorithm_authority_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||

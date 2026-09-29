@@ -5,6 +5,14 @@ CREATE INDEX canonical_forecast_price_flow_zero_request_lookup
  ON public.canonical_forecast_price_flow_saved_origins
  (organization_id,request_digest,id)
  WHERE output->>'calculationVersion'='m26_price_flow_zero_baseline_v1';
+CREATE INDEX canonical_forecast_price_flow_carry_horizon_lookup
+ ON public.canonical_forecast_price_flow_saved_origins
+ (organization_id,horizon_start DESC,id DESC) INCLUDE(horizon_end)
+ WHERE output->>'calculationVersion'='m26_price_flow_carry_forward_v1';
+CREATE INDEX canonical_forecast_price_flow_zero_horizon_lookup
+ ON public.canonical_forecast_price_flow_saved_origins
+ (organization_id,horizon_start,id)
+ WHERE output->>'calculationVersion'='m26_price_flow_zero_baseline_v1';
 
 CREATE FUNCTION public.canonical_forecast_price_flow_matched_population(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
@@ -99,24 +107,26 @@ BEGIN
      origin_activation.proof->>'savedReceiptDigest' IS NOT DISTINCT FROM
        base.receipt_digest AND
      source_receipt.captured_at<=base.saved_at AND
-     pg_xact_status(source_receipt.xmin::text::xid8)='committed' AND
      base.output->>'sourceSnapshotDigest' IS NOT DISTINCT FROM
        rtrim(source_receipt.snapshot_digest) AND
      jsonb_typeof(source_receipt.decision_events)='array' AND
      jsonb_array_length(source_receipt.decision_events)<=1000 THEN
    IF EXISTS(
     SELECT 1 FROM jsonb_array_elements(source_receipt.decision_events) event
-    JOIN public.canonical_forecast_price_decision_orders source
-     ON source.organization_id=org AND
-        source.decision_id::text=event->>'decisionId'
+     JOIN public.canonical_forecast_price_decision_orders source
+      ON source.organization_id=org AND
+         source.decision_id::text=event->>'decisionId'
+     JOIN public.canonical_forecast_price_decision_commit_observations witness
+      ON witness.organization_id=source.organization_id AND
+         witness.decision_id=source.decision_id
     JOIN public.canonical_estimate_decisions decision
      ON decision.organization_id=org AND decision.id=source.decision_id
     WHERE event->>'action'='approve' AND event->>'revision'='1' AND
      decision.action='approve' AND decision.revision=1 AND
      event->>'digest'=decision.digest AND
-     source.ordered_at=(event->>'sourceObservedAt')::timestamptz AND
-     source.ordered_at>=prior_start AND source.ordered_at<prior_end AND
-     pg_xact_status(source.xmin::text::xid8)='committed') THEN
+      source.ordered_at=(event->>'sourceObservedAt')::timestamptz AND
+      source.ordered_at>=prior_start AND source.ordered_at<prior_end AND
+      witness.observed_at<=source_receipt.captured_at) THEN
     source_day:=(prior_start AT TIME ZONE 'UTC')::date;
     IF NOT source_day=ANY(source_days) THEN
      source_days:=array_append(source_days,source_day);

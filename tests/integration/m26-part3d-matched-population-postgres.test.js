@@ -19,6 +19,94 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
   }); }, 300000);
   afterAll(async () => { if (f) await f.cleanup(); }, 300000);
 
+  test('startup refuses missing entries and inherited registry authority, then recovers',
+    async () => {
+      const missing = await f.ownerPool.connect();
+      try {
+        await missing.query('BEGIN');
+        await missing.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid)
+          RENAME TO canonical_forecast_price_flow_matched_population_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(missing,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await missing.query('ROLLBACK');
+      } catch (error) {
+        await missing.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missing.release();
+      }
+
+      const leaked = await f.ownerPool.connect();
+      try {
+        await leaked.query('BEGIN');
+        await leaked.query(
+          'GRANT SELECT ON canonical_forecast_price_flow_algorithms TO PUBLIC');
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(
+          'REVOKE SELECT ON canonical_forecast_price_flow_algorithms FROM PUBLIC');
+        await leaked.query(`GRANT EXECUTE ON FUNCTION
+          canonical_forecast_price_flow_registered_insert() TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE EXECUTE ON FUNCTION
+          canonical_forecast_price_flow_registered_insert() FROM PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
+        await leaked.query('ROLLBACK');
+      } catch (error) {
+        await leaked.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        leaked.release();
+      }
+    }, 300000);
+
+  test('matched population scans use the bounded partial horizon indexes',
+    async () => {
+      const indexes = await f.ownerPool.query(`SELECT indexname FROM pg_indexes
+        WHERE schemaname='public' AND indexname=ANY($1::text[])`, [[
+        'canonical_forecast_price_flow_carry_horizon_lookup',
+        'canonical_forecast_price_flow_zero_horizon_lookup',
+      ]]);
+      expect(indexes.rows.map(row => row.indexname).sort()).toEqual([
+        'canonical_forecast_price_flow_carry_horizon_lookup',
+        'canonical_forecast_price_flow_zero_horizon_lookup',
+      ]);
+      const client = await f.ownerPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SET LOCAL enable_seqscan=off');
+        const carry = await client.query(`EXPLAIN (FORMAT JSON)
+          SELECT id FROM canonical_forecast_price_flow_saved_origins
+          WHERE organization_id=$1 AND
+            output->>'calculationVersion'='m26_price_flow_carry_forward_v1' AND
+            horizon_end<=clock_timestamp()
+          ORDER BY horizon_start DESC,id DESC LIMIT 1`, [f.org]);
+        expect(JSON.stringify(carry.rows[0]['QUERY PLAN'])).toContain(
+          'canonical_forecast_price_flow_carry_horizon_lookup');
+        const zero = await client.query(`EXPLAIN (FORMAT JSON)
+          SELECT id FROM canonical_forecast_price_flow_saved_origins
+          WHERE organization_id=$1 AND horizon_start>=$2 AND
+            horizon_start<$3 AND
+            output->>'calculationVersion'='m26_price_flow_zero_baseline_v1'
+          ORDER BY horizon_start,id LIMIT 101`, [f.org,
+          new Date(Date.now() - 60 * day), new Date()]);
+        expect(JSON.stringify(zero.rows[0]['QUERY PLAN'])).toContain(
+          'canonical_forecast_price_flow_zero_horizon_lookup');
+        await client.query('ROLLBACK');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    }, 300000);
+
   test('sixty fictional source-owned matched origins and actuals remain private and non-promoting',
     async () => {
       const owner = f.actors.owner;

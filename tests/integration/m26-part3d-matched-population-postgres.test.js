@@ -750,6 +750,21 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           state: 'research_selected_origin_unavailable',
           reason: 'selection_commit_not_observed',
           preHorizonCommitVerified: false });
+        await pendingClient.query('SAVEPOINT released_selection');
+        const subtransactionPending = await pendingClient.query(
+          'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(subtransactionPending.rows[0].value.state)
+          .toBe('research_selected_origin_saved');
+        await pendingClient.query('RELEASE SAVEPOINT released_selection');
+        const subtransactionPremature = await pendingClient.query(
+          'SELECT public.canonical_forecast_activate_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken,
+            subtransactionPending.rows[0].value.selectionReceiptId]);
+        expect(subtransactionPremature.rows[0].value).toMatchObject({
+          state: 'research_selected_origin_unavailable',
+          reason: 'selection_commit_not_observed',
+          preHorizonCommitVerified: false });
         await pendingClient.query('ROLLBACK');
       } finally { pendingClient.release(); }
       const profileLockCandidate = await f.runtimePool.query(

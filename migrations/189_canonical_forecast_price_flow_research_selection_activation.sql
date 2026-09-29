@@ -34,7 +34,7 @@ DECLARE chosen public.canonical_forecast_price_flow_research_selected_origins%RO
  selected public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  prior public.canonical_forecast_price_flow_research_selected_activations%ROWTYPE;
  source_state JSONB; current_source JSONB; profile_state JSONB;
- chosen_xid XID8; selected_xid XID8; current_xid XID8;
+ chosen_xid XID8; selected_xid XID8;
  observed TIMESTAMPTZ; proof_value JSONB;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
@@ -87,12 +87,11 @@ BEGIN
  SELECT xmin::text::xid8 INTO selected_xid
   FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=chosen.selected_run_id;
- current_xid:=pg_current_xact_id_if_assigned();
  -- READ COMMITTED exposes another transaction's row only after commit.
- -- Refuse the sole exception without depending on retained transaction status:
- -- either required record was written by this same, still-open transaction.
- IF current_xid IS NOT NULL AND
-    (chosen_xid=current_xid OR selected_xid=current_xid) THEN
+ -- Refuse only active transactions, including released subtransactions. Old
+ -- committed/frozen rows do not need retained historical commit status.
+ IF pg_xact_status(chosen_xid)='in progress' OR
+    pg_xact_status(selected_xid)='in progress' THEN
   RETURN jsonb_build_object('state','research_selected_origin_unavailable',
    'reason','selection_commit_not_observed',
    'preHorizonCommitVerified',FALSE,'forecastServingEnabled',FALSE);

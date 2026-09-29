@@ -207,6 +207,173 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       historicalCoverageVerified: false, bookedWorkVerified: false,
       earnedRevenueMeasured: false, collectedCashMeasured: false,
       forecastIssued: false });
+    const confirmBody = {
+      reason: 'Owner confirms the synthetic accepted and scheduled job is booked.',
+      confirmed: true, confirmationVersion: 'owner-booked-work-confirm-v1',
+    };
+    const confirmRoute = `${bookingRoute}/${firstReviewId}/confirm-booked`;
+    const confirmKey = 'm26-confirm-booked-work-key-001';
+    const wrongCsrfConfirmation = await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', confirmKey).send(confirmBody);
+    expect(wrongCsrfConfirmation.status).toBe(403);
+    const memberConfirmation = await request(f.app).post(confirmRoute)
+      .set(f.actors.member.session.headers).set('Idempotency-Key', confirmKey)
+      .send(confirmBody);
+    expect(memberConfirmation.status).toBe(403);
+    const confirmed = await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('Idempotency-Key', confirmKey)
+      .send(confirmBody);
+    expect(confirmed.status).toBe(201);
+    expect(confirmed.body.data).toMatchObject({
+      state: 'booking_confirmation_recorded', reviewId: firstReviewId,
+      replayed: false, currentnessUnknown: true,
+      bookedWorkVerified: false, forecastIssued: false });
+    expect(confirmed.body.data).not.toHaveProperty('priceBeforeTax');
+    const confirmationId = confirmed.body.data.confirmationId;
+    const confirmationReadRoute = `${bookingRoute}/confirmations/${confirmationId}/currentness`;
+    const currentConfirmation = await request(f.app).get(confirmationReadRoute)
+      .set(actor.session.headers);
+    expect(currentConfirmation.status).toBe(200);
+    expect(currentConfirmation.body.data).toMatchObject({
+      state: 'owner_confirmed_booked_work_current',
+      commercialStatus: 'owner_confirmed_booked',
+      authority: 'paid_owner_or_admin_confirmation',
+      priceBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, bookedWorkVerified: true,
+      historicalCoverageVerified: false, wholeBusinessCoverageVerified: false,
+      earnedRevenueMeasured: false, collectedCashMeasured: false,
+      forecastIssued: false });
+    const confirmationMonth = (await f.ownerPool.query(
+      `SELECT to_char(confirmed_at AT TIME ZONE 'UTC','YYYY-MM') AS month
+         FROM canonical_forecast_booked_work_confirmations
+        WHERE organization_id=$1 AND id=$2`, [f.org, confirmationId])).rows[0].month;
+    const observedMonthRoute = `${bookingRoute}/booked-work/months/${confirmationMonth}/observed`;
+    const observedMonth = await request(f.app).get(observedMonthRoute)
+      .set(actor.session.headers);
+    expect(observedMonth.status).toBe(200);
+    expect(observedMonth.body.data).toMatchObject({
+      state: 'observed_owner_confirmed_jobs', month: confirmationMonth,
+      timeZone: 'UTC', confirmedJobCount: 1,
+      observedBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, includedJobConfirmationsVerified: true,
+      completePeriodVerified: false, wholeBusinessCoverageVerified: false,
+      earnedRevenueMeasured: false, collectedCashMeasured: false,
+      forecastIssued: false });
+    const noHistoryMonth = await request(f.app)
+      .get(`${bookingRoute}/booked-work/months/1999-01/observed`)
+      .set(actor.session.headers);
+    expect(noHistoryMonth.body.data).toMatchObject({
+      state: 'booked_work_month_unavailable', reason: 'no_confirmed_jobs',
+      completePeriodVerified: false, forecastIssued: false });
+    expect(noHistoryMonth.body.data).not.toHaveProperty('observedBeforeTax');
+    expect((await request(f.app)
+      .get(`${bookingRoute}/booked-work/months/0000-01/observed`)
+      .set(actor.session.headers)).status).toBe(400);
+    const otherTenantMonth = await request(f.app).get(observedMonthRoute)
+      .set(f.actors.otherOwner.session.headers);
+    expect(otherTenantMonth.body.data).toMatchObject({
+      state: 'booked_work_month_unavailable', reason: 'no_confirmed_jobs' });
+    expect(otherTenantMonth.body.data).not.toHaveProperty('observedBeforeTax');
+    expect((await request(f.app).get(observedMonthRoute)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const sourceMonthRoute = `${bookingRoute}/booked-work/months/${confirmationMonth}/source`;
+    const missingAnchor = await request(f.app).get(sourceMonthRoute)
+      .set(actor.session.headers);
+    expect(missingAnchor.body.data).toMatchObject({
+      state: 'booked_work_source_month_unavailable',
+      reason: 'source_anchor_missing', sourceMonthCoverageVerified: false,
+      completePeriodVerified: false, forecastIssued: false });
+    expect(missingAnchor.body.data).not.toHaveProperty('currentConfirmedBeforeTax');
+    const anchorRoute = `${bookingRoute}/booked-work/source-anchor`;
+    const anchorBody = { reason: 'Begin observing future synthetic booked confirmations.',
+      confirmed: true, confirmationVersion: 'booked-work-source-anchor-v1' };
+    const anchorKey = 'm26-booked-source-anchor-key-001';
+    expect((await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', anchorKey).send(anchorBody)).status).toBe(403);
+    expect((await request(f.app).post(anchorRoute)
+      .set(f.actors.member.session.headers).set('Idempotency-Key', anchorKey)
+      .send(anchorBody)).status).toBe(403);
+    const anchored = await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('Idempotency-Key', anchorKey)
+      .send(anchorBody);
+    expect(anchored.status).toBe(201);
+    expect(anchored.body.data).toMatchObject({
+      state: 'booked_work_source_anchored', replayed: false,
+      completePeriodVerified: false, forecastIssued: false });
+    expect((await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('Idempotency-Key', anchorKey)
+      .send(anchorBody)).body.data).toMatchObject({
+      anchorId: anchored.body.data.anchorId, replayed: true });
+    expect((await request(f.app).post(anchorRoute)
+      .set(actor.session.headers).set('Idempotency-Key', anchorKey)
+      .send({ ...anchorBody, reason: 'A changed anchor reason cannot reuse this key.' }))
+      .status).toBe(409);
+    const incompleteCurrentMonth = await request(f.app).get(sourceMonthRoute)
+      .set(actor.session.headers);
+    expect(incompleteCurrentMonth.body.data).toMatchObject({
+      state: 'booked_work_source_month_unavailable',
+      reason: 'month_before_source_anchor', sourceMonthCoverageVerified: false });
+    expect(incompleteCurrentMonth.body.data).not.toHaveProperty('currentConfirmedBeforeTax');
+    await expect(f.runtimePool.query(
+      'SELECT * FROM canonical_forecast_booked_work_anchors'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.ownerPool.query(
+      'DELETE FROM canonical_forecast_booked_work_anchors WHERE organization_id=$1',
+      [f.org])).rejects.toMatchObject({ code: '23514' });
+    // Test only: roll back shifted source dates to exercise a closed future
+    // month without manufacturing durable historical coverage evidence.
+    const syntheticClosedMonth = await f.ownerPool.connect();
+    try {
+      await syntheticClosedMonth.query('BEGIN');
+      await syntheticClosedMonth.query(
+        'ALTER TABLE canonical_forecast_booked_work_anchors DISABLE TRIGGER USER');
+      await syntheticClosedMonth.query(
+        'ALTER TABLE canonical_forecast_booked_work_confirmations DISABLE TRIGGER USER');
+      await syntheticClosedMonth.query(
+        `UPDATE canonical_forecast_booked_work_anchors
+            SET captured_at='2024-12-01T00:00:00Z'
+          WHERE organization_id=$1`, [f.org]);
+      await syntheticClosedMonth.query(
+        `UPDATE canonical_forecast_booked_work_confirmations
+            SET confirmed_at='2025-01-15T00:00:00Z'
+          WHERE organization_id=$1 AND id=$2`, [f.org, confirmationId]);
+      const closed = (await syntheticClosedMonth.query(
+        'SELECT public.canonical_forecast_booked_work_source_month($1,$2,$3,$4,$5) value',
+        [f.org, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, '2025-01'])).rows[0].value;
+      expect(closed).toMatchObject({
+        state: 'northstar_confirmation_source_month_current',
+        currentConfirmedBeforeTax: storedPrice.reviewed_price_before_tax,
+        sourceMonthCoverageVerified: true, completePeriodVerified: false,
+        wholeBusinessCoverageVerified: false, forecastIssued: false });
+    } finally {
+      await syntheticClosedMonth.query('ROLLBACK');
+      syntheticClosedMonth.release();
+    }
+    const otherTenantConfirmation = await request(f.app).get(confirmationReadRoute)
+      .set(f.actors.otherOwner.session.headers);
+    expect(otherTenantConfirmation.status).toBe(200);
+    expect(otherTenantConfirmation.body.data).toMatchObject({
+      state: 'booking_confirmation_unavailable', bookedWorkVerified: false });
+    expect(otherTenantConfirmation.body.data).not.toHaveProperty('priceBeforeTax');
+    expect((await request(f.app).get(confirmationReadRoute)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    await expect(f.runtimePool.query(
+      'SELECT * FROM canonical_forecast_booked_work_confirmations'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.ownerPool.query(
+      'DELETE FROM canonical_forecast_booked_work_confirmations WHERE organization_id=$1',
+      [f.org])).rejects.toMatchObject({ code: '23514' });
+    expect((await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('Idempotency-Key', confirmKey)
+      .send(confirmBody)).body.data).toMatchObject({
+      confirmationId, replayed: true, currentnessUnknown: true });
+    expect((await request(f.app).post(confirmRoute)
+      .set(actor.session.headers).set('Idempotency-Key', confirmKey)
+      .send({ ...confirmBody, reason: 'A different booking reason cannot reuse this key.' }))
+      .status).toBe(409);
     const currentnessParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, firstReviewId];
     expect((await f.runtimePool.query(
@@ -245,6 +412,18 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       state: 'owner_reviewed_position_unavailable',
       reviewCurrentAtRead: false, bookedWorkVerified: false });
     expect(supersededPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
+    const supersededConfirmation = await request(f.app).get(confirmationReadRoute)
+      .set(actor.session.headers);
+    expect(supersededConfirmation.body.data).toMatchObject({
+      state: 'booking_confirmation_stale_or_unavailable', bookedWorkVerified: false });
+    expect(supersededConfirmation.body.data).not.toHaveProperty('priceBeforeTax');
+    const changedMonth = await request(f.app).get(observedMonthRoute)
+      .set(actor.session.headers);
+    expect(changedMonth.body.data).toMatchObject({
+      state: 'booked_work_month_unavailable',
+      reason: 'confirmation_changed_or_unavailable',
+      completePeriodVerified: false, forecastIssued: false });
+    expect(changedMonth.body.data).not.toHaveProperty('observedBeforeTax');
     expect((await f.runtimePool.query(
       'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
       [...currentnessParams.slice(0, 4), initialReviewId])).rows[0].value)
@@ -499,6 +678,29 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     } finally {
       await f.ownerPool.query(
         'REVOKE SELECT ON TABLE public.canonical_forecast_commercial_booking_reviews FROM PUBLIC');
+    }
+    await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
+      .resolves.toBe(true);
+  }, 120000);
+
+  test('startup rejects inherited access to tenant-private booked-work tables', async () => {
+    await f.ownerPool.query(
+      'GRANT SELECT ON TABLE public.canonical_forecast_booked_work_confirmations TO PUBLIC');
+    try {
+      await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
+        .rejects.toThrow(/booked_work_confirmations_private/);
+    } finally {
+      await f.ownerPool.query(
+        'REVOKE SELECT ON TABLE public.canonical_forecast_booked_work_confirmations FROM PUBLIC');
+    }
+    await f.ownerPool.query(
+      'GRANT SELECT ON TABLE public.canonical_forecast_booked_work_anchors TO PUBLIC');
+    try {
+      await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
+        .rejects.toThrow(/booked_work_source_anchor_private/);
+    } finally {
+      await f.ownerPool.query(
+        'REVOKE SELECT ON TABLE public.canonical_forecast_booked_work_anchors FROM PUBLIC');
     }
     await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
       .resolves.toBe(true);

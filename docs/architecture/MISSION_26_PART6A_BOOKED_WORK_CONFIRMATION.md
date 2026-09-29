@@ -1,0 +1,9 @@
+# Mission 26 Part 6A: owner-confirmed booked job candidate
+
+This local candidate adds an explicit paid owner/admin confirmation after a current customer-accepted issued estimate, human scheduling approval, commercial review and reviewed job price. The append-only confirmation belongs to one tenant and one review. A separate guarded read rechecks the underlying estimate, accepted scope, price and schedule each time; a later review correction, customer response, changed price or cancellation makes the old confirmation unavailable. It does not infer that a revoked delivery link erases a recorded acceptance.
+
+`POST /api/v1/forecast/booking-reviews/:reviewId/confirm-booked` requires authenticated write authority, CSRF, an idempotency key, a reason and `confirmed: true`. Its receipt says currentness is unknown and contains no price or booked-work claim. `GET /api/v1/forecast/booking-reviews/confirmations/:confirmationId/currentness` requires paid internal read authority. Only its current result exposes the exact owner-reviewed before-tax price and currency for **one owner-confirmed booked job**. A changed or missing source returns unavailable without the price. Another tenant cannot see the confirmation. The runtime role has no direct table access, and the row cannot be changed or deleted.
+
+This is a bounded per-job synthetic-data path. It does not prove a first actual commercial booking, complete historical source periods, all jobs in the business, earned revenue, collected cash, calibrated forecasts or full Part 6A acceptance. The paid/demo frontend journey, changed accepted scope and price correction, cross-source contention and wider Mission 22 regression remain open. No Mission 22 or 24 tables or contracts are changed.
+
+The focused mounted fictional-tenant PostgreSQL suite covers owner confirmation, readback, replay, CSRF/role denial, tenant isolation and later correction suppression. The suite is not a live-data or release verdict.

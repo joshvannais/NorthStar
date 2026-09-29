@@ -53,6 +53,7 @@ SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(
   'm26:profile-effective-source:'||NEW.organization_id::text,0));
+ NEW.observed_at:=clock_timestamp();
  RETURN NEW;
 END $$;
 CREATE TRIGGER canonical_forecast_profile_activation_order_lock
@@ -64,7 +65,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE anchor_row public.canonical_forecast_profile_effective_anchors%ROWTYPE;
  prior public.canonical_forecast_profile_effective_activations%ROWTYPE;
- source_xid XID8; observed TIMESTAMPTZ;
+ source_xid XID8; observed TIMESTAMPTZ; inserted_value BOOLEAN:=FALSE;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'Forecast profile activation requires READ COMMITTED' USING ERRCODE='25001';
@@ -98,7 +99,7 @@ BEGIN
   organization_id,anchor_id,observed_at,actor_user_id,auth_session_id)
  VALUES(org,anchor_value,observed,actor,session_value)
  ON CONFLICT ON CONSTRAINT canonical_forecast_profile_effective_activations_pkey
- DO NOTHING;
+ DO NOTHING RETURNING TRUE INTO inserted_value;
  SELECT * INTO prior FROM public.canonical_forecast_profile_effective_activations
   WHERE organization_id=org AND anchor_id=anchor_value;
  IF NOT FOUND THEN
@@ -106,7 +107,7 @@ BEGIN
  END IF;
  RETURN jsonb_build_object('state','profile_effective_activation_recorded',
   'anchorId',anchor_value,'observedAt',public.canonical_forecast_utc_instant(prior.observed_at),
-  'replayed',prior.observed_at<>observed,
+  'replayed',NOT COALESCE(inserted_value,FALSE),
   'historicalCalendarVerified',FALSE,'forecastIssued',FALSE);
 END $$;
 

@@ -162,6 +162,12 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           confirmed: true });
       expect(profile.status).toBe(201);
       const profileAnchorId = profile.body.data.anchorId;
+      const queuedProfile = await request(f.app).post(profileRoot)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({ reason: 'Queued legacy activation ordering proof.',
+          confirmed: true });
+      expect(queuedProfile.status).toBe(201);
+      const queuedProfileAnchorId = queuedProfile.body.data.anchorId;
       // Simulate the INSERT tail of a migration-169 activation call that was
       // already executing when migration 171 replaced the function. The new
       // table trigger must serialize even this legacy body with origin save.
@@ -203,6 +209,64 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         profileActivationWriter.release();
         profileRaceOriginWriter.release();
       }
+
+      // Exercise the opposite ordering: origin owns the shared lock while a
+      // legacy INSERT has already formed an artificially earlier row clock.
+      // The trigger must wait, then replace that clock after acquiring the
+      // lock so the post-origin activation cannot become causal evidence.
+      const originFirstWriter = await f.runtimePool.connect();
+      const queuedActivationWriter = await f.ownerPool.connect();
+      let originFirst;
+      let queuedActivation;
+      try {
+        await originFirstWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await queuedActivationWriter.query(
+          'BEGIN ISOLATION LEVEL READ COMMITTED');
+        originFirst = (await originFirstWriter.query(
+          'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key(),
+            body.sourceReceiptId, body.currency, body.horizonStartsAt,
+            body.horizonEndsAt])).rows[0].value;
+        expect(originFirst).toMatchObject({
+          state: 'saved_price_flow_origin', replayed: false,
+        });
+        let queuedActivationSettled = false;
+        const waitingActivation = queuedActivationWriter.query(
+          `INSERT INTO canonical_forecast_profile_effective_activations(
+             organization_id,anchor_id,observed_at,actor_user_id,auth_session_id)
+           VALUES($1,$2,clock_timestamp()-interval '1 hour',$3,$4)
+           RETURNING observed_at`,
+          [f.org, queuedProfileAnchorId, owner().actorUserId,
+            owner().authSessionId]).then(result => {
+          queuedActivationSettled = true;
+          return result.rows[0];
+        });
+        await new Promise(resolve => setTimeout(resolve, 25));
+        expect(queuedActivationSettled).toBe(false);
+        await originFirstWriter.query('COMMIT');
+        queuedActivation = await waitingActivation;
+        await queuedActivationWriter.query('COMMIT');
+      } finally {
+        await originFirstWriter.query('ROLLBACK').catch(() => {});
+        await queuedActivationWriter.query('ROLLBACK').catch(() => {});
+        originFirstWriter.release();
+        queuedActivationWriter.release();
+      }
+      const originFirstStored = await f.ownerPool.query(
+        'SELECT saved_at FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+        [originFirst.runId]);
+      expect(queuedActivation.observed_at.getTime()).toBeGreaterThanOrEqual(
+        originFirstStored.rows[0].saved_at.getTime());
+      const queuedWitness = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${originFirst.runId}/profile-witness`)
+        .set(owner().session.headers)
+        .send({ profileAnchorId: queuedProfileAnchorId });
+      expect(queuedWitness.status).toBe(200);
+      expect(queuedWitness.body.data).toMatchObject({
+        state: 'profile_witness_unavailable',
+        reason: 'prospective_profile_unverified',
+      });
 
       const firstOriginWriter = await f.runtimePool.connect();
       const secondOriginWriter = await f.runtimePool.connect();

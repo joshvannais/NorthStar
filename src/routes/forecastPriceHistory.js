@@ -17,11 +17,15 @@ const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAda
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 const { normalizeForecastOutput } = require('../forecasting/outputContract');
 const { buildRollingBacktest } = require('../forecasting/rollingBacktest');
+const { measureEvaluation, measureGuardedSavedBacktest } = require('../forecasting/evaluationGates');
+const { assessSelectedPriceFlowEvaluation } = require('../forecasting/selectedPriceFlowEvaluationPolicy');
+const { assessCompletePriceFlowEvaluation } = require('../forecasting/completePriceFlowEvaluation');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const SQL_MILLISECOND_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const instant = value => typeof value === 'string' && INSTANT.test(value);
 
 function calendarAuthority(rawProfile) {
@@ -93,6 +97,25 @@ function createForecastPriceHistoryRouter(options = {}) {
     res.vary('Cookie');
     next();
   });
+
+  const lockPriceFlowActualRuns = async (client, organizationId, runIds) => {
+    if (!Array.isArray(runIds) || runIds.some(runId => !UUID.test(runId || '')) ||
+        new Set(runIds).size !== runIds.length) {
+      throw new Error('Invalid guarded evaluation origin');
+    }
+    const acquired = (await client.query(`
+      SELECT COALESCE(bool_and(acquired),TRUE) acquired FROM (
+        SELECT pg_try_advisory_xact_lock(hashtextextended(
+          'm26:price-flow-actual:'||$1::text||':'||input.run_id::text,0)) acquired
+        FROM unnest($2::uuid[]) AS input(run_id)
+        ORDER BY input.run_id
+      ) selected_actual_locks`, [organizationId, runIds])).rows[0]?.acquired;
+    if (acquired !== true) {
+      const busy = new Error('Price-flow evaluation actuals are busy');
+      busy.code = '55P03';
+      throw busy;
+    }
+  };
 
   // A separate transaction must observe the first ordered receipt committed
   // before its prospective source coverage can be used for a local period.
@@ -896,6 +919,25 @@ function createForecastPriceHistoryRouter(options = {}) {
           throw new Error('Invalid saved price-flow actual');
         }
         await client.query('COMMIT');
+        if (value.state === 'price_flow_actual_recorded') {
+          // The receipt writer must commit before a later transaction records
+          // durable commit evidence. That witness remains valid after xid
+          // status retention expires.
+          await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+          await client.query("SET LOCAL statement_timeout = '10000ms'");
+          await client.query("SET LOCAL lock_timeout = '2000ms'");
+          const observed = (await client.query(
+            'SELECT public.canonical_forecast_observe_price_flow_actual_commit($1,$2,$3,$4,$5,$6) value',
+            [identity.organizationId, identity.actorUserId,
+              identity.actorAccessRole, identity.authSessionId,
+              req.get('X-CSRF-Token'), value.receiptId])).rows[0]?.value;
+          if (observed?.state !== 'price_flow_actual_commit_observed' ||
+              observed.receiptId !== value.receiptId ||
+              observed.runId !== req.params.runId) {
+            throw new Error('Invalid price-flow actual commit observation');
+          }
+          await client.query('COMMIT');
+        }
         return res.status(value.state === 'price_flow_actual_recorded' &&
           !value.replayed ? 201 : 200).json({ success: true,
           data: { ...value, amount: null, firstApprovalCount: null,
@@ -946,6 +988,90 @@ function createForecastPriceHistoryRouter(options = {}) {
   // Read-only supported-source pairing. The owning SQL functions authenticate
   // each saved run, profile witness and latest actual before the pure
   // comparator sees them. No paid numerical prediction or actual is returned.
+  const guardedPriceFlowRun = async (client, identity, runId) => {
+    const args = [identity.organizationId, identity.actorUserId,
+      identity.actorAccessRole, identity.authSessionId, runId];
+    const source = (await client.query(
+      'SELECT public.canonical_forecast_price_flow_pair_source_read($1,$2,$3,$4,$5) value',
+      args)).rows[0]?.value;
+    if (source?.state === 'pair_source_unavailable') {
+      return { state: 'unavailable', reason: 'source_evidence_unavailable' };
+    }
+    if (source?.state !== 'pair_source_verified' ||
+        source.runId !== runId ||
+        !UUID.test(source.profileAnchorId || '') ||
+        !DIGEST.test(source.profileProofDigest || '') ||
+        !SQL_MILLISECOND_INSTANT.test(source.savedAt || '') ||
+        !SQL_MILLISECOND_INSTANT.test(source.sourceSnapshotAsOf || '') ||
+        (source.latestSourceRecordedAt !== null &&
+          !SQL_MILLISECOND_INSTANT.test(source.latestSourceRecordedAt || ''))) {
+      throw new Error('Invalid guarded price-flow source');
+    }
+    const output = normalizeForecastOutput(source.output);
+    const profilePin = (await client.query(
+      'SELECT public.canonical_forecast_profile_effective_anchor_pin($1,$2,$3,$4,$5) value',
+      [identity.organizationId, identity.actorUserId,
+        identity.actorAccessRole, identity.authSessionId,
+        source.profileAnchorId])).rows[0]?.value;
+    if (profilePin?.state !== 'profile_effective_anchor_pinned') {
+      return { state: 'unavailable', reason: 'profile_anchor_unavailable' };
+    }
+    const profile = await getBusinessProfileById(client,
+      identity.organizationId, profilePin.businessProfileId);
+    if (profile.versionNumber !== profilePin.businessProfileVersion ||
+        profile.profileHash !== profilePin.businessProfileHash ||
+        adaptBusinessProfile(profile.rawProfile,
+          profile.versionLabel).hash !== profilePin.businessProfileHash ||
+        profile.rawProfile.company?.currency !== output.unit.currency) {
+      throw new Error('Invalid pinned Business Profile');
+    }
+    const window = deriveReportingWindow({
+      organizationId: identity.organizationId,
+      businessProfileId: profile.id,
+      businessProfileVersion: profile.versionNumber,
+      businessProfileHash: profile.profileHash,
+      rawProfile: profile.rawProfile,
+      grain: 'day', localStartDate: output.horizon.startsAt.slice(0, 10),
+      serviceKey: null, areaScope: 'tenant_all',
+    });
+    if (window.startsAt !== output.horizon.startsAt ||
+        window.endsAt !== output.horizon.endsAt) {
+      throw new Error('Price-flow horizon and profile window differ');
+    }
+    const effective = (await client.query(
+      'SELECT public.canonical_forecast_profile_effective_window($1,$2,$3,$4,$5,$6,$7) value',
+      [identity.organizationId, identity.actorUserId,
+        identity.actorAccessRole, identity.authSessionId,
+        source.profileAnchorId, window.startsAt,
+        window.endsAt])).rows[0]?.value;
+    if (effective?.state !== 'profile_effective_window_verified' ||
+        effective.businessProfileId !== profile.id ||
+        effective.businessProfileHash !== profile.profileHash) {
+      return { state: 'unavailable', reason: 'profile_period_unverified' };
+    }
+    const run = { id: runId, savedAt: source.savedAt,
+      outputDigest: sha256(output),
+      sourceSnapshotAsOf: source.sourceSnapshotAsOf,
+      latestSourceRecordedAt: source.latestSourceRecordedAt,
+      reportingWindow: window, output };
+    const actual = (await client.query(
+      'SELECT public.canonical_forecast_price_flow_pair_actual_read($1,$2,$3,$4,$5) value',
+      args)).rows[0]?.value;
+    const outcome = actual?.state === 'pair_actual_known' ||
+      actual?.state === 'pair_actual_revoked' ? {
+        id: actual.receiptId, forecastRunId: runId,
+        organizationId: identity.organizationId,
+        target: output.target, horizon: output.horizon,
+        unit: output.unit, applicability: output.applicability,
+        observedThrough: actual.observedThrough,
+        capturedAt: actual.capturedAt,
+        sourceDigest: actual.sourceDigest,
+        state: actual.state === 'pair_actual_known' ? 'known' : 'revoked',
+        amount: actual.amount, reason: actual.reason,
+      } : null;
+    return { state: 'verified', run, outcome };
+  };
+
   const rollingPairHandler = async (req, res, saveEvaluation) => {
       if (!exactKeys(req.query, ['firstRunId', 'secondRunId']) ||
           !UUID.test(req.query.firstRunId || '') ||
@@ -986,99 +1112,18 @@ function createForecastPriceHistoryRouter(options = {}) {
         const runs = [];
         const outcomes = [];
         for (const runId of [req.query.firstRunId, req.query.secondRunId]) {
-          const args = [identity.organizationId, identity.actorUserId,
-            identity.actorAccessRole, identity.authSessionId, runId];
-          const source = (await client.query(
-            'SELECT public.canonical_forecast_price_flow_pair_source_read($1,$2,$3,$4,$5) value',
-            args)).rows[0]?.value;
-          if (source?.state === 'pair_source_unavailable') {
+          const guarded = await guardedPriceFlowRun(client, identity, runId);
+          if (guarded.state !== 'verified') {
             await client.query('COMMIT');
             return res.json({ success: true, data: {
               state: 'rolling_pairs_unavailable',
-              reason: 'source_evidence_unavailable',
+              reason: guarded.reason,
               evaluationSaved: false, realForecastEligible: false,
             } });
           }
-          if (source?.state !== 'pair_source_verified' ||
-              source.runId !== runId ||
-              !UUID.test(source.profileAnchorId || '') ||
-              !DIGEST.test(source.profileProofDigest || '')) {
-            throw new Error('Invalid guarded price-flow pair source');
-          }
-          const output = normalizeForecastOutput(source.output);
-          const profilePin = (await client.query(
-            'SELECT public.canonical_forecast_profile_effective_anchor_pin($1,$2,$3,$4,$5) value',
-            [identity.organizationId, identity.actorUserId,
-              identity.actorAccessRole, identity.authSessionId,
-              source.profileAnchorId])).rows[0]?.value;
-          if (profilePin?.state !== 'profile_effective_anchor_pinned') {
-            await client.query('COMMIT');
-            return res.json({ success: true, data: {
-              state: 'rolling_pairs_unavailable',
-              reason: 'profile_anchor_unavailable',
-              evaluationSaved: false, realForecastEligible: false,
-            } });
-          }
-          const profile = await getBusinessProfileById(client,
-            identity.organizationId, profilePin.businessProfileId);
-          if (profile.versionNumber !== profilePin.businessProfileVersion ||
-              profile.profileHash !== profilePin.businessProfileHash ||
-              adaptBusinessProfile(profile.rawProfile,
-                profile.versionLabel).hash !== profilePin.businessProfileHash ||
-              profile.rawProfile.company?.currency !== output.unit.currency) {
-            throw new Error('Invalid pinned Business Profile');
-          }
-          const window = deriveReportingWindow({
-            organizationId: identity.organizationId,
-            businessProfileId: profile.id,
-            businessProfileVersion: profile.versionNumber,
-            businessProfileHash: profile.profileHash,
-            rawProfile: profile.rawProfile,
-            grain: 'day', localStartDate: output.horizon.startsAt.slice(0, 10),
-            serviceKey: null, areaScope: 'tenant_all',
-          });
-          if (window.startsAt !== output.horizon.startsAt ||
-              window.endsAt !== output.horizon.endsAt) {
-            throw new Error('Price-flow horizon and profile window differ');
-          }
-          const effective = (await client.query(
-            'SELECT public.canonical_forecast_profile_effective_window($1,$2,$3,$4,$5,$6,$7) value',
-            [identity.organizationId, identity.actorUserId,
-              identity.actorAccessRole, identity.authSessionId,
-              source.profileAnchorId, window.startsAt,
-              window.endsAt])).rows[0]?.value;
-          if (effective?.state !== 'profile_effective_window_verified' ||
-              effective.businessProfileId !== profile.id ||
-              effective.businessProfileHash !== profile.profileHash) {
-            await client.query('COMMIT');
-            return res.json({ success: true, data: {
-              state: 'rolling_pairs_unavailable',
-              reason: 'profile_period_unverified',
-              evaluationSaved: false, realForecastEligible: false,
-            } });
-          }
-          runs.push({ id: runId, savedAt: source.savedAt,
-            outputDigest: sha256(output),
-            sourceSnapshotAsOf: source.sourceSnapshotAsOf,
-            latestSourceRecordedAt: source.latestSourceRecordedAt,
-            reportingWindow: window, output });
-          const actual = (await client.query(
-            'SELECT public.canonical_forecast_price_flow_pair_actual_read($1,$2,$3,$4,$5) value',
-            args)).rows[0]?.value;
-          if (actual?.state === 'pair_actual_known' ||
-              actual?.state === 'pair_actual_revoked') {
-            outcomes.push({ id: actual.receiptId, forecastRunId: runId,
-              organizationId: identity.organizationId,
-              target: output.target, horizon: output.horizon,
-              unit: output.unit, applicability: output.applicability,
-              observedThrough: actual.observedThrough,
-              capturedAt: actual.capturedAt,
-              sourceDigest: actual.sourceDigest,
-              state: actual.state === 'pair_actual_known' ? 'known' : 'revoked',
-              amount: actual.amount, reason: actual.reason });
-          }
-        }
-        const result = buildRollingBacktest({
+          runs.push(guarded.run);
+          if (guarded.outcome) outcomes.push(guarded.outcome);
+        }        const result = buildRollingBacktest({
           version: 'm26-rolling-backtest-v1', runs, outcomes });
         if (saveEvaluation) {
           const value = (await client.query(
@@ -1150,6 +1195,231 @@ function createForecastPriceHistoryRouter(options = {}) {
         }
         await client.query('COMMIT');
         return res.json({ success: true, data: manifest });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/saved-price-flow-evaluations/:evaluationId/measurement', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.evaluationId || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The evaluation measurement request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const initialSource = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_private_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (initialSource?.state === 'evaluation_measurement_unavailable') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'evaluation_measurement_unavailable',
+            reason: initialSource.reason, realAccuracyAvailable: false,
+          } });
+        }
+        if (initialSource?.state !== 'evaluation_measurement_source_verified' ||
+            initialSource.evaluationId !== req.params.evaluationId ||
+            !Array.isArray(initialSource.manifest?.origins) ||
+            initialSource.manifest.origins.length !== 2) {
+          throw new Error('Invalid guarded evaluation measurement source');
+        }
+        const selectedRunIds = initialSource.manifest.origins.map(
+          item => item.forecastRunId);
+        // The first read selects the immutable run identities only. Lock every
+        // actual writer before re-reading any status or population value, so
+        // missing-to-known and correction races cannot mix two snapshots.
+        await lockPriceFlowActualRuns(client, identity.organizationId,
+          selectedRunIds);
+        const source = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_private_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (source?.state !== 'evaluation_measurement_source_verified' ||
+            source.evaluationId !== req.params.evaluationId ||
+            !Array.isArray(source.manifest?.origins) ||
+            source.manifest.origins.length !== 2 ||
+            source.manifest.origins.map(item => item.forecastRunId).sort()
+              .join(',') !== [...selectedRunIds].sort().join(',')) {
+          throw new Error('Invalid guarded evaluation measurement source');
+        }
+        const population = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_population($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (!population || !['bounded_saved_origin_inventory_verified',
+          'evaluation_selection_incomplete',
+          'evaluation_population_unavailable'].includes(population.state)) {
+          throw new Error('Invalid guarded evaluation population');
+        }
+        const result = measureGuardedSavedBacktest(source.result);
+        const policy = assessSelectedPriceFlowEvaluation(
+          source.result, result, population);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: 'evaluation_descriptive_only',
+          evaluationId: source.evaluationId, revision: source.revision,
+          originCount: result.originCount,
+          comparisonCount: result.comparisonCount,
+          statusCounts: result.statusCounts,
+          savedOriginPopulation: {
+            state: population.state, scope: population.scope || null,
+            reason: population.reason || null,
+            storedOriginCount: population.storedOriginCount ?? null,
+            matchingContextCount: population.matchingContextCount ?? null,
+            excludedContextCount: population.excludedContextCount ?? null,
+            omittedMatchingCount: population.omittedMatchingCount ?? null,
+            unsavedOriginCoverageVerified: false,
+            wholeBusinessCoverageVerified: false,
+          },
+          currentStatusCounts: source.manifest.origins.reduce((counts, item) => {
+            counts[item.currentStatus] = (counts[item.currentStatus] || 0) + 1;
+            return counts;
+          }, {}),
+          policy,
+          descriptiveErrorAvailable: false,
+          sampleSufficiency: result.sampleSufficiency,
+          calibration: result.calibration, drift: result.drift,
+          realAccuracyAvailable: false, realForecastEligible: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/complete-price-flow-evaluation-window', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The evaluation window request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const window = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_complete_window($1,$2,$3,$4) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (window?.state === 'complete_window_unavailable') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'evaluation_window_unavailable', reason: window.reason,
+            realAccuracyAvailable: false, realForecastEligible: false,
+          } });
+        }
+        if (window?.state !== 'complete_saved_origin_window_observed' ||
+            window.expectedUtcDays !== 60 ||
+            !Array.isArray(window.origins) || window.origins.length > 100) {
+          throw new Error('Invalid guarded evaluation window');
+        }
+        const matchingOrigins = window.origins.filter(item =>
+          item.eligibility === 'matching_context');
+        const matchingRunIds = matchingOrigins.map(item => item.runId);
+        if (matchingRunIds.some(runId => !UUID.test(runId || '')) ||
+            new Set(matchingRunIds).size !== matchingRunIds.length) {
+          throw new Error('Invalid guarded evaluation origin');
+        }
+        // The actual writer uses the same per-run transaction lock. Acquire
+        // every selected lock in deterministic order before reading any run,
+        // so a concurrent correction cannot mix old and new actual revisions.
+        await lockPriceFlowActualRuns(client, identity.organizationId,
+          matchingRunIds);
+        const runs = [];
+        const outcomes = [];
+        for (const item of matchingOrigins) {
+          const guarded = await guardedPriceFlowRun(client, identity, item.runId);
+          if (guarded.state !== 'verified') {
+            await client.query('COMMIT');
+            return res.json({ success: true, data: {
+              state: 'evaluation_window_unavailable',
+              reason: guarded.reason,
+              realAccuracyAvailable: false, realForecastEligible: false,
+            } });
+          }
+          runs.push(guarded.run);
+          if (guarded.outcome) outcomes.push(guarded.outcome);
+        }
+        if (runs.length === 0) {
+          throw new Error('Guarded evaluation window has no matching origin');
+        }
+        let backtest;
+        let measurement;
+        let referenceMeasurement;
+        let laterMeasurement;
+        try {
+          backtest = buildRollingBacktest({
+            version: 'm26-rolling-backtest-v1', runs, outcomes });
+          measurement = measureEvaluation({
+            version: 'm26-evaluation-gates-v1', runs, outcomes });
+          const midpoint = Date.parse(window.windowStart) + 30 * 86400000;
+          const half = predicate => {
+            const selectedRuns = runs.filter(predicate);
+            if (selectedRuns.length === 0) {
+              return { descriptiveError: { state: 'unavailable' } };
+            }
+            const ids = new Set(selectedRuns.map(run => run.id));
+            return measureEvaluation({ version: 'm26-evaluation-gates-v1',
+              runs: selectedRuns,
+              outcomes: outcomes.filter(item => ids.has(item.forecastRunId)) });
+          };
+          referenceMeasurement = half(run =>
+            Date.parse(run.output.horizon.startsAt) < midpoint);
+          laterMeasurement = half(run =>
+            Date.parse(run.output.horizon.startsAt) >= midpoint);
+        } catch (error) {
+          if (!['M26_BACKTEST_COMPARISON_INVALID',
+            'M26_EVALUATION_INVALID'].includes(error.code)) throw error;
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'evaluation_window_unavailable',
+            reason: 'incomparable_source_windows',
+            realAccuracyAvailable: false, realForecastEligible: false,
+          } });
+        }
+        const diversity = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_event_diversity($1,$2,$3,$4,$5,$6::jsonb) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            window.anchorRunId, JSON.stringify(window.origins)])).rows[0]?.value;
+        if (!diversity || !Number.isInteger(diversity.distinctSourceEventCount) ||
+            diversity.distinctSourceEventCount < 0 ||
+            diversity.distinctSourceEventCount > 60) {
+          throw new Error('Invalid guarded source-event diversity');
+        }
+        const distinctSourceSnapshotCount = new Set(runs.map(run =>
+          run.sourceSnapshotAsOf)).size;
+        const policy = assessCompletePriceFlowEvaluation({ ...window,
+          distinctSourceSnapshotCount,
+          sourceEventDiversityVerified:
+            diversity.sourceEventDiversityVerified === true,
+          distinctSourceEventCount: diversity.distinctSourceEventCount }, backtest,
+          measurement, referenceMeasurement, laterMeasurement);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: 'evaluation_window_descriptive_only', policy,
+          numericalErrorAvailable: false,
+          realAccuracyAvailable: false, realForecastEligible: false,
+        } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

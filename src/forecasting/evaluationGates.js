@@ -64,6 +64,24 @@ function measureEvaluation(input) {
     version: BACKTEST_VERSION,
     runs: input.runs, outcomes: input.outcomes,
   });
+  return measureBacktest(backtest);
+}
+
+// Call only with an immutable result obtained through an owning, guarded
+// server reader. This verifies the saved deterministic digest; source
+// authorization and currentness remain the reader's responsibility.
+function measureGuardedSavedBacktest(backtest) {
+  if (!backtest || typeof backtest !== 'object' || Array.isArray(backtest) ||
+      backtest.version !== BACKTEST_VERSION ||
+      !/^[a-f0-9]{64}$/.test(backtest.digest || '') ||
+      !Array.isArray(backtest.comparisons) ||
+      backtest.comparisons.length < 1 || backtest.comparisons.length > 1000) invalid();
+  const { digest, ...unsigned } = backtest;
+  if (sha256(unsigned) !== digest) invalid();
+  return measureBacktest(backtest);
+}
+
+function measureBacktest(backtest) {
   const statusCounts = Object.fromEntries(STATUSES.map(status => [status, 0]));
   const reasonCounts = new Map();
   let earliestOutcomeCutoff = null;
@@ -141,4 +159,4 @@ function measureEvaluation(input) {
   return freeze({ ...result, digest: sha256(result) });
 }
 
-module.exports = { VERSION, measureEvaluation };
+module.exports = { VERSION, measureEvaluation, measureGuardedSavedBacktest };

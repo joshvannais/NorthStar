@@ -631,6 +631,64 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           await f.ownerPool.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
         }
       }
+      const completeWindow = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_complete_window($1,$2,$3,$4) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId]);
+      expect(completeWindow.rows[0].value).toMatchObject({
+        state: 'complete_saved_origin_window_observed',
+        scope: 'northstar_m24_registered_saved_origins_only',
+        expectedUtcDays: 60, matchingContextCount: 2,
+        unsavedOriginCoverageVerified: false,
+        wholeBusinessCoverageVerified: false });
+      expect(completeWindow.rows[0].value.origins).toHaveLength(2);
+      const actualLock = await f.ownerPool.connect();
+      try {
+        await actualLock.query('BEGIN');
+        await actualLock.query(`SELECT pg_advisory_xact_lock(hashtextextended(
+          'm26:price-flow-actual:'||$1::text||':'||$2::text,0))`,
+        [f.org, runId]);
+        const busyWindow = await request(f.app)
+          .get(`${root}/complete-price-flow-evaluation-window`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect(busyWindow.status).toBe(409);
+        expect(busyWindow.body.error).toMatchObject({
+          category: 'FORECAST_SOURCE_BUSY',
+        });
+        await actualLock.query('ROLLBACK');
+      } catch (error) {
+        await actualLock.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        actualLock.release();
+      }
+      const paidWindow = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluation-window`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(paidWindow.status).toBe(200);
+      expect(paidWindow.body.data).toMatchObject({
+        state: 'evaluation_window_descriptive_only',
+        policy: {
+          denominator: { expectedUtcDays: 60,
+            matchingContextCount: 2, missingSavedOriginDays: 58,
+            registeredWindowComplete: false },
+          sampleSufficiency: { state: 'unavailable',
+            reason: 'saved_origin_days_missing' },
+          realAccuracyAvailable: false,
+        },
+        numericalErrorAvailable: false,
+        realAccuracyAvailable: false, realForecastEligible: false,
+      });
+      expect(JSON.stringify(paidWindow.body.data)).not.toContain('1400.00');
+      expect(paidWindow.body.data).not.toHaveProperty('digest');
+      const foreignWindow = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluation-window`)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
+      expect(foreignWindow.status).toBe(200);
+      expect(foreignWindow.body.data).toMatchObject({
+        state: 'evaluation_window_unavailable',
+        reason: 'no_completed_saved_origin', realAccuracyAvailable: false,
+      });
       const postHorizonReceiptId = await capturePriceThroughGuardedSource();
       const actual = await request(f.app)
         .get(`${root}/saved-price-flow-origins/${runId}/actual-candidates/${postHorizonReceiptId}`)
@@ -841,12 +899,92 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(manifest.body.data.origins.map(item => item.currentStatus))
         .toEqual(['paired', 'paired']);
       expect(JSON.stringify(manifest.body.data)).not.toContain('1400.00');
+      const measurement = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(measurement.status).toBe(200);
+      expect(measurement.body.data).toMatchObject({
+        state: 'evaluation_descriptive_only', originCount: 2,
+        comparisonCount: 2, statusCounts: { paired: 2 },
+        currentStatusCounts: { paired: 2 },
+        savedOriginPopulation: {
+          state: 'bounded_saved_origin_inventory_verified',
+          storedOriginCount: 2, matchingContextCount: 2,
+          omittedMatchingCount: 0,
+          unsavedOriginCoverageVerified: false,
+          wholeBusinessCoverageVerified: false,
+        },
+        descriptiveErrorAvailable: false,
+        sampleSufficiency: { state: 'unavailable' },
+        calibration: { state: 'unavailable' },
+        drift: { state: 'unavailable' },
+        policy: {
+          scope: 'selected_northstar_m24_saved_price_flow_only',
+          denominator: {
+            pairedFraction: { numerator: 2, denominator: 2 },
+            boundedSavedOriginInventoryVerified: true,
+          },
+          intervalCoverage: { state: 'not_applicable',
+            reason: 'point_only_target' },
+          sampleSufficiency: { state: 'unavailable',
+            reason: 'unsaved_origin_and_empirical_independence_unverified' },
+          realAccuracyAvailable: false,
+        },
+        realAccuracyAvailable: false, realForecastEligible: false });
+      expect(JSON.stringify(measurement.body.data)).not.toContain('1400.00');
+      expect(measurement.body.data).not.toHaveProperty('digest');
       const foreignManifest = await request(f.app)
         .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/manifest`)
         .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
       expect(foreignManifest.status).toBe(200);
       expect(foreignManifest.body.data).toMatchObject({
         state: 'evaluation_manifest_unavailable', reason: 'evaluation_not_found' });
+      const foreignMeasurement = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
+      expect(foreignMeasurement.status).toBe(200);
+      expect(foreignMeasurement.body.data).toMatchObject({
+        state: 'evaluation_measurement_unavailable',
+        reason: 'source_evidence_unavailable', realAccuracyAvailable: false });
+      expect(foreignMeasurement.body.data).not.toHaveProperty('statusCounts');
+      // Owner-SQL fictional fixture: a third stored same-context candidate in
+      // the selected capture span must make the two-origin selection incomplete.
+      await f.ownerPool.query(`
+        INSERT INTO canonical_forecast_price_flow_saved_origins (
+          organization_id,id,saved_at,horizon_start,horizon_end,
+          source_receipt_id,output,receipt_digest,actor_user_id,
+          auth_session_id,request_key_hash,request_digest)
+        SELECT b.organization_id,gen_random_uuid(),
+          a.saved_at+(b.saved_at-a.saved_at)/2,b.horizon_start,b.horizon_end,
+          b.source_receipt_id,b.output,b.receipt_digest,b.actor_user_id,
+          b.auth_session_id,
+          encode(sha256(convert_to(gen_random_uuid()::text,'UTF8')),'hex'),
+          b.request_digest
+        FROM canonical_forecast_price_flow_saved_origins a
+        JOIN canonical_forecast_price_flow_saved_origins b
+          ON b.organization_id=a.organization_id
+        WHERE a.organization_id=$1 AND a.id=$2 AND b.id=$3
+      `, [f.org, runId, secondRunId]);
+      const incompletePopulation = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(incompletePopulation.status).toBe(200);
+      expect(incompletePopulation.body.data.savedOriginPopulation).toMatchObject({
+        state: 'evaluation_selection_incomplete',
+        storedOriginCount: 3, matchingContextCount: 3,
+        omittedMatchingCount: 1,
+        unsavedOriginCoverageVerified: false });
+      expect(incompletePopulation.body.data.policy.sampleSufficiency)
+        .toMatchObject({ state: 'unavailable',
+          reason: 'selected_origin_population_incomplete' });
+      const unprovenWindow = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluation-window`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(unprovenWindow.status).toBe(200);
+      expect(unprovenWindow.body.data).toMatchObject({
+        state: 'evaluation_window_unavailable',
+        reason: 'source_evidence_unavailable',
+        realAccuracyAvailable: false, realForecastEligible: false });
       const deniedEvaluation = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(f.actors.member.session.headers)
@@ -866,6 +1004,9 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .rejects.toMatchObject({ code: '42501' });
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_actual_receipts'))
+        .rejects.toMatchObject({ code: '42501' });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_actual_commit_observations'))
         .rejects.toMatchObject({ code: '42501' });
       const estimate = f.estimateGraphs[0].ids.estimate;
       const route = `/api/v1/canonical/estimates/${estimate}`;
@@ -972,6 +1113,14 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         originCount: 2, pairedCount: 0 });
       expect(staleManifest.body.data.origins.map(item => item.currentStatus))
         .toEqual(['stale', 'stale']);
+      const staleMeasurement = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(staleMeasurement.status).toBe(200);
+      expect(staleMeasurement.body.data).toMatchObject({
+        state: 'evaluation_descriptive_only',
+        statusCounts: { paired: 2 }, currentStatusCounts: { stale: 2 },
+        descriptiveErrorAvailable: false, realAccuracyAvailable: false });
       const oldKeyAfterSourceChange = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(owner().session.headers)
@@ -1043,6 +1192,11 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           .set('Cookie', owner().session.headers.Cookie);
         expect([401, 403]).toContain(lostAccess.status);
         expect(lostAccess.body.data?.origins).toBeUndefined();
+        const lostMeasurement = await request(f.app)
+          .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect([401, 403]).toContain(lostMeasurement.status);
+        expect(lostMeasurement.body.data?.statusCounts).toBeUndefined();
       } finally {
         await f.ownerPool.query(
           "UPDATE organization_memberships SET status='active' WHERE organization_id=$1 AND user_id=$2",
@@ -1053,5 +1207,20 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
          WHERE run_id=$1 ORDER BY revision`, [runId]);
       expect(history.rows.map(row => row.state)).toEqual(['known', 'revoked']);
       expect(history.rows[0].amount).toBe('1400.00');
+      const heldActualWriter = await f.runtimePool.connect();
+      try {
+        await heldActualWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await heldActualWriter.query(`SELECT pg_advisory_xact_lock(
+          hashtextextended('m26:price-flow-actual:'||$1::text||':'||$2::text,0))`,
+        [f.org, runId]);
+        const busyMeasurement = await request(f.app)
+          .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect(busyMeasurement.status).toBe(409);
+        expect(busyMeasurement.body.error.category).toBe('FORECAST_SOURCE_BUSY');
+      } finally {
+        await heldActualWriter.query('ROLLBACK').catch(() => {});
+        heldActualWriter.release();
+      }
     }, 120000);
 });

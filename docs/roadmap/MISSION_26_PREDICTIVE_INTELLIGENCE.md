@@ -69,7 +69,7 @@ Part 3D's [algorithm identity and promotion governance](../architecture/MISSION_
 
 ## Part 4 — four demand and commercial slices
 
-Part 4A's [inbound demand source and forecast boundary](../architecture/MISSION_26_PART4A_DEMAND_SOURCE_AND_FORECAST.md) is being implemented. Bounded unmounted candidates and a separate guarded Retell **call** source receipt are released. No production lead forecast is accepted. Retell call IDs deduplicate retries, not repeat calls about one lead. The source must prove reviewed distinct lead identity and complete coverage; heuristic service labels, customer addresses and unsaved historical inputs are not verified forecasts.
+Part 4A's [inbound demand source and forecast boundary](../architecture/MISSION_26_PART4A_DEMAND_SOURCE_AND_FORECAST.md) now has a released guarded paid internal workflow for tenant-derived company permission, Retell **call** source receipts, human dispositions and bounded reviewed-source windows. No production lead forecast is accepted. Retell call IDs deduplicate retries, not repeat calls about one lead. The source still lacks caller consent, provider retention/coverage and complete comparable distinct-lead periods; heuristic service labels, customer addresses and unsaved historical inputs are not verified forecasts.
 
 | Slice | Scope |
 | --- | --- |
@@ -78,7 +78,7 @@ Part 4A's [inbound demand source and forecast boundary](../architecture/MISSION_
 | C | Seasonality, current backlog and pipeline-to-scheduled-work forecasts without treating customer intent as guaranteed work. |
 | D | Paid and isolated-demo demand forecast UI, explanation, recovery and independent Part 4 acceptance. |
 
-Part 4B's [transition-probability boundary](../architecture/MISSION_26_PART4B_TRANSITION_PROBABILITY_BOUNDARY.md) is a bounded unmounted descriptive candidate. It can be validated with fictional cohort data while real calling remains offline; it is not a paid probability forecast, source authentication or final Part 4B acceptance. No old setup calls are required to advance independent roadmap work.
+Part 4B's [transition-probability boundary](../architecture/MISSION_26_PART4B_TRANSITION_PROBABILITY_BOUNDARY.md) now mounts a guarded source-owned precursor: an ended owner-reviewed commercial-booking withdrawal cohort. It is not `demand.booking_cancellation.v1` because commercial review withdrawal does not prove current Mission 22 at-risk state or operational cancellation. It can be validated with fictional cohort data while real calling remains offline. It is descriptive internal evidence, not a calibrated paid probability forecast or final Part 4B acceptance. Qualification, estimate-request, first-booking and canonical cancellation sources remain unavailable, and no old setup calls are required to advance independent roadmap work.
 
 Part 4C's [demand-to-schedule boundary](../architecture/MISSION_26_PART4C_DEMAND_TO_SCHEDULE_BOUNDARY.md) separates verified seasonality, current approved backlog and future pipeline transitions. It is architecture only; absent source coverage, approved-work linkage and calibrated outcomes keep numerical claims unavailable.
 

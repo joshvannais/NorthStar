@@ -381,6 +381,52 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         promotionAvailable: false, realForecastEligible: false });
       expect(JSON.stringify(matchedPopulation.body.data))
         .not.toContain('1400.00');
+      const guardedReader = await f.runtimePool.connect();
+      const competingWriter = await f.runtimePool.connect();
+      try {
+        await guardedReader.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await guardedReader.query("SET LOCAL statement_timeout = '15000ms'");
+        await guardedReader.query("SET LOCAL lock_timeout = '2000ms'");
+        const inventory = await guardedReader.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4,FALSE) value',
+          args);
+        const selectedRunIds = inventory.rows[0].value.selectedRunIds;
+        expect(selectedRunIds).toHaveLength(120);
+        const acquired = await guardedReader.query(`
+          SELECT bool_and(pg_try_advisory_xact_lock(hashtextextended(
+            'm26:price-flow-actual:'||$1::text||':'||run_id::text,0))) locked
+          FROM unnest($2::uuid[]) run_id`, [f.org, selectedRunIds]);
+        expect(acquired.rows[0].locked).toBe(true);
+        await competingWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const blockedBeforeRead = await competingWriter.query(`
+          SELECT pg_try_advisory_xact_lock(hashtextextended(
+            'm26:price-flow-actual:'||$1::text||':'||$2::text,0)) locked`,
+        [f.org, selectedRunIds[0]]);
+        expect(blockedBeforeRead.rows[0].locked).toBe(false);
+        const guardedPopulation = await guardedReader.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4,TRUE) value',
+          args);
+        expect(guardedPopulation.rows[0].value).toMatchObject({
+          state: 'matched_population_observed', pairedCount: 60,
+          selectedRunIds,
+        });
+        const blockedAfterRead = await competingWriter.query(`
+          SELECT pg_try_advisory_xact_lock(hashtextextended(
+            'm26:price-flow-actual:'||$1::text||':'||$2::text,0)) locked`,
+        [f.org, selectedRunIds[0]]);
+        expect(blockedAfterRead.rows[0].locked).toBe(false);
+        await guardedReader.query('COMMIT');
+        const acquiredAfterCommit = await competingWriter.query(`
+          SELECT pg_try_advisory_xact_lock(hashtextextended(
+            'm26:price-flow-actual:'||$1::text||':'||$2::text,0)) locked`,
+        [f.org, selectedRunIds[0]]);
+        expect(acquiredAfterCommit.rows[0].locked).toBe(true);
+      } finally {
+        await guardedReader.query('ROLLBACK').catch(() => {});
+        await competingWriter.query('ROLLBACK').catch(() => {});
+        guardedReader.release();
+        competingWriter.release();
+      }
       const heldActualWriter = await f.runtimePool.connect();
       try {
         await heldActualWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');

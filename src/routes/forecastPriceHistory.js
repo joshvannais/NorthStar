@@ -787,6 +787,9 @@ function createForecastPriceHistoryRouter(options = {}) {
             new Set(selectedRunIds).size !== selectedRunIds.length) {
           throw new Error('Invalid algorithm population origin inventory');
         }
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
         await lockPriceFlowActualRuns(client, identity.organizationId,
           selectedRunIds);
         const confirmed = (await client.query(
@@ -812,7 +815,7 @@ function createForecastPriceHistoryRouter(options = {}) {
           throw new Error('Invalid algorithm population counts');
         }
         const policy = assessMatchedPriceFlowAlgorithms(observed);
-        return res.json({ success: true, data: {
+        const responseData = {
           state: observed.state, scope: observed.scope,
           counts: Object.fromEntries(keys.map(name => [name, observed[name]])),
           completeRegisteredPopulation:
@@ -831,7 +834,9 @@ function createForecastPriceHistoryRouter(options = {}) {
           unsavedOriginCoverageVerified: false,
           wholeBusinessCoverageVerified: false,
           numericalErrorAvailable: false, promotionAvailable: false,
-          realForecastEligible: false } });
+          realForecastEligible: false };
+        await client.query('COMMIT');
+        return res.json({ success: true, data: responseData });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

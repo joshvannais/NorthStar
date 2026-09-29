@@ -34,14 +34,14 @@ This ledger tracks all 64 frozen slices. A part is full only when every slice in
 | 6D | Explicit delivery/resend/revoke/recovery, Mission 28 handoff, Part 6 acceptance | No | No | No | — | No | No | No | Planned |
 | 7A | Merchant/funds model and provider-neutral account/mode/method contract | No | No | No | — | No | No | N/A | Planned |
 | 7B | Capability-gated hosted onboarding, secrets, rotation, disconnect, no instrument storage | No | No | No | — | No | No | No | Planned |
-| 7C | Customer-initiated exact-balance hosted payment session | No | No | No | — | No | No | No | Planned |
+| 7C | Authorized exact-balance or launch-enabled partial/multi-invoice payment initiation plan | No | No | No | — | No | No | No | Planned |
 | 7D | Disabled-by-default sandbox, drift, rollback, unsupported methods, Part 7 acceptance | No | No | No | — | No | No | No | Planned |
 | 8A | Authenticated provider-event receipt, mode/account checks, replay safety | No | No | No | — | No | No | N/A | Planned |
 | 8B | Deterministic out-of-order event normalization | No | No | No | — | No | No | N/A | Planned |
 | 8C | Exact allocation and balance projection with fail-closed mismatch handling | No | No | No | — | No | No | No | Planned |
 | 8D | Settlement and payout reconciliation kept separate from capture | No | No | No | — | No | No | No | Planned |
 | 8E | Delay/correction/concurrency/recovery/raw-event ACL, Part 8 acceptance | No | No | No | — | No | No | N/A | Planned |
-| 9A | Concurrent attempts, partial/multi-invoice allocation, overpayment recovery | No | No | No | — | No | No | No | Planned |
+| 9A | Concurrent attempts and exact initiated partial/multi-invoice allocation, overpayment recovery | No | No | No | — | No | No | No | Planned |
 | 9B | Launch-approved deposit application and milestone unsupported boundary | No | No | No | — | No | No | No | Planned |
 | 9C | Capability-gated credit note and refund request/acknowledgement | No | No | No | — | No | No | No | Planned |
 | 9D | Reviewed offline cash/check intake, accepted-at/occurred-at, clearance states, allocation/evidence, idempotency, correction | No | No | No | — | No | No if enabled; documented N/A if disabled | No | Planned |

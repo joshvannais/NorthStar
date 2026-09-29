@@ -554,6 +554,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(reviewed.status).toBe(200);
       expect(reviewed.body.data).toMatchObject({
         state: 'research_review_ready', currentRevision: 0,
+        currentEventId: null,
         humanResearchReviewAvailable: true,
         promotionAvailable: false, forecastServingEnabled: false,
         reviewToken: null });
@@ -565,6 +566,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         algorithmVersion: 'm26_price_flow_zero_baseline_v1',
         reversesEventId: null,
         reason: 'Fictional owner review of complete M24 source comparison.' };
+      const impossibleCandidate = await request(f.app).post(challengeRoute)
+        .set(owner.session.headers).send({ ...selectionRequest,
+          algorithmVersion: 'm26_price_flow_carry_forward_v1' });
+      expect(impossibleCandidate.status).toBe(200);
+      expect(impossibleCandidate.body.data).toMatchObject({
+        state: 'research_challenge_unavailable',
+        reason: 'selection_transition_invalid', reviewToken: null });
       const challenged = await request(f.app).post(challengeRoute)
         .set(owner.session.headers).send(selectionRequest);
       expect(challenged.status).toBe(200);
@@ -612,11 +620,19 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(newerReview.status).toBe(200);
       expect(newerReview.body.data).toMatchObject({
         state: 'research_review_ready', currentRevision: 1,
+        currentEventId: selected.body.data.eventId,
         currentAlgorithmVersion: 'm26_price_flow_zero_baseline_v1' });
       const rollbackRequest = { expectedRevision: 1, action: 'rollback',
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         reversesEventId: selected.body.data.eventId,
         reason: 'Fictional owner rollback to prior deterministic version.' };
+      const impossibleRollback = await request(f.app).post(challengeRoute)
+        .set(owner.session.headers).send({ ...rollbackRequest,
+          reversesEventId: '00000000-0000-4000-8000-000000000001' });
+      expect(impossibleRollback.status).toBe(200);
+      expect(impossibleRollback.body.data).toMatchObject({
+        state: 'research_challenge_unavailable',
+        reason: 'selection_transition_invalid', reviewToken: null });
       const staleSelection = await request(f.app).post(selectionRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send({ ...rollbackRequest, reviewToken: selectionBody.reviewToken,

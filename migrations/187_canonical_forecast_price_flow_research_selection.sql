@@ -181,6 +181,7 @@ BEGIN
    'reason',CASE WHEN NOT complete THEN 'matched_population_incomplete'
     ELSE 'source_observation_lag_unverified' END,
    'currentRevision',COALESCE(latest.revision,0),
+   'currentEventId',latest.id,
    'currentAlgorithmVersion',latest.algorithm_version,
    'forecastServingEnabled',FALSE);
  END IF;
@@ -188,6 +189,7 @@ BEGIN
   'policyVersion','m26_selected_m24_research_review_v1',
   'comparisonDigest',public.canonical_completion_digest(population),
   'currentRevision',COALESCE(latest.revision,0),
+  'currentEventId',latest.id,
   'currentAlgorithmVersion',latest.algorithm_version,
   'scope','northstar_m24_registered_saved_algorithms_only',
   'researchOnly',TRUE,'forecastServingEnabled',FALSE);
@@ -218,6 +220,26 @@ BEGIN
     (reviewed->>'currentRevision')::integer<>expected_revision THEN
   RETURN jsonb_build_object('state','research_challenge_unavailable',
    'reason','review_source_changed','forecastServingEnabled',FALSE);
+ END IF;
+ IF action_value='select_candidate' THEN
+  IF candidate_version IS DISTINCT FROM 'm26_price_flow_zero_baseline_v1' OR
+     reverses_value IS NOT NULL OR
+     reviewed->>'currentAlgorithmVersion'=
+      'm26_price_flow_zero_baseline_v1' THEN
+   RETURN jsonb_build_object('state','research_challenge_unavailable',
+    'reason','selection_transition_invalid','forecastServingEnabled',FALSE);
+  END IF;
+ ELSE
+  IF candidate_version IS DISTINCT FROM
+      'm26_price_flow_carry_forward_v1' OR
+     reverses_value IS NULL OR
+     reviewed->>'currentEventId' IS NULL OR
+     reverses_value::text IS DISTINCT FROM reviewed->>'currentEventId' OR
+     reviewed->>'currentAlgorithmVersion' IS DISTINCT FROM
+      'm26_price_flow_zero_baseline_v1' THEN
+   RETURN jsonb_build_object('state','research_challenge_unavailable',
+    'reason','selection_transition_invalid','forecastServingEnabled',FALSE);
+  END IF;
  END IF;
  SELECT key_bytes INTO secret
   FROM public.canonical_forecast_price_flow_research_key WHERE singleton=TRUE;

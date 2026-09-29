@@ -780,6 +780,7 @@ function createForecastPriceHistoryRouter(options = {}) {
           state: reviewed.state, reason: reviewed.reason || null,
           policyVersion: reviewed.policyVersion || null,
           currentRevision: reviewed.currentRevision,
+          currentEventId: reviewed.currentEventId || null,
           currentAlgorithmVersion: reviewed.currentAlgorithmVersion || null,
           humanResearchReviewAvailable:
             reviewed.state === 'research_review_ready',

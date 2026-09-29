@@ -2740,6 +2740,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             AND has_function_privilege($1,'public.canonical_forecast_price_flow_research_challenge(uuid,uuid,text,uuid,text,integer,text,text,uuid,text)','EXECUTE')
             AND has_function_privilege($1,'public.canonical_forecast_price_flow_research_select(uuid,uuid,text,uuid,text,text,integer,text,text,uuid,text,text,boolean)','EXECUTE')
           ))
+          AND (to_regclass('public.canonical_forecast_price_flow_research_selected_origins') IS NULL OR (
+            NOT has_table_privilege($1,'public.canonical_forecast_price_flow_research_selected_origins','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+            AND COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_capture_research_selected_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid)'),
+              'EXECUTE'),FALSE)
+          ))
         )) AS price_flow_algorithm_authority_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,

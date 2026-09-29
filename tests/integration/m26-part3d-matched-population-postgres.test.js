@@ -39,6 +39,24 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missing.release();
       }
 
+      const missingSelectedOrigin = await f.ownerPool.connect();
+      try {
+        await missingSelectedOrigin.query('BEGIN');
+        await missingSelectedOrigin.query(`ALTER FUNCTION
+          public.canonical_forecast_capture_research_selected_price_flow_origin(
+            uuid,uuid,text,uuid,text,text,uuid)
+          RENAME TO canonical_forecast_capture_research_selected_origin_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingSelectedOrigin, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingSelectedOrigin.query('ROLLBACK');
+      } catch (error) {
+        await missingSelectedOrigin.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingSelectedOrigin.release();
+      }
+
       const leaked = await f.ownerPool.connect();
       try {
         await leaked.query('BEGIN');
@@ -70,6 +88,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           'Runtime database role privilege verification failed');
         await leaked.query(`REVOKE EXECUTE ON FUNCTION
           canonical_forecast_price_flow_research_mac(text,bytea) FROM PUBLIC`);
+        await leaked.query(`GRANT SELECT ON
+          canonical_forecast_price_flow_research_selected_origins TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE SELECT ON
+          canonical_forecast_price_flow_research_selected_origins FROM PUBLIC`);
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
           { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
         await leaked.query('ROLLBACK');

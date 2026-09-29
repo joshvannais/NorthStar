@@ -425,6 +425,155 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .post(`${root}/saved-price-flow-origins/${secondRunId}/profile-witness`)
         .set(owner().session.headers).send({ profileAnchorId });
       expect(secondWitness.status).toBe(200);
+      // A second installed deterministic definition uses the exact verified
+      // pre-horizon source/horizon, but its saved point remains private and
+      // cannot be promoted by this origin write. Dates above are test-shifted.
+      const zeroKey = key();
+      const zeroRoute = `${root}/saved-price-flow-origins/${runId}/zero-baseline`;
+      const zeroSql =
+        'SELECT public.canonical_forecast_capture_price_flow_zero_baseline($1,$2,$3,$4,$5,$6,$7) value';
+      const zeroArgs = [f.org, owner().actorUserId, owner().actorAccessRole,
+        owner().authSessionId, owner().csrfToken, zeroKey, runId];
+      const concurrentZero = await Promise.all([
+        f.runtimePool.query(zeroSql, zeroArgs),
+        f.runtimePool.query(zeroSql, zeroArgs),
+      ]);
+      const concurrentValues = concurrentZero.map(result => result.rows[0].value);
+      expect(new Set(concurrentValues.map(value => value.runId)).size).toBe(1);
+      expect(concurrentValues.map(value => value.replayed).sort())
+        .toEqual([false, true]);
+      const zero = await request(f.app).post(zeroRoute)
+        .set(owner().session.headers).set('Idempotency-Key', zeroKey)
+        .send({});
+      expect(zero.status).toBe(200);
+      expect(zero.body.data).toMatchObject({ state: 'saved_price_flow_origin',
+        output: null, outputDigest: null, receiptDigest: null,
+        preHorizonCommitVerified: false, realForecastEligible: false,
+        forecastValueAvailable: false, replayed: true });
+      const zeroRunId = zero.body.data.runId;
+      const zeroStored = await f.ownerPool.query(
+        'SELECT output,saved_at,source_receipt_id,horizon_start,horizon_end FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+        [zeroRunId]);
+      expect(zeroStored.rows[0].output).toMatchObject({
+        calculationVersion: 'm26_price_flow_zero_baseline_v1',
+        asOf: zeroStored.rows[0].saved_at.toISOString(),
+        value: { kind: 'point', amount: '0.00' } });
+      expect(zeroStored.rows[0].source_receipt_id).toBe(snapshotId);
+      // The shared capture throttle is already spent by the prior source
+      // receipts. Check idempotency through the same guarded runtime SQL.
+      const zeroReplay = await f.runtimePool.query(zeroSql, zeroArgs);
+      expect(zeroReplay.rows[0].value).toMatchObject({
+        runId: zeroRunId, replayed: true });
+      const zeroMember = await request(f.app).post(zeroRoute)
+        .set(f.actors.member.session.headers).set('Idempotency-Key', key())
+        .send({});
+      expect(zeroMember.status).toBe(403);
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_algorithms'))
+        .rejects.toMatchObject({ code: '42501' });
+      const zeroActivation = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${zeroRunId}/activate`)
+        .set(owner().session.headers).send({});
+      expect(zeroActivation.body.data).toMatchObject({
+        state: 'price_flow_origin_activated', preHorizonCommitVerified: true });
+      const zeroWitness = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${zeroRunId}/profile-witness`)
+        .set(owner().session.headers).send({ profileAnchorId });
+      expect(zeroWitness.body.data).toMatchObject({
+        state: 'profile_witness_recorded', runId: zeroRunId });
+      const zeroPair = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_pair_source_read($1,$2,$3,$4,$5) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, zeroRunId]);
+      expect(zeroPair.rows[0].value).toMatchObject({
+        state: 'pair_source_verified', runId: zeroRunId });
+      const zeroRead = await request(f.app)
+        .get(`${root}/saved-price-flow-origins/${zeroRunId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(zeroRead.status).toBe(200);
+      expect(zeroRead.body.data).toMatchObject({ runId: zeroRunId,
+        output: null, outputDigest: null, receiptDigest: null,
+        originProofDigest: null, forecastValueAvailable: false });
+      const matchedRoute = `${root}/algorithm-matched-pairs`;
+      const matchedQuery = { baseRunId: runId, candidateRunId: zeroRunId };
+      const missingMatch = await request(f.app).get(matchedRoute)
+        .set('Cookie', owner().session.headers.Cookie)
+        .query(matchedQuery);
+      expect(missingMatch.status).toBe(200);
+      expect(missingMatch.body.data).toMatchObject({
+        state: 'matched_algorithms_observed', matched: true,
+        actualPairStatus: 'missing', numericComparisonAvailable: false,
+        promotionAvailable: false, realForecastEligible: false });
+      const deniedMatch = await request(f.app).get(matchedRoute)
+        .set('Cookie', f.actors.member.session.headers.Cookie)
+        .query(matchedQuery);
+      expect(deniedMatch.status).toBe(403);
+      const foreignMatch = await request(f.app).get(matchedRoute)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie)
+        .query(matchedQuery);
+      expect(foreignMatch.status).toBe(200);
+      expect(foreignMatch.body.data).toMatchObject({
+        state: 'matched_algorithms_unavailable', matched: false,
+        reason: 'run_not_found', promotionAvailable: false });
+      // Disposable owner-only fault injection: a mismatched installed
+      // carry-forward registration must block both another base capture and
+      // a candidate cloned from the previously valid immutable base.
+      const registered = await f.ownerPool.query(
+        `SELECT implementation_digest FROM canonical_forecast_price_flow_algorithms
+         WHERE algorithm_version='m26_price_flow_carry_forward_v1'`);
+      await f.ownerPool.query(
+        'ALTER TABLE canonical_forecast_price_flow_algorithms DISABLE TRIGGER canonical_forecast_price_flow_algorithms_immutable');
+      try {
+        await f.ownerPool.query(
+          `UPDATE canonical_forecast_price_flow_algorithms
+           SET implementation_digest=$1
+           WHERE algorithm_version='m26_price_flow_carry_forward_v1'`,
+          ['0'.repeat(64)]);
+        const mismatched = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_capture_price_flow_zero_baseline($1,$2,$3,$4,$5,$6,$7) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key(), runId]);
+        expect(mismatched.rows[0].value).toMatchObject({
+          state: 'price_flow_origin_unavailable',
+          reason: 'base_algorithm_registration_unverified',
+          forecastIssued: false });
+        const mismatchedPair = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_price_flow_matched_algorithms($1,$2,$3,$4,$5,$6) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, runId, zeroRunId]);
+        expect(mismatchedPair.rows[0].value).toMatchObject({
+          state: 'matched_algorithms_unavailable',
+          reason: 'algorithm_registration_unverified', matched: false });
+        await expect(f.runtimePool.query(
+          'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key(), snapshotId,
+            'USD', horizonStartsAt, utc(horizonEnd)]))
+          .rejects.toMatchObject({ code: '23514' });
+      } finally {
+        await f.ownerPool.query(
+          `UPDATE canonical_forecast_price_flow_algorithms
+           SET implementation_digest=$1
+           WHERE algorithm_version='m26_price_flow_carry_forward_v1'`,
+          [registered.rows[0].implementation_digest]);
+        await f.ownerPool.query(
+          'ALTER TABLE canonical_forecast_price_flow_algorithms ENABLE TRIGGER canonical_forecast_price_flow_algorithms_immutable');
+      }
+      const absentZero = await request(f.app)
+        .post(`${root}/saved-price-flow-origins/${key()}/zero-baseline`)
+        .set(owner().session.headers).set('Idempotency-Key', key())
+        .send({});
+      expect(absentZero.status).toBe(200);
+      expect(absentZero.body.data).toMatchObject({
+        state: 'price_flow_origin_unavailable',
+        reason: 'base_origin_unavailable', forecastIssued: false });
+      const foreignZero = await request(f.app).post(zeroRoute)
+        .set(f.actors.otherOwner.session.headers)
+        .set('Idempotency-Key', key()).send({});
+      expect(foreignZero.status).toBe(200);
+      expect(foreignZero.body.data).toMatchObject({
+        state: 'price_flow_origin_unavailable',
+        reason: 'base_origin_unavailable', forecastIssued: false });
       const prematurePair = await request(f.app)
         .get(`${root}/saved-price-flow-rolling-pairs`)
         .set('Cookie', owner().session.headers.Cookie)
@@ -562,6 +711,32 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           SET observed_at=$2,proof=$3::jsonb,
             proof_digest=public.canonical_completion_digest($3::jsonb)
           WHERE run_id=$1`, [runId, proofAt, JSON.stringify(proofValue)]);
+        const zeroSavedAt = new Date(savedAt.getTime() + 60000);
+        const zeroShiftedOutput = { ...zeroStored.rows[0].output,
+          asOf: zeroSavedAt.toISOString(),
+          horizon: { startsAt: fictionalStart.toISOString(),
+            endsAt: fictionalEnd.toISOString(), grain: 'day' },
+          sourceSnapshotDigest: receipt.rows[0].digest };
+        const changedZero = await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_saved_origins
+          SET source_receipt_id=$2,saved_at=$3,horizon_start=$4,horizon_end=$5,
+            output=$6::jsonb,
+            receipt_digest=public.canonical_completion_digest($6::jsonb)
+          WHERE id=$1 RETURNING receipt_digest`,
+        [zeroRunId, anchorReceiptId, zeroSavedAt, fictionalStart, fictionalEnd,
+          JSON.stringify(zeroShiftedOutput)]);
+        const zeroProofValue = { ...zeroActivation.body.data,
+          savedReceiptDigest: changedZero.rows[0].receipt_digest,
+          captureCommitObservedAt: proofAt.toISOString(),
+          horizonStartsAt: fictionalStart.toISOString() };
+        delete zeroProofValue.proofDigest;
+        delete zeroProofValue.replayed;
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_origin_activations
+          SET observed_at=$2,proof=$3::jsonb,
+            proof_digest=public.canonical_completion_digest($3::jsonb)
+          WHERE run_id=$1`, [zeroRunId, proofAt,
+          JSON.stringify(zeroProofValue)]);
         await f.ownerPool.query(`
           UPDATE canonical_forecast_price_decision_commit_observations
           SET observed_at=$2 WHERE decision_id=$1`, [decisionId, witnessAt]);
@@ -625,6 +800,10 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await f.ownerPool.query(`
           UPDATE canonical_forecast_price_flow_profile_witnesses
           SET observed_at=$2 WHERE run_id=$1`,
+        [zeroRunId, new Date(profileBefore.getTime() + 2 * 3600000)]);
+        await f.ownerPool.query(`
+          UPDATE canonical_forecast_price_flow_profile_witnesses
+          SET observed_at=$2 WHERE run_id=$1`,
         [secondRunId, secondWitnessAt]);
       } finally {
         for (const [table, trigger] of triggers.reverse()) {
@@ -641,7 +820,9 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         expectedUtcDays: 60, matchingContextCount: 2,
         unsavedOriginCoverageVerified: false,
         wholeBusinessCoverageVerified: false });
-      expect(completeWindow.rows[0].value.origins).toHaveLength(2);
+      expect(completeWindow.rows[0].value.origins).toHaveLength(3);
+      expect(completeWindow.rows[0].value).toMatchObject({
+        matchingContextCount: 2, excludedContextCount: 1 });
       const actualLock = await f.ownerPool.connect();
       try {
         await actualLock.query('BEGIN');
@@ -802,6 +983,58 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(pairedActual.rows[0].value).toMatchObject({
         state: 'pair_actual_known', amount: '1400.00',
         receiptId: savedActual.body.data.receiptId });
+      const partialMatch = await request(f.app).get(matchedRoute)
+        .set('Cookie', owner().session.headers.Cookie)
+        .query(matchedQuery);
+      expect(partialMatch.body.data).toMatchObject({
+        state: 'matched_algorithms_observed',
+        actualPairStatus: 'partial', promotionAvailable: false });
+      const zeroActual = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_price_flow_actual($1,$2,$3,$4,$5,$6,$7,$8) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, key(),
+          zeroRunId, postHorizonReceiptId]);
+      expect(zeroActual.rows[0].value).toMatchObject({
+        state: 'price_flow_actual_recorded', actualState: 'known' });
+      const pairedMatch = await request(f.app).get(matchedRoute)
+        .set('Cookie', owner().session.headers.Cookie)
+        .query(matchedQuery);
+      expect(pairedMatch.status).toBe(200);
+      expect(pairedMatch.body.data).toMatchObject({
+        state: 'matched_algorithms_observed', matched: true,
+        actualPairStatus: 'paired', numericComparisonAvailable: false,
+        promotionAvailable: false, realForecastEligible: false });
+      expect(JSON.stringify(pairedMatch.body.data)).not.toContain('1400.00');
+      const matchedPopulation = await request(f.app)
+        .get(`${root}/algorithm-matched-population`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(matchedPopulation.status).toBe(200);
+      expect(matchedPopulation.body.data).toMatchObject({
+        state: 'matched_population_observed',
+        counts: { expectedUtcDays: 60, storedBaseCount: 2,
+          matchingBaseCount: 2, candidateMissingCount: 1,
+          pairedCount: 1, missingSavedOriginDays: 58 },
+        completeRegisteredPopulation: false,
+        numericalErrorAvailable: false, promotionAvailable: false,
+        realForecastEligible: false });
+      expect(JSON.stringify(matchedPopulation.body.data))
+        .not.toContain('1400.00');
+      const heldPriceFence = await f.runtimePool.connect();
+      try {
+        await heldPriceFence.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await heldPriceFence.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('m26:price-decision-order:'||$1::text,0))",
+          [f.org]);
+        const busyPopulation = await request(f.app)
+          .get(`${root}/algorithm-matched-population`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect(busyPopulation.status).toBe(409);
+        expect(busyPopulation.body.error.category).toBe(
+          'FORECAST_SOURCE_BUSY');
+      } finally {
+        await heldPriceFence.query('ROLLBACK').catch(() => {});
+        heldPriceFence.release();
+      }
       const partialManifest = await request(f.app)
         .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
         .set('Cookie', owner().session.headers.Cookie);
@@ -909,7 +1142,8 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         currentStatusCounts: { paired: 2 },
         savedOriginPopulation: {
           state: 'bounded_saved_origin_inventory_verified',
-          storedOriginCount: 2, matchingContextCount: 2,
+          storedOriginCount: 3, matchingContextCount: 2,
+          excludedContextCount: 1,
           omittedMatchingCount: 0,
           unsavedOriginCoverageVerified: false,
           wholeBusinessCoverageVerified: false,
@@ -971,7 +1205,8 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(incompletePopulation.status).toBe(200);
       expect(incompletePopulation.body.data.savedOriginPopulation).toMatchObject({
         state: 'evaluation_selection_incomplete',
-        storedOriginCount: 3, matchingContextCount: 3,
+        storedOriginCount: 4, matchingContextCount: 3,
+        excludedContextCount: 1,
         omittedMatchingCount: 1,
         unsavedOriginCoverageVerified: false });
       expect(incompletePopulation.body.data.policy.sampleSufficiency)

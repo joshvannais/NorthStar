@@ -72,6 +72,7 @@ function getLimitConfig(group, plan = 'starter') {
     'forecast-source-capture': { default: 4, window: 60 * 60 * 1000 },
     'forecast-actual-capture': { default: 4, window: 60 * 60 * 1000 },
     'forecast-evaluation-capture': { default: 6, window: 60 * 60 * 1000 },
+    'forecast-algorithm-origin': { default: 4, window: 60 * 60 * 1000 },
     'auth': { default: 5, window: 15 * 60 * 1000 }, // 5 attempts per 15 min
     'auth-total': { default: 20, window: 15 * 60 * 1000 } // 20 total per 15 min
   };
@@ -81,7 +82,8 @@ function getLimitConfig(group, plan = 'starter') {
 
   if (group === 'auth' || group === 'auth-total' ||
       group === 'forecast-source-capture' || group === 'forecast-actual-capture' ||
-      group === 'forecast-evaluation-capture') {
+      group === 'forecast-evaluation-capture' ||
+      group === 'forecast-algorithm-origin') {
     return { limit: config.default, window: config.window };
   }
 

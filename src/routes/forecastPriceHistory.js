@@ -20,6 +20,8 @@ const { buildRollingBacktest } = require('../forecasting/rollingBacktest');
 const { measureEvaluation, measureGuardedSavedBacktest } = require('../forecasting/evaluationGates');
 const { assessSelectedPriceFlowEvaluation } = require('../forecasting/selectedPriceFlowEvaluationPolicy');
 const { assessCompletePriceFlowEvaluation } = require('../forecasting/completePriceFlowEvaluation');
+const { assessMatchedPriceFlowAlgorithms } =
+  require('../forecasting/matchedPriceFlowAlgorithmPolicy');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -89,6 +91,9 @@ function createForecastPriceHistoryRouter(options = {}) {
     `forecast-price-history:${req.tenantContext.organizationId}`);
   const evaluationThrottle = options.evaluationThrottle ||
     rateLimit('forecast-evaluation-capture', req =>
+      `forecast-price-history:${req.tenantContext.organizationId}`);
+  const algorithmOriginThrottle = options.algorithmOriginThrottle ||
+    rateLimit('forecast-algorithm-origin', req =>
       `forecast-price-history:${req.tenantContext.organizationId}`);
   const readPosition = options.readPosition || readGuardedApprovedPriceFlow;
   router.use((_req, res, next) => {
@@ -694,6 +699,201 @@ function createForecastPriceHistoryRouter(options = {}) {
       } finally { if (client) client.release(); }
     });
 
+  // A fixed zero-point comparator shares the verified M24 source and horizon
+  // of an existing pre-horizon origin. It remains masked and ineligible for a
+  // real forecast until independent evaluation and human governance.
+  router.post('/saved-price-flow-origins/:runId/zero-baseline', auth,
+    requirePermission('forecast', 'update'), algorithmOriginThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!UUID.test(req.params.runId || '') || !KEY.test(key || '') ||
+          !exactKeys(req.body, []) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The forecast source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const saved = (await client.query(
+          'SELECT public.canonical_forecast_capture_price_flow_zero_baseline($1,$2,$3,$4,$5,$6,$7) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), key, req.params.runId])).rows[0]?.value;
+        if (saved?.state === 'price_flow_origin_unavailable') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: saved });
+        }
+        if (saved?.state !== 'saved_price_flow_origin' ||
+            !UUID.test(saved.runId || '') ||
+            saved.preHorizonCommitVerified !== false) {
+          throw new Error('Invalid zero baseline origin');
+        }
+        const output = normalizeForecastOutput(saved.output);
+        if (output.organizationId !== identity.organizationId ||
+            output.target.key !== 'revenue.approved_price_flow' ||
+            output.calculationVersion !== 'm26_price_flow_zero_baseline_v1' ||
+            output.applicability.limits.join('|') !==
+              'northstar_m24_only|uncalibrated_zero_baseline') {
+          throw new Error('Invalid zero baseline output');
+        }
+        await client.query('COMMIT');
+        if (saved.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(saved.replayed ? 200 : 201).json({ success: true,
+          data: { state: 'saved_price_flow_origin', runId: saved.runId,
+            output: null, outputDigest: null, receiptDigest: null,
+            preHorizonCommitVerified: false, realForecastEligible: false,
+            forecastValueAvailable: false, replayed: saved.replayed } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/algorithm-matched-population', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, [])) return res.status(400).json({
+        success: false, error: { category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm population request is invalid.' },
+      });
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        let observed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4,FALSE) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (!observed || !['matched_population_unavailable',
+          'matched_population_observed'].includes(observed.state)) {
+          throw new Error('Invalid algorithm population');
+        }
+        await client.query('COMMIT');
+        if (observed.state === 'matched_population_unavailable') {
+          return res.json({ success: true, data: {
+            state: observed.state, reason: observed.reason,
+            promotionAvailable: false, realForecastEligible: false } });
+        }
+        const selectedRunIds = observed.selectedRunIds;
+        if (!Array.isArray(selectedRunIds) || selectedRunIds.length > 200 ||
+            selectedRunIds.some(runId => !UUID.test(runId || '')) ||
+            new Set(selectedRunIds).size !== selectedRunIds.length) {
+          throw new Error('Invalid algorithm population origin inventory');
+        }
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        await lockPriceFlowActualRuns(client, identity.organizationId,
+          selectedRunIds);
+        const confirmed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4,TRUE) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (confirmed?.state !== 'matched_population_observed' ||
+            !Array.isArray(confirmed.selectedRunIds) ||
+            confirmed.selectedRunIds.join(',') !== selectedRunIds.join(',')) {
+          throw new Error('Algorithm population changed during guarded read');
+        }
+        observed = confirmed;
+        const keys = ['expectedUtcDays', 'storedBaseCount',
+          'matchingBaseCount', 'excludedBaseCount', 'candidateMissingCount',
+          'candidateDuplicateCount', 'orphanCandidateCount',
+          'missingSavedOriginDays', 'duplicateSavedOriginDays',
+          'pairedCount', 'partialCount', 'missingActualCount',
+          'unavailableCount', 'distinctSourceEventDays'];
+        if (observed.scope !==
+            'northstar_m24_registered_saved_algorithms_only' ||
+            !keys.every(name => Number.isInteger(observed[name]) &&
+              observed[name] >= 0 && observed[name] <= 100)) {
+          throw new Error('Invalid algorithm population counts');
+        }
+        const policy = assessMatchedPriceFlowAlgorithms(observed);
+        const responseData = {
+          state: observed.state, scope: observed.scope,
+          counts: Object.fromEntries(keys.map(name => [name, observed[name]])),
+          completeRegisteredPopulation:
+            observed.completeRegisteredPopulation === true,
+          comparisonState: policy.state,
+          comparisonReason: policy.reason || null,
+          direction: policy.direction || null,
+          referenceDirection: policy.referenceDirection || null,
+          laterDirection: policy.laterDirection || null,
+          candidateWorseDays: policy.candidateWorseDays ?? null,
+          sourceEventDiversityVerified:
+            policy.sourceEventDiversityVerified === true,
+          observationLag: policy.observationLag || {
+            state: 'unavailable',
+            reason: 'matched_population_incomplete' },
+          unsavedOriginCoverageVerified: false,
+          wholeBusinessCoverageVerified: false,
+          numericalErrorAvailable: false, promotionAvailable: false,
+          realForecastEligible: false };
+        await client.query('COMMIT');
+        return res.json({ success: true, data: responseData });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/algorithm-matched-pairs', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, ['baseRunId', 'candidateRunId']) ||
+          !UUID.test(req.query.baseRunId || '') ||
+          !UUID.test(req.query.candidateRunId || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm comparison request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const result = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_matched_algorithms($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.query.baseRunId, req.query.candidateRunId])).rows[0]?.value;
+        if (!result || !['matched_algorithms_unavailable',
+          'matched_algorithms_observed'].includes(result.state)) {
+          throw new Error('Invalid algorithm comparison source');
+        }
+        await client.query('COMMIT');
+        if (result.state === 'matched_algorithms_unavailable') {
+          return res.json({ success: true, data: {
+            state: result.state, reason: result.reason, matched: false,
+            numericComparisonAvailable: false,
+            promotionAvailable: false, realForecastEligible: false } });
+        }
+        if (result.matched !== true ||
+            !['paired', 'partial', 'missing', 'revoked', 'unavailable']
+              .includes(result.actualPairStatus) ||
+            result.baseRunId !== req.query.baseRunId ||
+            result.candidateRunId !== req.query.candidateRunId) {
+          throw new Error('Invalid algorithm comparison pair');
+        }
+        return res.json({ success: true, data: {
+          state: result.state, matched: true,
+          actualPairStatus: result.actualPairStatus,
+          numericComparisonAvailable: false, promotionAvailable: false,
+          realForecastEligible: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   router.post('/saved-price-flow-origins/:runId/activate', auth,
     requirePermission('forecast', 'update'), throttle, async (req, res) => {
       if (!UUID.test(req.params.runId) || !exactKeys(req.body, []) ||
@@ -763,8 +963,13 @@ function createForecastPriceHistoryRouter(options = {}) {
           throw new Error('Invalid supported price-flow output');
         }
         await client.query('COMMIT');
+        const zeroBaseline = output.calculationVersion ===
+          'm26_price_flow_zero_baseline_v1';
         return res.json({ success: true, data: { ...saved, output: null,
-          outputDigest: sha256(output), forecastValueAvailable: false } });
+          outputDigest: zeroBaseline ? null : sha256(output),
+          receiptDigest: zeroBaseline ? null : saved.receiptDigest,
+          originProofDigest: zeroBaseline ? null : saved.originProofDigest,
+          forecastValueAvailable: false } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

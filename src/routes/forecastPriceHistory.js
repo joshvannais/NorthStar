@@ -767,8 +767,8 @@ function createForecastPriceHistoryRouter(options = {}) {
         await client.query("SET LOCAL statement_timeout = '15000ms'");
         await client.query("SET LOCAL lock_timeout = '2000ms'");
         const identity = actor(req);
-        const observed = (await client.query(
-          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4) value',
+        let observed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4,FALSE) value',
           [identity.organizationId, identity.actorUserId,
             identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
         if (!observed || !['matched_population_unavailable',
@@ -781,6 +781,24 @@ function createForecastPriceHistoryRouter(options = {}) {
             state: observed.state, reason: observed.reason,
             promotionAvailable: false, realForecastEligible: false } });
         }
+        const selectedRunIds = observed.selectedRunIds;
+        if (!Array.isArray(selectedRunIds) || selectedRunIds.length > 200 ||
+            selectedRunIds.some(runId => !UUID.test(runId || '')) ||
+            new Set(selectedRunIds).size !== selectedRunIds.length) {
+          throw new Error('Invalid algorithm population origin inventory');
+        }
+        await lockPriceFlowActualRuns(client, identity.organizationId,
+          selectedRunIds);
+        const confirmed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4,TRUE) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (confirmed?.state !== 'matched_population_observed' ||
+            !Array.isArray(confirmed.selectedRunIds) ||
+            confirmed.selectedRunIds.join(',') !== selectedRunIds.join(',')) {
+          throw new Error('Algorithm population changed during guarded read');
+        }
+        observed = confirmed;
         const keys = ['expectedUtcDays', 'storedBaseCount',
           'matchingBaseCount', 'excludedBaseCount', 'candidateMissingCount',
           'candidateDuplicateCount', 'orphanCandidateCount',

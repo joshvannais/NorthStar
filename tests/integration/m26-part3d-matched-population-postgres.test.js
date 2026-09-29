@@ -25,7 +25,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       try {
         await missing.query('BEGIN');
         await missing.query(`ALTER FUNCTION
-          public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid)
+          public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid,boolean)
           RENAME TO canonical_forecast_price_flow_matched_population_missing_for_test`);
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(missing,
           { runtimeRole: f.roles.runtime })).rejects.toThrow(
@@ -381,5 +381,21 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         promotionAvailable: false, realForecastEligible: false });
       expect(JSON.stringify(matchedPopulation.body.data))
         .not.toContain('1400.00');
+      const heldActualWriter = await f.runtimePool.connect();
+      try {
+        await heldActualWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await heldActualWriter.query(`SELECT pg_advisory_xact_lock(
+          hashtextextended('m26:price-flow-actual:'||$1::text||':'||$2::text,0))`,
+        [f.org, runIds[0]]);
+        const busyPopulation = await request(f.app)
+          .get(`${root}/algorithm-matched-population`)
+          .set('Cookie', owner.session.headers.Cookie);
+        expect(busyPopulation.status).toBe(409);
+        expect(busyPopulation.body.error.category).toBe(
+          'FORECAST_SOURCE_BUSY');
+      } finally {
+        await heldActualWriter.query('ROLLBACK').catch(() => {});
+        heldActualWriter.release();
+      }
     }, 600000);
 });

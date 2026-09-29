@@ -430,14 +430,26 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       // cannot be promoted by this origin write. Dates above are test-shifted.
       const zeroKey = key();
       const zeroRoute = `${root}/saved-price-flow-origins/${runId}/zero-baseline`;
+      const zeroSql =
+        'SELECT public.canonical_forecast_capture_price_flow_zero_baseline($1,$2,$3,$4,$5,$6,$7) value';
+      const zeroArgs = [f.org, owner().actorUserId, owner().actorAccessRole,
+        owner().authSessionId, owner().csrfToken, zeroKey, runId];
+      const concurrentZero = await Promise.all([
+        f.runtimePool.query(zeroSql, zeroArgs),
+        f.runtimePool.query(zeroSql, zeroArgs),
+      ]);
+      const concurrentValues = concurrentZero.map(result => result.rows[0].value);
+      expect(new Set(concurrentValues.map(value => value.runId)).size).toBe(1);
+      expect(concurrentValues.map(value => value.replayed).sort())
+        .toEqual([false, true]);
       const zero = await request(f.app).post(zeroRoute)
         .set(owner().session.headers).set('Idempotency-Key', zeroKey)
         .send({});
-      expect(zero.status).toBe(201);
+      expect(zero.status).toBe(200);
       expect(zero.body.data).toMatchObject({ state: 'saved_price_flow_origin',
         output: null, outputDigest: null, receiptDigest: null,
         preHorizonCommitVerified: false, realForecastEligible: false,
-        forecastValueAvailable: false, replayed: false });
+        forecastValueAvailable: false, replayed: true });
       const zeroRunId = zero.body.data.runId;
       const zeroStored = await f.ownerPool.query(
         'SELECT output,saved_at,source_receipt_id,horizon_start,horizon_end FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
@@ -449,10 +461,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(zeroStored.rows[0].source_receipt_id).toBe(snapshotId);
       // The shared capture throttle is already spent by the prior source
       // receipts. Check idempotency through the same guarded runtime SQL.
-      const zeroReplay = await f.runtimePool.query(
-        'SELECT public.canonical_forecast_capture_price_flow_zero_baseline($1,$2,$3,$4,$5,$6,$7) value',
-        [f.org, owner().actorUserId, owner().actorAccessRole,
-          owner().authSessionId, owner().csrfToken, zeroKey, runId]);
+      const zeroReplay = await f.runtimePool.query(zeroSql, zeroArgs);
       expect(zeroReplay.rows[0].value).toMatchObject({
         runId: zeroRunId, replayed: true });
       const zeroMember = await request(f.app).post(zeroRoute)

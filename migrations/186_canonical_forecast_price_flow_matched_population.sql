@@ -15,7 +15,7 @@ CREATE INDEX canonical_forecast_price_flow_zero_horizon_lookup
  WHERE output->>'calculationVersion'='m26_price_flow_zero_baseline_v1';
 
 CREATE FUNCTION public.canonical_forecast_price_flow_matched_population(
- org UUID,actor UUID,role_value TEXT,session_value UUID)
+ org UUID,actor UUID,role_value TEXT,session_value UUID,include_pairs BOOLEAN)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE anchor public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
@@ -33,11 +33,13 @@ DECLARE anchor public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  missing_actual_count INTEGER:=0; unavailable_count INTEGER:=0;
  missing_days INTEGER:=0; duplicate_days INTEGER:=0;
  candidate_request TEXT; selected_candidates UUID[]:=ARRAY[]::UUID[];
+ selected_runs UUID[]:=ARRAY[]::UUID[];
  source_days DATE[]:=ARRAY[]::DATE[];
  prior_start TIMESTAMPTZ; prior_end TIMESTAMPTZ; source_day DATE;
  other_count INTEGER:=0;
 BEGIN
- IF current_setting('transaction_isolation')<>'read committed' THEN
+ IF current_setting('transaction_isolation')<>'read committed' OR
+    include_pairs IS NULL THEN
   RAISE EXCEPTION 'Matched algorithm population requires read committed'
    USING ERRCODE='25001';
  END IF;
@@ -158,8 +160,17 @@ BEGIN
     'horizonStart',public.canonical_forecast_utc_instant(base.horizon_start)));
    CONTINUE;
   END IF;
-  selected_candidates:=array_append(selected_candidates,candidate.id);
-  paired:=public.canonical_forecast_price_flow_matched_algorithms(
+   selected_candidates:=array_append(selected_candidates,candidate.id);
+   selected_runs:=array_append(selected_runs,base.id);
+   selected_runs:=array_append(selected_runs,candidate.id);
+   IF NOT include_pairs THEN
+    items:=items||jsonb_build_array(jsonb_build_object(
+     'baseRunId',base.id,'candidateRunId',candidate.id,
+     'state','pair_pending',
+     'horizonStart',public.canonical_forecast_utc_instant(base.horizon_start)));
+    CONTINUE;
+   END IF;
+   paired:=public.canonical_forecast_price_flow_matched_algorithms(
    org,actor,role_value,session_value,base.id,candidate.id);
   IF paired->>'state' IS DISTINCT FROM 'matched_algorithms_observed' THEN
    unavailable_count:=unavailable_count+1;
@@ -214,13 +225,14 @@ BEGIN
    other_count=0 AND missing_days=0 AND duplicate_days=0 AND
    paired_count=60 AND unavailable_count=0,
   'unsavedOriginCoverageVerified',FALSE,
-  'wholeBusinessCoverageVerified',FALSE,
-  'items',items);
+   'wholeBusinessCoverageVerified',FALSE,
+   'selectedRunIds',to_jsonb(selected_runs),
+   'items',items);
 END $$;
 
 REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_matched_population(
- UUID,UUID,TEXT,UUID) FROM PUBLIC;
+ UUID,UUID,TEXT,UUID,BOOLEAN) FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_matched_population(
-  UUID,UUID,TEXT,UUID) TO northstar_app_runtime;
+  UUID,UUID,TEXT,UUID,BOOLEAN) TO northstar_app_runtime;
 END IF; END $$;

@@ -1580,8 +1580,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_matched_algorithms(uuid,uuid,text,uuid,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_matched_algorithms(uuid,uuid,text,uuid,uuid,uuid) TO %I', runtime_role);
       END IF;
-      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid)') IS NOT NULL THEN
-        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid) TO %I', runtime_role);
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid,boolean)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid,boolean) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_origin_activations') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_origin_activations FROM %I', runtime_role);
@@ -2718,7 +2718,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             to_regprocedure('public.canonical_forecast_price_flow_matched_algorithms(uuid,uuid,text,uuid,uuid,uuid)'),
             'EXECUTE'),FALSE)
           AND COALESCE(has_function_privilege($1,
-            to_regprocedure('public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid)'),
+            to_regprocedure('public.canonical_forecast_price_flow_matched_population(uuid,uuid,text,uuid,boolean)'),
             'EXECUTE'),FALSE)
         )) AS price_flow_algorithm_authority_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR

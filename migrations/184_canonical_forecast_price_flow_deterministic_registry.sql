@@ -41,6 +41,8 @@ BEGIN
  request_hash:=public.canonical_completion_digest(jsonb_build_object(
   'baseRunId',base_run_value,'algorithmVersion',
   'm26_price_flow_zero_baseline_v1'));
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':'||actor::text||':price-flow-origin:'||key_hash,0));
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN

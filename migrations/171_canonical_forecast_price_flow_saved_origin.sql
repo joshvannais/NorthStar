@@ -123,7 +123,7 @@ DECLARE prior public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  count_value INT; total_value NUMERIC(18,2);
  key_hash TEXT; request_hash TEXT; source_events JSONB;
  receipt_xid XID8; activation_xid XID8;
- profile_timezone TEXT;
+ profile_timezone TEXT; profile_currency TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
   key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR
@@ -158,12 +158,19 @@ BEGIN
  END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(
   'm26:profile-effective-source:'||org::text,0));
- SELECT profile.raw_profile->'company'->>'timeZone' INTO profile_timezone
+ SELECT profile.raw_profile->'company'->>'timeZone',
+        profile.raw_profile->'company'->>'currency'
+ INTO profile_timezone,profile_currency
   FROM public.canonical_business_profiles profile
   WHERE profile.organization_id=org AND profile.is_active=TRUE;
  IF profile_timezone IS DISTINCT FROM 'UTC' THEN
   RETURN jsonb_build_object('state','price_flow_origin_unavailable',
    'reason','unsupported_calendar_timezone','calendarTimeZone',profile_timezone,
+   'forecastIssued',FALSE);
+ END IF;
+ IF profile_currency IS DISTINCT FROM currency_value THEN
+  RETURN jsonb_build_object('state','price_flow_origin_unavailable',
+   'reason','currency_conflict','profileCurrency',profile_currency,
    'forecastIssued',FALSE);
  END IF;
  source:=public.canonical_forecast_price_ordered_read(

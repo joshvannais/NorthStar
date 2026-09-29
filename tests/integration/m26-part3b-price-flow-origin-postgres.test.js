@@ -150,11 +150,31 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         reason: 'unsupported_calendar_timezone',
         calendarTimeZone: 'America/New_York', forecastIssued: false,
       });
-      const restoredRaw = JSON.parse(JSON.stringify(unsupportedProfile.rawProfile));
-      restoredRaw.company.timeZone = 'UTC';
+      const conflictingRaw = JSON.parse(JSON.stringify(
+        unsupportedProfile.rawProfile));
+      conflictingRaw.company.timeZone = 'UTC';
+      conflictingRaw.company.currency = 'CAD';
+      const conflictingProfile = await putBusinessProfile(f.ownerPool, {
+        organizationId: f.org, userId: owner().actorUserId,
+        expectedVersion: unsupportedProfile.versionLabel,
+        profile: conflictingRaw,
+      });
+      const conflictingOrigin = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, key(),
+          body.sourceReceiptId, body.currency, body.horizonStartsAt,
+          body.horizonEndsAt]);
+      expect(conflictingOrigin.rows[0].value).toMatchObject({
+        state: 'price_flow_origin_unavailable', reason: 'currency_conflict',
+        profileCurrency: 'CAD', forecastIssued: false,
+      });
+      const restoredRaw = JSON.parse(JSON.stringify(
+        conflictingProfile.rawProfile));
+      restoredRaw.company.currency = 'USD';
       await putBusinessProfile(f.ownerPool, {
         organizationId: f.org, userId: owner().actorUserId,
-        expectedVersion: unsupportedProfile.versionLabel, profile: restoredRaw,
+        expectedVersion: conflictingProfile.versionLabel, profile: restoredRaw,
       });
       const profile = await request(f.app).post(profileRoot)
         .set(owner().session.headers).set('Idempotency-Key', key())

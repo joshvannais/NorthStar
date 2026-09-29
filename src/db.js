@@ -2642,6 +2642,29 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND has_function_privilege($1,'public.canonical_forecast_price_anchor_activate(uuid,uuid,text,uuid,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid)','EXECUTE')
        )) AS price_anchor_activation_guarded,
+       (to_regclass('public.canonical_forecast_price_flow_saved_origins') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_price_flow_saved_origins','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_origin_activations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_decision_commit_observations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_actual_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_profile_witnesses','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_evaluations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_origin_immutable()','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_origin_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_observe_price_decision_commit(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_actual_candidate(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_actual(uuid,uuid,text,uuid,text,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_actual_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_profile_observe(uuid,uuid,text,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_profile_witness_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_pair_source_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_pair_actual_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_evaluation_replay(uuid,uuid,text,uuid,text,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_evaluation(uuid,uuid,text,uuid,text,text,uuid,uuid,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_price_flow_evaluation_manifest(uuid,uuid,text,uuid,uuid)','EXECUTE')
+       )) AS price_flow_rolling_authority_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_retell_call_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS retell_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR (
@@ -3069,6 +3092,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.profile_effective_source_private ||
       !runtimePrivileges.profile_effective_source_entries_allowed ||
       !runtimePrivileges.price_anchor_activation_guarded ||
+      !runtimePrivileges.price_flow_rolling_authority_guarded ||
       !runtimePrivileges.retell_snapshot_table_withheld ||
       !runtimePrivileges.retell_snapshot_entries_allowed ||
       !runtimePrivileges.retell_snapshot_helpers_withheld ||

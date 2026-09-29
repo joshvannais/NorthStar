@@ -682,6 +682,8 @@ function createForecastPriceHistoryRouter(options = {}) {
       try {
         client = await poolProvider().connect();
         await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
         const identity = actor(req);
         const proof = (await client.query(
           'SELECT public.canonical_forecast_activate_price_flow_origin($1,$2,$3,$4,$5,$6) value',
@@ -712,6 +714,8 @@ function createForecastPriceHistoryRouter(options = {}) {
       try {
         client = await poolProvider().connect();
         await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
         const identity = actor(req);
         const saved = (await client.query(
           'SELECT public.canonical_forecast_price_flow_origin_read($1,$2,$3,$4,$5) value',

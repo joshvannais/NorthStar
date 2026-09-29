@@ -5,6 +5,8 @@ const request = require('supertest');
 const { createEstimateReviewFixture } =
   require('../helpers/m24-estimate-review-fixture');
 const { sha256 } = require('../../src/services/businessProfileAdapter');
+const { getActiveBusinessProfile, putBusinessProfile } =
+  require('../../src/services/organizationAuthority');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const root = '/api/v1/forecast/price-history';
@@ -129,6 +131,66 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       horizonEnd.setUTCDate(horizonEnd.getUTCDate() + 1);
       const body = { sourceReceiptId: snapshotId, currency: 'USD',
         horizonStartsAt, horizonEndsAt: utc(horizonEnd) };
+
+      const activeProfile = await getActiveBusinessProfile(f.ownerPool, f.org);
+      const unsupportedRaw = JSON.parse(JSON.stringify(activeProfile.rawProfile));
+      unsupportedRaw.company.timeZone = 'America/New_York';
+      const unsupportedProfile = await putBusinessProfile(f.ownerPool, {
+        organizationId: f.org, userId: owner().actorUserId,
+        expectedVersion: activeProfile.versionLabel, profile: unsupportedRaw,
+      });
+      const unsupportedOrigin = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, key(),
+          body.sourceReceiptId, body.currency, body.horizonStartsAt,
+          body.horizonEndsAt]);
+      expect(unsupportedOrigin.rows[0].value).toMatchObject({
+        state: 'price_flow_origin_unavailable',
+        reason: 'unsupported_calendar_timezone',
+        calendarTimeZone: 'America/New_York', forecastIssued: false,
+      });
+      const restoredRaw = JSON.parse(JSON.stringify(unsupportedProfile.rawProfile));
+      restoredRaw.company.timeZone = 'UTC';
+      await putBusinessProfile(f.ownerPool, {
+        organizationId: f.org, userId: owner().actorUserId,
+        expectedVersion: unsupportedProfile.versionLabel, profile: restoredRaw,
+      });
+
+      const firstOriginWriter = await f.runtimePool.connect();
+      const secondOriginWriter = await f.runtimePool.connect();
+      const concurrentKey = key();
+      const concurrentArgs = [f.org, owner().actorUserId,
+        owner().actorAccessRole, owner().authSessionId, owner().csrfToken,
+        concurrentKey, body.sourceReceiptId, body.currency,
+        body.horizonStartsAt, body.horizonEndsAt];
+      try {
+        await firstOriginWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await secondOriginWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await secondOriginWriter.query("SET LOCAL lock_timeout = '2000ms'");
+        const firstConcurrent = await firstOriginWriter.query(
+          'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          concurrentArgs);
+        const waitingReplay = secondOriginWriter.query(
+          'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          concurrentArgs);
+        await new Promise(resolve => setTimeout(resolve, 25));
+        await firstOriginWriter.query('COMMIT');
+        const secondConcurrent = await waitingReplay;
+        expect(firstConcurrent.rows[0].value).toMatchObject({
+          state: 'saved_price_flow_origin', replayed: false,
+        });
+        expect(secondConcurrent.rows[0].value).toMatchObject({
+          state: 'saved_price_flow_origin',
+          runId: firstConcurrent.rows[0].value.runId, replayed: true,
+        });
+        await secondOriginWriter.query('COMMIT');
+      } finally {
+        await firstOriginWriter.query('ROLLBACK').catch(() => {});
+        await secondOriginWriter.query('ROLLBACK').catch(() => {});
+        firstOriginWriter.release();
+        secondOriginWriter.release();
+      }
       const origin = await request(f.app)
         .post(`${root}/saved-price-flow-origins`)
         .set(owner().session.headers).set('Idempotency-Key', key())
@@ -264,6 +326,25 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_decision_commit_observations'))
         .rejects.toMatchObject({ code: '42501' });
+      const authorityClient = await f.ownerPool.connect();
+      try {
+        await authorityClient.query('BEGIN');
+        await authorityClient.query(
+          'GRANT SELECT ON canonical_forecast_price_flow_saved_origins TO PUBLIC');
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          authorityClient, { migrationRole: f.roles.owner,
+            runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await authorityClient.query(
+          'REVOKE SELECT ON canonical_forecast_price_flow_saved_origins FROM PUBLIC');
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          authorityClient, { migrationRole: f.roles.owner,
+            runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
+        await authorityClient.query('COMMIT');
+      } finally {
+        await authorityClient.query('ROLLBACK').catch(() => {});
+        authorityClient.release();
+      }
 
       // Disposable fixture only: move the already-proven production writer
       // and its immutable receipts to a coherent past UTC window so the
@@ -669,6 +750,31 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(unverifiedManifest.body.data.origins.map(item => item.reason))
         .toEqual(['actual_source_changed', 'actual_source_changed']);
       const correctedSource = await capturePriceThroughGuardedSource();
+      const unverifiedClient = await f.runtimePool.connect();
+      try {
+        await unverifiedClient.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const transientActual = (await unverifiedClient.query(
+          'SELECT public.canonical_forecast_capture_price_flow_actual($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key(), runId,
+            correctedSource])).rows[0].value;
+        expect(transientActual).toMatchObject({
+          state: 'price_flow_actual_recorded', revision: 2,
+          actualState: 'revoked',
+        });
+        const transientManifest = (await unverifiedClient.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_manifest($1,$2,$3,$4,$5) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, savedEvaluation.body.data.evaluationId]))
+          .rows[0].value;
+        expect(transientManifest.origins.find(item =>
+          item.forecastRunId === runId)).toMatchObject({
+          currentStatus: 'excluded', reason: 'actual_commit_unverified',
+        });
+      } finally {
+        await unverifiedClient.query('ROLLBACK').catch(() => {});
+        unverifiedClient.release();
+      }
       const correction = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
         .set(owner().session.headers).set('Idempotency-Key', key())
@@ -737,6 +843,14 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         state: 'price_flow_evaluation_saved', revision: 4,
         previousId: sameResultNewKey.body.data.evaluationId,
         accuracyAvailable: false, realForecastEligible: false });
+      const revokedSavedManifest = await request(f.app)
+        .get(`${root}/saved-price-flow-evaluations/${revisedEvaluation.body.data.evaluationId}/manifest`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(revokedSavedManifest.status).toBe(200);
+      expect(revokedSavedManifest.body.data.origins.find(item =>
+        item.forecastRunId === runId)).toMatchObject({
+        currentStatus: 'revoked', reason: 'actual_revoked',
+      });
       const evaluationHistory = await f.ownerPool.query(`
         SELECT revision,previous_id,result FROM canonical_forecast_price_flow_evaluations
         WHERE organization_id=$1 ORDER BY revision`, [f.org]);

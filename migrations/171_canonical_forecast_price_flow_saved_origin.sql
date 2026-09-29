@@ -51,6 +51,7 @@ DECLARE prior public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  count_value INT; total_value NUMERIC(18,2);
  key_hash TEXT; request_hash TEXT; source_events JSONB;
  receipt_xid XID8; activation_xid XID8;
+ profile_timezone TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
   key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR
@@ -70,6 +71,8 @@ BEGIN
   'horizonStart',public.canonical_forecast_utc_instant(horizon_start_value),
   'horizonEnd',public.canonical_forecast_utc_instant(horizon_end_value))::text,
   'UTF8')),'hex');
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':'||actor::text||':price-flow-origin:'||key_hash,0));
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN
@@ -80,6 +83,14 @@ BEGIN
    'runId',prior.id,'output',prior.output,
    'receiptDigest',prior.receipt_digest,'replayed',TRUE,
    'preHorizonCommitVerified',FALSE);
+ END IF;
+ SELECT profile.raw_profile->'company'->>'timeZone' INTO profile_timezone
+  FROM public.canonical_business_profiles profile
+  WHERE profile.organization_id=org AND profile.is_active=TRUE;
+ IF profile_timezone IS DISTINCT FROM 'UTC' THEN
+  RETURN jsonb_build_object('state','price_flow_origin_unavailable',
+   'reason','unsupported_calendar_timezone','calendarTimeZone',profile_timezone,
+   'forecastIssued',FALSE);
  END IF;
  source:=public.canonical_forecast_price_ordered_read(
   org,actor,role_value,session_value,receipt_id);

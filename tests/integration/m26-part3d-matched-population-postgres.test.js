@@ -81,7 +81,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
     }, 300000);
 
 
-  test('research review fails closed when the trusted population contract is incomplete',
+  test('research review fails closed for incomplete, mistyped and null-lag population contracts',
     async () => {
       const owner = f.actors.owner;
       const client = await f.ownerPool.connect();
@@ -107,6 +107,54 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           state: 'research_review_unavailable',
           reason: 'matched_population_incomplete',
           forecastServingEnabled: false });
+        await client.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            include_pairs boolean)
+          RETURNS jsonb LANGUAGE sql VOLATILE AS $$
+            SELECT jsonb_build_object(
+              'state','matched_population_observed',
+              'selectedRunIds','[]'::jsonb,
+              'completeRegisteredPopulation',to_jsonb('true'::text),
+              'sourceEventDiversityVerified',to_jsonb('true'::text),
+              'distinctSourceEventDays',to_jsonb('60'::text),
+              'items',(SELECT jsonb_agg('{}'::jsonb)
+                FROM generate_series(1,60)))
+          $$`);
+        const mistyped = await client.query(
+          'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
+          [f.org, owner.actorUserId, owner.actorAccessRole,
+            owner.authSessionId]);
+        expect(mistyped.rows[0].value).toMatchObject({
+          state: 'research_review_unavailable',
+          reason: 'matched_population_incomplete' });
+        await client.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            include_pairs boolean)
+          RETURNS jsonb LANGUAGE sql VOLATILE AS $$
+            SELECT jsonb_build_object(
+              'state','matched_population_observed',
+              'selectedRunIds','[]'::jsonb,
+              'completeRegisteredPopulation',TRUE,
+              'sourceEventDiversityVerified',TRUE,
+              'distinctSourceEventDays',60,
+              'items',(SELECT jsonb_agg(jsonb_build_object(
+                'state','matched_algorithms_observed',
+                'actualPairStatus','paired',
+                'baseActual',jsonb_build_object(
+                  'state','pair_actual_known'),
+                'candidateActual',jsonb_build_object(
+                  'state','pair_actual_known')))
+                FROM generate_series(1,60)))
+          $$`);
+        const nullLag = await client.query(
+          'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
+          [f.org, owner.actorUserId, owner.actorAccessRole,
+            owner.authSessionId]);
+        expect(nullLag.rows[0].value).toMatchObject({
+          state: 'research_review_unavailable',
+          reason: 'source_observation_lag_unverified' });
         await client.query('ROLLBACK');
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});

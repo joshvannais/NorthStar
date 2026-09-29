@@ -135,15 +135,31 @@ BEGIN
    'currentAlgorithmVersion',latest.algorithm_version,
    'forecastServingEnabled',FALSE);
  END IF;
- complete:=COALESCE(
-   population->>'completeRegisteredPopulation'='true',FALSE) AND
-  COALESCE(population->>'sourceEventDiversityVerified'='true',FALSE) AND
-  COALESCE((population->>'distinctSourceEventDays')::integer=60,FALSE) AND
-  CASE WHEN jsonb_typeof(population->'items')='array' THEN
-   jsonb_array_length(population->'items')=60 ELSE FALSE END;
+ complete:=jsonb_typeof(population->'completeRegisteredPopulation')='boolean' AND
+  population->'completeRegisteredPopulation'='true'::jsonb AND
+  jsonb_typeof(population->'sourceEventDiversityVerified')='boolean' AND
+  population->'sourceEventDiversityVerified'='true'::jsonb AND
+  jsonb_typeof(population->'distinctSourceEventDays')='number' AND
+  COALESCE((population->>'distinctSourceEventDays')::numeric=60,FALSE) AND
+  jsonb_typeof(population->'items')='array' AND
+  jsonb_array_length(population->'items')=60;
  IF complete IS TRUE THEN
   FOR item IN SELECT value FROM jsonb_array_elements(population->'items') LOOP
-   IF item->>'state' IS DISTINCT FROM 'matched_algorithms_observed' OR
+   IF jsonb_typeof(item) IS DISTINCT FROM 'object' OR
+      jsonb_typeof(item->'baseActual') IS DISTINCT FROM 'object' OR
+      jsonb_typeof(item->'candidateActual') IS DISTINCT FROM 'object' OR
+      jsonb_typeof(item->'horizonEnd') IS DISTINCT FROM 'string' OR
+      jsonb_typeof(item->'baseActual'->'observedThrough')
+       IS DISTINCT FROM 'string' OR
+      jsonb_typeof(item->'candidateActual'->'observedThrough')
+       IS DISTINCT FROM 'string' OR
+      item->>'horizonEnd' !~
+       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{6}Z$' OR
+      item->'baseActual'->>'observedThrough' !~
+       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$' OR
+      item->'candidateActual'->>'observedThrough' !~
+       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$' OR
+      item->>'state' IS DISTINCT FROM 'matched_algorithms_observed' OR
       item->>'actualPairStatus' IS DISTINCT FROM 'paired' OR
       item->'baseActual'->>'state' IS DISTINCT FROM 'pair_actual_known' OR
       item->'candidateActual'->>'state' IS DISTINCT FROM 'pair_actual_known' OR
@@ -153,7 +169,8 @@ BEGIN
    END IF;
    horizon_end:=(item->>'horizonEnd')::timestamptz;
    observed_through:=(item->'baseActual'->>'observedThrough')::timestamptz;
-   IF observed_through<horizon_end OR
+   IF observed_through IS NULL OR horizon_end IS NULL OR
+      observed_through<horizon_end OR
       observed_through>horizon_end+INTERVAL '60 days' THEN
     lag_ok:=FALSE; EXIT;
    END IF;

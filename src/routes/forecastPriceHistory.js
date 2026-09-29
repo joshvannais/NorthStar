@@ -1272,13 +1272,32 @@ function createForecastPriceHistoryRouter(options = {}) {
             !Array.isArray(window.origins) || window.origins.length > 100) {
           throw new Error('Invalid guarded evaluation window');
         }
+        const matchingOrigins = window.origins.filter(item =>
+          item.eligibility === 'matching_context');
+        const matchingRunIds = matchingOrigins.map(item => item.runId);
+        if (matchingRunIds.some(runId => !UUID.test(runId || '')) ||
+            new Set(matchingRunIds).size !== matchingRunIds.length) {
+          throw new Error('Invalid guarded evaluation origin');
+        }
+        // The actual writer uses the same per-run transaction lock. Acquire
+        // every selected lock in deterministic order before reading any run,
+        // so a concurrent correction cannot mix old and new actual revisions.
+        const actualLocks = (await client.query(`
+          SELECT COALESCE(bool_and(acquired),TRUE) acquired FROM (
+            SELECT pg_try_advisory_xact_lock(hashtextextended(
+              'm26:price-flow-actual:'||$1::text||':'||input.run_id::text,0)) acquired
+            FROM unnest($2::uuid[]) AS input(run_id)
+            ORDER BY input.run_id
+          ) selected_actual_locks`,
+        [identity.organizationId, matchingRunIds])).rows[0]?.acquired;
+        if (actualLocks !== true) {
+          const busy = new Error('Price-flow evaluation actuals are busy');
+          busy.code = '55P03';
+          throw busy;
+        }
         const runs = [];
         const outcomes = [];
-        for (const item of window.origins) {
-          if (item.eligibility !== 'matching_context') continue;
-          if (!UUID.test(item.runId || '')) {
-            throw new Error('Invalid guarded evaluation origin');
-          }
+        for (const item of matchingOrigins) {
           const guarded = await guardedPriceFlowRun(client, identity, item.runId);
           if (guarded.state !== 'verified') {
             await client.query('COMMIT');

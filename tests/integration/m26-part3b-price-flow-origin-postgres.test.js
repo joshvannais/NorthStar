@@ -642,6 +642,26 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         unsavedOriginCoverageVerified: false,
         wholeBusinessCoverageVerified: false });
       expect(completeWindow.rows[0].value.origins).toHaveLength(2);
+      const actualLock = await f.ownerPool.connect();
+      try {
+        await actualLock.query('BEGIN');
+        await actualLock.query(`SELECT pg_advisory_xact_lock(hashtextextended(
+          'm26:price-flow-actual:'||$1::text||':'||$2::text,0))`,
+        [f.org, runId]);
+        const busyWindow = await request(f.app)
+          .get(`${root}/complete-price-flow-evaluation-window`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect(busyWindow.status).toBe(409);
+        expect(busyWindow.body.error).toMatchObject({
+          category: 'FORECAST_SOURCE_BUSY',
+        });
+        await actualLock.query('ROLLBACK');
+      } catch (error) {
+        await actualLock.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        actualLock.release();
+      }
       const paidWindow = await request(f.app)
         .get(`${root}/complete-price-flow-evaluation-window`)
         .set('Cookie', owner().session.headers.Cookie);

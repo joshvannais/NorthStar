@@ -70,6 +70,8 @@ function getLimitConfig(group, plan = 'starter') {
     // Creating an immutable forecast source receipt is costlier than reading
     // one. This is an availability limit, not financial or source authority.
     'forecast-source-capture': { default: 4, window: 60 * 60 * 1000 },
+    // Human review is confirmed per call and needs its own bounded allowance.
+    'forecast-source-review': { default: 120, window: 60 * 60 * 1000 },
     'forecast-actual-capture': { default: 4, window: 60 * 60 * 1000 },
     'forecast-evaluation-capture': { default: 6, window: 60 * 60 * 1000 },
     'forecast-algorithm-origin': { default: 4, window: 60 * 60 * 1000 },
@@ -83,6 +85,7 @@ function getLimitConfig(group, plan = 'starter') {
 
   if (group === 'auth' || group === 'auth-total' ||
       group === 'forecast-source-capture' || group === 'forecast-actual-capture' ||
+      group === 'forecast-source-review' ||
       group === 'forecast-evaluation-capture' ||
       group === 'forecast-algorithm-origin' ||
       group === 'forecast-active-origin') {

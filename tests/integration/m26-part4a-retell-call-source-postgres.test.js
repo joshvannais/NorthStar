@@ -1,9 +1,13 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const express = require('express');
+const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { normalizeAsOfSourceManifest } = require('../../src/forecasting/asOfSourceManifest');
 const { readReviewedRetellLeadReceipts } = require('../../src/forecasting/retellReviewedLeadReceipts');
+const { createForecastDemandSourcesRouter } =
+  require('../../src/routes/forecastDemandSources');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -145,22 +149,87 @@ realPostgres('Mission 26 Part 4A Retell call source receipts', () => {
     expect(captured.snapshot.identityBoundary).toMatch(/not distinct reviewed lead identities/);
   }, 120000);
 
-  test('guarded review projection preserves first receipt and remains uncertified', async () => {
+  test('mounted paid route binds server identity through capture, review and source-only read', async () => {
     const owner = fixture.actors.otherOwner;
-    const client = await fixture.runtimePool.connect();
+    const consentClient = await fixture.runtimePool.connect();
     try {
-      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      await client.query(
+      await consentClient.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await consentClient.query(
         'SELECT public.canonical_forecast_retell_source_consent_mutate($1,$2,$3,$4,$5,$6,$7::jsonb)',
         [owner.organizationId, owner.actorUserId, owner.actorAccessRole,
           owner.authSessionId, owner.csrfToken, key(), JSON.stringify({
             action: 'grant', expectedRevision: 0, expectedDigest: 'none',
-            reason: 'Fictional forecast-purpose source permission', confirmed: true,
+            reason: 'Fictional mounted route source permission', confirmed: true,
             confirmationVersion: 'm26-retell-demand-source-consent-v1',
           })]);
-      await client.query('COMMIT');
-    } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
-    finally { client.release(); }
+      await consentClient.query('COMMIT');
+    } catch (error) {
+      await consentClient.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally { consentClient.release(); }
+    const dated = await call({ tenant: fixture.otherOrg,
+      eventAt: '2024-06-10T12:00:00.000Z' });
+    const app = express();
+    app.use(express.json());
+    const auth = (req, _res, next) => {
+      req.user = { id: owner.actorUserId };
+      req.tenantContext = { organizationId: owner.organizationId,
+        userId: owner.actorUserId };
+      req.orgId = owner.organizationId;
+      req.userRole = owner.actorAccessRole;
+      req.authSession = { id: owner.authSessionId };
+      next();
+    };
+    const bypass = (_req, _res, next) => next();
+    app.use('/api/v1/forecast/demand-sources',
+      createForecastDemandSourcesRouter({ auth, throttle: bypass,
+        captureThrottle: bypass, reviewThrottle: bypass,
+        poolProvider: () => fixture.runtimePool }));
+
+    const captured = await request(app)
+      .post('/api/v1/forecast/demand-sources/retell/snapshots')
+      .set('X-CSRF-Token', owner.csrfToken).set('Idempotency-Key', key()).send({});
+    expect(captured.status).toBe(201);
+    expect(captured.body.data).toMatchObject({ state: 'retell_call_source_recorded',
+      historicalCoverageVerified: false, providerCoverageVerified: false,
+      forecastIssued: false });
+    const snapshotId = captured.body.data.snapshotId;
+    const sourceRead = await request(app)
+      .get(`/api/v1/forecast/demand-sources/retell/snapshots/${snapshotId}`);
+    expect(sourceRead.status).toBe(200);
+    const source = sourceRead.body.data.sources
+      .find(item => item.callSourceId === dated.transcript);
+    expect(source).toBeDefined();
+    expect(JSON.stringify(sourceRead.body)).not.toMatch(/external|transcriptText|Synthetic call/);
+
+    const reviewed = await request(app)
+      .post(`/api/v1/forecast/demand-sources/retell/snapshots/${snapshotId}` +
+        `/reviews/${dated.transcript}`)
+      .set('X-CSRF-Token', owner.csrfToken).set('Idempotency-Key', key())
+      .send({ expectedSourceDigest: source.sourceDigest, expectedRevision: 0,
+        expectedDigest: 'none', disposition: 'new_lead', anchorCallSourceId: null,
+        reason: 'Confirm mounted fictional call as reviewed lead', confirmed: true,
+        confirmationVersion: 'm26-retell-call-review-v1' });
+    expect(reviewed.status).toBe(201);
+    expect(reviewed.body.data).toMatchObject({ state: 'call_review_recorded',
+      historicalCoverageVerified: false, providerCoverageVerified: false,
+      forecastIssued: false });
+
+    const window = await request(app)
+      .get(`/api/v1/forecast/demand-sources/retell/snapshots/${snapshotId}` +
+        '/reviewed-source-window')
+      .query({ startsAt: '2024-06-10T00:00:00.000000Z',
+        endsAt: '2024-06-11T00:00:00.000000Z' });
+    expect(window.status).toBe(200);
+    expect(window.body.data).toMatchObject({ state: 'reviewed_source_only',
+      callCount: 1, reviewedDistinctLeadCount: 1,
+      historicalCoverageVerified: false, providerCoverageVerified: false,
+      retentionVerified: false, forecastIssued: false });
+    expect(JSON.stringify(window.body)).not.toMatch(/leadReceipts|leadId|external/);
+  }, 120000);
+
+  test('guarded review projection preserves first receipt and remains uncertified', async () => {
+    const owner = fixture.actors.otherOwner;
     const first = await call({ tenant: fixture.otherOrg, eventAt: '2026-01-10T12:00:00.000Z' });
     const receipt = (await capture(owner)).snapshot;
     const pin = receipt.sources.find(item => item.sourceId === first.transcript);

@@ -12,6 +12,16 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const INSTANT = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/;
+const DATABASE_INSTANT =
+  /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3,6}(?:Z|[+-]\d\d:\d\d)$/;
+const PURPOSE = 'forecast_demand_source';
+const TARGET = 'retell.inbound_calls';
+const SNAPSHOT_VERSION = 'm26-as-of-source-manifest-v1';
+const CONSENT_VERSION = 'm26-retell-demand-source-consent-v1';
+const CONSENT_BOUNDARY =
+  'Company permission does not establish caller consent, provider coverage or retention.';
+const SNAPSHOT_BOUNDARY =
+  'Retell call receipts are not distinct reviewed lead identities or complete provider coverage.';
 
 function exact(value, keys) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
@@ -35,14 +45,15 @@ function failure(res, error) {
     category: status === 403 ? 'FORECAST_DEMAND_SOURCE_RESTRICTED' :
       status === 400 ? 'FORECAST_DEMAND_SOURCE_REQUEST_INVALID' :
         error?.code === '23505' ? 'FORECAST_DEMAND_SOURCE_REQUEST_REUSED' :
-          ['40P01', '55P03'].includes(error?.code) ? 'FORECAST_DEMAND_SOURCE_BUSY' :
+          ['40P01', '55P03', '57014'].includes(error?.code) ?
+            'FORECAST_DEMAND_SOURCE_BUSY' :
             status === 409 ? 'FORECAST_DEMAND_SOURCE_CHANGED' :
               'FORECAST_DEMAND_SOURCE_UNAVAILABLE',
     message: status === 403 ? 'You cannot access this demand source.' :
       status === 400 ? 'Check the demand source details and try again.' :
         error?.code === '23505' ?
           'This request was already used with different details. Start a new request.' :
-          ['40P01', '55P03'].includes(error?.code) ?
+          ['40P01', '55P03', '57014'].includes(error?.code) ?
             'The demand source is busy. Try again shortly.' :
             status === 409 ? 'The demand source changed. Refresh and try again.' :
               'The demand source is temporarily unavailable.',
@@ -55,15 +66,45 @@ function actor(req) {
     authSessionId: req.authSession.id };
 }
 
+function validTimestamp(value) {
+  return typeof value === 'string' && DATABASE_INSTANT.test(value) &&
+    Number.isFinite(Date.parse(value));
+}
+
+function validConsentItem(item) {
+  return item && UUID.test(item.id || '') && item.purposeKey === PURPOSE &&
+    Number.isSafeInteger(item.revision) && item.revision >= 1 &&
+    (item.previousId === null || UUID.test(item.previousId || '')) &&
+    ['grant', 'revoke'].includes(item.action) &&
+    Array.isArray(item.sourceScope) && item.sourceScope.length === 1 &&
+    item.sourceScope[0] === TARGET && item.consentVersion === CONSENT_VERSION &&
+    typeof item.reason === 'string' && item.reason.trim().length >= 10 &&
+    item.reason.length <= 1000 && Buffer.byteLength(item.reason) <= 4000 &&
+    DIGEST.test(item.digest || '') && validTimestamp(item.createdAt) &&
+    item.boundary === CONSENT_BOUNDARY;
+}
+
 function safeConsent(value) {
   if (!value || typeof value.active !== 'boolean' || !Array.isArray(value.history) ||
       !Number.isSafeInteger(value.total) || value.total < 0 ||
       typeof value.truncated !== 'boolean' || value.history.length > 20 ||
-      value.history.some(item => !UUID.test(item?.id || '') ||
-        !Number.isSafeInteger(item.revision) || item.revision < 1 ||
-        !['grant', 'revoke'].includes(item.action) || !DIGEST.test(item.digest || '')) ||
-      (value.current !== null && (!UUID.test(value.current?.id || '') ||
-        !DIGEST.test(value.current?.digest || '')))) return null;
+      value.history.length > value.total || value.truncated !== (value.total > 20) ||
+      value.history.some(item => !validConsentItem(item)) ||
+      (value.current !== null && !validConsentItem(value.current)) ||
+      (value.current === null && (value.active || value.total !== 0 ||
+        value.history.length !== 0)) ||
+      (value.current !== null && (value.history.length === 0 ||
+        value.current.id !== value.history[0].id ||
+        value.current.revision !== value.history[0].revision ||
+        value.current.digest !== value.history[0].digest ||
+        value.active !== (value.current.action === 'grant')))) return null;
+  for (let index = 0; index + 1 < value.history.length; index += 1) {
+    if (value.history[index].previousId !== value.history[index + 1].id ||
+        value.history[index].revision !== value.history[index + 1].revision + 1) return null;
+  }
+  if (value.current !== null && (value.current.revision !== value.total ||
+      (value.total === value.history.length &&
+        value.history.at(-1).previousId !== null))) return null;
   const project = item => item && ({ id: item.id, revision: item.revision,
     action: item.action, digest: item.digest, createdAt: item.createdAt,
     reason: item.reason, sourceScope: item.sourceScope,
@@ -76,6 +117,28 @@ function safeConsent(value) {
   retentionVerified: false, forecastIssued: false };
 }
 
+function validSource(item) {
+  return item && item.sourceKind === 'retell_call' &&
+    UUID.test(item.sourceId || '') && item.revision === 1 &&
+    DIGEST.test(item.digest || '') && item.state === 'active' &&
+    INSTANT.test(item.recordedAt || '') &&
+    (item.eventAt === null || INSTANT.test(item.eventAt || ''));
+}
+
+function validCurrentSnapshot(value, organizationId, requireReadFlags) {
+  return value && UUID.test(value.id || '') &&
+    value.version === SNAPSHOT_VERSION && value.organizationId === organizationId &&
+    value.purposeKey === PURPOSE && value.targetKey === TARGET &&
+    INSTANT.test(value.asOf || '') && INSTANT.test(value.capturedAt || '') &&
+    value.asOf === value.capturedAt && UUID.test(value.sourceConsentId || '') &&
+    DIGEST.test(value.sourceConsentDigest || '') &&
+    value.identityBoundary === SNAPSHOT_BOUNDARY &&
+    DIGEST.test(value.sourceSnapshotDigest || '') && Array.isArray(value.sources) &&
+    value.sources.length <= 1000 && value.sourceCount === value.sources.length &&
+    !value.sources.some(item => !validSource(item)) &&
+    (!requireReadFlags || (value.stale === false && value.refreshRequired === false));
+}
+
 function createForecastDemandSourcesRouter(options = {}) {
   const router = express.Router();
   const poolProvider = options.poolProvider || (() => db.getPool());
@@ -85,6 +148,8 @@ function createForecastDemandSourcesRouter(options = {}) {
     `forecast-demand-source:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
   const captureThrottle = options.captureThrottle || rateLimit('forecast-source-capture', req =>
     `forecast-demand-source-capture:${req.tenantContext.organizationId}`);
+  const reviewThrottle = options.reviewThrottle || rateLimit('forecast-source-review', req =>
+    `forecast-demand-source-review:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
 
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
@@ -99,6 +164,8 @@ function createForecastDemandSourcesRouter(options = {}) {
     try {
       client = await poolProvider().connect();
       await client.query(`BEGIN ISOLATION LEVEL ${isolation}`);
+      await client.query("SET LOCAL statement_timeout = '10000ms'");
+      await client.query("SET LOCAL lock_timeout = '2000ms'");
       const identity = [req.tenantContext.organizationId,
         req.tenantContext.userId, req.userRole, req.authSession.id];
       const value = (await client.query(sql, [...identity, ...params])).rows[0]?.value;
@@ -126,7 +193,8 @@ function createForecastDemandSourcesRouter(options = {}) {
   router.post('/retell/consent', auth, requirePermission('forecast', 'update'),
     captureThrottle, async (req, res) => {
       const body = req.body, key = req.get('Idempotency-Key');
-      if (!exact(body, ['action', 'expectedRevision', 'expectedDigest', 'reason',
+      if (!exact(req.query, []) ||
+          !exact(body, ['action', 'expectedRevision', 'expectedDigest', 'reason',
         'confirmed', 'confirmationVersion']) ||
           !['grant', 'revoke'].includes(body.action) ||
           !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0 ||
@@ -141,11 +209,12 @@ function createForecastDemandSourcesRouter(options = {}) {
         sql: 'SELECT public.canonical_forecast_retell_source_consent_mutate($1,$2,$3,$4,$5,$6,$7::jsonb) value',
         params: [req.get('X-CSRF-Token'), key, JSON.stringify(body)],
         validate(value) {
-          if (!value || !UUID.test(value.consent?.id || '') ||
-              !DIGEST.test(value.consent?.digest || '') ||
-              !Number.isSafeInteger(value.consent?.revision) ||
+          if (!value || !validConsentItem(value.consent) ||
               value.consent.action !== body.action || typeof value.replayed !== 'boolean' ||
-              typeof value.current !== 'boolean' || typeof value.active !== 'boolean') return null;
+              typeof value.current !== 'boolean' || typeof value.active !== 'boolean' ||
+              value.active !== (value.current && value.consent.action === 'grant')) {
+            return null;
+          }
           return { state: value.active ? 'company_permission_active' :
             'company_permission_inactive', consentId: value.consent.id,
           revision: value.consent.revision, digest: value.consent.digest,
@@ -159,7 +228,9 @@ function createForecastDemandSourcesRouter(options = {}) {
   router.post('/retell/snapshots', auth, requirePermission('forecast', 'update'),
     captureThrottle, async (req, res) => {
       const key = req.get('Idempotency-Key');
-      if (!exact(req.body, []) || !KEY.test(key || '')) return invalid(res);
+      if (!exact(req.query, []) || !exact(req.body, []) || !KEY.test(key || '')) {
+        return invalid(res);
+      }
       return run(req, res, { isolation: 'SERIALIZABLE', write: true,
         sql: 'SELECT public.canonical_forecast_retell_call_snapshot_capture($1,$2,$3,$4,$5,$6) value',
         params: [req.get('X-CSRF-Token'), key], validate(value) {
@@ -177,11 +248,8 @@ function createForecastDemandSourcesRouter(options = {}) {
               providerCoverageVerified: false, retentionVerified: false,
               historicalCoverageVerified: false, forecastIssued: false };
           }
-          if (!DIGEST.test(snapshot.sourceSnapshotDigest || '') ||
-              !Array.isArray(snapshot.sources) || snapshot.sources.length > 1000 ||
-              snapshot.sourceCount !== snapshot.sources.length ||
-              snapshot.sources.some(item => !UUID.test(item?.sourceId || '') ||
-                !DIGEST.test(item?.digest || ''))) return null;
+          if (!validCurrentSnapshot(snapshot,
+            req.tenantContext.organizationId, false)) return null;
           return { state: 'retell_call_source_recorded', snapshotId: snapshot.id,
           sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
           sourceCount: snapshot.sourceCount, replayed: value.replayed,
@@ -210,13 +278,8 @@ function createForecastDemandSourcesRouter(options = {}) {
               providerCoverageVerified: false, retentionVerified: false,
               forecastIssued: false };
           }
-          if (value.refreshRequired !== false ||
-              !DIGEST.test(value.sourceSnapshotDigest || '') ||
-              value.sources.some(item => !UUID.test(item?.sourceId || '') ||
-                !DIGEST.test(item?.digest || '') || item.sourceKind !== 'retell_call' ||
-                !['active'].includes(item.state) ||
-                (item.eventAt !== null && !INSTANT.test(item.eventAt || '')) ||
-                !INSTANT.test(item.recordedAt || ''))) return null;
+          if (!validCurrentSnapshot(value,
+            req.tenantContext.organizationId, true)) return null;
           return { state: 'retell_call_source_current', snapshotId: value.id,
             sourceSnapshotDigest: value.sourceSnapshotDigest,
             sources: value.sources.map(item => ({ callSourceId: item.sourceId,
@@ -278,11 +341,11 @@ function createForecastDemandSourcesRouter(options = {}) {
     });
 
   router.post('/retell/snapshots/:snapshotId/reviews/:callSourceId', auth,
-    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+    requirePermission('forecast', 'update'), reviewThrottle, async (req, res) => {
       const body = req.body, key = req.get('Idempotency-Key');
       const keys = ['expectedSourceDigest', 'expectedRevision', 'expectedDigest',
         'disposition', 'anchorCallSourceId', 'reason', 'confirmed', 'confirmationVersion'];
-      if (!UUID.test(req.params.snapshotId || '') ||
+      if (!UUID.test(req.params.snapshotId || '') || !exact(req.query, []) ||
           !UUID.test(req.params.callSourceId || '') || !exact(body, keys) ||
           !DIGEST.test(body.expectedSourceDigest || '') ||
           !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0 ||
@@ -326,9 +389,20 @@ function createForecastDemandSourcesRouter(options = {}) {
         return invalid(res);
       }
       try {
-        const value = await readReviewed({ pool: poolProvider(), actor: actor(req),
-          snapshotId: req.params.snapshotId.toLowerCase(),
-          startsAt: req.query.startsAt, endsAt: req.query.endsAt });
+        const client = await poolProvider().connect();
+        let value;
+        try {
+          await client.query('BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY');
+          await client.query("SET LOCAL statement_timeout = '10000ms'");
+          await client.query("SET LOCAL lock_timeout = '2000ms'");
+          value = await readReviewed({ pool: client, actor: actor(req),
+            snapshotId: req.params.snapshotId.toLowerCase(),
+            startsAt: req.query.startsAt, endsAt: req.query.endsAt });
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK').catch(() => {});
+          throw error;
+        } finally { client.release(); }
         if (!value || !['unavailable', 'reviewed_source_only'].includes(value.state) ||
             (value.state === 'unavailable' &&
               (typeof value.reason !== 'string' || value.reason.length === 0)) ||

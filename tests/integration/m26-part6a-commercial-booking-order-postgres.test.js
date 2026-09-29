@@ -163,10 +163,140 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       }
     }
     const bookingRoute = '/api/v1/forecast/booking-reviews';
+    const beforeReviewCandidates = await request(f.app)
+      .get(`${bookingRoute}/candidates`).set(actor.session.headers);
+    expect(beforeReviewCandidates.status).toBe(200);
+    expect(beforeReviewCandidates.body.data).toMatchObject({
+      state: 'booking_review_candidates_observed', candidateCount: 1,
+      recentWindowOnly: true, recentApprovalWindowLimit: 100,
+      writeRechecksCurrentness: true, bookedWorkVerified: false,
+      completePeriodVerified: false, forecastIssued: false });
+    expect(beforeReviewCandidates.body.data.candidates[0]).toMatchObject({
+      approvalId: matchingApprovalId, appointmentId: appointment });
+    const lineageIndexes = (await f.ownerPool.query(
+      `SELECT indexname,indexdef FROM pg_indexes
+        WHERE schemaname='public' AND indexname=ANY($1::text[])
+        ORDER BY indexname`, [[
+        'canonical_forecast_delivery_events_tenant_estimate_kind_idx',
+        'canonical_forecast_estimates_tenant_opportunity_idx',
+      ]])).rows;
+    expect(lineageIndexes.map(row => row.indexname)).toEqual([
+      'canonical_forecast_delivery_events_tenant_estimate_kind_idx',
+      'canonical_forecast_estimates_tenant_opportunity_idx',
+    ]);
+    expect(lineageIndexes[0].indexdef).toContain(
+      '(organization_id, estimate_id, kind, id)');
+    expect(lineageIndexes[1].indexdef).toContain(
+      '(organization_id, opportunity_id, id)');
+    const oversizedApprovalHistory = await f.ownerPool.connect();
+    try {
+      await oversizedApprovalHistory.query('BEGIN');
+      await oversizedApprovalHistory.query(
+        `CREATE TEMP TABLE synthetic_booking_approval_ids ON COMMIT DROP AS
+         SELECT gen_random_uuid() id,gen_random_uuid() preview_id,value
+           FROM generate_series(1,1001) value`);
+      await oversizedApprovalHistory.query(
+        `INSERT INTO canonical_schedule_mutation_previews
+         SELECT (jsonb_populate_record(
+           NULL::canonical_schedule_mutation_previews,
+           to_jsonb(base) || jsonb_build_object(
+             'id', synthetic.preview_id
+           ))).*
+           FROM canonical_schedule_mutation_previews base
+           JOIN canonical_schedule_human_approvals approval
+             ON approval.organization_id=base.organization_id
+              AND approval.preview_id=base.id
+           CROSS JOIN synthetic_booking_approval_ids synthetic
+          WHERE approval.organization_id=$1 AND approval.id=$2`,
+        [f.org, matchingApprovalId]);
+      await oversizedApprovalHistory.query(
+        'ALTER TABLE canonical_schedule_human_approvals DISABLE TRIGGER USER');
+      await oversizedApprovalHistory.query(
+        `INSERT INTO canonical_schedule_human_approvals
+         SELECT (jsonb_populate_record(
+           NULL::canonical_schedule_human_approvals,
+           to_jsonb(base) || jsonb_build_object(
+             'id', synthetic.id,
+             'preview_id', synthetic.preview_id,
+             'idempotency_key_hash', md5(
+               'm26-booking-history-key-' || synthetic.value::text) ||
+               md5('m26-booking-history-key-b-' || synthetic.value::text),
+             'approved_at', to_jsonb(base.approved_at -
+               make_interval(secs => synthetic.value + 10))
+           ))).*
+           FROM canonical_schedule_human_approvals base
+           CROSS JOIN synthetic_booking_approval_ids synthetic
+          WHERE base.organization_id=$1 AND base.id=$2`,
+        [f.org, matchingApprovalId]);
+      await oversizedApprovalHistory.query(
+        'ALTER TABLE canonical_forecast_booking_approval_orders DISABLE TRIGGER USER');
+      await oversizedApprovalHistory.query(
+        `INSERT INTO canonical_forecast_booking_approval_orders(
+           organization_id,appointment_id,approval_id,source_order,observed_at)
+         SELECT $1,$2,synthetic.id,
+                nextval('canonical_forecast_booking_approval_order_sequence'),clock_timestamp()
+           FROM synthetic_booking_approval_ids synthetic`,
+        [f.org, appointment]);
+      await oversizedApprovalHistory.query(
+        `UPDATE canonical_forecast_booking_approval_orders
+            SET source_order=nextval('canonical_forecast_booking_approval_order_sequence')
+          WHERE organization_id=$1 AND approval_id=$2`,
+        [f.org, matchingApprovalId]);
+      const oversized = (await oversizedApprovalHistory.query(
+        'SELECT public.canonical_forecast_booking_review_candidates($1,$2,$3,$4) value',
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]))
+        .rows[0].value;
+      expect(oversized).toMatchObject({
+        state: 'booking_review_candidates_observed', candidateCount: 0,
+        writeRechecksCurrentness: true, bookedWorkVerified: false });
+    } finally {
+      await oversizedApprovalHistory.query('ROLLBACK');
+      oversizedApprovalHistory.release();
+    }
+    const candidateLaterLink = await post('/customer-estimate-links', {
+      versionId: issuedVersionId, expiresInDays: 14,
+      confirmed: true, confirmationVersion: 'customer-estimate-delivery-v1',
+    });
+    expect(candidateLaterLink.status).toBe(201);
+    const laterCandidateAcceptance = await f.ownerPool.connect();
+    try {
+      await laterCandidateAcceptance.query('BEGIN');
+      await laterCandidateAcceptance.query(
+        `INSERT INTO canonical_customer_estimate_delivery_events(
+           organization_id,estimate_id,version_id,link_id,kind,body,actor_user_id,
+           request_key_hash,request_digest,digest)
+         SELECT organization_id,estimate_id,version_id,id,'accepted',
+                $2::jsonb,NULL,$3,$4,$5
+           FROM canonical_customer_estimate_delivery_links WHERE id=$1`,
+        [candidateLaterLink.body.data.link.id,
+          JSON.stringify({ customerName: 'Later candidate customer', confirmed: true,
+            confirmationVersion: 'customer-estimate-accept-v1' }),
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex')]);
+      const superseded = (await laterCandidateAcceptance.query(
+        'SELECT public.canonical_forecast_booking_review_candidates($1,$2,$3,$4) value',
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]))
+        .rows[0].value;
+      expect(superseded).toMatchObject({
+        state: 'booking_review_candidates_observed', candidateCount: 0,
+        writeRechecksCurrentness: true, bookedWorkVerified: false });
+    } finally {
+      await laterCandidateAcceptance.query('ROLLBACK');
+      laterCandidateAcceptance.release();
+    }
+    expect((await request(f.app).get(`${bookingRoute}/candidates`)
+      .set(f.actors.otherOwner.session.headers)).body.data).toMatchObject({
+      state: 'booking_review_candidates_observed', candidateCount: 0,
+      recentWindowOnly: true, recentApprovalWindowLimit: 100 });
+    expect((await request(f.app).get(`${bookingRoute}/candidates`)
+      .set(f.actors.member.session.headers)).status).toBe(403);
     const firstWrite = await request(f.app).post(`${bookingRoute}/first`)
       .set(actor.session.headers).set('Idempotency-Key', reviewParams[6])
       .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
     expect(firstWrite.status).toBe(201);
+    expect((await request(f.app).get(`${bookingRoute}/candidates`)
+      .set(actor.session.headers)).body.data).toMatchObject({
+      state: 'booking_review_candidates_observed', candidateCount: 0 });
     const firstReview = firstWrite.body.data;
     expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
       replayed: false,

@@ -32,7 +32,7 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
       measurement?.backtestDigest !== backtest.digest ||
       !Number.isInteger(window.distinctSourceSnapshotCount) ||
       window.distinctSourceSnapshotCount < 0 ||
-      window.distinctSourceSnapshotCount > 60 ||
+      window.distinctSourceSnapshotCount > window.origins.length ||
       !referenceMeasurement || !laterMeasurement) invalid();
   const startsAt = Date.parse(window.windowStart);
   const endsAt = Date.parse(window.windowEnd);

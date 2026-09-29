@@ -115,6 +115,7 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
       eligibility: 'matching_context' });
     duplicated.window.storedOriginCount = 61;
     duplicated.window.matchingContextCount = 61;
+    duplicated.window.distinctSourceSnapshotCount = 61;
     duplicated.measurement.comparisonCount = 61;
     duplicated.measurement.statusCounts.paired = 61;
     expect(assess(duplicated).sampleSufficiency.reason)

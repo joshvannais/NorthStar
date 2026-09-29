@@ -690,6 +690,7 @@ function createForecastPriceHistoryRouter(options = {}) {
             baseRunId: captured.baseRunId,
             algorithmVersion: captured.algorithmVersion,
             selectionEventId: captured.selectionEventId || null,
+            stagedEventId: captured.stagedEventId || null,
             replayed: captured.replayed === true, researchOnly: true,
             forecastServingEnabled: false, realForecastEligible: false,
             forecastValueAvailable: false, output: null } });
@@ -740,6 +741,7 @@ function createForecastPriceHistoryRouter(options = {}) {
         return res.json({ success: true, data: {
           state: proof.state, selectionReceiptId: proof.selectionReceiptId,
           runId: proof.runId, algorithmVersion: proof.algorithmVersion,
+          stagedEventId: proof.stagedEventId || null,
           preHorizonCommitVerified: true, replayed: proof.replayed === true,
           researchOnly: true, forecastServingEnabled: false,
           realForecastEligible: false, forecastValueAvailable: false } });

@@ -1108,6 +1108,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selected_origin_saved',
         algorithmVersion: 'm26_price_flow_zero_baseline_v1',
         selectionEventId: selected.body.data.eventId,
+        stagedEventId: staged.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false,
         realForecastEligible: false, forecastValueAvailable: false,
         output: null, replayed: false });
@@ -1117,14 +1118,15 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(new Set(concurrent.map(value => value.body.data.runId)).size).toBe(1);
       const privateSelected = await f.ownerPool.query(`
         SELECT o.output->>'calculationVersion' algorithm,
-          r.forecast_serving_enabled serving
+          r.forecast_serving_enabled serving, r.staged_event_id staged_event_id
         FROM canonical_forecast_price_flow_research_selected_origins r
         JOIN canonical_forecast_price_flow_saved_origins o
           ON o.organization_id=r.organization_id AND o.id=r.selected_run_id
         WHERE r.organization_id=$1 AND r.selected_run_id=$2`,
       [f.org, selectedOrigin.body.data.runId]);
       expect(privateSelected.rows[0]).toMatchObject({
-        algorithm: 'm26_price_flow_zero_baseline_v1', serving: false });
+        algorithm: 'm26_price_flow_zero_baseline_v1', serving: false,
+        staged_event_id: staged.body.data.eventId });
       const pendingClient = await f.runtimePool.connect();
       try {
         await pendingClient.query('BEGIN');
@@ -1196,12 +1198,20 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selected_origin_activated',
         selectionReceiptId: selectedOrigin.body.data.selectionReceiptId,
         runId: selectedOrigin.body.data.runId,
+        stagedEventId: staged.body.data.eventId,
         preHorizonCommitVerified: true, researchOnly: true,
         forecastServingEnabled: false, realForecastEligible: false });
       const activationReplay = await request(f.app).post(activationRoute)
         .set(owner.session.headers).send({});
       expect(activationReplay.status).toBe(200);
       expect(activationReplay.body.data.replayed).toBe(true);
+      const notYetActivated = (await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+        [...args, owner.csrfToken, key(), futureBaseId])).rows[0].value;
+      expect(notYetActivated).toMatchObject({
+        state: 'research_selected_origin_saved',
+        stagedEventId: staged.body.data.eventId,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1' });
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_research_selected_origins WHERE organization_id=$1',
         [f.org])).rejects.toMatchObject({ code: '42501' });
@@ -1245,6 +1255,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(awaitingStagedRollback.body.data).toMatchObject({
         state: 'staged_algorithm_unavailable',
         reason: 'review_choice_changed', algorithmVersion: null });
+      const noFirstActivationAfterChoiceChange = await request(f.app)
+        .post(`${selectedOriginRoute}/${notYetActivated.selectionReceiptId}/activate`)
+        .set(owner.session.headers).send({});
+      expect(noFirstActivationAfterChoiceChange.status).toBe(200);
+      expect(noFirstActivationAfterChoiceChange.body.data).toMatchObject({
+        state: 'research_selected_origin_unavailable',
+        reason: 'staged_choice_changed', preHorizonCommitVerified: false });
       const stagedRollback = await request(f.app).post(stagingRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send({ expectedRevision: 1,
@@ -1271,6 +1288,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selected_origin_saved',
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         selectionEventId: rolledBack.body.data.eventId,
+        stagedEventId: stagedRollback.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false });
       const secondCandidateRequest = {
         expectedRevision: 2, action: 'select_candidate',

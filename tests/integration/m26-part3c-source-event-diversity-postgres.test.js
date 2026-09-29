@@ -325,6 +325,13 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
         expect(actual.rows[0].value).toMatchObject({
           state: 'price_flow_actual_recorded', actualState: 'known',
           selectedSourceFinalizedAtCapture: true });
+        const commitObservation = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_observe_price_flow_actual_commit($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken, actual.rows[0].value.receiptId]);
+        expect(commitObservation.rows[0].value).toMatchObject({
+          state: 'price_flow_actual_commit_observed', runId,
+          receiptId: actual.rows[0].value.receiptId,
+        });
       }
       const paired = await request(f.app)
         .get(`${root}/complete-price-flow-evaluation-window`)

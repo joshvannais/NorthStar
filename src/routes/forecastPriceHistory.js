@@ -98,6 +98,25 @@ function createForecastPriceHistoryRouter(options = {}) {
     next();
   });
 
+  const lockPriceFlowActualRuns = async (client, organizationId, runIds) => {
+    if (!Array.isArray(runIds) || runIds.some(runId => !UUID.test(runId || '')) ||
+        new Set(runIds).size !== runIds.length) {
+      throw new Error('Invalid guarded evaluation origin');
+    }
+    const acquired = (await client.query(`
+      SELECT COALESCE(bool_and(acquired),TRUE) acquired FROM (
+        SELECT pg_try_advisory_xact_lock(hashtextextended(
+          'm26:price-flow-actual:'||$1::text||':'||input.run_id::text,0)) acquired
+        FROM unnest($2::uuid[]) AS input(run_id)
+        ORDER BY input.run_id
+      ) selected_actual_locks`, [organizationId, runIds])).rows[0]?.acquired;
+    if (acquired !== true) {
+      const busy = new Error('Price-flow evaluation actuals are busy');
+      busy.code = '55P03';
+      throw busy;
+    }
+  };
+
   // A separate transaction must observe the first ordered receipt committed
   // before its prospective source coverage can be used for a local period.
   router.post('/ordered-anchor/activate', auth,
@@ -900,6 +919,25 @@ function createForecastPriceHistoryRouter(options = {}) {
           throw new Error('Invalid saved price-flow actual');
         }
         await client.query('COMMIT');
+        if (value.state === 'price_flow_actual_recorded') {
+          // The receipt writer must commit before a later transaction records
+          // durable commit evidence. That witness remains valid after xid
+          // status retention expires.
+          await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+          await client.query("SET LOCAL statement_timeout = '10000ms'");
+          await client.query("SET LOCAL lock_timeout = '2000ms'");
+          const observed = (await client.query(
+            'SELECT public.canonical_forecast_observe_price_flow_actual_commit($1,$2,$3,$4,$5,$6) value',
+            [identity.organizationId, identity.actorUserId,
+              identity.actorAccessRole, identity.authSessionId,
+              req.get('X-CSRF-Token'), value.receiptId])).rows[0]?.value;
+          if (observed?.state !== 'price_flow_actual_commit_observed' ||
+              observed.receiptId !== value.receiptId ||
+              observed.runId !== req.params.runId) {
+            throw new Error('Invalid price-flow actual commit observation');
+          }
+          await client.query('COMMIT');
+        }
         return res.status(value.state === 'price_flow_actual_recorded' &&
           !value.replayed ? 201 : 200).json({ success: true,
           data: { ...value, amount: null, firstApprovalCount: null,
@@ -1179,20 +1217,42 @@ function createForecastPriceHistoryRouter(options = {}) {
         await client.query("SET LOCAL statement_timeout = '10000ms'");
         await client.query("SET LOCAL lock_timeout = '2000ms'");
         const identity = actor(req);
+        const initialSource = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_evaluation_private_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (initialSource?.state === 'evaluation_measurement_unavailable') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'evaluation_measurement_unavailable',
+            reason: initialSource.reason, realAccuracyAvailable: false,
+          } });
+        }
+        if (initialSource?.state !== 'evaluation_measurement_source_verified' ||
+            initialSource.evaluationId !== req.params.evaluationId ||
+            !Array.isArray(initialSource.manifest?.origins) ||
+            initialSource.manifest.origins.length !== 2) {
+          throw new Error('Invalid guarded evaluation measurement source');
+        }
+        const selectedRunIds = initialSource.manifest.origins.map(
+          item => item.forecastRunId);
+        // The first read selects the immutable run identities only. Lock every
+        // actual writer before re-reading any status or population value, so
+        // missing-to-known and correction races cannot mix two snapshots.
+        await lockPriceFlowActualRuns(client, identity.organizationId,
+          selectedRunIds);
         const source = (await client.query(
           'SELECT public.canonical_forecast_price_flow_evaluation_private_read($1,$2,$3,$4,$5) value',
           [identity.organizationId, identity.actorUserId,
             identity.actorAccessRole, identity.authSessionId,
             req.params.evaluationId])).rows[0]?.value;
-        if (source?.state === 'evaluation_measurement_unavailable') {
-          await client.query('COMMIT');
-          return res.json({ success: true, data: {
-            state: 'evaluation_measurement_unavailable',
-            reason: source.reason, realAccuracyAvailable: false,
-          } });
-        }
         if (source?.state !== 'evaluation_measurement_source_verified' ||
-            source.evaluationId !== req.params.evaluationId) {
+            source.evaluationId !== req.params.evaluationId ||
+            !Array.isArray(source.manifest?.origins) ||
+            source.manifest.origins.length !== 2 ||
+            source.manifest.origins.map(item => item.forecastRunId).sort()
+              .join(',') !== [...selectedRunIds].sort().join(',')) {
           throw new Error('Invalid guarded evaluation measurement source');
         }
         const population = (await client.query(
@@ -1282,19 +1342,8 @@ function createForecastPriceHistoryRouter(options = {}) {
         // The actual writer uses the same per-run transaction lock. Acquire
         // every selected lock in deterministic order before reading any run,
         // so a concurrent correction cannot mix old and new actual revisions.
-        const actualLocks = (await client.query(`
-          SELECT COALESCE(bool_and(acquired),TRUE) acquired FROM (
-            SELECT pg_try_advisory_xact_lock(hashtextextended(
-              'm26:price-flow-actual:'||$1::text||':'||input.run_id::text,0)) acquired
-            FROM unnest($2::uuid[]) AS input(run_id)
-            ORDER BY input.run_id
-          ) selected_actual_locks`,
-        [identity.organizationId, matchingRunIds])).rows[0]?.acquired;
-        if (actualLocks !== true) {
-          const busy = new Error('Price-flow evaluation actuals are busy');
-          busy.code = '55P03';
-          throw busy;
-        }
+        await lockPriceFlowActualRuns(client, identity.organizationId,
+          matchingRunIds);
         const runs = [];
         const outcomes = [];
         for (const item of matchingOrigins) {

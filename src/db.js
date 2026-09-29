@@ -1589,6 +1589,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_actual(uuid,uuid,text,uuid,text,text,uuid,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_actual_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_actual_commit_observations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_actual_commit_observations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_observe_price_flow_actual_commit(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_profile_witnesses') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_profile_witnesses FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_profile_observe(uuid,uuid,text,uuid,text,uuid,uuid) TO %I', runtime_role);
@@ -2660,6 +2664,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_origin_activations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_decision_commit_observations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_actual_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_actual_commit_observations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_profile_witnesses','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_evaluations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_origin_immutable()','EXECUTE')
@@ -2671,6 +2676,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND has_function_privilege($1,'public.canonical_forecast_price_flow_actual_candidate(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_actual(uuid,uuid,text,uuid,text,text,uuid,uuid)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_flow_actual_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_observe_price_flow_actual_commit(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_flow_profile_observe(uuid,uuid,text,uuid,text,uuid,uuid)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_flow_profile_witness_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_flow_pair_source_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
@@ -3239,6 +3245,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('179_canonical_forecast_guarded_evaluation_
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('180_canonical_forecast_price_flow_evaluation_population.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('181_canonical_forecast_price_flow_complete_window.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('182_canonical_forecast_price_flow_event_diversity.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('183_canonical_forecast_price_flow_actual_commit_observation.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

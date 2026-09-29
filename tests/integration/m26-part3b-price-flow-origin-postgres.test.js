@@ -1005,6 +1005,9 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_actual_receipts'))
         .rejects.toMatchObject({ code: '42501' });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_actual_commit_observations'))
+        .rejects.toMatchObject({ code: '42501' });
       const estimate = f.estimateGraphs[0].ids.estimate;
       const route = `/api/v1/canonical/estimates/${estimate}`;
       const current = await request(f.app).get(`${route}/review`)
@@ -1204,5 +1207,20 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
          WHERE run_id=$1 ORDER BY revision`, [runId]);
       expect(history.rows.map(row => row.state)).toEqual(['known', 'revoked']);
       expect(history.rows[0].amount).toBe('1400.00');
+      const heldActualWriter = await f.runtimePool.connect();
+      try {
+        await heldActualWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await heldActualWriter.query(`SELECT pg_advisory_xact_lock(
+          hashtextextended('m26:price-flow-actual:'||$1::text||':'||$2::text,0))`,
+        [f.org, runId]);
+        const busyMeasurement = await request(f.app)
+          .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect(busyMeasurement.status).toBe(409);
+        expect(busyMeasurement.body.error.category).toBe('FORECAST_SOURCE_BUSY');
+      } finally {
+        await heldActualWriter.query('ROLLBACK').catch(() => {});
+        heldActualWriter.release();
+      }
     }, 120000);
 });

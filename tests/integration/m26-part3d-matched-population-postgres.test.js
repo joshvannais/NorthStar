@@ -57,6 +57,24 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missingSelectedOrigin.release();
       }
 
+      const missingSelectedActivation = await f.ownerPool.connect();
+      try {
+        await missingSelectedActivation.query('BEGIN');
+        await missingSelectedActivation.query(`ALTER FUNCTION
+          public.canonical_forecast_activate_research_selected_price_flow_origin(
+            uuid,uuid,text,uuid,text,uuid)
+          RENAME TO canonical_forecast_activate_research_selected_origin_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingSelectedActivation, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingSelectedActivation.query('ROLLBACK');
+      } catch (error) {
+        await missingSelectedActivation.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingSelectedActivation.release();
+      }
+
       const leaked = await f.ownerPool.connect();
       try {
         await leaked.query('BEGIN');
@@ -95,6 +113,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           'Runtime database role privilege verification failed');
         await leaked.query(`REVOKE SELECT ON
           canonical_forecast_price_flow_research_selected_origins FROM PUBLIC`);
+        await leaked.query(`GRANT SELECT ON
+          canonical_forecast_price_flow_research_selected_activations TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE SELECT ON
+          canonical_forecast_price_flow_research_selected_activations FROM PUBLIC`);
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
           { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
         await leaked.query('ROLLBACK');
@@ -710,8 +735,88 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       [f.org, selectedOrigin.body.data.runId]);
       expect(privateSelected.rows[0]).toMatchObject({
         algorithm: 'm26_price_flow_zero_baseline_v1', serving: false });
+      const pendingClient = await f.runtimePool.connect();
+      try {
+        await pendingClient.query('BEGIN');
+        const pending = await pendingClient.query(
+          'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(pending.rows[0].value.state).toBe('research_selected_origin_saved');
+        const premature = await pendingClient.query(
+          'SELECT public.canonical_forecast_activate_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken,
+            pending.rows[0].value.selectionReceiptId]);
+        expect(premature.rows[0].value).toMatchObject({
+          state: 'research_selected_origin_unavailable',
+          reason: 'selection_commit_not_observed',
+          preHorizonCommitVerified: false });
+        await pendingClient.query('SAVEPOINT released_selection');
+        const subtransactionPending = await pendingClient.query(
+          'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(subtransactionPending.rows[0].value.state)
+          .toBe('research_selected_origin_saved');
+        await pendingClient.query('RELEASE SAVEPOINT released_selection');
+        const subtransactionPremature = await pendingClient.query(
+          'SELECT public.canonical_forecast_activate_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken,
+            subtransactionPending.rows[0].value.selectionReceiptId]);
+        expect(subtransactionPremature.rows[0].value).toMatchObject({
+          state: 'research_selected_origin_unavailable',
+          reason: 'selection_commit_not_observed',
+          preHorizonCommitVerified: false });
+        await pendingClient.query('ROLLBACK');
+      } finally { pendingClient.release(); }
+      const profileLockCandidate = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+        [...args, owner.csrfToken, key(), futureBaseId]);
+      expect(profileLockCandidate.rows[0].value.state)
+        .toBe('research_selected_origin_saved');
+      const profileLockActivationRoute =
+        `${selectedOriginRoute}/${profileLockCandidate.rows[0].value.selectionReceiptId}/activate`;
+      const heldProfileWriter = await f.ownerPool.connect();
+      try {
+        await heldProfileWriter.query('BEGIN');
+        await heldProfileWriter.query(
+          `SELECT pg_advisory_xact_lock(hashtextextended(
+            'm26:profile-effective-source:'||$1::text,0))`, [f.org]);
+        const busyActivation = await request(f.app)
+          .post(profileLockActivationRoute).set(owner.session.headers).send({});
+        expect(busyActivation.status).toBe(409);
+        expect(busyActivation.body.error.category).toBe('FORECAST_SOURCE_BUSY');
+        await heldProfileWriter.query('ROLLBACK');
+      } catch (error) {
+        await heldProfileWriter.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        heldProfileWriter.release();
+      }
+      // Frozen/old tuple transaction status must not be needed to observe a
+      // commit. READ COMMITTED visibility plus same-transaction refusal is the
+      // durable rule.
+      await f.ownerPool.query(
+        'VACUUM (FREEZE) canonical_forecast_price_flow_research_selected_origins');
+      await f.ownerPool.query(
+        'VACUUM (FREEZE) canonical_forecast_price_flow_saved_origins');
+      const activationRoute = `${selectedOriginRoute}/${selectedOrigin.body.data.selectionReceiptId}/activate`;
+      const selectedActivation = await request(f.app).post(activationRoute)
+        .set(owner.session.headers).send({});
+      expect(selectedActivation.status).toBe(200);
+      expect(selectedActivation.body.data).toMatchObject({
+        state: 'research_selected_origin_activated',
+        selectionReceiptId: selectedOrigin.body.data.selectionReceiptId,
+        runId: selectedOrigin.body.data.runId,
+        preHorizonCommitVerified: true, researchOnly: true,
+        forecastServingEnabled: false, realForecastEligible: false });
+      const activationReplay = await request(f.app).post(activationRoute)
+        .set(owner.session.headers).send({});
+      expect(activationReplay.status).toBe(200);
+      expect(activationReplay.body.data.replayed).toBe(true);
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_research_selected_origins WHERE organization_id=$1',
+        [f.org])).rejects.toMatchObject({ code: '42501' });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_research_selected_activations WHERE organization_id=$1',
         [f.org])).rejects.toMatchObject({ code: '42501' });
       const rollbackRequest = { expectedRevision: 1, action: 'rollback',
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
@@ -765,6 +870,15 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         expect(rejected.rows[0].value).toMatchObject({
           state: 'research_selected_origin_unavailable',
           reason: 'base_profile_source_changed',
+          forecastServingEnabled: false });
+        const activationRejected = await changedProfile.query(
+          'SELECT public.canonical_forecast_activate_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken,
+            profileLockCandidate.rows[0].value.selectionReceiptId]);
+        expect(activationRejected.rows[0].value).toMatchObject({
+          state: 'research_selected_origin_unavailable',
+          reason: 'base_profile_source_changed',
+          preHorizonCommitVerified: false,
           forecastServingEnabled: false });
         await changedProfile.query('ROLLBACK');
       } catch (error) {

@@ -672,6 +672,7 @@ function createForecastPriceHistoryRouter(options = {}) {
             realForecastEligible: false, forecastValueAvailable: false } });
         }
         if (captured?.state !== 'research_selected_origin_saved' ||
+            !UUID.test(captured.selectionReceiptId || '') ||
             !UUID.test(captured.runId || '') ||
             !UUID.test(captured.baseRunId || '') ||
             !['m26_price_flow_carry_forward_v1',
@@ -685,12 +686,63 @@ function createForecastPriceHistoryRouter(options = {}) {
         if (captured.replayed) res.set('Idempotency-Replayed', 'true');
         return res.status(captured.replayed ? 200 : 201).json({ success: true,
           data: { state: captured.state, runId: captured.runId,
+            selectionReceiptId: captured.selectionReceiptId,
             baseRunId: captured.baseRunId,
             algorithmVersion: captured.algorithmVersion,
             selectionEventId: captured.selectionEventId || null,
             replayed: captured.replayed === true, researchOnly: true,
             forecastServingEnabled: false, realForecastEligible: false,
             forecastValueAvailable: false, output: null } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/research-selected-origins/:selectionReceiptId/activate', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.selectionReceiptId || '') ||
+          !exactKeys(req.body, []) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The research activation request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const proof = (await client.query(
+          'SELECT public.canonical_forecast_activate_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'),
+            req.params.selectionReceiptId])).rows[0]?.value;
+        if (!proof || !['research_selected_origin_activated',
+          'research_selected_origin_unavailable'].includes(proof.state)) {
+          throw new Error('Invalid research activation proof');
+        }
+        await client.query('COMMIT');
+        if (proof.state === 'research_selected_origin_unavailable') {
+          return res.json({ success: true, data: {
+            state: proof.state, reason: proof.reason,
+            preHorizonCommitVerified: false, researchOnly: true,
+            forecastServingEnabled: false, realForecastEligible: false } });
+        }
+        if (proof.selectionReceiptId !== req.params.selectionReceiptId ||
+            proof.preHorizonCommitVerified !== true ||
+            proof.forecastServingEnabled !== false) {
+          throw new Error('Invalid research activation receipt');
+        }
+        return res.json({ success: true, data: {
+          state: proof.state, selectionReceiptId: proof.selectionReceiptId,
+          runId: proof.runId, algorithmVersion: proof.algorithmVersion,
+          preHorizonCommitVerified: true, replayed: proof.replayed === true,
+          researchOnly: true, forecastServingEnabled: false,
+          realForecastEligible: false, forecastValueAvailable: false } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

@@ -13,14 +13,17 @@ const key = () => crypto.randomUUID();
 const utc = value => new Date(value).toISOString();
 const preciseUtc = value => utc(value).replace('Z', '000Z');
 
-realPostgres('Mission 26 Part 3D matched algorithm population', () => {
+for (const scenario of ['flat', 'alternating', 'mixed']) {
+realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () => {
   let f;
   beforeAll(async () => { f = await createEstimateReviewFixture({
     operationalSchedule: true, additionalCompleteEstimates: 59,
   }); }, 300000);
   afterAll(async () => { if (f) await f.cleanup(); }, 300000);
 
-  test('startup refuses missing entries and inherited registry authority, then recovers',
+  const baselineTest = scenario === 'flat' ? test : test.skip;
+
+  baselineTest('startup refuses missing entries and inherited registry authority, then recovers',
     async () => {
       const missing = await f.ownerPool.connect();
       try {
@@ -183,6 +186,24 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missingPromotionReview.release();
       }
 
+      const missingSupportedExperiment = await f.ownerPool.connect();
+      try {
+        await missingSupportedExperiment.query('BEGIN');
+        await missingSupportedExperiment.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_supported_experiment_review(
+            uuid,uuid,text,uuid,uuid)
+          RENAME TO canonical_forecast_price_flow_supported_experiment_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingSupportedExperiment, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingSupportedExperiment.query('ROLLBACK');
+      } catch (error) {
+        await missingSupportedExperiment.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingSupportedExperiment.release();
+      }
+
       const missingActiveTables = await f.ownerPool.connect();
       try {
         await missingActiveTables.query('BEGIN');
@@ -279,7 +300,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
     }, 300000);
 
 
-  test('research review fails closed for incomplete, mistyped and null-lag population contracts',
+  baselineTest('research review fails closed for incomplete, mistyped and null-lag population contracts',
     async () => {
       const owner = f.actors.owner;
       const client = await f.ownerPool.connect();
@@ -460,7 +481,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       }
     }, 300000);
 
-  test('matched population scans use the bounded partial horizon indexes',
+  baselineTest('matched population scans use the bounded partial horizon indexes',
     async () => {
       const indexes = await f.ownerPool.query(`SELECT indexname FROM pg_indexes
         WHERE schemaname='public' AND indexname=ANY($1::text[])`, [[
@@ -501,7 +522,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       }
     }, 300000);
 
-  test('sixty fictional source-owned matched origins and actuals remain private and non-promoting',
+  test(`sixty fictional source-owned matched origins and actuals ${scenario}`,
     async () => {
       const owner = f.actors.owner;
       const args = [f.org, owner.actorUserId, owner.actorAccessRole,
@@ -580,7 +601,9 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
             .send({ action: 'approve', expectedRevision: 0,
               expectedDigest: 'none', sourcePins: review.body.data.pins,
               scopeSummary: `Fictional approval ${index + 1}.`,
-              priceBeforeTax: '1400.00',
+              priceBeforeTax: (scenario === 'alternating' ||
+                (scenario === 'mixed' && index < 30)) ?
+                (index % 4 < 2 ? '5000.00' : '1000.00') : '1400.00',
               currency: review.body.data.currency,
               reason: 'Fictional owner review.', confirmed: true,
               confirmationVersion: 'estimate-quote-preparation-v1' });
@@ -712,7 +735,11 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
             horizon: { startsAt: utc(horizon), endsAt: utc(horizonEnd),
               grain: 'day' },
             value: { kind: 'point', amount:
-              currentRunId === runIds[index] ? '1400.00' : '0.00' },
+              currentRunId === runIds[index] ?
+                ((scenario === 'alternating' ||
+                  (scenario === 'mixed' && index < 30)) ?
+                  (index % 4 < 2 ? '5000.00' : '1000.00') : '1400.00') :
+                '0.00' },
             evidenceCoverage: { included: 1, excluded: 0, missing: 0,
               stale: 0, conflicting: 0 } };
           const changed = await f.ownerPool.query(`
@@ -851,8 +878,10 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(promotionReview.body.data).toMatchObject({
         state: 'internal_experiment_review_ready',
         policyVersion: 'm26_selected_m24_promotion_policy_v1',
-        referenceDirection: 'candidate_higher_error',
-        laterDirection: 'candidate_higher_error',
+        referenceDirection: scenario !== 'flat' ?
+          'candidate_lower_error' : 'candidate_higher_error',
+        laterDirection: scenario === 'alternating' ?
+          'candidate_lower_error' : 'candidate_higher_error',
         internalExperimentReviewReady: true,
         internalExperimentOnly: true,
         productionPromotionEligible: false,
@@ -885,6 +914,38 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         internalExperimentOnly: true,
         productionPromotionEligible: false,
       });
+      const supportedReviewRoute =
+        `${root}/algorithm-supported-experiment-review?anchorRunId=${runIds[59]}`;
+      const supportedReview = await request(f.app).get(supportedReviewRoute)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(supportedReview.status).toBe(200);
+      expect(supportedReview.body.data).toMatchObject(
+        scenario === 'alternating' ? {
+          state: 'internal_experiment_support_ready',
+          referenceDirection: 'candidate_lower_error',
+          laterDirection: 'candidate_lower_error',
+          internalExperimentSupported: true,
+          internalExperimentOnly: true,
+          productionPromotionEligible: false,
+          paidNumericServing: false, realForecastEligible: false,
+          numericalErrorAvailable: false,
+        } : {
+          state: 'internal_experiment_support_unavailable',
+          reason: 'candidate_not_better_in_both_windows',
+          referenceDirection: scenario === 'mixed' ?
+            'candidate_lower_error' : 'candidate_higher_error',
+          laterDirection: 'candidate_higher_error',
+          internalExperimentSupported: false,
+          internalExperimentOnly: true,
+          productionPromotionEligible: false,
+          paidNumericServing: false, realForecastEligible: false,
+          numericalErrorAvailable: false,
+        });
+      expect(JSON.stringify(supportedReview.body.data))
+        .not.toMatch(/comparisonDigest|policyDigest|reviewDigest|"amount"|1400\.00/);
+      const deniedSupported = await request(f.app).get(supportedReviewRoute)
+        .set('Cookie', f.actors.member.session.headers.Cookie);
+      expect(deniedSupported.status).toBe(403);
       const promotionDenied = await request(f.app).get(promotionReviewRoute)
         .set('Cookie', f.actors.member.session.headers.Cookie);
       expect(promotionDenied.status).toBe(403);
@@ -896,6 +957,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         internalExperimentReviewReady: false,
         internalExperimentOnly: true,
         productionPromotionEligible: false });
+      if (scenario !== 'flat') return;
       const activeChallengeRoute = `${root}/algorithm-active-challenges`;
       const activeSelectionRoute = `${root}/algorithm-active-selections`;
       const promoteRequest = { anchorRunId: runIds[59], expectedRevision: 0,
@@ -2128,3 +2190,4 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         forecastServingEnabled: false });
     }, 600000);
 });
+}

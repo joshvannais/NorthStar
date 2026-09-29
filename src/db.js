@@ -1589,6 +1589,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_supported_experiment_review(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_supported_experiment_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_active_select(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_active_algorithms FROM %I', runtime_role);
@@ -2770,6 +2773,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND COALESCE(has_function_privilege($1,
             to_regprocedure('public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid)'),
             'EXECUTE'),FALSE)
+          AND COALESCE(has_function_privilege($1,
+            to_regprocedure('public.canonical_forecast_price_flow_supported_experiment_review(uuid,uuid,text,uuid,uuid)'),
+            'EXECUTE'),FALSE)
           AND (
             NOT has_table_privilege($1,'public.canonical_forecast_price_flow_active_algorithms','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND COALESCE(has_function_privilege($1,
@@ -3388,6 +3394,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('194_canonical_forecast_price_flow_promotio
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('195_canonical_forecast_price_flow_active_algorithm.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('196_canonical_forecast_price_flow_active_origin_execution.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('197_canonical_forecast_price_flow_internal_experiment.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('198_canonical_forecast_price_flow_supported_internal_experiment.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

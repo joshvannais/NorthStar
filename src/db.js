@@ -1589,6 +1589,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_stage_algorithm(uuid,uuid,text,uuid,text,text,integer,uuid,uuid,text,boolean)') IS NOT NULL AND
+         pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_staged_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_staged_algorithms FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_stage_algorithm(uuid,uuid,text,uuid,text,text,integer,uuid,uuid,text,boolean) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_staged_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_research_review(uuid,uuid,text,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_selections FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_key FROM %I', runtime_role);
@@ -2748,6 +2754,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND COALESCE(has_function_privilege($1,
             to_regprocedure('public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid)'),
             'EXECUTE'),FALSE)
+          AND (to_regclass('public.canonical_forecast_price_flow_staged_algorithms') IS NULL OR (
+            NOT has_table_privilege($1,'public.canonical_forecast_price_flow_staged_algorithms','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+            AND COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_price_flow_stage_algorithm(uuid,uuid,text,uuid,text,text,integer,uuid,uuid,text,boolean)'),
+              'EXECUTE'),FALSE)
+            AND COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_price_flow_staged_read(uuid,uuid,text,uuid,uuid)'),
+              'EXECUTE'),FALSE)
+          ))
           AND (to_regclass('public.canonical_forecast_price_flow_research_selections') IS NULL OR (
             NOT has_table_privilege($1,'public.canonical_forecast_price_flow_research_selections','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_research_key','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -3327,6 +3342,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('188_canonical_forecast_price_flow_research
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('189_canonical_forecast_price_flow_research_selection_activation.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('190_canonical_forecast_price_flow_fixed_review_population.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('191_canonical_forecast_price_flow_fixed_research_review.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('192_canonical_forecast_price_flow_staged_algorithm.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

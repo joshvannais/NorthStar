@@ -75,6 +75,42 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missingFixedPolicy.release();
       }
 
+      const missingStaging = await f.ownerPool.connect();
+      try {
+        await missingStaging.query('BEGIN');
+        await missingStaging.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_stage_algorithm(
+            uuid,uuid,text,uuid,text,text,integer,uuid,uuid,text,boolean)
+          RENAME TO canonical_forecast_price_flow_stage_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingStaging, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingStaging.query('ROLLBACK');
+      } catch (error) {
+        await missingStaging.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingStaging.release();
+      }
+
+      const missingStagedRead = await f.ownerPool.connect();
+      try {
+        await missingStagedRead.query('BEGIN');
+        await missingStagedRead.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_staged_read(
+            uuid,uuid,text,uuid,uuid)
+          RENAME TO canonical_forecast_price_flow_staged_read_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingStagedRead, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingStagedRead.query('ROLLBACK');
+      } catch (error) {
+        await missingStagedRead.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingStagedRead.release();
+      }
+
       const missingSelectedOrigin = await f.ownerPool.connect();
       try {
         await missingSelectedOrigin.query('BEGIN');
@@ -898,6 +934,121 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(selectionReceipt.rows[0]).toEqual({
         actor_user_id: owner.actorUserId,
         auth_session_id: owner.authSessionId });
+      const stagingRoute = `${root}/algorithm-staging`;
+      const stagedRequest = { expectedRevision: 0,
+        researchEventId: selected.body.data.eventId,
+        anchorRunId: runIds[59],
+        reason: 'Fictional owner stages the reviewed source comparison.',
+        confirmed: true };
+      // Even a fixed-review function reporting an older saved anchor as ready
+      // cannot bind that unrelated cohort to the current rolling selection.
+      const wrongCohort = await f.ownerPool.connect();
+      try {
+        await wrongCohort.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await wrongCohort.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_fixed_research_review(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            anchor_run_value uuid)
+          RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER
+          SET search_path=pg_catalog,public,pg_temp AS $$
+            SELECT jsonb_build_object(
+              'state','fixed_research_review_ready',
+              'anchorRunId',anchor_run_value,
+              'comparisonDigest',repeat('a',64),
+              'researchOnly',TRUE,'productionPromotionEligible',FALSE,
+              'forecastServingEnabled',FALSE)
+          $$`);
+        const rejected = await wrongCohort.query(
+          'SELECT public.canonical_forecast_price_flow_stage_algorithm($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+          [...args, owner.csrfToken, key(), 0, selected.body.data.eventId,
+            runIds[58],
+            'Fictional owner cannot stage an unrelated valid cohort.', true]);
+        expect(rejected.rows[0].value).toMatchObject({
+          state: 'algorithm_staging_unavailable',
+          reason: 'review_choice_cohort_changed',
+          forecastServingEnabled: false });
+        await wrongCohort.query('ROLLBACK');
+      } catch (error) {
+        await wrongCohort.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally { wrongCohort.release(); }
+      const stagedKey = key();
+      await f.ownerPool.query(`CREATE FUNCTION m26_staging_delay()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN PERFORM pg_sleep(2); RETURN NEW; END $$`);
+      await f.ownerPool.query(`CREATE TRIGGER m26_staging_delay
+        BEFORE INSERT ON canonical_forecast_price_flow_staged_algorithms
+        FOR EACH ROW EXECUTE FUNCTION m26_staging_delay()`);
+      let stagedConcurrent;
+      try {
+        stagedConcurrent = await Promise.all([1, 2].map(() => request(f.app)
+          .post(stagingRoute).set(owner.session.headers)
+          .set('Idempotency-Key', stagedKey).send(stagedRequest)));
+      } finally {
+        await f.ownerPool.query(`DROP TRIGGER m26_staging_delay
+          ON canonical_forecast_price_flow_staged_algorithms`);
+        await f.ownerPool.query('DROP FUNCTION m26_staging_delay()');
+      }
+      expect(stagedConcurrent.map(value => value.status).sort())
+        .toEqual([200, 201]);
+      const staged = stagedConcurrent.find(value => value.status === 201);
+      const stagedReplay = stagedConcurrent.find(value => value.status === 200);
+      expect(staged.body.data).toMatchObject({
+        state: 'algorithm_staged', revision: 1,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        forecastServingEnabled: false, forecastValueAvailable: false });
+      expect(stagedReplay.headers['idempotency-replayed']).toBe('true');
+      expect(stagedReplay.body.data).toMatchObject({
+        eventId: staged.body.data.eventId, replayed: true });
+      const stagedRead = await request(f.app)
+        .get(`${stagingRoute}/${runIds[59]}`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(stagedRead.status).toBe(200);
+      expect(stagedRead.body.data).toMatchObject({
+        state: 'staged_algorithm_current', revision: 1,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        forecastServingEnabled: false, forecastValueAvailable: false });
+      expect(JSON.stringify(stagedRead.body.data)).not.toContain('1400.00');
+      // A rolling-only evidence drift invalidates the stage even while its
+      // fixed cohort remains unchanged and ready.
+      const rollingDrift = await f.ownerPool.connect();
+      try {
+        await rollingDrift.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const currentPopulation = (await rollingDrift.query(
+          'SELECT public.canonical_forecast_price_flow_matched_population($1,$2,$3,$4,TRUE) value',
+          args)).rows[0].value;
+        const driftedPopulation = { ...currentPopulation,
+          windowEnd: '2099-01-01T00:00:00.000000Z' };
+        await rollingDrift.query(
+          "SELECT set_config('m26.test_population',$1,TRUE)",
+          [JSON.stringify(driftedPopulation)]);
+        await rollingDrift.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            include_pairs boolean)
+          RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER
+          SET search_path=pg_catalog,public,pg_temp AS $$
+            SELECT current_setting('m26.test_population')::jsonb
+          $$`);
+        const drifted = await rollingDrift.query(
+          'SELECT public.canonical_forecast_price_flow_staged_read($1,$2,$3,$4,$5) value',
+          [...args, runIds[59]]);
+        expect(drifted.rows[0].value).toMatchObject({
+          state: 'staged_algorithm_unavailable',
+          reason: 'staged_evidence_changed',
+          forecastServingEnabled: false });
+        await rollingDrift.query('ROLLBACK');
+      } catch (error) {
+        await rollingDrift.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally { rollingDrift.release(); }
+      const stagedMember = await request(f.app).post(stagingRoute)
+        .set(f.actors.member.session.headers).set('Idempotency-Key', key())
+        .send({ ...stagedRequest, expectedRevision: 1 });
+      expect(stagedMember.status).toBe(403);
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_staged_algorithms WHERE organization_id=$1',
+        [f.org])).rejects.toMatchObject({ code: '42501' });
       const replayed = await request(f.app).post(selectionRoute)
         .set(owner.session.headers).set('Idempotency-Key', selectedKey)
         .send(selectionBody);
@@ -1088,6 +1239,30 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selection_recorded', revision: 2,
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         researchOnly: true, forecastServingEnabled: false });
+      const awaitingStagedRollback = await request(f.app)
+        .get(`${stagingRoute}/${runIds[59]}`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(awaitingStagedRollback.body.data).toMatchObject({
+        state: 'staged_algorithm_unavailable',
+        reason: 'review_choice_changed', algorithmVersion: null });
+      const stagedRollback = await request(f.app).post(stagingRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ expectedRevision: 1,
+          researchEventId: rolledBack.body.data.eventId,
+          anchorRunId: runIds[59],
+          reason: 'Fictional owner stages rollback after source review.',
+          confirmed: true });
+      expect(stagedRollback.status).toBe(201);
+      expect(stagedRollback.body.data).toMatchObject({
+        state: 'algorithm_staged', revision: 2,
+        algorithmVersion: 'm26_price_flow_carry_forward_v1',
+        forecastServingEnabled: false });
+      const afterStagedRollback = await request(f.app)
+        .get(`${stagingRoute}/${runIds[59]}`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(afterStagedRollback.body.data).toMatchObject({
+        state: 'staged_algorithm_current', revision: 2,
+        algorithmVersion: 'm26_price_flow_carry_forward_v1' });
       const afterRollback = await request(f.app).post(selectedOriginRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send(selectedOriginBody);
@@ -1097,6 +1272,76 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         selectionEventId: rolledBack.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false });
+      const secondCandidateRequest = {
+        expectedRevision: 2, action: 'select_candidate',
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        reversesEventId: null,
+        reason: 'Fictional owner begins a second reviewed candidate cycle.' };
+      const secondChallenge = await request(f.app).post(challengeRoute)
+        .set(owner.session.headers).send(secondCandidateRequest);
+      expect(secondChallenge.status).toBe(200);
+      expect(secondChallenge.body.data.state).toBe('research_challenge_ready');
+      const secondSelected = await request(f.app).post(selectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ ...secondCandidateRequest,
+          reviewToken: secondChallenge.body.data.reviewToken,
+          confirmed: true });
+      expect(secondSelected.status).toBe(201);
+      expect(secondSelected.body.data).toMatchObject({
+        state: 'research_selection_recorded', revision: 3,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1' });
+      const secondStaged = await request(f.app).post(stagingRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ expectedRevision: 2,
+          researchEventId: secondSelected.body.data.eventId,
+          anchorRunId: runIds[59],
+          reason: 'Fictional owner stages the second reviewed candidate cycle.',
+          confirmed: true });
+      expect(secondStaged.status).toBe(201);
+      expect(secondStaged.body.data).toMatchObject({
+        state: 'algorithm_staged', revision: 3,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1' });
+      const secondStagedRead = await request(f.app)
+        .get(`${stagingRoute}/${runIds[59]}`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(secondStagedRead.body.data).toMatchObject({
+        state: 'staged_algorithm_current', revision: 3,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1' });
+
+      // A rollback row that reverses a different research selection cannot
+      // be attached to the latest staged candidate, even if all other source
+      // evidence is current.
+      const mismatchedRollback = await f.ownerPool.connect();
+      try {
+        await mismatchedRollback.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const currentReview = (await mismatchedRollback.query(
+          'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
+          args)).rows[0].value;
+        const forged = await mismatchedRollback.query(`INSERT INTO
+          canonical_forecast_price_flow_research_selections(
+            organization_id,revision,action,algorithm_version,
+            previous_algorithm_version,reversed_event_id,comparison_digest,
+            policy_version,reason,actor_user_id,auth_session_id,
+            request_key_hash,request_digest)
+          VALUES($1,4,'rollback','m26_price_flow_carry_forward_v1',
+            'm26_price_flow_zero_baseline_v1',$2,$3,
+            'm26_selected_m24_research_review_v1',
+            'Fictional mismatched rollback lineage for fail-closed proof.',
+            $4,$5,repeat('c',64),repeat('d',64)) RETURNING id`,
+        [f.org, selected.body.data.eventId, currentReview.comparisonDigest,
+          owner.actorUserId, owner.authSessionId]);
+        await expect(mismatchedRollback.query(
+          'SELECT public.canonical_forecast_price_flow_stage_algorithm($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+          [...args, owner.csrfToken, key(), 3, forged.rows[0].id,
+            runIds[59],
+            'Fictional owner cannot stage mismatched rollback lineage.', true]))
+          .rejects.toMatchObject({ code: '22023',
+            message: 'Algorithm rollback invalid' });
+        await mismatchedRollback.query('ROLLBACK');
+      } catch (error) {
+        await mismatchedRollback.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally { mismatchedRollback.release(); }
       const changedProfile = await f.ownerPool.connect();
       try {
         await changedProfile.query('BEGIN ISOLATION LEVEL READ COMMITTED');
@@ -1264,6 +1509,14 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'fixed_research_review_unavailable',
         reason: 'matched_population_incomplete',
         productionPromotionEligible: false });
+      const staleStaged = await request(f.app)
+        .get(`${stagingRoute}/${runIds[59]}`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(staleStaged.status).toBe(200);
+      expect(staleStaged.body.data).toMatchObject({
+        state: 'staged_algorithm_unavailable',
+        reason: 'staged_evidence_changed',
+        algorithmVersion: null, forecastServingEnabled: false });
       const changedOrigin = await request(f.app).post(selectedOriginRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send(selectedOriginBody);

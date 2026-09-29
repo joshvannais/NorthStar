@@ -173,6 +173,21 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       completePeriodVerified: false, forecastIssued: false });
     expect(beforeReviewCandidates.body.data.candidates[0]).toMatchObject({
       approvalId: matchingApprovalId, appointmentId: appointment });
+    const lineageIndexes = (await f.ownerPool.query(
+      `SELECT indexname,indexdef FROM pg_indexes
+        WHERE schemaname='public' AND indexname=ANY($1::text[])
+        ORDER BY indexname`, [[
+        'canonical_forecast_delivery_events_tenant_estimate_kind_idx',
+        'canonical_forecast_estimates_tenant_opportunity_idx',
+      ]])).rows;
+    expect(lineageIndexes.map(row => row.indexname)).toEqual([
+      'canonical_forecast_delivery_events_tenant_estimate_kind_idx',
+      'canonical_forecast_estimates_tenant_opportunity_idx',
+    ]);
+    expect(lineageIndexes[0].indexdef).toContain(
+      '(organization_id, estimate_id, kind, id)');
+    expect(lineageIndexes[1].indexdef).toContain(
+      '(organization_id, opportunity_id, id)');
     const oversizedApprovalHistory = await f.ownerPool.connect();
     try {
       await oversizedApprovalHistory.query('BEGIN');

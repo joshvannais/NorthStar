@@ -1,5 +1,14 @@
 -- Mission 26 Part 6A: bounded discovery of recent human schedule approvals
 -- that may be ready for commercial review. The write remains authoritative.
+-- The guarded lineage helpers start from one immutable opportunity. These
+-- indexes keep their accepted-version lookup opportunity-local instead of
+-- repeatedly walking the tenant's commercial history inside this 100-row read.
+CREATE INDEX canonical_forecast_estimates_tenant_opportunity_idx
+ ON public.canonical_estimates(organization_id,opportunity_id,id);
+CREATE INDEX canonical_forecast_delivery_events_tenant_estimate_kind_idx
+ ON public.canonical_customer_estimate_delivery_events(
+  organization_id,estimate_id,kind,id);
+
 CREATE FUNCTION public.canonical_forecast_booking_review_candidates(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER

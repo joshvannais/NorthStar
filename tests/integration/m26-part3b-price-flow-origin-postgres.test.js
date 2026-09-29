@@ -162,10 +162,44 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           confirmed: true });
       expect(profile.status).toBe(201);
       const profileAnchorId = profile.body.data.anchorId;
-      const profileActivation = await request(f.app)
-        .post(`${profileRoot}/${profileAnchorId}/activate`)
-        .set(owner().session.headers).send({});
-      expect(profileActivation.status).toBe(200);
+      const profileActivationWriter = await f.runtimePool.connect();
+      const profileRaceOriginWriter = await f.runtimePool.connect();
+      try {
+        await profileActivationWriter.query(
+          'BEGIN ISOLATION LEVEL READ COMMITTED');
+        await profileRaceOriginWriter.query(
+          'BEGIN ISOLATION LEVEL READ COMMITTED');
+        const profileActivation = (await profileActivationWriter.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_activate($1,$2,$3,$4,$5,$6) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, profileAnchorId]))
+          .rows[0].value;
+        expect(profileActivation).toMatchObject({
+          state: 'profile_effective_activation_recorded', replayed: false,
+        });
+        let raceOriginSettled = false;
+        const raceOrigin = profileRaceOriginWriter.query(
+          'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key(),
+            body.sourceReceiptId, body.currency, body.horizonStartsAt,
+            body.horizonEndsAt]).then(result => {
+          raceOriginSettled = true;
+          return result.rows[0].value;
+        });
+        await new Promise(resolve => setTimeout(resolve, 25));
+        expect(raceOriginSettled).toBe(false);
+        await profileActivationWriter.query('COMMIT');
+        expect(await raceOrigin).toMatchObject({
+          state: 'saved_price_flow_origin', replayed: false,
+        });
+        await profileRaceOriginWriter.query('COMMIT');
+      } finally {
+        await profileActivationWriter.query('ROLLBACK').catch(() => {});
+        await profileRaceOriginWriter.query('ROLLBACK').catch(() => {});
+        profileActivationWriter.release();
+        profileRaceOriginWriter.release();
+      }
 
       const firstOriginWriter = await f.runtimePool.connect();
       const secondOriginWriter = await f.runtimePool.connect();

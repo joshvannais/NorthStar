@@ -39,6 +39,61 @@ CREATE TRIGGER canonical_forecast_price_flow_origins_immutable
  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_forecast_price_flow_saved_origins
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
 
+-- Serialize profile activation with origin capture. Without this shared lock,
+-- an activation could obtain an earlier row clock, commit after the origin,
+-- and later appear to have been available when the forecast was saved.
+CREATE OR REPLACE FUNCTION public.canonical_forecast_profile_effective_anchor_activate(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,anchor_value UUID)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE anchor_row public.canonical_forecast_profile_effective_anchors%ROWTYPE;
+ prior public.canonical_forecast_profile_effective_activations%ROWTYPE;
+ source_xid XID8; observed TIMESTAMPTZ;
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed' THEN
+  RAISE EXCEPTION 'Forecast profile activation requires READ COMMITTED' USING ERRCODE='25001';
+ END IF;
+ PERFORM public.canonical_forecast_booking_ordered_access(
+  org,actor,role_value,session_value,csrf,TRUE);
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  'm26:profile-effective-source:'||org::text,0));
+ SELECT * INTO anchor_row FROM public.canonical_forecast_profile_effective_anchors
+  WHERE organization_id=org AND id=anchor_value;
+ IF NOT FOUND THEN
+  RETURN jsonb_build_object('state','profile_effective_activation_unavailable',
+   'reason','anchor_not_found','historicalCalendarVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
+ SELECT * INTO prior FROM public.canonical_forecast_profile_effective_activations
+  WHERE organization_id=org AND anchor_id=anchor_value;
+ IF FOUND THEN
+  RETURN jsonb_build_object('state','profile_effective_activation_recorded',
+   'anchorId',anchor_value,'observedAt',public.canonical_forecast_utc_instant(prior.observed_at),
+   'replayed',TRUE,'historicalCalendarVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
+ SELECT xmin::text::xid8 INTO source_xid
+  FROM public.canonical_forecast_profile_effective_anchors
+  WHERE organization_id=org AND id=anchor_value;
+ IF pg_xact_status(source_xid) IS DISTINCT FROM 'committed' THEN
+  RETURN jsonb_build_object('state','profile_effective_activation_unavailable',
+   'reason','anchor_commit_unverified','historicalCalendarVerified',FALSE,'forecastIssued',FALSE);
+ END IF;
+ observed:=clock_timestamp();
+ INSERT INTO public.canonical_forecast_profile_effective_activations(
+  organization_id,anchor_id,observed_at,actor_user_id,auth_session_id)
+ VALUES(org,anchor_value,observed,actor,session_value)
+ ON CONFLICT ON CONSTRAINT canonical_forecast_profile_effective_activations_pkey
+ DO NOTHING;
+ SELECT * INTO prior FROM public.canonical_forecast_profile_effective_activations
+  WHERE organization_id=org AND anchor_id=anchor_value;
+ IF NOT FOUND THEN
+  RAISE EXCEPTION 'Forecast profile activation unavailable' USING ERRCODE='40001';
+ END IF;
+ RETURN jsonb_build_object('state','profile_effective_activation_recorded',
+  'anchorId',anchor_value,'observedAt',public.canonical_forecast_utc_instant(prior.observed_at),
+  'replayed',prior.observed_at<>observed,
+  'historicalCalendarVerified',FALSE,'forecastIssued',FALSE);
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_capture_price_flow_origin(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,
  key_value TEXT,receipt_id UUID,currency_value TEXT,
@@ -84,6 +139,8 @@ BEGIN
    'receiptDigest',prior.receipt_digest,'replayed',TRUE,
    'preHorizonCommitVerified',FALSE);
  END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  'm26:profile-effective-source:'||org::text,0));
  SELECT profile.raw_profile->'company'->>'timeZone' INTO profile_timezone
   FROM public.canonical_business_profiles profile
   WHERE profile.organization_id=org AND profile.is_active=TRUE;

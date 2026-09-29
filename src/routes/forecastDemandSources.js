@@ -29,8 +29,10 @@ const REVIEWED_BOUNDARY =
   'Reviewed identities only; no caller consent, retention, provider coverage or forecast is certified.';
 
 function exact(value, keys) {
+  const prototype = value && typeof value === 'object' ?
+    Object.getPrototypeOf(value) : undefined;
   return value && typeof value === 'object' && !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype &&
+    (prototype === Object.prototype || prototype === null) &&
     Object.keys(value).length === keys.length &&
     Object.keys(value).every(key => keys.includes(key));
 }

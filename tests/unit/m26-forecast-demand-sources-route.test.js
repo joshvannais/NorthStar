@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const querystring = require('node:querystring');
 const request = require('supertest');
 const { createForecastDemandSourcesRouter } =
   require('../../src/routes/forecastDemandSources');
@@ -52,6 +53,8 @@ function snapshot(extra = {}) {
 function application({ role = 'owner', consentRead, consentWrite, capture,
   snapshotRead, reviews, reviewWrite, readReviewed, databaseError } = {}) {
   const app = express();
+  // Express's production "simple" parser returns null-prototype objects.
+  app.set('query parser', querystring.parse);
   app.use(express.json());
   const auth = (req, _res, next) => {
     req.user = { id: USER };

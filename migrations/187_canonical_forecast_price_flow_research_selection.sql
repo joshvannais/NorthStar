@@ -12,13 +12,20 @@ CREATE TABLE public.canonical_forecast_price_flow_research_selections (
  policy_version TEXT NOT NULL CHECK(policy_version='m26_selected_m24_research_review_v1'),
  reason TEXT NOT NULL CHECK(length(reason) BETWEEN 16 AND 1000),
  actor_user_id UUID NOT NULL,
+ auth_session_id UUID NOT NULL,
  request_key_hash TEXT NOT NULL CHECK(request_key_hash~'^[a-f0-9]{64}$'),
  request_digest TEXT NOT NULL CHECK(request_digest~'^[a-f0-9]{64}$'),
  reviewed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
  research_only BOOLEAN NOT NULL DEFAULT TRUE CHECK(research_only),
  forecast_serving_enabled BOOLEAN NOT NULL DEFAULT FALSE CHECK(NOT forecast_serving_enabled),
  UNIQUE(organization_id,revision),
- UNIQUE(organization_id,actor_user_id,request_key_hash)
+ UNIQUE(organization_id,actor_user_id,request_key_hash),
+ FOREIGN KEY(organization_id,actor_user_id)
+  REFERENCES public.organization_memberships(organization_id,user_id)
+  ON DELETE RESTRICT,
+ FOREIGN KEY(organization_id,actor_user_id,auth_session_id)
+  REFERENCES public.auth_sessions(organization_id,user_id,id)
+  ON DELETE RESTRICT
 );
 CREATE INDEX canonical_forecast_price_flow_research_selection_latest
  ON public.canonical_forecast_price_flow_research_selections
@@ -128,11 +135,13 @@ BEGIN
    'currentAlgorithmVersion',latest.algorithm_version,
    'forecastServingEnabled',FALSE);
  END IF;
- complete:=population->>'completeRegisteredPopulation'='true' AND
-  population->>'sourceEventDiversityVerified'='true' AND
-  (population->>'distinctSourceEventDays')::integer=60 AND
-  jsonb_array_length(population->'items')=60;
- IF complete THEN
+ complete:=COALESCE(
+   population->>'completeRegisteredPopulation'='true',FALSE) AND
+  COALESCE(population->>'sourceEventDiversityVerified'='true',FALSE) AND
+  COALESCE((population->>'distinctSourceEventDays')::integer=60,FALSE) AND
+  CASE WHEN jsonb_typeof(population->'items')='array' THEN
+   jsonb_array_length(population->'items')=60 ELSE FALSE END;
+ IF complete IS TRUE THEN
   FOR item IN SELECT value FROM jsonb_array_elements(population->'items') LOOP
    IF item->>'state' IS DISTINCT FROM 'matched_algorithms_observed' OR
       item->>'actualPairStatus' IS DISTINCT FROM 'paired' OR
@@ -150,7 +159,7 @@ BEGIN
    END IF;
   END LOOP;
  END IF;
- IF NOT complete OR NOT lag_ok THEN
+ IF complete IS DISTINCT FROM TRUE OR lag_ok IS DISTINCT FROM TRUE THEN
   RETURN jsonb_build_object('state','research_review_unavailable',
    'reason',CASE WHEN NOT complete THEN 'matched_population_incomplete'
     ELSE 'source_observation_lag_unverified' END,
@@ -316,10 +325,11 @@ BEGIN
  INSERT INTO public.canonical_forecast_price_flow_research_selections(
   organization_id,revision,action,algorithm_version,
   previous_algorithm_version,reversed_event_id,comparison_digest,
-  policy_version,reason,actor_user_id,request_key_hash,request_digest)
+  policy_version,reason,actor_user_id,auth_session_id,request_key_hash,
+  request_digest)
  VALUES(org,expected_revision+1,action_value,selected_version,
   prior_version,reverses_value,reviewed_comparison_digest,
-  'm26_selected_m24_research_review_v1',reason_value,actor,
+  'm26_selected_m24_research_review_v1',reason_value,actor,session_value,
   key_hash,request_hash) RETURNING * INTO saved;
  RETURN jsonb_build_object('state','research_selection_recorded',
   'eventId',saved.id,'revision',saved.revision,

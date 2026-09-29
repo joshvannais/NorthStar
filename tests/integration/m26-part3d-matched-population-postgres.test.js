@@ -80,6 +80,42 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       }
     }, 300000);
 
+
+  test('research review fails closed when the trusted population contract is incomplete',
+    async () => {
+      const owner = f.actors.owner;
+      const client = await f.ownerPool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            include_pairs boolean)
+          RETURNS jsonb LANGUAGE sql VOLATILE AS $$
+            SELECT jsonb_build_object(
+              'state','matched_population_observed',
+              'selectedRunIds','[]'::jsonb,
+              'items','[]'::jsonb,
+              'sourceEventDiversityVerified',TRUE,
+              'distinctSourceEventDays',60)
+          $$`);
+        const result = await client.query(
+          'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
+          [f.org, owner.actorUserId, owner.actorAccessRole,
+            owner.authSessionId]);
+        expect(result.rows[0].value).toMatchObject({
+          state: 'research_review_unavailable',
+          reason: 'matched_population_incomplete',
+          forecastServingEnabled: false });
+        await client.query('ROLLBACK');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    }, 300000);
+
   test('matched population scans use the bounded partial horizon indexes',
     async () => {
       const indexes = await f.ownerPool.query(`SELECT indexname FROM pg_indexes
@@ -512,6 +548,14 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         researchOnly: true, forecastServingEnabled: false,
         forecastValueAvailable: false, realForecastEligible: false,
         replayed: false });
+      const selectionReceipt = await f.ownerPool.query(
+        `SELECT actor_user_id,auth_session_id FROM
+          canonical_forecast_price_flow_research_selections
+          WHERE organization_id=$1 AND id=$2`,
+        [f.org, selected.body.data.eventId]);
+      expect(selectionReceipt.rows[0]).toEqual({
+        actor_user_id: owner.actorUserId,
+        auth_session_id: owner.authSessionId });
       const replayed = await request(f.app).post(selectionRoute)
         .set(owner.session.headers).set('Idempotency-Key', selectedKey)
         .send(selectionBody);

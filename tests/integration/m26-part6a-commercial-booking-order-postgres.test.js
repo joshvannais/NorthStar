@@ -19,6 +19,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
   let issuedVersionId;
   let estimateRoute;
   let matchingApprovalId;
+  let firstReviewId;
   beforeAll(async () => { f = await createEstimateReviewFixture(); }, 120000);
   afterAll(async () => { if (f) await f.cleanup(); }, 120000);
 
@@ -133,11 +134,342 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       'SELECT id FROM canonical_schedule_human_approvals WHERE organization_id=$1 AND appointment_id=$2 ORDER BY approved_at DESC LIMIT 1',
       [f.org, appointment])).rows[0].id;
 
+    const reviewParams = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, matchingApprovalId,
+      'Human reviewed the synthetic accepted work and scheduled appointment.',
+      'm26-first-booking-review-key-001', actor.csrfToken];
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...reviewParams.slice(0, 7), 'invalid-csrf-token']))
+      .rejects.toMatchObject({ code: '42501' });
+    // Exercise both M22 terminal statuses without changing the shared
+    // fixture: an owner-only synthetic transaction rolls the state back.
+    for (const terminalStatus of ['cancelled', 'completed']) {
+      const synthetic = await f.ownerPool.connect();
+      try {
+        await synthetic.query('BEGIN');
+        await synthetic.query('ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
+        await synthetic.query(
+          'UPDATE canonical_schedule_assignments SET appointment_status=$3 WHERE organization_id=$1 AND appointment_id=$2',
+          [f.org, appointment, terminalStatus]);
+        const guarded = (await synthetic.query(
+          'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+          reviewParams)).rows[0].value;
+        expect(guarded).toMatchObject({ state: 'current_booking_evidence_unavailable',
+          bookedWorkVerified: false, forecastIssued: false });
+      } finally {
+        await synthetic.query('ROLLBACK');
+        synthetic.release();
+      }
+    }
+    const bookingRoute = '/api/v1/forecast/booking-reviews';
+    const firstWrite = await request(f.app).post(`${bookingRoute}/first`)
+      .set(actor.session.headers).set('Idempotency-Key', reviewParams[6])
+      .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
+    expect(firstWrite.status).toBe(201);
+    const firstReview = firstWrite.body.data;
+    expect(firstReview).toMatchObject({ state: 'first_booking_reviewed',
+      replayed: false,
+      bookedWorkVerified: false, forecastIssued: false });
+    firstReviewId = firstReview.reviewId;
+    const firstReplay = await request(f.app).post(`${bookingRoute}/first`)
+      .set(actor.session.headers).set('Idempotency-Key', reviewParams[6])
+      .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
+    expect(firstReplay.status).toBe(200);
+    expect(firstReplay.body.data).toMatchObject({ state: 'first_booking_reviewed',
+      reviewId: firstReviewId, replayed: true, bookedWorkVerified: false });
+    const deniedWrite = await request(f.app).post(`${bookingRoute}/first`)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', reviewParams[6])
+      .send({ approvalId: matchingApprovalId, reason: reviewParams[5] });
+    expect(deniedWrite.status).toBe(403);
+    const httpCurrent = await request(f.app)
+      .get(`${bookingRoute}/${firstReviewId}/currentness`)
+      .set(actor.session.headers);
+    expect(httpCurrent.status).toBe(200);
+    expect(httpCurrent.body.data).toMatchObject({
+      state: 'review_evidence_current_at_read', reviewCurrentAtRead: true,
+      bookedWorkVerified: false, forecastIssued: false });
+    const storedPrice = (await f.ownerPool.query(
+      `SELECT reviewed_price_before_tax,currency
+         FROM canonical_forecast_commercial_booking_reviews
+        WHERE organization_id=$1 AND id=$2`, [f.org, firstReviewId])).rows[0];
+    const firstPosition = await request(f.app)
+      .get(`${bookingRoute}/${firstReviewId}/position`)
+      .set(actor.session.headers);
+    expect(firstPosition.status).toBe(200);
+    expect(firstPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_booking_candidate',
+      commercialStatus: 'owner_reviewed_booking',
+      reviewedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, ownerAttestationCurrentAtRead: true,
+      reviewCurrentAtRead: true,
+      historicalCoverageVerified: false, bookedWorkVerified: false,
+      earnedRevenueMeasured: false, collectedCashMeasured: false,
+      forecastIssued: false });
+    const currentnessParams = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, firstReviewId];
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value).toMatchObject({
+      state: 'review_evidence_current_at_read', reviewId: firstReviewId,
+      reviewCurrentAtRead: true, firstActualBookingKnown: false,
+      bookedWorkVerified: false, historicalCoverageVerified: false,
+      forecastIssued: false });
+    const initialReviewId = firstReviewId;
+    const correctionReason = 'Owner corrected the synthetic booking review after checking the scope.';
+    const corrected = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-001')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(corrected.status).toBe(201);
+    expect(corrected.body.data).toMatchObject({ state: 'booking_corrected',
+      previousReviewId: initialReviewId, replayed: false,
+      bookedWorkVerified: false, forecastIssued: false });
+    firstReviewId = corrected.body.data.reviewId;
+    currentnessParams[4] = firstReviewId;
+    const correctedPosition = await request(f.app)
+      .get(`${bookingRoute}/${firstReviewId}/position`)
+      .set(actor.session.headers);
+    expect(correctedPosition.status).toBe(200);
+    expect(correctedPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_booking_candidate',
+      reviewedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
+      currency: storedPrice.currency, reviewCurrentAtRead: true,
+      bookedWorkVerified: false });
+    const supersededPosition = await request(f.app)
+      .get(`${bookingRoute}/${initialReviewId}/position`)
+      .set(actor.session.headers);
+    expect(supersededPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_position_unavailable',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
+    expect(supersededPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [...currentnessParams.slice(0, 4), initialReviewId])).rows[0].value)
+      .toMatchObject({ state: 'later_review_exists', reviewCurrentAtRead: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value)
+      .toMatchObject({ state: 'review_evidence_current_at_read',
+        reviewCurrentAtRead: true, bookedWorkVerified: false });
+    const correctionReplay = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-001')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(correctionReplay.status).toBe(200);
+    expect(correctionReplay.body.data).toMatchObject({ reviewId: firstReviewId,
+      replayed: true, bookedWorkVerified: false });
+    const changedCorrection = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-001')
+      .send({ approvalId: matchingApprovalId,
+        reason: 'Different reason cannot reuse the same correction request.' });
+    expect(changedCorrection.status).toBe(409);
+    expect(changedCorrection.body.error.category).toBe('FORECAST_REVIEW_REQUEST_REUSED');
+    const staleCorrection = await request(f.app)
+      .post(`${bookingRoute}/${initialReviewId}/correct`)
+      .set(actor.session.headers)
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-002')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(staleCorrection.status).toBe(200);
+    expect(staleCorrection.body.data).toMatchObject({
+      state: 'prior_review_stale_or_cancelled', bookedWorkVerified: false });
+    const badCorrectionCsrf = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/correct`)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', 'm26-correct-booking-review-key-003')
+      .send({ approvalId: matchingApprovalId, reason: correctionReason });
+    expect(badCorrectionCsrf.status).toBe(403);
+    const changedAssignment = await f.ownerPool.connect();
+    try {
+      await changedAssignment.query('BEGIN');
+      await changedAssignment.query(
+        'ALTER TABLE canonical_schedule_assignments DISABLE TRIGGER USER');
+      await changedAssignment.query(
+        'UPDATE canonical_schedule_assignments SET last_human_approval_id=NULL WHERE organization_id=$1 AND appointment_id=$2',
+        [f.org, appointment]);
+      expect((await changedAssignment.query(
+        'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+        currentnessParams)).rows[0].value).toMatchObject({
+        state: 'review_schedule_stale_or_unavailable',
+        reviewCurrentAtRead: false, bookedWorkVerified: false });
+    } finally {
+      await changedAssignment.query('ROLLBACK');
+      changedAssignment.release();
+    }
+    const other = f.actors.otherOwner;
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [other.organizationId, other.actorUserId, other.actorAccessRole,
+        other.authSessionId, firstReviewId])).rows[0].value)
+      .toMatchObject({ state: 'review_unavailable', reviewCurrentAtRead: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      reviewParams)).rows[0].value).toMatchObject({ id: initialReviewId,
+      replayed: true, bookedWorkVerified: false });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...reviewParams.slice(0, 5), 'A changed review reason cannot reuse the same key.',
+        reviewParams[6], actor.csrfToken])).rejects.toMatchObject({ code: '23505' });
+    await expect(f.runtimePool.query('SELECT * FROM canonical_forecast_commercial_booking_reviews'))
+      .rejects.toMatchObject({ code: '42501' });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...reviewParams.slice(0, 6), 'm26-first-booking-review-key-002', actor.csrfToken])).rows[0].value)
+      .toMatchObject({ state: 'prior_commercial_review_exists',
+        bookedWorkVerified: false, forecastIssued: false });
+    const member = f.actors.member;
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [f.org, member.actorUserId, member.actorAccessRole,
+        member.authSessionId, firstReviewId]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [f.org, member.actorUserId, member.actorAccessRole, member.authSessionId,
+        matchingApprovalId, reviewParams[5], 'm26-member-booking-review-key-001',
+        member.csrfToken]))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(f.ownerPool.query(
+      'DELETE FROM canonical_forecast_commercial_booking_reviews WHERE organization_id=$1',
+      [f.org])).rejects.toMatchObject({ code: '23514' });
+    const laterLink = await post('/customer-estimate-links', {
+      versionId: issuedVersionId, expiresInDays: 14,
+      confirmed: true, confirmationVersion: 'customer-estimate-delivery-v1',
+    });
+    expect(laterLink.status).toBe(201);
+    const laterAcceptance = await f.ownerPool.connect();
+    try {
+      await laterAcceptance.query('BEGIN');
+      await laterAcceptance.query(
+        `INSERT INTO canonical_customer_estimate_delivery_events(
+           organization_id,estimate_id,version_id,link_id,kind,body,actor_user_id,
+           request_key_hash,request_digest,digest)
+         SELECT organization_id,estimate_id,version_id,id,'accepted',
+                $2::jsonb,NULL,$3,$4,$5
+           FROM canonical_customer_estimate_delivery_links WHERE id=$1`,
+        [laterLink.body.data.link.id,
+          JSON.stringify({ customerName: 'Later synthetic customer', confirmed: true,
+            confirmationVersion: 'customer-estimate-accept-v1' }),
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex')]);
+      const guarded = (await laterAcceptance.query(
+        'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+        [...reviewParams.slice(0, 6), 'm26-newer-scope-review-key-001', actor.csrfToken]))
+        .rows[0].value;
+      expect(guarded).toMatchObject({ state: 'later_accepted_response_unreviewed',
+        bookedWorkVerified: false, forecastIssued: false });
+      const stale = (await laterAcceptance.query(
+        'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+        currentnessParams)).rows[0].value;
+      expect(stale).toMatchObject({ state: 'later_accepted_response_unreviewed',
+        reviewCurrentAtRead: false, bookedWorkVerified: false });
+    } finally {
+      await laterAcceptance.query('ROLLBACK');
+      laterAcceptance.release();
+    }
+
     await f.createExecution({ approvedScheduling: true, stopAfterScheduling: true });
     const links = await get('/customer-estimate-links');
     expect(links.status).toBe(200);
-    const revoked = await post(`/customer-estimate-links/${links.body.data.links[0].id}/revoke`, {});
+    const revoked = await post(`/customer-estimate-links/${link.body.data.link.id}/revoke`, {});
     expect(revoked.status).toBe(201);
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value).toMatchObject({
+      state: 'review_lineage_stale_or_unavailable',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
+    const cancelParams = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, firstReviewId,
+      'The synthetic customer cancelled the reviewed work before service.',
+      'm26-cancel-booking-review-key-001', actor.csrfToken];
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...cancelParams.slice(0, 7), 'invalid-csrf-token']))
+      .rejects.toMatchObject({ code: '42501' });
+    const cancelWrite = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/cancel`)
+      .set(actor.session.headers).set('Idempotency-Key', cancelParams[6])
+      .send({ reason: cancelParams[5] });
+    expect(cancelWrite.status).toBe(201);
+    const cancellation = cancelWrite.body.data;
+    expect(cancellation).toMatchObject({ state: 'booking_cancelled',
+      previousReviewId: firstReviewId, replayed: false,
+      schedulingNeedsReview: true, bookedWorkVerified: false,
+      forecastIssued: false });
+    const cancelReplay = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/cancel`)
+      .set(actor.session.headers).set('Idempotency-Key', cancelParams[6])
+      .send({ reason: cancelParams[5] });
+    expect(cancelReplay.status).toBe(200);
+    expect(cancelReplay.body.data).toMatchObject({ state: 'booking_cancelled',
+      reviewId: cancellation.reviewId, replayed: true,
+      schedulingNeedsReview: true, bookedWorkVerified: false });
+    const memberCancel = await request(f.app)
+      .post(`${bookingRoute}/${firstReviewId}/cancel`)
+      .set(f.actors.member.session.headers)
+      .set('Idempotency-Key', 'm26-member-http-cancel-key-001')
+      .send({ reason: cancelParams[5] });
+    expect(memberCancel.status).toBe(403);
+    const cancelledRead = await request(f.app)
+      .get(`${bookingRoute}/${cancellation.reviewId}/currentness`)
+      .set(actor.session.headers);
+    expect(cancelledRead.status).toBe(200);
+    expect(cancelledRead.body.data).toMatchObject({ state: 'booking_cancelled',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
+    const cancelledPosition = await request(f.app)
+      .get(`${bookingRoute}/${cancellation.reviewId}/position`)
+      .set(actor.session.headers);
+    expect(cancelledPosition.status).toBe(200);
+    expect(cancelledPosition.body.data).toMatchObject({
+      state: 'owner_reviewed_position_unavailable',
+      reviewCurrentAtRead: false, bookedWorkVerified: false });
+    expect(cancelledPosition.body.data).not.toHaveProperty('reviewedPriceBeforeTax');
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [f.org, member.actorUserId, member.actorAccessRole,
+        member.authSessionId, firstReviewId, cancelParams[5],
+        'm26-member-booking-cancel-key-001', member.csrfToken]))
+      .rejects.toMatchObject({ code: '42501' });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [other.organizationId, other.actorUserId, other.actorAccessRole,
+        other.authSessionId, firstReviewId, cancelParams[5],
+        'm26-other-tenant-cancel-key-001', other.csrfToken])).rows[0].value)
+      .toMatchObject({ state: 'prior_review_unavailable',
+        bookedWorkVerified: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      cancelParams)).rows[0].value).toMatchObject({
+      id: cancellation.reviewId, replayed: true, bookedWorkVerified: false });
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...cancelParams.slice(0, 5), 'Changed cancellation reason cannot reuse key.',
+        cancelParams[6], actor.csrfToken])).rejects.toMatchObject({ code: '23505' });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_cancel_booking_review($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...cancelParams.slice(0, 6), 'm26-cancel-booking-review-key-002', actor.csrfToken]))
+      .rows[0].value).toMatchObject({ state: 'prior_review_stale_or_cancelled',
+        bookedWorkVerified: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      currentnessParams)).rows[0].value).toMatchObject({
+      state: 'later_review_exists', reviewCurrentAtRead: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [...currentnessParams.slice(0, 4), cancellation.reviewId])).rows[0].value)
+      .toMatchObject({ state: 'booking_cancelled',
+        previousReviewId: firstReviewId, reviewCurrentAtRead: false,
+        bookedWorkVerified: false });
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_review_first_booking($1,$2,$3,$4,$5,$6,$7,$8) value',
+      [...reviewParams.slice(0, 6), 'm26-revoked-booking-review-key-001', actor.csrfToken])).rows[0].value)
+      .toMatchObject({ state: 'lineage_unavailable',
+        bookedWorkVerified: false, forecastIssued: false });
 
     const ordered = (await f.ownerPool.query(
       `SELECT source_kind,approval_id,delivery_event_id,source_order
@@ -156,6 +488,20 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     await expect(f.ownerPool.query(
       'DELETE FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1', [f.org]))
       .rejects.toMatchObject({ code: '23514' });
+  }, 120000);
+
+  test('startup rejects inherited access to tenant-private commercial reviews', async () => {
+    await f.ownerPool.query(
+      'GRANT SELECT ON TABLE public.canonical_forecast_commercial_booking_reviews TO PUBLIC');
+    try {
+      await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
+        .rejects.toThrow(/commercial_booking_reviews_private/);
+    } finally {
+      await f.ownerPool.query(
+        'REVOKE SELECT ON TABLE public.canonical_forecast_commercial_booking_reviews FROM PUBLIC');
+    }
+    await expect(f.db.runMigrations({ pool: f.ownerPool, runtimePool: f.runtimePool }))
+      .resolves.toBe(true);
   }, 120000);
 
   test('guarded reader links one earlier accepted issued version to the same immutable opportunity without claiming booked work', async () => {

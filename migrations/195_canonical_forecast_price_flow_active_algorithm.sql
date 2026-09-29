@@ -83,8 +83,10 @@ BEGIN
   RAISE EXCEPTION 'Active algorithm revision changed' USING ERRCODE='23505';
  END IF;
  IF (action_value='promote' AND
-     (expected_revision<>0 OR latest.id IS NOT NULL OR reverses_value IS NOT NULL OR
-      algorithm_value<>'m26_price_flow_zero_baseline_v1')) OR
+     (reverses_value IS NOT NULL OR
+      algorithm_value<>'m26_price_flow_zero_baseline_v1' OR
+      (latest.id IS NULL AND expected_revision<>0) OR
+      (latest.id IS NOT NULL AND latest.action<>'rollback'))) OR
     (action_value='rollback' AND
      (latest.id IS NULL OR latest.action<>'promote' OR
       reverses_value IS DISTINCT FROM latest.id OR
@@ -148,16 +150,14 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
- IF NOT pg_try_advisory_xact_lock(hashtextextended(
-   'm26:price-decision-order:'||org::text,0)) THEN
-  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
- END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object(
   'anchorRunId',anchor_run_value,'expectedRevision',expected_revision,
   'action',action_value,'algorithmVersion',algorithm_value,
   'reversesEventId',reverses_value,'reason',reason_value,
   'reviewToken',review_token_value));
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':'||actor::text||':active-algorithm:'||key_hash,0));
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_active_algorithms
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF prior.id IS NOT NULL THEN
@@ -168,6 +168,10 @@ BEGIN
    'eventId',prior.id,'revision',prior.revision,
    'algorithmVersion',prior.algorithm_version,'replayed',TRUE,
    'paidNumericServing',FALSE,'realForecastEligible',FALSE);
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:price-decision-order:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
  END IF;
  SELECT * INTO anchor FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=anchor_run_value AND
@@ -188,8 +192,10 @@ BEGIN
   RAISE EXCEPTION 'Active algorithm revision changed' USING ERRCODE='23505';
  END IF;
  IF (action_value='promote' AND
-     (expected_revision<>0 OR latest.id IS NOT NULL OR reverses_value IS NOT NULL OR
-      algorithm_value<>'m26_price_flow_zero_baseline_v1')) OR
+     (reverses_value IS NOT NULL OR
+      algorithm_value<>'m26_price_flow_zero_baseline_v1' OR
+      (latest.id IS NULL AND expected_revision<>0) OR
+      (latest.id IS NOT NULL AND latest.action<>'rollback'))) OR
     (action_value='rollback' AND
      (latest.id IS NULL OR latest.action<>'promote' OR
       reverses_value IS DISTINCT FROM latest.id OR

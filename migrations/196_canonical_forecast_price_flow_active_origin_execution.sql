@@ -69,7 +69,7 @@ DECLARE prior public.canonical_forecast_price_flow_active_origins%ROWTYPE;
  base_row public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  selected public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  active_state JSONB; active_event public.canonical_forecast_price_flow_active_algorithms%ROWTYPE;
- source_state JSONB; current_source JSONB; zero JSONB;
+ source_state JSONB; current_source JSONB; profile_state JSONB; zero JSONB;
  key_hash TEXT; request_hash TEXT; zero_key TEXT;
  chosen_run UUID;
 BEGIN
@@ -80,13 +80,11 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
- IF NOT pg_try_advisory_xact_lock(hashtextextended(
-   'm26:price-decision-order:'||org::text,0)) THEN
-  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
- END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object(
   'baseRunId',base_run_value));
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':'||actor::text||':active-origin:'||key_hash,0));
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_active_origins
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF prior.id IS NOT NULL THEN
@@ -98,6 +96,14 @@ BEGIN
    'baseRunId',prior.base_run_id,'activeEventId',prior.active_event_id,
    'algorithmVersion',prior.algorithm_version,'replayed',TRUE,
    'paidNumericServing',FALSE,'preHorizonCommitVerified',FALSE);
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:profile-effective-source:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast profile source busy' USING ERRCODE='55P03';
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:price-decision-order:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
  END IF;
  SELECT * INTO base_row FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=base_run_value;
@@ -118,6 +124,14 @@ BEGIN
       base_row.receipt_digest THEN
   RETURN jsonb_build_object('state','active_origin_unavailable',
    'reason','base_source_unavailable','paidNumericServing',FALSE);
+ END IF;
+ profile_state:=public.canonical_forecast_profile_effective_window(
+  org,actor,role_value,session_value,
+  (source_state->>'profileAnchorId')::uuid,base_row.saved_at,clock_timestamp());
+ IF profile_state->>'state' IS DISTINCT FROM
+    'profile_effective_window_verified' THEN
+  RETURN jsonb_build_object('state','active_origin_unavailable',
+   'reason','base_profile_source_changed','paidNumericServing',FALSE);
  END IF;
  active_state:=public.canonical_forecast_price_flow_active_read(
   org,actor,role_value,session_value,base_run_value);
@@ -183,7 +197,7 @@ DECLARE chosen public.canonical_forecast_price_flow_active_origins%ROWTYPE;
  base public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  selected public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  prior public.canonical_forecast_price_flow_active_origin_activations%ROWTYPE;
- active_state JSONB; source_state JSONB; current_source JSONB;
+ active_state JSONB; source_state JSONB; current_source JSONB; profile_state JSONB;
  chosen_xid XID8; selected_xid XID8; observed TIMESTAMPTZ; proof_value JSONB;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
@@ -192,6 +206,10 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:profile-effective-source:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast profile source busy' USING ERRCODE='55P03';
+ END IF;
  IF NOT pg_try_advisory_xact_lock(hashtextextended(
    'm26:price-decision-order:'||org::text,0)) THEN
   RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
@@ -241,8 +259,8 @@ BEGIN
  SELECT xmin::text::xid8 INTO selected_xid
   FROM public.canonical_forecast_price_flow_saved_origins
   WHERE organization_id=org AND id=chosen.selected_run_id;
- IF pg_xact_status(chosen_xid) IS DISTINCT FROM 'committed' OR
-    pg_xact_status(selected_xid) IS DISTINCT FROM 'committed' THEN
+ IF pg_xact_status(chosen_xid)='in progress' OR
+    pg_xact_status(selected_xid)='in progress' THEN
   RETURN jsonb_build_object('state','active_origin_unavailable',
    'reason','origin_commit_not_observed','preHorizonCommitVerified',FALSE,
    'paidNumericServing',FALSE);
@@ -258,6 +276,15 @@ BEGIN
    'paidNumericServing',FALSE);
  END IF;
  observed:=clock_timestamp();
+ profile_state:=public.canonical_forecast_profile_effective_window(
+  org,actor,role_value,session_value,
+  (source_state->>'profileAnchorId')::uuid,base.saved_at,observed);
+ IF profile_state->>'state' IS DISTINCT FROM
+    'profile_effective_window_verified' THEN
+  RETURN jsonb_build_object('state','active_origin_unavailable',
+   'reason','base_profile_source_changed','preHorizonCommitVerified',FALSE,
+   'paidNumericServing',FALSE);
+ END IF;
  IF observed>=base.horizon_start OR chosen.captured_at>=base.horizon_start THEN
   RETURN jsonb_build_object('state','active_origin_unavailable',
    'reason','origin_commit_not_observed_before_horizon',

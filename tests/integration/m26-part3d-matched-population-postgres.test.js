@@ -147,6 +147,24 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missingSelectedActivation.release();
       }
 
+      const missingActiveSelection = await f.ownerPool.connect();
+      try {
+        await missingActiveSelection.query('BEGIN');
+        await missingActiveSelection.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_active_select(
+            uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean)
+          RENAME TO canonical_forecast_price_flow_active_select_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingActiveSelection, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingActiveSelection.query('ROLLBACK');
+      } catch (error) {
+        await missingActiveSelection.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingActiveSelection.release();
+      }
+
       const leaked = await f.ownerPool.connect();
       try {
         await leaked.query('BEGIN');
@@ -192,6 +210,20 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           'Runtime database role privilege verification failed');
         await leaked.query(`REVOKE SELECT ON
           canonical_forecast_price_flow_research_selected_activations FROM PUBLIC`);
+        await leaked.query(`GRANT SELECT ON
+          canonical_forecast_price_flow_active_algorithms TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE SELECT ON
+          canonical_forecast_price_flow_active_algorithms FROM PUBLIC`);
+        await leaked.query(`GRANT SELECT ON
+          canonical_forecast_price_flow_active_origins TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE SELECT ON
+          canonical_forecast_price_flow_active_origins FROM PUBLIC`);
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
           { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
         await leaked.query('ROLLBACK');
@@ -821,16 +853,38 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'active_algorithm_unavailable',
         reason: 'review_evidence_changed' });
       const activeKey = key();
-      const activeSelection = await request(f.app).post(activeSelectionRoute)
-        .set(owner.session.headers).set('Idempotency-Key', activeKey)
-        .send({ ...promoteRequest,
-          reviewToken: activeChallenge.body.data.reviewToken,
-          confirmed: true });
+      await f.ownerPool.query(`CREATE FUNCTION m26_active_selection_delay()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN PERFORM pg_sleep(0.5); RETURN NEW; END $$`);
+      await f.ownerPool.query(`CREATE TRIGGER m26_active_selection_delay
+        BEFORE INSERT ON canonical_forecast_price_flow_active_algorithms
+        FOR EACH ROW EXECUTE FUNCTION m26_active_selection_delay()`);
+      let concurrentActiveSelections;
+      try {
+        concurrentActiveSelections = await Promise.all([1, 2].map(() =>
+          request(f.app).post(activeSelectionRoute)
+            .set(owner.session.headers).set('Idempotency-Key', activeKey)
+            .send({ ...promoteRequest,
+              reviewToken: activeChallenge.body.data.reviewToken,
+              confirmed: true })));
+      } finally {
+        await f.ownerPool.query(`DROP TRIGGER m26_active_selection_delay
+          ON canonical_forecast_price_flow_active_algorithms`);
+        await f.ownerPool.query('DROP FUNCTION m26_active_selection_delay()');
+      }
+      expect(concurrentActiveSelections.map(value => value.status).sort())
+        .toEqual([200, 201]);
+      const activeSelection = concurrentActiveSelections
+        .find(value => value.status === 201);
+      const concurrentActiveSelectionReplay = concurrentActiveSelections
+        .find(value => value.status === 200);
       expect(activeSelection.status).toBe(201);
       expect(activeSelection.body.data).toMatchObject({
         state: 'active_algorithm_recorded', revision: 1,
         algorithmVersion: 'm26_price_flow_zero_baseline_v1',
         paidNumericServing: false, realForecastEligible: false });
+      expect(concurrentActiveSelectionReplay.body.data).toMatchObject({
+        eventId: activeSelection.body.data.eventId, replayed: true });
       const staleActive = await request(f.app).post(activeSelectionRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send({ ...promoteRequest,
@@ -918,6 +972,44 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(rolledBackActiveRead.body.data).toMatchObject({
         state: 'active_algorithm_current', revision: 2,
         eventId: rolledBackActive.body.data.eventId,
+        algorithmVersion: 'm26_price_flow_carry_forward_v1' });
+      const rePromoteRequest = { anchorRunId: runIds[59],
+        expectedRevision: 2, action: 'promote',
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        reversesEventId: null,
+        reason: 'Fictional owner deliberately promotes again after rollback.' };
+      const rePromoteChallenge = await request(f.app)
+        .post(activeChallengeRoute).set(owner.session.headers)
+        .send(rePromoteRequest);
+      expect(rePromoteChallenge.body.data.state).toBe('active_challenge_ready');
+      const rePromotedActive = await request(f.app).post(activeSelectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ ...rePromoteRequest,
+          reviewToken: rePromoteChallenge.body.data.reviewToken,
+          confirmed: true });
+      expect(rePromotedActive.status).toBe(201);
+      expect(rePromotedActive.body.data).toMatchObject({
+        state: 'active_algorithm_recorded', revision: 3,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1' });
+      const restoreRollbackRequest = { anchorRunId: runIds[59],
+        expectedRevision: 3, action: 'rollback',
+        algorithmVersion: 'm26_price_flow_carry_forward_v1',
+        reversesEventId: rePromotedActive.body.data.eventId,
+        reason: 'Fictional owner restores the reviewed carry-forward fallback.' };
+      const restoreRollbackChallenge = await request(f.app)
+        .post(activeChallengeRoute).set(owner.session.headers)
+        .send(restoreRollbackRequest);
+      expect(restoreRollbackChallenge.body.data.state)
+        .toBe('active_challenge_ready');
+      const restoredRollbackActive = await request(f.app)
+        .post(activeSelectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ ...restoreRollbackRequest,
+          reviewToken: restoreRollbackChallenge.body.data.reviewToken,
+          confirmed: true });
+      expect(restoredRollbackActive.status).toBe(201);
+      expect(restoredRollbackActive.body.data).toMatchObject({
+        state: 'active_algorithm_recorded', revision: 4,
         algorithmVersion: 'm26_price_flow_carry_forward_v1' });
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_active_algorithms'))
@@ -1241,19 +1333,36 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       // stage still selects zero. Future execution must follow the active event.
       const activeOriginRoute = `${root}/algorithm-active-origins`;
       const activeOriginKey = key();
-      const activeOrigin = await request(f.app).post(activeOriginRoute)
-        .set(owner.session.headers).set('Idempotency-Key', activeOriginKey)
-        .send({ baseRunId: futureBaseId });
+      await f.ownerPool.query(`CREATE FUNCTION m26_active_origin_delay()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN PERFORM pg_sleep(0.5); RETURN NEW; END $$`);
+      await f.ownerPool.query(`CREATE TRIGGER m26_active_origin_delay
+        BEFORE INSERT ON canonical_forecast_price_flow_active_origins
+        FOR EACH ROW EXECUTE FUNCTION m26_active_origin_delay()`);
+      let concurrentActiveOrigins;
+      try {
+        concurrentActiveOrigins = await Promise.all([1, 2].map(() =>
+          request(f.app).post(activeOriginRoute)
+            .set(owner.session.headers).set('Idempotency-Key', activeOriginKey)
+            .send({ baseRunId: futureBaseId })));
+      } finally {
+        await f.ownerPool.query(`DROP TRIGGER m26_active_origin_delay
+          ON canonical_forecast_price_flow_active_origins`);
+        await f.ownerPool.query('DROP FUNCTION m26_active_origin_delay()');
+      }
+      expect(concurrentActiveOrigins.map(value => value.status).sort())
+        .toEqual([200, 201]);
+      const activeOrigin = concurrentActiveOrigins
+        .find(value => value.status === 201);
+      const activeOriginReplay = concurrentActiveOrigins
+        .find(value => value.status === 200);
       expect(activeOrigin.status).toBe(201);
       expect(activeOrigin.body.data).toMatchObject({
         state: 'active_origin_saved', runId: futureBaseId,
-        activeEventId: rolledBackActive.body.data.eventId,
+        activeEventId: restoredRollbackActive.body.data.eventId,
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         paidNumericServing: false, preHorizonCommitVerified: false,
         output: null });
-      const activeOriginReplay = await request(f.app).post(activeOriginRoute)
-        .set(owner.session.headers).set('Idempotency-Key', activeOriginKey)
-        .send({ baseRunId: futureBaseId });
       expect(activeOriginReplay.status).toBe(200);
       expect(activeOriginReplay.body.data).toMatchObject({
         originReceiptId: activeOrigin.body.data.originReceiptId,
@@ -1264,7 +1373,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(activeActivation.status).toBe(200);
       expect(activeActivation.body.data).toMatchObject({
         state: 'active_origin_activated',
-        activeEventId: rolledBackActive.body.data.eventId,
+        activeEventId: restoredRollbackActive.body.data.eventId,
         preHorizonCommitVerified: true, paidNumericServing: false,
         output: null });
       const activeActivationReplay = await request(f.app)
@@ -1656,6 +1765,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         await mismatchedRollback.query('ROLLBACK').catch(() => {});
         throw error;
       } finally { mismatchedRollback.release(); }
+      const activeProfileLockCandidate = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_active_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+        [...args, owner.csrfToken, key(), futureBaseId]);
+      expect(activeProfileLockCandidate.rows[0].value).toMatchObject({
+        state: 'active_origin_saved',
+        activeEventId: restoredRollbackActive.body.data.eventId,
+        algorithmVersion: 'm26_price_flow_carry_forward_v1' });
       const changedProfile = await f.ownerPool.connect();
       try {
         await changedProfile.query('BEGIN ISOLATION LEVEL READ COMMITTED');
@@ -1678,6 +1794,22 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           reason: 'base_profile_source_changed',
           preHorizonCommitVerified: false,
           forecastServingEnabled: false });
+        const activeCaptureRejected = await changedProfile.query(
+          'SELECT public.canonical_forecast_capture_active_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(activeCaptureRejected.rows[0].value).toMatchObject({
+          state: 'active_origin_unavailable',
+          reason: 'base_profile_source_changed',
+          paidNumericServing: false });
+        const activeActivationRejected = await changedProfile.query(
+          'SELECT public.canonical_forecast_activate_active_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken,
+            activeProfileLockCandidate.rows[0].value.originReceiptId]);
+        expect(activeActivationRejected.rows[0].value).toMatchObject({
+          state: 'active_origin_unavailable',
+          reason: 'base_profile_source_changed',
+          preHorizonCommitVerified: false,
+          paidNumericServing: false });
         await changedProfile.query('ROLLBACK');
       } catch (error) {
         await changedProfile.query('ROLLBACK').catch(() => {});
@@ -1685,6 +1817,20 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       } finally {
         changedProfile.release();
       }
+      await f.ownerPool.query(
+        'VACUUM (FREEZE) canonical_forecast_price_flow_active_origins');
+      await f.ownerPool.query(
+        'VACUUM (FREEZE) canonical_forecast_price_flow_saved_origins');
+      const frozenActiveActivation = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_activate_active_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+        [...args, owner.csrfToken,
+          activeProfileLockCandidate.rows[0].value.originReceiptId]);
+      expect(frozenActiveActivation.rows[0].value).toMatchObject({
+        state: 'active_origin_activated',
+        originReceiptId:
+          activeProfileLockCandidate.rows[0].value.originReceiptId,
+        preHorizonCommitVerified: true,
+        paidNumericServing: false });
       const retrospective = await f.runtimePool.query(
         'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
         [...args, owner.csrfToken, key(), runIds[59]]);

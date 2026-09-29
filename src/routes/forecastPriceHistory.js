@@ -9,7 +9,10 @@ const { readGuardedApprovedPriceFlow } = require('../forecasting/guardedApproved
 const { calendarMonth, assessOrderedPriceMonthCandidate,
   assessOrderedPriceReportingMonthCandidate } =
   require('../forecasting/orderedPriceMonthCandidate');
-const { getActiveBusinessProfile } = require('../services/organizationAuthority');
+const { assessComparablePricePeriods } =
+  require('../forecasting/comparablePricePeriods');
+const { getActiveBusinessProfile, getBusinessProfileById } =
+  require('../services/organizationAuthority');
 const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
 
@@ -80,6 +83,39 @@ function createForecastPriceHistoryRouter(options = {}) {
     res.vary('Cookie');
     next();
   });
+
+  // A separate transaction must observe the first ordered receipt committed
+  // before its prospective source coverage can be used for a local period.
+  router.post('/ordered-anchor/activate', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      if (!exactKeys(req.body, [])) return res.status(400).json({
+        success: false, error: { category: 'FORECAST_REQUEST_INVALID',
+          message: 'The price source request is invalid.' },
+      });
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const identity = actor(req);
+        const response = await client.query(
+          'SELECT public.canonical_forecast_price_anchor_activate($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token')]);
+        const value = response.rows[0]?.value;
+        if (!value || !['price_anchor_activation_recorded',
+          'price_anchor_activation_unavailable'].includes(value.state) ||
+          (value.firstReceiptId !== undefined && !UUID.test(value.firstReceiptId)) ||
+          value.sourceCoverageVerified !== false || value.forecastIssued !== false) {
+          throw new Error('Invalid guarded price anchor activation');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
 
   async function guardedMonthCandidate(req, res, buildWindow, currency) {
     let client;
@@ -428,6 +464,122 @@ function createForecastPriceHistoryRouter(options = {}) {
             digest: source.attestationDigest,
             recordedAt: source.attestationRecordedAt } };
       }, withCurrency ? req.query.currency : null);
+    });
+
+  router.get('/ordered-snapshots/:snapshotId/comparable-profile-months', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.snapshotId) ||
+          !exactKeys(req.query, ['profileAnchorId', 'firstLocalStartDate',
+            'secondLocalStartDate', 'currency']) ||
+          !UUID.test(req.query.profileAnchorId) ||
+          !validLocalMonth(req.query.firstLocalStartDate) ||
+          !validLocalMonth(req.query.secondLocalStartDate) ||
+          req.query.firstLocalStartDate >= req.query.secondLocalStartDate ||
+          typeof req.query.currency !== 'string' ||
+          !/^[A-Z]{3}$/.test(req.query.currency)) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The reporting period comparison request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const identity = actor(req);
+        const pin = (await client.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_pin($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.query.profileAnchorId])).rows[0]?.value;
+        if (!pin || !['profile_effective_anchor_pinned',
+          'profile_effective_anchor_unavailable'].includes(pin.state)) {
+          throw new Error('Invalid guarded profile anchor');
+        }
+        if (pin.state !== 'profile_effective_anchor_pinned') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'unavailable', reason: 'profile_anchor_not_found',
+            observationCoverageVerified: false,
+            historicalCalendarVerified: false,
+            eligibleForForecast: false,
+            wholeBusinessCoverageVerified: false, forecastIssued: false,
+          } });
+        }
+        const profile = await getBusinessProfileById(client,
+          identity.organizationId, pin.businessProfileId);
+        if (profile.versionNumber !== pin.businessProfileVersion ||
+            profile.profileHash !== pin.businessProfileHash ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              pin.businessProfileHash) {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'unavailable', reason: 'profile_changed',
+            observationCoverageVerified: false,
+            historicalCalendarVerified: false,
+            eligibleForForecast: false,
+            wholeBusinessCoverageVerified: false, forecastIssued: false,
+          } });
+        }
+        if (profile.rawProfile.company?.currency !== req.query.currency) {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            state: 'unavailable', reason: 'profile_currency_mismatch',
+            observationCoverageVerified: false,
+            historicalCalendarVerified: false,
+            eligibleForForecast: false,
+            wholeBusinessCoverageVerified: false, forecastIssued: false,
+          } });
+        }
+        const windows = [req.query.firstLocalStartDate,
+          req.query.secondLocalStartDate].map(localStartDate =>
+          deriveReportingWindow({
+            organizationId: identity.organizationId,
+            businessProfileId: profile.id,
+            businessProfileVersion: profile.versionNumber,
+            businessProfileHash: profile.profileHash,
+            rawProfile: profile.rawProfile, grain: 'month', localStartDate,
+            serviceKey: null, areaScope: 'tenant_all',
+          }));
+        const profileProofs = [];
+        for (const window of windows) {
+          const proof = await client.query(
+            'SELECT public.canonical_forecast_profile_effective_window($1,$2,$3,$4,$5,$6,$7) value',
+            [identity.organizationId, identity.actorUserId,
+              identity.actorAccessRole, identity.authSessionId,
+              req.query.profileAnchorId, window.startsAt, window.endsAt]);
+          profileProofs.push(proof.rows[0]?.value);
+        }
+        const priceActivation = (await client.query(
+          'SELECT public.canonical_forecast_price_anchor_activation_read($1,$2,$3,$4) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        const source = (await client.query(
+          'SELECT public.canonical_forecast_price_ordered_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.snapshotId])).rows[0]?.value;
+        if (source === null) {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Forecast history is unavailable.',
+          } });
+        }
+        if (!source?.snapshot ||
+            source.snapshot.organizationId !== identity.organizationId ||
+            source.snapshot.id !== req.params.snapshotId) {
+          throw new Error('Invalid guarded ordered-price source');
+        }
+        const data = assessComparablePricePeriods({ source, profileProofs,
+          priceActivation, windows, currency: req.query.currency,
+          anchorId: req.query.profileAnchorId });
+        await client.query('COMMIT');
+        return res.json({ success: true, data });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
     });
 
   router.get('/snapshots/:snapshotId/approved-flow', auth,

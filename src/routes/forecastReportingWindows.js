@@ -8,7 +8,8 @@ const { rateLimit } = require('../middleware/rateLimit');
 const { getActiveBusinessProfile, getBusinessProfileById } =
   require('../services/organizationAuthority');
 const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAdapter');
-const { deriveReportingWindow } = require('../forecasting/timeSeriesWindows');
+const { deriveReportingWindow, compareReportingWindows } =
+  require('../forecasting/timeSeriesWindows');
 
 const GRAINS = new Set(['day', 'week', 'month', 'quarter', 'year']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -219,6 +220,259 @@ function createForecastReportingWindowsRouter(options = {}) {
           attestation: { id: claim.id, revision: claim.revision,
             digest: claim.digest, recordedAt: claim.recordedAt },
           ownerConfirmedHistoricalProfile: true, profilePinVerified: true } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  // This prospective source starts with an owner-captured profile and a
+  // separate commit observation. It cannot certify a month before capture.
+  router.post('/effective-anchors', auth, requirePermission('forecast', 'update'),
+    captureThrottle, async (req, res) => {
+      const body = req.body;
+      const key = req.get('Idempotency-Key');
+      if (!exact(body, ['reason', 'confirmed']) || body.confirmed !== true ||
+          typeof body.reason !== 'string' || body.reason.trim().length < 10 ||
+          body.reason.length > 1000 || !KEY.test(key || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The profile source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const result = await client.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_capture($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.get('X-CSRF-Token'),
+            key, body.reason, body.confirmed]);
+        const value = result.rows[0]?.value;
+        if (!value || !['profile_effective_anchor_recorded',
+          'profile_effective_anchor_unavailable'].includes(value.state) ||
+            (value.anchorId !== undefined && !UUID.test(value.anchorId))) {
+          throw new Error('Invalid guarded profile source receipt');
+        }
+        await client.query('COMMIT');
+        if (value.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(value.state === 'profile_effective_anchor_recorded' &&
+          !value.replayed ? 201 : 200).json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/effective-anchors/:anchorId/activate', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      if (!UUID.test(req.params.anchorId) || !exact(req.body, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The profile source request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const result = await client.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_activate($1,$2,$3,$4,$5,$6) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.get('X-CSRF-Token'),
+            req.params.anchorId]);
+        const value = result.rows[0]?.value;
+        if (!value || !['profile_effective_activation_recorded',
+          'profile_effective_activation_unavailable'].includes(value.state) ||
+            (value.anchorId !== undefined && value.anchorId !== req.params.anchorId)) {
+          throw new Error('Invalid guarded profile source receipt');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/effective-anchors/:anchorId/month', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.anchorId) ||
+          !exact(req.query, ['localStartDate']) ||
+          !validRequestDate(req.query.localStartDate, 'month')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The reporting window request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const pin = await client.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_pin($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.anchorId]);
+        const source = pin.rows[0]?.value;
+        if (!source || source.state !== 'profile_effective_anchor_pinned') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: {
+            window: null, historicalCalendarVerified: false,
+            observationCoverageVerified: false, forecastIssued: false,
+            unavailableReason: 'anchor_not_found',
+          } });
+        }
+        const profile = await getBusinessProfileById(client,
+          req.tenantContext.organizationId, source.businessProfileId);
+        if (profile.versionNumber !== source.businessProfileVersion ||
+            profile.profileHash !== source.businessProfileHash ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              source.businessProfileHash) throw new Error('Business Profile pin is unavailable');
+        const window = deriveReportingWindow({
+          organizationId: profile.organizationId,
+          businessProfileId: profile.id,
+          businessProfileVersion: profile.versionNumber,
+          businessProfileHash: profile.profileHash,
+          rawProfile: profile.rawProfile, grain: 'month',
+          localStartDate: req.query.localStartDate,
+          serviceKey: null, areaScope: 'tenant_all',
+        });
+        const result = await client.query(
+          'SELECT public.canonical_forecast_profile_effective_window($1,$2,$3,$4,$5,$6,$7) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.anchorId,
+            window.startsAt, window.endsAt]);
+        const value = result.rows[0]?.value;
+        if (!value || typeof value.state !== 'string' ||
+            (value.state === 'profile_effective_window_verified' &&
+              (value.businessProfileId !== profile.id ||
+               value.businessProfileHash !== profile.profileHash ||
+               !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(value.startsAt || '') ||
+               !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(value.endsAt || '') ||
+               Date.parse(value.startsAt) !== Date.parse(window.startsAt) ||
+               Date.parse(value.endsAt) !== Date.parse(window.endsAt)))) {
+          throw new Error('Invalid guarded profile source window');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          window: value.state === 'profile_effective_window_verified' ? window : null,
+          profileBasis: 'prospective_source_observed_profile',
+          historicalCalendarVerified: value.historicalCalendarVerified === true,
+          observationCoverageVerified: false, forecastIssued: false,
+          unavailableReason: value.reason || null,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/effective-anchors/:anchorId/compare-months', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.anchorId) ||
+          !exact(req.query, ['firstLocalStartDate', 'secondLocalStartDate',
+            'areaScope']) ||
+          !validRequestDate(req.query.firstLocalStartDate, 'month') ||
+          !validRequestDate(req.query.secondLocalStartDate, 'month') ||
+          req.query.firstLocalStartDate >= req.query.secondLocalStartDate ||
+          !['tenant_all', 'profile_area'].includes(req.query.areaScope)) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The reporting period comparison request is invalid.',
+        } });
+      }
+      const unavailable = reason => ({ state: 'unavailable', reason,
+        windows: null, historicalCalendarVerified: false,
+        observationCoverageVerified: false,
+        areaObservationCoverageVerified: false, forecastIssued: false });
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const pin = (await client.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_pin($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.anchorId])).rows[0]?.value;
+        if (!pin || !['profile_effective_anchor_pinned',
+          'profile_effective_anchor_unavailable'].includes(pin.state)) {
+          throw new Error('Invalid guarded profile anchor');
+        }
+        if (pin.state !== 'profile_effective_anchor_pinned') {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: unavailable('anchor_not_found') });
+        }
+        const profile = await getBusinessProfileById(client,
+          req.tenantContext.organizationId, pin.businessProfileId);
+        if (profile.versionNumber !== pin.businessProfileVersion ||
+            profile.profileHash !== pin.businessProfileHash ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              pin.businessProfileHash) {
+          await client.query('COMMIT');
+          return res.json({ success: true, data: unavailable('profile_changed') });
+        }
+        let windows;
+        try {
+          windows = [req.query.firstLocalStartDate,
+            req.query.secondLocalStartDate].map(localStartDate =>
+            deriveReportingWindow({
+              organizationId: profile.organizationId,
+              businessProfileId: profile.id,
+              businessProfileVersion: profile.versionNumber,
+              businessProfileHash: profile.profileHash,
+              rawProfile: profile.rawProfile, grain: 'month', localStartDate,
+              serviceKey: null, areaScope: req.query.areaScope,
+            }));
+        } catch (error) {
+          if (error?.code !== 'M26_REPORTING_WINDOW_UNAVAILABLE') throw error;
+          await client.query('COMMIT');
+          return res.json({ success: true,
+            data: unavailable(error.reason || 'reporting_window_unavailable') });
+        }
+        for (const window of windows) {
+          const proof = (await client.query(
+            'SELECT public.canonical_forecast_profile_effective_window($1,$2,$3,$4,$5,$6,$7) value',
+            [req.tenantContext.organizationId, req.tenantContext.userId,
+              req.userRole, req.authSession.id, req.params.anchorId,
+              window.startsAt, window.endsAt])).rows[0]?.value;
+          if (!proof || !['profile_effective_window_verified',
+            'profile_effective_window_unavailable'].includes(proof.state)) {
+            throw new Error('Invalid guarded profile window');
+          }
+          if (proof.state !== 'profile_effective_window_verified') {
+            await client.query('COMMIT');
+            return res.json({ success: true,
+              data: unavailable(proof.reason || 'profile_period_unverified') });
+          }
+          if (proof.anchorId !== req.params.anchorId ||
+              proof.businessProfileId !== window.businessProfileId ||
+              proof.businessProfileVersion !== window.businessProfileVersion ||
+              proof.businessProfileHash !== window.businessProfileHash ||
+              !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(proof.startsAt || '') ||
+              !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(proof.endsAt || '') ||
+              Date.parse(proof.startsAt) !== Date.parse(window.startsAt) ||
+              Date.parse(proof.endsAt) !== Date.parse(window.endsAt)) {
+            throw new Error('Invalid guarded profile period identity');
+          }
+        }
+        const context = compareReportingWindows(windows[0], windows[1]);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: context.comparableContext ? 'comparable_profile_context' :
+            'incomparable_profile_context',
+          reason: context.comparableContext ? null : context.reasons,
+          windows, areaScope: req.query.areaScope,
+          normalizationRequired: context.normalizationRequired,
+          normalizationDimensions: !context.comparableContext ? [] : [
+            ...(windows[0].elapsedMinutes !== windows[1].elapsedMinutes ?
+              ['elapsed_minutes'] : []),
+            ...(windows[0].openMinutes !== windows[1].openMinutes ?
+              ['open_minutes'] : []),
+            ...(windows[0].calendarDigest !== windows[1].calendarDigest ?
+              ['calendar_revision'] : []),
+          ],
+          historicalCalendarVerified: context.comparableContext,
+          observationCoverageVerified: false,
+          areaObservationCoverageVerified: false,
+          forecastIssued: false,
+        } });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return attestationError(res, error);

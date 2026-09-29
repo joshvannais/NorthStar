@@ -123,6 +123,8 @@ realPostgres('Mission 26 Part 2B supported-source period comparison', () => {
         historicalCalendarVerified: true,
         sourceCohortAsOfCaptureVerified: true,
         observationCoverageVerified: false,
+        normalizationRequired: true,
+        normalizationDimensions: ['elapsed_minutes', 'open_minutes'],
         wholeBusinessCoverageVerified: false, forecastIssued: false,
         periods: [
           { sourceInsertTimeDecisionCountKnownAtCapture: 0,

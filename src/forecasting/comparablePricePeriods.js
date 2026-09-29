@@ -1,6 +1,7 @@
 'use strict';
 
-const { validateReportingWindow } = require('./timeSeriesWindows');
+const { validateReportingWindow, compareReportingWindows } =
+  require('./timeSeriesWindows');
 const { assessOrderedPriceReportingMonthCandidate } =
   require('./orderedPriceMonthCandidate');
 
@@ -45,6 +46,9 @@ function assessComparablePricePeriods({ source, profileProofs,
   try { windows.forEach(validateReportingWindow); }
   catch { return unavailable('invalid_reporting_window'); }
   const [first, second] = windows;
+  let normalization;
+  try { normalization = compareReportingWindows(first, second); }
+  catch { return unavailable('invalid_reporting_window'); }
   if (first.grain !== 'month' || second.grain !== 'month' ||
       first.serviceKey !== null || second.serviceKey !== null ||
       first.areaScope !== 'tenant_all' || second.areaScope !== 'tenant_all' ||
@@ -57,7 +61,8 @@ function assessComparablePricePeriods({ source, profileProofs,
       first.calendarDigest !== second.calendarDigest ||
       first.calendarState !== second.calendarState ||
       first.calendarState !== 'known' ||
-      first.endsAt > second.startsAt) {
+      first.endsAt > second.startsAt ||
+      normalization.comparableContext !== true) {
     return unavailable('incomparable_profile_periods');
   }
   for (let i = 0; i < 2; i += 1) {
@@ -104,8 +109,16 @@ function assessComparablePricePeriods({ source, profileProofs,
     reason: null, sourceScope: 'northstar_m24_approved_price_decisions',
     sourceSnapshotId: candidates[0].sourceSnapshotId,
     sourceSnapshotDigest: candidates[0].sourceSnapshotDigest,
-    currency, periods: Object.freeze(candidates.map((candidate, index) =>
+    currency, normalizationRequired: normalization.normalizationRequired,
+    normalizationDimensions: Object.freeze([
+      ...(first.elapsedMinutes !== second.elapsedMinutes ? ['elapsed_minutes'] : []),
+      ...(first.openMinutes !== second.openMinutes ? ['open_minutes'] : []),
+      ...(first.calendarDigest !== second.calendarDigest ? ['calendar_revision'] : []),
+    ]),
+    periods: Object.freeze(candidates.map((candidate, index) =>
       Object.freeze({ window: Object.freeze({ ...windows[index] }),
+        elapsedMinutes: windows[index].elapsedMinutes,
+        openMinutes: windows[index].openMinutes,
         sourceInsertTimeDecisionCountKnownAtCapture:
           candidate.inputOrderTimestampDecisionCount,
         zeroDecisionsKnownAtCapture:

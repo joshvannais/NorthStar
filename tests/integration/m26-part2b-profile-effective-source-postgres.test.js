@@ -102,4 +102,18 @@ realPostgres('Mission 26 Part 2B prospective profile source', () => {
     expect((await capture(fixture.actors.member)).status).toBe(403);
     expect((await read(id, lastMonth(), fixture.actors.member)).status).toBe(403);
   }, 120000);
+
+  test('missing active profile does not report a created anchor', async () => {
+    await fixture.ownerPool.query(
+      'UPDATE canonical_business_profiles SET is_active=FALSE, retired_at=clock_timestamp() WHERE organization_id=$1',
+      [fixture.org]);
+    const response = await capture();
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      state: 'profile_effective_anchor_unavailable',
+      reason: 'active_profile_missing',
+      historicalCalendarVerified: false, forecastIssued: false,
+    });
+    expect(response.body.data.anchorId).toBeUndefined();
+  }, 120000);
 });

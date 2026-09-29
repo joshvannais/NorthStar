@@ -248,13 +248,15 @@ function createForecastReportingWindowsRouter(options = {}) {
             req.userRole, req.authSession.id, req.get('X-CSRF-Token'),
             key, body.reason, body.confirmed]);
         const value = result.rows[0]?.value;
-        if (!value || typeof value.state !== 'string' ||
+        if (!value || !['profile_effective_anchor_recorded',
+          'profile_effective_anchor_unavailable'].includes(value.state) ||
             (value.anchorId !== undefined && !UUID.test(value.anchorId))) {
           throw new Error('Invalid guarded profile source receipt');
         }
         await client.query('COMMIT');
         if (value.replayed) res.set('Idempotency-Replayed', 'true');
-        return res.status(value.replayed ? 200 : 201).json({ success: true, data: value });
+        return res.status(value.state === 'profile_effective_anchor_recorded' &&
+          !value.replayed ? 201 : 200).json({ success: true, data: value });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return attestationError(res, error);
@@ -278,7 +280,8 @@ function createForecastReportingWindowsRouter(options = {}) {
             req.userRole, req.authSession.id, req.get('X-CSRF-Token'),
             req.params.anchorId]);
         const value = result.rows[0]?.value;
-        if (!value || typeof value.state !== 'string' ||
+        if (!value || !['profile_effective_activation_recorded',
+          'profile_effective_activation_unavailable'].includes(value.state) ||
             (value.anchorId !== undefined && value.anchorId !== req.params.anchorId)) {
           throw new Error('Invalid guarded profile source receipt');
         }

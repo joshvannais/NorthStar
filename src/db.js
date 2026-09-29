@@ -1561,6 +1561,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_effective_window(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_effective_anchor_pin(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_price_anchor_activations') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_anchor_activations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_anchor_activate(uuid,uuid,text,uuid,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_anchor_activation_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -3111,6 +3116,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('166_canonical_forecast_booked_work_month_o
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('167_canonical_forecast_booked_work_source_anchor.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('168_canonical_forecast_booking_review_candidates.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('169_canonical_forecast_profile_effective_source.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('170_canonical_forecast_price_anchor_activation.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

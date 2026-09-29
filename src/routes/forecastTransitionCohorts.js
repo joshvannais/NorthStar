@@ -183,12 +183,16 @@ function createForecastTransitionCohortsRouter(options = {}) {
           if (value.state === 'source_changed_inside_horizon') {
             if (value.replayed !== false || value.sourceAuthenticated !== false ||
                 value.sourceCoverageComplete !== false ||
-                value.probabilityCalibrated !== false || value.forecastIssued !== false ||
+                value.offPlatformCoverageVerified !== false ||
+                value.providerCoverageVerified !== false ||
+                value.probabilityCalibrated !== false ||
+                value.confidence !== 'unavailable' || value.forecastIssued !== false ||
                 value.paidNumericServing !== false) return null;
             return { state: value.state, reason: 'source_correction_inside_horizon',
               sourceAuthenticated: false, sourceCoverageComplete: false,
+              offPlatformCoverageVerified: false, providerCoverageVerified: false,
               probabilityCalibrated: false, forecastIssued: false,
-              paidNumericServing: false };
+              confidence: 'unavailable', paidNumericServing: false };
           }
           const cohort = safeCohort(value.cohort);
           return cohort && { ...cohort, replayed: value.replayed };

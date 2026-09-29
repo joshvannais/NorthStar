@@ -107,14 +107,17 @@ test('keeps empty, corrected and stale history explicitly unavailable', async ()
 
   const corrected = { state: 'source_changed_inside_horizon', replayed: false,
     sourceAuthenticated: false, sourceCoverageComplete: false,
-    probabilityCalibrated: false, forecastIssued: false, paidNumericServing: false };
+    offPlatformCoverageVerified: false, providerCoverageVerified: false,
+    probabilityCalibrated: false, confidence: 'unavailable', forecastIssued: false,
+    paidNumericServing: false };
   expect((await request(application({ captured: corrected }).app)
     .post('/cohorts/commercial-booking-withdrawals').set('X-CSRF-Token', 'csrf')
     .set('Idempotency-Key', KEY).send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON }))
     .body.data).toEqual({ state: 'source_changed_inside_horizon',
       reason: 'source_correction_inside_horizon', sourceAuthenticated: false,
       sourceCoverageComplete: false, probabilityCalibrated: false,
-      forecastIssued: false, paidNumericServing: false });
+      offPlatformCoverageVerified: false, providerCoverageVerified: false,
+      confidence: 'unavailable', forecastIssued: false, paidNumericServing: false });
 
   const stale = cohort({ state: 'source_stale', reason: 'source_changed_inside_horizon',
     eligibleCount: 0, cancelledCount: 0, observedRate: null, sourceDigest: null,

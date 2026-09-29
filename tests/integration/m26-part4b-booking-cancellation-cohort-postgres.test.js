@@ -217,8 +217,9 @@ realPostgres('Mission 26 Part 4B booking-cancellation cohort', () => {
     expect(correctedCapture.body.data).toEqual({
       state: 'source_changed_inside_horizon',
       reason: 'source_correction_inside_horizon', sourceAuthenticated: false,
-      sourceCoverageComplete: false, probabilityCalibrated: false,
-      forecastIssued: false, paidNumericServing: false });
+      sourceCoverageComplete: false, offPlatformCoverageVerified: false,
+      providerCoverageVerified: false, probabilityCalibrated: false,
+      confidence: 'unavailable', forecastIssued: false, paidNumericServing: false });
   }, 120000);
 
   test('paid role, tenant, CSRF and current subscription remain server-owned', async () => {

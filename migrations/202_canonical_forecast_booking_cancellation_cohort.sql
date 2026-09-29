@@ -212,7 +212,9 @@ BEGIN
  IF corrected_count>0 THEN
   RETURN jsonb_build_object('state','source_changed_inside_horizon',
    'replayed',FALSE,'sourceAuthenticated',FALSE,
-   'sourceCoverageComplete',FALSE,'probabilityCalibrated',FALSE,
+   'sourceCoverageComplete',FALSE,'offPlatformCoverageVerified',FALSE,
+   'providerCoverageVerified',FALSE,'probabilityCalibrated',FALSE,
+   'confidence','unavailable',
    'forecastIssued',FALSE,'paidNumericServing',FALSE);
  END IF;
  eligible:=bounded_count;

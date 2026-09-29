@@ -29,7 +29,7 @@ BEGIN
  reviewed:=public.canonical_forecast_price_flow_fixed_research_review(
   org,actor,role_value,session_value,anchor_run_value);
  IF reviewed->>'state' IS DISTINCT FROM 'fixed_research_review_ready' THEN
-  RETURN jsonb_build_object('state','internal_experiment_review_unavailable',
+  RETURN jsonb_build_object('state','promotion_review_unavailable',
    'reason','source_or_cohort_incomplete','policyVersion',policy_version,
    'productionPromotionEligible',FALSE,'forecastServingEnabled',FALSE,
    'realForecastEligible',FALSE);
@@ -43,7 +43,7 @@ BEGIN
     population->>'sourceEventDiversityVerified' IS DISTINCT FROM 'true' OR
     (population->>'distinctSourceEventDays')::INTEGER<>60 OR
     jsonb_array_length(population->'items')<>60 THEN
-  RETURN jsonb_build_object('state','internal_experiment_review_unavailable',
+  RETURN jsonb_build_object('state','promotion_review_unavailable',
    'reason','matched_evidence_changed','policyVersion',policy_version,
    'productionPromotionEligible',FALSE,'forecastServingEnabled',FALSE,
    'realForecastEligible',FALSE);
@@ -65,7 +65,7 @@ BEGIN
      (item->'baseActual'->>'amount' ~ amount_pattern) IS DISTINCT FROM TRUE OR
      (item->'baseOutput'->'value'->>'amount' ~ amount_pattern) IS DISTINCT FROM TRUE OR
      (item->'candidateOutput'->'value'->>'amount' ~ amount_pattern) IS DISTINCT FROM TRUE THEN
-   RETURN jsonb_build_object('state','internal_experiment_review_unavailable',
+   RETURN jsonb_build_object('state','promotion_review_unavailable',
     'reason','matched_amount_unverified','policyVersion',policy_version,
     'productionPromotionEligible',FALSE,'forecastServingEnabled',FALSE,
     'realForecastEligible',FALSE);
@@ -75,7 +75,7 @@ BEGIN
   IF day_index<0 OR day_index>=60 OR day_index=ANY(seen_days) OR
      (item->>'horizonStart')::timestamptz<>
        start_at+day_index*INTERVAL '1 day' THEN
-   RETURN jsonb_build_object('state','internal_experiment_review_unavailable',
+   RETURN jsonb_build_object('state','promotion_review_unavailable',
     'reason','held_out_window_unverified','policyVersion',policy_version,
     'productionPromotionEligible',FALSE,'forecastServingEnabled',FALSE,
     'realForecastEligible',FALSE);
@@ -94,7 +94,7 @@ BEGIN
   END IF;
  END LOOP;
  IF cardinality(seen_days)<>60 THEN
-  RETURN jsonb_build_object('state','internal_experiment_review_unavailable',
+  RETURN jsonb_build_object('state','promotion_review_unavailable',
    'reason','held_out_window_unverified','policyVersion',policy_version,
    'productionPromotionEligible',FALSE,'forecastServingEnabled',FALSE,
    'realForecastEligible',FALSE);
@@ -102,7 +102,7 @@ BEGIN
  -- The policy demands complete comparable evidence and names downside;
  -- it does not set a universal error threshold or choose a winner. An
  -- owner must explicitly review the directional tradeoff before a switch.
- RETURN jsonb_build_object('state','internal_experiment_review_ready',
+ RETURN jsonb_build_object('state','promotion_review_ready',
   'policyVersion',policy_version,'anchorRunId',anchor_run_value,
   'contextScope','northstar_m24_approved_price_flow_only',
   'comparisonDigest',reviewed->>'comparisonDigest',
@@ -193,7 +193,7 @@ BEGIN
  END IF;
  reviewed:=public.canonical_forecast_price_flow_promotion_review(
   org,actor,role_value,session_value,anchor_run_value);
- IF reviewed->>'state' IS DISTINCT FROM 'internal_experiment_review_ready' OR
+ IF reviewed->>'state' IS DISTINCT FROM 'promotion_review_ready' OR
     reviewed->>'productionPromotionEligible' IS DISTINCT FROM 'false' THEN
   RETURN jsonb_build_object('state','active_challenge_unavailable',
    'reason','promotion_evidence_unavailable','paidNumericServing',FALSE);
@@ -310,7 +310,7 @@ BEGIN
  challenged:=public.canonical_forecast_price_flow_active_challenge(
   org,actor,role_value,session_value,csrf,anchor_run_value,
   expected_revision,action_value,algorithm_value,reverses_value,reason_value);
- IF reviewed->>'state' IS DISTINCT FROM 'internal_experiment_review_ready' OR
+ IF reviewed->>'state' IS DISTINCT FROM 'promotion_review_ready' OR
     reviewed->>'productionPromotionEligible' IS DISTINCT FROM 'false' OR
     challenged->>'state' IS DISTINCT FROM 'active_challenge_ready' OR
     challenged->>'reviewToken' IS DISTINCT FROM review_token_value THEN
@@ -407,7 +407,7 @@ BEGIN
  END IF;
  installed:=encode(sha256(convert_to(pg_get_functiondef(function_identity),
   'UTF8')),'hex');
- IF reviewed->>'state' IS DISTINCT FROM 'internal_experiment_review_ready' OR
+ IF reviewed->>'state' IS DISTINCT FROM 'promotion_review_ready' OR
     reviewed->>'productionPromotionEligible' IS DISTINCT FROM 'false' OR
     reviewed->>'reviewDigest' IS DISTINCT FROM latest.review_digest OR
     registry.implementation_digest IS DISTINCT FROM latest.implementation_digest OR

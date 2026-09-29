@@ -862,6 +862,29 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(promotionReview.body.data.candidateWorseDays).toBeGreaterThan(0);
       expect(JSON.stringify(promotionReview.body.data))
         .not.toMatch(/comparisonDigest|reviewDigest|"amount"|1400\.00/);
+      const legacyPromotionReview = await request(f.app)
+        .get(`${root}/algorithm-promotion-review?anchorRunId=${runIds[59]}`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(legacyPromotionReview.status).toBe(200);
+      expect(legacyPromotionReview.body.data).toMatchObject({
+        state: 'promotion_review_ready',
+        supportedSourcePromotionReviewReady: true,
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
+        forecastServingEnabled: false, realForecastEligible: false,
+      });
+      expect(legacyPromotionReview.body.data)
+        .not.toHaveProperty('internalExperimentReviewReady');
+      const databasePromotionReview = (await f.ownerPool.query(
+        `SELECT public.canonical_forecast_price_flow_promotion_review(
+          $1,$2,$3,$4,$5) value`,
+        [f.org, owner.actorUserId, owner.actorAccessRole,
+          owner.authSessionId, runIds[59]])).rows[0].value;
+      expect(databasePromotionReview).toMatchObject({
+        state: 'promotion_review_ready',
+        internalExperimentOnly: true,
+        productionPromotionEligible: false,
+      });
       const promotionDenied = await request(f.app).get(promotionReviewRoute)
         .set('Cookie', f.actors.member.session.headers.Cookie);
       expect(promotionDenied.status).toBe(403);

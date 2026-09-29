@@ -165,6 +165,49 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missingActiveSelection.release();
       }
 
+      const missingPromotionReview = await f.ownerPool.connect();
+      try {
+        await missingPromotionReview.query('BEGIN');
+        await missingPromotionReview.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_promotion_review(
+            uuid,uuid,text,uuid,uuid)
+          RENAME TO canonical_forecast_price_flow_promotion_review_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingPromotionReview, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow();
+        await missingPromotionReview.query('ROLLBACK');
+      } catch (error) {
+        await missingPromotionReview.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingPromotionReview.release();
+      }
+
+      const missingActiveTables = await f.ownerPool.connect();
+      try {
+        await missingActiveTables.query('BEGIN');
+        await missingActiveTables.query(`ALTER TABLE
+          canonical_forecast_price_flow_active_algorithms
+          RENAME TO canonical_forecast_price_flow_active_algorithms_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingActiveTables, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow();
+        await missingActiveTables.query('ROLLBACK');
+        await missingActiveTables.query('BEGIN');
+        await missingActiveTables.query(`ALTER TABLE
+          canonical_forecast_price_flow_active_origins
+          RENAME TO canonical_forecast_price_flow_active_origins_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingActiveTables, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow();
+        await missingActiveTables.query('ROLLBACK');
+      } catch (error) {
+        await missingActiveTables.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingActiveTables.release();
+      }
+
       const leaked = await f.ownerPool.connect();
       try {
         await leaked.query('BEGIN');
@@ -855,7 +898,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       const activeKey = key();
       await f.ownerPool.query(`CREATE FUNCTION m26_active_selection_delay()
         RETURNS trigger LANGUAGE plpgsql AS $$
-        BEGIN PERFORM pg_sleep(0.5); RETURN NEW; END $$`);
+        BEGIN PERFORM pg_sleep(2.5); RETURN NEW; END $$`);
       await f.ownerPool.query(`CREATE TRIGGER m26_active_selection_delay
         BEFORE INSERT ON canonical_forecast_price_flow_active_algorithms
         FOR EACH ROW EXECUTE FUNCTION m26_active_selection_delay()`);
@@ -1335,7 +1378,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       const activeOriginKey = key();
       await f.ownerPool.query(`CREATE FUNCTION m26_active_origin_delay()
         RETURNS trigger LANGUAGE plpgsql AS $$
-        BEGIN PERFORM pg_sleep(0.5); RETURN NEW; END $$`);
+        BEGIN PERFORM pg_sleep(2.5); RETURN NEW; END $$`);
       await f.ownerPool.query(`CREATE TRIGGER m26_active_origin_delay
         BEFORE INSERT ON canonical_forecast_price_flow_active_origins
         FOR EACH ROW EXECUTE FUNCTION m26_active_origin_delay()`);
@@ -1564,6 +1607,38 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           preHorizonCommitVerified: false });
         await pendingClient.query('ROLLBACK');
       } finally { pendingClient.release(); }
+      const pendingActiveClient = await f.runtimePool.connect();
+      try {
+        await pendingActiveClient.query('BEGIN');
+        const pendingActive = await pendingActiveClient.query(
+          'SELECT public.canonical_forecast_capture_active_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(pendingActive.rows[0].value.state).toBe('active_origin_saved');
+        const prematureActive = await pendingActiveClient.query(
+          'SELECT public.canonical_forecast_activate_active_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken,
+            pendingActive.rows[0].value.originReceiptId]);
+        expect(prematureActive.rows[0].value).toMatchObject({
+          state: 'active_origin_unavailable',
+          reason: 'origin_commit_not_observed',
+          preHorizonCommitVerified: false });
+        await pendingActiveClient.query('SAVEPOINT released_active_origin');
+        const subtransactionActive = await pendingActiveClient.query(
+          'SELECT public.canonical_forecast_capture_active_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(subtransactionActive.rows[0].value.state)
+          .toBe('active_origin_saved');
+        await pendingActiveClient.query('RELEASE SAVEPOINT released_active_origin');
+        const subtransactionActivePremature = await pendingActiveClient.query(
+          'SELECT public.canonical_forecast_activate_active_price_flow_origin($1,$2,$3,$4,$5,$6) value',
+          [...args, owner.csrfToken,
+            subtransactionActive.rows[0].value.originReceiptId]);
+        expect(subtransactionActivePremature.rows[0].value).toMatchObject({
+          state: 'active_origin_unavailable',
+          reason: 'origin_commit_not_observed',
+          preHorizonCommitVerified: false });
+        await pendingActiveClient.query('ROLLBACK');
+      } finally { pendingActiveClient.release(); }
       const profileLockCandidate = await f.runtimePool.query(
         'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
         [...args, owner.csrfToken, key(), futureBaseId]);

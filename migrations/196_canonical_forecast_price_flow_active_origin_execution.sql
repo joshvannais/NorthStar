@@ -83,8 +83,10 @@ BEGIN
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object(
   'baseRunId',base_run_value));
+ PERFORM set_config('lock_timeout','28000ms',TRUE);
  PERFORM pg_advisory_xact_lock(hashtextextended(
   org::text||':'||actor::text||':active-origin:'||key_hash,0));
+ PERFORM set_config('lock_timeout','2000ms',TRUE);
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_active_origins
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF prior.id IS NOT NULL THEN

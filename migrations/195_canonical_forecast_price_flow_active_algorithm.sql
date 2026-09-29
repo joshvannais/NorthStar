@@ -156,8 +156,10 @@ BEGIN
   'action',action_value,'algorithmVersion',algorithm_value,
   'reversesEventId',reverses_value,'reason',reason_value,
   'reviewToken',review_token_value));
+ PERFORM set_config('lock_timeout','28000ms',TRUE);
  PERFORM pg_advisory_xact_lock(hashtextextended(
   org::text||':'||actor::text||':active-algorithm:'||key_hash,0));
+ PERFORM set_config('lock_timeout','2000ms',TRUE);
  SELECT * INTO prior FROM public.canonical_forecast_price_flow_active_algorithms
   WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF prior.id IS NOT NULL THEN

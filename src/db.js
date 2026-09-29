@@ -1589,10 +1589,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
-      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
-        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
-      END IF;
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_active_select(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_active_algorithms FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_active_challenge(uuid,uuid,text,uuid,text,uuid,integer,text,text,uuid,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_active_select(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean) TO %I', runtime_role);
@@ -2768,11 +2766,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND COALESCE(has_function_privilege($1,
             to_regprocedure('public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid)'),
             'EXECUTE'),FALSE)
-          AND (to_regprocedure('public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid)') IS NULL OR
-            COALESCE(has_function_privilege($1,
-              to_regprocedure('public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid)'),
-              'EXECUTE'),FALSE))
-          AND (to_regclass('public.canonical_forecast_price_flow_active_algorithms') IS NULL OR (
+          AND to_regclass('public.canonical_forecast_price_flow_active_algorithms') IS NOT NULL
+          AND COALESCE(has_function_privilege($1,
+            to_regprocedure('public.canonical_forecast_price_flow_promotion_review(uuid,uuid,text,uuid,uuid)'),
+            'EXECUTE'),FALSE)
+          AND (
             NOT has_table_privilege($1,'public.canonical_forecast_price_flow_active_algorithms','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND COALESCE(has_function_privilege($1,
               to_regprocedure('public.canonical_forecast_price_flow_active_challenge(uuid,uuid,text,uuid,text,uuid,integer,text,text,uuid,text)'),
@@ -2783,8 +2781,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             AND COALESCE(has_function_privilege($1,
               to_regprocedure('public.canonical_forecast_price_flow_active_read(uuid,uuid,text,uuid,uuid)'),
               'EXECUTE'),FALSE)
-          ))
-          AND (to_regclass('public.canonical_forecast_price_flow_active_origins') IS NULL OR (
+          )
+          AND to_regclass('public.canonical_forecast_price_flow_active_origins') IS NOT NULL
+          AND to_regclass('public.canonical_forecast_price_flow_active_origin_activations') IS NOT NULL
+          AND (
             NOT has_table_privilege($1,'public.canonical_forecast_price_flow_active_origins','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_active_origin_activations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND COALESCE(has_function_privilege($1,
@@ -2793,7 +2793,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             AND COALESCE(has_function_privilege($1,
               to_regprocedure('public.canonical_forecast_activate_active_price_flow_origin(uuid,uuid,text,uuid,text,uuid)'),
               'EXECUTE'),FALSE)
-          ))
+          )
           AND (to_regclass('public.canonical_forecast_price_flow_staged_algorithms') IS NULL OR (
             NOT has_table_privilege($1,'public.canonical_forecast_price_flow_staged_algorithms','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND COALESCE(has_function_privilege($1,

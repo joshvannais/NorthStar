@@ -22,6 +22,7 @@ const { createCanonicalRouter, createCompatibilityRouter } = require('./routes/c
 const { createLearningRouter } = require('./routes/learning');
 const { createForecastPriceHistoryRouter } = require('./routes/forecastPriceHistory');
 const { createForecastFeaturesRouter } = require('./routes/forecastFeatures');
+const { createForecastDemandSourcesRouter } = require('./routes/forecastDemandSources');
 const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
 const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
@@ -291,6 +292,7 @@ app.use('/api/v1/forecast/price-history', createForecastPriceHistoryRouter());
 app.use('/api/v1/forecast/booking-reviews',
   require('./routes/forecastBookingReviews').createForecastBookingReviewsRouter());
 app.use('/api/v1/forecast/features', createForecastFeaturesRouter());
+app.use('/api/v1/forecast/demand-sources', createForecastDemandSourcesRouter());
 app.use('/api/v1/forecast/reporting-windows',
   require('./routes/forecastReportingWindows').createForecastReportingWindowsRouter());
 app.use('/api/v1', simulationsRoutes);

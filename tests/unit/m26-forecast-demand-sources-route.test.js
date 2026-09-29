@@ -1,0 +1,234 @@
+'use strict';
+
+const express = require('express');
+const request = require('supertest');
+const { createForecastDemandSourcesRouter } =
+  require('../../src/routes/forecastDemandSources');
+
+const ORG = '11111111-1111-4111-8111-111111111111';
+const USER = '22222222-2222-4222-8222-222222222222';
+const SESSION = '33333333-3333-4333-8333-333333333333';
+const SNAPSHOT = '44444444-4444-4444-8444-444444444444';
+const CALL = '55555555-5555-4555-8555-555555555555';
+const REVIEW = '66666666-6666-4666-8666-666666666666';
+const DIGEST = 'a'.repeat(64);
+const KEY = 'm26-demand-source-request-1';
+const START = '2026-09-01T00:00:00.000000Z';
+const END = '2026-10-01T00:00:00.000000Z';
+
+function application({ role = 'owner', consentRead, consentWrite, capture,
+  snapshotRead, reviews, reviewWrite, readReviewed } = {}) {
+  const app = express();
+  app.use(express.json());
+  const auth = (req, _res, next) => {
+    req.user = { id: USER };
+    req.tenantContext = { organizationId: ORG, userId: USER };
+    req.orgId = ORG;
+    req.userRole = role;
+    req.authSession = { id: SESSION };
+    next();
+  };
+  const client = { query: jest.fn(async sql => {
+    if (sql.includes('source_consent_read')) return { rows: [{ value:
+      consentRead || { current: null, active: false, history: [], total: 0,
+        truncated: false } }] };
+    if (sql.includes('source_consent_mutate')) return { rows: [{ value:
+      consentWrite || { consent: { id: REVIEW, revision: 1, action: 'grant',
+        digest: DIGEST }, replayed: false, current: true, active: true } }] };
+    if (sql.includes('snapshot_capture')) return { rows: [{ value:
+      capture || { snapshot: { id: SNAPSHOT, sourceSnapshotDigest: DIGEST,
+        sourceCount: 1, sources: [{ sourceId: CALL, digest: DIGEST,
+          privateTranscript: 'must not leak' }] }, replayed: false } }] };
+    if (sql.includes('snapshot_read')) return { rows: [{ value:
+      snapshotRead || { id: SNAPSHOT, stale: false, refreshRequired: false,
+        sourceSnapshotDigest: DIGEST, sources: [{ sourceKind: 'retell_call',
+          sourceId: CALL, digest: DIGEST, state: 'active',
+          eventAt: '2026-09-10T12:00:00.000000Z',
+          recordedAt: '2026-09-10T12:01:00.000000Z',
+          privateTranscript: 'must not leak' }] } }] };
+    if (sql.includes('reviews_read')) return { rows: [{ value:
+      reviews || { snapshotId: SNAPSHOT, stale: false,
+        sourceSnapshotDigest: DIGEST, callCount: 1, reviewedCount: 0,
+        unresolvedCount: 1, calls: [{ callSourceId: CALL, status: 'unresolved',
+          disposition: null, anchorCallSourceId: null, reviewRevision: 0,
+          reviewDigest: null, privateTranscript: 'must not leak' }] } }] };
+    if (sql.includes('review_mutate')) return { rows: [{ value:
+      reviewWrite || { id: REVIEW, revision: 1, digest: DIGEST,
+        replayed: false, status: 'recorded' } }] };
+    return { rows: [] };
+  }), release: jest.fn() };
+  const pool = { connect: jest.fn(async () => client), query: jest.fn() };
+  app.use('/sources', createForecastDemandSourcesRouter({ auth,
+    throttle: (_req, _res, next) => next(),
+    captureThrottle: (_req, _res, next) => next(),
+    poolProvider: () => pool,
+    readReviewed: readReviewed || jest.fn(async () => ({
+      state: 'reviewed_source_only', sourceSnapshotDigest: DIGEST,
+      callCount: 1, reviewedDistinctLeadCount: 1,
+      leadReceipts: [{ organizationId: ORG, leadId: CALL,
+        privateSourceDigest: 'must not leak' }], historicalCoverageCertified: false,
+    })) }));
+  return { app, pool, client };
+}
+
+const consentBody = { action: 'grant', expectedRevision: 0,
+  expectedDigest: 'none', reason: 'Authorize bounded fictional source review',
+  confirmed: true, confirmationVersion: 'm26-retell-demand-source-consent-v1' };
+
+const reviewBody = { expectedSourceDigest: DIGEST, expectedRevision: 0,
+  expectedDigest: 'none', disposition: 'new_lead', anchorCallSourceId: null,
+  reason: 'Confirm fictional call as a distinct reviewed lead', confirmed: true,
+  confirmationVersion: 'm26-retell-call-review-v1' };
+
+test('owner reads explicit inactive company permission without broader claims', async () => {
+  const { app, client } = application();
+  const response = await request(app).get('/sources/retell/consent');
+  expect(response.status).toBe(200);
+  expect(response.headers['cache-control']).toBe('private, no-store');
+  expect(response.body.data).toEqual({ state: 'company_permission_inactive',
+    active: false, current: null, history: [], total: 0, truncated: false,
+    callerConsentVerified: false, providerCoverageVerified: false,
+    retentionVerified: false, forecastIssued: false });
+  expect(client.query.mock.calls[1][1]).toEqual([ORG, USER, 'owner', SESSION]);
+});
+
+test('owner grants company permission through serializable guarded mutation', async () => {
+  const { app, client } = application();
+  const response = await request(app).post('/sources/retell/consent')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send(consentBody);
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({ state: 'company_permission_active',
+    consentId: REVIEW, action: 'grant', callerConsentVerified: false,
+    providerCoverageVerified: false, retentionVerified: false,
+    forecastIssued: false });
+  expect(client.query.mock.calls.map(call => call[0])).toEqual([
+    'BEGIN ISOLATION LEVEL SERIALIZABLE',
+    'SELECT public.canonical_forecast_retell_source_consent_mutate($1,$2,$3,$4,$5,$6,$7::jsonb) value',
+    'COMMIT',
+  ]);
+  expect(client.query.mock.calls[1][1].slice(0, 6)).toEqual([
+    ORG, USER, 'owner', SESSION, 'validated-csrf', KEY,
+  ]);
+});
+
+test('snapshot capture returns only bounded source metadata', async () => {
+  const { app, client } = application();
+  const response = await request(app).post('/sources/retell/snapshots')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf').send({});
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({ state: 'retell_call_source_recorded',
+    snapshotId: SNAPSHOT, sourceCount: 1, reviewedLeadIdentityVerified: false,
+    historicalCoverageVerified: false, forecastIssued: false });
+  expect(JSON.stringify(response.body)).not.toMatch(/privateTranscript|sourceId/);
+  expect(client.query.mock.calls[1][1]).toEqual([
+    ORG, USER, 'owner', SESSION, 'validated-csrf', KEY,
+  ]);
+});
+
+test('snapshot read exposes only review handles and guarded source digests', async () => {
+  const { app, client } = application();
+  const response = await request(app).get(`/sources/retell/snapshots/${SNAPSHOT}`);
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual({ state: 'retell_call_source_current',
+    snapshotId: SNAPSHOT, sourceSnapshotDigest: DIGEST,
+    sources: [{ callSourceId: CALL, sourceDigest: DIGEST,
+      occurredAt: '2026-09-10T12:00:00.000000Z',
+      recordedAt: '2026-09-10T12:01:00.000000Z' }],
+    refreshRequired: false, reviewedLeadIdentityVerified: false,
+    historicalCoverageVerified: false, providerCoverageVerified: false,
+    retentionVerified: false, forecastIssued: false });
+  expect(JSON.stringify(response.body)).not.toContain('privateTranscript');
+  expect(client.query.mock.calls[1][1]).toEqual([ORG, USER, 'owner', SESSION, SNAPSHOT]);
+});
+
+test('stale snapshot replay is explicit instead of becoming a server error', async () => {
+  const { app } = application({ capture: { snapshot: { id: SNAPSHOT,
+    stale: true, refreshRequired: true, sources: [],
+    reason: 'private source changed' }, replayed: true } });
+  const response = await request(app).post('/sources/retell/snapshots')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf').send({});
+  expect(response.status).toBe(200);
+  expect(response.body.data).toMatchObject({ state: 'source_receipt_stale',
+    snapshotId: SNAPSHOT, sourceSnapshotDigest: null, sourceCount: 0,
+    replayed: true, forecastIssued: false });
+  expect(JSON.stringify(response.body)).not.toContain('private source changed');
+});
+
+test('review queue exposes call receipts but never transcript content or coverage', async () => {
+  const { app, client } = application();
+  const response = await request(app)
+    .get(`/sources/retell/snapshots/${SNAPSHOT}/reviews`);
+  expect(response.status).toBe(200);
+  expect(response.body.data).toMatchObject({ state: 'call_reviews_incomplete',
+    snapshotId: SNAPSHOT, callCount: 1, reviewedCount: 0, unresolvedCount: 1,
+    historicalCoverageVerified: false, providerCoverageVerified: false,
+    forecastIssued: false });
+  expect(response.body.data.calls).toEqual([{ callSourceId: CALL,
+    status: 'unresolved', disposition: null, anchorCallSourceId: null,
+    reviewRevision: 0, reviewDigest: null }]);
+  expect(JSON.stringify(response.body)).not.toContain('privateTranscript');
+  expect(client.query.mock.calls[1][1]).toEqual([ORG, USER, 'owner', SESSION, SNAPSHOT]);
+});
+
+test('review mutation binds path identity and does not accept caller-supplied transcript IDs', async () => {
+  const { app, client } = application();
+  const response = await request(app)
+    .post(`/sources/retell/snapshots/${SNAPSHOT}/reviews/${CALL}`)
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send(reviewBody);
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({ state: 'call_review_recorded',
+    reviewId: REVIEW, revision: 1, forecastIssued: false });
+  const params = client.query.mock.calls[1][1];
+  expect(params.slice(0, 7)).toEqual([
+    ORG, USER, 'owner', SESSION, 'validated-csrf', KEY, SNAPSHOT,
+  ]);
+  expect(JSON.parse(params[7])).toEqual({ transcriptId: CALL,
+    expectedSourceDigest: DIGEST, expectedRevision: 0, expectedDigest: 'none',
+    disposition: 'new_lead', anchorTranscriptId: null,
+    reason: reviewBody.reason, confirmed: true,
+    confirmationVersion: 'm26-retell-call-review-v1' });
+  expect((await request(app)
+    .post(`/sources/retell/snapshots/${SNAPSHOT}/reviews/${CALL}`)
+    .set('Idempotency-Key', KEY).send({ ...reviewBody, transcriptId: USER })).status)
+    .toBe(400);
+});
+
+test('reviewed window is explicit source-only evidence and strips lead identities', async () => {
+  const readReviewed = jest.fn(async () => ({ state: 'reviewed_source_only',
+    sourceSnapshotDigest: DIGEST, callCount: 2, reviewedDistinctLeadCount: 1,
+    leadReceipts: [{ organizationId: ORG, leadId: CALL,
+      sourceDigest: DIGEST }], historicalCoverageCertified: false }));
+  const { app, pool } = application({ readReviewed });
+  const response = await request(app)
+    .get(`/sources/retell/snapshots/${SNAPSHOT}/reviewed-source-window`)
+    .query({ startsAt: START, endsAt: END });
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual({ state: 'reviewed_source_only',
+    snapshotId: SNAPSHOT, sourceSnapshotDigest: DIGEST, callCount: 2,
+    reviewedDistinctLeadCount: 1, historicalCoverageVerified: false,
+    providerCoverageVerified: false, retentionVerified: false,
+    forecastIssued: false });
+  expect(JSON.stringify(response.body)).not.toMatch(/leadReceipts|leadId/);
+  expect(readReviewed).toHaveBeenCalledWith({ pool, actor: {
+    organizationId: ORG, actorUserId: USER, actorAccessRole: 'owner',
+    authSessionId: SESSION }, snapshotId: SNAPSHOT, startsAt: START, endsAt: END });
+});
+
+test('member, extra authority, poison and database details fail closed', async () => {
+  const member = application({ role: 'member' });
+  expect((await request(member.app).get('/sources/retell/consent')).status).toBe(403);
+  expect(member.pool.connect).not.toHaveBeenCalled();
+  const owner = application();
+  expect((await request(owner.app).post('/sources/retell/snapshots')
+    .set('Idempotency-Key', KEY).send({ organizationId: ORG })).status).toBe(400);
+  expect(owner.pool.connect).not.toHaveBeenCalled();
+  const poisoned = application({ reviews: { snapshotId: USER, stale: false,
+    calls: [{ privateTranscript: 'do not leak' }] } });
+  const response = await request(poisoned.app)
+    .get(`/sources/retell/snapshots/${SNAPSHOT}/reviews`);
+  expect(response.status).toBe(503);
+  expect(JSON.stringify(response.body)).not.toContain('do not leak');
+  expect(poisoned.client.query.mock.calls.at(-1)[0]).toBe('ROLLBACK');
+});

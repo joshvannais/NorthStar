@@ -668,25 +668,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         .set(owner.session.headers).send({ profileAnchorId });
       expect(futureProfile.status).toBe(200);
       expect(futureProfile.body.data.state).toBe('profile_witness_recorded');
-      const selectedOriginKey = key();
       const selectedOriginBody = { baseRunId: futureBaseId };
-      const selectedOrigin = await request(f.app).post(selectedOriginRoute)
-        .set(owner.session.headers).set('Idempotency-Key', selectedOriginKey)
-        .send(selectedOriginBody);
-      expect(selectedOrigin.status).toBe(201);
-      expect(selectedOrigin.body.data).toMatchObject({
-        state: 'research_selected_origin_saved',
-        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
-        selectionEventId: selected.body.data.eventId,
-        researchOnly: true, forecastServingEnabled: false,
-        realForecastEligible: false, forecastValueAvailable: false,
-        output: null });
-      const selectedOriginReplay = await request(f.app).post(selectedOriginRoute)
-        .set(owner.session.headers).set('Idempotency-Key', selectedOriginKey)
-        .send(selectedOriginBody);
-      expect(selectedOriginReplay.status).toBe(200);
-      expect(selectedOriginReplay.body.data).toMatchObject({
-        runId: selectedOrigin.body.data.runId, replayed: true });
       await f.ownerPool.query(`CREATE FUNCTION m26_selected_origin_delay()
         RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN PERFORM pg_sleep(2); RETURN NEW; END $$`);
@@ -694,31 +676,30 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         BEFORE INSERT ON canonical_forecast_price_flow_research_selected_origins
         FOR EACH ROW EXECUTE FUNCTION m26_selected_origin_delay()`);
       const concurrentKey = key();
-      const captureConcurrent = async () => {
-        const client = await f.runtimePool.connect();
-        try {
-          await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
-          await client.query("SET LOCAL statement_timeout='15000ms'");
-          const result = await client.query(
-            'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
-            [...args, owner.csrfToken, concurrentKey, futureBaseId]);
-          await client.query('COMMIT');
-          return result.rows[0].value;
-        } catch (error) {
-          await client.query('ROLLBACK').catch(() => {});
-          throw error;
-        } finally { client.release(); }
-      };
       let concurrent;
       try {
-        concurrent = await Promise.all([captureConcurrent(), captureConcurrent()]);
+        concurrent = await Promise.all([1, 2].map(() => request(f.app)
+          .post(selectedOriginRoute).set(owner.session.headers)
+          .set('Idempotency-Key', concurrentKey).send(selectedOriginBody)));
       } finally {
         await f.ownerPool.query(`DROP TRIGGER m26_selected_origin_delay
           ON canonical_forecast_price_flow_research_selected_origins`);
         await f.ownerPool.query('DROP FUNCTION m26_selected_origin_delay()');
       }
-      expect(concurrent.map(value => value.replayed).sort()).toEqual([false, true]);
-      expect(new Set(concurrent.map(value => value.runId)).size).toBe(1);
+      expect(concurrent.map(value => value.status).sort()).toEqual([200, 201]);
+      const selectedOrigin = concurrent.find(value => value.status === 201);
+      const concurrentReplay = concurrent.find(value => value.status === 200);
+      expect(selectedOrigin.body.data).toMatchObject({
+        state: 'research_selected_origin_saved',
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        selectionEventId: selected.body.data.eventId,
+        researchOnly: true, forecastServingEnabled: false,
+        realForecastEligible: false, forecastValueAvailable: false,
+        output: null, replayed: false });
+      expect(concurrentReplay.headers['idempotency-replayed']).toBe('true');
+      expect(concurrentReplay.body.data).toMatchObject({
+        runId: selectedOrigin.body.data.runId, replayed: true });
+      expect(new Set(concurrent.map(value => value.body.data.runId)).size).toBe(1);
       const privateSelected = await f.ownerPool.query(`
         SELECT o.output->>'calculationVersion' algorithm,
           r.forecast_serving_enabled serving

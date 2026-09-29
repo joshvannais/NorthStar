@@ -656,7 +656,7 @@ function createForecastPriceHistoryRouter(options = {}) {
         client = await poolProvider().connect();
         await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
         await client.query("SET LOCAL statement_timeout = '15000ms'");
-        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        await client.query("SET LOCAL lock_timeout = '14000ms'");
         const identity = actor(req);
         const captured = (await client.query(
           'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',

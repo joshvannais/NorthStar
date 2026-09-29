@@ -883,27 +883,10 @@ function createForecastPriceHistoryRouter(options = {}) {
           req.body.reversesEventId, req.body.reason,
           req.body.reviewToken];
         const selectionSql =
-          'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) value';
+          'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value';
         // A committed replay stays idempotent even if its source later changes.
-        let saved = (await client.query(selectionSql,
-          [...selectionArgs, null, true])).rows[0]?.value;
-        if (saved?.state === 'research_selection_unavailable' &&
-            saved.reason === 'review_required') {
-          const reviewed = (await client.query(
-            'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
-            [identity.organizationId, identity.actorUserId,
-              identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
-          if (reviewed?.state !== 'research_review_ready') {
-            await client.query('ROLLBACK');
-            return res.status(409).json({ success: false, error: {
-              category: 'FORECAST_SOURCE_CHANGED',
-              message: 'The research review changed. Refresh it before selecting.',
-            } });
-          }
-          saved = (await client.query(selectionSql,
-            [...selectionArgs, reviewed.comparisonDigest,
-              true])).rows[0]?.value;
-        }
+        const saved = (await client.query(selectionSql,
+          [...selectionArgs, true])).rows[0]?.value;
         if (!saved || !['research_selection_recorded',
           'research_selection_unavailable'].includes(saved.state)) {
           throw new Error('Invalid research selection receipt');

@@ -1589,7 +1589,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_mac(text,bytea) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_review(uuid,uuid,text,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_challenge(uuid,uuid,text,uuid,text,integer,text,text,uuid,text) TO %I', runtime_role);
-        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_select(uuid,uuid,text,uuid,text,text,integer,text,text,uuid,text,text,text,boolean) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_select(uuid,uuid,text,uuid,text,text,integer,text,text,uuid,text,text,boolean) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_origin_activations') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_origin_activations FROM %I', runtime_role);
@@ -2734,7 +2734,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_research_mac(text,bytea)','EXECUTE')
             AND has_function_privilege($1,'public.canonical_forecast_price_flow_research_review(uuid,uuid,text,uuid)','EXECUTE')
             AND has_function_privilege($1,'public.canonical_forecast_price_flow_research_challenge(uuid,uuid,text,uuid,text,integer,text,text,uuid,text)','EXECUTE')
-            AND has_function_privilege($1,'public.canonical_forecast_price_flow_research_select(uuid,uuid,text,uuid,text,text,integer,text,text,uuid,text,text,text,boolean)','EXECUTE')
+            AND has_function_privilege($1,'public.canonical_forecast_price_flow_research_select(uuid,uuid,text,uuid,text,text,integer,text,text,uuid,text,text,boolean)','EXECUTE')
           ))
         )) AS price_flow_algorithm_authority_guarded,
        (to_regclass('public.canonical_forecast_retell_call_snapshots') IS NULL OR

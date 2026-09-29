@@ -242,8 +242,7 @@ CREATE FUNCTION public.canonical_forecast_price_flow_research_select(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,
  key_value TEXT,expected_revision INTEGER,action_value TEXT,
  candidate_version TEXT,reverses_value UUID,reason_value TEXT,
- review_token_value TEXT,reviewed_comparison_digest TEXT,
- confirmed_value BOOLEAN)
+ review_token_value TEXT,confirmed_value BOOLEAN)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE prior public.canonical_forecast_price_flow_research_selections%ROWTYPE;
@@ -288,14 +287,6 @@ BEGIN
    'algorithmVersion',prior.algorithm_version,
    'researchOnly',TRUE,'forecastServingEnabled',FALSE,'replayed',TRUE);
  END IF;
- IF reviewed_comparison_digest IS NULL THEN
-  RETURN jsonb_build_object('state','research_selection_unavailable',
-   'reason','review_required','forecastServingEnabled',FALSE);
- END IF;
- IF reviewed_comparison_digest!~'^[a-f0-9]{64}$' THEN
-  RAISE EXCEPTION 'Research comparison digest invalid'
-   USING ERRCODE='22023';
- END IF;
  SELECT * INTO latest FROM public.canonical_forecast_price_flow_research_selections
   WHERE organization_id=org ORDER BY revision DESC LIMIT 1;
  IF COALESCE(latest.revision,0)<>expected_revision THEN
@@ -324,8 +315,6 @@ BEGIN
  review_value:=public.canonical_forecast_price_flow_research_review(
   org,actor,role_value,session_value);
  IF review_value->>'state' IS DISTINCT FROM 'research_review_ready' OR
-    review_value->>'comparisonDigest' IS DISTINCT FROM
-      reviewed_comparison_digest OR
     (review_value->>'currentRevision')::integer<>expected_revision THEN
   RETURN jsonb_build_object('state','research_selection_unavailable',
    'reason','review_source_changed','forecastServingEnabled',FALSE);
@@ -357,7 +346,7 @@ BEGIN
   policy_version,reason,actor_user_id,auth_session_id,request_key_hash,
   request_digest)
  VALUES(org,expected_revision+1,action_value,selected_version,
-  prior_version,reverses_value,reviewed_comparison_digest,
+  prior_version,reverses_value,review_value->>'comparisonDigest',
   'm26_selected_m24_research_review_v1',reason_value,actor,session_value,
   key_hash,request_hash) RETURNING * INTO saved;
  RETURN jsonb_build_object('state','research_selection_recorded',
@@ -376,14 +365,14 @@ REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_review(
 REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_challenge(
  UUID,UUID,TEXT,UUID,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_research_select(
- UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,TEXT,BOOLEAN) FROM PUBLIC;
+ UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,BOOLEAN) FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_review(
   UUID,UUID,TEXT,UUID) TO northstar_app_runtime;
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_challenge(
   UUID,UUID,TEXT,UUID,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT) TO northstar_app_runtime;
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_research_select(
-  UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,TEXT,BOOLEAN)
+  UUID,UUID,TEXT,UUID,TEXT,TEXT,INTEGER,TEXT,TEXT,UUID,TEXT,TEXT,BOOLEAN)
   TO northstar_app_runtime;
  REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_selections
   FROM northstar_app_runtime;

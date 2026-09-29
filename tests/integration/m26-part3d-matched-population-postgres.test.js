@@ -572,15 +572,11 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_challenge_ready',
         researchOnly: true, forecastServingEnabled: false });
       expect(challenged.body.data.reviewToken).toMatch(/^[a-f0-9]{64}$/);
-      const privateReview = await f.runtimePool.query(
-        'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
-        args);
       const forgedDirect = await f.runtimePool.query(
-        'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) value',
+        'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
         [...args, owner.csrfToken, key(), 0, 'select_candidate',
           'm26_price_flow_zero_baseline_v1', null,
-          selectionRequest.reason, '0'.repeat(64),
-          privateReview.rows[0].value.comparisonDigest, true]);
+          selectionRequest.reason, '0'.repeat(64), true]);
       expect(forgedDirect.rows[0].value).toMatchObject({
         state: 'research_selection_unavailable',
         reason: 'review_challenge_invalid' });

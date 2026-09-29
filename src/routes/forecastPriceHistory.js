@@ -1027,6 +1027,107 @@ function createForecastPriceHistoryRouter(options = {}) {
       } finally { if (client) client.release(); }
     });
 
+  router.post('/algorithm-staging', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.query, []) || !exactKeys(req.body,
+        ['expectedRevision', 'researchEventId', 'anchorRunId',
+          'reason', 'confirmed']) ||
+        !Number.isInteger(req.body.expectedRevision) ||
+        req.body.expectedRevision < 0 ||
+        !UUID.test(req.body.researchEventId || '') ||
+        !UUID.test(req.body.anchorRunId || '') ||
+        typeof req.body.reason !== 'string' ||
+        req.body.reason.length < 16 || req.body.reason.length > 1000 ||
+        req.body.confirmed !== true || !KEY.test(key || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm staging request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const saved = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_stage_algorithm($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), key, req.body.expectedRevision,
+            req.body.researchEventId, req.body.anchorRunId,
+            req.body.reason, true])).rows[0]?.value;
+        if (!saved || !['algorithm_staged',
+          'algorithm_staging_unavailable'].includes(saved.state)) {
+          throw new Error('Invalid algorithm staging receipt');
+        }
+        if (saved.state === 'algorithm_staging_unavailable') {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_CHANGED',
+            message: 'The reviewed algorithm evidence changed. Refresh before staging.',
+          } });
+        }
+        await client.query('COMMIT');
+        if (saved.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(saved.replayed ? 200 : 201).json({
+          success: true, data: {
+            state: saved.state, eventId: saved.eventId,
+            revision: saved.revision,
+            algorithmVersion: saved.algorithmVersion,
+            replayed: saved.replayed === true,
+            researchOnly: true, forecastServingEnabled: false,
+            forecastValueAvailable: false, realForecastEligible: false,
+          },
+        });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/algorithm-staging/:contextRunId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, []) ||
+        !UUID.test(req.params.contextRunId || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm staging read is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const observed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_staged_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.contextRunId])).rows[0]?.value;
+        if (!observed || !['staged_algorithm_current',
+          'staged_algorithm_unavailable'].includes(observed.state)) {
+          throw new Error('Invalid staged algorithm state');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: observed.state, reason: observed.reason || null,
+          revision: observed.revision ?? null,
+          algorithmVersion: observed.state === 'staged_algorithm_current' ?
+            observed.algorithmVersion : null,
+          researchOnly: true, forecastServingEnabled: false,
+          forecastValueAvailable: false, realForecastEligible: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   router.get('/algorithm-matched-population', auth,
     requirePermission('forecast', 'read'), throttle, async (req, res) => {
       if (!exactKeys(req.query, [])) return res.status(400).json({

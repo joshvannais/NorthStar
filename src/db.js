@@ -1551,6 +1551,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_month_guarded_source(uuid,uuid,text,uuid,date) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_profile_effective_anchors') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL ON SEQUENCE public.canonical_forecast_profile_change_sequence FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_profile_change_events, public.canonical_forecast_profile_effective_anchors, public.canonical_forecast_profile_effective_activations FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_profile_change_record() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_profile_effective_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_effective_anchor_capture(uuid,uuid,text,uuid,text,text,text,boolean) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_effective_anchor_activate(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_effective_window(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_profile_effective_anchor_pin(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_retell_call_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_call_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_pins(uuid,timestamptz) FROM %I', runtime_role);
@@ -3100,6 +3110,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('165_canonical_forecast_booked_work_confirm
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('166_canonical_forecast_booked_work_month_observed.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('167_canonical_forecast_booked_work_source_anchor.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('168_canonical_forecast_booking_review_candidates.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('169_canonical_forecast_profile_effective_source.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

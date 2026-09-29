@@ -4,7 +4,7 @@ CREATE FUNCTION public.canonical_forecast_booking_review_candidates(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE item RECORD;pair JSONB;price JSONB;items JSONB:='[]'::jsonb;
+DECLARE item RECORD;pair JSONB;position JSONB;price JSONB;items JSONB:='[]'::jsonb;
  pinned_order BIGINT;later_count INTEGER;later_same_opportunity BOOLEAN;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
@@ -37,6 +37,14 @@ BEGIN
  LOOP
   IF EXISTS(SELECT 1 FROM public.canonical_forecast_commercial_booking_reviews review
     WHERE review.organization_id=org AND review.appointment_id=item.appointment_id) THEN
+   CONTINUE;
+  END IF;
+  position:=public.canonical_forecast_booking_status_position(
+   org,actor,role_value,session_value,item.approval_id);
+  IF position->>'state'<>'observed_schedule_position' OR
+    position->>'latestObservedApprovalId'<>item.approval_id::text OR
+    position->>'latestScheduleState'<>'scheduled' OR
+    position->>'latestAppointmentStatus' NOT IN ('preferred','scheduled') THEN
    CONTINUE;
   END IF;
   pair:=public.canonical_forecast_acceptance_booking_pair(

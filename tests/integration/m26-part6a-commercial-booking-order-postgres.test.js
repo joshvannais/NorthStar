@@ -173,6 +173,71 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       completePeriodVerified: false, forecastIssued: false });
     expect(beforeReviewCandidates.body.data.candidates[0]).toMatchObject({
       approvalId: matchingApprovalId, appointmentId: appointment });
+    const oversizedApprovalHistory = await f.ownerPool.connect();
+    try {
+      await oversizedApprovalHistory.query('BEGIN');
+      await oversizedApprovalHistory.query(
+        `CREATE TEMP TABLE synthetic_booking_approval_ids ON COMMIT DROP AS
+         SELECT gen_random_uuid() id,gen_random_uuid() preview_id,value
+           FROM generate_series(1,1001) value`);
+      await oversizedApprovalHistory.query(
+        `INSERT INTO canonical_schedule_mutation_previews
+         SELECT (jsonb_populate_record(
+           NULL::canonical_schedule_mutation_previews,
+           to_jsonb(base) || jsonb_build_object(
+             'id', synthetic.preview_id
+           ))).*
+           FROM canonical_schedule_mutation_previews base
+           JOIN canonical_schedule_human_approvals approval
+             ON approval.organization_id=base.organization_id
+              AND approval.preview_id=base.id
+           CROSS JOIN synthetic_booking_approval_ids synthetic
+          WHERE approval.organization_id=$1 AND approval.id=$2`,
+        [f.org, matchingApprovalId]);
+      await oversizedApprovalHistory.query(
+        'ALTER TABLE canonical_schedule_human_approvals DISABLE TRIGGER USER');
+      await oversizedApprovalHistory.query(
+        `INSERT INTO canonical_schedule_human_approvals
+         SELECT (jsonb_populate_record(
+           NULL::canonical_schedule_human_approvals,
+           to_jsonb(base) || jsonb_build_object(
+             'id', synthetic.id,
+             'preview_id', synthetic.preview_id,
+             'idempotency_key_hash', md5(
+               'm26-booking-history-key-' || synthetic.value::text) ||
+               md5('m26-booking-history-key-b-' || synthetic.value::text),
+             'approved_at', to_jsonb(base.approved_at -
+               make_interval(secs => synthetic.value + 10))
+           ))).*
+           FROM canonical_schedule_human_approvals base
+           CROSS JOIN synthetic_booking_approval_ids synthetic
+          WHERE base.organization_id=$1 AND base.id=$2`,
+        [f.org, matchingApprovalId]);
+      await oversizedApprovalHistory.query(
+        'ALTER TABLE canonical_forecast_booking_approval_orders DISABLE TRIGGER USER');
+      await oversizedApprovalHistory.query(
+        `INSERT INTO canonical_forecast_booking_approval_orders(
+           organization_id,appointment_id,approval_id,source_order,observed_at)
+         SELECT $1,$2,synthetic.id,
+                nextval('canonical_forecast_booking_approval_order_sequence'),clock_timestamp()
+           FROM synthetic_booking_approval_ids synthetic`,
+        [f.org, appointment]);
+      await oversizedApprovalHistory.query(
+        `UPDATE canonical_forecast_booking_approval_orders
+            SET source_order=nextval('canonical_forecast_booking_approval_order_sequence')
+          WHERE organization_id=$1 AND approval_id=$2`,
+        [f.org, matchingApprovalId]);
+      const oversized = (await oversizedApprovalHistory.query(
+        'SELECT public.canonical_forecast_booking_review_candidates($1,$2,$3,$4) value',
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]))
+        .rows[0].value;
+      expect(oversized).toMatchObject({
+        state: 'booking_review_candidates_observed', candidateCount: 0,
+        writeRechecksCurrentness: true, bookedWorkVerified: false });
+    } finally {
+      await oversizedApprovalHistory.query('ROLLBACK');
+      oversizedApprovalHistory.release();
+    }
     const candidateLaterLink = await post('/customer-estimate-links', {
       versionId: issuedVersionId, expiresInDays: 14,
       confirmed: true, confirmationVersion: 'customer-estimate-delivery-v1',

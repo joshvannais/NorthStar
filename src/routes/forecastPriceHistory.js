@@ -675,6 +675,11 @@ function createForecastPriceHistoryRouter(options = {}) {
             !UUID.test(captured.selectionReceiptId || '') ||
             !UUID.test(captured.runId || '') ||
             !UUID.test(captured.baseRunId || '') ||
+            (captured.replayed !== true &&
+              !UUID.test(captured.stagedEventId || '')) ||
+            (captured.replayed === true && captured.stagedEventId !== null &&
+              !UUID.test(captured.stagedEventId || '')) ||
+            ![true, false].includes(captured.replayed) ||
             !['m26_price_flow_carry_forward_v1',
               'm26_price_flow_zero_baseline_v1'].includes(
               captured.algorithmVersion) ||

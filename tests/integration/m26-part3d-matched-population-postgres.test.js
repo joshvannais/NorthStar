@@ -1127,6 +1127,106 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(privateSelected.rows[0]).toMatchObject({
         algorithm: 'm26_price_flow_zero_baseline_v1', serving: false,
         staged_event_id: staged.body.data.eventId });
+      const stagedConstraint =
+        'canonical_forecast_price_flow_selected_staged_event_required';
+      const legacyDirectKey = crypto.createHash('sha256')
+        .update(key()).digest('hex');
+      await expect(f.ownerPool.query(`INSERT INTO
+        canonical_forecast_price_flow_research_selected_origins(
+          organization_id,base_run_id,selected_run_id,selection_event_id,
+          algorithm_version,actor_user_id,auth_session_id,request_key_hash,
+          request_digest)
+        SELECT organization_id,base_run_id,selected_run_id,selection_event_id,
+          algorithm_version,actor_user_id,auth_session_id,$2,request_digest
+        FROM canonical_forecast_price_flow_research_selected_origins
+        WHERE organization_id=$1 AND id=$3`,
+      [f.org, legacyDirectKey, selectedOrigin.body.data.selectionReceiptId]))
+        .rejects.toMatchObject({ code: '23514', constraint: stagedConstraint });
+
+      // Rehearse the rolling-upgrade edge: an old function body is already
+      // running but blocked before its first sidecar-table statement. The
+      // migration table fence installs the NOT VALID check, which preserves
+      // historical nulls while rejecting that queued old body's future row.
+      const oldBodyKey = crypto.createHash('sha256').update(key()).digest('hex');
+      const oldBodyLock = `m26:test-old-selected:${oldBodyKey}`;
+      const lockHolder = await f.ownerPool.connect();
+      const oldBodyClient = await f.ownerPool.connect();
+      const fenceClient = await f.ownerPool.connect();
+      let constraintInstalled = true;
+      let holderOpen = false;
+      let queuedOldBody;
+      try {
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_flow_research_selected_origins
+          DROP CONSTRAINT ${stagedConstraint}`);
+        constraintInstalled = false;
+        await f.ownerPool.query(`CREATE FUNCTION
+          public.m26_test_old_research_selected_origin_insert(
+            source_id uuid,key_hash_value text,lock_value text)
+          RETURNS uuid LANGUAGE plpgsql AS $$
+          DECLARE inserted_id uuid;
+          BEGIN
+            PERFORM pg_advisory_xact_lock(hashtextextended(lock_value,0));
+            INSERT INTO canonical_forecast_price_flow_research_selected_origins(
+              organization_id,base_run_id,selected_run_id,selection_event_id,
+              algorithm_version,actor_user_id,auth_session_id,request_key_hash,
+              request_digest)
+            SELECT organization_id,base_run_id,selected_run_id,selection_event_id,
+              algorithm_version,actor_user_id,auth_session_id,key_hash_value,
+              request_digest
+            FROM canonical_forecast_price_flow_research_selected_origins
+            WHERE id=source_id
+            RETURNING id INTO inserted_id;
+            RETURN inserted_id;
+          END $$`);
+        await lockHolder.query('BEGIN');
+        holderOpen = true;
+        await lockHolder.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [oldBodyLock]);
+        const oldPid = Number((await oldBodyClient.query(
+          'SELECT pg_backend_pid() pid')).rows[0].pid);
+        queuedOldBody = oldBodyClient.query(
+          'SELECT public.m26_test_old_research_selected_origin_insert($1,$2,$3)',
+          [selectedOrigin.body.data.selectionReceiptId, oldBodyKey, oldBodyLock])
+          .then(value => ({ value }), error => ({ error }));
+        let oldBodyWaiting = false;
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const activity = (await f.ownerPool.query(`SELECT wait_event_type,wait_event
+            FROM pg_stat_activity WHERE pid=$1`, [oldPid])).rows[0];
+          oldBodyWaiting = activity?.wait_event_type === 'Lock' &&
+            activity?.wait_event === 'advisory';
+          if (oldBodyWaiting) break;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        expect(oldBodyWaiting).toBe(true);
+        await fenceClient.query('BEGIN');
+        await fenceClient.query(`ALTER TABLE
+          canonical_forecast_price_flow_research_selected_origins
+          ADD CONSTRAINT ${stagedConstraint}
+          CHECK(staged_event_id IS NOT NULL) NOT VALID`);
+        await fenceClient.query('COMMIT');
+        constraintInstalled = true;
+        await lockHolder.query('COMMIT');
+        holderOpen = false;
+        const oldBodyResult = await queuedOldBody;
+        expect(oldBodyResult.error).toMatchObject({
+          code: '23514', constraint: stagedConstraint });
+        const leakedOldBody = await f.ownerPool.query(`SELECT count(*)::integer n
+          FROM canonical_forecast_price_flow_research_selected_origins
+          WHERE organization_id=$1 AND request_key_hash=$2`, [f.org, oldBodyKey]);
+        expect(leakedOldBody.rows[0].n).toBe(0);
+      } finally {
+        await fenceClient.query('ROLLBACK').catch(() => {});
+        if (!constraintInstalled) await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_flow_research_selected_origins
+          ADD CONSTRAINT ${stagedConstraint}
+          CHECK(staged_event_id IS NOT NULL) NOT VALID`);
+        if (holderOpen) await lockHolder.query('ROLLBACK').catch(() => {});
+        if (queuedOldBody) await queuedOldBody;
+        await f.ownerPool.query(
+          'DROP FUNCTION IF EXISTS public.m26_test_old_research_selected_origin_insert(uuid,text,text)');
+        lockHolder.release(); oldBodyClient.release(); fenceClient.release();
+      }
       const pendingClient = await f.runtimePool.connect();
       try {
         await pendingClient.query('BEGIN');

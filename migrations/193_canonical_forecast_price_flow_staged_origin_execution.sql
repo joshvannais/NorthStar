@@ -10,7 +10,12 @@ ALTER TABLE public.canonical_forecast_price_flow_research_selected_origins
  ADD CONSTRAINT canonical_forecast_price_flow_selected_staged_event_fk
  FOREIGN KEY(organization_id,staged_event_id)
  REFERENCES public.canonical_forecast_price_flow_staged_algorithms(organization_id,id)
- ON DELETE RESTRICT;
+ ON DELETE RESTRICT,
+ -- Keep historical pre-193 rows readable, but reject every new row that an
+ -- already-running pre-193 function body could try to insert after this table
+ -- fence commits during a rolling deployment.
+ ADD CONSTRAINT canonical_forecast_price_flow_selected_staged_event_required
+ CHECK(staged_event_id IS NOT NULL) NOT VALID;
 
 CREATE OR REPLACE FUNCTION public.canonical_forecast_capture_research_selected_price_flow_origin(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,

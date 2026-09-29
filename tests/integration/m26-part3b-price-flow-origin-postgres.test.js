@@ -447,9 +447,12 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         amount: null, firstApprovalCount: null,
         outcomeFinalized: false, realForecastEligible: false });
       const stored = await f.ownerPool.query(
-        'SELECT output FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+        `SELECT saved_at,output
+         FROM canonical_forecast_price_flow_saved_origins WHERE id=$1`,
         [runId]);
       expect(stored.rows[0].output.value.amount).toBe('0.00');
+      expect(stored.rows[0].output.asOf).toBe(
+        stored.rows[0].saved_at.toISOString());
       const replay = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/activate`)
         .set(owner().session.headers).send({});
@@ -530,7 +533,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           WHERE id=$1 RETURNING rtrim(snapshot_digest) digest`,
         [anchorReceiptId, captureAt]);
         const output = { ...stored.rows[0].output,
-          asOf: captureAt.toISOString(),
+          asOf: savedAt.toISOString(),
           horizon: { startsAt: fictionalStart.toISOString(),
             endsAt: fictionalEnd.toISOString(), grain: 'day' },
           value: { kind: 'point', amount: '0.00' },
@@ -575,7 +578,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           WHERE id=$1 RETURNING rtrim(snapshot_digest) digest`,
         [secondSnapshotId, secondCaptureAt]);
         const secondOutput = { ...stored.rows[0].output,
-          asOf: secondCaptureAt.toISOString(),
+          asOf: secondSavedAt.toISOString(),
           horizon: { startsAt: fictionalEnd.toISOString(),
             endsAt: new Date(fictionalEnd.getTime() + 86400000).toISOString(),
             grain: 'day' },

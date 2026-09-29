@@ -228,7 +228,7 @@ BEGIN
  value:=jsonb_build_object(
   'contractVersion','m26-forecast-output-v1','organizationId',org,
   'asOf',to_char(date_trunc('milliseconds',
-    (source->'snapshot'->>'capturedAt')::timestamptz) AT TIME ZONE 'UTC',
+    saved) AT TIME ZONE 'UTC',
     'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
   'horizon',jsonb_build_object(
    'startsAt',to_char(horizon_start_value AT TIME ZONE 'UTC',

@@ -754,6 +754,167 @@ function createForecastPriceHistoryRouter(options = {}) {
       } finally { if (client) client.release(); }
     });
 
+  router.get('/algorithm-research-review', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, [])) return res.status(400).json({
+        success: false, error: { category: 'FORECAST_REQUEST_INVALID',
+          message: 'The algorithm review request is invalid.' },
+      });
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const reviewed = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (!reviewed || !['research_review_ready',
+          'research_review_unavailable'].includes(reviewed.state)) {
+          throw new Error('Invalid algorithm research review');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: reviewed.state, reason: reviewed.reason || null,
+          policyVersion: reviewed.policyVersion || null,
+          currentRevision: reviewed.currentRevision,
+          currentEventId: reviewed.currentEventId || null,
+          currentAlgorithmVersion: reviewed.currentAlgorithmVersion || null,
+          humanResearchReviewAvailable:
+            reviewed.state === 'research_review_ready',
+          reviewToken: null,
+          researchOnly: true, numericalErrorAvailable: false,
+          promotionAvailable: false, forecastServingEnabled: false,
+          realForecastEligible: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/algorithm-research-challenges', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, []) ||
+          !exactKeys(req.body, ['expectedRevision', 'action',
+            'algorithmVersion', 'reversesEventId', 'reason']) ||
+          !Number.isInteger(req.body.expectedRevision) ||
+          req.body.expectedRevision < 0 ||
+          !['select_candidate', 'rollback'].includes(req.body.action) ||
+          !['m26_price_flow_zero_baseline_v1',
+            'm26_price_flow_carry_forward_v1'].includes(
+            req.body.algorithmVersion) ||
+          !(req.body.reversesEventId === null ||
+            UUID.test(req.body.reversesEventId || '')) ||
+          typeof req.body.reason !== 'string' ||
+          req.body.reason.length < 16 || req.body.reason.length > 1000) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The research challenge request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const challenged = (await client.query(
+          'SELECT public.canonical_forecast_price_flow_research_challenge($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.body.expectedRevision,
+            req.body.action, req.body.algorithmVersion,
+            req.body.reversesEventId, req.body.reason])).rows[0]?.value;
+        if (!challenged || !['research_challenge_ready',
+          'research_challenge_unavailable'].includes(challenged.state)) {
+          throw new Error('Invalid research challenge');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: {
+          state: challenged.state, reason: challenged.reason || null,
+          reviewToken: challenged.state === 'research_challenge_ready' ?
+            challenged.reviewToken : null,
+          currentRevision: challenged.currentRevision ?? null,
+          researchOnly: true, forecastServingEnabled: false,
+          realForecastEligible: false } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/algorithm-research-selections', auth,
+    requirePermission('forecast', 'update'), throttle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.query, []) ||
+          !exactKeys(req.body, ['expectedRevision', 'action',
+            'algorithmVersion', 'reversesEventId', 'reason',
+            'reviewToken', 'confirmed']) ||
+          !Number.isInteger(req.body.expectedRevision) ||
+          req.body.expectedRevision < 0 ||
+          !['select_candidate', 'rollback'].includes(req.body.action) ||
+          !['m26_price_flow_zero_baseline_v1',
+            'm26_price_flow_carry_forward_v1'].includes(
+            req.body.algorithmVersion) ||
+          !(req.body.reversesEventId === null ||
+            UUID.test(req.body.reversesEventId || '')) ||
+          typeof req.body.reason !== 'string' ||
+          req.body.reason.length < 16 || req.body.reason.length > 1000 ||
+          !DIGEST.test(req.body.reviewToken || '') ||
+          req.body.confirmed !== true || !KEY.test(key || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The research selection request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '15000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const selectionArgs = [identity.organizationId, identity.actorUserId,
+          identity.actorAccessRole, identity.authSessionId,
+          req.get('X-CSRF-Token'), key, req.body.expectedRevision,
+          req.body.action, req.body.algorithmVersion,
+          req.body.reversesEventId, req.body.reason,
+          req.body.reviewToken];
+        const selectionSql =
+          'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value';
+        // A committed replay stays idempotent even if its source later changes.
+        const saved = (await client.query(selectionSql,
+          [...selectionArgs, true])).rows[0]?.value;
+        if (!saved || !['research_selection_recorded',
+          'research_selection_unavailable'].includes(saved.state)) {
+          throw new Error('Invalid research selection receipt');
+        }
+        if (saved.state === 'research_selection_unavailable') {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_CHANGED',
+            message: 'The research review changed. Refresh it before selecting.',
+          } });
+        }
+        await client.query('COMMIT');
+        if (saved.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(saved.state === 'research_selection_recorded' &&
+          !saved.replayed ? 201 : 200).json({ success: true, data: {
+          state: saved.state, reason: saved.reason || null,
+          eventId: saved.eventId || null, revision: saved.revision ?? null,
+          algorithmVersion: saved.algorithmVersion || null,
+          researchOnly: true, forecastServingEnabled: false,
+          forecastValueAvailable: false, realForecastEligible: false,
+          replayed: saved.replayed === true } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   router.get('/algorithm-matched-population', auth,
     requirePermission('forecast', 'read'), throttle, async (req, res) => {
       if (!exactKeys(req.query, [])) return res.status(400).json({

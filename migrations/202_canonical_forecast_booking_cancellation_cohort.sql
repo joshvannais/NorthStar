@@ -139,12 +139,23 @@ BEGIN
  IF high_water>9007199254740991 THEN
   RAISE EXCEPTION 'Commercial booking source exceeds safe order size' USING ERRCODE='54000';
  END IF;
- WITH firsts AS MATERIALIZED (
+ -- Bound the lightweight eligible identity set before performing per-member
+ -- latest/cancellation enrichment. This keeps at most 501 enriched rows while
+ -- retaining one overflow sentinel for the explicit capacity refusal below.
+ WITH bounded_firsts AS MATERIALIZED (
   SELECT review.appointment_id,review.id first_review_id,
    review.review_order first_review_order,review.reviewed_at first_reviewed_at
   FROM public.canonical_forecast_commercial_booking_reviews review
   WHERE review.organization_id=org AND review.action='first_booking_reviewed'
    AND review.reviewed_at<=cutoff_value
+   AND NOT EXISTS(
+    SELECT 1 FROM public.canonical_forecast_commercial_booking_reviews prior_cancel
+    WHERE prior_cancel.organization_id=org
+     AND prior_cancel.appointment_id=review.appointment_id
+     AND prior_cancel.action='booking_cancelled'
+     AND prior_cancel.reviewed_at<=cutoff_value)
+  ORDER BY review.appointment_id
+  LIMIT 501
  ), eligible_rows AS MATERIALIZED (
   SELECT firsts.*,
    (SELECT latest.id FROM public.canonical_forecast_commercial_booking_reviews latest
@@ -176,15 +187,9 @@ BEGIN
      AND cancellation.reviewed_at>cutoff_value
      AND cancellation.reviewed_at<=horizon_value
     ORDER BY cancellation.review_order LIMIT 1) cancelled_at
-  FROM firsts
-  WHERE NOT EXISTS(
-   SELECT 1 FROM public.canonical_forecast_commercial_booking_reviews prior_cancel
-   WHERE prior_cancel.organization_id=org
-    AND prior_cancel.appointment_id=firsts.appointment_id
-    AND prior_cancel.action='booking_cancelled'
-    AND prior_cancel.reviewed_at<=cutoff_value)
+  FROM bounded_firsts firsts
  ), bounded AS (
-  SELECT * FROM eligible_rows ORDER BY appointment_id LIMIT 501
+  SELECT * FROM eligible_rows ORDER BY appointment_id
  )
  SELECT count(*)::integer,
   COALESCE(jsonb_agg(jsonb_build_object(

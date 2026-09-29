@@ -111,6 +111,33 @@ realPostgres('Mission 26 Part 4B booking-cancellation cohort', () => {
         .toEqual([responses[0].body.data.cohortId, responses[0].body.data.cohortId]);
       expect(responses.map(value => value.body.data.replayed).sort())
         .toEqual([false, true]);
+
+      await fixture.ownerPool.query(`
+        INSERT INTO canonical_forecast_commercial_booking_reviews(
+          id,organization_id,appointment_id,opportunity_id,approval_id,acceptance_id,
+          estimate_id,issued_version_id,approved_decision_id,approved_decision_digest,
+          reviewed_price_before_tax,currency,action,previous_review_id,reason,
+          actor_user_id,auth_session_id,request_key_hash,request_digest,review_order,
+          reviewed_at)
+        SELECT gen_random_uuid(),$1,gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
+          gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
+          encode(sha256(convert_to('decision-'||series_value::text,'UTF8')),'hex'),
+          '100.00','USD','first_booking_reviewed',NULL,
+          'Fictional bounded overflow evidence',$2,$3,
+          encode(sha256(convert_to('key-'||series_value::text,'UTF8')),'hex'),
+          encode(sha256(convert_to('request-'||series_value::text,'UTF8')),'hex'),
+          100+series_value,'2026-08-25T12:00:00Z'
+        FROM generate_series(1,500) series_value`, [fixture.otherOrg,
+        fixture.actors.otherOwner.actorUserId,
+        fixture.actors.otherOwner.authSessionId]);
+      const overflow = await request(app)
+        .post('/api/v1/forecast/transition-cohorts/commercial-booking-withdrawals')
+        .set('X-CSRF-Token', fixture.actors.otherOwner.csrfToken)
+        .set('Idempotency-Key', `m26-p4b-overflow-${key()}`)
+        .send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON });
+      expect(overflow.status).toBe(503);
+      expect(JSON.stringify(overflow.body))
+        .not.toMatch(/observedRate|eligibleCount|sourceDigest|cohortDigest/);
     } finally {
       await fixture.ownerPool.query(`
         DROP TRIGGER IF EXISTS m26_part4b_test_insert_delay

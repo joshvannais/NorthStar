@@ -14,7 +14,7 @@ const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const INSTANT =
   /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(\d{6})Z$/;
 const DATABASE_INSTANT =
-  /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(\d{3,6})(Z|[+-]\d\d:\d\d)$/;
+  /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/;
 const PURPOSE = 'forecast_demand_source';
 const TARGET = 'retell.inbound_calls';
 const SNAPSHOT_VERSION = 'm26-as-of-source-manifest-v1';

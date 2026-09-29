@@ -125,6 +125,18 @@ test('owner reads explicit inactive company permission without broader claims', 
   expect(client.query.mock.calls[3][1]).toEqual([ORG, USER, 'owner', SESSION]);
 });
 
+test('consent reads accept PostgreSQL legal timestamp precision', async () => {
+  const historical = { ...consent(), createdAt: '2026-09-10T12:00:00Z' };
+  const current = { ...consent('revoke'), id: SNAPSHOT, revision: 2,
+    previousId: REVIEW, createdAt: '2026-09-10T12:01:00.12Z' };
+  const { app } = application({ consentRead: { current, active: false,
+    history: [current, historical], total: 2, truncated: false } });
+  const response = await request(app).get('/sources/retell/consent');
+  expect(response.status).toBe(200);
+  expect(response.body.data.current.createdAt).toBe('2026-09-10T12:01:00.12Z');
+  expect(response.body.data.history[1].createdAt).toBe('2026-09-10T12:00:00Z');
+});
+
 test('owner grants company permission through serializable guarded mutation', async () => {
   const { app, client } = application();
   const response = await request(app).post('/sources/retell/consent')

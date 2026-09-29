@@ -675,6 +675,11 @@ function createForecastPriceHistoryRouter(options = {}) {
             !UUID.test(captured.selectionReceiptId || '') ||
             !UUID.test(captured.runId || '') ||
             !UUID.test(captured.baseRunId || '') ||
+            (captured.replayed !== true &&
+              !UUID.test(captured.stagedEventId || '')) ||
+            (captured.replayed === true && captured.stagedEventId !== null &&
+              !UUID.test(captured.stagedEventId || '')) ||
+            ![true, false].includes(captured.replayed) ||
             !['m26_price_flow_carry_forward_v1',
               'm26_price_flow_zero_baseline_v1'].includes(
               captured.algorithmVersion) ||
@@ -690,6 +695,7 @@ function createForecastPriceHistoryRouter(options = {}) {
             baseRunId: captured.baseRunId,
             algorithmVersion: captured.algorithmVersion,
             selectionEventId: captured.selectionEventId || null,
+            stagedEventId: captured.stagedEventId || null,
             replayed: captured.replayed === true, researchOnly: true,
             forecastServingEnabled: false, realForecastEligible: false,
             forecastValueAvailable: false, output: null } });
@@ -740,6 +746,7 @@ function createForecastPriceHistoryRouter(options = {}) {
         return res.json({ success: true, data: {
           state: proof.state, selectionReceiptId: proof.selectionReceiptId,
           runId: proof.runId, algorithmVersion: proof.algorithmVersion,
+          stagedEventId: proof.stagedEventId || null,
           preHorizonCommitVerified: true, replayed: proof.replayed === true,
           researchOnly: true, forecastServingEnabled: false,
           realForecastEligible: false, forecastValueAvailable: false } });

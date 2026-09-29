@@ -1108,6 +1108,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selected_origin_saved',
         algorithmVersion: 'm26_price_flow_zero_baseline_v1',
         selectionEventId: selected.body.data.eventId,
+        stagedEventId: staged.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false,
         realForecastEligible: false, forecastValueAvailable: false,
         output: null, replayed: false });
@@ -1117,14 +1118,115 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(new Set(concurrent.map(value => value.body.data.runId)).size).toBe(1);
       const privateSelected = await f.ownerPool.query(`
         SELECT o.output->>'calculationVersion' algorithm,
-          r.forecast_serving_enabled serving
+          r.forecast_serving_enabled serving, r.staged_event_id staged_event_id
         FROM canonical_forecast_price_flow_research_selected_origins r
         JOIN canonical_forecast_price_flow_saved_origins o
           ON o.organization_id=r.organization_id AND o.id=r.selected_run_id
         WHERE r.organization_id=$1 AND r.selected_run_id=$2`,
       [f.org, selectedOrigin.body.data.runId]);
       expect(privateSelected.rows[0]).toMatchObject({
-        algorithm: 'm26_price_flow_zero_baseline_v1', serving: false });
+        algorithm: 'm26_price_flow_zero_baseline_v1', serving: false,
+        staged_event_id: staged.body.data.eventId });
+      const stagedConstraint =
+        'canonical_forecast_price_flow_selected_staged_event_required';
+      const legacyDirectKey = crypto.createHash('sha256')
+        .update(key()).digest('hex');
+      await expect(f.ownerPool.query(`INSERT INTO
+        canonical_forecast_price_flow_research_selected_origins(
+          organization_id,base_run_id,selected_run_id,selection_event_id,
+          algorithm_version,actor_user_id,auth_session_id,request_key_hash,
+          request_digest)
+        SELECT organization_id,base_run_id,selected_run_id,selection_event_id,
+          algorithm_version,actor_user_id,auth_session_id,$2,request_digest
+        FROM canonical_forecast_price_flow_research_selected_origins
+        WHERE organization_id=$1 AND id=$3`,
+      [f.org, legacyDirectKey, selectedOrigin.body.data.selectionReceiptId]))
+        .rejects.toMatchObject({ code: '23514', constraint: stagedConstraint });
+
+      // Rehearse the rolling-upgrade edge: an old function body is already
+      // running but blocked before its first sidecar-table statement. The
+      // migration table fence installs the NOT VALID check, which preserves
+      // historical nulls while rejecting that queued old body's future row.
+      const oldBodyKey = crypto.createHash('sha256').update(key()).digest('hex');
+      const oldBodyLock = `m26:test-old-selected:${oldBodyKey}`;
+      const lockHolder = await f.ownerPool.connect();
+      const oldBodyClient = await f.ownerPool.connect();
+      const fenceClient = await f.ownerPool.connect();
+      let constraintInstalled = true;
+      let holderOpen = false;
+      let queuedOldBody;
+      try {
+        await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_flow_research_selected_origins
+          DROP CONSTRAINT ${stagedConstraint}`);
+        constraintInstalled = false;
+        await f.ownerPool.query(`CREATE FUNCTION
+          public.m26_test_old_research_selected_origin_insert(
+            source_id uuid,key_hash_value text,lock_value text)
+          RETURNS uuid LANGUAGE plpgsql AS $$
+          DECLARE inserted_id uuid;
+          BEGIN
+            PERFORM pg_advisory_xact_lock(hashtextextended(lock_value,0));
+            INSERT INTO canonical_forecast_price_flow_research_selected_origins(
+              organization_id,base_run_id,selected_run_id,selection_event_id,
+              algorithm_version,actor_user_id,auth_session_id,request_key_hash,
+              request_digest)
+            SELECT organization_id,base_run_id,selected_run_id,selection_event_id,
+              algorithm_version,actor_user_id,auth_session_id,key_hash_value,
+              request_digest
+            FROM canonical_forecast_price_flow_research_selected_origins
+            WHERE id=source_id
+            RETURNING id INTO inserted_id;
+            RETURN inserted_id;
+          END $$`);
+        await lockHolder.query('BEGIN');
+        holderOpen = true;
+        await lockHolder.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [oldBodyLock]);
+        const oldPid = Number((await oldBodyClient.query(
+          'SELECT pg_backend_pid() pid')).rows[0].pid);
+        queuedOldBody = oldBodyClient.query(
+          'SELECT public.m26_test_old_research_selected_origin_insert($1,$2,$3)',
+          [selectedOrigin.body.data.selectionReceiptId, oldBodyKey, oldBodyLock])
+          .then(value => ({ value }), error => ({ error }));
+        let oldBodyWaiting = false;
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const activity = (await f.ownerPool.query(`SELECT wait_event_type,wait_event
+            FROM pg_stat_activity WHERE pid=$1`, [oldPid])).rows[0];
+          oldBodyWaiting = activity?.wait_event_type === 'Lock' &&
+            activity?.wait_event === 'advisory';
+          if (oldBodyWaiting) break;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        expect(oldBodyWaiting).toBe(true);
+        await fenceClient.query('BEGIN');
+        await fenceClient.query(`ALTER TABLE
+          canonical_forecast_price_flow_research_selected_origins
+          ADD CONSTRAINT ${stagedConstraint}
+          CHECK(staged_event_id IS NOT NULL) NOT VALID`);
+        await fenceClient.query('COMMIT');
+        constraintInstalled = true;
+        await lockHolder.query('COMMIT');
+        holderOpen = false;
+        const oldBodyResult = await queuedOldBody;
+        expect(oldBodyResult.error).toMatchObject({
+          code: '23514', constraint: stagedConstraint });
+        const leakedOldBody = await f.ownerPool.query(`SELECT count(*)::integer n
+          FROM canonical_forecast_price_flow_research_selected_origins
+          WHERE organization_id=$1 AND request_key_hash=$2`, [f.org, oldBodyKey]);
+        expect(leakedOldBody.rows[0].n).toBe(0);
+      } finally {
+        await fenceClient.query('ROLLBACK').catch(() => {});
+        if (!constraintInstalled) await f.ownerPool.query(`ALTER TABLE
+          canonical_forecast_price_flow_research_selected_origins
+          ADD CONSTRAINT ${stagedConstraint}
+          CHECK(staged_event_id IS NOT NULL) NOT VALID`);
+        if (holderOpen) await lockHolder.query('ROLLBACK').catch(() => {});
+        if (queuedOldBody) await queuedOldBody;
+        await f.ownerPool.query(
+          'DROP FUNCTION IF EXISTS public.m26_test_old_research_selected_origin_insert(uuid,text,text)');
+        lockHolder.release(); oldBodyClient.release(); fenceClient.release();
+      }
       const pendingClient = await f.runtimePool.connect();
       try {
         await pendingClient.query('BEGIN');
@@ -1196,12 +1298,20 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selected_origin_activated',
         selectionReceiptId: selectedOrigin.body.data.selectionReceiptId,
         runId: selectedOrigin.body.data.runId,
+        stagedEventId: staged.body.data.eventId,
         preHorizonCommitVerified: true, researchOnly: true,
         forecastServingEnabled: false, realForecastEligible: false });
       const activationReplay = await request(f.app).post(activationRoute)
         .set(owner.session.headers).send({});
       expect(activationReplay.status).toBe(200);
       expect(activationReplay.body.data.replayed).toBe(true);
+      const notYetActivated = (await f.runtimePool.query(
+        'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+        [...args, owner.csrfToken, key(), futureBaseId])).rows[0].value;
+      expect(notYetActivated).toMatchObject({
+        state: 'research_selected_origin_saved',
+        stagedEventId: staged.body.data.eventId,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1' });
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_research_selected_origins WHERE organization_id=$1',
         [f.org])).rejects.toMatchObject({ code: '42501' });
@@ -1245,6 +1355,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(awaitingStagedRollback.body.data).toMatchObject({
         state: 'staged_algorithm_unavailable',
         reason: 'review_choice_changed', algorithmVersion: null });
+      const noFirstActivationAfterChoiceChange = await request(f.app)
+        .post(`${selectedOriginRoute}/${notYetActivated.selectionReceiptId}/activate`)
+        .set(owner.session.headers).send({});
+      expect(noFirstActivationAfterChoiceChange.status).toBe(200);
+      expect(noFirstActivationAfterChoiceChange.body.data).toMatchObject({
+        state: 'research_selected_origin_unavailable',
+        reason: 'staged_choice_changed', preHorizonCommitVerified: false });
       const stagedRollback = await request(f.app).post(stagingRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send({ expectedRevision: 1,
@@ -1271,6 +1388,7 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         state: 'research_selected_origin_saved',
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         selectionEventId: rolledBack.body.data.eventId,
+        stagedEventId: stagedRollback.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false });
       const secondCandidateRequest = {
         expectedRevision: 2, action: 'select_candidate',

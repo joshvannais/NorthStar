@@ -39,7 +39,8 @@ DECLARE prior public.canonical_forecast_price_flow_research_selected_origins%ROW
  choice public.canonical_forecast_price_flow_research_selections%ROWTYPE;
  base_row public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  selected public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
- reviewed JSONB; source_state JSONB; current_source JSONB; zero JSONB;
+ reviewed JSONB; source_state JSONB; current_source JSONB; profile_state JSONB;
+ zero JSONB;
  key_hash TEXT; request_hash TEXT; zero_key TEXT;
  chosen_run UUID; chosen_version TEXT;
 BEGIN
@@ -50,6 +51,10 @@ BEGIN
  END IF;
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+   'm26:profile-effective-source:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Forecast profile source busy' USING ERRCODE='55P03';
+ END IF;
  IF NOT pg_try_advisory_xact_lock(hashtextextended(
    'm26:price-decision-order:'||org::text,0)) THEN
   RAISE EXCEPTION 'Forecast price-decision source is busy' USING ERRCODE='55P03';
@@ -95,6 +100,14 @@ BEGIN
       base_row.receipt_digest THEN
   RETURN jsonb_build_object('state','research_selected_origin_unavailable',
    'reason','base_source_unavailable','forecastServingEnabled',FALSE);
+ END IF;
+ profile_state:=public.canonical_forecast_profile_effective_window(
+  org,actor,role_value,session_value,
+  (source_state->>'profileAnchorId')::uuid,base_row.saved_at,clock_timestamp());
+ IF profile_state->>'state' IS DISTINCT FROM
+    'profile_effective_window_verified' THEN
+  RETURN jsonb_build_object('state','research_selected_origin_unavailable',
+   'reason','base_profile_source_changed','forecastServingEnabled',FALSE);
  END IF;
  SELECT * INTO choice FROM public.canonical_forecast_price_flow_research_selections
   WHERE organization_id=org ORDER BY revision DESC LIMIT 1;

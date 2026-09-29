@@ -740,6 +740,26 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         algorithmVersion: 'm26_price_flow_carry_forward_v1',
         selectionEventId: rolledBack.body.data.eventId,
         researchOnly: true, forecastServingEnabled: false });
+      const changedProfile = await f.ownerPool.connect();
+      try {
+        await changedProfile.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await changedProfile.query(`UPDATE canonical_business_profiles
+          SET raw_profile=raw_profile
+          WHERE organization_id=$1 AND is_active=TRUE`, [f.org]);
+        const rejected = await changedProfile.query(
+          'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
+          [...args, owner.csrfToken, key(), futureBaseId]);
+        expect(rejected.rows[0].value).toMatchObject({
+          state: 'research_selected_origin_unavailable',
+          reason: 'base_profile_source_changed',
+          forecastServingEnabled: false });
+        await changedProfile.query('ROLLBACK');
+      } catch (error) {
+        await changedProfile.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        changedProfile.release();
+      }
       const retrospective = await f.runtimePool.query(
         'SELECT public.canonical_forecast_capture_research_selected_price_flow_origin($1,$2,$3,$4,$5,$6,$7) value',
         [...args, owner.csrfToken, key(), runIds[59]]);
